@@ -15,7 +15,7 @@ A CLI-based REPL for orchestrating web application penetration testing tools wit
 - System tools: nmap, semgrep, gitleaks, osv-scanner
 
 ## Installation
-todo
+.venv/bin/pip install -r requirements.txt 
 
 ## Usage
 todo

@@ -217,6 +217,89 @@ class ProjectManager:
             base_urls=base_urls,
         )
 
+    def edit_repository(self, project_name: str, repo_name: str) -> Optional[Repository]:
+        """Interactively edit an existing repository in project_name.
+
+        Returns:
+            Updated Repository on success, None if cancelled.
+
+        Raises:
+            ValueError: if the project or repository does not exist.
+        """
+        if project_name not in self.list_projects():
+            raise ValueError(f"Project '{project_name}' does not exist.")
+        repos = self.config.load_repositories(project_name)
+        idx = next((i for i, r in enumerate(repos) if r.name == repo_name), None)
+        if idx is None:
+            raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
+
+        existing = repos[idx]
+        print(f"\nEditing repository '{repo_name}' (press Enter to keep current value)...\n")
+        try:
+            # Name
+            while True:
+                name = _prompt('  Name', default=existing.name)
+                if name:
+                    break
+                print('  Repository name is required.')
+
+            # Path
+            while True:
+                raw_path = _prompt('  Path', default=existing.path)
+                if not raw_path:
+                    print('  Path is required.')
+                    continue
+                repo_path = Path(raw_path).expanduser().resolve()
+                if repo_path.exists():
+                    break
+                print(f'  Path does not exist: {raw_path}')
+
+            # Languages
+            current_langs = ', '.join(existing.languages) if existing.languages else ''
+            lang_input = _prompt("  Languages (comma-separated or 'auto')", default=current_langs)
+            if lang_input.lower() == 'auto':
+                langs = _detect_languages(repo_path)
+                if langs:
+                    print(f'  [Detected: {", ".join(langs)}]')
+                else:
+                    print('  [No languages detected]')
+            else:
+                langs = [l.strip() for l in lang_input.split(',') if l.strip()]
+
+            # Base URLs
+            current_urls = ', '.join(existing.base_urls) if existing.base_urls else ''
+            url_input = _prompt('  Base URLs (comma-separated, optional)', default=current_urls)
+            base_urls = [u.strip() for u in url_input.split(',') if u.strip()]
+
+            updated = Repository(
+                name=name,
+                path=str(repo_path),
+                languages=langs,
+                base_urls=base_urls,
+            )
+            repos[idx] = updated
+            self.config.save_repositories(project_name, repos)
+            print(f"\n✓ Repository '{name}' updated")
+            return updated
+
+        except KeyboardInterrupt:
+            print('\n\n[Cancelled]')
+            return None
+
+    def delete_repository(self, project_name: str, repo_name: str) -> None:
+        """Remove a repository from project_name by name.
+
+        Raises:
+            ValueError: if the project or repository does not exist.
+        """
+        if project_name not in self.list_projects():
+            raise ValueError(f"Project '{project_name}' does not exist.")
+        repos = self.config.load_repositories(project_name)
+        new_repos = [r for r in repos if r.name != repo_name]
+        if len(new_repos) == len(repos):
+            raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
+        self.config.save_repositories(project_name, new_repos)
+
     # ------------------------------------------------------------------
     # Filesystem helpers
     # ------------------------------------------------------------------
