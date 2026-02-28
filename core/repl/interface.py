@@ -14,6 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
+from core.repl.commands import ProjectCommands
 
 _VERSION = '1.0'
 
@@ -36,11 +37,14 @@ _HELP_BOX = box.Box(
 # ---------------------------------------------------------------------------
 _HELP_ROWS = [
     ('Project Management', None, None),
-    (None, 'project new',         'Create a new project (interactive)'),
-    (None, 'project list',        'List all projects'),
-    (None, 'project switch <n>',  'Switch active project'),
-    (None, 'project info',        'Show active project details'),
-    (None, 'repo add',            'Add a repository to the active project'),
+    (None, 'new-project',         'Create a new project (interactive)'),
+    (None, 'projects',            'List all projects'),
+    (None, 'switch <name>',       'Switch active project'),
+    (None, 'project-info',        'Show active project details'),
+    (None, 'add-repo',            'Add a repository to the active project'),
+    (None, 'repos',               'List configured repositories'),
+    (None, 'edit-repo <name>',    'Edit a repository\'s config'),
+    (None, 'delete-repo <name>',  'Delete a repository\'s config'),
     ('Scanning', None, None),
     (None, 'nmap scan',           'Run nmap against configured hosts'),
     (None, 'semgrep scan',        'Run semgrep static analysis'),
@@ -60,8 +64,8 @@ _HELP_ROWS = [
 
 _COMPLETIONS = [
     'help', 'exit', 'quit', 'clear',
-    'project new', 'project list', 'project switch', 'project info',
-    'repo add',
+    'new-project', 'projects', 'switch', 'project-info', 'add-repo',
+    'repos', 'edit-repo', 'delete-repo',
     'nmap scan', 'semgrep scan', 'osv scan', 'gitleaks scan', 'zap scan',
     'rag index', 'rag query',
     'report',
@@ -79,6 +83,7 @@ class REPL:
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
         self.active_project: Optional[str] = self.projects.get_active_project()
+        self.project_commands = ProjectCommands(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -127,20 +132,27 @@ class REPL:
     # ------------------------------------------------------------------
 
     def _dispatch(self, cmd: str, args: list) -> None:
+        pc = self.project_commands
         handlers = {
-            'help':     self._cmd_help,
-            'clear':    self._cmd_clear,
-            'exit':     self._cmd_exit,
-            'quit':     self._cmd_exit,
-            'project':  self._cmd_stub,
-            'repo':     self._cmd_stub,
-            'nmap':     self._cmd_stub,
-            'semgrep':  self._cmd_stub,
-            'osv':      self._cmd_stub,
-            'gitleaks': self._cmd_stub,
-            'zap':      self._cmd_stub,
-            'rag':      self._cmd_stub,
-            'report':   self._cmd_stub,
+            'help':         self._cmd_help,
+            'clear':        self._cmd_clear,
+            'exit':         self._cmd_exit,
+            'quit':         self._cmd_exit,
+            'projects':     pc.cmd_projects,
+            'switch':       pc.cmd_switch,
+            'new-project':  pc.cmd_new_project,
+            'add-repo':     pc.cmd_add_repo,
+            'repos':        pc.cmd_repos,
+            'edit-repo':    pc.cmd_edit_repo,
+            'delete-repo':  pc.cmd_delete_repo,
+            'project-info': pc.cmd_project_info,
+            'nmap':         self._cmd_stub,
+            'semgrep':      self._cmd_stub,
+            'osv':          self._cmd_stub,
+            'gitleaks':     self._cmd_stub,
+            'zap':          self._cmd_stub,
+            'rag':          self._cmd_stub,
+            'report':       self._cmd_stub,
         }
         handler = handlers.get(cmd)
         if handler is None:

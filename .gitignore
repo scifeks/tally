@@ -35,9 +35,8 @@ ENV/
 *~
 
 # Project-specific
-projects/*/chroma_db/
-projects/*/tool_outputs/
-projects/*/sessions/
+projects/*
+!projects/.gitkeep
 *.log
 config/global.json
 
