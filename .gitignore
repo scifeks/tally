@@ -39,6 +39,7 @@ projects/*/chroma_db/
 projects/*/tool_outputs/
 projects/*/sessions/
 *.log
+config/global.json
 
 # OS
 .DS_Store
