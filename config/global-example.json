@@ -1,0 +1,6 @@
+{
+  "ollama_base_url": "http://localhost:11434",
+  "default_llm": "qwen2.5:7b",
+  "default_embedding": "nomic-embed-text",
+  "projects_dir": "./projects"
+}
