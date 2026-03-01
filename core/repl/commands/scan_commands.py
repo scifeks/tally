@@ -53,8 +53,14 @@ class ScanCommands:
             self._cmd_scan_nmap(remaining, timeout)
         elif tool_name == 'semgrep':
             self._cmd_scan_semgrep(remaining, timeout)
-        elif tool_name == 'osv-scanner':
+        elif tool_name in ('osv-scanner', 'osv'):
             self._cmd_scan_osv(remaining, timeout)
+        elif tool_name == 'pip-audit':
+            self._cmd_scan_pip_audit(remaining, timeout)
+        elif tool_name == 'npm-audit':
+            self._cmd_scan_npm_audit(remaining, timeout)
+        elif tool_name == 'composer-audit':
+            self._cmd_scan_composer_audit(remaining, timeout)
         else:
             self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
 
@@ -387,6 +393,417 @@ class ScanCommands:
         parts = [f'{by_sev[s]} {s}' for s in ('critical', 'high', 'medium', 'low') if by_sev.get(s)]
         sev_str = ', '.join(parts) if parts else 'none'
         return f'{total} vulnerabilities ({sev_str})'
+
+    # ------------------------------------------------------------------
+    # Public — repo-scan (language-aware multi-tool SCA)
+    # ------------------------------------------------------------------
+
+    def cmd_repo_scan(self, _cmd: str, args: List[str]) -> None:
+        """repo-scan [--timeout N]  — run language-appropriate SCA tools on a repo."""
+        timeout, _ = self._parse_timeout_arg(args)
+
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        selected_tools = self._select_sca_tools(repo.languages)
+        lang_str = ', '.join(repo.languages) if repo.languages else 'unknown'
+        self.repl.console.print(
+            f'\nRepository: [cyan]{repo.name}[/cyan] ({lang_str})'
+        )
+        self.repl.console.print(
+            f'Auto-selected tools: [cyan]{", ".join(selected_tools)}[/cyan]\n'
+        )
+
+        for tool_name in selected_tools:
+            tool = tool_registry.get_tool(tool_name)
+            if tool is None:
+                self.repl.console.print(f'[yellow]Tool not found: {tool_name} — skipping[/yellow]')
+                continue
+            if not tool.check_available():
+                self.repl.console.print(f'[yellow]{tool_name} not installed — skipping[/yellow]')
+                continue
+
+            try:
+                answer = input(f'Run {tool_name}? [y/N]: ').strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if answer not in ('y', 'yes'):
+                continue
+
+            if tool_name == 'semgrep':
+                result = self._execute_semgrep_scan(repo.name, repo.path, timeout=timeout)
+                self._print_semgrep_result(result)
+                if result.parsed_data and "error" not in result.parsed_data:
+                    result.success = True
+            elif tool_name == 'osv-scanner':
+                result = self._execute_osv_scan(repo.name, repo.path, timeout=timeout)
+                self._print_osv_result(result)
+                if result.parsed_data and "error" not in result.parsed_data:
+                    result.success = True
+            elif tool_name == 'pip-audit':
+                result = self._execute_pip_audit_scan(repo.name, repo.path, timeout=timeout)
+                self._print_sca_result(result, 'pip-audit')
+                if result.parsed_data and "error" not in result.parsed_data:
+                    result.success = True
+            elif tool_name == 'npm-audit':
+                result = self._execute_npm_audit_scan(repo.name, repo.path, timeout=timeout)
+                self._print_sca_result(result, 'npm-audit')
+                if result.parsed_data and "error" not in result.parsed_data:
+                    result.success = True
+            elif tool_name == 'composer-audit':
+                result = self._execute_composer_audit_scan(repo.name, repo.path, timeout=timeout)
+                self._print_sca_result(result, 'composer-audit')
+                if result.parsed_data and "error" not in result.parsed_data:
+                    result.success = True
+            else:
+                continue
+
+            if result.output_files:
+                for path in result.output_files.values():
+                    self.repl.console.print(f'Output saved to: {path}')
+
+            if self._ask_ingest():
+                count = _ingest_result(self.repl, result, profile=repo.name)
+                label = 'findings' if tool_name == 'semgrep' else 'vulnerabilities'
+                if count > 0:
+                    self.repl.console.print(f'[green]✓ Ingested {count} {label}[/green]')
+                else:
+                    self.repl.console.print(f'[yellow]No {label} to ingest.[/yellow]')
+            self.repl.console.print()
+
+    # ------------------------------------------------------------------
+    # Private — pip-audit scan flow
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_pip_audit(self, remaining: List[str], timeout: int) -> None:
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        tool = tool_registry.get_tool('pip-audit')
+        if tool is None:
+            self.repl.console.print('[red]Tool not found:[/red] pip-audit')
+            return
+
+        if not tool.check_available():
+            self.repl.console.print(
+                '[red]Tool not installed:[/red] pip-audit. '
+                'Install with: pip install pip-audit'
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        self.repl.console.print(f'Running pip-audit: {repo.name}...')
+        result = self._execute_pip_audit_scan(repo.name, repo.path, timeout=timeout)
+        self._print_sca_result(result, 'pip-audit')
+
+        if result.output_files:
+            for path in result.output_files.values():
+                self.repl.console.print(f'Output saved to: {path}')
+
+        # pip-audit exits with code 1 when vulnerabilities are present — not a true failure
+        if result.parsed_data and "error" not in result.parsed_data:
+            result.success = True
+
+        if self._ask_ingest():
+            count = _ingest_result(self.repl, result, profile=repo.name)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} vulnerabilities[/green]')
+            else:
+                self.repl.console.print('[yellow]No vulnerabilities to ingest.[/yellow]')
+
+    def _execute_pip_audit_scan(
+        self,
+        repo_name: str,
+        repo_path: str,
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        tool = tool_registry.get_tool('pip-audit')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        return executor.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=timeout,
+            label=repo_name,
+            repo_path=repo_path,
+        )
+
+    # ------------------------------------------------------------------
+    # Private — npm-audit scan flow
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_npm_audit(self, remaining: List[str], timeout: int) -> None:
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        tool = tool_registry.get_tool('npm-audit')
+        if tool is None:
+            self.repl.console.print('[red]Tool not found:[/red] npm-audit')
+            return
+
+        if not tool.check_available():
+            self.repl.console.print(
+                '[red]Tool not installed:[/red] npm-audit (requires npm). '
+                'Install with: apt install nodejs npm'
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        self.repl.console.print(f'Running npm-audit: {repo.name}...')
+        result = self._execute_npm_audit_scan(repo.name, repo.path, timeout=timeout)
+        self._print_sca_result(result, 'npm-audit')
+
+        if result.output_files:
+            for path in result.output_files.values():
+                self.repl.console.print(f'Output saved to: {path}')
+
+        # npm audit exits with code 1 when vulnerabilities are present — not a true failure
+        if result.parsed_data and "error" not in result.parsed_data:
+            result.success = True
+
+        if self._ask_ingest():
+            count = _ingest_result(self.repl, result, profile=repo.name)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} vulnerabilities[/green]')
+            else:
+                self.repl.console.print('[yellow]No vulnerabilities to ingest.[/yellow]')
+
+    def _execute_npm_audit_scan(
+        self,
+        repo_name: str,
+        repo_path: str,
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        tool = tool_registry.get_tool('npm-audit')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        # npm audit must run from inside the repository directory
+        return executor.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=timeout,
+            label=repo_name,
+            cwd=repo_path,
+            repo_path=repo_path,
+        )
+
+    # ------------------------------------------------------------------
+    # Private — composer-audit scan flow
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_composer_audit(self, remaining: List[str], timeout: int) -> None:
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        tool = tool_registry.get_tool('composer-audit')
+        if tool is None:
+            self.repl.console.print('[red]Tool not found:[/red] composer-audit')
+            return
+
+        if not tool.check_available():
+            self.repl.console.print(
+                '[red]Tool not installed:[/red] composer-audit (requires composer). '
+                'Install with: apt install composer'
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        self.repl.console.print(f'Running composer-audit: {repo.name}...')
+        result = self._execute_composer_audit_scan(repo.name, repo.path, timeout=timeout)
+        self._print_sca_result(result, 'composer-audit')
+
+        if result.output_files:
+            for path in result.output_files.values():
+                self.repl.console.print(f'Output saved to: {path}')
+
+        # composer audit exits with code 1 when vulnerabilities are present — not a true failure
+        if result.parsed_data and "error" not in result.parsed_data:
+            result.success = True
+
+        if self._ask_ingest():
+            count = _ingest_result(self.repl, result, profile=repo.name)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} vulnerabilities[/green]')
+            else:
+                self.repl.console.print('[yellow]No vulnerabilities to ingest.[/yellow]')
+
+    def _execute_composer_audit_scan(
+        self,
+        repo_name: str,
+        repo_path: str,
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        tool = tool_registry.get_tool('composer-audit')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        # composer audit must run from inside the repository directory
+        return executor.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=timeout,
+            label=repo_name,
+            cwd=repo_path,
+            repo_path=repo_path,
+        )
+
+    # ------------------------------------------------------------------
+    # Private — shared SCA result helpers
+    # ------------------------------------------------------------------
+
+    def _print_sca_result(self, result: ToolResult, tool_name: str) -> None:
+        has_valid_data = result.parsed_data and "error" not in result.parsed_data
+        if has_valid_data or result.success:
+            summary = self._summarize_sca(result)
+            self.repl.console.print(f'[green]✓ Scan complete:[/green] {summary}')
+        else:
+            self.repl.console.print(f'[red]✗ Scan failed:[/red] {result.output}')
+
+    @staticmethod
+    def _summarize_sca(result: ToolResult) -> str:
+        if not result.parsed_data:
+            return 'scan complete'
+        summary = result.parsed_data.get('summary', {})
+        total = summary.get('total_vulnerabilities', 0)
+        by_sev = summary.get('by_severity', {})
+        parts = [
+            f'{by_sev[s]} {s}'
+            for s in ('critical', 'high', 'medium', 'low')
+            if by_sev.get(s)
+        ]
+        sev_str = ', '.join(parts) if parts else 'none'
+        return f'{total} vulnerabilities ({sev_str})'
+
+    @staticmethod
+    def _select_sca_tools(languages: List[str]) -> List[str]:
+        """Return SCA tool names applicable to the given repository languages.
+
+        osv-scanner is always included as a baseline multi-ecosystem scanner.
+        Language-specific tools are added based on detected languages.
+        """
+        tools = ["osv-scanner"]
+        lowered = {lang.lower() for lang in languages}
+        if "python" in lowered:
+            tools.append("pip-audit")
+        if lowered & {"javascript", "typescript", "javascript/typescript", "node"}:
+            tools.append("npm-audit")
+        if "php" in lowered:
+            tools.append("composer-audit")
+        return tools
 
     def _print_semgrep_result(self, result: ToolResult) -> None:
         has_valid_data = result.parsed_data and "error" not in result.parsed_data

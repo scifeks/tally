@@ -121,8 +121,8 @@ class FindingIngestor:
             return self._chunks_from_nmap(tool_result, profile)
         if tool == "semgrep":
             return self._chunks_from_semgrep(tool_result, profile)
-        if tool == "osv-scanner":
-            return self._chunks_from_osv(tool_result, profile)
+        if tool in ("osv-scanner", "pip-audit", "npm-audit", "composer-audit"):
+            return self._chunks_from_sca_vulns(tool_result, profile)
 
         # Stub for future tools (Phase 6)
         logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
@@ -273,30 +273,36 @@ class FindingIngestor:
 
         return chunks
 
-    def _chunks_from_osv(
+    def _chunks_from_sca_vulns(
         self,
         tool_result: ToolResult,
         profile: str,
     ) -> List[Tuple[str, Dict[str, Any], str]]:
-        """Build document chunks from an OSV-Scanner ToolResult.
+        """Build document chunks from any SCA tool that emits the standard vulnerability format.
+
+        Handles osv-scanner, pip-audit, npm-audit, and composer-audit, all of
+        which produce ``{vulnerabilities: [...], summary: {...}}`` output.
 
         Each vulnerability produces one ``dependency_vulnerability`` chunk
-        containing the package name, version, CVE/GHSA ID, severity, and
+        containing the package name, version, advisory ID, severity, and
         description.
 
         Args:
-            tool_result: Parsed OSV-Scanner result.
+            tool_result: Parsed SCA tool result.
             profile:     Effective profile name (repo name).
 
         Returns:
             List of ``(document_text, metadata, id)`` tuples.
         """
+        tool = tool_result.tool_name
         parsed = tool_result.parsed_data  # type: ignore[union-attr]
         vulnerabilities: List[Dict[str, Any]] = parsed.get("vulnerabilities", [])
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
         ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        # Safe ID prefix: replace hyphens so doc IDs have consistent format
+        tool_id = tool.replace("-", "_")
 
         chunks: List[Tuple[str, Dict[str, Any], str]] = []
 
@@ -322,7 +328,7 @@ class FindingIngestor:
             )
 
             meta: Dict[str, Any] = {
-                "tool": "osv-scanner",
+                "tool": tool,
                 "profile": profile,
                 "finding_type": "dependency_vulnerability",
                 "severity": severity,
@@ -340,7 +346,7 @@ class FindingIngestor:
             if lockfile:
                 meta["lockfile"] = lockfile
 
-            doc_id = f"osv-scanner_{profile}_vuln_{vi}_{ts_compact}"
+            doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks
