@@ -269,6 +269,65 @@ class RAGEngine:
     # Convenience helpers
     # ------------------------------------------------------------------
 
+    def delete_findings(self, tool: str, profile: Optional[str] = None) -> int:
+        """Delete stored findings for a tool, optionally scoped to a profile.
+
+        Args:
+            tool:    Tool name (e.g. ``"nmap"``).
+            profile: Profile name to scope the deletion. If ``None``, all
+                     findings for the tool are deleted regardless of profile.
+
+        Returns:
+            Number of documents deleted (0 if collection is uninitialised or
+            no matching documents exist).
+        """
+        if self._collection is None:
+            return 0
+
+        where: Dict[str, Any] = {"tool": tool}
+        if profile is not None:
+            where["profile"] = profile
+
+        try:
+            result = self._collection.get(where=where, include=[])
+            ids: List[str] = result.get("ids") or []
+            if ids:
+                self._collection.delete(ids=ids)
+            return len(ids)
+        except Exception as exc:
+            logger.warning("delete_findings failed (tool=%s profile=%s): %s", tool, profile, exc)
+            return 0
+
+    def add_documents(
+        self,
+        texts: List[str],
+        metadatas: List[Dict[str, Any]],
+        ids: List[str],
+    ) -> None:
+        """Upsert documents into the project's collection.
+
+        Uses ChromaDB ``upsert`` so existing IDs are updated rather than
+        causing a duplicate-key error.
+
+        Args:
+            texts:     Document text strings.
+            metadatas: Parallel list of metadata dicts.
+            ids:       Stable unique IDs for deduplication.
+
+        Raises:
+            RuntimeError: If the collection is not initialised or ChromaDB
+                          raises an error.
+        """
+        if self._collection is None:
+            raise RuntimeError("ChromaDB collection is not initialised")
+
+        try:
+            self._collection.upsert(documents=texts, metadatas=metadatas, ids=ids)
+            logger.debug("Upserted %d documents into '%s'", len(ids), self._collection_name)
+        except Exception as exc:
+            logger.error("add_documents failed: %s", exc)
+            raise RuntimeError(f"Failed to add documents to collection: {exc}") from exc
+
     @staticmethod
     def now_iso() -> str:
         """Return the current UTC time as an ISO-8601 string."""
