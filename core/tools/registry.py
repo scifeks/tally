@@ -1,0 +1,29 @@
+from typing import Dict, List, Optional
+
+from .base import ToolWrapper
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._tools: Dict[str, ToolWrapper] = {}
+
+    def register(self, tool: ToolWrapper) -> None:
+        self._tools[tool.name] = tool
+
+    def get_tool(self, name: str) -> Optional[ToolWrapper]:
+        return self._tools.get(name)
+
+    def get_tools_by_category(self, category: str) -> List[ToolWrapper]:
+        return [t for t in self._tools.values() if t.category == category]
+
+    def get_tools_by_scope(self, scope: str) -> List[ToolWrapper]:
+        return [t for t in self._tools.values() if t.scope == scope]
+
+    def list_all(self) -> List[ToolWrapper]:
+        return list(self._tools.values())
+
+    def check_availability(self) -> Dict[str, bool]:
+        return {name: tool.check_available() for name, tool in self._tools.items()}
+
+
+tool_registry = ToolRegistry()
