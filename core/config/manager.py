@@ -29,14 +29,25 @@ class ConfigManager:
         self.global_config = self._load_global_config()
 
     def _load_global_config(self) -> GlobalConfig:
-        """Load global configuration or create default."""
-        if self.global_config_path.exists():
-            with open(self.global_config_path, 'r') as f:
-                data = json.load(f)
-                return GlobalConfig(**data)
-        config = GlobalConfig()
-        self.save_global_config(config)
-        return config
+        """Load global configuration from disk.
+
+        Raises:
+            FileNotFoundError: If config/global.json does not exist.
+            ValueError: If required fields (default_llm, default_embedding) are missing.
+        """
+        if not self.global_config_path.exists():
+            raise FileNotFoundError(
+                f"Global config not found at {self.global_config_path}. "
+                "Create it with the required fields: default_llm, default_embedding."
+            )
+        with open(self.global_config_path, 'r') as f:
+            data = json.load(f)
+        try:
+            return GlobalConfig(**data)
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid global config at {self.global_config_path}: {exc}"
+            ) from exc
 
     def save_global_config(self, config: GlobalConfig) -> None:
         """Save global configuration to disk.

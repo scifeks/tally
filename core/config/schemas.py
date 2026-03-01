@@ -47,8 +47,8 @@ class ProjectConfig(BaseModel):
 class GlobalConfig(BaseModel):
     """Global application configuration."""
     ollama_base_url: str = Field(default="http://localhost:11434")
-    default_llm: str = Field(default="qwen2.5:7b")
-    default_embedding: str = Field(default="nomic-embed-text")
+    default_llm: str = Field(description="Ollama chat model to use (e.g. qwen3:14b)")
+    default_embedding: str = Field(description="Ollama embedding model to use (e.g. nomic-embed-text)")
     projects_dir: str = Field(default="./projects")
 
     @field_validator('ollama_base_url')

@@ -1,0 +1,243 @@
+"""Finding ingestion pipeline — converts ToolResult output into ChromaDB documents."""
+import logging
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from core.tools.base import ToolResult
+from .engine import RAGEngine
+
+logger = logging.getLogger(__name__)
+
+
+class FindingIngestor:
+    """Ingests tool findings into the project's ChromaDB collection.
+
+    Uses a delete-insert (upsert) strategy: before adding new findings for a
+    given tool/profile combination the existing ones are removed, so re-running
+    a scan never produces duplicates.
+
+    Document ID format::
+
+        <tool>_<profile>_<type>_<indices>_<compact_utc>
+        nmap_webservers_host_0_20240228T143022
+        nmap_webservers_port_0_3_20240228T143022
+    """
+
+    def __init__(self, rag_engine: RAGEngine, project_name: str) -> None:
+        """Initialise the ingestor.
+
+        Args:
+            rag_engine:   Initialised RAGEngine for the current project.
+            project_name: Identifier for the project (used for logging).
+        """
+        self._engine = rag_engine
+        self.project_name = project_name
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def ingest_tool_output(
+        self,
+        tool_result: ToolResult,
+        profile: Optional[str] = None,
+    ) -> int:
+        """Index a tool's findings into ChromaDB.
+
+        Old findings for the same tool/profile are deleted before new ones are
+        added, ensuring the collection always reflects the latest scan.
+
+        Args:
+            tool_result: Result object returned by the tool executor.
+            profile:     Optional profile name (e.g. nmap profile). Defaults
+                         to ``"manual"`` for ad-hoc invocations.
+
+        Returns:
+            Number of documents ingested (0 if nothing to ingest).
+        """
+        tool = tool_result.tool_name
+        effective_profile = profile or "manual"
+
+        if not tool_result.success or tool_result.parsed_data is None:
+            logger.warning(
+                "Skipping ingestion for %s/%s: tool did not succeed or produced no parsed data",
+                tool,
+                effective_profile,
+            )
+            return 0
+
+        if "error" in tool_result.parsed_data:
+            logger.warning(
+                "Skipping ingestion for %s/%s: parse error — %s",
+                tool,
+                effective_profile,
+                tool_result.parsed_data["error"],
+            )
+            return 0
+
+        # Delete stale findings for this tool/profile before inserting fresh ones
+        deleted = self._engine.delete_findings(tool, effective_profile)
+        if deleted:
+            logger.debug(
+                "Deleted %d stale findings for %s/%s", deleted, tool, effective_profile
+            )
+
+        chunks = self._build_chunks(tool_result, effective_profile)
+
+        if not chunks:
+            logger.info(
+                "No findings to ingest for %s/%s", tool, effective_profile
+            )
+            return 0
+
+        texts, metadatas, ids = zip(*chunks)
+        self._engine.add_documents(list(texts), list(metadatas), list(ids))
+        logger.info(
+            "Ingested %d documents for %s/%s", len(chunks), tool, effective_profile
+        )
+        return len(chunks)
+
+    # ------------------------------------------------------------------
+    # Chunk builders
+    # ------------------------------------------------------------------
+
+    def _build_chunks(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Dispatch to the appropriate per-tool chunk builder.
+
+        Args:
+            tool_result: Parsed tool result.
+            profile:     Effective profile name.
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        tool = tool_result.tool_name
+        if tool == "nmap":
+            return self._chunks_from_nmap(tool_result, profile)
+
+        # Stub for future tools (Phase 5/6)
+        logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
+        return []
+
+    def _chunks_from_nmap(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from an nmap ToolResult.
+
+        Each host produces one ``host`` chunk; each open port on that host
+        produces an additional ``open_port`` chunk.
+
+        Args:
+            tool_result: Parsed nmap result.
+            profile:     Effective profile name.
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        hosts: List[Dict[str, Any]] = parsed.get("hosts", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for host_idx, host in enumerate(hosts):
+            ip = host.get("ip_address", "")
+            hostname = host.get("hostname", "")
+            state = host.get("state", "unknown")
+            ports: List[Dict[str, Any]] = host.get("ports", [])
+            open_ports = [p for p in ports if p.get("state") == "open"]
+
+            # ---- host chunk ----
+            port_lines = "\n".join(
+                f"  {p['port']}/{p.get('protocol','tcp')} {p.get('service','')} {p.get('version','')}".rstrip()
+                for p in open_ports
+            ) or "  (none)"
+
+            host_label = f"{ip} ({hostname})" if hostname else ip
+            host_text = (
+                f"Host: {host_label}\n"
+                f"Status: {state}\n"
+                f"Ports:\n{port_lines}"
+            )
+            host_meta: Dict[str, Any] = {
+                "tool": "nmap",
+                "profile": profile,
+                "finding_type": "host",
+                "ip_address": ip,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
+            chunks.append((host_text, host_meta, host_id))
+
+            # ---- per-port chunks ----
+            for port_idx, port in enumerate(open_ports):
+                port_num = port.get("port", 0)
+                protocol = port.get("protocol", "tcp")
+                service = port.get("service", "")
+                version = port.get("version", "")
+                svc_str = f"{service} {version}".strip()
+
+                port_text = f"Port {port_num}/{protocol} on {ip}: {svc_str}"
+                port_meta: Dict[str, Any] = {
+                    "tool": "nmap",
+                    "profile": profile,
+                    "finding_type": "open_port",
+                    "ip_address": ip,
+                    "port": port_num,
+                    "service": service,
+                    "timestamp": timestamp,
+                    "source_file": source_file,
+                }
+                port_id = f"nmap_{profile}_port_{host_idx}_{port_idx}_{ts_compact}"
+                chunks.append((port_text, port_meta, port_id))
+
+        return chunks
+
+    def _process_finding(
+        self,
+        finding: Dict[str, Any],
+        tool_name: str,
+        profile: str,
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Convert a single finding dict to a (text, metadata) pair.
+
+        Currently a stub; tool-specific logic will be added in Phase 6.
+
+        Args:
+            finding:   Structured finding dict from parsed tool output.
+            tool_name: Name of the tool that produced the finding.
+            profile:   Effective profile name.
+
+        Returns:
+            ``(document_text, metadata)`` tuple.
+        """
+        text = str(finding)
+        metadata: Dict[str, Any] = {
+            "tool": tool_name,
+            "profile": profile,
+            "finding_type": finding.get("type", "unknown"),
+            "timestamp": RAGEngine.now_iso(),
+        }
+        return text, metadata
+
+
+# ------------------------------------------------------------------
+# Module-level helpers
+# ------------------------------------------------------------------
+
+def _first_output_file(output_files: Dict[str, Path]) -> str:
+    """Return the string path of the first output file, or empty string."""
+    if not output_files:
+        return ""
+    return str(next(iter(output_files.values())))

@@ -12,6 +12,22 @@ if TYPE_CHECKING:
     from core.repl.interface import REPL
 
 
+def _ingest_result(repl: 'REPL', result: ToolResult, profile: Optional[str] = None) -> int:
+    """Ingest a ToolResult into the project's RAG store. Returns document count."""
+    from core.rag import FindingIngestor, RAGEngine
+
+    try:
+        rag_engine = RAGEngine(
+            project_name=repl.active_project,
+            base_path=repl.base_path,
+        )
+        ingestor = FindingIngestor(rag_engine, repl.active_project)
+        return ingestor.ingest_tool_output(result, profile=profile)
+    except (RuntimeError, ValueError) as exc:
+        repl.console.print(f'[red]Ingestion error:[/red] {exc}')
+        return 0
+
+
 class ScanCommands:
     """Handlers for tool scan execution commands."""
 
@@ -87,10 +103,11 @@ class ScanCommands:
                 self.repl.console.print(f'Output saved to: {path}')
 
         if self._ask_ingest():
-            self.repl.console.print(
-                '[green]✓ Marked for ingestion[/green] '
-                '(RAG ingestion coming in Phase 4)'
-            )
+            count = _ingest_result(self.repl, result)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} findings[/green]')
+            else:
+                self.repl.console.print('[yellow]No findings to ingest.[/yellow]')
 
     # ------------------------------------------------------------------
     # Private — nmap scan flow
@@ -149,10 +166,11 @@ class ScanCommands:
                 self.repl.console.print(f'Output saved to: {path}')
 
         if self._ask_ingest():
-            self.repl.console.print(
-                '[green]✓ Marked for ingestion[/green] '
-                '(RAG ingestion coming in Phase 4)'
-            )
+            count = _ingest_result(self.repl, result, profile=profile_name)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} findings[/green]')
+            else:
+                self.repl.console.print('[yellow]No findings to ingest.[/yellow]')
 
     def _execute_nmap_scan(
         self,
