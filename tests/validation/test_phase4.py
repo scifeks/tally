@@ -60,6 +60,7 @@ slow = pytest.mark.slow
 def project_env(tmp_path: Path) -> Dict:
     """Minimal project environment under tmp_path (no nmap config, no data)."""
     name = "test-proj"
+    _write_global_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm._create_project_dirs(name)
     pm._save_project(name, [])
@@ -76,6 +77,16 @@ def nmap_project_env(project_env: Dict) -> Dict:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _write_global_config(base_path: Path) -> None:
+    config_dir = base_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "global.json").write_text(json.dumps({
+        "ollama_base_url": "http://localhost:11434",
+        "default_llm": "qwen3:14b",
+        "default_embedding": "nomic-embed-text:latest",
+    }))
+
 
 def _write_nmap_config(base_path: Path, project_name: str) -> None:
     cm = ConfigManager(base_path=str(base_path))
@@ -436,6 +447,7 @@ class TestUpsert:
 @requires_ollama
 class TestProjectIsolation:
     def _make_two_projects(self, tmp_path: Path) -> None:
+        _write_global_config(tmp_path)
         pm = ProjectManager(base_path=str(tmp_path))
         for n in ("proj-a", "proj-b"):
             pm._create_project_dirs(n)
