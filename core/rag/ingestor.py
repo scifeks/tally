@@ -119,6 +119,8 @@ class FindingIngestor:
         tool = tool_result.tool_name
         if tool == "nmap":
             return self._chunks_from_nmap(tool_result, profile)
+        if tool == "semgrep":
+            return self._chunks_from_semgrep(tool_result, profile)
 
         # Stub for future tools (Phase 5/6)
         logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
@@ -201,6 +203,71 @@ class FindingIngestor:
                 }
                 port_id = f"nmap_{profile}_port_{host_idx}_{port_idx}_{ts_compact}"
                 chunks.append((port_text, port_meta, port_id))
+
+        return chunks
+
+    def _chunks_from_semgrep(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from a semgrep ToolResult.
+
+        Each finding produces one ``vulnerability`` chunk containing the rule
+        ID, severity, message, file path, and code snippet.
+
+        Args:
+            tool_result: Parsed semgrep result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        findings: List[Dict[str, Any]] = parsed.get("findings", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for fi, finding in enumerate(findings):
+            rule_id = finding.get("rule_id", "")
+            severity = finding.get("severity", "low")
+            message = finding.get("message", "")
+            file_path = finding.get("file_path", "")
+            line_start = finding.get("line_start", 0)
+            line_end = finding.get("line_end", 0)
+            code_snippet = finding.get("code_snippet", "")
+            cwe = finding.get("cwe") or ""
+            owasp = finding.get("owasp") or ""
+
+            text = (
+                f"[{severity.upper()}] {rule_id} in {file_path}:{line_start}\n"
+                f"Message: {message}\n"
+                f"Code: {code_snippet}"
+            )
+
+            meta: Dict[str, Any] = {
+                "tool": "semgrep",
+                "profile": profile,
+                "finding_type": "vulnerability",
+                "severity": severity,
+                "rule_id": rule_id,
+                "file_path": file_path,
+                "line_start": line_start,
+                "line_end": line_end,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if cwe:
+                meta["cwe"] = cwe
+            if owasp:
+                meta["owasp"] = owasp
+
+            doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
 
         return chunks
 
