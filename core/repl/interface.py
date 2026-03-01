@@ -14,7 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import ProjectCommands, ScanCommands
+from core.repl.commands import KnowledgeCommands, ProjectCommands, ScanCommands
 
 _VERSION = '1.0'
 
@@ -54,9 +54,10 @@ _HELP_ROWS = [
     (None, 'scan -t gitleaks',       'Run gitleaks secret detection'),
     (None, 'scan -t zap',            'Run OWASP ZAP web scan'),
     (None, 'run <tool> [args...]',   'Execute a tool with raw arguments'),
-    ('RAG / Analysis', None, None),
-    (None, 'rag index',           'Index repositories into vector store'),
-    (None, 'rag query <text>',    'Query the RAG engine'),
+    ('Knowledge Base', None, None),
+    (None, 'search <query>',      'Semantic search over ingested findings'),
+    (None, 'chat <message>',      'RAG-augmented chat with the LLM'),
+    (None, 'stats',               'Show knowledge base statistics'),
     ('Reporting', None, None),
     (None, 'report',              'Generate findings report'),
     ('Utility', None, None),
@@ -70,7 +71,7 @@ _COMPLETIONS = [
     'new-project', 'projects', 'switch', 'project-info', 'add-repo',
     'repos', 'edit-repo', 'delete-repo',
     'scan', 'run',
-    'rag index', 'rag query',
+    'search', 'chat', 'stats',
     'report',
 ]
 # First tokens only for WordCompleter
@@ -88,6 +89,7 @@ class REPL:
         self.active_project: Optional[str] = None
         self.project_commands = ProjectCommands(self)
         self.scan_commands = ScanCommands(self)
+        self.knowledge_commands = KnowledgeCommands(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -138,6 +140,7 @@ class REPL:
     def _dispatch(self, cmd: str, args: list) -> None:
         pc = self.project_commands
         sc = self.scan_commands
+        kc = self.knowledge_commands
         handlers = {
             'help':         self._cmd_help,
             'clear':        self._cmd_clear,
@@ -153,7 +156,9 @@ class REPL:
             'project-info': pc.cmd_project_info,
             'scan':         sc.cmd_scan,
             'run':          sc.cmd_run,
-            'rag':          self._cmd_stub,
+            'search':       kc.cmd_search,
+            'chat':         kc.cmd_chat,
+            'stats':        kc.cmd_stats,
             'report':       self._cmd_stub,
         }
         handler = handlers.get(cmd)
