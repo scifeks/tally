@@ -53,6 +53,8 @@ class ScanCommands:
             self._cmd_scan_nmap(remaining, timeout)
         elif tool_name == 'semgrep':
             self._cmd_scan_semgrep(remaining, timeout)
+        elif tool_name == 'osv-scanner':
+            self._cmd_scan_osv(remaining, timeout)
         else:
             self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
 
@@ -280,6 +282,111 @@ class ScanCommands:
             label=repo_name,
             repo_path=repo_path,
         )
+
+    # ------------------------------------------------------------------
+    # Private — osv-scanner scan flow
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_osv(self, remaining: List[str], timeout: int) -> None:
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        tool = tool_registry.get_tool('osv-scanner')
+        if tool is None:
+            self.repl.console.print('[red]Tool not found:[/red] osv-scanner')
+            return
+
+        if not tool.check_available():
+            self.repl.console.print(
+                '[red]Tool not installed:[/red] osv-scanner. '
+                'Install with: go install github.com/google/osv-scanner/cmd/osv-scanner@latest'
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        self.repl.console.print(f'Running osv-scanner: {repo.name}...')
+        result = self._execute_osv_scan(repo.name, repo.path, timeout=timeout)
+        self._print_osv_result(result)
+
+        if result.output_files:
+            for path in result.output_files.values():
+                self.repl.console.print(f'Output saved to: {path}')
+
+        # osv-scanner exits with code 1 when vulnerabilities are present — not a true failure
+        if result.parsed_data and "error" not in result.parsed_data:
+            result.success = True
+
+        if self._ask_ingest():
+            count = _ingest_result(self.repl, result, profile=repo.name)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} vulnerabilities[/green]')
+            else:
+                self.repl.console.print('[yellow]No vulnerabilities to ingest.[/yellow]')
+
+    def _execute_osv_scan(
+        self,
+        repo_name: str,
+        repo_path: str,
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        tool = tool_registry.get_tool('osv-scanner')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        return executor.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=timeout,
+            label=repo_name,
+            repo_path=repo_path,
+        )
+
+    def _print_osv_result(self, result: ToolResult) -> None:
+        has_valid_data = result.parsed_data and "error" not in result.parsed_data
+        if has_valid_data or result.success:
+            summary = self._summarize_osv(result)
+            self.repl.console.print(f'[green]✓ Scan complete:[/green] {summary}')
+        else:
+            self.repl.console.print(f'[red]✗ Scan failed:[/red] {result.output}')
+
+    @staticmethod
+    def _summarize_osv(result: ToolResult) -> str:
+        if not result.parsed_data:
+            return 'scan complete'
+        summary = result.parsed_data.get('summary', {})
+        total = summary.get('total_vulnerabilities', 0)
+        by_sev = summary.get('by_severity', {})
+        parts = [f'{by_sev[s]} {s}' for s in ('critical', 'high', 'medium', 'low') if by_sev.get(s)]
+        sev_str = ', '.join(parts) if parts else 'none'
+        return f'{total} vulnerabilities ({sev_str})'
 
     def _print_semgrep_result(self, result: ToolResult) -> None:
         has_valid_data = result.parsed_data and "error" not in result.parsed_data

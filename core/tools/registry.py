@@ -29,7 +29,9 @@ class ToolRegistry:
 tool_registry = ToolRegistry()
 
 from .wrappers.nmap import NmapWrapper  # noqa: E402
+from .wrappers.osv_scanner import OSVScannerWrapper  # noqa: E402
 from .wrappers.semgrep import SemgrepWrapper  # noqa: E402
 
 tool_registry.register(NmapWrapper())
+tool_registry.register(OSVScannerWrapper())
 tool_registry.register(SemgrepWrapper())

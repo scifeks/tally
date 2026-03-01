@@ -121,8 +121,10 @@ class FindingIngestor:
             return self._chunks_from_nmap(tool_result, profile)
         if tool == "semgrep":
             return self._chunks_from_semgrep(tool_result, profile)
+        if tool == "osv-scanner":
+            return self._chunks_from_osv(tool_result, profile)
 
-        # Stub for future tools (Phase 5/6)
+        # Stub for future tools (Phase 6)
         logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
         return []
 
@@ -267,6 +269,78 @@ class FindingIngestor:
                 meta["owasp"] = owasp
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
+
+        return chunks
+
+    def _chunks_from_osv(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from an OSV-Scanner ToolResult.
+
+        Each vulnerability produces one ``dependency_vulnerability`` chunk
+        containing the package name, version, CVE/GHSA ID, severity, and
+        description.
+
+        Args:
+            tool_result: Parsed OSV-Scanner result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        vulnerabilities: List[Dict[str, Any]] = parsed.get("vulnerabilities", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for vi, vuln in enumerate(vulnerabilities):
+            pkg_name = vuln.get("package_name", "")
+            pkg_version = vuln.get("package_version", "")
+            vuln_id = vuln.get("vulnerability_id", "")
+            severity = vuln.get("severity", "low")
+            summary = vuln.get("summary", "")
+            ecosystem = vuln.get("affected_ecosystem", "")
+            fixed_version = vuln.get("fixed_version")
+            cvss_score = vuln.get("cvss_score")
+            lockfile = vuln.get("source_file", "")
+
+            fixed_str = fixed_version or "unknown"
+            text = (
+                f"[{severity.upper()}] vulnerability in {pkg_name}@{pkg_version}\n"
+                f"Vulnerability: {vuln_id}\n"
+                f"Description: {summary}\n"
+                f"Ecosystem: {ecosystem}\n"
+                f"Fixed in: {fixed_str}\n"
+                f"Source: {lockfile}"
+            )
+
+            meta: Dict[str, Any] = {
+                "tool": "osv-scanner",
+                "profile": profile,
+                "finding_type": "dependency_vulnerability",
+                "severity": severity,
+                "package_name": pkg_name,
+                "package_version": pkg_version,
+                "vulnerability_id": vuln_id,
+                "ecosystem": ecosystem,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if fixed_version:
+                meta["fixed_version"] = fixed_version
+            if cvss_score is not None:
+                meta["cvss_score"] = cvss_score
+            if lockfile:
+                meta["lockfile"] = lockfile
+
+            doc_id = f"osv-scanner_{profile}_vuln_{vi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks
