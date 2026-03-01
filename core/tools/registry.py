@@ -27,3 +27,7 @@ class ToolRegistry:
 
 
 tool_registry = ToolRegistry()
+
+from .wrappers.nmap import NmapWrapper  # noqa: E402
+
+tool_registry.register(NmapWrapper())
