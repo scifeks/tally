@@ -14,7 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import ProjectCommands
+from core.repl.commands import ProjectCommands, ScanCommands
 
 _VERSION = '1.0'
 
@@ -46,11 +46,14 @@ _HELP_ROWS = [
     (None, 'edit-repo <name>',    'Edit a repository\'s config'),
     (None, 'delete-repo <name>',  'Delete a repository\'s config'),
     ('Scanning', None, None),
-    (None, 'nmap scan',           'Run nmap against configured hosts'),
-    (None, 'semgrep scan',        'Run semgrep static analysis'),
-    (None, 'osv scan',            'Run OSV-Scanner for vulnerabilities'),
-    (None, 'gitleaks scan',       'Run gitleaks secret detection'),
-    (None, 'zap scan',            'Run OWASP ZAP web scan'),
+    #todo: I don't like this formatting. Experiment with other layouts.s
+    (None, '',                       '[dim]All commands accept --timeout <seconds>[/dim]'),
+    (None, 'scan -t nmap [profile]', 'Run nmap (all profiles or one by name)'),
+    (None, 'scan -t semgrep',        'Run semgrep static analysis'),
+    (None, 'scan -t osv',            'Run OSV-Scanner for vulnerabilities'),
+    (None, 'scan -t gitleaks',       'Run gitleaks secret detection'),
+    (None, 'scan -t zap',            'Run OWASP ZAP web scan'),
+    (None, 'run <tool> [args...]',   'Execute a tool with raw arguments'),
     ('RAG / Analysis', None, None),
     (None, 'rag index',           'Index repositories into vector store'),
     (None, 'rag query <text>',    'Query the RAG engine'),
@@ -66,7 +69,7 @@ _COMPLETIONS = [
     'help', 'exit', 'quit', 'clear',
     'new-project', 'projects', 'switch', 'project-info', 'add-repo',
     'repos', 'edit-repo', 'delete-repo',
-    'nmap scan', 'semgrep scan', 'osv scan', 'gitleaks scan', 'zap scan',
+    'scan', 'run',
     'rag index', 'rag query',
     'report',
 ]
@@ -82,8 +85,9 @@ class REPL:
         self.console = Console()
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
-        self.active_project: Optional[str] = self.projects.get_active_project()
+        self.active_project: Optional[str] = None
         self.project_commands = ProjectCommands(self)
+        self.scan_commands = ScanCommands(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -133,6 +137,7 @@ class REPL:
 
     def _dispatch(self, cmd: str, args: list) -> None:
         pc = self.project_commands
+        sc = self.scan_commands
         handlers = {
             'help':         self._cmd_help,
             'clear':        self._cmd_clear,
@@ -146,11 +151,8 @@ class REPL:
             'edit-repo':    pc.cmd_edit_repo,
             'delete-repo':  pc.cmd_delete_repo,
             'project-info': pc.cmd_project_info,
-            'nmap':         self._cmd_stub,
-            'semgrep':      self._cmd_stub,
-            'osv':          self._cmd_stub,
-            'gitleaks':     self._cmd_stub,
-            'zap':          self._cmd_stub,
+            'scan':         sc.cmd_scan,
+            'run':          sc.cmd_run,
             'rag':          self._cmd_stub,
             'report':       self._cmd_stub,
         }
