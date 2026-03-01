@@ -284,9 +284,10 @@ class RAGEngine:
         if self._collection is None:
             return 0
 
-        where: Dict[str, Any] = {"tool": tool}
         if profile is not None:
-            where["profile"] = profile
+            where: Dict[str, Any] = {"$and": [{"tool": tool}, {"profile": profile}]}
+        else:
+            where: Dict[str, Any] = {"tool": tool}
 
         try:
             result = self._collection.get(where=where, include=[])
