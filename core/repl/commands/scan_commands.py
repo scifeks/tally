@@ -1,8 +1,9 @@
 """Scan execution commands for the tally REPL."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from core.tools.base import ToolResult
 from core.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
@@ -63,6 +64,8 @@ class ScanCommands:
             self._cmd_scan_composer_audit(remaining, timeout)
         elif tool_name == 'gitleaks':
             self._cmd_scan_gitleaks(remaining, timeout)
+        elif tool_name == 'zap':
+            self._cmd_scan_zap(remaining, timeout)
         else:
             self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
 
@@ -435,7 +438,7 @@ class ScanCommands:
                 self.repl.console.print('[red]Invalid choice.[/red]')
                 return
 
-        selected_tools = self._select_repo_tools(repo.languages)
+        selected_tools = self._select_repo_tools(repo.languages, repo.base_urls)
         lang_str = ', '.join(repo.languages) if repo.languages else 'unknown'
         self.repl.console.print(
             f'\nRepository: [cyan]{repo.name}[/cyan] ({lang_str})'
@@ -491,6 +494,34 @@ class ScanCommands:
                 self._print_gitleaks_result(result)
                 if result.parsed_data and "error" not in result.parsed_data:
                     result.success = True
+            elif tool_name == 'zap':
+                endpoint_cfg = self.repl.config.load_endpoint_config(
+                    self.repl.active_project, repo.name
+                )
+                endpoints_dict: Dict[str, List[str]] = (
+                    endpoint_cfg.endpoints if endpoint_cfg else {}
+                )
+                for base_url in repo.base_urls:
+                    self.repl.console.print(f'  Scanning: [cyan]{base_url}[/cyan]...')
+                    zap_result = self._execute_zap_scan(
+                        repo.name, base_url, endpoints_dict, timeout=timeout
+                    )
+                    self._print_zap_result(zap_result)
+                    if zap_result.parsed_data and "error" not in zap_result.parsed_data:
+                        zap_result.success = True
+                    if zap_result.output_files:
+                        for path in zap_result.output_files.values():
+                            self.repl.console.print(f'Output saved to: {path}')
+                    if self._ask_ingest():
+                        count = _ingest_result(self.repl, zap_result, profile=repo.name)
+                        if count > 0:
+                            self.repl.console.print(
+                                f'[green]✓ Ingested {count} alerts[/green]'
+                            )
+                        else:
+                            self.repl.console.print('[yellow]No alerts to ingest.[/yellow]')
+                self.repl.console.print()
+                continue  # output files and ingestion already handled per base_url
             else:
                 continue
 
@@ -885,6 +916,155 @@ class ScanCommands:
         return f'{total} secrets in {files_count} file(s) ({rule_str})'
 
     # ------------------------------------------------------------------
+    # Private — ZAP scan flow
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_zap(self, remaining: List[str], timeout: int) -> None:
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        tool = tool_registry.get_tool('zap')
+        if tool is None:
+            self.repl.console.print('[red]Tool not found:[/red] zap')
+            return
+
+        if not tool.check_available():
+            self.repl.console.print(
+                '[red]Tool not installed:[/red] zap. '
+                'Install with: apt install zaproxy  (or download from zaproxy.org)'
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        if not repo.base_urls:
+            self.repl.console.print(
+                '[yellow]No base_urls configured for this repository.[/yellow]\n'
+                "Add base_urls to the repository config (e.g. 'http://localhost:8080')."
+            )
+            return
+
+        endpoint_cfg = self.repl.config.load_endpoint_config(
+            self.repl.active_project, repo.name
+        )
+        if endpoint_cfg is None:
+            self.repl.console.print(
+                f'[yellow]No endpoint config found for {repo.name!r}.[/yellow]\n'
+                f'Create one at: projects/{self.repl.active_project}'
+                f'/config/endpoints/{repo.name}.json\n'
+                'ZAP will still run using quick-scan mode (spider from base_url).'
+            )
+        endpoints_dict: Dict[str, List[str]] = (
+            endpoint_cfg.endpoints if endpoint_cfg else {}
+        )
+
+        for base_url in repo.base_urls:
+            self.repl.console.print(f'Running ZAP: {repo.name} → [cyan]{base_url}[/cyan]...')
+            result = self._execute_zap_scan(
+                repo.name, base_url, endpoints_dict, timeout=timeout
+            )
+            self._print_zap_result(result)
+
+            if result.output_files:
+                for path in result.output_files.values():
+                    self.repl.console.print(f'Output saved to: {path}')
+
+            # ZAP exits non-zero when alerts are found — not a true failure
+            if result.parsed_data and "error" not in result.parsed_data:
+                result.success = True
+
+            if self._ask_ingest():
+                count = _ingest_result(self.repl, result, profile=repo.name)
+                if count > 0:
+                    self.repl.console.print(f'[green]✓ Ingested {count} alerts[/green]')
+                else:
+                    self.repl.console.print('[yellow]No alerts to ingest.[/yellow]')
+
+    def _execute_zap_scan(
+        self,
+        repo_name: str,
+        base_url: str,
+        endpoints: Dict[str, List[str]],
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        tool = tool_registry.get_tool('zap')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        # Compute report path inside the project's tool_outputs/zap directory
+        output_dir = (
+            Path(self.repl.base_path)
+            / "projects"
+            / self.repl.active_project
+            / "tool_outputs"
+            / "zap"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        output_file = str(output_dir / f"{repo_name}_{ts}_report.json")
+
+        return executor.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=timeout,
+            label=repo_name,
+            base_url=base_url,
+            endpoints=endpoints,
+            output_file=output_file,
+        )
+
+    def _print_zap_result(self, result: ToolResult) -> None:
+        has_valid_data = result.parsed_data and "error" not in result.parsed_data
+        if has_valid_data or result.success:
+            summary = self._summarize_zap(result)
+            self.repl.console.print(f'[green]✓ Scan complete:[/green] {summary}')
+        else:
+            self.repl.console.print(f'[red]✗ Scan failed:[/red] {result.output[:200]}')
+
+    @staticmethod
+    def _summarize_zap(result: ToolResult) -> str:
+        if not result.parsed_data:
+            return 'scan complete'
+        summary = result.parsed_data.get('summary', {})
+        total = summary.get('total_alerts', 0)
+        by_risk = summary.get('by_risk', {})
+        parts = [
+            f'{by_risk[r]} {r}'
+            for r in ('high', 'medium', 'low', 'informational')
+            if by_risk.get(r)
+        ]
+        risk_str = ', '.join(parts) if parts else 'none'
+        urls = summary.get('urls_scanned', 0)
+        return f'{total} alerts ({risk_str}), {urls} URLs scanned'
+
+    # ------------------------------------------------------------------
     # Private — shared SCA result helpers
     # ------------------------------------------------------------------
 
@@ -912,12 +1092,16 @@ class ScanCommands:
         return f'{total} vulnerabilities ({sev_str})'
 
     @staticmethod
-    def _select_repo_tools(languages: List[str]) -> List[str]:
+    def _select_repo_tools(
+        languages: List[str],
+        base_urls: Optional[List[str]] = None,
+    ) -> List[str]:
         """Return tool names for a full repository scan.
 
         osv-scanner is always included as a baseline multi-ecosystem scanner.
         gitleaks is always included for secrets detection.
         Language-specific tools are added based on detected languages.
+        zap is included when the repository has base_urls configured.
         """
         tools = ["osv-scanner"]
         lowered = {lang.lower() for lang in languages}
@@ -928,6 +1112,8 @@ class ScanCommands:
         if "php" in lowered:
             tools.append("composer-audit")
         tools.append("gitleaks")
+        if base_urls:
+            tools.append("zap")
         return tools
 
     def _print_semgrep_result(self, result: ToolResult) -> None:

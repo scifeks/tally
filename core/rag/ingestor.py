@@ -125,6 +125,8 @@ class FindingIngestor:
             return self._chunks_from_sca_vulns(tool_result, profile)
         if tool == "gitleaks":
             return self._chunks_from_gitleaks(tool_result, profile)
+        if tool == "zap":
+            return self._chunks_from_zap(tool_result, profile)
 
         logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
         return []
@@ -414,6 +416,78 @@ class FindingIngestor:
                 meta["commit"] = commit
 
             doc_id = f"gitleaks_{profile}_secret_{si}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
+
+        return chunks
+
+    def _chunks_from_zap(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from a ZAP ToolResult.
+
+        Each alert instance produces one ``api_vulnerability`` chunk containing
+        the risk level, affected endpoint, description, and remediation advice.
+
+        Args:
+            tool_result: Parsed ZAP result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        alerts: List[Dict[str, Any]] = parsed.get("alerts", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for ai, alert in enumerate(alerts):
+            alert_name = alert.get("alert_name", "")
+            risk = alert.get("risk", "informational")
+            confidence = alert.get("confidence", "low")
+            description = alert.get("description", "")
+            url = alert.get("url", "")
+            method = alert.get("method", "")
+            param = alert.get("param") or ""
+            evidence = alert.get("evidence") or ""
+            solution = alert.get("solution", "")
+            cwe_id = alert.get("cwe_id")
+
+            text_lines = [
+                f"[{risk.upper()}] API vulnerability: {alert_name}",
+                f"Endpoint: {method} {url}",
+            ]
+            if param:
+                text_lines.append(f"Parameter: {param}")
+            text_lines.append(f"Description: {description}")
+            if evidence:
+                text_lines.append(f"Evidence: {evidence}")
+            text_lines.append(f"Solution: {solution}")
+            text = "\n".join(text_lines)
+
+            meta: Dict[str, Any] = {
+                "tool": "zap",
+                "profile": profile,
+                "finding_type": "api_vulnerability",
+                "severity": risk,
+                "confidence": confidence,
+                "alert_name": alert_name,
+                "url": url,
+                "method": method,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if param:
+                meta["param"] = param
+            if cwe_id is not None:
+                meta["cwe_id"] = cwe_id
+
+            doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks

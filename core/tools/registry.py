@@ -35,6 +35,7 @@ from .wrappers.npm_audit import NpmAuditWrapper  # noqa: E402
 from .wrappers.osv_scanner import OSVScannerWrapper  # noqa: E402
 from .wrappers.pip_audit import PipAuditWrapper  # noqa: E402
 from .wrappers.semgrep import SemgrepWrapper  # noqa: E402
+from .wrappers.zap import ZAPWrapper  # noqa: E402
 
 tool_registry.register(NmapWrapper())
 tool_registry.register(OSVScannerWrapper())
@@ -43,3 +44,4 @@ tool_registry.register(PipAuditWrapper())
 tool_registry.register(NpmAuditWrapper())
 tool_registry.register(ComposerAuditWrapper())
 tool_registry.register(GitleaksWrapper())
+tool_registry.register(ZAPWrapper())
