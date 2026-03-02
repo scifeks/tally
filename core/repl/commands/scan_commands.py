@@ -61,6 +61,8 @@ class ScanCommands:
             self._cmd_scan_npm_audit(remaining, timeout)
         elif tool_name == 'composer-audit':
             self._cmd_scan_composer_audit(remaining, timeout)
+        elif tool_name == 'gitleaks':
+            self._cmd_scan_gitleaks(remaining, timeout)
         else:
             self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
 
@@ -119,6 +121,7 @@ class ScanCommands:
             else:
                 self.repl.console.print('[yellow]No findings to ingest.[/yellow]')
 
+    #todo: These all need to be their own modules, this is getting ridiculous.
     # ------------------------------------------------------------------
     # Private — nmap scan flow
     # ------------------------------------------------------------------
@@ -432,7 +435,7 @@ class ScanCommands:
                 self.repl.console.print('[red]Invalid choice.[/red]')
                 return
 
-        selected_tools = self._select_sca_tools(repo.languages)
+        selected_tools = self._select_repo_tools(repo.languages)
         lang_str = ', '.join(repo.languages) if repo.languages else 'unknown'
         self.repl.console.print(
             f'\nRepository: [cyan]{repo.name}[/cyan] ({lang_str})'
@@ -483,6 +486,11 @@ class ScanCommands:
                 self._print_sca_result(result, 'composer-audit')
                 if result.parsed_data and "error" not in result.parsed_data:
                     result.success = True
+            elif tool_name == 'gitleaks':
+                result = self._execute_gitleaks_scan(repo.name, repo.path, timeout=timeout)
+                self._print_gitleaks_result(result)
+                if result.parsed_data and "error" not in result.parsed_data:
+                    result.success = True
             else:
                 continue
 
@@ -492,7 +500,12 @@ class ScanCommands:
 
             if self._ask_ingest():
                 count = _ingest_result(self.repl, result, profile=repo.name)
-                label = 'findings' if tool_name == 'semgrep' else 'vulnerabilities'
+                if tool_name == 'gitleaks':
+                    label = 'secrets'
+                elif tool_name == 'semgrep':
+                    label = 'findings'
+                else:
+                    label = 'vulnerabilities'
                 if count > 0:
                     self.repl.console.print(f'[green]✓ Ingested {count} {label}[/green]')
                 else:
@@ -762,6 +775,116 @@ class ScanCommands:
         )
 
     # ------------------------------------------------------------------
+    # Private — gitleaks scan flow
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_gitleaks(self, remaining: List[str], timeout: int) -> None:
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+            )
+            return
+
+        tool = tool_registry.get_tool('gitleaks')
+        if tool is None:
+            self.repl.console.print('[red]Tool not found:[/red] gitleaks')
+            return
+
+        if not tool.check_available():
+            self.repl.console.print(
+                '[red]Tool not installed:[/red] gitleaks. '
+                'Install with: apt install gitleaks'
+            )
+            return
+
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        if not repos:
+            self.repl.console.print(
+                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+            )
+            return
+
+        if len(repos) == 1:
+            repo = repos[0]
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
+                    self.repl.console.print('[red]Invalid choice.[/red]')
+                    return
+                repo = repos[idx]
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
+
+        self.repl.console.print(f'Running gitleaks: {repo.name}...')
+        result = self._execute_gitleaks_scan(repo.name, repo.path, timeout=timeout)
+        self._print_gitleaks_result(result)
+
+        if result.output_files:
+            for path in result.output_files.values():
+                self.repl.console.print(f'Output saved to: {path}')
+
+        # gitleaks exits with code 1 when secrets are found — not a true failure
+        if result.parsed_data and "error" not in result.parsed_data:
+            result.success = True
+
+        if self._ask_ingest():
+            count = _ingest_result(self.repl, result, profile=repo.name)
+            if count > 0:
+                self.repl.console.print(f'[green]✓ Ingested {count} secrets[/green]')
+            else:
+                self.repl.console.print('[yellow]No secrets to ingest.[/yellow]')
+
+    def _execute_gitleaks_scan(
+        self,
+        repo_name: str,
+        repo_path: str,
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        tool = tool_registry.get_tool('gitleaks')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        return executor.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=timeout,
+            label=repo_name,
+            repo_path=repo_path,
+        )
+
+    def _print_gitleaks_result(self, result: ToolResult) -> None:
+        has_valid_data = result.parsed_data and "error" not in result.parsed_data
+        if has_valid_data or result.success:
+            total = (result.parsed_data or {}).get("summary", {}).get("total_secrets", 0)
+            if total > 0:
+                self.repl.console.print('[yellow]⚠  WARNING: Secrets detected![/yellow]')
+            summary = self._summarize_gitleaks(result)
+            self.repl.console.print(f'[green]✓ Scan complete:[/green] {summary}')
+        else:
+            self.repl.console.print(f'[red]✗ Scan failed:[/red] {result.output}')
+
+    @staticmethod
+    def _summarize_gitleaks(result: ToolResult) -> str:
+        if not result.parsed_data:
+            return 'scan complete'
+        summary = result.parsed_data.get('summary', {})
+        total = summary.get('total_secrets', 0)
+        if total == 0:
+            return '0 secrets found (clean)'
+        files_count = summary.get('files_with_secrets', 0)
+        by_rule = summary.get('by_rule', {})
+        rule_str = ', '.join(f'{count} {rule}' for rule, count in by_rule.items())
+        return f'{total} secrets in {files_count} file(s) ({rule_str})'
+
+    # ------------------------------------------------------------------
     # Private — shared SCA result helpers
     # ------------------------------------------------------------------
 
@@ -789,10 +912,11 @@ class ScanCommands:
         return f'{total} vulnerabilities ({sev_str})'
 
     @staticmethod
-    def _select_sca_tools(languages: List[str]) -> List[str]:
-        """Return SCA tool names applicable to the given repository languages.
+    def _select_repo_tools(languages: List[str]) -> List[str]:
+        """Return tool names for a full repository scan.
 
         osv-scanner is always included as a baseline multi-ecosystem scanner.
+        gitleaks is always included for secrets detection.
         Language-specific tools are added based on detected languages.
         """
         tools = ["osv-scanner"]
@@ -803,6 +927,7 @@ class ScanCommands:
             tools.append("npm-audit")
         if "php" in lowered:
             tools.append("composer-audit")
+        tools.append("gitleaks")
         return tools
 
     def _print_semgrep_result(self, result: ToolResult) -> None:

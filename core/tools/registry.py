@@ -29,6 +29,7 @@ class ToolRegistry:
 tool_registry = ToolRegistry()
 
 from .wrappers.composer_audit import ComposerAuditWrapper  # noqa: E402
+from .wrappers.gitleaks import GitleaksWrapper  # noqa: E402
 from .wrappers.nmap import NmapWrapper  # noqa: E402
 from .wrappers.npm_audit import NpmAuditWrapper  # noqa: E402
 from .wrappers.osv_scanner import OSVScannerWrapper  # noqa: E402
@@ -41,3 +42,4 @@ tool_registry.register(SemgrepWrapper())
 tool_registry.register(PipAuditWrapper())
 tool_registry.register(NpmAuditWrapper())
 tool_registry.register(ComposerAuditWrapper())
+tool_registry.register(GitleaksWrapper())

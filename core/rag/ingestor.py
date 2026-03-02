@@ -123,8 +123,9 @@ class FindingIngestor:
             return self._chunks_from_semgrep(tool_result, profile)
         if tool in ("osv-scanner", "pip-audit", "npm-audit", "composer-audit"):
             return self._chunks_from_sca_vulns(tool_result, profile)
+        if tool == "gitleaks":
+            return self._chunks_from_gitleaks(tool_result, profile)
 
-        # Stub for future tools (Phase 6)
         logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
         return []
 
@@ -347,6 +348,72 @@ class FindingIngestor:
                 meta["lockfile"] = lockfile
 
             doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
+
+        return chunks
+
+    def _chunks_from_gitleaks(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from a gitleaks ToolResult.
+
+        Each detected secret produces one ``secret`` chunk containing the rule
+        ID, file path, line number, and match pattern.  The actual secret value
+        is never included in any chunk or metadata.
+
+        Args:
+            tool_result: Parsed gitleaks result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        secrets: List[Dict[str, Any]] = parsed.get("secrets", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for si, secret in enumerate(secrets):
+            rule_id = secret.get("rule_id", "")
+            description = secret.get("description", "")
+            file_path = secret.get("file_path", "")
+            line_number = secret.get("line_number", 0)
+            match = secret.get("match", "")
+            tags: List[str] = secret.get("tags") or []
+            commit = secret.get("commit")
+
+            tags_str = ", ".join(tags) if tags else ""
+
+            text = (
+                f"Secret detected: {rule_id} in {file_path}:{line_number}\n"
+                f"Type: {description}\n"
+                f"Pattern matched: {match}\n"
+                f"Tags: {tags_str}\n"
+                "Note: Actual secret value redacted for security"
+            )
+
+            meta: Dict[str, Any] = {
+                "tool": "gitleaks",
+                "profile": profile,
+                "finding_type": "secret",
+                "severity": "high",
+                "rule_id": rule_id,
+                "file_path": file_path,
+                "line_number": line_number,
+                "tags": tags_str,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if commit:
+                meta["commit"] = commit
+
+            doc_id = f"gitleaks_{profile}_secret_{si}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks

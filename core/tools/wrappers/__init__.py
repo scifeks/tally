@@ -1,4 +1,5 @@
 from .composer_audit import ComposerAuditWrapper
+from .gitleaks import GitleaksWrapper
 from .nmap import NmapWrapper
 from .npm_audit import NpmAuditWrapper
 from .osv_scanner import OSVScannerWrapper
@@ -7,6 +8,7 @@ from .semgrep import SemgrepWrapper
 
 __all__ = [
     "ComposerAuditWrapper",
+    "GitleaksWrapper",
     "NmapWrapper",
     "NpmAuditWrapper",
     "OSVScannerWrapper",
