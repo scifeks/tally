@@ -45,6 +45,7 @@ class ToolExecutor:
         auto_approve: Optional[bool] = None,
         timeout: int = DEFAULT_TIMEOUT,
         label: str = "output",
+        cwd: Optional[str] = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, capture, and return a ToolResult.
@@ -54,6 +55,9 @@ class ToolExecutor:
             auto_approve: Override instance-level auto_approve for this call.
             timeout:      Seconds before the subprocess is killed (default 300).
             label:        Prefix for saved output filenames (e.g. "webservers").
+            cwd:          Working directory for the subprocess. Required for
+                          tools like npm-audit and composer-audit that must run
+                          inside the project directory.
             **kwargs:     Passed verbatim to tool.build_command().
         """
         timestamp = ToolResult.now_iso()
@@ -88,6 +92,7 @@ class ToolExecutor:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                cwd=cwd,
             )
         except subprocess.TimeoutExpired:
             duration = round(perf_counter() - start, 3)

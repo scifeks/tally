@@ -119,8 +119,15 @@ class FindingIngestor:
         tool = tool_result.tool_name
         if tool == "nmap":
             return self._chunks_from_nmap(tool_result, profile)
+        if tool == "semgrep":
+            return self._chunks_from_semgrep(tool_result, profile)
+        if tool in ("osv-scanner", "pip-audit", "npm-audit", "composer-audit"):
+            return self._chunks_from_sca_vulns(tool_result, profile)
+        if tool == "gitleaks":
+            return self._chunks_from_gitleaks(tool_result, profile)
+        if tool == "zap":
+            return self._chunks_from_zap(tool_result, profile)
 
-        # Stub for future tools (Phase 5/6)
         logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
         return []
 
@@ -201,6 +208,287 @@ class FindingIngestor:
                 }
                 port_id = f"nmap_{profile}_port_{host_idx}_{port_idx}_{ts_compact}"
                 chunks.append((port_text, port_meta, port_id))
+
+        return chunks
+
+    def _chunks_from_semgrep(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from a semgrep ToolResult.
+
+        Each finding produces one ``vulnerability`` chunk containing the rule
+        ID, severity, message, file path, and code snippet.
+
+        Args:
+            tool_result: Parsed semgrep result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        findings: List[Dict[str, Any]] = parsed.get("findings", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for fi, finding in enumerate(findings):
+            rule_id = finding.get("rule_id", "")
+            severity = finding.get("severity", "low")
+            message = finding.get("message", "")
+            file_path = finding.get("file_path", "")
+            line_start = finding.get("line_start", 0)
+            line_end = finding.get("line_end", 0)
+            code_snippet = finding.get("code_snippet", "")
+            cwe = finding.get("cwe") or ""
+            owasp = finding.get("owasp") or ""
+
+            text = (
+                f"[{severity.upper()}] {rule_id} in {file_path}:{line_start}\n"
+                f"Message: {message}\n"
+                f"Code: {code_snippet}"
+            )
+
+            meta: Dict[str, Any] = {
+                "tool": "semgrep",
+                "profile": profile,
+                "finding_type": "vulnerability",
+                "severity": severity,
+                "rule_id": rule_id,
+                "file_path": file_path,
+                "line_start": line_start,
+                "line_end": line_end,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if cwe:
+                meta["cwe"] = cwe
+            if owasp:
+                meta["owasp"] = owasp
+
+            doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
+
+        return chunks
+
+    def _chunks_from_sca_vulns(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from any SCA tool that emits the standard vulnerability format.
+
+        Handles osv-scanner, pip-audit, npm-audit, and composer-audit, all of
+        which produce ``{vulnerabilities: [...], summary: {...}}`` output.
+
+        Each vulnerability produces one ``dependency_vulnerability`` chunk
+        containing the package name, version, advisory ID, severity, and
+        description.
+
+        Args:
+            tool_result: Parsed SCA tool result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        tool = tool_result.tool_name
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        vulnerabilities: List[Dict[str, Any]] = parsed.get("vulnerabilities", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        # Safe ID prefix: replace hyphens so doc IDs have consistent format
+        tool_id = tool.replace("-", "_")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for vi, vuln in enumerate(vulnerabilities):
+            pkg_name = vuln.get("package_name", "")
+            pkg_version = vuln.get("package_version", "")
+            vuln_id = vuln.get("vulnerability_id", "")
+            severity = vuln.get("severity", "low")
+            summary = vuln.get("summary", "")
+            ecosystem = vuln.get("affected_ecosystem", "")
+            fixed_version = vuln.get("fixed_version")
+            cvss_score = vuln.get("cvss_score")
+            lockfile = vuln.get("source_file", "")
+
+            fixed_str = fixed_version or "unknown"
+            text = (
+                f"[{severity.upper()}] vulnerability in {pkg_name}@{pkg_version}\n"
+                f"Vulnerability: {vuln_id}\n"
+                f"Description: {summary}\n"
+                f"Ecosystem: {ecosystem}\n"
+                f"Fixed in: {fixed_str}\n"
+                f"Source: {lockfile}"
+            )
+
+            meta: Dict[str, Any] = {
+                "tool": tool,
+                "profile": profile,
+                "finding_type": "dependency_vulnerability",
+                "severity": severity,
+                "package_name": pkg_name,
+                "package_version": pkg_version,
+                "vulnerability_id": vuln_id,
+                "ecosystem": ecosystem,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if fixed_version:
+                meta["fixed_version"] = fixed_version
+            if cvss_score is not None:
+                meta["cvss_score"] = cvss_score
+            if lockfile:
+                meta["lockfile"] = lockfile
+
+            doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
+
+        return chunks
+
+    def _chunks_from_gitleaks(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from a gitleaks ToolResult.
+
+        Each detected secret produces one ``secret`` chunk containing the rule
+        ID, file path, line number, and match pattern.  The actual secret value
+        is never included in any chunk or metadata.
+
+        Args:
+            tool_result: Parsed gitleaks result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        secrets: List[Dict[str, Any]] = parsed.get("secrets", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for si, secret in enumerate(secrets):
+            rule_id = secret.get("rule_id", "")
+            description = secret.get("description", "")
+            file_path = secret.get("file_path", "")
+            line_number = secret.get("line_number", 0)
+            match = secret.get("match", "")
+            tags: List[str] = secret.get("tags") or []
+            commit = secret.get("commit")
+
+            tags_str = ", ".join(tags) if tags else ""
+
+            text = (
+                f"Secret detected: {rule_id} in {file_path}:{line_number}\n"
+                f"Type: {description}\n"
+                f"Pattern matched: {match}\n"
+                f"Tags: {tags_str}\n"
+                "Note: Actual secret value redacted for security"
+            )
+
+            meta: Dict[str, Any] = {
+                "tool": "gitleaks",
+                "profile": profile,
+                "finding_type": "secret",
+                "severity": "high",
+                "rule_id": rule_id,
+                "file_path": file_path,
+                "line_number": line_number,
+                "tags": tags_str,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if commit:
+                meta["commit"] = commit
+
+            doc_id = f"gitleaks_{profile}_secret_{si}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
+
+        return chunks
+
+    def _chunks_from_zap(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> List[Tuple[str, Dict[str, Any], str]]:
+        """Build document chunks from a ZAP ToolResult.
+
+        Each alert instance produces one ``api_vulnerability`` chunk containing
+        the risk level, affected endpoint, description, and remediation advice.
+
+        Args:
+            tool_result: Parsed ZAP result.
+            profile:     Effective profile name (repo name).
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        alerts: List[Dict[str, Any]] = parsed.get("alerts", [])
+
+        timestamp = tool_result.timestamp
+        source_file = _first_output_file(tool_result.output_files)
+        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
+        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+
+        for ai, alert in enumerate(alerts):
+            alert_name = alert.get("alert_name", "")
+            risk = alert.get("risk", "informational")
+            confidence = alert.get("confidence", "low")
+            description = alert.get("description", "")
+            url = alert.get("url", "")
+            method = alert.get("method", "")
+            param = alert.get("param") or ""
+            evidence = alert.get("evidence") or ""
+            solution = alert.get("solution", "")
+            cwe_id = alert.get("cwe_id")
+
+            text_lines = [
+                f"[{risk.upper()}] API vulnerability: {alert_name}",
+                f"Endpoint: {method} {url}",
+            ]
+            if param:
+                text_lines.append(f"Parameter: {param}")
+            text_lines.append(f"Description: {description}")
+            if evidence:
+                text_lines.append(f"Evidence: {evidence}")
+            text_lines.append(f"Solution: {solution}")
+            text = "\n".join(text_lines)
+
+            meta: Dict[str, Any] = {
+                "tool": "zap",
+                "profile": profile,
+                "finding_type": "api_vulnerability",
+                "severity": risk,
+                "confidence": confidence,
+                "alert_name": alert_name,
+                "url": url,
+                "method": method,
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if param:
+                meta["param"] = param
+            if cwe_id is not None:
+                meta["cwe_id"] = cwe_id
+
+            doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
+            chunks.append((text, meta, doc_id))
 
         return chunks
 
