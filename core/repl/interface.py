@@ -14,7 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ScanCommands
+from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands
 
 _VERSION = '1.0'
 
@@ -96,6 +96,7 @@ class REPL:
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
+        self.report_commands = ReportCommand(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -167,7 +168,7 @@ class REPL:
             'chat':         kc.cmd_chat,
             'stats':        kc.cmd_stats,
             'purge':        self.purge_commands.cmd_purge,
-            'report':       self._cmd_stub,
+            'report':       self.report_commands.execute,
         }
         handler = handlers.get(cmd)
         if handler is None:
