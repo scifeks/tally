@@ -269,28 +269,45 @@ class RAGEngine:
     # Convenience helpers
     # ------------------------------------------------------------------
 
-    def delete_findings(self, tool: str, profile: Optional[str] = None) -> int:
-        """Delete stored findings for a tool, optionally scoped to a profile.
+    def delete_findings(
+        self,
+        tool: Optional[str] = None,
+        profile: Optional[str] = None,
+    ) -> int:
+        """Delete stored findings, optionally filtered by tool and/or profile.
 
         Args:
-            tool:    Tool name (e.g. ``"nmap"``).
+            tool:    Tool name (e.g. ``"nmap"``). If ``None``, all findings are
+                     deleted (only valid when ``profile`` is also ``None``).
             profile: Profile name to scope the deletion. If ``None``, all
                      findings for the tool are deleted regardless of profile.
+                     Requires ``tool`` to be set.
 
         Returns:
             Number of documents deleted (0 if collection is uninitialised or
             no matching documents exist).
+
+        Raises:
+            ValueError: If ``profile`` is given without ``tool``.
         """
+        if profile is not None and tool is None:
+            raise ValueError("--profile requires --tool to be specified")
+
         if self._collection is None:
             return 0
 
-        if profile is not None:
+        if tool is not None and profile is not None:
             where: Dict[str, Any] = {"$and": [{"tool": tool}, {"profile": profile}]}
+        elif tool is not None:
+            where = {"tool": tool}
         else:
-            where: Dict[str, Any] = {"tool": tool}
+            where = {}
 
         try:
-            result = self._collection.get(where=where, include=[])
+            kwargs: Dict[str, Any] = {"include": []}
+            if where:
+                kwargs["where"] = where
+            result = self._collection.get(**kwargs)
             ids: List[str] = result.get("ids") or []
             if ids:
                 self._collection.delete(ids=ids)
