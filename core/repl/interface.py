@@ -15,6 +15,7 @@ from rich import box
 from core.config import ConfigManager
 from core.project import ProjectManager
 from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands
+from core.tools.registry import print_discovery_summary
 
 _VERSION = '1.0'
 
@@ -105,6 +106,7 @@ class REPL:
     def run(self) -> None:
         """Start the REPL loop."""
         self._print_banner()
+        print_discovery_summary(self.console)
 
         history_path = Path.home() / '.tally-repl-history'
         session: PromptSession = PromptSession(
