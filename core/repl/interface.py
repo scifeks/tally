@@ -14,7 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import KnowledgeCommands, ProjectCommands, ScanCommands
+from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ScanCommands
 
 _VERSION = '1.0'
 
@@ -62,6 +62,7 @@ _HELP_ROWS = [
     (None, 'search <query>',      'Semantic search over ingested findings'),
     (None, 'chat <message>',      'RAG-augmented chat with the LLM'),
     (None, 'stats',               'Show knowledge base statistics'),
+    (None, 'purge [--tool <t>] [--profile <p>]', 'Delete findings from the knowledge base'),
     ('Reporting', None, None),
     (None, 'report',              'Generate findings report'),
     ('Utility', None, None),
@@ -75,7 +76,7 @@ _COMPLETIONS = [
     'new-project', 'projects', 'switch', 'project-info', 'add-repo',
     'repos', 'edit-repo', 'delete-repo',
     'scan', 'repo-scan', 'run',
-    'search', 'chat', 'stats',
+    'search', 'chat', 'stats', 'purge',
     'report',
 ]
 # First tokens only for WordCompleter
@@ -94,6 +95,7 @@ class REPL:
         self.project_commands = ProjectCommands(self)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
+        self.purge_commands = PurgeCommand(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -164,6 +166,7 @@ class REPL:
             'search':       kc.cmd_search,
             'chat':         kc.cmd_chat,
             'stats':        kc.cmd_stats,
+            'purge':        self.purge_commands.cmd_purge,
             'report':       self._cmd_stub,
         }
         handler = handlers.get(cmd)

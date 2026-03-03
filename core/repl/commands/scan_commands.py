@@ -40,34 +40,56 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: List[str]) -> None:
-        """scan -t <tool> [--timeout N] [profile]  — run a tool scan."""
+        """scan [-y] [-s <segment>] [-t <tool>]  — run tool scans."""
+        auto_approve, args = self._parse_bool_flag(args, '-y', '--yes')
+        segment_name, args = self._parse_value_flag(args, '-s', '--segment')
         tool_name, remaining = self._parse_tool_flag(args)
-        if tool_name is None:
+
+        # -t <tool>: existing single-tool flow
+        if tool_name is not None:
+            timeout, remaining = self._parse_timeout_arg(remaining)
+            if tool_name == 'nmap':
+                self._cmd_scan_nmap(remaining, timeout)
+            elif tool_name == 'semgrep':
+                self._cmd_scan_semgrep(remaining, timeout)
+            elif tool_name in ('osv-scanner', 'osv'):
+                self._cmd_scan_osv(remaining, timeout)
+            elif tool_name == 'pip-audit':
+                self._cmd_scan_pip_audit(remaining, timeout)
+            elif tool_name == 'npm-audit':
+                self._cmd_scan_npm_audit(remaining, timeout)
+            elif tool_name == 'composer-audit':
+                self._cmd_scan_composer_audit(remaining, timeout)
+            elif tool_name == 'gitleaks':
+                self._cmd_scan_gitleaks(remaining, timeout)
+            elif tool_name == 'zap':
+                self._cmd_scan_zap(remaining, timeout)
+            else:
+                self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
+            return
+
+        if not self.repl.active_project:
             self.repl.console.print(
-                '[red]Usage:[/red] scan -t <tool> [--timeout <seconds>] [profile]'
+                "[yellow]No active project. Use 'new-project' first.[/yellow]"
             )
             return
 
-        timeout, remaining = self._parse_timeout_arg(remaining)
+        from core.tools.orchestrator import ScanOrchestrator, SCAN_SEGMENTS
+        orchestrator = self._make_orchestrator()
+        if orchestrator is None:
+            return
 
-        if tool_name == 'nmap':
-            self._cmd_scan_nmap(remaining, timeout)
-        elif tool_name == 'semgrep':
-            self._cmd_scan_semgrep(remaining, timeout)
-        elif tool_name in ('osv-scanner', 'osv'):
-            self._cmd_scan_osv(remaining, timeout)
-        elif tool_name == 'pip-audit':
-            self._cmd_scan_pip_audit(remaining, timeout)
-        elif tool_name == 'npm-audit':
-            self._cmd_scan_npm_audit(remaining, timeout)
-        elif tool_name == 'composer-audit':
-            self._cmd_scan_composer_audit(remaining, timeout)
-        elif tool_name == 'gitleaks':
-            self._cmd_scan_gitleaks(remaining, timeout)
-        elif tool_name == 'zap':
-            self._cmd_scan_zap(remaining, timeout)
+        if segment_name is not None:
+            valid_segments = list(SCAN_SEGMENTS)
+            if segment_name not in valid_segments:
+                self.repl.console.print(
+                    f'[red]Invalid segment:[/red] {segment_name!r}. '
+                    f'Valid: {", ".join(valid_segments)}'
+                )
+                return
+            orchestrator.run_segment(segment_name, auto_approve=auto_approve)
         else:
-            self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
+            orchestrator.run_full_scan(auto_approve=auto_approve)
 
     def cmd_run(self, _cmd: str, args: List[str]) -> None:
         """run <tool> [--timeout <seconds>] [args...]  — execute a tool with raw arguments."""
@@ -405,15 +427,29 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_repo_scan(self, _cmd: str, args: List[str]) -> None:
-        """repo-scan [--timeout N]  — run language-appropriate SCA tools on a repo."""
-        timeout, _ = self._parse_timeout_arg(args)
-
+        """repo-scan <repo> [-y] [--exclude <dirs>] [--severity <level>] [--export <file>]"""
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'new-project' first.[/yellow]"
             )
             return
 
+        auto_approve, args = self._parse_bool_flag(args, '-y', '--yes')
+        exclude_str, args = self._parse_value_flag(args, '--exclude')
+        severity, args = self._parse_value_flag(args, '--severity')
+        export_path, args = self._parse_value_flag(args, '--export')
+        _, args = self._parse_timeout_arg(args)  # consume --timeout if present
+
+        if severity and severity not in ('critical', 'high', 'medium', 'low'):
+            self.repl.console.print(
+                f'[red]Invalid severity:[/red] {severity!r}. '
+                'Valid: critical, high, medium, low'
+            )
+            return
+
+        exclude_dirs = [d.strip() for d in exclude_str.split(',')] if exclude_str else None
+
+        # Resolve repo name — positional arg or interactive prompt
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
@@ -421,127 +457,44 @@ class ScanCommands:
             )
             return
 
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print('\nSelect repository:')
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
-            try:
-                raw = input('\nChoice: ').strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
+        # First non-flag arg is repo name
+        repo_name: Optional[str] = args[0] if args else None
+
+        if repo_name is None:
+            if len(repos) == 1:
+                repo_name = repos[0].name
+            else:
+                self.repl.console.print('\nSelect repository:')
+                for i, r in enumerate(repos, 1):
+                    self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+                try:
+                    raw = input('\nChoice: ').strip()
+                    idx = int(raw) - 1
+                    if not (0 <= idx < len(repos)):
+                        self.repl.console.print('[red]Invalid choice.[/red]')
+                        return
+                    repo_name = repos[idx].name
+                except (ValueError, EOFError, KeyboardInterrupt):
                     self.repl.console.print('[red]Invalid choice.[/red]')
                     return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print('[red]Invalid choice.[/red]')
-                return
 
-        selected_tools = self._select_repo_tools(repo.languages, repo.base_urls)
-        lang_str = ', '.join(repo.languages) if repo.languages else 'unknown'
-        self.repl.console.print(
-            f'\nRepository: [cyan]{repo.name}[/cyan] ({lang_str})'
-        )
-        self.repl.console.print(
-            f'Auto-selected tools: [cyan]{", ".join(selected_tools)}[/cyan]\n'
-        )
+        orchestrator = self._make_orchestrator()
+        if orchestrator is None:
+            return
 
-        for tool_name in selected_tools:
-            tool = tool_registry.get_tool(tool_name)
-            if tool is None:
-                self.repl.console.print(f'[yellow]Tool not found: {tool_name} — skipping[/yellow]')
-                continue
-            if not tool.check_available():
-                self.repl.console.print(f'[yellow]{tool_name} not installed — skipping[/yellow]')
-                continue
+        try:
+            summary = orchestrator.run_repo_scan(
+                repo_name=repo_name,
+                auto_approve=auto_approve,
+                exclude_dirs=exclude_dirs,
+                severity_filter=severity,
+            )
+        except ValueError as exc:
+            self.repl.console.print(f'[red]Error:[/red] {exc}')
+            return
 
-            try:
-                answer = input(f'Run {tool_name}? [y/N]: ').strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if answer not in ('y', 'yes'):
-                continue
-
-            if tool_name == 'semgrep':
-                result = self._execute_semgrep_scan(repo.name, repo.path, timeout=timeout)
-                self._print_semgrep_result(result)
-                if result.parsed_data and "error" not in result.parsed_data:
-                    result.success = True
-            elif tool_name == 'osv-scanner':
-                result = self._execute_osv_scan(repo.name, repo.path, timeout=timeout)
-                self._print_osv_result(result)
-                if result.parsed_data and "error" not in result.parsed_data:
-                    result.success = True
-            elif tool_name == 'pip-audit':
-                result = self._execute_pip_audit_scan(repo.name, repo.path, timeout=timeout)
-                self._print_sca_result(result, 'pip-audit')
-                if result.parsed_data and "error" not in result.parsed_data:
-                    result.success = True
-            elif tool_name == 'npm-audit':
-                result = self._execute_npm_audit_scan(repo.name, repo.path, timeout=timeout)
-                self._print_sca_result(result, 'npm-audit')
-                if result.parsed_data and "error" not in result.parsed_data:
-                    result.success = True
-            elif tool_name == 'composer-audit':
-                result = self._execute_composer_audit_scan(repo.name, repo.path, timeout=timeout)
-                self._print_sca_result(result, 'composer-audit')
-                if result.parsed_data and "error" not in result.parsed_data:
-                    result.success = True
-            elif tool_name == 'gitleaks':
-                result = self._execute_gitleaks_scan(repo.name, repo.path, timeout=timeout)
-                self._print_gitleaks_result(result)
-                if result.parsed_data and "error" not in result.parsed_data:
-                    result.success = True
-            elif tool_name == 'zap':
-                endpoint_cfg = self.repl.config.load_endpoint_config(
-                    self.repl.active_project, repo.name
-                )
-                endpoints_dict: Dict[str, List[str]] = (
-                    endpoint_cfg.endpoints if endpoint_cfg else {}
-                )
-                for base_url in repo.base_urls:
-                    self.repl.console.print(f'  Scanning: [cyan]{base_url}[/cyan]...')
-                    zap_result = self._execute_zap_scan(
-                        repo.name, base_url, endpoints_dict, timeout=timeout
-                    )
-                    self._print_zap_result(zap_result)
-                    if zap_result.parsed_data and "error" not in zap_result.parsed_data:
-                        zap_result.success = True
-                    if zap_result.output_files:
-                        for path in zap_result.output_files.values():
-                            self.repl.console.print(f'Output saved to: {path}')
-                    if self._ask_ingest():
-                        count = _ingest_result(self.repl, zap_result, profile=repo.name)
-                        if count > 0:
-                            self.repl.console.print(
-                                f'[green]✓ Ingested {count} alerts[/green]'
-                            )
-                        else:
-                            self.repl.console.print('[yellow]No alerts to ingest.[/yellow]')
-                self.repl.console.print()
-                continue  # output files and ingestion already handled per base_url
-            else:
-                continue
-
-            if result.output_files:
-                for path in result.output_files.values():
-                    self.repl.console.print(f'Output saved to: {path}')
-
-            if self._ask_ingest():
-                count = _ingest_result(self.repl, result, profile=repo.name)
-                if tool_name == 'gitleaks':
-                    label = 'secrets'
-                elif tool_name == 'semgrep':
-                    label = 'findings'
-                else:
-                    label = 'vulnerabilities'
-                if count > 0:
-                    self.repl.console.print(f'[green]✓ Ingested {count} {label}[/green]')
-                else:
-                    self.repl.console.print(f'[yellow]No {label} to ingest.[/yellow]')
-            self.repl.console.print()
+        if export_path:
+            self._export_summary(summary, export_path)
 
     # ------------------------------------------------------------------
     # Private — pip-audit scan flow
@@ -1195,3 +1148,83 @@ class ScanCommands:
                 remaining = args[:i] + args[i + 2:]
                 return seconds, remaining
         return DEFAULT_TIMEOUT, args
+
+    @staticmethod
+    def _parse_bool_flag(args: List[str], *flags: str) -> tuple[bool, List[str]]:
+        """Extract a boolean flag. Returns (found, remaining_args)."""
+        for flag in flags:
+            if flag in args:
+                remaining = [a for a in args if a != flag]
+                return True, remaining
+        return False, args
+
+    @staticmethod
+    def _parse_value_flag(
+        args: List[str], *flags: str
+    ) -> tuple[Optional[str], List[str]]:
+        """Extract a value flag (e.g. --severity high). Returns (value_or_None, remaining_args)."""
+        for i, token in enumerate(args):
+            if token in flags and i + 1 < len(args):
+                value = args[i + 1]
+                remaining = args[:i] + args[i + 2:]
+                return value, remaining
+        return None, args
+
+    # ------------------------------------------------------------------
+    # Private — orchestrator factory and export
+    # ------------------------------------------------------------------
+
+    def _make_orchestrator(self):
+        """Create a ScanOrchestrator for the active project. Returns None on failure."""
+        from core.tools.orchestrator import ScanOrchestrator
+        from core.tools.executor import ToolExecutor
+
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+
+        rag_engine = None
+        try:
+            from core.rag.engine import RAGEngine
+            rag_engine = RAGEngine(
+                project_name=self.repl.active_project,
+                base_path=self.repl.base_path,
+            )
+        except (RuntimeError, ValueError) as exc:
+            self.repl.console.print(f'[yellow]RAG unavailable (ingestion disabled):[/yellow] {exc}')
+
+        return ScanOrchestrator(
+            project=self.repl.active_project,
+            tool_registry=tool_registry,
+            tool_executor=executor,
+            rag_engine=rag_engine,
+        )
+
+    def _export_summary(self, summary, export_path: str) -> None:
+        """Export ScanSummary results to a JSON file."""
+        import json
+        import dataclasses
+
+        try:
+            data = {
+                'total_tools_run': summary.total_tools_run,
+                'total_tools_skipped': summary.total_tools_skipped,
+                'total_tools_failed': summary.total_tools_failed,
+                'duration_seconds': summary.duration_seconds,
+                'findings_ingested': summary.findings_ingested,
+                'results': [
+                    {
+                        'tool_name': r.tool_name,
+                        'success': r.success,
+                        'duration_seconds': r.duration_seconds,
+                        'timestamp': r.timestamp,
+                        'findings': r.parsed_data,
+                    }
+                    for r in summary.results
+                ],
+            }
+            Path(export_path).write_text(json.dumps(data, indent=2, default=str))
+            self.repl.console.print(f'[green]✓ Exported to:[/green] {export_path}')
+        except Exception as exc:
+            self.repl.console.print(f'[red]Export failed:[/red] {exc}')
