@@ -5,8 +5,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+import json
+
 from core.tools.base import ToolResult
 from core.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
+from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
 from core.tools.registry import tool_registry
 
 if TYPE_CHECKING:
@@ -816,7 +819,7 @@ class ScanCommands:
 
         self.repl.console.print(f'Running gitleaks: {repo.name}...')
         repo_path = tool_registry.get_repo_path('gitleaks', repo)
-        result = self._execute_gitleaks_scan(repo.name, repo_path, timeout=timeout)
+        result = self._execute_gitleaks_both_scans(repo.name, repo_path, timeout=timeout)
         self._print_gitleaks_result(result)
 
         if result.output_files:
@@ -834,6 +837,85 @@ class ScanCommands:
             else:
                 self.repl.console.print('[yellow]No secrets to ingest.[/yellow]')
 
+    def _execute_gitleaks_both_scans(
+        self,
+        repo_name: str,
+        repo_path: str,
+        auto_approve: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> ToolResult:
+        """Run gitleaks dir + git scans and return a single combined ToolResult.
+
+        Prompts once for approval (unless auto_approve), then runs both scan
+        types with auto_approve=True so the executor does not prompt twice.
+        """
+        tool = tool_registry.get_tool('gitleaks')
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+
+        if not auto_approve:
+            try:
+                answer = input(f'Run {tool.name} (dir + git)? [y/N]: ').strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return ToolResult(
+                    tool_name='gitleaks', success=False,
+                    output='Execution denied by user.', parsed_data=None,
+                    output_files={}, timestamp=ToolResult.now_iso(), duration_seconds=0.0,
+                )
+            if answer not in ('y', 'yes'):
+                return ToolResult(
+                    tool_name='gitleaks', success=False,
+                    output='Execution denied by user.', parsed_data=None,
+                    output_files={}, timestamp=ToolResult.now_iso(), duration_seconds=0.0,
+                )
+
+        dir_result = executor.execute(
+            tool, auto_approve=True, timeout=timeout,
+            label=f'{repo_name}_dir', repo_path=repo_path, scan_type='dir',
+        )
+        git_result = executor.execute(
+            tool, auto_approve=True, timeout=timeout,
+            label=f'{repo_name}_git', repo_path=repo_path, scan_type='git',
+        )
+
+        dir_data = dir_result.parsed_data or {}
+        git_data = git_result.parsed_data or {}
+        combined_data = combine_gitleaks_results(dir_data, git_data)
+
+        # Write combined JSON to tool_outputs/gitleaks/
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
+        output_dir = (
+            Path(self.repl.base_path)
+            / 'projects'
+            / self.repl.active_project
+            / 'tool_outputs'
+            / 'gitleaks'
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        combined_path = output_dir / f'{repo_name}_{ts}_combined.json'
+        combined_path.write_text(json.dumps(combined_data, indent=2), encoding='utf-8')
+
+        combined_files: Dict[str, Path] = {}
+        for key, path in dir_result.output_files.items():
+            combined_files[f'dir_{key}'] = path
+        for key, path in git_result.output_files.items():
+            combined_files[f'git_{key}'] = path
+        combined_files['combined'] = combined_path
+
+        return ToolResult(
+            tool_name='gitleaks',
+            success=dir_result.success or git_result.success,
+            output=(dir_result.output or '') + '\n' + (git_result.output or ''),
+            parsed_data=combined_data,
+            output_files=combined_files,
+            timestamp=dir_result.timestamp,
+            duration_seconds=dir_result.duration_seconds + git_result.duration_seconds,
+        )
+
     def _execute_gitleaks_scan(
         self,
         repo_name: str,
@@ -841,17 +923,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
-        tool = tool_registry.get_tool('gitleaks')
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            repo_path=repo_path,
+        """Backward-compatible single-scan entry point; delegates to dual-scan."""
+        return self._execute_gitleaks_both_scans(
+            repo_name, repo_path, auto_approve=auto_approve, timeout=timeout,
         )
 
     def _print_gitleaks_result(self, result: ToolResult) -> None:

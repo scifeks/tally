@@ -32,8 +32,8 @@ class DockerGitleaksWrapper(DockerToolWrapper):
 
         Keyword Args:
             repo_path (str): Container path to the repository (docker_path).
-            scan_uncommitted (bool): Scan uncommitted changes (default: False).
-            verbose (bool): Enable verbose output (default: False).
+            scan_type (str): 'dir' for working-tree scan or 'git' for full
+                             history scan (default: 'dir').
         """
         repo_path: str = kwargs.get("repo_path", "")
         if not repo_path:
@@ -42,22 +42,15 @@ class DockerGitleaksWrapper(DockerToolWrapper):
                 "Use 'edit-repo' to set the container mount path."
             )
 
-        scan_uncommitted: bool = bool(kwargs.get("scan_uncommitted", False))
-        verbose: bool = bool(kwargs.get("verbose", False))
+        scan_type: str = kwargs.get("scan_type", "dir")
+        if scan_type not in ("dir", "git"):
+            raise ValueError(f"scan_type must be 'dir' or 'git', got {scan_type!r}")
 
         tool_args = [
-            "detect",
-            "--source", repo_path,
+            scan_type, repo_path,
             "--report-format", "json",
+            "--exit-code", "0",
         ]
-
-        if scan_uncommitted:
-            tool_args.append("--uncommitted")
-        else:
-            tool_args.append("--no-git")
-
-        if verbose:
-            tool_args.append("--verbose")
 
         return self._build_docker_exec(tool_args)
 
