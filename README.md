@@ -11,6 +11,7 @@ Tally is a CLI REPL for orchestrating web application penetration testing. It wr
 - Three report formats: Markdown, HTML, JSON
 - Human-in-the-loop approval before each tool execution
 - Dependency checker validates required packages on every startup
+- Docker execution support for all tools
 
 ## Requirements
 
@@ -34,13 +35,13 @@ ollama serve
 cp config/global-example.json config/global.json
 # edit config/global.json
 
-# 4. Start Tally
+# 4. Start Tally — first run launches an interactive tool setup wizard
 .venv/bin/python3 tally.py
 
 # 5. Create a project and start scanning
-new-project
-add-repo
-scan -t semgrep
+project add
+repo add
+scan semgrep
 report
 ```
 
@@ -50,14 +51,28 @@ report
 
 | Command | Description |
 |---|---|
-| `new-project` | Create a new project (interactive) |
-| `projects` | List all projects |
-| `switch <name>` | Switch active project |
-| `project-info` | Show active project details |
-| `add-repo` | Add a repository to the active project |
-| `repos` | List configured repositories |
-| `edit-repo <name>` | Edit a repository's config |
-| `delete-repo <name>` | Delete a repository's config |
+| `project add` | Create a new project (interactive) |
+| `project list` | List all projects |
+| `project switch <name>` | Switch active project |
+| `project info` | Show active project details |
+
+### Repository Management
+
+| Command | Description |
+|---|---|
+| `repo add` | Add a repository to the active project |
+| `repo list` | List configured repositories |
+| `repo edit <name>` | Edit a repository's configuration |
+| `repo delete <name>` | Delete a repository from the project |
+
+### Tool Management
+
+| Command | Description |
+|---|---|
+| `tool add` | Add a tool to configuration (interactive) |
+| `tool list` | List configured tools and their status |
+| `tool edit <name>` | Edit tool configuration |
+| `tool remove <name>` | Remove a tool from configuration |
 
 ### Scanning
 
@@ -67,12 +82,11 @@ All scan commands accept `--timeout <seconds>`.
 |---|---|
 | `scan` | Full scan: all segments across all repos |
 | `scan -s <segment>` | Segment scan (network, sast, sca, secrets, api) |
-| `scan -t <tool>` | Single tool scan |
-| `scan -t nmap [profile]` | Run nmap (all profiles or one by name) |
+| `scan <tool>` | Single tool scan |
+| `scan nmap [profile]` | Run nmap (all profiles or one by name) |
 | `scan -y` | Auto-approve all tool executions |
-| `repo-scan [<repo>]` | Language-appropriate tools for a single repo |
-| `repo-scan --severity <level>` | Filter by severity (critical/high/medium/low) |
-| `repo-scan --exclude <dirs>` | Exclude directories (comma-separated) |
+| `scan repo` | Language-appropriate tools for an interactively selected repo |
+| `scan repo <tool>` | Run a single tool against all repositories |
 | `run <tool> [args...]` | Execute a tool with raw arguments |
 
 ### Knowledge Base
@@ -101,6 +115,39 @@ All scan commands accept `--timeout <seconds>`.
 | `help` | Show command reference |
 | `clear` | Clear the screen |
 | `exit` / `quit` | Exit Tally |
+
+## Docker Support
+
+Tools can run locally or inside a Docker container. The execution mode is configured per-tool in `config/commands.json`.
+
+**Local execution** — Tally runs the tool binary directly:
+
+```json
+{
+  "semgrep": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/local/bin/semgrep"
+  }
+}
+```
+
+**Docker execution** — Tally uses `docker exec` to run the tool inside a running container:
+
+```json
+{
+  "semgrep": {
+    "type": "repo",
+    "location": "docker",
+    "container": {
+      "name": "semgrep-container",
+      "tool_path": "/usr/local/bin/semgrep"
+    }
+  }
+}
+```
+
+`config/commands.json` is auto-generated on first run via an interactive setup wizard. Use `tool edit <name>` to change a tool's execution mode at any time.
 
 ## Startup Flags
 
