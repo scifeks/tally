@@ -2,10 +2,14 @@
 """Main entry point for tally pentesting REPL."""
 import argparse
 import sys
+from pathlib import Path
 
 from core.repl import REPL
 from core.tools import tool_registry
+from core.tools.registry import discover_tools
 from core.startup.checker import DependencyChecker
+
+_BASE_PATH = '.'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Tally pentesting REPL')
@@ -19,6 +23,17 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
+    # First-run setup: generate commands.json if absent.
+    # Runs before --check and --skip-checks so the registry is always current.
+    if not (Path(_BASE_PATH) / 'config' / 'commands.json').exists():
+        from core.setup.commands_setup import run_commands_setup
+        run_commands_setup(_BASE_PATH)
+
+    # Re-run discovery with the confirmed base_path so the registry reflects
+    # whatever commands.json now contains (the module-level auto-discovery in
+    # registry.py ran at import time before setup completed).
+    discover_tools(_BASE_PATH)
+
     checker = DependencyChecker(tool_registry)
 
     if args.check:
@@ -31,6 +46,6 @@ if __name__ == '__main__':
             sys.exit(1)
 
     try:
-        REPL(base_path='.').run()
+        REPL(base_path=_BASE_PATH).run()
     except KeyboardInterrupt:
         pass
