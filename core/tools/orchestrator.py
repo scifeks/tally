@@ -293,6 +293,45 @@ class ScanOrchestrator:
         self._print_final_line(summary)
         return summary
 
+    def run_tool_on_all_repos(
+        self,
+        tool_name: str,
+        auto_approve: bool = False,
+    ) -> ScanSummary:
+        """Run a single tool against all configured repositories.
+
+        Args:
+            tool_name:    Name of the tool to run (must be registered and not 'nmap').
+            auto_approve: Skip per-tool approval prompts.
+
+        Returns:
+            ScanSummary aggregating results across all repositories.
+        """
+        start = perf_counter()
+
+        self.console.print(
+            f'\n[bold cyan]Repo Tool Scan:[/bold cyan] {self.project_name} — {tool_name}'
+        )
+        self.console.print('─' * 50)
+
+        results_list, total_run, total_skipped, total_failed, total_ingested = (
+            self._run_repo_segment([tool_name], auto_approve)
+        )
+
+        duration = round(perf_counter() - start, 1)
+        self._print_summary_table(results_list)
+
+        summary = ScanSummary(
+            total_tools_run=total_run,
+            total_tools_skipped=total_skipped,
+            total_tools_failed=total_failed,
+            results=results_list,
+            duration_seconds=duration,
+            findings_ingested=total_ingested,
+        )
+        self._print_final_line(summary)
+        return summary
+
     def _run_tool_with_approval(
         self,
         tool: ToolWrapper,

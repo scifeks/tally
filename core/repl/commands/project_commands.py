@@ -17,6 +17,50 @@ class ProjectCommands:
         self.repl = repl
 
     # ------------------------------------------------------------------
+    # Grouped command entrypoints (scoped help or subcommand dispatch)
+    # ------------------------------------------------------------------
+
+    def cmd_project(self, _cmd: str, args: List[str]) -> None:
+        """project [add|switch|list|info] — project management."""
+        if not args:
+            self.repl._cmd_help_scoped('project')
+            return
+        sub = args[0].lower()
+        if sub == 'add':
+            self.cmd_new_project(_cmd, args[1:])
+        elif sub == 'switch':
+            self.cmd_switch(_cmd, args[1:])
+        elif sub == 'list':
+            self.cmd_projects(_cmd, args[1:])
+        elif sub == 'info':
+            self.cmd_project_info(_cmd, args[1:])
+        else:
+            self.repl.console.print(
+                f'[red]Unknown subcommand:[/red] project {sub}\n'
+                'Type [bold]project[/bold] for available subcommands'
+            )
+
+    def cmd_repo(self, _cmd: str, args: List[str]) -> None:
+        """repo [add|delete|edit|list] — repository management."""
+        if not args:
+            self.repl._cmd_help_scoped('repo')
+            return
+        sub = args[0].lower()
+        if sub == 'add':
+            self.cmd_add_repo(_cmd, args[1:])
+        elif sub == 'delete':
+            self.cmd_delete_repo(_cmd, args[1:])
+        elif sub == 'edit':
+            self.cmd_edit_repo(_cmd, args[1:])
+        elif sub == 'list':
+            self.cmd_repos(_cmd, args[1:])
+        else:
+            self.repl.console.print(
+                f'[red]Unknown subcommand:[/red] repo {sub}\n'
+                'Type [bold]repo[/bold] for available subcommands'
+            )
+
+    # ------------------------------------------------------------------
     # Commands
     # ------------------------------------------------------------------
 
@@ -52,7 +96,7 @@ class ProjectCommands:
     def cmd_switch(self, _cmd: str, args: List[str]) -> None:
         """Switch active project."""
         if not args:
-            self.repl.console.print('[red]Usage:[/red] switch <project-name>')
+            self.repl.console.print('[red]Usage:[/red] project switch <name>')
             return
 
         name = args[0]
@@ -73,7 +117,7 @@ class ProjectCommands:
         """Add a repository to the current project."""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch <name>'[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
         self.repl.projects.add_repository(self.repl.active_project)
@@ -82,7 +126,7 @@ class ProjectCommands:
         """List configured repositories for the active project."""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch <name>'[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
 
@@ -108,11 +152,11 @@ class ProjectCommands:
         """Edit an existing repository's config."""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch <name>'[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
         if not args:
-            self.repl.console.print('[red]Usage:[/red] edit-repo <repo-name>')
+            self.repl.console.print('[red]Usage:[/red] repo edit <name>')
             return
 
         repo_name = args[0]
@@ -125,11 +169,11 @@ class ProjectCommands:
         """Delete a repository's config from the active project."""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch <name>'[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
         if not args:
-            self.repl.console.print('[red]Usage:[/red] delete-repo <repo-name>')
+            self.repl.console.print('[red]Usage:[/red] repo delete <name>')
             return
 
         repo_name = args[0]
@@ -148,7 +192,7 @@ class ProjectCommands:
         """Show current project details."""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch <name>'[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
 
