@@ -30,7 +30,7 @@ class KnowledgeCommands:
 
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>' first.[/yellow]"
             )
             return
 
@@ -73,7 +73,7 @@ class KnowledgeCommands:
 
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>' first.[/yellow]"
             )
             return
 
@@ -93,7 +93,7 @@ class KnowledgeCommands:
         """stats  — show knowledge base statistics for the active project."""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>' first.[/yellow]"
             )
             return
 

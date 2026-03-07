@@ -14,7 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands
+from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands, ToolCommands
 from core.tools.registry import print_discovery_summary, tool_registry
 
 _VERSION = '1.0'
@@ -33,56 +33,58 @@ _HELP_BOX = box.Box(
 )
 
 # ---------------------------------------------------------------------------
-# Help table definition: (section, command, description)
-# None in the command slot = section header row.
-#
-# Scan tool rows are built dynamically in _cmd_help() from the live registry
-# so that only configured tools appear, with their location shown.
+# Help registry: (group, command, description)
+# command=None → section header row; description holds the section title.
+# group is used by _cmd_help_scoped() to render filtered tables.
 # ---------------------------------------------------------------------------
-_HELP_ROWS_TOP = [
-    ('Project Management', None, None),
-    (None, 'new-project',         'Create a new project (interactive)'),
-    (None, 'projects',            'List all projects'),
-    (None, 'switch <name>',       'Switch active project'),
-    (None, 'project-info',        'Show active project details'),
-    (None, 'add-repo',            'Add a repository to the active project'),
-    (None, 'repos',               'List configured repositories'),
-    (None, 'edit-repo <name>',    'Edit a repository\'s config'),
-    (None, 'delete-repo <name>',  'Delete a repository\'s config'),
-    ('Scanning', None, None),
-    (None, '',                    '[dim]All commands accept --timeout <seconds>[/dim]'),
-]
-
-_HELP_ROWS_BOTTOM = [
-    (None, 'repo-scan [--timeout N]',    'Run language-appropriate SCA tools on a repo'),
-    (None, 'run <tool> [args...]',       'Execute a tool with raw arguments'),
-    ('Knowledge Base', None, None),
-    (None, 'search <query>',      'Semantic search over ingested findings'),
-    (None, 'chat <message>',      'RAG-augmented chat with the LLM'),
-    (None, 'stats',               'Show knowledge base statistics'),
-    (None, 'purge [--tool <t>] [--profile <p>]', 'Delete findings from the knowledge base'),
-    ('Reporting', None, None),
-    (None, 'report',              'Generate findings report'),
-    ('Utility', None, None),
-    (None, 'help',                'Show this help table'),
-    (None, 'clear',               'Clear the screen'),
-    (None, 'exit / quit',         'Exit tally'),
-]
-
-# Canonical display order for scan tools (mirrors SCAN_SEGMENTS ordering)
-_SCAN_TOOL_ORDER = [
-    'nmap',
-    'semgrep',
-    'osv-scanner', 'pip-audit', 'npm-audit', 'composer-audit',
-    'gitleaks',
-    'zap',
+_HELP_REGISTRY = [
+    # Project Management
+    ('project',   None,                                  'Project Management'),
+    ('project',   'project add',                         'Create a new project (interactive)'),
+    ('project',   'project switch <name>',               'Switch the active project'),
+    ('project',   'project list',                        'List all projects'),
+    ('project',   'project info',                        'Show active project details'),
+    # Repo Management
+    ('repo',      None,                                  'Repo Management'),
+    ('repo',      'repo add',                            'Add a repository to the active project'),
+    ('repo',      'repo delete <name>',                  "Delete a repository's config"),
+    ('repo',      'repo edit <name>',                    "Edit a repository's config"),
+    ('repo',      'repo list',                           'List configured repositories'),
+    # Scanning
+    ('scan',      None,                                  'Scanning'),
+    ('scan',      '',                                    '[dim]All commands accept --timeout <seconds>[/dim]'),
+    ('scan',      'scan',                                'Run all tools across the active project'),
+    ('scan',      'scan <tool>',                         'Run a specific tool against the active project'),
+    ('scan',      'scan repo',                           'Run language-appropriate tools on a selected repository'),
+    ('scan',      'scan repo <tool>',                    'Run a specific tool against all repositories'),
+    ('scan',      'run <tool> [args...]',                'Execute a tool with raw arguments'),
+    # Tools
+    ('tool',      None,                                  'Tools'),
+    ('tool',      'tool add',                            'Add a tool to the active configuration'),
+    ('tool',      'tool edit <name>',                    'Edit a configured tool interactively'),
+    ('tool',      'tool remove <name>',                  'Remove a tool from the configuration'),
+    ('tool',      'tool list',                           'List all configured tools and their status'),
+    # Knowledge Base
+    ('knowledge', None,                                  'Knowledge Base'),
+    ('knowledge', 'search <query>',                      'Semantic search over ingested findings'),
+    ('knowledge', 'chat <message>',                      'RAG-augmented chat with the LLM'),
+    ('knowledge', 'stats',                               'Show knowledge base statistics'),
+    ('knowledge', 'purge [--tool <t>] [--profile <p>]', 'Delete findings from the knowledge base'),
+    # Reporting
+    ('reporting', None,                                  'Reporting'),
+    ('reporting', 'report',                              'Generate findings report'),
+    # Utility
+    ('utility',   None,                                  'Utility'),
+    ('utility',   'help',                                'Show this help table'),
+    ('utility',   'clear',                               'Clear the screen'),
+    ('utility',   'exit / quit',                         'Exit tally'),
 ]
 
 _COMPLETIONS = [
     'help', 'exit', 'quit', 'clear',
-    'new-project', 'projects', 'switch', 'project-info', 'add-repo',
-    'repos', 'edit-repo', 'delete-repo',
-    'scan', 'repo-scan', 'run',
+    'project', 'repo',
+    'scan', 'run',
+    'tool',
     'search', 'chat', 'stats', 'purge',
     'report',
 ]
@@ -104,6 +106,7 @@ class REPL:
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
+        self.tool_commands = ToolCommands(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -156,27 +159,22 @@ class REPL:
         pc = self.project_commands
         sc = self.scan_commands
         kc = self.knowledge_commands
+        tc = self.tool_commands
         handlers = {
-            'help':         self._cmd_help,
-            'clear':        self._cmd_clear,
-            'exit':         self._cmd_exit,
-            'quit':         self._cmd_exit,
-            'projects':     pc.cmd_projects,
-            'switch':       pc.cmd_switch,
-            'new-project':  pc.cmd_new_project,
-            'add-repo':     pc.cmd_add_repo,
-            'repos':        pc.cmd_repos,
-            'edit-repo':    pc.cmd_edit_repo,
-            'delete-repo':  pc.cmd_delete_repo,
-            'project-info': pc.cmd_project_info,
-            'scan':         sc.cmd_scan,
-            'repo-scan':    sc.cmd_repo_scan,
-            'run':          sc.cmd_run,
-            'search':       kc.cmd_search,
-            'chat':         kc.cmd_chat,
-            'stats':        kc.cmd_stats,
-            'purge':        self.purge_commands.cmd_purge,
-            'report':       self.report_commands.execute,
+            'help':    self._cmd_help,
+            'clear':   self._cmd_clear,
+            'exit':    self._cmd_exit,
+            'quit':    self._cmd_exit,
+            'project': pc.cmd_project,
+            'repo':    pc.cmd_repo,
+            'scan':    sc.cmd_scan,
+            'run':     sc.cmd_run,
+            'tool':    tc.cmd_tool,
+            'search':  kc.cmd_search,
+            'chat':    kc.cmd_chat,
+            'stats':   kc.cmd_stats,
+            'purge':   self.purge_commands.cmd_purge,
+            'report':  self.report_commands.execute,
         }
         handler = handlers.get(cmd)
         if handler is None:
@@ -197,6 +195,14 @@ class REPL:
     # ------------------------------------------------------------------
 
     def _cmd_help(self, _cmd: str, _args: list) -> None:
+        self.console.print(self._build_help_table())
+
+    def _cmd_help_scoped(self, group: str) -> None:
+        """Render a help table filtered to a single group (e.g. 'project', 'repo')."""
+        self.console.print(self._build_help_table(group=group))
+
+    def _build_help_table(self, group: str = None) -> Table:
+        """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered by group."""
         table = Table(
             show_header=True,
             header_style='bold',
@@ -206,50 +212,22 @@ class REPL:
         table.add_column('Command', style='cyan', no_wrap=True, min_width=26)
         table.add_column('Description', style='white')
 
-        # Build the full row list: static top + dynamic tool rows + static bottom
-        registered = set(tool_registry.list_tool_names())
-        ordered_tools = [t for t in _SCAN_TOOL_ORDER if t in registered]
-        # Any registered tools not in the canonical order go at the end
-        ordered_tools += sorted(t for t in registered if t not in _SCAN_TOOL_ORDER)
-
-        tool_rows = []
-        for tool_name in ordered_tools:
-            tool = tool_registry.get_tool(tool_name)
-            config = tool_registry.get_tool_config(tool_name)
-            location = config.location if config else 'local'
-
-            if tool_name == 'nmap':
-                cmd_str = 'scan -t nmap [profile]'
-            else:
-                cmd_str = f'scan -t {tool_name}'
-
-            if location == 'docker':
-                container = config.container.name if config else ''
-                desc = f'{tool.description} [dim](docker: {container})[/dim]'
-            else:
-                desc = tool.description
-
-            tool_rows.append((None, cmd_str, desc))
-
-        all_rows = list(_HELP_ROWS_TOP) + tool_rows + list(_HELP_ROWS_BOTTOM)
-
-        for section, command, description in all_rows:
-            if section is not None and command is None:
-                table.add_row(f'[bold yellow]{section}[/bold yellow]', '')
+        for entry_group, command, description in _HELP_REGISTRY:
+            if group is not None and entry_group != group:
+                continue
+            if command is None:
+                # Section header row
+                table.add_row(f'[bold yellow]{description}[/bold yellow]', '')
             else:
                 table.add_row(command, description)
 
-        self.console.print(table)
+        return table
 
     def _cmd_clear(self, _cmd: str, _args: list) -> None:
         self.console.clear()
 
     def _cmd_exit(self, _cmd: str, _args: list) -> None:
         raise EOFError  # re-use EOF path to trigger "Goodbye!"
-
-    def _cmd_stub(self, cmd: str, args: list) -> None:
-        sub = f' {args[0]}' if args else ''
-        self.console.print(f'[dim]{cmd}{sub}[/dim] — coming soon')
 
     # ------------------------------------------------------------------
     # UI helpers

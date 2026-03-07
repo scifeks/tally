@@ -35,7 +35,7 @@ class ReportCommand:
 
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' or 'switch' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' or 'project switch <name>' first.[/yellow]"
             )
             return
 

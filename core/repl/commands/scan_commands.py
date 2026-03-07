@@ -43,13 +43,25 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: List[str]) -> None:
-        """scan [-y] [-s <segment>] [-t <tool>]  — run tool scans."""
+        """scan [<tool>] | scan repo [<tool>]  — run tool scans."""
         auto_approve, args = self._parse_bool_flag(args, '-y', '--yes')
         segment_name, args = self._parse_value_flag(args, '-s', '--segment')
-        tool_name, remaining = self._parse_tool_flag(args)
 
-        # -t <tool>: existing single-tool flow
-        if tool_name is not None:
+        if args:
+            first = args[0].lower()
+
+            if first == 'repo':
+                # scan repo [<tool>]
+                repo_args = args[1:]
+                if repo_args and not repo_args[0].startswith('-'):
+                    self._cmd_scan_repo_tool(repo_args[0].lower(), auto_approve)
+                else:
+                    self._cmd_scan_repo(repo_args, auto_approve)
+                return
+
+            # scan <tool>
+            tool_name = first
+            remaining = args[1:]
             timeout, remaining = self._parse_timeout_arg(remaining)
             if tool_name == 'nmap':
                 self._cmd_scan_nmap(remaining, timeout)
@@ -68,12 +80,17 @@ class ScanCommands:
             elif tool_name == 'zap':
                 self._cmd_scan_zap(remaining, timeout)
             else:
-                self.repl.console.print(f'[red]Unknown tool:[/red] {tool_name}')
+                known = tool_registry.list_tool_names()
+                self.repl.console.print(
+                    f'[red]Unknown tool:[/red] {tool_name}\n'
+                    f'Configured tools: {", ".join(sorted(known))}'
+                )
             return
 
+        # scan (no args) → full project scan or segment scan
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -108,7 +125,7 @@ class ScanCommands:
 
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -157,7 +174,7 @@ class ScanCommands:
     def _cmd_scan_nmap(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -241,7 +258,7 @@ class ScanCommands:
     def _cmd_scan_semgrep(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -260,7 +277,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -328,7 +345,7 @@ class ScanCommands:
     def _cmd_scan_osv(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -347,7 +364,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -428,18 +445,17 @@ class ScanCommands:
         return f'{total} vulnerabilities ({sev_str})'
 
     # ------------------------------------------------------------------
-    # Public — repo-scan (language-aware multi-tool SCA)
+    # Private — scan repo (language-aware multi-tool SCA on a single repo)
     # ------------------------------------------------------------------
 
-    def cmd_repo_scan(self, _cmd: str, args: List[str]) -> None:
-        """repo-scan <repo> [-y] [--exclude <dirs>] [--severity <level>] [--export <file>]"""
+    def _cmd_scan_repo(self, args: List[str], auto_approve: bool = False) -> None:
+        """scan repo [--exclude <dirs>] [--severity <level>] [--export <file>]"""
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
-        auto_approve, args = self._parse_bool_flag(args, '-y', '--yes')
         exclude_str, args = self._parse_value_flag(args, '--exclude')
         severity, args = self._parse_value_flag(args, '--severity')
         export_path, args = self._parse_value_flag(args, '--export')
@@ -454,34 +470,30 @@ class ScanCommands:
 
         exclude_dirs = [d.strip() for d in exclude_str.split(',')] if exclude_str else None
 
-        # Resolve repo name — positional arg or interactive prompt
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
-        # First non-flag arg is repo name
-        repo_name: Optional[str] = args[0] if args else None
-
-        if repo_name is None:
-            if len(repos) == 1:
-                repo_name = repos[0].name
-            else:
-                self.repl.console.print('\nSelect repository:')
-                for i, r in enumerate(repos, 1):
-                    self.repl.console.print(f'  {i}. {r.name} ({r.path})')
-                try:
-                    raw = input('\nChoice: ').strip()
-                    idx = int(raw) - 1
-                    if not (0 <= idx < len(repos)):
-                        self.repl.console.print('[red]Invalid choice.[/red]')
-                        return
-                    repo_name = repos[idx].name
-                except (ValueError, EOFError, KeyboardInterrupt):
+        # Interactive repo selection
+        if len(repos) == 1:
+            repo_name = repos[0].name
+        else:
+            self.repl.console.print('\nSelect repository:')
+            for i, r in enumerate(repos, 1):
+                self.repl.console.print(f'  {i}. {r.name} ({r.path})')
+            try:
+                raw = input('\nChoice: ').strip()
+                idx = int(raw) - 1
+                if not (0 <= idx < len(repos)):
                     self.repl.console.print('[red]Invalid choice.[/red]')
                     return
+                repo_name = repos[idx].name
+            except (ValueError, EOFError, KeyboardInterrupt):
+                self.repl.console.print('[red]Invalid choice.[/red]')
+                return
 
         orchestrator = self._make_orchestrator()
         if orchestrator is None:
@@ -502,13 +514,49 @@ class ScanCommands:
             self._export_summary(summary, export_path)
 
     # ------------------------------------------------------------------
+    # Private — scan repo <tool> (single tool against all repositories)
+    # ------------------------------------------------------------------
+
+    def _cmd_scan_repo_tool(self, tool_name: str, auto_approve: bool = False) -> None:
+        """scan repo <tool> — run a single tool against all configured repositories."""
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
+            )
+            return
+
+        known_tools = tool_registry.list_tool_names()
+        if tool_name not in known_tools:
+            self.repl.console.print(
+                f'[red]Unknown tool:[/red] {tool_name}\n'
+                f'Configured tools: {", ".join(sorted(known_tools))}'
+            )
+            return
+
+        if tool_name == 'nmap':
+            self.repl.console.print(
+                "[red]Error:[/red] nmap is a network tool and cannot be run with "
+                "'scan repo'. Use 'scan nmap' instead."
+            )
+            return
+
+        orchestrator = self._make_orchestrator()
+        if orchestrator is None:
+            return
+
+        try:
+            orchestrator.run_tool_on_all_repos(tool_name, auto_approve=auto_approve)
+        except ValueError as exc:
+            self.repl.console.print(f'[red]Error:[/red] {exc}')
+
+    # ------------------------------------------------------------------
     # Private — pip-audit scan flow
     # ------------------------------------------------------------------
 
     def _cmd_scan_pip_audit(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -527,7 +575,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -595,7 +643,7 @@ class ScanCommands:
     def _cmd_scan_npm_audit(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -614,7 +662,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -686,7 +734,7 @@ class ScanCommands:
     def _cmd_scan_composer_audit(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -705,7 +753,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -777,7 +825,7 @@ class ScanCommands:
     def _cmd_scan_gitleaks(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -796,7 +844,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -959,7 +1007,7 @@ class ScanCommands:
     def _cmd_scan_zap(self, remaining: List[str], timeout: int) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
-                "[yellow]No active project. Use 'new-project' first.[/yellow]"
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
@@ -978,7 +1026,7 @@ class ScanCommands:
         repos = self.repl.config.load_repositories(self.repl.active_project)
         if not repos:
             self.repl.console.print(
-                "[yellow]No repositories configured. Use 'add-repo' to add one.[/yellow]"
+                "[yellow]No repositories configured. Use 'repo add' to add one.[/yellow]"
             )
             return
 
@@ -1202,18 +1250,6 @@ class ScanCommands:
             for h in up_hosts
         )
         return f'{len(up_hosts)} hosts up, {open_ports} open ports'
-
-    @staticmethod
-    def _parse_tool_flag(
-        args: List[str],
-    ) -> tuple[Optional[str], List[str]]:
-        """Extract -t/--tool value. Returns (tool_name, remaining_args)."""
-        for i, token in enumerate(args):
-            if token in ('-t', '--tool') and i + 1 < len(args):
-                tool = args[i + 1].lower()
-                remaining = args[:i] + args[i + 2:]
-                return tool, remaining
-        return None, args
 
     @staticmethod
     def _parse_timeout_arg(
