@@ -14,7 +14,7 @@ from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands
+from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands, ToolCommands
 from core.tools.registry import print_discovery_summary, tool_registry
 
 _VERSION = '1.0'
@@ -58,6 +58,12 @@ _HELP_REGISTRY = [
     ('scan',      'scan repo',                           'Run language-appropriate tools on a selected repository'),
     ('scan',      'scan repo <tool>',                    'Run a specific tool against all repositories'),
     ('scan',      'run <tool> [args...]',                'Execute a tool with raw arguments'),
+    # Tools
+    ('tool',      None,                                  'Tools'),
+    ('tool',      'tool add',                            'Add a tool to the active configuration'),
+    ('tool',      'tool edit <name>',                    'Edit a configured tool interactively'),
+    ('tool',      'tool remove <name>',                  'Remove a tool from the configuration'),
+    ('tool',      'tool list',                           'List all configured tools and their status'),
     # Knowledge Base
     ('knowledge', None,                                  'Knowledge Base'),
     ('knowledge', 'search <query>',                      'Semantic search over ingested findings'),
@@ -78,6 +84,7 @@ _COMPLETIONS = [
     'help', 'exit', 'quit', 'clear',
     'project', 'repo',
     'scan', 'run',
+    'tool',
     'search', 'chat', 'stats', 'purge',
     'report',
 ]
@@ -99,6 +106,7 @@ class REPL:
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
+        self.tool_commands = ToolCommands(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -151,6 +159,7 @@ class REPL:
         pc = self.project_commands
         sc = self.scan_commands
         kc = self.knowledge_commands
+        tc = self.tool_commands
         handlers = {
             'help':    self._cmd_help,
             'clear':   self._cmd_clear,
@@ -160,6 +169,7 @@ class REPL:
             'repo':    pc.cmd_repo,
             'scan':    sc.cmd_scan,
             'run':     sc.cmd_run,
+            'tool':    tc.cmd_tool,
             'search':  kc.cmd_search,
             'chat':    kc.cmd_chat,
             'stats':   kc.cmd_stats,

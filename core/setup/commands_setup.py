@@ -43,7 +43,7 @@ def _warn_metachar(label: str, value: str) -> None:
         print(f"  Warning: {label} contains shell metacharacters — verify this is correct.")
 
 
-def _find_local_binary(tool_name: str) -> Optional[str]:
+def find_local_binary(tool_name: str) -> Optional[str]:
     """Return the first binary found on PATH for tool_name, or None."""
     for cmd in _TOOL_COMMANDS.get(tool_name, [tool_name]):
         found = shutil.which(cmd)
@@ -52,25 +52,35 @@ def _find_local_binary(tool_name: str) -> Optional[str]:
     return None
 
 
-def _interview_local(tool_name: str) -> Optional[Dict]:
-    """Collect local binary path for tool_name. Returns a raw dict or None to skip."""
-    found = _find_local_binary(tool_name)
+def interview_local(tool_name: str, defaults: Optional[Dict] = None) -> Optional[Dict]:
+    """Collect local binary path for tool_name. Returns a raw dict or None to skip.
 
-    if found:
-        print(f"  Local binary found: {found}")
-        raw = input("  Use this path? [Y/n]: ").strip().lower()
-        if raw in ('', 'y', 'yes'):
-            path = found
-        else:
-            path = input(f"  Enter path to {tool_name} binary: ").strip()
-            if not path:
-                print("  Skipping.")
-                return None
-    else:
-        print(f"  {tool_name} not found on PATH.")
-        path = input(f"  Enter path manually (or press Enter to skip): ").strip()
+    In edit mode (defaults is not None and has 'path'), shows current value and
+    Enter keeps it. In add mode, performs binary detection and manual entry.
+    """
+    if defaults is not None and defaults.get('path'):
+        current_path = defaults['path']
+        print(f"  Current path: {current_path}")
+        path = input(f"  Enter new path [{current_path}]: ").strip()
         if not path:
-            return None
+            path = current_path
+    else:
+        found = find_local_binary(tool_name)
+        if found:
+            print(f"  Local binary found: {found}")
+            raw = input("  Use this path? [Y/n]: ").strip().lower()
+            if raw in ('', 'y', 'yes'):
+                path = found
+            else:
+                path = input(f"  Enter path to {tool_name} binary: ").strip()
+                if not path:
+                    print("  Skipping.")
+                    return None
+        else:
+            print(f"  {tool_name} not found on PATH.")
+            path = input(f"  Enter path manually (or press Enter to skip): ").strip()
+            if not path:
+                return None
 
     path = path.strip()
     _warn_metachar("binary path", path)
@@ -81,19 +91,42 @@ def _interview_local(tool_name: str) -> Optional[Dict]:
     }
 
 
-def _interview_docker(tool_name: str) -> Optional[Dict]:
-    """Collect Docker container config for tool_name. Returns a raw dict or None to skip."""
-    raw = input(f"  Run {tool_name} in a Docker container? [y/N]: ").strip().lower()
-    if raw not in ('y', 'yes'):
-        return None
+def interview_docker(tool_name: str, defaults: Optional[Dict] = None) -> Optional[Dict]:
+    """Collect Docker container config for tool_name. Returns a raw dict or None to skip.
 
-    container = input("  Container name: ").strip()
+    In add mode (defaults is None), asks the gate question "Run in Docker?".
+    In edit mode (defaults is not None), skips the gate and shows current values;
+    Enter keeps each current value.
+    """
+    if defaults is None:
+        raw = input(f"  Run {tool_name} in a Docker container? [y/N]: ").strip().lower()
+        if raw not in ('y', 'yes'):
+            return None
+        current_name = ''
+        current_tool_path = ''
+    else:
+        current_name = (defaults.get('container') or {}).get('name', '')
+        current_tool_path = (defaults.get('container') or {}).get('tool_path', '')
+
+    if defaults is not None:
+        name_input = input(f"  Container name [{current_name}]: ").strip()
+        container = name_input if name_input else current_name
+    else:
+        container = input("  Container name: ").strip()
+
     if not container:
         print("  Container name is required. Skipping.")
         return None
     _warn_metachar("container name", container)
 
-    tool_path = input(f"  Path to {tool_name} binary inside the container: ").strip()
+    if defaults is not None:
+        tp_input = input(
+            f"  Path to {tool_name} binary inside the container [{current_tool_path}]: "
+        ).strip()
+        tool_path = tp_input if tp_input else current_tool_path
+    else:
+        tool_path = input(f"  Path to {tool_name} binary inside the container: ").strip()
+
     if not tool_path:
         print("  Binary path is required. Skipping.")
         return None
@@ -106,29 +139,62 @@ def _interview_docker(tool_name: str) -> Optional[Dict]:
     }
 
 
-def _interview_tool(tool_name: str, has_local: bool, has_docker: bool) -> Optional[Dict]:
-    """Full interview for a single tool. Returns raw CommandEntry dict or None."""
+def interview_tool(
+    tool_name: str, has_local: bool, has_docker: bool, defaults: Optional[Dict] = None
+) -> Optional[Dict]:
+    """Full interview for a single tool. Returns raw CommandEntry dict or None.
+
+    In add mode (defaults is None), prompts to configure from scratch.
+    In edit mode (defaults is not None), shows current location and allows
+    keeping, updating, or switching the configuration.
+    """
     print(f"\n[{tool_name}]")
 
+    if defaults is None:
+        if has_local and has_docker:
+            found = find_local_binary(tool_name)
+            if found:
+                print(f"  Local binary found: {found}")
+            choice = input("  Run locally or via Docker? [local/docker/skip]: ").strip().lower()
+            if choice == 'docker':
+                return interview_docker(tool_name)
+            elif choice == 'local':
+                return interview_local(tool_name)
+            else:
+                print("  Skipping.")
+                return None
+        elif has_local:
+            return interview_local(tool_name)
+        elif has_docker:
+            return interview_docker(tool_name)
+        return None
+
+    # Edit mode
+    current_location = defaults.get('location', 'local')
+    print(f"  current: {current_location}")
+
     if has_local and has_docker:
-        found = _find_local_binary(tool_name)
-        if found:
-            print(f"  Local binary found: {found}")
-        choice = input("  Run locally or via Docker? [local/docker/skip]: ").strip().lower()
-        if choice == 'docker':
-            return _interview_docker(tool_name)
-        elif choice == 'local':
-            return _interview_local(tool_name)
+        choice = input("  Run locally or via Docker? [local/docker/keep]: ").strip().lower()
+        if choice == 'local':
+            if current_location == 'local':
+                return interview_local(tool_name, defaults=defaults)
+            else:
+                return interview_local(tool_name, defaults={})
+        elif choice == 'docker':
+            if current_location == 'docker':
+                return interview_docker(tool_name, defaults=defaults)
+            else:
+                return interview_docker(tool_name, defaults={})
         else:
-            print("  Skipping.")
-            return None
-
+            # keep (Enter or unrecognised)
+            if current_location == 'docker':
+                return interview_docker(tool_name, defaults=defaults)
+            else:
+                return interview_local(tool_name, defaults=defaults)
     elif has_local:
-        return _interview_local(tool_name)
-
+        return interview_local(tool_name, defaults=defaults)
     elif has_docker:
-        return _interview_docker(tool_name)
-
+        return interview_docker(tool_name, defaults=defaults)
     return None
 
 
@@ -166,7 +232,7 @@ def run_commands_setup(base_path: str) -> None:
     commands: Dict[str, Dict] = {}
 
     for tool_name in all_tools:
-        entry = _interview_tool(
+        entry = interview_tool(
             tool_name,
             has_local=tool_name in local_tools,
             has_docker=tool_name in docker_tools,

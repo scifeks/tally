@@ -159,14 +159,8 @@ def _discover_fallback(wrappers_dir: Path) -> None:
                 tool_registry.register(obj())
 
 
-def print_discovery_summary(console: Console) -> None:
-    """Print a Rich table summarising discovered tools."""
-    tools = tool_registry.get_all_tools()
-    available_count = sum(1 for t in tools if t.check_available())
-    unavailable_count = len(tools) - available_count
-
-    console.print("\n[bold][*] Discovering tools...[/bold]")
-
+def build_tool_table(tools, registry) -> Table:
+    """Return a Rich Table of tool status rows (Tool/Category/Location/Status/Hint)."""
     table = Table(show_header=True, header_style="bold", padding=(0, 1))
     table.add_column("Tool", style="cyan", min_width=18)
     table.add_column("Category", min_width=10)
@@ -175,7 +169,7 @@ def print_discovery_summary(console: Console) -> None:
     table.add_column("Hint")
 
     for tool in tools:
-        config = tool_registry.get_tool_config(tool.name)
+        config = registry.get_tool_config(tool.name)
         location = config.location if config else "local"
 
         if location == "docker":
@@ -198,7 +192,17 @@ def print_discovery_summary(console: Console) -> None:
 
         table.add_row(tool.name, tool.category, location, status, hint)
 
-    console.print(table)
+    return table
+
+
+def print_discovery_summary(console: Console) -> None:
+    """Print a Rich table summarising discovered tools."""
+    tools = tool_registry.get_all_tools()
+    available_count = sum(1 for t in tools if t.check_available())
+    unavailable_count = len(tools) - available_count
+
+    console.print("\n[bold][*] Discovering tools...[/bold]")
+    console.print(build_tool_table(tools, tool_registry))
 
     summary = f"Loaded {len(tools)} tools ({available_count} available"
     if unavailable_count:
