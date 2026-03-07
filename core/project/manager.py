@@ -184,21 +184,32 @@ class ProjectManager:
                 break
             print('  Repository name is required.')
 
-        # Path
+        # Path + Docker path (at least one required)
+        local_path_str = ''
+        docker_path = ''
         while True:
-            raw_path = _prompt('  Path')
-            if not raw_path:
-                print('  Path is required.')
+            raw_path = _prompt('  Path (local filesystem, leave blank if docker-only)')
+            raw_docker = _prompt('  Docker path (container mount point, leave blank if local-only)')
+
+            if not raw_path and not raw_docker:
+                print('  At least one of path or docker_path is required.')
                 continue
-            repo_path = Path(raw_path).expanduser().resolve()
-            if repo_path.exists():
-                break
-            print(f"  Path does not exist: {raw_path}")
+
+            if raw_path:
+                resolved = Path(raw_path).expanduser().resolve()
+                if not resolved.exists():
+                    print(f"  Path does not exist: {raw_path}")
+                    continue
+                local_path_str = str(resolved)
+
+            docker_path = raw_docker.strip()
+            break
 
         # Languages
+        detect_base = Path(local_path_str) if local_path_str else None
         lang_input = _prompt("  Languages (comma-separated or 'auto')")
         if lang_input.lower() == 'auto':
-            langs = _detect_languages(repo_path)
+            langs = _detect_languages(detect_base) if detect_base else []
             if langs:
                 print(f'  [Detected: {", ".join(langs)}]')
             else:
@@ -212,7 +223,8 @@ class ProjectManager:
 
         return Repository(
             name=name,
-            path=str(repo_path),
+            path=local_path_str,
+            docker_path=docker_path,
             languages=langs,
             base_urls=base_urls,
         )
@@ -243,22 +255,35 @@ class ProjectManager:
                     break
                 print('  Repository name is required.')
 
-            # Path
+            # Path + Docker path (at least one required)
+            local_path_str = existing.path
+            docker_path = existing.docker_path
             while True:
-                raw_path = _prompt('  Path', default=existing.path)
-                if not raw_path:
-                    print('  Path is required.')
+                raw_path = _prompt('  Path (local filesystem)', default=existing.path)
+                raw_docker = _prompt('  Docker path (container mount point)', default=existing.docker_path)
+
+                if not raw_path and not raw_docker:
+                    print('  At least one of path or docker_path is required.')
                     continue
-                repo_path = Path(raw_path).expanduser().resolve()
-                if repo_path.exists():
-                    break
-                print(f'  Path does not exist: {raw_path}')
+
+                if raw_path:
+                    resolved = Path(raw_path).expanduser().resolve()
+                    if not resolved.exists():
+                        print(f'  Path does not exist: {raw_path}')
+                        continue
+                    local_path_str = str(resolved)
+                else:
+                    local_path_str = ''
+
+                docker_path = raw_docker.strip()
+                break
 
             # Languages
+            detect_base = Path(local_path_str) if local_path_str else None
             current_langs = ', '.join(existing.languages) if existing.languages else ''
             lang_input = _prompt("  Languages (comma-separated or 'auto')", default=current_langs)
             if lang_input.lower() == 'auto':
-                langs = _detect_languages(repo_path)
+                langs = _detect_languages(detect_base) if detect_base else []
                 if langs:
                     print(f'  [Detected: {", ".join(langs)}]')
                 else:
@@ -273,7 +298,8 @@ class ProjectManager:
 
             updated = Repository(
                 name=name,
-                path=str(repo_path),
+                path=local_path_str,
+                docker_path=docker_path,
                 languages=langs,
                 base_urls=base_urls,
             )
