@@ -48,3 +48,4 @@ Thumbs.db
 *.key
 *.pem
 config/secrets.json
+/config/commands.json

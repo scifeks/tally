@@ -475,27 +475,34 @@ class ScanOrchestrator:
         repo,
         exclude_dirs: Optional[List[str]] = None,
     ) -> dict:
-        kwargs: dict = {'label': repo.name, 'repo_path': repo.path}
+        repo_path = self.registry.get_repo_path(tool_name, repo)
+        kwargs: dict = {'label': repo.name, 'repo_path': repo_path}
 
         if tool_name in ('npm-audit', 'composer-audit'):
-            kwargs['cwd'] = repo.path
+            # Docker wrappers handle working directory internally via -w;
+            # only set cwd for local tools.
+            tool_config = self.registry.get_tool_config(tool_name)
+            if tool_config is None or tool_config.location == 'local':
+                kwargs['cwd'] = repo_path
 
         if tool_name == 'zap' and repo.base_urls:
             endpoint_cfg = self._config.load_endpoint_config(self.project_name, repo.name)
             endpoints_dict = endpoint_cfg.endpoints if endpoint_cfg else {}
-            output_dir = (
-                self.executor.base_path
-                / 'projects'
-                / self.project_name
-                / 'tool_outputs'
-                / 'zap'
-            )
-            output_dir.mkdir(parents=True, exist_ok=True)
-            ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
-            output_file = str(output_dir / f'{repo.name}_{ts}_report.json')
             kwargs['base_url'] = repo.base_urls[0]
             kwargs['endpoints'] = endpoints_dict
-            kwargs['output_file'] = output_file
+            # output_file only applies to local ZAP; docker ZAP writes inside the container
+            tool_config = self.registry.get_tool_config(tool_name)
+            if tool_config is None or tool_config.location == 'local':
+                output_dir = (
+                    self.executor.base_path
+                    / 'projects'
+                    / self.project_name
+                    / 'tool_outputs'
+                    / 'zap'
+                )
+                output_dir.mkdir(parents=True, exist_ok=True)
+                ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
+                kwargs['output_file'] = str(output_dir / f'{repo.name}_{ts}_report.json')
 
         return kwargs
 

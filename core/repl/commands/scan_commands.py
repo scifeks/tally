@@ -279,7 +279,8 @@ class ScanCommands:
                 return
 
         self.repl.console.print(f'Running semgrep: {repo.name}...')
-        result = self._execute_semgrep_scan(repo.name, repo.path, timeout=timeout)
+        repo_path = tool_registry.get_repo_path('semgrep', repo)
+        result = self._execute_semgrep_scan(repo.name, repo_path, timeout=timeout)
         self._print_semgrep_result(result)
 
         if result.output_files:
@@ -365,7 +366,8 @@ class ScanCommands:
                 return
 
         self.repl.console.print(f'Running osv-scanner: {repo.name}...')
-        result = self._execute_osv_scan(repo.name, repo.path, timeout=timeout)
+        repo_path = tool_registry.get_repo_path('osv-scanner', repo)
+        result = self._execute_osv_scan(repo.name, repo_path, timeout=timeout)
         self._print_osv_result(result)
 
         if result.output_files:
@@ -544,7 +546,8 @@ class ScanCommands:
                 return
 
         self.repl.console.print(f'Running pip-audit: {repo.name}...')
-        result = self._execute_pip_audit_scan(repo.name, repo.path, timeout=timeout)
+        repo_path = tool_registry.get_repo_path('pip-audit', repo)
+        result = self._execute_pip_audit_scan(repo.name, repo_path, timeout=timeout)
         self._print_sca_result(result, 'pip-audit')
 
         if result.output_files:
@@ -630,7 +633,8 @@ class ScanCommands:
                 return
 
         self.repl.console.print(f'Running npm-audit: {repo.name}...')
-        result = self._execute_npm_audit_scan(repo.name, repo.path, timeout=timeout)
+        repo_path = tool_registry.get_repo_path('npm-audit', repo)
+        result = self._execute_npm_audit_scan(repo.name, repo_path, timeout=timeout)
         self._print_sca_result(result, 'npm-audit')
 
         if result.output_files:
@@ -660,13 +664,15 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
         )
-        # npm audit must run from inside the repository directory
+        # Docker wrappers handle cwd via -w internally; only set cwd for local tools.
+        config = tool_registry.get_tool_config('npm-audit')
+        cwd = repo_path if (config is None or config.location == 'local') else None
         return executor.execute(
             tool,
             auto_approve=auto_approve,
             timeout=timeout,
             label=repo_name,
-            cwd=repo_path,
+            cwd=cwd,
             repo_path=repo_path,
         )
 
@@ -718,7 +724,8 @@ class ScanCommands:
                 return
 
         self.repl.console.print(f'Running composer-audit: {repo.name}...')
-        result = self._execute_composer_audit_scan(repo.name, repo.path, timeout=timeout)
+        repo_path = tool_registry.get_repo_path('composer-audit', repo)
+        result = self._execute_composer_audit_scan(repo.name, repo_path, timeout=timeout)
         self._print_sca_result(result, 'composer-audit')
 
         if result.output_files:
@@ -748,13 +755,15 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
         )
-        # composer audit must run from inside the repository directory
+        # Docker wrappers handle cwd via -w internally; only set cwd for local tools.
+        config = tool_registry.get_tool_config('composer-audit')
+        cwd = repo_path if (config is None or config.location == 'local') else None
         return executor.execute(
             tool,
             auto_approve=auto_approve,
             timeout=timeout,
             label=repo_name,
-            cwd=repo_path,
+            cwd=cwd,
             repo_path=repo_path,
         )
 
@@ -806,7 +815,8 @@ class ScanCommands:
                 return
 
         self.repl.console.print(f'Running gitleaks: {repo.name}...')
-        result = self._execute_gitleaks_scan(repo.name, repo.path, timeout=timeout)
+        repo_path = tool_registry.get_repo_path('gitleaks', repo)
+        result = self._execute_gitleaks_scan(repo.name, repo_path, timeout=timeout)
         self._print_gitleaks_result(result)
 
         if result.output_files:

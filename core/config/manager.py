@@ -8,7 +8,8 @@ from .schemas import (
     ProjectConfig,
     Repository,
     NmapProfile,
-    EndpointConfig
+    EndpointConfig,
+    CommandEntry,
 )
 
 
@@ -191,6 +192,31 @@ class ConfigManager:
         with open(config_path, 'r') as f:
             data = json.load(f)
             return EndpointConfig(**data)
+
+    def load_commands_config(self) -> Optional[Dict[str, CommandEntry]]:
+        """Load commands.json from the app config directory.
+
+        Returns:
+            Dict mapping tool name to CommandEntry, or None if file does not exist.
+        """
+        config_path = self.base_path / "config" / "commands.json"
+        if not config_path.exists():
+            return None
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+        return {name: CommandEntry(**entry) for name, entry in data.items()}
+
+    def save_commands_config(self, config: Dict[str, CommandEntry]) -> None:
+        """Save commands.json to the app config directory.
+
+        Args:
+            config: Dict mapping tool name to CommandEntry
+        """
+        config_path = self.base_path / "config" / "commands.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        data = {name: entry.model_dump() for name, entry in config.items()}
+        with open(config_path, 'w') as f:
+            json.dump(data, f, indent=2)
 
     def save_endpoint_config(
         self,

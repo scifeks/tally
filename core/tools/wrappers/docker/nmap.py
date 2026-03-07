@@ -1,0 +1,83 @@
+"""Docker wrapper for nmap network scanning."""
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from ...base import DockerToolWrapper
+from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
+
+
+class DockerNmapWrapper(DockerToolWrapper):
+    @property
+    def name(self) -> str:
+        return "nmap"
+
+    @property
+    def category(self) -> str:
+        return "network"
+
+    @property
+    def scope(self) -> str:
+        return "project"
+
+    @property
+    def description(self) -> str:
+        return "Network mapper for host discovery and port scanning"
+
+    @property
+    def supported_languages(self) -> Optional[List[str]]:
+        return None
+
+    def build_command(self, **kwargs) -> List[str]:
+        """Build docker exec argv for nmap.
+
+        Keyword Args:
+            profile (str):        Profile name from nmap_hosts.json.
+            hosts (List[str]):    Explicit host/subnet list.
+            args (str):           Additional nmap arguments.
+            project_name (str):   Required when using a profile.
+            base_path (str|Path): App base path (default ".").
+        """
+        profile: Optional[str] = kwargs.get("profile")
+        hosts: Optional[List[str]] = kwargs.get("hosts")
+        args: str = kwargs.get("args", "")
+        project_name: Optional[str] = kwargs.get("project_name")
+        base_path = kwargs.get("base_path", ".")
+
+        if profile is not None:
+            if not project_name:
+                raise ValueError("project_name is required when using a profile")
+
+            from core.config import ConfigManager
+
+            config = ConfigManager(base_path=str(base_path))
+            profiles = config.load_nmap_hosts(project_name)
+            if not profiles:
+                raise ValueError(
+                    f"No nmap_hosts.json found for project: {project_name!r}"
+                )
+            if profile not in profiles:
+                available = list(profiles.keys())
+                raise ValueError(
+                    f"Profile {profile!r} not found. Available profiles: {available}"
+                )
+
+            nmap_profile = profiles[profile]
+            hosts = nmap_profile.hosts
+            if not args:
+                args = nmap_profile.nmap_args
+
+        elif hosts is not None:
+            if not isinstance(hosts, list):
+                raise ValueError("hosts must be a list of strings")
+        else:
+            raise ValueError("Either 'profile' or 'hosts' must be provided")
+
+        # -oX - writes XML to stdout; executor captures it
+        tool_args = (args.split() if args else []) + ["-oX", "-"] + list(hosts)
+        return self._build_docker_exec(tool_args)
+
+    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+        xml_path = files.get("stdout")
+        if xml_path is not None and xml_path.exists():
+            return parse_nmap_xml(xml_path)
+        return parse_nmap_xml_string(output)

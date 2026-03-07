@@ -15,7 +15,7 @@ from rich import box
 from core.config import ConfigManager
 from core.project import ProjectManager
 from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands
-from core.tools.registry import print_discovery_summary
+from core.tools.registry import print_discovery_summary, tool_registry
 
 _VERSION = '1.0'
 
@@ -34,9 +34,12 @@ _HELP_BOX = box.Box(
 
 # ---------------------------------------------------------------------------
 # Help table definition: (section, command, description)
-# None in the command slot = section header row
+# None in the command slot = section header row.
+#
+# Scan tool rows are built dynamically in _cmd_help() from the live registry
+# so that only configured tools appear, with their location shown.
 # ---------------------------------------------------------------------------
-_HELP_ROWS = [
+_HELP_ROWS_TOP = [
     ('Project Management', None, None),
     (None, 'new-project',         'Create a new project (interactive)'),
     (None, 'projects',            'List all projects'),
@@ -47,16 +50,10 @@ _HELP_ROWS = [
     (None, 'edit-repo <name>',    'Edit a repository\'s config'),
     (None, 'delete-repo <name>',  'Delete a repository\'s config'),
     ('Scanning', None, None),
-    #todo: I don't like this formatting. Experiment with other layouts.s
-    (None, '',                       '[dim]All commands accept --timeout <seconds>[/dim]'),
-    (None, 'scan -t nmap [profile]',     'Run nmap (all profiles or one by name)'),
-    (None, 'scan -t semgrep',            'Run semgrep static analysis'),
-    (None, 'scan -t osv-scanner',        'Run OSV-Scanner for vulnerabilities'),
-    (None, 'scan -t pip-audit',          'Run pip-audit (Python SCA)'),
-    (None, 'scan -t npm-audit',          'Run npm-audit (Node.js SCA)'),
-    (None, 'scan -t composer-audit',     'Run composer-audit (PHP SCA)'),
-    (None, 'scan -t gitleaks',           'Run gitleaks secret detection'),
-    (None, 'scan -t zap',                'Run OWASP ZAP web scan'),
+    (None, '',                    '[dim]All commands accept --timeout <seconds>[/dim]'),
+]
+
+_HELP_ROWS_BOTTOM = [
     (None, 'repo-scan [--timeout N]',    'Run language-appropriate SCA tools on a repo'),
     (None, 'run <tool> [args...]',       'Execute a tool with raw arguments'),
     ('Knowledge Base', None, None),
@@ -70,6 +67,15 @@ _HELP_ROWS = [
     (None, 'help',                'Show this help table'),
     (None, 'clear',               'Clear the screen'),
     (None, 'exit / quit',         'Exit tally'),
+]
+
+# Canonical display order for scan tools (mirrors SCAN_SEGMENTS ordering)
+_SCAN_TOOL_ORDER = [
+    'nmap',
+    'semgrep',
+    'osv-scanner', 'pip-audit', 'npm-audit', 'composer-audit',
+    'gitleaks',
+    'zap',
 ]
 
 _COMPLETIONS = [
@@ -200,9 +206,35 @@ class REPL:
         table.add_column('Command', style='cyan', no_wrap=True, min_width=26)
         table.add_column('Description', style='white')
 
-        for section, command, description in _HELP_ROWS:
+        # Build the full row list: static top + dynamic tool rows + static bottom
+        registered = set(tool_registry.list_tool_names())
+        ordered_tools = [t for t in _SCAN_TOOL_ORDER if t in registered]
+        # Any registered tools not in the canonical order go at the end
+        ordered_tools += sorted(t for t in registered if t not in _SCAN_TOOL_ORDER)
+
+        tool_rows = []
+        for tool_name in ordered_tools:
+            tool = tool_registry.get_tool(tool_name)
+            config = tool_registry.get_tool_config(tool_name)
+            location = config.location if config else 'local'
+
+            if tool_name == 'nmap':
+                cmd_str = 'scan -t nmap [profile]'
+            else:
+                cmd_str = f'scan -t {tool_name}'
+
+            if location == 'docker':
+                container = config.container.name if config else ''
+                desc = f'{tool.description} [dim](docker: {container})[/dim]'
+            else:
+                desc = tool.description
+
+            tool_rows.append((None, cmd_str, desc))
+
+        all_rows = list(_HELP_ROWS_TOP) + tool_rows + list(_HELP_ROWS_BOTTOM)
+
+        for section, command, description in all_rows:
             if section is not None and command is None:
-                # Section header
                 table.add_row(f'[bold yellow]{section}[/bold yellow]', '')
             else:
                 table.add_row(command, description)
