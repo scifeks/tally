@@ -9,7 +9,7 @@ from typing import List, Optional
 from core.config import ConfigManager, ProjectConfig, Repository, NmapProfile
 
 
-_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9-]*$')
+_NAME_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9\s\-]*$')
 
 _LANG_INDICATORS = [
     (['*.py', 'requirements.txt', 'setup.py', 'pyproject.toml'], 'python'),
@@ -147,7 +147,7 @@ class ProjectManager:
                 continue
             if not _NAME_RE.match(name):
                 print(
-                    '  Invalid name. Use lowercase letters, digits, and hyphens only '
+                    '  Invalid name. Use letters, digits, spaces, and hyphens only '
                     '(must start with a letter or digit).'
                 )
                 continue
