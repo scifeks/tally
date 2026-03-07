@@ -1,4 +1,6 @@
+import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -8,7 +10,7 @@ from ...parsers.gitleaks_parser import parse_gitleaks_json, parse_gitleaks_json_
 
 class GitleaksWrapper(ToolWrapper):
     def __init__(self, config=None) -> None:
-        pass
+        self._last_report_path: Optional[Path] = None
 
     @property
     def name(self) -> str:
@@ -42,9 +44,8 @@ class GitleaksWrapper(ToolWrapper):
 
         Keyword Args:
             repo_path (str): Path to the repository to scan (required).
-            scan_uncommitted (bool): Scan uncommitted changes in a git repo (default: False).
-                                     When True, omits --no-git and adds --uncommitted.
-            verbose (bool): Enable verbose output (default: False).
+            scan_type (str): 'dir' for working-tree scan or 'git' for full
+                             history scan (default: 'dir').
         """
         repo_path: Optional[str] = kwargs.get("repo_path")
         if not repo_path:
@@ -53,31 +54,28 @@ class GitleaksWrapper(ToolWrapper):
         if not Path(repo_path).exists():
             raise ValueError(f"Repository path does not exist: {repo_path!r}")
 
-        scan_uncommitted: bool = bool(kwargs.get("scan_uncommitted", False))
-        verbose: bool = bool(kwargs.get("verbose", False))
+        scan_type: str = kwargs.get("scan_type", "dir")
+        if scan_type not in ("dir", "git"):
+            raise ValueError(f"scan_type must be 'dir' or 'git', got {scan_type!r}")
 
-        cmd = [
-            "gitleaks", "detect",
-            "--source", repo_path,
+        tmp = tempfile.mktemp(suffix=".json", prefix=f"gitleaks_{scan_type}_")
+        self._last_report_path = Path(tmp)
+
+        return [
+            "gitleaks", scan_type, repo_path,
             "--report-format", "json",
+            "--report-path", tmp,
+            "--exit-code", "0",
         ]
-
-        if scan_uncommitted:
-            cmd.append("--uncommitted")
-        else:
-            # Scan working tree files without requiring a git repository
-            cmd.append("--no-git")
-
-        if verbose:
-            cmd.append("--verbose")
-
-        return cmd
 
     def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
         """Parse gitleaks JSON output into structured data.
 
-        Prefers the saved stdout file; falls back to parsing the output string.
+        Prefers the report file written via --report-path; falls back to the
+        saved stdout file, then parses the raw output string.
         """
+        if self._last_report_path is not None and self._last_report_path.exists():
+            return parse_gitleaks_json(self._last_report_path)
         json_path = files.get("stdout")
         if json_path is not None and json_path.exists():
             return parse_gitleaks_json(json_path)

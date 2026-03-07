@@ -13,6 +13,7 @@ from rich.table import Table
 
 from core.tools.base import ToolResult, ToolWrapper
 from core.tools.executor import ToolExecutor, DEFAULT_TIMEOUT
+from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
 from core.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -257,7 +258,11 @@ class ScanOrchestrator:
 
             self.console.print(f'  [dim][*] Running {tool_name}...[/dim]')
             kwargs = self._repo_tool_kwargs(tool_name, repo, exclude_dirs=exclude_dirs)
-            result = self._run_tool_with_approval(tool, kwargs, auto_approve)
+
+            if tool_name == 'gitleaks':
+                result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
+            else:
+                result = self._run_tool_with_approval(tool, kwargs, auto_approve)
 
             if result is None:
                 self._print_tool_line(tool_name, 'SKIPPED', 0, None)
@@ -313,6 +318,59 @@ class ScanOrchestrator:
         label = kwargs.pop('label', 'output')
         cwd = kwargs.pop('cwd', None)
         return self.executor.execute(tool, auto_approve=True, label=label, cwd=cwd, **kwargs)
+
+    def _run_gitleaks_both_scans(
+        self,
+        tool: ToolWrapper,
+        kwargs: dict,
+        auto_approve: bool,
+    ) -> Optional[ToolResult]:
+        """Run gitleaks dir + git scans, combine, and return one ToolResult.
+
+        Prompts once for approval (if not auto_approve), then runs both scan
+        types with auto_approve=True.
+        """
+        if not auto_approve:
+            try:
+                answer = input(f'Run {tool.name} (dir + git)? [y/N]: ').strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return None
+            if answer not in ('y', 'yes'):
+                return None
+
+        base_kwargs = {k: v for k, v in kwargs.items() if k not in ('label', 'cwd')}
+        label = kwargs.get('label', 'output')
+        cwd = kwargs.get('cwd', None)
+
+        dir_result = self.executor.execute(
+            tool, auto_approve=True, label=f'{label}_dir', cwd=cwd,
+            scan_type='dir', **base_kwargs,
+        )
+        git_result = self.executor.execute(
+            tool, auto_approve=True, label=f'{label}_git', cwd=cwd,
+            scan_type='git', **base_kwargs,
+        )
+
+        dir_data = dir_result.parsed_data or {}
+        git_data = git_result.parsed_data or {}
+        combined_data = combine_gitleaks_results(dir_data, git_data)
+
+        combined_files: Dict[str, Path] = {}
+        for key, path in dir_result.output_files.items():
+            combined_files[f'dir_{key}'] = path
+        for key, path in git_result.output_files.items():
+            combined_files[f'git_{key}'] = path
+
+        return ToolResult(
+            tool_name='gitleaks',
+            success=dir_result.success or git_result.success,
+            output=(dir_result.output or '') + '\n' + (git_result.output or ''),
+            parsed_data=combined_data,
+            output_files=combined_files,
+            timestamp=dir_result.timestamp,
+            duration_seconds=dir_result.duration_seconds + git_result.duration_seconds,
+        )
 
     def _batch_ingest(self, results: List[ToolResult], profile: str) -> int:
         """Ingest all successful ToolResults into RAG after scan completes.
@@ -432,7 +490,11 @@ class ScanOrchestrator:
 
                 self.console.print(f'  [dim][*] Running {tool_name} ({repo.name})...[/dim]')
                 kwargs = self._repo_tool_kwargs(tool_name, repo)
-                result = self._run_tool_with_approval(tool, kwargs, auto_approve)
+
+                if tool_name == 'gitleaks':
+                    result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
+                else:
+                    result = self._run_tool_with_approval(tool, kwargs, auto_approve)
 
                 if result is None:
                     self._print_tool_line(f'{tool_name}/{repo.name}', 'SKIPPED', 0, None)
