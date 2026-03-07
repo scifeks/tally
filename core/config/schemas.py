@@ -1,6 +1,6 @@
 """Configuration schemas using Pydantic for validation."""
 from typing import List, Dict, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NmapProfile(BaseModel):
@@ -9,21 +9,52 @@ class NmapProfile(BaseModel):
     nmap_args: str = Field(..., description="Nmap arguments for this profile")
 
 
+class DockerContainer(BaseModel):
+    """Docker container configuration for a tool."""
+    name: str = Field(..., description="Docker container name")
+    tool_path: str = Field(..., description="Path to tool binary inside container")
+
+
+class CommandEntry(BaseModel):
+    """Single tool entry in commands.json."""
+    type: str = Field(..., description="Tool type: 'repo' or 'api'")
+    location: str = Field(..., description="Execution location: 'local' or 'docker'")
+    path: str = Field(default="", description="Binary path for local tools")
+    container: Optional[DockerContainer] = Field(
+        default=None, description="Docker container config"
+    )
+
+    @model_validator(mode='after')
+    def validate_location_fields(self) -> 'CommandEntry':
+        if self.location == 'docker' and self.container is None:
+            raise ValueError("container is required when location is 'docker'")
+        if self.location == 'local' and not self.path:
+            raise ValueError("path is required when location is 'local'")
+        return self
+
+
 class Repository(BaseModel):
     """Repository configuration."""
     name: str = Field(..., description="Repository name")
-    path: str = Field(..., description="Filesystem path to repository")
+    path: str = Field(default="", description="Filesystem path to repository")
+    docker_path: str = Field(default="", description="Container mount path for Docker tools")
     languages: List[str] = Field(..., description="Programming languages used")
     base_urls: List[str] = Field(default_factory=list, description="API base URLs")
 
     @field_validator('path')
     @classmethod
     def path_must_exist(cls, v: str) -> str:
-        """Validate that repository path exists."""
+        """Validate that repository path exists (only when non-empty)."""
         from pathlib import Path
-        if not Path(v).exists():
+        if v and not Path(v).exists():
             raise ValueError(f"Repository path does not exist: {v}")
         return v
+
+    @model_validator(mode='after')
+    def at_least_one_path(self) -> 'Repository':
+        if not self.path and not self.docker_path:
+            raise ValueError("At least one of 'path' or 'docker_path' must be set")
+        return self
 
 
 class EndpointConfig(BaseModel):

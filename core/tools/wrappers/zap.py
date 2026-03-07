@@ -11,7 +11,8 @@ from ..parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_za
 # Candidate binaries in preference order
 _ZAP_CANDIDATES = ("zap.sh", "zap-cli", "zaproxy")
 
-
+#todo: Implement output adapter interface for API wrappers since Docker filesystem wont be available for output.
+#todo: Wrapper output -> stdOut -> Adapter -> host filesystem
 class ZAPWrapper(ToolWrapper):
     """Wrapper for OWASP ZAP quick-scan (DAST) mode.
 
