@@ -6,7 +6,9 @@
 .venv/bin/python3 tally.py
 ```
 
-On startup Tally runs a dependency check, then prints the tool discovery summary:
+On first run, if `config/commands.json` does not exist, Tally launches an interactive setup wizard that detects installed tools and configures how each one runs (locally or via Docker). After setup completes, the REPL starts normally.
+
+On subsequent startups Tally runs a dependency check, then prints the tool discovery summary:
 
 ```
 Tally - Dependency Check
@@ -57,7 +59,7 @@ If a required Python package is missing, Tally prints an error and exits with co
 Tally organizes all scans and findings by project. Before scanning, you need an active project.
 
 ```
-[no-project]> new-project
+[no-project]> project add
 ```
 
 Tally prompts you interactively:
@@ -94,7 +96,7 @@ reports/               # Generated reports
 A repository represents a codebase to scan. Add one with:
 
 ```
-[acme-pentest]> add-repo
+[acme-pentest]> repo add
 ```
 
 You are prompted for:
@@ -104,7 +106,7 @@ You are prompted for:
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 
 ```
-[acme-pentest]> add-repo
+[acme-pentest]> repo add
 Repository name: api-server
 Path: /home/user/projects/acme/api
 Languages (comma-separated): python
@@ -115,7 +117,7 @@ Base URLs (comma-separated, optional):
 View configured repositories:
 
 ```
-[acme-pentest]> repos
+[acme-pentest]> repo list
  Name        | Path                         | Languages | Base URLs
  api-server  | /home/user/projects/acme/api | python    | —
 ```
@@ -123,9 +125,47 @@ View configured repositories:
 Edit or remove a repository:
 
 ```
-[acme-pentest]> edit-repo api-server
-[acme-pentest]> delete-repo api-server
+[acme-pentest]> repo edit api-server
+[acme-pentest]> repo delete api-server
 ```
+
+---
+
+## Managing Tools
+
+Tally stores tool configuration in `config/commands.json`. Use the `tool` commands to view and modify it from within the REPL.
+
+### Listing Tools
+
+```
+[acme-pentest]> tool list
+```
+
+Shows all configured tools, their execution mode (local or docker), and whether they are currently available.
+
+### Adding a Tool
+
+```
+[acme-pentest]> tool add
+```
+
+Tally lists tools that have a wrapper but are not yet configured. Select one by name or number and follow the prompts to configure the binary path (local) or container details (docker).
+
+### Editing a Tool
+
+```
+[acme-pentest]> tool edit semgrep
+```
+
+Re-runs the configuration interview for the named tool, pre-filling current values. Press Enter to keep an existing value.
+
+### Removing a Tool
+
+```
+[acme-pentest]> tool remove semgrep
+```
+
+Removes the tool from `config/commands.json`. Tally asks for confirmation before deleting.
 
 ---
 
@@ -182,20 +222,20 @@ Valid segments: `network`, `sast`, `sca`, `secrets`, `api`
 ### Single Tool Scan
 
 ```
-[acme-pentest]> scan -t semgrep
-[acme-pentest]> scan -t osv-scanner
-[acme-pentest]> scan -t gitleaks
-[acme-pentest]> scan -t pip-audit
-[acme-pentest]> scan -t npm-audit
-[acme-pentest]> scan -t composer-audit
-[acme-pentest]> scan -t zap
+[acme-pentest]> scan semgrep
+[acme-pentest]> scan osv-scanner
+[acme-pentest]> scan gitleaks
+[acme-pentest]> scan pip-audit
+[acme-pentest]> scan npm-audit
+[acme-pentest]> scan composer-audit
+[acme-pentest]> scan zap
 ```
 
 For nmap, you can optionally specify a profile name. Without a profile name, all configured profiles run:
 
 ```
-[acme-pentest]> scan -t nmap
-[acme-pentest]> scan -t nmap management
+[acme-pentest]> scan nmap
+[acme-pentest]> scan nmap management
 ```
 
 ### Timeout
@@ -203,7 +243,7 @@ For nmap, you can optionally specify a profile name. Without a profile name, all
 All scan commands accept `--timeout <seconds>` (default: 300):
 
 ```
-[acme-pentest]> scan -t nmap --timeout 600
+[acme-pentest]> scan nmap --timeout 600
 [acme-pentest]> scan -s sca --timeout 120
 ```
 
@@ -217,34 +257,46 @@ Runs all language-appropriate tools for a single repository. Tool selection is a
 - PHP repos: adds composer-audit
 
 ```
-[acme-pentest]> repo-scan api-server
+[acme-pentest]> scan repo
 ```
 
-If you have only one repository, the name is optional:
-
-```
-[acme-pentest]> repo-scan
-```
-
-With multiple repositories and no name, Tally presents an interactive selection menu.
+If you have only one repository, it is selected automatically. With multiple repositories, Tally presents an interactive selection menu.
 
 Additional flags:
 
 ```
 # Auto-approve all tool executions
-[acme-pentest]> repo-scan api-server -y
+[acme-pentest]> scan repo -y
 
 # Exclude directories from scanning
-[acme-pentest]> repo-scan api-server --exclude tests,vendor,node_modules
+[acme-pentest]> scan repo --exclude tests,vendor,node_modules
 
 # Filter findings by minimum severity
-[acme-pentest]> repo-scan api-server --severity high
+[acme-pentest]> scan repo --severity high
 
 # Export results to a file
-[acme-pentest]> repo-scan api-server --export /tmp/api-server-results.json
+[acme-pentest]> scan repo --export /tmp/api-server-results.json
 ```
 
 Valid severity values: `critical`, `high`, `medium`, `low`
+
+To run a single tool against all repositories:
+
+```
+[acme-pentest]> scan repo semgrep
+```
+
+### Docker vs Local Execution
+
+Each tool runs in whichever mode is configured in `config/commands.json` — either locally as a subprocess or via `docker exec` inside a running container. From the scan commands' perspective, the execution mode is transparent: output is captured, parsed, and ingested identically regardless of whether a tool runs locally or in Docker.
+
+To switch a tool from local to Docker (or vice versa):
+
+```
+[acme-pentest]> tool edit semgrep
+```
+
+For Docker tools, repositories must have a `docker_path` set — the container-side mount path for the repository. This is set when adding or editing a repository with `repo add` / `repo edit`.
 
 ### Raw Tool Execution
 
@@ -385,19 +437,19 @@ The Markdown report contains:
 
 ```
 # List all projects
-[acme-pentest]> projects
+[acme-pentest]> project list
 
  Name          | Created    | Repositories | Active
  → acme-pentest| 2024-01-14 | 2            | ✓
  corp-audit    | 2024-01-10 | 1            |
 
 # Switch to a different project
-[acme-pentest]> switch corp-audit
+[acme-pentest]> project switch corp-audit
 ✓ Switched to project: corp-audit
 [corp-audit]>
 
 # View active project details
-[corp-audit]> project-info
+[corp-audit]> project info
 ╭─ Project: corp-audit ──────────────────────────╮
 │ Created: 2024-01-10                             │
 │ Repositories: 1                                 │

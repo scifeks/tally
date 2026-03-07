@@ -188,11 +188,96 @@ Structure your `parse_output()` return value with a `findings` list where each f
 
 ---
 
+## Docker Wrappers
+
+Every tool that can run locally should also have a Docker wrapper so users can run it inside a container. Local wrappers live in `core/tools/wrappers/local/`; Docker wrappers live in `core/tools/wrappers/docker/`.
+
+### Base Class
+
+Docker wrappers subclass `DockerToolWrapper` from `core.tools.base` instead of `ToolWrapper`. `DockerToolWrapper` extends `ToolWrapper` with:
+
+- `__init__(self, config)` — receives the `CommandEntry` from `commands.json` and stores `container.name` and `container.tool_path`
+- `container_name` / `tool_path` properties — expose the configured container details
+- `command` property — always returns `"docker"` (the host-side binary used)
+- `check_available()` — always returns `True`; presence in `commands.json` means the user configured it
+- `get_version()` — always returns `None`
+- `_build_docker_exec(tool_args, workdir=None)` — helper that builds the full `["docker", "exec", ...]` argv list
+
+### What to Implement
+
+Your Docker wrapper must implement: `name`, `category`, `scope`, `description`, `build_command`, and `parse_output`. You do **not** implement `command`, `check_available`, or `get_version` — those are handled by the base class.
+
+In `build_command`, call `self._build_docker_exec(tool_args)` to produce the final argv rather than building the docker prefix by hand:
+
+```python
+from ...base import DockerToolWrapper
+
+class DockerMyToolWrapper(DockerToolWrapper):
+
+    @property
+    def name(self) -> str:
+        return "mytool"
+
+    @property
+    def category(self) -> str:
+        return "sast"
+
+    @property
+    def scope(self) -> str:
+        return "repository"
+
+    @property
+    def description(self) -> str:
+        return "My tool for finding vulnerabilities"
+
+    def build_command(self, **kwargs) -> list:
+        repo_path = kwargs.get("repo_path", "")
+        if not repo_path:
+            raise ValueError(
+                "docker_path is not configured for this repository. "
+                "Use 'repo edit' to set the container mount path."
+            )
+        tool_args = ["--output-format", "json", repo_path]
+        return self._build_docker_exec(tool_args)
+
+    def parse_output(self, output, files):
+        # identical to the local wrapper's parse_output
+        ...
+```
+
+The generated command looks like:
+
+```
+docker exec <container_name> /usr/local/bin/mytool --output-format json /repo
+```
+
+With `workdir` set it becomes:
+
+```
+docker exec -w /repo <container_name> /usr/local/bin/mytool --output-format json .
+```
+
+### File Location
+
+```
+core/tools/wrappers/
+  local/mytool.py      ← local wrapper (subclasses ToolWrapper)
+  docker/mytool.py     ← docker wrapper (subclasses DockerToolWrapper)
+```
+
+The registry discovers both automatically — no imports or registry changes needed. The wrapper that gets instantiated depends on which `location` is set in `commands.json` for that tool.
+
+---
+
 ## Developer Checklist
 
 Use this checklist to verify your wrapper is working before committing:
 
-- [ ] **check_available() returns correct value**
+- [ ] **Local wrapper created** at `core/tools/wrappers/local/mytool.py` (subclasses `ToolWrapper`)
+
+- [ ] **Docker wrapper created** at `core/tools/wrappers/docker/mytool.py` (subclasses `DockerToolWrapper`)
+
+- [ ] **check_available() returns correct value** (local wrapper)
   ```bash
   .venv/bin/python3 -c "
   from core.tools import tool_registry
@@ -229,12 +314,12 @@ Use this checklist to verify your wrapper is working before committing:
   "
   ```
 
-- [ ] **scan -t mytool runs without errors** (requires a project and the tool installed)
+- [ ] **scan mytool runs without errors** (requires a project and the tool installed)
   ```
-  [myproject]> scan -t mytool
+  [myproject]> scan mytool
   ```
 
-- [ ] **get_version() returns a string or None** (not an exception)
+- [ ] **get_version() returns a string or None** (not an exception; N/A for Docker wrappers)
   ```bash
   .venv/bin/python3 -c "
   from core.tools import tool_registry
