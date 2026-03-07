@@ -131,16 +131,29 @@ class DependencyChecker:
     def check_system_tools(self) -> List[DepCheck]:
         results: List[DepCheck] = []
         for tool in self._registry.get_all_tools():
-            available = tool.check_available()
-            version = tool.get_version() if available else None
-            results.append(DepCheck(
-                name=tool.name,
-                type="system_tool",
-                required=False,
-                installed=available,
-                version=version,
-                install_hint=_INSTALL_HINTS.get(tool.name),
-            ))
+            config = self._registry.get_tool_config(tool.name)
+            if config is not None and config.location == 'docker':
+                # Docker tools are always "installed" — the user explicitly configured them
+                results.append(DepCheck(
+                    name=tool.name,
+                    type="docker",
+                    required=False,
+                    installed=True,
+                    version=None,
+                    install_hint=f"Container: {config.container.name}",
+                ))
+            else:
+                # Local tool or fallback mode — check binary availability as before
+                available = tool.check_available()
+                version = tool.get_version() if available else None
+                results.append(DepCheck(
+                    name=tool.name,
+                    type="system_tool",
+                    required=False,
+                    installed=available,
+                    version=version,
+                    install_hint=_INSTALL_HINTS.get(tool.name),
+                ))
         return results
 
     def print_summary(self, result: CheckResult) -> None:
