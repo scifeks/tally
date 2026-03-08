@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "tally"
 version = "0.1.0"
 description = "CLI REPL for orchestrating web application penetration testing"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.0.0",
     "rich>=13.0.0",
@@ -26,7 +26,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
@@ -36,7 +36,7 @@ quote-style = "double"
 
 [tool.pyright]
 typeCheckingMode = "basic"
-pythonVersion = "3.11"
+pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
 
