@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import ToolWrapper
 from ...parsers.semgrep_parser import parse_semgrep_json, parse_semgrep_json_string
@@ -31,13 +31,13 @@ class SemgrepWrapper(ToolWrapper):
         return "Static analysis tool for finding bugs and security issues"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
     def check_available(self) -> bool:
         return shutil.which("semgrep") is not None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build the semgrep argv list.
 
         Keyword Args:
@@ -46,7 +46,7 @@ class SemgrepWrapper(ToolWrapper):
             severity (List[str]): Only report findings at these severities.
             exclude (List[str]): Glob patterns for paths to exclude.
         """
-        repo_path: Optional[str] = kwargs.get("repo_path")
+        repo_path: str | None = kwargs.get("repo_path")
         if not repo_path:
             raise ValueError("repo_path is required for semgrep")
 
@@ -54,8 +54,8 @@ class SemgrepWrapper(ToolWrapper):
             raise ValueError(f"Repository path does not exist: {repo_path!r}")
 
         config: str = kwargs.get("config", "auto")
-        severity: Optional[List[str]] = kwargs.get("severity")
-        exclude: Optional[List[str]] = kwargs.get("exclude")
+        severity: list[str] | None = kwargs.get("severity")
+        exclude: list[str] | None = kwargs.get("exclude")
 
         # --json sends findings as JSON to stdout; executor captures and saves it
         cmd = ["semgrep", "scan", "--config", config, "--json", repo_path]
@@ -70,7 +70,7 @@ class SemgrepWrapper(ToolWrapper):
 
         return cmd
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse semgrep JSON output into structured data.
 
         Prefers the saved stdout file; falls back to parsing the output string.

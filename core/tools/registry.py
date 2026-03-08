@@ -3,7 +3,6 @@ import inspect
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -15,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 class ToolRegistry:
     def __init__(self) -> None:
-        self._tools: Dict[str, ToolWrapper] = {}
-        self._configs: Dict[str, object] = {}  # CommandEntry per tool
+        self._tools: dict[str, ToolWrapper] = {}
+        self._configs: dict[str, object] = {}  # CommandEntry per tool
 
     def register(self, tool: ToolWrapper, config=None) -> None:
         self._tools[tool.name] = tool
@@ -27,7 +26,7 @@ class ToolRegistry:
         self._tools.clear()
         self._configs.clear()
 
-    def get_tool(self, name: str) -> Optional[ToolWrapper]:
+    def get_tool(self, name: str) -> ToolWrapper | None:
         return self._tools.get(name)
 
     def get_tool_config(self, name: str):
@@ -41,26 +40,26 @@ class ToolRegistry:
         falls back to repo.path for local tools or when no config exists.
         """
         config = self.get_tool_config(tool_name)
-        if config is not None and config.location == 'docker':
+        if config is not None and config.location == "docker":
             return repo.docker_path
         return repo.path
 
-    def get_tools_by_category(self, category: str) -> List[ToolWrapper]:
+    def get_tools_by_category(self, category: str) -> list[ToolWrapper]:
         return [t for t in self._tools.values() if t.category == category]
 
-    def get_tools_by_scope(self, scope: str) -> List[ToolWrapper]:
+    def get_tools_by_scope(self, scope: str) -> list[ToolWrapper]:
         return [t for t in self._tools.values() if t.scope == scope]
 
-    def get_all_tools(self) -> List[ToolWrapper]:
+    def get_all_tools(self) -> list[ToolWrapper]:
         return list(self._tools.values())
 
-    def list_all(self) -> List[ToolWrapper]:
+    def list_all(self) -> list[ToolWrapper]:
         return self.get_all_tools()
 
-    def list_tool_names(self) -> List[str]:
+    def list_tool_names(self) -> list[str]:
         return list(self._tools.keys())
 
-    def check_availability(self) -> Dict[str, bool]:
+    def check_availability(self) -> dict[str, bool]:
         return {name: tool.check_available() for name, tool in self._tools.items()}
 
 
@@ -90,15 +89,22 @@ def discover_tools(base_path: str = ".") -> None:
             with open(commands_path) as f:
                 data = _json.load(f)
             from core.config.schemas import CommandEntry
-            commands_config = {name: CommandEntry(**entry) for name, entry in data.items()}
+
+            commands_config = {
+                name: CommandEntry(**entry) for name, entry in data.items()
+            }
         except Exception as exc:
-            logger.warning("Failed to load commands.json (%s) — falling back to local discovery", exc)
+            logger.warning(
+                "Failed to load commands.json (%s) — falling back to local discovery",
+                exc,
+            )
 
     if commands_config is not None:
         _discover_from_config(commands_config, wrappers_dir)
     else:
         logger.warning(
-            "commands.json not found at %s — running in fallback mode (all local tools)",
+            "commands.json not found at %s — "
+            "running in fallback mode (all local tools)",
             commands_path,
         )
         _discover_fallback(wrappers_dir)
@@ -108,12 +114,15 @@ def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
     """Register only tools listed in commands.json with their configured location."""
     for tool_name, entry in commands_config.items():
         location = entry.location
-        file_stem = tool_name.replace('-', '_')
+        file_stem = tool_name.replace("-", "_")
         wrapper_file = wrappers_dir / location / f"{file_stem}.py"
 
         if not wrapper_file.exists():
             logger.warning(
-                "Skipping %r: no %s wrapper found at %s", tool_name, location, wrapper_file
+                "Skipping %r: no %s wrapper found at %s",
+                tool_name,
+                location,
+                wrapper_file,
             )
             continue
 
@@ -133,7 +142,9 @@ def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
                 try:
                     tool_registry.register(obj(config=entry), config=entry)
                 except Exception as exc:
-                    logger.warning("Skipping %r: instantiation failed — %s", tool_name, exc)
+                    logger.warning(
+                        "Skipping %r: instantiation failed — %s", tool_name, exc
+                    )
                 break
 
 
@@ -181,8 +192,8 @@ def build_tool_table(tools, registry) -> Table:
             version = tool.get_version() if avail else None
             # Extract bare version number from verbose strings like "Nmap version 7.95"
             if version:
-                match = re.search(r'\d+\.\d+[\d.]*', version)
-                version = match.group(0) if match else version.split('(')[0].strip()
+                match = re.search(r"\d+\.\d+[\d.]*", version)
+                version = match.group(0) if match else version.split("(")[0].strip()
             status = (
                 f"[green]v {version or 'installed'}[/green]"
                 if avail

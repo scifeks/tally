@@ -1,8 +1,7 @@
-import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import ToolWrapper
 from ...parsers.gitleaks_parser import parse_gitleaks_json, parse_gitleaks_json_string
@@ -10,7 +9,7 @@ from ...parsers.gitleaks_parser import parse_gitleaks_json, parse_gitleaks_json_
 
 class GitleaksWrapper(ToolWrapper):
     def __init__(self, config=None) -> None:
-        self._last_report_path: Optional[Path] = None
+        self._last_report_path: Path | None = None
 
     @property
     def name(self) -> str:
@@ -33,13 +32,13 @@ class GitleaksWrapper(ToolWrapper):
         return "Secrets detection tool for git repositories and files"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
     def check_available(self) -> bool:
         return shutil.which("gitleaks") is not None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build the gitleaks argv list.
 
         Keyword Args:
@@ -47,7 +46,7 @@ class GitleaksWrapper(ToolWrapper):
             scan_type (str): 'dir' for working-tree scan or 'git' for full
                              history scan (default: 'dir').
         """
-        repo_path: Optional[str] = kwargs.get("repo_path")
+        repo_path: str | None = kwargs.get("repo_path")
         if not repo_path:
             raise ValueError("repo_path is required for gitleaks")
 
@@ -62,13 +61,18 @@ class GitleaksWrapper(ToolWrapper):
         self._last_report_path = Path(tmp)
 
         return [
-            "gitleaks", scan_type, repo_path,
-            "--report-format", "json",
-            "--report-path", tmp,
-            "--exit-code", "0",
+            "gitleaks",
+            scan_type,
+            repo_path,
+            "--report-format",
+            "json",
+            "--report-path",
+            tmp,
+            "--exit-code",
+            "0",
         ]
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse gitleaks JSON output into structured data.
 
         Prefers the report file written via --report-path; falls back to the

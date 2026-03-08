@@ -1,9 +1,13 @@
 """Docker wrapper for pip-audit Python dependency vulnerability scanning."""
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import DockerToolWrapper
-from ...parsers.pip_audit_parser import parse_pip_audit_json, parse_pip_audit_json_string
+from ...parsers.pip_audit_parser import (
+    parse_pip_audit_json,
+    parse_pip_audit_json_string,
+)
 
 
 class DockerPipAuditWrapper(DockerToolWrapper):
@@ -24,10 +28,10 @@ class DockerPipAuditWrapper(DockerToolWrapper):
         return "Python dependency vulnerability scanner using PyPI advisory database"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return ["python"]
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for pip-audit.
 
         Runs ``pip-audit --format json --path .`` inside the repository
@@ -46,7 +50,7 @@ class DockerPipAuditWrapper(DockerToolWrapper):
         tool_args = ["--format", "json", "--path", "."]
         return self._build_docker_exec(tool_args, workdir=repo_path)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         json_path = files.get("stdout")
         if json_path is not None and json_path.exists():
             return parse_pip_audit_json(json_path)

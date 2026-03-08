@@ -1,6 +1,7 @@
 """Semantic search and RAG-augmented chat over a project's ChromaDB collection."""
+
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import ollama
 
@@ -26,14 +27,14 @@ class QueryEngine:
     def __init__(
         self,
         rag_engine: RAGEngine,
-        llm_model: Optional[str] = None,
-        ollama_base_url: Optional[str] = None,
+        llm_model: str | None = None,
+        ollama_base_url: str | None = None,
     ) -> None:
         """Initialise the query engine.
 
         Args:
-            rag_engine:      Initialised RAGEngine for the current project.
-            llm_model:       Ollama chat model override; falls back to rag_engine default.
+            rag_engine: Initialised RAGEngine for the current project.
+            llm_model: Ollama chat model override; falls back to rag_engine default.
             ollama_base_url: Ollama API URL override; falls back to rag_engine default.
         """
         self._engine = rag_engine
@@ -48,8 +49,8 @@ class QueryEngine:
         self,
         query: str,
         n_results: int = 5,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Semantic search against the findings collection.
 
         Args:
@@ -76,7 +77,7 @@ class QueryEngine:
         # ChromaDB errors if n_results > number of documents in the collection
         n = min(n_results, total)
 
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             "query_texts": [query],
             "n_results": n,
             "include": ["documents", "metadatas", "distances"],
@@ -143,7 +144,11 @@ class QueryEngine:
                 options={"temperature": 0.7, "num_predict": 2000},
             )
             # Support both attribute access (0.2.x+) and dict access (0.1.x)
-            msg = response.message if hasattr(response, "message") else response["message"]
+            msg = (
+                response.message
+                if hasattr(response, "message")
+                else response["message"]
+            )
             content = msg.content if hasattr(msg, "content") else msg["content"]
             return content
         except Exception as exc:

@@ -1,6 +1,7 @@
 """Docker wrapper for OSV-Scanner dependency vulnerability scanning."""
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import DockerToolWrapper
 from ...parsers.osv_parser import parse_osv_json, parse_osv_json_string
@@ -24,10 +25,10 @@ class DockerOSVScannerWrapper(DockerToolWrapper):
         return "Dependency vulnerability scanner using OSV database"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for osv-scanner.
 
         Keyword Args:
@@ -50,7 +51,7 @@ class DockerOSVScannerWrapper(DockerToolWrapper):
 
         return self._build_docker_exec(tool_args)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         json_path = files.get("stdout")
         if json_path is not None and json_path.exists():
             return parse_osv_json(json_path)

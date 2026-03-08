@@ -1,7 +1,8 @@
 """composer-audit wrapper for PHP dependency vulnerability scanning (SCA)."""
+
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import ToolWrapper
 from ..parsers.composer_audit_parser import (
@@ -29,16 +30,18 @@ class ComposerAuditWrapper(ToolWrapper):
 
     @property
     def description(self) -> str:
-        return "PHP dependency vulnerability scanner using Packagist security advisories"
+        return (
+            "PHP dependency vulnerability scanner using Packagist security advisories"
+        )
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return ["php"]
 
     def check_available(self) -> bool:
         return shutil.which("composer") is not None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build the composer audit argv list.
 
         Keyword Args:
@@ -50,7 +53,7 @@ class ComposerAuditWrapper(ToolWrapper):
             The executor must be called with ``cwd=repo_path`` so the
             subprocess runs inside the repository directory.
         """
-        repo_path: Optional[str] = kwargs.get("repo_path")
+        repo_path: str | None = kwargs.get("repo_path")
         if not repo_path:
             raise ValueError("repo_path is required for composer-audit")
 
@@ -63,7 +66,7 @@ class ComposerAuditWrapper(ToolWrapper):
 
         return ["composer", "audit", "--format=json"]
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse composer audit JSON output into structured data.
 
         Prefers the saved stdout file; falls back to parsing the output string.

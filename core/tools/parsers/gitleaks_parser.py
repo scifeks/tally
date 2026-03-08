@@ -1,10 +1,11 @@
 """Parser for gitleaks JSON secret-detection output."""
+
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any
 
 
-def parse_gitleaks_json(json_path: Path) -> Dict[str, Any]:
+def parse_gitleaks_json(json_path: Path) -> dict[str, Any]:
     """Parse a gitleaks JSON output file into structured data."""
     try:
         with open(json_path, encoding="utf-8") as f:
@@ -14,7 +15,7 @@ def parse_gitleaks_json(json_path: Path) -> Dict[str, Any]:
     return _parse_gitleaks_data(data)
 
 
-def parse_gitleaks_json_string(json_string: str) -> Dict[str, Any]:
+def parse_gitleaks_json_string(json_string: str) -> dict[str, Any]:
     """Parse gitleaks JSON from a raw string into structured data."""
     stripped = json_string.strip() if json_string else ""
     if not stripped:
@@ -31,7 +32,8 @@ def parse_gitleaks_json_string(json_string: str) -> Dict[str, Any]:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_gitleaks_data(findings: Any) -> Dict[str, Any]:
+
+def _parse_gitleaks_data(findings: Any) -> dict[str, Any]:
     if findings is None:
         findings = []
     if not isinstance(findings, list):
@@ -39,8 +41,8 @@ def _parse_gitleaks_data(findings: Any) -> Dict[str, Any]:
 
     secrets = [_parse_secret(f) for f in findings]
 
-    by_rule: Dict[str, int] = {}
-    files_with_secrets: Set[str] = set()
+    by_rule: dict[str, int] = {}
+    files_with_secrets: set[str] = set()
     for secret in secrets:
         rule = secret["rule_id"]
         by_rule[rule] = by_rule.get(rule, 0) + 1
@@ -57,9 +59,9 @@ def _parse_gitleaks_data(findings: Any) -> Dict[str, Any]:
     }
 
 
-def _parse_secret(finding: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_secret(finding: dict[str, Any]) -> dict[str, Any]:
     raw_secret = finding.get("Secret", "")
-    tags: List[str] = finding.get("Tags") or []
+    tags: list[str] = finding.get("Tags") or []
     commit = finding.get("Commit") or None
     return {
         "rule_id": finding.get("RuleID", ""),
@@ -73,19 +75,19 @@ def _parse_secret(finding: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def combine_gitleaks_results(dir_data: Dict, git_data: Dict) -> Dict[str, Any]:
+def combine_gitleaks_results(dir_data: dict, git_data: dict) -> dict[str, Any]:
     """Merge dir-scan and git-scan results into a single combined result.
 
     The returned dict has top-level ``secrets`` and ``summary`` keys consumed
     by the ingestor, plus ``dir`` / ``git`` sub-keys preserving each scan's
     individual data.
     """
-    dir_secrets: List[Dict] = (dir_data or {}).get("secrets", [])
-    git_secrets: List[Dict] = (git_data or {}).get("secrets", [])
+    dir_secrets: list[dict] = (dir_data or {}).get("secrets", [])
+    git_secrets: list[dict] = (git_data or {}).get("secrets", [])
 
     # Deduplicate by (rule_id, file_path, line_number, commit)
-    seen: Set[Tuple] = set()
-    merged: List[Dict] = []
+    seen: set[tuple] = set()
+    merged: list[dict] = []
     for secret in dir_secrets + git_secrets:
         key = (
             secret.get("rule_id", ""),
@@ -97,8 +99,8 @@ def combine_gitleaks_results(dir_data: Dict, git_data: Dict) -> Dict[str, Any]:
             seen.add(key)
             merged.append(secret)
 
-    by_rule: Dict[str, int] = {}
-    files_with_secrets: Set[str] = set()
+    by_rule: dict[str, int] = {}
+    files_with_secrets: set[str] = set()
     for secret in merged:
         rule = secret.get("rule_id", "")
         by_rule[rule] = by_rule.get(rule, 0) + 1

@@ -1,10 +1,10 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 import shutil
 import subprocess
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -12,14 +12,14 @@ class ToolResult:
     tool_name: str
     success: bool
     output: str
-    parsed_data: Optional[Dict[str, Any]]
-    output_files: Dict[str, Path]
+    parsed_data: dict[str, Any] | None
+    output_files: dict[str, Path]
     timestamp: str
     duration_seconds: float
 
     @staticmethod
     def now_iso() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 class ToolWrapper(ABC):
@@ -44,7 +44,7 @@ class ToolWrapper(ABC):
     def description(self) -> str: ...
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
     @abstractmethod
@@ -52,14 +52,14 @@ class ToolWrapper(ABC):
         """Return True if the tool binary is present on PATH."""
 
     @abstractmethod
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Return the full argv list for this tool invocation."""
 
     @abstractmethod
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse raw tool output into a structured dict."""
 
-    def get_version(self) -> Optional[str]:
+    def get_version(self) -> str | None:
         """Run `<command> --version` and return the first line, or None."""
         binary = shutil.which(self.command)
         if binary is None:
@@ -114,7 +114,7 @@ class DockerToolWrapper(ToolWrapper, ABC):
     def check_available(self) -> bool:
         return True
 
-    def get_version(self) -> Optional[str]:
+    def get_version(self) -> str | None:
         return None
 
     # ------------------------------------------------------------------
@@ -123,9 +123,9 @@ class DockerToolWrapper(ToolWrapper, ABC):
 
     def _build_docker_exec(
         self,
-        tool_args: List[str],
-        workdir: Optional[str] = None,
-    ) -> List[str]:
+        tool_args: list[str],
+        workdir: str | None = None,
+    ) -> list[str]:
         """Build a ``docker exec`` argv list.
 
         Args:

@@ -1,10 +1,12 @@
 """Finding ingestion pipeline — converts ToolResult output into ChromaDB documents."""
+
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from core.tools.base import ToolResult
+
 from .engine import RAGEngine
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,7 @@ class FindingIngestor:
     def ingest_tool_output(
         self,
         tool_result: ToolResult,
-        profile: Optional[str] = None,
+        profile: str | None = None,
     ) -> int:
         """Index a tool's findings into ChromaDB.
 
@@ -61,7 +63,8 @@ class FindingIngestor:
 
         if not tool_result.success or tool_result.parsed_data is None:
             logger.warning(
-                "Skipping ingestion for %s/%s: tool did not succeed or produced no parsed data",
+                "Skipping ingestion for %s/%s: "
+                "tool did not succeed or produced no parsed data",
                 tool,
                 effective_profile,
             )
@@ -86,9 +89,7 @@ class FindingIngestor:
         chunks = self._build_chunks(tool_result, effective_profile)
 
         if not chunks:
-            logger.info(
-                "No findings to ingest for %s/%s", tool, effective_profile
-            )
+            logger.info("No findings to ingest for %s/%s", tool, effective_profile)
             return 0
 
         texts, metadatas, ids = zip(*chunks)
@@ -106,7 +107,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str,
-    ) -> List[Tuple[str, Dict[str, Any], str]]:
+    ) -> list[tuple[str, dict[str, Any], str]]:
         """Dispatch to the appropriate per-tool chunk builder.
 
         Args:
@@ -135,7 +136,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str,
-    ) -> List[Tuple[str, Dict[str, Any], str]]:
+    ) -> list[tuple[str, dict[str, Any], str]]:
         """Build document chunks from an nmap ToolResult.
 
         Each host produces one ``host`` chunk; each open port on that host
@@ -149,34 +150,36 @@ class FindingIngestor:
             List of ``(document_text, metadata, id)`` tuples.
         """
         parsed = tool_result.parsed_data  # type: ignore[union-attr]
-        hosts: List[Dict[str, Any]] = parsed.get("hosts", [])
+        hosts: list[dict[str, Any]] = parsed.get("hosts", [])
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
-        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
-        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+        chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for host_idx, host in enumerate(hosts):
             ip = host.get("ip_address", "")
             hostname = host.get("hostname", "")
             state = host.get("state", "unknown")
-            ports: List[Dict[str, Any]] = host.get("ports", [])
+            ports: list[dict[str, Any]] = host.get("ports", [])
             open_ports = [p for p in ports if p.get("state") == "open"]
 
             # ---- host chunk ----
-            port_lines = "\n".join(
-                f"  {p['port']}/{p.get('protocol','tcp')} {p.get('service','')} {p.get('version','')}".rstrip()
-                for p in open_ports
-            ) or "  (none)"
+            port_lines = (
+                "\n".join(
+                    (
+                        f"  {p['port']}/{p.get('protocol', 'tcp')} "
+                        f"{p.get('service', '')} {p.get('version', '')}"
+                    ).rstrip()
+                    for p in open_ports
+                )
+                or "  (none)"
+            )
 
             host_label = f"{ip} ({hostname})" if hostname else ip
-            host_text = (
-                f"Host: {host_label}\n"
-                f"Status: {state}\n"
-                f"Ports:\n{port_lines}"
-            )
-            host_meta: Dict[str, Any] = {
+            host_text = f"Host: {host_label}\nStatus: {state}\nPorts:\n{port_lines}"
+            host_meta: dict[str, Any] = {
                 "tool": "nmap",
                 "profile": profile,
                 "finding_type": "host",
@@ -196,7 +199,7 @@ class FindingIngestor:
                 svc_str = f"{service} {version}".strip()
 
                 port_text = f"Port {port_num}/{protocol} on {ip}: {svc_str}"
-                port_meta: Dict[str, Any] = {
+                port_meta: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
                     "finding_type": "open_port",
@@ -215,7 +218,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str,
-    ) -> List[Tuple[str, Dict[str, Any], str]]:
+    ) -> list[tuple[str, dict[str, Any], str]]:
         """Build document chunks from a semgrep ToolResult.
 
         Each finding produces one ``vulnerability`` chunk containing the rule
@@ -229,13 +232,13 @@ class FindingIngestor:
             List of ``(document_text, metadata, id)`` tuples.
         """
         parsed = tool_result.parsed_data  # type: ignore[union-attr]
-        findings: List[Dict[str, Any]] = parsed.get("findings", [])
+        findings: list[dict[str, Any]] = parsed.get("findings", [])
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
-        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
-        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+        chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for fi, finding in enumerate(findings):
             rule_id = finding.get("rule_id", "")
@@ -254,7 +257,7 @@ class FindingIngestor:
                 f"Code: {code_snippet}"
             )
 
-            meta: Dict[str, Any] = {
+            meta: dict[str, Any] = {
                 "tool": "semgrep",
                 "profile": profile,
                 "finding_type": "vulnerability",
@@ -280,8 +283,9 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str,
-    ) -> List[Tuple[str, Dict[str, Any], str]]:
-        """Build document chunks from any SCA tool that emits the standard vulnerability format.
+    ) -> list[tuple[str, dict[str, Any], str]]:
+        """Build document chunks from any SCA tool that emits the standard
+        vulnerability format.
 
         Handles osv-scanner, pip-audit, npm-audit, and composer-audit, all of
         which produce ``{vulnerabilities: [...], summary: {...}}`` output.
@@ -299,15 +303,15 @@ class FindingIngestor:
         """
         tool = tool_result.tool_name
         parsed = tool_result.parsed_data  # type: ignore[union-attr]
-        vulnerabilities: List[Dict[str, Any]] = parsed.get("vulnerabilities", [])
+        vulnerabilities: list[dict[str, Any]] = parsed.get("vulnerabilities", [])
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
-        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         # Safe ID prefix: replace hyphens so doc IDs have consistent format
         tool_id = tool.replace("-", "_")
 
-        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+        chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for vi, vuln in enumerate(vulnerabilities):
             pkg_name = vuln.get("package_name", "")
@@ -330,7 +334,7 @@ class FindingIngestor:
                 f"Source: {lockfile}"
             )
 
-            meta: Dict[str, Any] = {
+            meta: dict[str, Any] = {
                 "tool": tool,
                 "profile": profile,
                 "finding_type": "dependency_vulnerability",
@@ -358,7 +362,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str,
-    ) -> List[Tuple[str, Dict[str, Any], str]]:
+    ) -> list[tuple[str, dict[str, Any], str]]:
         """Build document chunks from a gitleaks ToolResult.
 
         Each detected secret produces one ``secret`` chunk containing the rule
@@ -373,13 +377,13 @@ class FindingIngestor:
             List of ``(document_text, metadata, id)`` tuples.
         """
         parsed = tool_result.parsed_data  # type: ignore[union-attr]
-        secrets: List[Dict[str, Any]] = parsed.get("secrets", [])
+        secrets: list[dict[str, Any]] = parsed.get("secrets", [])
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
-        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
-        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+        chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for si, secret in enumerate(secrets):
             rule_id = secret.get("rule_id", "")
@@ -387,7 +391,7 @@ class FindingIngestor:
             file_path = secret.get("file_path", "")
             line_number = secret.get("line_number", 0)
             match = secret.get("match", "")
-            tags: List[str] = secret.get("tags") or []
+            tags: list[str] = secret.get("tags") or []
             commit = secret.get("commit")
 
             tags_str = ", ".join(tags) if tags else ""
@@ -400,7 +404,7 @@ class FindingIngestor:
                 "Note: Actual secret value redacted for security"
             )
 
-            meta: Dict[str, Any] = {
+            meta: dict[str, Any] = {
                 "tool": "gitleaks",
                 "profile": profile,
                 "finding_type": "secret",
@@ -424,7 +428,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str,
-    ) -> List[Tuple[str, Dict[str, Any], str]]:
+    ) -> list[tuple[str, dict[str, Any], str]]:
         """Build document chunks from a ZAP ToolResult.
 
         Each alert instance produces one ``api_vulnerability`` chunk containing
@@ -438,13 +442,13 @@ class FindingIngestor:
             List of ``(document_text, metadata, id)`` tuples.
         """
         parsed = tool_result.parsed_data  # type: ignore[union-attr]
-        alerts: List[Dict[str, Any]] = parsed.get("alerts", [])
+        alerts: list[dict[str, Any]] = parsed.get("alerts", [])
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
-        ts_compact = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
-        chunks: List[Tuple[str, Dict[str, Any], str]] = []
+        chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for ai, alert in enumerate(alerts):
             alert_name = alert.get("alert_name", "")
@@ -470,7 +474,7 @@ class FindingIngestor:
             text_lines.append(f"Solution: {solution}")
             text = "\n".join(text_lines)
 
-            meta: Dict[str, Any] = {
+            meta: dict[str, Any] = {
                 "tool": "zap",
                 "profile": profile,
                 "finding_type": "api_vulnerability",
@@ -494,10 +498,10 @@ class FindingIngestor:
 
     def _process_finding(
         self,
-        finding: Dict[str, Any],
+        finding: dict[str, Any],
         tool_name: str,
         profile: str,
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> tuple[str, dict[str, Any]]:
         """Convert a single finding dict to a (text, metadata) pair.
 
         Currently a stub; tool-specific logic will be added in Phase 6.
@@ -511,7 +515,7 @@ class FindingIngestor:
             ``(document_text, metadata)`` tuple.
         """
         text = str(finding)
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "tool": tool_name,
             "profile": profile,
             "finding_type": finding.get("type", "unknown"),
@@ -524,7 +528,8 @@ class FindingIngestor:
 # Module-level helpers
 # ------------------------------------------------------------------
 
-def _first_output_file(output_files: Dict[str, Path]) -> str:
+
+def _first_output_file(output_files: dict[str, Path]) -> str:
     """Return the string path of the first output file, or empty string."""
     if not output_files:
         return ""

@@ -1,6 +1,7 @@
 """Docker wrapper for nmap network scanning."""
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import DockerToolWrapper
 from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
@@ -24,10 +25,10 @@ class DockerNmapWrapper(DockerToolWrapper):
         return "Network mapper for host discovery and port scanning"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for nmap.
 
         Keyword Args:
@@ -37,10 +38,10 @@ class DockerNmapWrapper(DockerToolWrapper):
             project_name (str):   Required when using a profile.
             base_path (str|Path): App base path (default ".").
         """
-        profile: Optional[str] = kwargs.get("profile")
-        hosts: Optional[List[str]] = kwargs.get("hosts")
+        profile: str | None = kwargs.get("profile")
+        hosts: list[str] | None = kwargs.get("hosts")
         args: str = kwargs.get("args", "")
-        project_name: Optional[str] = kwargs.get("project_name")
+        project_name: str | None = kwargs.get("project_name")
         base_path = kwargs.get("base_path", ".")
 
         if profile is not None:
@@ -76,7 +77,7 @@ class DockerNmapWrapper(DockerToolWrapper):
         tool_args = (args.split() if args else []) + ["-oX", "-"] + list(hosts)
         return self._build_docker_exec(tool_args)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         xml_path = files.get("stdout")
         if xml_path is not None and xml_path.exists():
             return parse_nmap_xml(xml_path)

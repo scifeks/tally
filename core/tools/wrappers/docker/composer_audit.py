@@ -1,6 +1,7 @@
 """Docker wrapper for composer-audit PHP dependency vulnerability scanning."""
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import DockerToolWrapper
 from ...parsers.composer_audit_parser import (
@@ -24,13 +25,15 @@ class DockerComposerAuditWrapper(DockerToolWrapper):
 
     @property
     def description(self) -> str:
-        return "PHP dependency vulnerability scanner using Packagist security advisories"
+        return (
+            "PHP dependency vulnerability scanner using Packagist security advisories"
+        )
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return ["php"]
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for composer audit.
 
         Runs ``composer audit --format=json`` inside the repository directory
@@ -49,7 +52,7 @@ class DockerComposerAuditWrapper(DockerToolWrapper):
         tool_args = ["audit", "--format=json"]
         return self._build_docker_exec(tool_args, workdir=repo_path)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         json_path = files.get("stdout")
         if json_path is not None and json_path.exists():
             return parse_composer_audit_json(json_path)

@@ -1,6 +1,7 @@
 """Docker wrapper for semgrep static analysis."""
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import DockerToolWrapper
 from ...parsers.semgrep_parser import parse_semgrep_json, parse_semgrep_json_string
@@ -24,10 +25,10 @@ class DockerSemgrepWrapper(DockerToolWrapper):
         return "Static analysis tool for finding bugs and security issues"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for semgrep.
 
         Keyword Args:
@@ -44,8 +45,8 @@ class DockerSemgrepWrapper(DockerToolWrapper):
             )
 
         ruleset: str = kwargs.get("config", "auto")
-        severity: Optional[List[str]] = kwargs.get("severity")
-        exclude: Optional[List[str]] = kwargs.get("exclude")
+        severity: list[str] | None = kwargs.get("severity")
+        exclude: list[str] | None = kwargs.get("exclude")
 
         tool_args = ["scan", "--config", ruleset, "--json", repo_path]
 
@@ -59,7 +60,7 @@ class DockerSemgrepWrapper(DockerToolWrapper):
 
         return self._build_docker_exec(tool_args)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         json_path = files.get("stdout")
         if json_path is not None and json_path.exists():
             return parse_semgrep_json(json_path)

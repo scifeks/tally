@@ -1,15 +1,15 @@
 """Configuration management for global and project settings."""
+
 import json
 from pathlib import Path
-from typing import Optional, Dict, List
 
 from .schemas import (
+    CommandEntry,
+    EndpointConfig,
     GlobalConfig,
+    NmapProfile,
     ProjectConfig,
     Repository,
-    NmapProfile,
-    EndpointConfig,
-    CommandEntry,
 )
 
 
@@ -41,7 +41,7 @@ class ConfigManager:
                 f"Global config not found at {self.global_config_path}. "
                 "Create it with the required fields: default_llm, default_embedding."
             )
-        with open(self.global_config_path, 'r') as f:
+        with open(self.global_config_path) as f:
             data = json.load(f)
         try:
             return GlobalConfig(**data)
@@ -56,10 +56,10 @@ class ConfigManager:
         Args:
             config: Global configuration to save
         """
-        with open(self.global_config_path, 'w') as f:
+        with open(self.global_config_path, "w") as f:
             json.dump(config.model_dump(), f, indent=2)
 
-    def load_project_config(self, project_name: str) -> Optional[ProjectConfig]:
+    def load_project_config(self, project_name: str) -> ProjectConfig | None:
         """Load project configuration.
 
         Args:
@@ -73,7 +73,7 @@ class ConfigManager:
         if not config_path.exists():
             return None
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             data = json.load(f)
             return ProjectConfig(**data)
 
@@ -88,10 +88,10 @@ class ConfigManager:
         config_dir.mkdir(parents=True, exist_ok=True)
 
         config_path = config_dir / "project.json"
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(config.model_dump(), f, indent=2)
 
-    def load_nmap_hosts(self, project_name: str) -> Optional[Dict[str, NmapProfile]]:
+    def load_nmap_hosts(self, project_name: str) -> dict[str, NmapProfile] | None:
         """Load nmap hosts configuration for a project.
 
         Args:
@@ -105,14 +105,12 @@ class ConfigManager:
         if not config_path.exists():
             return None
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             data = json.load(f)
             return {name: NmapProfile(**profile) for name, profile in data.items()}
 
     def save_nmap_hosts(
-        self,
-        project_name: str,
-        profiles: Dict[str, NmapProfile]
+        self, project_name: str, profiles: dict[str, NmapProfile]
     ) -> None:
         """Save nmap hosts configuration.
 
@@ -126,10 +124,10 @@ class ConfigManager:
         config_path = config_dir / "nmap_hosts.json"
         data = {name: profile.model_dump() for name, profile in profiles.items()}
 
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(data, f, indent=2)
 
-    def load_repositories(self, project_name: str) -> List[Repository]:
+    def load_repositories(self, project_name: str) -> list[Repository]:
         """Load repositories configuration for a project.
 
         Args:
@@ -143,14 +141,12 @@ class ConfigManager:
         if not config_path.exists():
             return []
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             data = json.load(f)
-            return [Repository(**repo) for repo in data.get('repositories', [])]
+            return [Repository(**repo) for repo in data.get("repositories", [])]
 
     def save_repositories(
-        self,
-        project_name: str,
-        repositories: List[Repository]
+        self, project_name: str, repositories: list[Repository]
     ) -> None:
         """Save repositories configuration.
 
@@ -162,16 +158,14 @@ class ConfigManager:
         config_dir.mkdir(parents=True, exist_ok=True)
 
         config_path = config_dir / "repositories.json"
-        data = {'repositories': [repo.model_dump() for repo in repositories]}
+        data = {"repositories": [repo.model_dump() for repo in repositories]}
 
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(data, f, indent=2)
 
     def load_endpoint_config(
-        self,
-        project_name: str,
-        repo_name: str
-    ) -> Optional[EndpointConfig]:
+        self, project_name: str, repo_name: str
+    ) -> EndpointConfig | None:
         """Load endpoint configuration for a repository.
 
         Args:
@@ -182,18 +176,21 @@ class ConfigManager:
             EndpointConfig if exists, None otherwise
         """
         config_path = (
-            self.projects_dir / project_name / "config" /
-            "endpoints" / f"{repo_name}.json"
+            self.projects_dir
+            / project_name
+            / "config"
+            / "endpoints"
+            / f"{repo_name}.json"
         )
 
         if not config_path.exists():
             return None
 
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             data = json.load(f)
             return EndpointConfig(**data)
 
-    def load_commands_config(self) -> Optional[Dict[str, CommandEntry]]:
+    def load_commands_config(self) -> dict[str, CommandEntry] | None:
         """Load commands.json from the app config directory.
 
         Returns:
@@ -202,11 +199,11 @@ class ConfigManager:
         config_path = self.base_path / "config" / "commands.json"
         if not config_path.exists():
             return None
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             data = json.load(f)
         return {name: CommandEntry(**entry) for name, entry in data.items()}
 
-    def save_commands_config(self, config: Dict[str, CommandEntry]) -> None:
+    def save_commands_config(self, config: dict[str, CommandEntry]) -> None:
         """Save commands.json to the app config directory.
 
         Args:
@@ -215,14 +212,10 @@ class ConfigManager:
         config_path = self.base_path / "config" / "commands.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         data = {name: entry.model_dump() for name, entry in config.items()}
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(data, f, indent=2)
 
-    def save_endpoint_config(
-        self,
-        project_name: str,
-        config: EndpointConfig
-    ) -> None:
+    def save_endpoint_config(self, project_name: str, config: EndpointConfig) -> None:
         """Save endpoint configuration for a repository.
 
         Args:
@@ -233,5 +226,5 @@ class ConfigManager:
         config_dir.mkdir(parents=True, exist_ok=True)
 
         config_path = config_dir / f"{config.repo_name}.json"
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(config.model_dump(), f, indent=2)

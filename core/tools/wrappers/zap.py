@@ -1,9 +1,10 @@
 """OWASP ZAP wrapper for dynamic web application / API security testing."""
+
 import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import ToolWrapper
 from ..parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_zap_xml
@@ -11,8 +12,10 @@ from ..parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_za
 # Candidate binaries in preference order
 _ZAP_CANDIDATES = ("zap.sh", "zap-cli", "zaproxy")
 
-#todo: Implement output adapter interface for API wrappers since Docker filesystem wont be available for output.
-#todo: Wrapper output -> stdOut -> Adapter -> host filesystem
+
+# todo: Implement output adapter interface for API wrappers since Docker
+# filesystem wont be available for output.
+# todo: Wrapper output -> stdOut -> Adapter -> host filesystem
 class ZAPWrapper(ToolWrapper):
     """Wrapper for OWASP ZAP quick-scan (DAST) mode.
 
@@ -24,9 +27,9 @@ class ZAPWrapper(ToolWrapper):
 
     def __init__(self) -> None:
         # Populated by check_available(); used by build_command()
-        self._found_command: Optional[str] = None
+        self._found_command: str | None = None
         # Set by build_command(); read by parse_output()
-        self._last_report_path: Optional[Path] = None
+        self._last_report_path: Path | None = None
 
     # ------------------------------------------------------------------
     # ToolWrapper abstract properties
@@ -49,7 +52,7 @@ class ZAPWrapper(ToolWrapper):
         return "repository"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None  # Tests running applications, not source code
 
     @property
@@ -73,7 +76,7 @@ class ZAPWrapper(ToolWrapper):
     # Command building
     # ------------------------------------------------------------------
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build the ZAP quick-scan argv list.
 
         Keyword Args:
@@ -89,11 +92,11 @@ class ZAPWrapper(ToolWrapper):
             output_file (Optional[str]): Filesystem path for the ZAP JSON
                 report.  If omitted a temporary file is used.
         """
-        base_url: Optional[str] = kwargs.get("base_url")
+        base_url: str | None = kwargs.get("base_url")
         if not base_url:
             raise ValueError("base_url is required for ZAP")
 
-        output_file: Optional[str] = kwargs.get("output_file")
+        output_file: str | None = kwargs.get("output_file")
         if not output_file:
             output_file = str(
                 Path(tempfile.gettempdir()) / f"zap_report_{os.getpid()}.json"
@@ -104,17 +107,20 @@ class ZAPWrapper(ToolWrapper):
         zap_cmd = self._found_command or "zap.sh"
 
         return [
-            zap_cmd, "-cmd",
-            "-quickurl", base_url,
+            zap_cmd,
+            "-cmd",
+            "-quickurl",
+            base_url,
             "-quickprogress",
-            "-quickout", output_file,
+            "-quickout",
+            output_file,
         ]
 
     # ------------------------------------------------------------------
     # Output parsing
     # ------------------------------------------------------------------
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse ZAP scan output into structured data.
 
         ZAP writes its report to the file specified by ``-quickout`` rather
