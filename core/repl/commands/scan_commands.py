@@ -1297,11 +1297,7 @@ class ScanCommands:
         summary = result.parsed_data.get("summary", {})
         total = summary.get("total_findings", 0)
         by_sev = summary.get("by_severity", {})
-        parts = [
-            f"{by_sev[s]} {s}"
-            for s in ("high", "medium", "low")
-            if by_sev.get(s)
-        ]
+        parts = [f"{by_sev[s]} {s}" for s in ("high", "medium", "low") if by_sev.get(s)]
         sev_str = ", ".join(parts) if parts else "none"
         return f"{total} findings ({sev_str})"
 

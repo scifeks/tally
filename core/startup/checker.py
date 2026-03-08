@@ -98,9 +98,7 @@ class DependencyChecker:
             return results
 
         with open(req_path) as f:
-            lines = [
-                ln.strip() for ln in f if ln.strip() and not ln.startswith("#")
-            ]
+            lines = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
 
         for line in lines:
             # Strip version specifiers (>=, ==, etc.)

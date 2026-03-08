@@ -331,8 +331,7 @@ class ScanOrchestrator:
         start = perf_counter()
 
         title = (
-            f"[bold cyan]Repo Tool Scan:[/bold cyan]"
-            f" {self.project_name} — {tool_name}"
+            f"[bold cyan]Repo Tool Scan:[/bold cyan] {self.project_name} — {tool_name}"
         )
         self.console.print(f"\n{title}")
         self.console.print("─" * 50)
