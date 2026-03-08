@@ -42,7 +42,7 @@ class KnowledgeCommands:
             return
 
         with self.repl.console.status("Searching knowledge base..."):
-            results = query_engine.search(query, n_results=5)
+            results = query_engine.search(query)
 
         if not results:
             self.repl.console.print("[yellow]No results found.[/yellow]")
