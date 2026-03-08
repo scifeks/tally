@@ -1,13 +1,18 @@
 """Semantic search and RAG-augmented chat over a project's ChromaDB collection."""
 
 import logging
+import re
 from typing import Any
 
 import ollama
 
+from core.config.manager import ConfigManager
+
 from .engine import RAGEngine, verify_ollama_available
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_N_RESULTS = 20
 
 _SYSTEM_PROMPT = """\
 You are a penetration testing assistant analyzing security findings.
@@ -41,6 +46,13 @@ class QueryEngine:
         self.llm_model = llm_model or rag_engine.llm_model
         self.ollama_base_url = ollama_base_url or rag_engine.ollama_base_url
 
+        # Load known tool names from commands.json at runtime — no hardcoded list.
+        config_manager = ConfigManager(str(rag_engine.base_path))
+        commands = config_manager.load_commands_config()
+        self._known_tools: frozenset[str] = (
+            frozenset(commands.keys()) if commands else frozenset()
+        )
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -48,15 +60,21 @@ class QueryEngine:
     def search(
         self,
         query: str,
-        n_results: int = 5,
+        n_results: int = _DEFAULT_N_RESULTS,
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Semantic search against the findings collection.
 
+        When no explicit ``filters`` are provided, the query is inspected for
+        a known tool name. If exactly one tool is matched, a metadata filter is
+        applied automatically and ``n_results`` is set to the full count of
+        documents for that tool so minority tools are never crowded out.
+
         Args:
             query:     Natural-language query string.
-            n_results: Maximum number of results to return.
+            n_results: Maximum number of results when no tool filter is active.
             filters:   Optional metadata filter dict (e.g. ``{"tool": "nmap"}``).
+                       When provided, auto-detection is skipped.
 
         Returns:
             List of result dicts sorted by relevance (lowest distance first).
@@ -74,7 +92,21 @@ class QueryEngine:
         if total == 0:
             return []
 
-        # ChromaDB errors if n_results > number of documents in the collection
+        # Auto-detect tool filter when none is explicitly provided.
+        if filters is None:
+            filters = self._detect_tool_filter(query)
+            if filters:
+                # Retrieve all documents for this tool so volume imbalance
+                # cannot crowd them out of the result set.
+                try:
+                    id_result = collection.get(where=filters, include=[])
+                    tool_count = len(id_result.get("ids") or [])
+                except Exception:
+                    tool_count = 0
+                if tool_count > 0:
+                    n_results = tool_count
+
+        # ChromaDB errors if n_results > number of documents in the collection.
         n = min(n_results, total)
 
         kwargs: dict[str, Any] = {
@@ -102,12 +134,13 @@ class QueryEngine:
         results.sort(key=lambda r: r["distance"])
         return results
 
-    def chat(self, message: str, n_context: int = 5) -> str:
+    def chat(self, message: str, n_context: int = _DEFAULT_N_RESULTS) -> str:
         """RAG-augmented chat: retrieve context then query the LLM.
 
         Args:
             message:   User's question or message.
-            n_context: Number of context chunks to retrieve for the prompt.
+            n_context: Maximum context chunks for unfiltered queries. When a
+                       tool filter is detected, all docs for that tool are used.
 
         Returns:
             LLM response string, or a user-facing error message string.
@@ -154,3 +187,28 @@ class QueryEngine:
         except Exception as exc:
             logger.error("LLM chat failed: %s", exc)
             return f"LLM error: {exc}"
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _detect_tool_filter(self, query: str) -> dict[str, Any] | None:
+        """Detect a single tool name in ``query`` and return a ChromaDB filter.
+
+        Scans the lowercased query for each known tool name using word-boundary
+        matching. Returns a ``{"tool": name}`` filter if exactly one tool is
+        found. Returns ``None`` for zero or multiple matches so that general
+        queries ("summarize all findings") and multi-tool queries ("nmap and
+        gitleaks") fall through to unfiltered retrieval.
+
+        Args:
+            query: The user's raw query string.
+
+        Returns:
+            A ChromaDB ``where`` dict, or ``None``.
+        """
+        q = query.lower()
+        matched = [t for t in self._known_tools if re.search(rf"\b{re.escape(t)}\b", q)]
+        if len(matched) == 1:
+            return {"tool": matched[0]}
+        return None

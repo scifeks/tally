@@ -178,7 +178,9 @@ class FindingIngestor:
             )
 
             host_label = f"{ip} ({hostname})" if hostname else ip
-            host_text = f"Host: {host_label}\nStatus: {state}\nPorts:\n{port_lines}"
+            host_text = (
+                f"[nmap] Host: {host_label}\nStatus: {state}\nPorts:\n{port_lines}"
+            )
             host_meta: dict[str, Any] = {
                 "tool": "nmap",
                 "profile": profile,
@@ -198,7 +200,7 @@ class FindingIngestor:
                 version = port.get("version", "")
                 svc_str = f"{service} {version}".strip()
 
-                port_text = f"Port {port_num}/{protocol} on {ip}: {svc_str}"
+                port_text = f"[nmap] Port {port_num}/{protocol} on {ip}: {svc_str}"
                 port_meta: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
@@ -252,7 +254,8 @@ class FindingIngestor:
             owasp = finding.get("owasp") or ""
 
             text = (
-                f"[{severity.upper()}] {rule_id} in {file_path}:{line_start}\n"
+                f"[semgrep] [{severity.upper()}] {rule_id} "
+                f"in {file_path}:{line_start}\n"
                 f"Message: {message}\n"
                 f"Code: {code_snippet}"
             )
@@ -326,7 +329,8 @@ class FindingIngestor:
 
             fixed_str = fixed_version or "unknown"
             text = (
-                f"[{severity.upper()}] vulnerability in {pkg_name}@{pkg_version}\n"
+                f"[{tool}] [{severity.upper()}] vulnerability"
+                f" in {pkg_name}@{pkg_version}\n"
                 f"Vulnerability: {vuln_id}\n"
                 f"Description: {summary}\n"
                 f"Ecosystem: {ecosystem}\n"
@@ -397,7 +401,7 @@ class FindingIngestor:
             tags_str = ", ".join(tags) if tags else ""
 
             text = (
-                f"Secret detected: {rule_id} in {file_path}:{line_number}\n"
+                f"[gitleaks] Secret detected: {rule_id} in {file_path}:{line_number}\n"
                 f"Type: {description}\n"
                 f"Pattern matched: {match}\n"
                 f"Tags: {tags_str}\n"
@@ -463,7 +467,7 @@ class FindingIngestor:
             cwe_id = alert.get("cwe_id")
 
             text_lines = [
-                f"[{risk.upper()}] API vulnerability: {alert_name}",
+                f"[zap] [{risk.upper()}] API vulnerability: {alert_name}",
                 f"Endpoint: {method} {url}",
             ]
             if param:
