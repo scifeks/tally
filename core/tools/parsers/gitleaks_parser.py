@@ -72,6 +72,7 @@ def _parse_secret(finding: dict[str, Any]) -> dict[str, Any]:
         "secret": _redact_secret(raw_secret),
         "match": finding.get("Match", ""),
         "tags": tags,
+        "fingerprint": finding.get("Fingerprint", ""),
     }
 
 
@@ -85,7 +86,9 @@ def combine_gitleaks_results(dir_data: dict, git_data: dict) -> dict[str, Any]:
     dir_secrets: list[dict] = (dir_data or {}).get("secrets", [])
     git_secrets: list[dict] = (git_data or {}).get("secrets", [])
 
-    # Deduplicate by (rule_id, file_path, line_number, commit)
+    # Deduplicate by (rule_id, file_path, line_number).  commit is intentionally
+    # excluded: the same secret found by both a dir scan (commit=None) and a git
+    # scan (commit=hash) is the same logical finding and should appear only once.
     seen: set[tuple] = set()
     merged: list[dict] = []
     for secret in dir_secrets + git_secrets:
@@ -93,7 +96,6 @@ def combine_gitleaks_results(dir_data: dict, git_data: dict) -> dict[str, Any]:
             secret.get("rule_id", ""),
             secret.get("file_path", ""),
             secret.get("line_number", 0),
-            secret.get("commit"),
         )
         if key not in seen:
             seen.add(key)

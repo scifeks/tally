@@ -1,0 +1,9 @@
+{
+  "_generated_by": "tests/fixtures/generate_gitleaks_fixtures.py",
+  "_gitleaks_version": "v8.30.0",
+  "_generated_at": "2026-03-08T22:35:53.139246+00:00",
+  "_scan_mode": "git",
+  "_command": "gitleaks detect --source <repo> --report-format json",
+  "_secret_file": "config/aws.js",
+  "_secret_description": "AKIAIOSFODNN7EXAMPLE at line 10 (9 leading blank lines)"
+}

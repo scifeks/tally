@@ -397,6 +397,7 @@ class FindingIngestor:
             match = secret.get("match", "")
             tags: list[str] = secret.get("tags") or []
             commit = secret.get("commit")
+            fingerprint = secret.get("fingerprint", "")
 
             tags_str = ", ".join(tags) if tags else ""
 
@@ -422,6 +423,8 @@ class FindingIngestor:
             }
             if commit:
                 meta["commit"] = commit
+            if fingerprint:
+                meta["fingerprint"] = fingerprint
 
             doc_id = f"gitleaks_{profile}_secret_{si}_{ts_compact}"
             chunks.append((text, meta, doc_id))
