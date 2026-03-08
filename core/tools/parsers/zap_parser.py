@@ -1,12 +1,13 @@
 """Parser for OWASP ZAP JSON/XML dynamic security scan output."""
+
 import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 # ZAP risk codes (riskcode field) and text names (riskdesc field) → severity label
-_RISK_MAP: Dict[str, str] = {
+_RISK_MAP: dict[str, str] = {
     "3": "high",
     "high": "high",
     "2": "medium",
@@ -19,7 +20,7 @@ _RISK_MAP: Dict[str, str] = {
 }
 
 
-def parse_zap_json(json_path: Path) -> Dict[str, Any]:
+def parse_zap_json(json_path: Path) -> dict[str, Any]:
     """Parse a ZAP JSON report file into structured data."""
     try:
         with open(json_path, encoding="utf-8") as f:
@@ -29,7 +30,7 @@ def parse_zap_json(json_path: Path) -> Dict[str, Any]:
     return _parse_zap_data(data)
 
 
-def parse_zap_json_string(json_string: str) -> Dict[str, Any]:
+def parse_zap_json_string(json_string: str) -> dict[str, Any]:
     """Parse ZAP JSON from a raw string into structured data."""
     stripped = json_string.strip() if json_string else ""
     if not stripped:
@@ -41,7 +42,7 @@ def parse_zap_json_string(json_string: str) -> Dict[str, Any]:
     return _parse_zap_data(data)
 
 
-def parse_zap_xml(xml_path: Path) -> Dict[str, Any]:
+def parse_zap_xml(xml_path: Path) -> dict[str, Any]:
     """Parse a ZAP XML report file into structured data."""
     try:
         tree = ET.parse(xml_path)
@@ -55,13 +56,14 @@ def parse_zap_xml(xml_path: Path) -> Dict[str, Any]:
 # Internal helpers — JSON
 # ---------------------------------------------------------------------------
 
-def _parse_zap_data(data: Any) -> Dict[str, Any]:
+
+def _parse_zap_data(data: Any) -> dict[str, Any]:
     """Normalise the top-level ZAP JSON object into the canonical output dict."""
     if not isinstance(data, dict):
         return {"error": "Unexpected ZAP JSON format (expected object at root)"}
 
-    alerts: List[Dict[str, Any]] = []
-    urls_scanned: Set[str] = set()
+    alerts: list[dict[str, Any]] = []
+    urls_scanned: set[str] = set()
 
     sites = data.get("site", [])
     if not isinstance(sites, list):
@@ -77,7 +79,7 @@ def _parse_zap_data(data: Any) -> Dict[str, Any]:
                 if a.get("url"):
                     urls_scanned.add(a["url"])
 
-    by_risk: Dict[str, int] = {}
+    by_risk: dict[str, int] = {}
     for alert in alerts:
         risk = alert.get("risk", "informational")
         by_risk[risk] = by_risk.get(risk, 0) + 1
@@ -92,34 +94,56 @@ def _parse_zap_data(data: Any) -> Dict[str, Any]:
     }
 
 
-def _parse_alert(alert: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _parse_alert(alert: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse one ZAP alert dict, expanding its ``instances`` into separate records."""
     alert_name = alert.get("name") or alert.get("alert", "")
     risk_raw = str(alert.get("riskcode", alert.get("riskdesc", "0")))
     risk = _normalize_risk(risk_raw)
-    confidence = (alert.get("confidencedesc") or str(alert.get("confidence", "low"))).lower()
+    confidence = (
+        alert.get("confidencedesc") or str(alert.get("confidence", "low"))
+    ).lower()
     description = _strip_html(alert.get("desc", ""))
     solution = _extract_solution(alert)
     cwe_id = _to_int(alert.get("cweid"))
     wasc_id = _to_int(alert.get("wascid"))
 
-    instances: List[Dict[str, Any]] = alert.get("instances", [])
+    instances: list[dict[str, Any]] = alert.get("instances", [])
     if not instances:
-        return [_build_alert_record(
-            alert_name, risk, confidence, description, solution, cwe_id, wasc_id,
-            url="", method="", param=None, attack=None, evidence=None,
-        )]
+        return [
+            _build_alert_record(
+                alert_name,
+                risk,
+                confidence,
+                description,
+                solution,
+                cwe_id,
+                wasc_id,
+                url="",
+                method="",
+                param=None,
+                attack=None,
+                evidence=None,
+            )
+        ]
 
     records = []
     for inst in instances:
-        records.append(_build_alert_record(
-            alert_name, risk, confidence, description, solution, cwe_id, wasc_id,
-            url=inst.get("uri") or inst.get("url") or "",
-            method=(inst.get("method") or "").upper(),
-            param=inst.get("param") or None,
-            attack=inst.get("attack") or None,
-            evidence=inst.get("evidence") or None,
-        ))
+        records.append(
+            _build_alert_record(
+                alert_name,
+                risk,
+                confidence,
+                description,
+                solution,
+                cwe_id,
+                wasc_id,
+                url=inst.get("uri") or inst.get("url") or "",
+                method=(inst.get("method") or "").upper(),
+                param=inst.get("param") or None,
+                attack=inst.get("attack") or None,
+                evidence=inst.get("evidence") or None,
+            )
+        )
     return records
 
 
@@ -129,14 +153,14 @@ def _build_alert_record(
     confidence: str,
     description: str,
     solution: str,
-    cwe_id: Optional[int],
-    wasc_id: Optional[int],
+    cwe_id: int | None,
+    wasc_id: int | None,
     url: str,
     method: str,
-    param: Optional[str],
-    attack: Optional[str],
-    evidence: Optional[str],
-) -> Dict[str, Any]:
+    param: str | None,
+    attack: str | None,
+    evidence: str | None,
+) -> dict[str, Any]:
     return {
         "alert_name": alert_name,
         "risk": risk,
@@ -157,18 +181,24 @@ def _build_alert_record(
 # Internal helpers — XML
 # ---------------------------------------------------------------------------
 
-def _parse_zap_xml_root(root: ET.Element) -> Dict[str, Any]:
+
+def _parse_zap_xml_root(root: ET.Element) -> dict[str, Any]:
     """Parse a ZAP XML report's root element into the canonical output dict."""
-    alerts: List[Dict[str, Any]] = []
-    urls_scanned: Set[str] = set()
+    alerts: list[dict[str, Any]] = []
+    urls_scanned: set[str] = set()
 
     for alertitem in root.iter("alertitem"):
-        risk_raw = _xml_text(alertitem, "riskcode") or _xml_text(alertitem, "riskdesc") or "0"
+        risk_raw = (
+            _xml_text(alertitem, "riskcode") or _xml_text(alertitem, "riskdesc") or "0"
+        )
         risk = _normalize_risk(risk_raw)
         confidence = (_xml_text(alertitem, "confidencedesc") or "low").lower()
         alert_name = _xml_text(alertitem, "alert") or _xml_text(alertitem, "name")
         description = _strip_html(_xml_text(alertitem, "desc"))
-        solution = _strip_html(_xml_text(alertitem, "solution")) or "See OWASP ZAP documentation."
+        solution = (
+            _strip_html(_xml_text(alertitem, "solution"))
+            or "See OWASP ZAP documentation."
+        )
         cwe_id = _to_int(_xml_text(alertitem, "cweid"))
         wasc_id = _to_int(_xml_text(alertitem, "wascid"))
 
@@ -176,25 +206,45 @@ def _parse_zap_xml_root(root: ET.Element) -> Dict[str, Any]:
         instances = instances_el.findall("instance") if instances_el is not None else []
 
         if not instances:
-            alerts.append(_build_alert_record(
-                alert_name, risk, confidence, description, solution, cwe_id, wasc_id,
-                url="", method="", param=None, attack=None, evidence=None,
-            ))
+            alerts.append(
+                _build_alert_record(
+                    alert_name,
+                    risk,
+                    confidence,
+                    description,
+                    solution,
+                    cwe_id,
+                    wasc_id,
+                    url="",
+                    method="",
+                    param=None,
+                    attack=None,
+                    evidence=None,
+                )
+            )
         else:
             for inst in instances:
                 url = _xml_text(inst, "uri") or _xml_text(inst, "url") or ""
-                alerts.append(_build_alert_record(
-                    alert_name, risk, confidence, description, solution, cwe_id, wasc_id,
-                    url=url,
-                    method=(_xml_text(inst, "method") or "").upper(),
-                    param=_xml_text(inst, "param") or None,
-                    attack=_xml_text(inst, "attack") or None,
-                    evidence=_xml_text(inst, "evidence") or None,
-                ))
+                alerts.append(
+                    _build_alert_record(
+                        alert_name,
+                        risk,
+                        confidence,
+                        description,
+                        solution,
+                        cwe_id,
+                        wasc_id,
+                        url=url,
+                        method=(_xml_text(inst, "method") or "").upper(),
+                        param=_xml_text(inst, "param") or None,
+                        attack=_xml_text(inst, "attack") or None,
+                        evidence=_xml_text(inst, "evidence") or None,
+                    )
+                )
                 if url:
                     urls_scanned.add(url)
 
-    by_risk: Dict[str, int] = {}
+    by_risk: dict[str, int] = {}
     for alert in alerts:
         r = alert.get("risk", "informational")
         by_risk[r] = by_risk.get(r, 0) + 1
@@ -219,12 +269,13 @@ def _xml_text(element: ET.Element, tag: str) -> str:
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _normalize_risk(risk: str) -> str:
     """Map ZAP risk code or description to a lowercase severity label."""
     return _RISK_MAP.get(risk.lower(), _RISK_MAP.get(risk, "informational"))
 
 
-def _extract_solution(alert: Dict[str, Any]) -> str:
+def _extract_solution(alert: dict[str, Any]) -> str:
     raw = alert.get("solution", "")
     cleaned = _strip_html(raw) if raw else ""
     return cleaned or "See OWASP ZAP documentation."
@@ -237,7 +288,7 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text).strip()
 
 
-def _to_int(value: Any) -> Optional[int]:
+def _to_int(value: Any) -> int | None:
     """Safely convert a value to int, returning None on failure."""
     if value is None or value == "":
         return None

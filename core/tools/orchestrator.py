@@ -1,18 +1,18 @@
 """Scan orchestration: coordinate multi-tool scans across segments and repositories."""
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Dict, List, Optional, Tuple
 
 from rich.console import Console
 from rich.table import Table
 
 from core.tools.base import ToolResult, ToolWrapper
-from core.tools.executor import ToolExecutor, DEFAULT_TIMEOUT
+from core.tools.executor import ToolExecutor
 from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
 from core.tools.registry import ToolRegistry
 
@@ -22,36 +22,48 @@ logger = logging.getLogger(__name__)
 # Module-level constants (exported for smoke tests and REPL use)
 # ---------------------------------------------------------------------------
 
-SCAN_SEGMENTS: Dict[str, List[str]] = {
-    'network': ['nmap'],
-    'sast': ['semgrep'],
-    'sca': ['osv-scanner', 'pip-audit', 'npm-audit', 'composer-audit'],
-    'secrets': ['gitleaks'],
-    'api': ['zap'],
+SCAN_SEGMENTS: dict[str, list[str]] = {
+    "network": ["nmap"],
+    "sast": ["semgrep"],
+    "sca": ["osv-scanner", "pip-audit", "npm-audit", "composer-audit"],
+    "secrets": ["gitleaks"],
+    "api": ["zap"],
 }
 
-SEGMENT_ORDER: List[str] = ['network', 'sast', 'sca', 'secrets', 'api']
+SEGMENT_ORDER: list[str] = ["network", "sast", "sca", "secrets", "api"]
 
-LANGUAGE_TOOL_MAP: Dict[str, List[str]] = {
-    'python': ['pip-audit'],
-    'javascript': ['npm-audit'],
-    'typescript': ['npm-audit'],
-    'node': ['npm-audit'],
-    'php': ['composer-audit'],
+LANGUAGE_TOOL_MAP: dict[str, list[str]] = {
+    "python": ["pip-audit"],
+    "javascript": ["npm-audit"],
+    "typescript": ["npm-audit"],
+    "node": ["npm-audit"],
+    "php": ["composer-audit"],
 }
 
-ALWAYS_RUN_REPO_TOOLS: List[str] = ['semgrep', 'osv-scanner', 'gitleaks', 'zap']
+ALWAYS_RUN_REPO_TOOLS: list[str] = ["semgrep", "osv-scanner", "gitleaks", "zap"]
 
 # Tools that exit non-zero when findings are present (not true failures)
-_FINDINGS_EXIT_TOOLS: frozenset = frozenset({
-    'semgrep', 'osv-scanner', 'pip-audit', 'npm-audit',
-    'composer-audit', 'gitleaks', 'zap',
-})
+_FINDINGS_EXIT_TOOLS: frozenset = frozenset(
+    {
+        "semgrep",
+        "osv-scanner",
+        "pip-audit",
+        "npm-audit",
+        "composer-audit",
+        "gitleaks",
+        "zap",
+    }
+)
 
 # Canonical ordering for repo-scan tool execution
-_REPO_TOOL_ORDER: List[str] = [
-    'semgrep', 'osv-scanner', 'pip-audit', 'npm-audit',
-    'composer-audit', 'gitleaks', 'zap',
+_REPO_TOOL_ORDER: list[str] = [
+    "semgrep",
+    "osv-scanner",
+    "pip-audit",
+    "npm-audit",
+    "composer-audit",
+    "gitleaks",
+    "zap",
 ]
 
 
@@ -59,12 +71,13 @@ _REPO_TOOL_ORDER: List[str] = [
 # ScanSummary
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ScanSummary:
     total_tools_run: int
     total_tools_skipped: int
     total_tools_failed: int
-    results: List[ToolResult]
+    results: list[ToolResult]
     duration_seconds: float
     findings_ingested: int
 
@@ -72,6 +85,7 @@ class ScanSummary:
 # ---------------------------------------------------------------------------
 # ScanOrchestrator
 # ---------------------------------------------------------------------------
+
 
 class ScanOrchestrator:
     """Coordinate multi-tool scans across segments and repositories.
@@ -97,6 +111,7 @@ class ScanOrchestrator:
         self.console = Console()
 
         from core.config.manager import ConfigManager
+
         self._config = ConfigManager(str(tool_executor.base_path))
 
     # ------------------------------------------------------------------
@@ -106,7 +121,7 @@ class ScanOrchestrator:
     def run_full_scan(
         self,
         auto_approve: bool = False,
-        exclude_segments: Optional[List[str]] = None,
+        exclude_segments: list[str] | None = None,
     ) -> ScanSummary:
         """Run all segments across all repos in SEGMENT_ORDER.
 
@@ -116,18 +131,18 @@ class ScanOrchestrator:
         exclude_segments = exclude_segments or []
         start = perf_counter()
 
-        all_results: List[ToolResult] = []
+        all_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
 
-        self.console.print(f'\n[bold cyan]Full Scan:[/bold cyan] {self.project_name}')
-        self.console.print('─' * 50)
+        self.console.print(f"\n[bold cyan]Full Scan:[/bold cyan] {self.project_name}")
+        self.console.print("─" * 50)
 
         for segment in SEGMENT_ORDER:
             if segment in exclude_segments:
-                self.console.print(f'[dim]Skipping segment: {segment}[/dim]')
+                self.console.print(f"[dim]Skipping segment: {segment}[/dim]")
                 continue
 
-            self.console.print(f'\n[bold yellow]{segment.upper()}[/bold yellow]')
+            self.console.print(f"\n[bold yellow]{segment.upper()}[/bold yellow]")
             seg_summary = self.run_segment(segment, auto_approve=auto_approve)
 
             all_results.extend(seg_summary.results)
@@ -167,10 +182,10 @@ class ScanOrchestrator:
             )
 
         start = perf_counter()
-        all_results: List[ToolResult] = []
+        all_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
 
-        if segment_name == 'network':
+        if segment_name == "network":
             results_list, total_run, total_skipped, total_failed, total_ingested = (
                 self._run_network_segment(auto_approve)
             )
@@ -195,8 +210,8 @@ class ScanOrchestrator:
         self,
         repo_name: str,
         auto_approve: bool = False,
-        exclude_dirs: Optional[List[str]] = None,
-        severity_filter: Optional[str] = None,
+        exclude_dirs: list[str] | None = None,
+        severity_filter: str | None = None,
     ) -> ScanSummary:
         """Run all applicable tools for a single repo.
 
@@ -223,49 +238,53 @@ class ScanOrchestrator:
 
         # Build ordered tool list
         tool_set: set = set(ALWAYS_RUN_REPO_TOOLS)
-        for lang in (repo.languages or []):
+        for lang in repo.languages or []:
             tool_set.update(LANGUAGE_TOOL_MAP.get(lang.lower(), []))
 
         ordered_tools = [t for t in _REPO_TOOL_ORDER if t in tool_set]
 
-        lang_str = ', '.join(repo.languages) if repo.languages else 'unknown'
-        self.console.print(f'\n[bold cyan]Repo Scan:[/bold cyan] {repo.name}')
-        self.console.print(f'Languages: {lang_str}')
-        self.console.print(f'Tools: {", ".join(ordered_tools)}\n')
+        lang_str = ", ".join(repo.languages) if repo.languages else "unknown"
+        self.console.print(f"\n[bold cyan]Repo Scan:[/bold cyan] {repo.name}")
+        self.console.print(f"Languages: {lang_str}")
+        self.console.print(f"Tools: {', '.join(ordered_tools)}\n")
 
         start = perf_counter()
-        results: List[ToolResult] = []
+        results: list[ToolResult] = []
         total_run = total_skipped = total_failed = 0
 
         for tool_name in ordered_tools:
             # ZAP requires base_urls
-            if tool_name == 'zap' and not repo.base_urls:
+            if tool_name == "zap" and not repo.base_urls:
                 self.console.print(
-                    f'  [dim]- zap | SKIPPED (no base_urls configured)[/dim]'
+                    "  [dim]- zap | SKIPPED (no base_urls configured)[/dim]"
                 )
                 total_skipped += 1
                 continue
 
             tool = self.registry.get_tool(tool_name)
             if tool is None:
-                self.console.print(f'  [dim]- {tool_name} | SKIPPED (not registered)[/dim]')
+                self.console.print(
+                    f"  [dim]- {tool_name} | SKIPPED (not registered)[/dim]"
+                )
                 total_skipped += 1
                 continue
             if not tool.check_available():
-                self.console.print(f'  [dim]- {tool_name} | SKIPPED (not installed)[/dim]')
+                self.console.print(
+                    f"  [dim]- {tool_name} | SKIPPED (not installed)[/dim]"
+                )
                 total_skipped += 1
                 continue
 
-            self.console.print(f'  [dim][*] Running {tool_name}...[/dim]')
+            self.console.print(f"  [dim][*] Running {tool_name}...[/dim]")
             kwargs = self._repo_tool_kwargs(tool_name, repo, exclude_dirs=exclude_dirs)
 
-            if tool_name == 'gitleaks':
+            if tool_name == "gitleaks":
                 result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
             else:
                 result = self._run_tool_with_approval(tool, kwargs, auto_approve)
 
             if result is None:
-                self._print_tool_line(tool_name, 'SKIPPED', 0, None)
+                self._print_tool_line(tool_name, "SKIPPED", 0, None)
                 total_skipped += 1
             else:
                 result = self._normalize_success(result)
@@ -273,10 +292,12 @@ class ScanOrchestrator:
                 findings = self._count_findings(result)
                 if result.success:
                     total_run += 1
-                    self._print_tool_line(tool_name, 'pass', findings, result.duration_seconds)
+                    self._print_tool_line(
+                        tool_name, "pass", findings, result.duration_seconds
+                    )
                 else:
                     total_failed += 1
-                    self._print_tool_line(tool_name, 'fail', 0, result.duration_seconds)
+                    self._print_tool_line(tool_name, "fail", 0, result.duration_seconds)
 
         duration = round(perf_counter() - start, 1)
         ingested = self._batch_ingest(results, profile=repo.name)
@@ -309,10 +330,11 @@ class ScanOrchestrator:
         """
         start = perf_counter()
 
-        self.console.print(
-            f'\n[bold cyan]Repo Tool Scan:[/bold cyan] {self.project_name} — {tool_name}'
+        title = (
+            f"[bold cyan]Repo Tool Scan:[/bold cyan] {self.project_name} — {tool_name}"
         )
-        self.console.print('─' * 50)
+        self.console.print(f"\n{title}")
+        self.console.print("─" * 50)
 
         results_list, total_run, total_skipped, total_failed, total_ingested = (
             self._run_repo_segment([tool_name], auto_approve)
@@ -337,7 +359,7 @@ class ScanOrchestrator:
         tool: ToolWrapper,
         kwargs: dict,
         auto_approve: bool,
-    ) -> Optional[ToolResult]:
+    ) -> ToolResult | None:
         """Prompt 'Run <tool>? [y/N]' unless auto_approve is True.
 
         Returns:
@@ -345,25 +367,27 @@ class ScanOrchestrator:
         """
         if not auto_approve:
             try:
-                answer = input(f'Run {tool.name}? [y/N]: ').strip().lower()
+                answer = input(f"Run {tool.name}? [y/N]: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 print()
                 return None
-            if answer not in ('y', 'yes'):
+            if answer not in ("y", "yes"):
                 return None
 
         # Extract executor-level kwargs before passing build_command kwargs
         kwargs = dict(kwargs)
-        label = kwargs.pop('label', 'output')
-        cwd = kwargs.pop('cwd', None)
-        return self.executor.execute(tool, auto_approve=True, label=label, cwd=cwd, **kwargs)
+        label = kwargs.pop("label", "output")
+        cwd = kwargs.pop("cwd", None)
+        return self.executor.execute(
+            tool, auto_approve=True, label=label, cwd=cwd, **kwargs
+        )
 
     def _run_gitleaks_both_scans(
         self,
         tool: ToolWrapper,
         kwargs: dict,
         auto_approve: bool,
-    ) -> Optional[ToolResult]:
+    ) -> ToolResult | None:
         """Run gitleaks dir + git scans, combine, and return one ToolResult.
 
         Prompts once for approval (if not auto_approve), then runs both scan
@@ -371,47 +395,55 @@ class ScanOrchestrator:
         """
         if not auto_approve:
             try:
-                answer = input(f'Run {tool.name} (dir + git)? [y/N]: ').strip().lower()
+                answer = input(f"Run {tool.name} (dir + git)? [y/N]: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 print()
                 return None
-            if answer not in ('y', 'yes'):
+            if answer not in ("y", "yes"):
                 return None
 
-        base_kwargs = {k: v for k, v in kwargs.items() if k not in ('label', 'cwd')}
-        label = kwargs.get('label', 'output')
-        cwd = kwargs.get('cwd', None)
+        base_kwargs = {k: v for k, v in kwargs.items() if k not in ("label", "cwd")}
+        label = kwargs.get("label", "output")
+        cwd = kwargs.get("cwd", None)
 
         dir_result = self.executor.execute(
-            tool, auto_approve=True, label=f'{label}_dir', cwd=cwd,
-            scan_type='dir', **base_kwargs,
+            tool,
+            auto_approve=True,
+            label=f"{label}_dir",
+            cwd=cwd,
+            scan_type="dir",
+            **base_kwargs,
         )
         git_result = self.executor.execute(
-            tool, auto_approve=True, label=f'{label}_git', cwd=cwd,
-            scan_type='git', **base_kwargs,
+            tool,
+            auto_approve=True,
+            label=f"{label}_git",
+            cwd=cwd,
+            scan_type="git",
+            **base_kwargs,
         )
 
         dir_data = dir_result.parsed_data or {}
         git_data = git_result.parsed_data or {}
         combined_data = combine_gitleaks_results(dir_data, git_data)
 
-        combined_files: Dict[str, Path] = {}
+        combined_files: dict[str, Path] = {}
         for key, path in dir_result.output_files.items():
-            combined_files[f'dir_{key}'] = path
+            combined_files[f"dir_{key}"] = path
         for key, path in git_result.output_files.items():
-            combined_files[f'git_{key}'] = path
+            combined_files[f"git_{key}"] = path
 
         return ToolResult(
-            tool_name='gitleaks',
+            tool_name="gitleaks",
             success=dir_result.success or git_result.success,
-            output=(dir_result.output or '') + '\n' + (git_result.output or ''),
+            output=(dir_result.output or "") + "\n" + (git_result.output or ""),
             parsed_data=combined_data,
             output_files=combined_files,
             timestamp=dir_result.timestamp,
             duration_seconds=dir_result.duration_seconds + git_result.duration_seconds,
         )
 
-    def _batch_ingest(self, results: List[ToolResult], profile: str) -> int:
+    def _batch_ingest(self, results: list[ToolResult], profile: str) -> int:
         """Ingest all successful ToolResults into RAG after scan completes.
 
         Uses delete-insert upsert: deletes old findings for tool+profile,
@@ -427,16 +459,22 @@ class ScanOrchestrator:
 
         total = 0
         try:
-            ingestor = FindingIngestor(self.rag_engine, self.project_name)
+            ingestor = FindingIngestor(self.rag_engine, self.project_name)  # type: ignore[arg-type]
             for result in results:
-                if result.success and result.parsed_data and 'error' not in result.parsed_data:
+                if (
+                    result.success
+                    and result.parsed_data
+                    and "error" not in result.parsed_data
+                ):
                     try:
                         count = ingestor.ingest_tool_output(result, profile=profile)
                         total += count
                     except Exception as exc:
-                        logger.error('Ingestion failed for %s: %s', result.tool_name, exc)
+                        logger.error(
+                            "Ingestion failed for %s: %s", result.tool_name, exc
+                        )
         except Exception as exc:
-            logger.error('Batch ingestion setup error: %s', exc)
+            logger.error("Batch ingestion setup error: %s", exc)
 
         return total
 
@@ -447,96 +485,117 @@ class ScanOrchestrator:
     def _run_network_segment(
         self,
         auto_approve: bool,
-    ) -> Tuple[List[ToolResult], int, int, int, int]:
-        """Run nmap for each configured profile. Returns (results, run, skipped, failed, ingested)."""
-        results: List[ToolResult] = []
+    ) -> tuple[list[ToolResult], int, int, int, int]:
+        """Run nmap for each configured profile.
+
+        Returns (results, run, skipped, failed, ingested).
+        """
+        results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
 
         profiles = self._config.load_nmap_hosts(self.project_name) or {}
         if not profiles:
-            self.console.print('[yellow]No nmap profiles configured — skipping network segment[/yellow]')
+            self.console.print(
+                "[yellow]No nmap profiles configured"
+                " — skipping network segment[/yellow]"
+            )
             total_skipped += 1
             return results, total_run, total_skipped, total_failed, total_ingested
 
-        tool = self.registry.get_tool('nmap')
+        tool = self.registry.get_tool("nmap")
         if tool is None:
-            self.console.print('[dim]- nmap | SKIPPED (not registered)[/dim]')
+            self.console.print("[dim]- nmap | SKIPPED (not registered)[/dim]")
             total_skipped += len(profiles)
             return results, total_run, total_skipped, total_failed, total_ingested
 
         if not tool.check_available():
-            self.console.print('[dim]- nmap | SKIPPED (not installed)[/dim]')
+            self.console.print("[dim]- nmap | SKIPPED (not installed)[/dim]")
             total_skipped += len(profiles)
             return results, total_run, total_skipped, total_failed, total_ingested
 
         for profile_name in profiles:
-            self.console.print(f'  [dim][*] Running nmap ({profile_name})...[/dim]')
+            self.console.print(f"  [dim][*] Running nmap ({profile_name})...[/dim]")
             kwargs = self._nmap_kwargs(profile_name)
             result = self._run_tool_with_approval(tool, kwargs, auto_approve)
 
             if result is None:
-                self._print_tool_line(f'nmap/{profile_name}', 'SKIPPED', 0, None)
+                self._print_tool_line(f"nmap/{profile_name}", "SKIPPED", 0, None)
                 total_skipped += 1
             else:
                 results.append(result)
                 findings = self._count_findings(result)
                 if result.success:
                     total_run += 1
-                    self._print_tool_line(f'nmap/{profile_name}', 'pass', findings, result.duration_seconds)
+                    self._print_tool_line(
+                        f"nmap/{profile_name}",
+                        "pass",
+                        findings,
+                        result.duration_seconds,
+                    )
                     total_ingested += self._batch_ingest([result], profile=profile_name)
                 else:
                     total_failed += 1
-                    self._print_tool_line(f'nmap/{profile_name}', 'fail', 0, result.duration_seconds)
+                    self._print_tool_line(
+                        f"nmap/{profile_name}", "fail", 0, result.duration_seconds
+                    )
 
         return results, total_run, total_skipped, total_failed, total_ingested
 
     def _run_repo_segment(
         self,
-        tool_names: List[str],
+        tool_names: list[str],
         auto_approve: bool,
-    ) -> Tuple[List[ToolResult], int, int, int, int]:
+    ) -> tuple[list[ToolResult], int, int, int, int]:
         """Run a set of tools on every configured repository.
 
         Returns (results, run, skipped, failed, ingested).
         """
         repos = self._config.load_repositories(self.project_name)
         if not repos:
-            self.console.print('[yellow]No repositories configured — skipping[/yellow]')
+            self.console.print("[yellow]No repositories configured — skipping[/yellow]")
             return [], 0, len(tool_names), 0, 0
 
-        all_results: List[ToolResult] = []
+        all_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
 
         for repo in repos:
-            self.console.print(f'  [bold]Repository:[/bold] {repo.name}')
-            repo_results: List[ToolResult] = []
+            self.console.print(f"  [bold]Repository:[/bold] {repo.name}")
+            repo_results: list[ToolResult] = []
 
             for tool_name in tool_names:
-                if tool_name == 'zap' and not repo.base_urls:
-                    self.console.print(f'  [dim]- zap | SKIPPED (no base_urls)[/dim]')
+                if tool_name == "zap" and not repo.base_urls:
+                    self.console.print("  [dim]- zap | SKIPPED (no base_urls)[/dim]")
                     total_skipped += 1
                     continue
 
                 tool = self.registry.get_tool(tool_name)
                 if tool is None:
-                    self.console.print(f'  [dim]- {tool_name} | SKIPPED (not registered)[/dim]')
+                    self.console.print(
+                        f"  [dim]- {tool_name} | SKIPPED (not registered)[/dim]"
+                    )
                     total_skipped += 1
                     continue
                 if not tool.check_available():
-                    self.console.print(f'  [dim]- {tool_name} | SKIPPED (not installed)[/dim]')
+                    self.console.print(
+                        f"  [dim]- {tool_name} | SKIPPED (not installed)[/dim]"
+                    )
                     total_skipped += 1
                     continue
 
-                self.console.print(f'  [dim][*] Running {tool_name} ({repo.name})...[/dim]')
+                self.console.print(
+                    f"  [dim][*] Running {tool_name} ({repo.name})...[/dim]"
+                )
                 kwargs = self._repo_tool_kwargs(tool_name, repo)
 
-                if tool_name == 'gitleaks':
+                if tool_name == "gitleaks":
                     result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
                 else:
                     result = self._run_tool_with_approval(tool, kwargs, auto_approve)
 
                 if result is None:
-                    self._print_tool_line(f'{tool_name}/{repo.name}', 'SKIPPED', 0, None)
+                    self._print_tool_line(
+                        f"{tool_name}/{repo.name}", "SKIPPED", 0, None
+                    )
                     total_skipped += 1
                 else:
                     result = self._normalize_success(result)
@@ -545,12 +604,18 @@ class ScanOrchestrator:
                     if result.success:
                         total_run += 1
                         self._print_tool_line(
-                            f'{tool_name}/{repo.name}', 'pass', findings, result.duration_seconds
+                            f"{tool_name}/{repo.name}",
+                            "pass",
+                            findings,
+                            result.duration_seconds,
                         )
                     else:
                         total_failed += 1
                         self._print_tool_line(
-                            f'{tool_name}/{repo.name}', 'fail', 0, result.duration_seconds
+                            f"{tool_name}/{repo.name}",
+                            "fail",
+                            0,
+                            result.duration_seconds,
                         )
 
             all_results.extend(repo_results)
@@ -564,46 +629,51 @@ class ScanOrchestrator:
 
     def _nmap_kwargs(self, profile_name: str) -> dict:
         return {
-            'label': profile_name,
-            'profile': profile_name,
-            'project_name': self.project_name,
-            'base_path': str(self.executor.base_path),
+            "label": profile_name,
+            "profile": profile_name,
+            "project_name": self.project_name,
+            "base_path": str(self.executor.base_path),
         }
 
     def _repo_tool_kwargs(
         self,
         tool_name: str,
         repo,
-        exclude_dirs: Optional[List[str]] = None,
+        exclude_dirs: list[str] | None = None,
     ) -> dict:
         repo_path = self.registry.get_repo_path(tool_name, repo)
-        kwargs: dict = {'label': repo.name, 'repo_path': repo_path}
+        kwargs: dict = {"label": repo.name, "repo_path": repo_path}
 
-        if tool_name in ('npm-audit', 'composer-audit'):
+        if tool_name in ("npm-audit", "composer-audit"):
             # Docker wrappers handle working directory internally via -w;
             # only set cwd for local tools.
             tool_config = self.registry.get_tool_config(tool_name)
-            if tool_config is None or tool_config.location == 'local':
-                kwargs['cwd'] = repo_path
+            if tool_config is None or tool_config.location == "local":
+                kwargs["cwd"] = repo_path
 
-        if tool_name == 'zap' and repo.base_urls:
-            endpoint_cfg = self._config.load_endpoint_config(self.project_name, repo.name)
+        if tool_name == "zap" and repo.base_urls:
+            endpoint_cfg = self._config.load_endpoint_config(
+                self.project_name, repo.name
+            )
             endpoints_dict = endpoint_cfg.endpoints if endpoint_cfg else {}
-            kwargs['base_url'] = repo.base_urls[0]
-            kwargs['endpoints'] = endpoints_dict
-            # output_file only applies to local ZAP; docker ZAP writes inside the container
+            kwargs["base_url"] = repo.base_urls[0]
+            kwargs["endpoints"] = endpoints_dict
+            # output_file only applies to local ZAP;
+            # docker ZAP writes inside the container
             tool_config = self.registry.get_tool_config(tool_name)
-            if tool_config is None or tool_config.location == 'local':
+            if tool_config is None or tool_config.location == "local":
                 output_dir = (
                     self.executor.base_path
-                    / 'projects'
+                    / "projects"
                     / self.project_name
-                    / 'tool_outputs'
-                    / 'zap'
+                    / "tool_outputs"
+                    / "zap"
                 )
                 output_dir.mkdir(parents=True, exist_ok=True)
-                ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
-                kwargs['output_file'] = str(output_dir / f'{repo.name}_{ts}_report.json')
+                ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+                kwargs["output_file"] = str(
+                    output_dir / f"{repo.name}_{ts}_report.json"
+                )
 
         return kwargs
 
@@ -613,9 +683,11 @@ class ScanOrchestrator:
 
     @staticmethod
     def _normalize_success(result: ToolResult) -> ToolResult:
-        """Mark tools that exit non-zero on findings as successful when parsed_data is valid."""
+        """Mark tools that exit non-zero on findings as successful
+        when parsed_data is valid.
+        """
         if result.tool_name in _FINDINGS_EXIT_TOOLS:
-            if result.parsed_data and 'error' not in result.parsed_data:
+            if result.parsed_data and "error" not in result.parsed_data:
                 result.success = True
         return result
 
@@ -624,25 +696,25 @@ class ScanOrchestrator:
         if not result.parsed_data:
             return 0
         pd = result.parsed_data
-        summary = pd.get('summary', {})
-        if 'hosts' in pd:
-            return len(pd['hosts'])
-        if 'total_findings' in summary:
-            return summary['total_findings']
-        if 'findings' in pd:
-            return len(pd['findings'])
-        if 'total_vulnerabilities' in summary:
-            return summary['total_vulnerabilities']
-        if 'vulnerabilities' in pd:
-            return len(pd['vulnerabilities'])
-        if 'total_secrets' in summary:
-            return summary['total_secrets']
-        if 'secrets' in pd:
-            return len(pd['secrets'])
-        if 'total_alerts' in summary:
-            return summary['total_alerts']
-        if 'alerts' in pd:
-            return len(pd['alerts'])
+        summary = pd.get("summary", {})
+        if "hosts" in pd:
+            return len(pd["hosts"])
+        if "total_findings" in summary:
+            return summary["total_findings"]
+        if "findings" in pd:
+            return len(pd["findings"])
+        if "total_vulnerabilities" in summary:
+            return summary["total_vulnerabilities"]
+        if "vulnerabilities" in pd:
+            return len(pd["vulnerabilities"])
+        if "total_secrets" in summary:
+            return summary["total_secrets"]
+        if "secrets" in pd:
+            return len(pd["secrets"])
+        if "total_alerts" in summary:
+            return summary["total_alerts"]
+        if "alerts" in pd:
+            return len(pd["alerts"])
         return 0
 
     # ------------------------------------------------------------------
@@ -654,38 +726,46 @@ class ScanOrchestrator:
         tool_name: str,
         status: str,
         findings: int,
-        duration: Optional[float],
+        duration: float | None,
     ) -> None:
-        icons = {'pass': '[green]✓[/green]', 'fail': '[red]✗[/red]', 'SKIPPED': '[dim]-[/dim]'}
+        icons = {
+            "pass": "[green]✓[/green]",
+            "fail": "[red]✗[/red]",
+            "SKIPPED": "[dim]-[/dim]",
+        }
         icon = icons.get(status, status)
-        findings_str = f'{findings} findings' if status == 'pass' else ('-' if status == 'SKIPPED' else 'FAILED')
-        dur_str = f'{duration:.1f}s' if duration is not None else '-'
+        findings_str = (
+            f"{findings} findings"
+            if status == "pass"
+            else ("-" if status == "SKIPPED" else "FAILED")
+        )
+        dur_str = f"{duration:.1f}s" if duration is not None else "-"
         self.console.print(
-            f'  {icon} [cyan]{tool_name:<22}[/cyan] | {findings_str:<14} | {dur_str}'
+            f"  {icon} [cyan]{tool_name:<22}[/cyan] | {findings_str:<14} | {dur_str}"
         )
 
-    def _print_summary_table(self, results: List[ToolResult]) -> None:
+    def _print_summary_table(self, results: list[ToolResult]) -> None:
         if not results:
             return
-        table = Table(title=None, show_header=True, header_style='bold')
-        table.add_column('Tool', style='cyan')
-        table.add_column('Status', style='white')
-        table.add_column('Findings', style='white')
-        table.add_column('Duration', style='white')
+        table = Table(title=None, show_header=True, header_style="bold")
+        table.add_column("Tool", style="cyan")
+        table.add_column("Status", style="white")
+        table.add_column("Findings", style="white")
+        table.add_column("Duration", style="white")
         for r in results:
-            status = 'pass' if r.success else 'fail'
+            status = "pass" if r.success else "fail"
             findings = str(self._count_findings(r))
-            dur = f'{r.duration_seconds:.1f}s'
+            dur = f"{r.duration_seconds:.1f}s"
             table.add_row(r.tool_name, status, findings, dur)
         self.console.print()
         self.console.print(table)
 
     def _print_final_line(self, summary: ScanSummary) -> None:
         self.console.print(
-            f'\n[bold]Scan complete:[/bold] '
-            f'[green]{summary.total_tools_run} passed[/green], '
-            f'[red]{summary.total_tools_failed} failed[/red], '
-            f'[dim]{summary.total_tools_skipped} skipped[/dim] | '
-            f'{summary.findings_ingested} findings ingested | '
-            f'{summary.duration_seconds:.1f}s total'
+            f"\n[bold]Scan complete:[/bold] "
+            f"[green]{summary.total_tools_run} passed[/green], "
+            f"[red]{summary.total_tools_failed} failed[/red], "
+            f"[dim]{summary.total_tools_skipped} skipped[/dim] | "
+            f"{summary.findings_ingested} findings ingested | "
+            f"{summary.duration_seconds:.1f}s total"
         )

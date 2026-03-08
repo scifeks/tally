@@ -1,7 +1,8 @@
 """npm-audit wrapper for Node.js dependency vulnerability scanning (SCA)."""
+
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..base import ToolWrapper
 from ..parsers.npm_audit_parser import parse_npm_audit_json, parse_npm_audit_json_string
@@ -29,13 +30,13 @@ class NpmAuditWrapper(ToolWrapper):
         return "Node.js dependency vulnerability scanner using npm advisory database"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return ["javascript", "typescript", "node"]
 
     def check_available(self) -> bool:
         return shutil.which("npm") is not None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build the npm audit argv list.
 
         Keyword Args:
@@ -47,7 +48,7 @@ class NpmAuditWrapper(ToolWrapper):
             The executor must be called with ``cwd=repo_path`` so the
             subprocess runs inside the repository directory.
         """
-        repo_path: Optional[str] = kwargs.get("repo_path")
+        repo_path: str | None = kwargs.get("repo_path")
         if not repo_path:
             raise ValueError("repo_path is required for npm-audit")
 
@@ -60,7 +61,7 @@ class NpmAuditWrapper(ToolWrapper):
 
         return ["npm", "audit", "--json"]
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse npm audit JSON output into structured data.
 
         Prefers the saved stdout file; falls back to parsing the output string.

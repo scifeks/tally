@@ -1,11 +1,9 @@
-from typing import Dict, List
-
-SCAN_SEGMENTS: Dict[str, List[str]] = {
-    'network': ['nmap'],
-    'sast': ['semgrep'],
-    'sca': ['osv-scanner', 'pip-audit', 'npm-audit', 'composer-audit'],
-    'secrets': ['gitleaks'],
-    'api': ['zap'],
+SCAN_SEGMENTS: dict[str, list[str]] = {
+    "network": ["nmap"],
+    "sast": ["semgrep"],
+    "sca": ["osv-scanner", "pip-audit", "npm-audit", "composer-audit"],
+    "secrets": ["gitleaks"],
+    "api": ["zap"],
 }
 
-SEVERITY_LEVELS: List[str] = ['low', 'medium', 'high', 'critical']
+SEVERITY_LEVELS: list[str] = ["low", "medium", "high", "critical"]

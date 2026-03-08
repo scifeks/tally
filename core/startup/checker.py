@@ -1,53 +1,52 @@
 """Dependency checker for tally startup validation."""
+
 import importlib
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
 
 from rich.console import Console
 from rich.table import Table
 
-
 _INSTALL_HINTS = {
-    "nmap":           "sudo apt install nmap  OR  brew install nmap",
-    "semgrep":        "pip install semgrep",
-    "osv-scanner":    "go install github.com/google/osv-scanner/cmd/osv-scanner@latest",
-    "pip-audit":      "pip install pip-audit",
-    "npm-audit":      "Included with Node.js: https://nodejs.org",
+    "nmap": "sudo apt install nmap  OR  brew install nmap",
+    "semgrep": "pip install semgrep",
+    "osv-scanner": "go install github.com/google/osv-scanner/cmd/osv-scanner@latest",
+    "pip-audit": "pip install pip-audit",
+    "npm-audit": "Included with Node.js: https://nodejs.org",
     "composer-audit": "Included with Composer: https://getcomposer.org",
-    "gitleaks":       "brew install gitleaks  OR  https://github.com/gitleaks/gitleaks/releases",
-    "zap":            "https://www.zaproxy.org/download/",
+    "gitleaks": "brew install gitleaks  OR  https://github.com/gitleaks/gitleaks/releases",
+    "zap": "https://www.zaproxy.org/download/",
 }
 
 # Map package names in requirements.txt to importable module names
 _PACKAGE_IMPORT_MAP = {
-    "pydantic":         "pydantic",
-    "rich":             "rich",
-    "prompt_toolkit":   "prompt_toolkit",
-    "chromadb":         "chromadb",
-    "ollama":           "ollama",
-    "pytest":           "pytest",
-    "pytest-timeout":   "pytest_timeout",
+    "pydantic": "pydantic",
+    "rich": "rich",
+    "prompt_toolkit": "prompt_toolkit",
+    "chromadb": "chromadb",
+    "ollama": "ollama",
+    "pytest": "pytest",
+    "pytest-timeout": "pytest_timeout",
 }
 
 
 @dataclass
 class DepCheck:
     name: str
-    type: str           # 'python', 'package', 'system_tool'
+    type: str  # 'python', 'package', 'system_tool'
     required: bool
     installed: bool
-    version: Optional[str] = None
-    install_hint: Optional[str] = None
+    version: str | None = None
+    install_hint: str | None = None
 
 
 @dataclass
 class CheckResult:
-    checks: List[DepCheck]
+    checks: list[DepCheck]
     all_required_present: bool
-    missing_required: List[DepCheck]
-    missing_optional: List[DepCheck]
+    missing_required: list[DepCheck]
+    missing_optional: list[DepCheck]
 
 
 class DependencyChecker:
@@ -56,7 +55,7 @@ class DependencyChecker:
         self._console = Console()
 
     def run(self, auto_fix: bool = False) -> CheckResult:
-        checks: List[DepCheck] = []
+        checks: list[DepCheck] = []
 
         checks.append(self.check_python_version())
         checks.extend(self.check_python_packages())
@@ -91,19 +90,21 @@ class DependencyChecker:
             install_hint="https://www.python.org/downloads/" if not installed else None,
         )
 
-    def check_python_packages(self) -> List[DepCheck]:
+    def check_python_packages(self) -> list[DepCheck]:
         req_path = Path(__file__).parent.parent.parent / "requirements.txt"
-        results: List[DepCheck] = []
+        results: list[DepCheck] = []
 
         if not req_path.exists():
             return results
 
         with open(req_path) as f:
-            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+            lines = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
 
         for line in lines:
             # Strip version specifiers (>=, ==, etc.)
-            pkg_name = line.split(">=")[0].split("==")[0].split("!=")[0].split("~=")[0].strip()
+            pkg_name = (
+                line.split(">=")[0].split("==")[0].split("!=")[0].split("~=")[0].strip()
+            )
             if not pkg_name:
                 continue
 
@@ -117,43 +118,50 @@ class DependencyChecker:
                 version = None
                 installed = False
 
-            results.append(DepCheck(
-                name=pkg_name,
-                type="package",
-                required=True,
-                installed=installed,
-                version=version,
-                install_hint=f"pip install {pkg_name}" if not installed else None,
-            ))
+            results.append(
+                DepCheck(
+                    name=pkg_name,
+                    type="package",
+                    required=True,
+                    installed=installed,
+                    version=version,
+                    install_hint=f"pip install {pkg_name}" if not installed else None,
+                )
+            )
 
         return results
 
-    def check_system_tools(self) -> List[DepCheck]:
-        results: List[DepCheck] = []
+    def check_system_tools(self) -> list[DepCheck]:
+        results: list[DepCheck] = []
         for tool in self._registry.get_all_tools():
             config = self._registry.get_tool_config(tool.name)
-            if config is not None and config.location == 'docker':
-                # Docker tools are always "installed" — the user explicitly configured them
-                results.append(DepCheck(
-                    name=tool.name,
-                    type="docker",
-                    required=False,
-                    installed=True,
-                    version=None,
-                    install_hint=f"Container: {config.container.name}",
-                ))
+            if config is not None and config.location == "docker":
+                # Docker tools are always "installed" — the user explicitly
+                # configured them
+                results.append(
+                    DepCheck(
+                        name=tool.name,
+                        type="docker",
+                        required=False,
+                        installed=True,
+                        version=None,
+                        install_hint=f"Container: {config.container.name}",
+                    )
+                )
             else:
                 # Local tool or fallback mode — check binary availability as before
                 available = tool.check_available()
                 version = tool.get_version() if available else None
-                results.append(DepCheck(
-                    name=tool.name,
-                    type="system_tool",
-                    required=False,
-                    installed=available,
-                    version=version,
-                    install_hint=_INSTALL_HINTS.get(tool.name),
-                ))
+                results.append(
+                    DepCheck(
+                        name=tool.name,
+                        type="system_tool",
+                        required=False,
+                        installed=available,
+                        version=version,
+                        install_hint=_INSTALL_HINTS.get(tool.name),
+                    )
+                )
         return results
 
     def print_summary(self, result: CheckResult) -> None:
@@ -180,7 +188,8 @@ class DependencyChecker:
         if result.missing_optional:
             count = len(result.missing_optional)
             self._console.print(
-                f"[yellow]Warning: {count} optional tool{'s' if count != 1 else ''} not found. "
+                f"[yellow]Warning: {count} optional "
+                f"tool{'s' if count != 1 else ''} not found. "
                 f"Some scan features will be unavailable.[/yellow]"
             )
 

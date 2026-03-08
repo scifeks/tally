@@ -1,5 +1,7 @@
 # Tally
 
+[![CI](https://github.com/scifeks/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/scifeks/tally/actions/workflows/ci.yml)
+
 Tally is a CLI REPL for orchestrating web application penetration testing. It wraps common security tools, stores findings in a RAG knowledge base (ChromaDB + Ollama), and lets you search, chat over, and report on findings — all within a single terminal session.
 
 ## Features

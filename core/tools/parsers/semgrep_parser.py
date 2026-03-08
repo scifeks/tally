@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 _SEVERITY_MAP = {
     "ERROR": "high",
@@ -9,7 +9,7 @@ _SEVERITY_MAP = {
 }
 
 
-def parse_semgrep_json(json_path: Path) -> Dict[str, Any]:
+def parse_semgrep_json(json_path: Path) -> dict[str, Any]:
     """Parse a semgrep JSON output file into structured data."""
     try:
         with open(json_path, encoding="utf-8") as f:
@@ -19,7 +19,7 @@ def parse_semgrep_json(json_path: Path) -> Dict[str, Any]:
     return _parse_semgrep_data(data)
 
 
-def parse_semgrep_json_string(json_string: str) -> Dict[str, Any]:
+def parse_semgrep_json_string(json_string: str) -> dict[str, Any]:
     """Parse semgrep JSON from a raw string into structured data."""
     try:
         data = json.loads(json_string)
@@ -32,11 +32,12 @@ def parse_semgrep_json_string(json_string: str) -> Dict[str, Any]:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_semgrep_data(data: Dict[str, Any]) -> Dict[str, Any]:
+
+def _parse_semgrep_data(data: dict[str, Any]) -> dict[str, Any]:
     results = data.get("results", [])
     findings = [_parse_finding(r) for r in results]
 
-    by_severity: Dict[str, int] = {}
+    by_severity: dict[str, int] = {}
     files_scanned: set = set()
     for finding in findings:
         sev = finding["severity"]
@@ -54,7 +55,7 @@ def _parse_semgrep_data(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _parse_finding(result: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_finding(result: dict[str, Any]) -> dict[str, Any]:
     extra = result.get("extra", {})
     start = result.get("start", {})
     end = result.get("end", {})
@@ -72,12 +73,12 @@ def _parse_finding(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _extract_severity(extra: Dict[str, Any]) -> str:
+def _extract_severity(extra: dict[str, Any]) -> str:
     raw = extra.get("severity", "INFO").upper()
     return _SEVERITY_MAP.get(raw, "low")
 
 
-def _extract_metadata(extra: Dict[str, Any]) -> Dict[str, Optional[str]]:
+def _extract_metadata(extra: dict[str, Any]) -> dict[str, str | None]:
     meta = extra.get("metadata", {})
     return {
         "cwe": meta.get("cwe"),

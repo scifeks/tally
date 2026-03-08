@@ -8,6 +8,7 @@ Skip markers:
     requires_ollama  — skipped when Ollama is not reachable
     slow             — long-running tests (real nmap scans or sleep-based timing)
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,6 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Dict
 
 import pytest
 
@@ -24,16 +24,15 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.config import ConfigManager
-from core.config.schemas import NmapProfile
-from core.project import ProjectManager
-from core.rag import FindingIngestor, RAGEngine
-from core.rag.engine import verify_ollama_available
-from core.rag.query import QueryEngine
-from core.tools.base import ToolResult
-from core.tools.executor import ToolExecutor
-from core.tools.registry import tool_registry
-
+from core.config import ConfigManager  # noqa: E402
+from core.config.schemas import NmapProfile  # noqa: E402
+from core.project import ProjectManager  # noqa: E402
+from core.rag import FindingIngestor, RAGEngine  # noqa: E402
+from core.rag.engine import verify_ollama_available  # noqa: E402
+from core.rag.query import QueryEngine  # noqa: E402
+from core.tools.base import ToolResult  # noqa: E402
+from core.tools.executor import ToolExecutor  # noqa: E402
+from core.tools.registry import tool_registry  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Skip markers
@@ -56,8 +55,9 @@ slow = pytest.mark.slow
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
-def project_env(tmp_path: Path) -> Dict:
+def project_env(tmp_path: Path) -> dict:
     """Minimal project environment under tmp_path (no nmap config, no data)."""
     name = "test-proj"
     _write_global_config(tmp_path)
@@ -68,7 +68,7 @@ def project_env(tmp_path: Path) -> Dict:
 
 
 @pytest.fixture()
-def nmap_project_env(project_env: Dict) -> Dict:
+def nmap_project_env(project_env: dict) -> dict:
     """project_env with a localhost nmap profile pre-configured."""
     _write_nmap_config(project_env["base_path"], project_env["project_name"])
     return project_env
@@ -78,14 +78,19 @@ def nmap_project_env(project_env: Dict) -> Dict:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _write_global_config(base_path: Path) -> None:
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "global.json").write_text(json.dumps({
-        "ollama_base_url": "http://localhost:11434",
-        "default_llm": "qwen3:14b",
-        "default_embedding": "nomic-embed-text:latest",
-    }))
+    (config_dir / "global.json").write_text(
+        json.dumps(
+            {
+                "ollama_base_url": "http://localhost:11434",
+                "default_llm": "qwen3:14b",
+                "default_embedding": "nomic-embed-text:latest",
+            }
+        )
+    )
 
 
 def _write_nmap_config(base_path: Path, project_name: str) -> None:
@@ -109,8 +114,20 @@ def _make_nmap_result() -> ToolResult:
                     "hostname": "localhost",
                     "state": "up",
                     "ports": [
-                        {"port": 22, "protocol": "tcp", "state": "open", "service": "ssh", "version": ""},
-                        {"port": 80, "protocol": "tcp", "state": "open", "service": "http", "version": ""},
+                        {
+                            "port": 22,
+                            "protocol": "tcp",
+                            "state": "open",
+                            "service": "ssh",
+                            "version": "",
+                        },
+                        {
+                            "port": 80,
+                            "protocol": "tcp",
+                            "state": "open",
+                            "service": "http",
+                            "version": "",
+                        },
                     ],
                 }
             ]
@@ -121,9 +138,14 @@ def _make_nmap_result() -> ToolResult:
     )
 
 
-def _run_scan(base_path: Path, project_name: str, profile: str = "localhost") -> ToolResult:
+def _run_scan(
+    base_path: Path, project_name: str, profile: str = "localhost"
+) -> ToolResult:
     tool = tool_registry.get_tool("nmap")
-    executor = ToolExecutor(project_name=project_name, base_path=base_path, auto_approve=True)
+    assert tool is not None
+    executor = ToolExecutor(
+        project_name=project_name, base_path=base_path, auto_approve=True
+    )
     return executor.execute(
         tool,
         label=profile,
@@ -137,17 +159,22 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
     return RAGEngine(project_name=project_name, base_path=str(base_path))
 
 
-def _ingest(base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost") -> int:
+def _ingest(
+    base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
+) -> int:
     engine = _make_rag_engine(base_path, project_name)
-    return FindingIngestor(engine, project_name).ingest_tool_output(result, profile=profile)
+    return FindingIngestor(engine, project_name).ingest_tool_output(
+        result, profile=profile
+    )
 
 
 # ---------------------------------------------------------------------------
 # Scenario 1 – Project creation  (no external deps)
 # ---------------------------------------------------------------------------
 
+
 class TestProjectCreation:
-    def test_project_dirs_created(self, project_env: Dict) -> None:
+    def test_project_dirs_created(self, project_env: dict) -> None:
         root = project_env["base_path"] / "projects" / project_env["project_name"]
         expected = [
             root / "config" / "endpoints",
@@ -162,19 +189,31 @@ class TestProjectCreation:
         for d in expected:
             assert d.is_dir(), f"Missing: {d}"
 
-    def test_project_config_written(self, project_env: Dict) -> None:
-        p = project_env["base_path"] / "projects" / project_env["project_name"] / "config" / "project.json"
+    def test_project_config_written(self, project_env: dict) -> None:
+        p = (
+            project_env["base_path"]
+            / "projects"
+            / project_env["project_name"]
+            / "config"
+            / "project.json"
+        )
         assert p.exists()
         data = json.loads(p.read_text())
         assert data["project_name"] == project_env["project_name"]
         assert "created" in data
 
-    def test_nmap_hosts_initialised_empty(self, project_env: Dict) -> None:
-        p = project_env["base_path"] / "projects" / project_env["project_name"] / "config" / "nmap_hosts.json"
+    def test_nmap_hosts_initialised_empty(self, project_env: dict) -> None:
+        p = (
+            project_env["base_path"]
+            / "projects"
+            / project_env["project_name"]
+            / "config"
+            / "nmap_hosts.json"
+        )
         assert p.exists()
         assert json.loads(p.read_text()) == {}
 
-    def test_project_listed_by_manager(self, project_env: Dict) -> None:
+    def test_project_listed_by_manager(self, project_env: dict) -> None:
         pm = ProjectManager(base_path=str(project_env["base_path"]))
         assert project_env["project_name"] in pm.list_projects()
 
@@ -183,8 +222,9 @@ class TestProjectCreation:
 # Scenario 2 – Nmap configuration  (no external deps)
 # ---------------------------------------------------------------------------
 
+
 class TestNmapConfig:
-    def test_nmap_profile_round_trips(self, project_env: Dict) -> None:
+    def test_nmap_profile_round_trips(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _write_nmap_config(base, name)
 
@@ -199,26 +239,35 @@ class TestNmapConfig:
 # Scenario 3 – Nmap scan execution  (@requires_nmap @slow)
 # ---------------------------------------------------------------------------
 
+
 @requires_nmap
 @slow
 class TestNmapExecution:
-    def test_scan_succeeds(self, nmap_project_env: Dict) -> None:
-        result = _run_scan(nmap_project_env["base_path"], nmap_project_env["project_name"])
+    def test_scan_succeeds(self, nmap_project_env: dict) -> None:
+        result = _run_scan(
+            nmap_project_env["base_path"], nmap_project_env["project_name"]
+        )
         assert result.success, f"Scan failed: {result.output}"
 
-    def test_output_file_created(self, nmap_project_env: Dict) -> None:
-        result = _run_scan(nmap_project_env["base_path"], nmap_project_env["project_name"])
+    def test_output_file_created(self, nmap_project_env: dict) -> None:
+        result = _run_scan(
+            nmap_project_env["base_path"], nmap_project_env["project_name"]
+        )
         assert result.output_files
         stdout = result.output_files.get("stdout")
         assert stdout is not None and Path(stdout).exists()
 
-    def test_output_file_is_xml(self, nmap_project_env: Dict) -> None:
-        result = _run_scan(nmap_project_env["base_path"], nmap_project_env["project_name"])
+    def test_output_file_is_xml(self, nmap_project_env: dict) -> None:
+        result = _run_scan(
+            nmap_project_env["base_path"], nmap_project_env["project_name"]
+        )
         content = Path(result.output_files["stdout"]).read_text()
         assert content.lstrip().startswith("<?xml")
 
-    def test_parsed_data_has_hosts(self, nmap_project_env: Dict) -> None:
-        result = _run_scan(nmap_project_env["base_path"], nmap_project_env["project_name"])
+    def test_parsed_data_has_hosts(self, nmap_project_env: dict) -> None:
+        result = _run_scan(
+            nmap_project_env["base_path"], nmap_project_env["project_name"]
+        )
         assert result.parsed_data is not None
         assert "error" not in result.parsed_data
         assert "hosts" in result.parsed_data
@@ -230,32 +279,47 @@ class TestNmapExecution:
 # Uses _make_nmap_result() so these run without nmap and in milliseconds.
 # ---------------------------------------------------------------------------
 
+
 @requires_ollama
 class TestIngestionUnit:
-    def test_ingestion_returns_positive_count(self, project_env: Dict) -> None:
-        count = _ingest(project_env["base_path"], project_env["project_name"], _make_nmap_result())
+    def test_ingestion_returns_positive_count(self, project_env: dict) -> None:
+        count = _ingest(
+            project_env["base_path"], project_env["project_name"], _make_nmap_result()
+        )
         assert count >= 1
 
-    def test_stats_shows_nmap_documents(self, project_env: Dict) -> None:
-        _ingest(project_env["base_path"], project_env["project_name"], _make_nmap_result())
-        stats = _make_rag_engine(project_env["base_path"], project_env["project_name"]).get_stats()
+    def test_stats_shows_nmap_documents(self, project_env: dict) -> None:
+        _ingest(
+            project_env["base_path"], project_env["project_name"], _make_nmap_result()
+        )
+        stats = _make_rag_engine(
+            project_env["base_path"], project_env["project_name"]
+        ).get_stats()
         assert stats["total_documents"] > 0
         assert "nmap" in stats["by_tool"]
 
-    def test_failed_result_not_ingested(self, project_env: Dict) -> None:
+    def test_failed_result_not_ingested(self, project_env: dict) -> None:
         failed = ToolResult(
-            tool_name="nmap", success=False, output="denied",
-            parsed_data=None, output_files={},
-            timestamp=RAGEngine.now_iso(), duration_seconds=0.0,
+            tool_name="nmap",
+            success=False,
+            output="denied",
+            parsed_data=None,
+            output_files={},
+            timestamp=RAGEngine.now_iso(),
+            duration_seconds=0.0,
         )
         count = _ingest(project_env["base_path"], project_env["project_name"], failed)
         assert count == 0
 
-    def test_parse_error_result_not_ingested(self, project_env: Dict) -> None:
+    def test_parse_error_result_not_ingested(self, project_env: dict) -> None:
         errored = ToolResult(
-            tool_name="nmap", success=True, output="",
+            tool_name="nmap",
+            success=True,
+            output="",
             parsed_data={"error": "malformed XML"},
-            output_files={}, timestamp=RAGEngine.now_iso(), duration_seconds=0.0,
+            output_files={},
+            timestamp=RAGEngine.now_iso(),
+            duration_seconds=0.0,
         )
         count = _ingest(project_env["base_path"], project_env["project_name"], errored)
         assert count == 0
@@ -269,18 +333,26 @@ class TestIngestionUnit:
 # so timing of IDs is irrelevant and the behaviour is unambiguous.
 # ---------------------------------------------------------------------------
 
+
 @requires_ollama
 class TestDeleteFindings:
     def _add_docs(self, engine: RAGEngine, profile: str, ids: list[str]) -> None:
         ts = RAGEngine.now_iso()
         engine.add_documents(
             texts=[f"Host 1.2.3.4 ({profile})" for _ in ids],
-            metadatas=[{"tool": "nmap", "profile": profile, "finding_type": "host", "timestamp": ts}
-                       for _ in ids],
+            metadatas=[
+                {
+                    "tool": "nmap",
+                    "profile": profile,
+                    "finding_type": "host",
+                    "timestamp": ts,
+                }
+                for _ in ids
+            ],
             ids=ids,
         )
 
-    def test_delete_by_tool_and_profile(self, project_env: Dict) -> None:
+    def test_delete_by_tool_and_profile(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
         self._add_docs(engine, "localhost", ["doc-a", "doc-b"])
         assert engine.count_documents() == 2
@@ -290,7 +362,7 @@ class TestDeleteFindings:
         assert deleted == 2
         assert engine.count_documents() == 0
 
-    def test_delete_scoped_to_profile_leaves_others(self, project_env: Dict) -> None:
+    def test_delete_scoped_to_profile_leaves_others(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
         self._add_docs(engine, "profile-a", ["a-1"])
         self._add_docs(engine, "profile-b", ["b-1"])
@@ -301,7 +373,7 @@ class TestDeleteFindings:
         assert deleted == 1
         assert engine.count_documents() == 1
 
-    def test_delete_by_tool_only_removes_all_profiles(self, project_env: Dict) -> None:
+    def test_delete_by_tool_only_removes_all_profiles(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
         self._add_docs(engine, "profile-a", ["a-1"])
         self._add_docs(engine, "profile-b", ["b-1"])
@@ -312,7 +384,7 @@ class TestDeleteFindings:
         assert deleted == 2
         assert engine.count_documents() == 0
 
-    def test_delete_nonexistent_returns_zero(self, project_env: Dict) -> None:
+    def test_delete_nonexistent_returns_zero(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
         assert engine.count_documents() == 0
 
@@ -325,17 +397,22 @@ class TestDeleteFindings:
 # Scenario 5a – Search unit  (@requires_ollama, no nmap, not slow)
 # ---------------------------------------------------------------------------
 
+
 @requires_ollama
 class TestSearchUnit:
-    def test_search_empty_collection_returns_empty(self, project_env: Dict) -> None:
-        qe = QueryEngine(_make_rag_engine(project_env["base_path"], project_env["project_name"]))
+    def test_search_empty_collection_returns_empty(self, project_env: dict) -> None:
+        qe = QueryEngine(
+            _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        )
         assert qe.search("anything") == []
 
-    def test_search_blank_query_returns_empty(self, project_env: Dict) -> None:
-        qe = QueryEngine(_make_rag_engine(project_env["base_path"], project_env["project_name"]))
+    def test_search_blank_query_returns_empty(self, project_env: dict) -> None:
+        qe = QueryEngine(
+            _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        )
         assert qe.search("   ") == []
 
-    def test_search_results_have_required_keys(self, project_env: Dict) -> None:
+    def test_search_results_have_required_keys(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_nmap_result())
         results = QueryEngine(_make_rag_engine(base, name)).search("127.0.0.1")
@@ -345,7 +422,7 @@ class TestSearchUnit:
             assert "metadata" in r
             assert "distance" in r
 
-    def test_search_results_sorted_by_distance(self, project_env: Dict) -> None:
+    def test_search_results_sorted_by_distance(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_nmap_result())
         results = QueryEngine(_make_rag_engine(base, name)).search("host port open")
@@ -357,15 +434,20 @@ class TestSearchUnit:
 # Scenario 5b – Search e2e with real nmap  (@requires_nmap @requires_ollama @slow)
 # ---------------------------------------------------------------------------
 
+
 @requires_nmap
 @requires_ollama
 @slow
 class TestSearchE2E:
-    def test_search_returns_results_from_real_scan(self, nmap_project_env: Dict) -> None:
+    def test_search_returns_results_from_real_scan(
+        self, nmap_project_env: dict
+    ) -> None:
         base, name = nmap_project_env["base_path"], nmap_project_env["project_name"]
         result = _run_scan(base, name)
         _ingest(base, name, result)
-        results = QueryEngine(_make_rag_engine(base, name)).search("127.0.0.1", n_results=5)
+        results = QueryEngine(_make_rag_engine(base, name)).search(
+            "127.0.0.1", n_results=5
+        )
         assert len(results) > 0
 
 
@@ -373,22 +455,29 @@ class TestSearchE2E:
 # Scenario 6a – Chat unit  (@requires_ollama, no nmap, not slow)
 # ---------------------------------------------------------------------------
 
+
 @requires_ollama
 class TestChatUnit:
-    def test_chat_no_data_returns_informative_message(self, project_env: Dict) -> None:
-        qe = QueryEngine(_make_rag_engine(project_env["base_path"], project_env["project_name"]))
+    def test_chat_no_data_returns_informative_message(self, project_env: dict) -> None:
+        qe = QueryEngine(
+            _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        )
         response = qe.chat("what hosts were scanned?")
         assert isinstance(response, str)
         assert "No relevant findings" in response
 
-    def test_chat_blank_message_returns_prompt(self, project_env: Dict) -> None:
-        qe = QueryEngine(_make_rag_engine(project_env["base_path"], project_env["project_name"]))
+    def test_chat_blank_message_returns_prompt(self, project_env: dict) -> None:
+        qe = QueryEngine(
+            _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        )
         assert "Please provide a message" in qe.chat("   ")
 
-    def test_chat_with_data_returns_non_empty_string(self, project_env: Dict) -> None:
+    def test_chat_with_data_returns_non_empty_string(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_nmap_result())
-        response = QueryEngine(_make_rag_engine(base, name)).chat("what ports are open?")
+        response = QueryEngine(_make_rag_engine(base, name)).chat(
+            "what ports are open?"
+        )
         assert isinstance(response, str)
         assert len(response) > 0
 
@@ -397,15 +486,18 @@ class TestChatUnit:
 # Scenario 6b – Chat e2e with real nmap  (@requires_nmap @requires_ollama @slow)
 # ---------------------------------------------------------------------------
 
+
 @requires_nmap
 @requires_ollama
 @slow
 class TestChatE2E:
-    def test_chat_references_scan_data(self, nmap_project_env: Dict) -> None:
+    def test_chat_references_scan_data(self, nmap_project_env: dict) -> None:
         base, name = nmap_project_env["base_path"], nmap_project_env["project_name"]
         result = _run_scan(base, name)
         _ingest(base, name, result)
-        response = QueryEngine(_make_rag_engine(base, name)).chat("what hosts were scanned?")
+        response = QueryEngine(_make_rag_engine(base, name)).chat(
+            "what hosts were scanned?"
+        )
         assert isinstance(response, str)
         assert len(response) > 0
 
@@ -419,10 +511,11 @@ class TestChatE2E:
 # rather than upsert coincidentally matching identical IDs.
 # ---------------------------------------------------------------------------
 
+
 @requires_ollama
 @slow
 class TestUpsert:
-    def test_rescan_does_not_duplicate_documents(self, project_env: Dict) -> None:
+    def test_rescan_does_not_duplicate_documents(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
 
         count1 = _ingest(base, name, _make_nmap_result())
@@ -444,6 +537,7 @@ class TestUpsert:
 # Scenario 8 – Project isolation  (@requires_ollama)
 # ---------------------------------------------------------------------------
 
+
 @requires_ollama
 class TestProjectIsolation:
     def _make_two_projects(self, tmp_path: Path) -> None:
@@ -464,4 +558,7 @@ class TestProjectIsolation:
         self._make_two_projects(tmp_path)
         count = _ingest(tmp_path, "proj-a", _make_nmap_result())
         assert count >= 1
-        assert RAGEngine(project_name="proj-b", base_path=str(tmp_path)).count_documents() == 0
+        assert (
+            RAGEngine(project_name="proj-b", base_path=str(tmp_path)).count_documents()
+            == 0
+        )

@@ -1,7 +1,8 @@
 """Parser for npm audit JSON output (v1 and v2 formats)."""
+
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # npm severity → normalised label
 _SEVERITY_MAP = {
@@ -14,7 +15,7 @@ _SEVERITY_MAP = {
 }
 
 
-def parse_npm_audit_json(json_path: Path) -> Dict[str, Any]:
+def parse_npm_audit_json(json_path: Path) -> dict[str, Any]:
     """Parse an npm audit JSON output file into structured data."""
     try:
         with open(json_path, encoding="utf-8") as f:
@@ -24,7 +25,7 @@ def parse_npm_audit_json(json_path: Path) -> Dict[str, Any]:
     return _parse_npm_audit_data(data)
 
 
-def parse_npm_audit_json_string(json_string: str) -> Dict[str, Any]:
+def parse_npm_audit_json_string(json_string: str) -> dict[str, Any]:
     """Parse npm audit JSON from a raw string into structured data."""
     try:
         data = json.loads(json_string)
@@ -37,15 +38,16 @@ def parse_npm_audit_json_string(json_string: str) -> Dict[str, Any]:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _parse_npm_audit_data(data: Dict[str, Any]) -> Dict[str, Any]:
+
+def _parse_npm_audit_data(data: dict[str, Any]) -> dict[str, Any]:
     if data.get("auditReportVersion") == 2:
         return _parse_v2(data)
     return _parse_v1(data)
 
 
-def _parse_v2(data: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_v2(data: dict[str, Any]) -> dict[str, Any]:
     """Parse npm audit v2 format (npm 7+)."""
-    vulnerabilities: List[Dict[str, Any]] = []
+    vulnerabilities: list[dict[str, Any]] = []
 
     for pkg_name, vuln_info in data.get("vulnerabilities", {}).items():
         severity = _SEVERITY_MAP.get(vuln_info.get("severity", "").lower(), "low")
@@ -69,23 +71,25 @@ def _parse_v2(data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Fixed version from fixAvailable (may be bool or dict)
         fix_available = vuln_info.get("fixAvailable")
-        fixed_version: Optional[str] = None
+        fixed_version: str | None = None
         if isinstance(fix_available, dict):
             fixed_version = fix_available.get("version")
 
-        vulnerabilities.append({
-            "vulnerability_id": vuln_id or pkg_name,
-            "package_name": pkg_name,
-            "package_version": affected_range,
-            "affected_ecosystem": "npm",
-            "severity": severity,
-            "summary": summary or f"Vulnerability in {pkg_name} ({affected_range})",
-            "fixed_version": fixed_version,
-            "cvss_score": None,
-            "source_file": "",
-        })
+        vulnerabilities.append(
+            {
+                "vulnerability_id": vuln_id or pkg_name,
+                "package_name": pkg_name,
+                "package_version": affected_range,
+                "affected_ecosystem": "npm",
+                "severity": severity,
+                "summary": summary or f"Vulnerability in {pkg_name} ({affected_range})",
+                "fixed_version": fixed_version,
+                "cvss_score": None,
+                "source_file": "",
+            }
+        )
 
-    by_severity: Dict[str, int] = {}
+    by_severity: dict[str, int] = {}
     for v in vulnerabilities:
         sev = v["severity"]
         by_severity[sev] = by_severity.get(sev, 0) + 1
@@ -101,33 +105,35 @@ def _parse_v2(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _parse_v1(data: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_v1(data: dict[str, Any]) -> dict[str, Any]:
     """Parse npm audit v1 format (npm 6)."""
-    vulnerabilities: List[Dict[str, Any]] = []
+    vulnerabilities: list[dict[str, Any]] = []
 
     for advisory_id, advisory in data.get("advisories", {}).items():
         severity = _SEVERITY_MAP.get(advisory.get("severity", "").lower(), "low")
-        cves: List[str] = advisory.get("cves", [])
+        cves: list[str] = advisory.get("cves", [])
         vuln_id = cves[0] if cves else f"npm-advisory-{advisory_id}"
         pkg_name = advisory.get("module_name", "")
         patched = advisory.get("patched_versions", "")
-        fixed_version: Optional[str] = (
+        fixed_version: str | None = (
             patched if patched and patched not in ("<0.0.0", "*") else None
         )
 
-        vulnerabilities.append({
-            "vulnerability_id": vuln_id,
-            "package_name": pkg_name,
-            "package_version": advisory.get("vulnerable_versions", ""),
-            "affected_ecosystem": "npm",
-            "severity": severity,
-            "summary": advisory.get("title", ""),
-            "fixed_version": fixed_version,
-            "cvss_score": None,
-            "source_file": "",
-        })
+        vulnerabilities.append(
+            {
+                "vulnerability_id": vuln_id,
+                "package_name": pkg_name,
+                "package_version": advisory.get("vulnerable_versions", ""),
+                "affected_ecosystem": "npm",
+                "severity": severity,
+                "summary": advisory.get("title", ""),
+                "fixed_version": fixed_version,
+                "cvss_score": None,
+                "source_file": "",
+            }
+        )
 
-    by_severity: Dict[str, int] = {}
+    by_severity: dict[str, int] = {}
     for v in vulnerabilities:
         sev = v["severity"]
         by_severity[sev] = by_severity.get(sev, 0) + 1

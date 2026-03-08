@@ -1,8 +1,8 @@
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base import ToolResult, ToolWrapper
 
@@ -14,7 +14,7 @@ _METACHAR_CHARS = frozenset(";&|<>`$")
 DEFAULT_TIMEOUT = 300  # seconds
 
 
-def sanitize_command(cmd: List[str]) -> List[str]:
+def sanitize_command(cmd: list[str]) -> list[str]:
     """Raise ValueError if any token in *cmd* looks like a shell injection attempt."""
     for token in cmd:
         if token in _METACHAR_TOKENS:
@@ -42,10 +42,10 @@ class ToolExecutor:
     def execute(
         self,
         tool: ToolWrapper,
-        auto_approve: Optional[bool] = None,
+        auto_approve: bool | None = None,
         timeout: int = DEFAULT_TIMEOUT,
         label: str = "output",
-        cwd: Optional[str] = None,
+        cwd: str | None = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, capture, and return a ToolResult.
@@ -83,7 +83,7 @@ class ToolExecutor:
         # 4. Run
         print(f"Running {tool.name}...")
         output_dir = self._ensure_output_dir(tool.name)
-        ts_file = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
+        ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
 
         start = perf_counter()
         try:
@@ -117,7 +117,7 @@ class ToolExecutor:
         success = proc.returncode == 0
 
         # 5. Persist stdout / stderr to disk
-        output_files: Dict[str, Path] = {}
+        output_files: dict[str, Path] = {}
         if proc.stdout:
             path = output_dir / f"{label}_{ts_file}.stdout"
             path.write_text(proc.stdout, encoding="utf-8")
@@ -133,7 +133,7 @@ class ToolExecutor:
             combined = (combined + "\n" + proc.stderr).strip()
 
         # 6. Parse output (failures are silently swallowed — parsed_data stays None)
-        parsed: Optional[Dict[str, Any]] = None
+        parsed: dict[str, Any] | None = None
         try:
             parsed = tool.parse_output(combined, output_files)
         except Exception:
@@ -158,17 +158,13 @@ class ToolExecutor:
 
     def _ensure_output_dir(self, tool_name: str) -> Path:
         path = (
-            self.base_path
-            / "projects"
-            / self.project_name
-            / "tool_outputs"
-            / tool_name
+            self.base_path / "projects" / self.project_name / "tool_outputs" / tool_name
         )
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     @staticmethod
-    def _prompt_approval(tool_name: str, cmd: List[str]) -> bool:
+    def _prompt_approval(tool_name: str, cmd: list[str]) -> bool:
         print()
         print("!!HUMAN APPROVAL REQUIRED!!")
         print(f"Tool:    {tool_name}")

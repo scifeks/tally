@@ -6,9 +6,10 @@ targets a temp path inside the container and falls back to parsing stdout
 (ZAP's progress output) for any structured data.  This is a known limitation:
 structured JSON report data is unavailable without a shared volume.
 """
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import DockerToolWrapper
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string
@@ -17,7 +18,7 @@ from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string
 class DockerZAPWrapper(DockerToolWrapper):
     def __init__(self, config) -> None:
         super().__init__(config)
-        self._container_report_path: Optional[str] = None
+        self._container_report_path: str | None = None
 
     @property
     def name(self) -> str:
@@ -36,10 +37,10 @@ class DockerZAPWrapper(DockerToolWrapper):
         return "OWASP ZAP dynamic web application security scanner"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for ZAP quick-scan.
 
         Keyword Args:
@@ -47,23 +48,25 @@ class DockerZAPWrapper(DockerToolWrapper):
             endpoints (Dict): Endpoint map (informational only in quick-scan mode).
             output_file (str): Ignored for docker — report is written inside container.
         """
-        base_url: Optional[str] = kwargs.get("base_url")
+        base_url: str | None = kwargs.get("base_url")
         if not base_url:
             raise ValueError("base_url is required for ZAP")
 
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         report_path = f"/tmp/tally_zap_{ts}.json"
         self._container_report_path = report_path
 
         tool_args = [
             "-cmd",
-            "-quickurl", base_url,
+            "-quickurl",
+            base_url,
             "-quickprogress",
-            "-quickout", report_path,
+            "-quickout",
+            report_path,
         ]
         return self._build_docker_exec(tool_args)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse ZAP output from stdout.
 
         The report file is written inside the container and cannot be read from

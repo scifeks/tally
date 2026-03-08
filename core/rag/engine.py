@@ -1,10 +1,11 @@
 """RAG engine foundation using ChromaDB for project-isolated vector storage."""
+
 import logging
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import chromadb
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
@@ -30,7 +31,7 @@ def verify_ollama_available(base_url: str) -> bool:
         return False
 
 
-def get_ollama_models(base_url: str) -> List[str]:
+def get_ollama_models(base_url: str) -> list[str]:
     """List models available in Ollama.
 
     Args:
@@ -70,17 +71,18 @@ class RAGEngine:
         self,
         project_name: str,
         base_path: str = ".",
-        llm_model: Optional[str] = None,
-        embedding_model: Optional[str] = None,
-        ollama_base_url: Optional[str] = None,
+        llm_model: str | None = None,
+        embedding_model: str | None = None,
+        ollama_base_url: str | None = None,
     ) -> None:
         """Initialise the RAG engine for a specific project.
 
         Args:
-            project_name:    Identifier for the current engagement project.
-            base_path:       Application root directory (contains projects/).
-            llm_model:       Ollama chat model override; falls back to global config.
-            embedding_model: Ollama embedding model override; falls back to global config.
+            project_name: Identifier for the current engagement project.
+            base_path: Application root directory (contains projects/).
+            llm_model: Ollama chat model override; falls back to global config.
+            embedding_model: Ollama embedding model override; falls back to global
+                config.
             ollama_base_url: Ollama API URL override; falls back to global config.
 
         Raises:
@@ -116,8 +118,8 @@ class RAGEngine:
 
         self._collection_name = f"findings_{project_name}"
 
-        self._client: Optional[chromadb.PersistentClient] = None
-        self._collection: Optional[chromadb.Collection] = None
+        self._client: chromadb.PersistentClient | None = None  # type: ignore[type-arg]
+        self._collection: chromadb.Collection | None = None
 
         self._init_chromadb()
 
@@ -137,9 +139,12 @@ class RAGEngine:
         try:
             self._client = chromadb.PersistentClient(path=str(self._chroma_path))
         except Exception as exc:
-            logger.error("Failed to create ChromaDB client at %s: %s", self._chroma_path, exc)
+            logger.error(
+                "Failed to create ChromaDB client at %s: %s", self._chroma_path, exc
+            )
             raise RuntimeError(
-                f"ChromaDB initialisation failed for project '{self.project_name}': {exc}"
+                "ChromaDB initialisation failed for project"
+                f" '{self.project_name}': {exc}"
             ) from exc
 
         self._collection = self.get_or_create_collection()
@@ -189,10 +194,16 @@ class RAGEngine:
                 embedding_function=embedding_fn,
                 metadata={"project": self.project_name, "hnsw:space": "cosine"},
             )
-            logger.debug("Collection '%s' ready (%d docs)", self._collection_name, collection.count())
+            logger.debug(
+                "Collection '%s' ready (%d docs)",
+                self._collection_name,
+                collection.count(),
+            )
             return collection
         except Exception as exc:
-            logger.error("Failed to get/create collection '%s': %s", self._collection_name, exc)
+            logger.error(
+                "Failed to get/create collection '%s': %s", self._collection_name, exc
+            )
             raise RuntimeError(
                 f"Could not create ChromaDB collection '{self._collection_name}': {exc}"
             ) from exc
@@ -211,7 +222,7 @@ class RAGEngine:
             logger.warning("count_documents failed: %s", exc)
             return 0
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Return statistics for the project's vector store.
 
         Returns:
@@ -221,7 +232,7 @@ class RAGEngine:
                 - by_severity (Dict[str, int]) – counts by severity level
                 - last_updated (Optional[str]) – ISO timestamp of the most recent doc
         """
-        stats: Dict[str, Any] = {
+        stats: dict[str, Any] = {
             "total_documents": 0,
             "by_tool": {},
             "by_severity": {},
@@ -239,11 +250,11 @@ class RAGEngine:
 
         try:
             result = self._collection.get(include=["metadatas"])
-            metadatas: List[Dict[str, Any]] = result.get("metadatas") or []
+            metadatas: list[dict[str, Any]] = result.get("metadatas") or []  # type: ignore[assignment]
 
-            by_tool: Dict[str, int] = {}
-            by_severity: Dict[str, int] = {}
-            latest_ts: Optional[str] = None
+            by_tool: dict[str, int] = {}
+            by_severity: dict[str, int] = {}
+            latest_ts: str | None = None
 
             for meta in metadatas:
                 tool = meta.get("tool", "unknown")
@@ -271,8 +282,8 @@ class RAGEngine:
 
     def delete_findings(
         self,
-        tool: Optional[str] = None,
-        profile: Optional[str] = None,
+        tool: str | None = None,
+        profile: str | None = None,
     ) -> int:
         """Delete stored findings, optionally filtered by tool and/or profile.
 
@@ -297,30 +308,32 @@ class RAGEngine:
             return 0
 
         if tool is not None and profile is not None:
-            where: Dict[str, Any] = {"$and": [{"tool": tool}, {"profile": profile}]}
+            where: dict[str, Any] = {"$and": [{"tool": tool}, {"profile": profile}]}
         elif tool is not None:
             where = {"tool": tool}
         else:
             where = {}
 
         try:
-            kwargs: Dict[str, Any] = {"include": []}
+            kwargs: dict[str, Any] = {"include": []}
             if where:
                 kwargs["where"] = where
             result = self._collection.get(**kwargs)
-            ids: List[str] = result.get("ids") or []
+            ids: list[str] = result.get("ids") or []
             if ids:
                 self._collection.delete(ids=ids)
             return len(ids)
         except Exception as exc:
-            logger.warning("delete_findings failed (tool=%s profile=%s): %s", tool, profile, exc)
+            logger.warning(
+                "delete_findings failed (tool=%s profile=%s): %s", tool, profile, exc
+            )
             return 0
 
     def add_documents(
         self,
-        texts: List[str],
-        metadatas: List[Dict[str, Any]],
-        ids: List[str],
+        texts: list[str],
+        metadatas: list[dict[str, Any]],
+        ids: list[str],
     ) -> None:
         """Upsert documents into the project's collection.
 
@@ -340,8 +353,10 @@ class RAGEngine:
             raise RuntimeError("ChromaDB collection is not initialised")
 
         try:
-            self._collection.upsert(documents=texts, metadatas=metadatas, ids=ids)
-            logger.debug("Upserted %d documents into '%s'", len(ids), self._collection_name)
+            self._collection.upsert(documents=texts, metadatas=metadatas, ids=ids)  # type: ignore[arg-type]
+            logger.debug(
+                "Upserted %d documents into '%s'", len(ids), self._collection_name
+            )
         except Exception as exc:
             logger.error("add_documents failed: %s", exc)
             raise RuntimeError(f"Failed to add documents to collection: {exc}") from exc
@@ -349,7 +364,7 @@ class RAGEngine:
     @staticmethod
     def now_iso() -> str:
         """Return the current UTC time as an ISO-8601 string."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     @property
     def collection_name(self) -> str:

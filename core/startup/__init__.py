@@ -1,3 +1,3 @@
-from .checker import DependencyChecker, DepCheck, CheckResult
+from .checker import CheckResult, DepCheck, DependencyChecker
 
 __all__ = ["DependencyChecker", "DepCheck", "CheckResult"]

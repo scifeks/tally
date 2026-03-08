@@ -1,35 +1,42 @@
 """Interactive REPL shell for tally web app pentesting."""
+
 import shlex
 from pathlib import Path
-from typing import Optional
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich import box
 
 from core.config import ConfigManager
 from core.project import ProjectManager
-from core.repl.commands import KnowledgeCommands, ProjectCommands, PurgeCommand, ReportCommand, ScanCommands, ToolCommands
-from core.tools.registry import print_discovery_summary, tool_registry
+from core.repl.commands import (
+    KnowledgeCommands,
+    ProjectCommands,
+    PurgeCommand,
+    ReportCommand,
+    ScanCommands,
+    ToolCommands,
+)
+from core.tools.registry import print_discovery_summary
 
-_VERSION = '1.0'
+_VERSION = "1.0"
 
 # Custom box: vertical edge/divider lines with a header separator only.
 # Each line = 4 chars: left-edge, fill, column-divider, right-edge.
 _HELP_BOX = box.Box(
-    "┌─┬┐\n"   # top border
-    "│ ││\n"   # head row chars
-    "├─┼┤\n"   # head/data separator
-    "│ ││\n"   # data row chars
-    "│ ││\n"   # row separator (show_lines=True only)
-    "├─┼┤\n"   # foot separator
-    "│ ││\n"   # foot row chars
-    "└─┴┘\n"   # bottom border
+    "┌─┬┐\n"  # top border
+    "│ ││\n"  # head row chars
+    "├─┼┤\n"  # head/data separator
+    "│ ││\n"  # data row chars
+    "│ ││\n"  # row separator (show_lines=True only)
+    "├─┼┤\n"  # foot separator
+    "│ ││\n"  # foot row chars
+    "└─┴┘\n"  # bottom border
 )
 
 # ---------------------------------------------------------------------------
@@ -39,54 +46,66 @@ _HELP_BOX = box.Box(
 # ---------------------------------------------------------------------------
 _HELP_REGISTRY = [
     # Project Management
-    ('project',   None,                                  'Project Management'),
-    ('project',   'project add',                         'Create a new project (interactive)'),
-    ('project',   'project switch <name>',               'Switch the active project'),
-    ('project',   'project list',                        'List all projects'),
-    ('project',   'project info',                        'Show active project details'),
+    ("project", None, "Project Management"),
+    ("project", "project add", "Create a new project (interactive)"),
+    ("project", "project switch <name>", "Switch the active project"),
+    ("project", "project list", "List all projects"),
+    ("project", "project info", "Show active project details"),
     # Repo Management
-    ('repo',      None,                                  'Repo Management'),
-    ('repo',      'repo add',                            'Add a repository to the active project'),
-    ('repo',      'repo delete <name>',                  "Delete a repository's config"),
-    ('repo',      'repo edit <name>',                    "Edit a repository's config"),
-    ('repo',      'repo list',                           'List configured repositories'),
+    ("repo", None, "Repo Management"),
+    ("repo", "repo add", "Add a repository to the active project"),
+    ("repo", "repo delete <name>", "Delete a repository's config"),
+    ("repo", "repo edit <name>", "Edit a repository's config"),
+    ("repo", "repo list", "List configured repositories"),
     # Scanning
-    ('scan',      None,                                  'Scanning'),
-    ('scan',      '',                                    '[dim]All commands accept --timeout <seconds>[/dim]'),
-    ('scan',      'scan',                                'Run all tools across the active project'),
-    ('scan',      'scan <tool>',                         'Run a specific tool against the active project'),
-    ('scan',      'scan repo',                           'Run language-appropriate tools on a selected repository'),
-    ('scan',      'scan repo <tool>',                    'Run a specific tool against all repositories'),
-    ('scan',      'run <tool> [args...]',                'Execute a tool with raw arguments'),
+    ("scan", None, "Scanning"),
+    ("scan", "", "[dim]All commands accept --timeout <seconds>[/dim]"),
+    ("scan", "scan", "Run all tools across the active project"),
+    ("scan", "scan <tool>", "Run a specific tool against the active project"),
+    ("scan", "scan repo", "Run language-appropriate tools on a selected repository"),
+    ("scan", "scan repo <tool>", "Run a specific tool against all repositories"),
+    ("scan", "run <tool> [args...]", "Execute a tool with raw arguments"),
     # Tools
-    ('tool',      None,                                  'Tools'),
-    ('tool',      'tool add',                            'Add a tool to the active configuration'),
-    ('tool',      'tool edit <name>',                    'Edit a configured tool interactively'),
-    ('tool',      'tool remove <name>',                  'Remove a tool from the configuration'),
-    ('tool',      'tool list',                           'List all configured tools and their status'),
+    ("tool", None, "Tools"),
+    ("tool", "tool add", "Add a tool to the active configuration"),
+    ("tool", "tool edit <name>", "Edit a configured tool interactively"),
+    ("tool", "tool remove <name>", "Remove a tool from the configuration"),
+    ("tool", "tool list", "List all configured tools and their status"),
     # Knowledge Base
-    ('knowledge', None,                                  'Knowledge Base'),
-    ('knowledge', 'search <query>',                      'Semantic search over ingested findings'),
-    ('knowledge', 'chat <message>',                      'RAG-augmented chat with the LLM'),
-    ('knowledge', 'stats',                               'Show knowledge base statistics'),
-    ('knowledge', 'purge [--tool <t>] [--profile <p>]', 'Delete findings from the knowledge base'),
+    ("knowledge", None, "Knowledge Base"),
+    ("knowledge", "search <query>", "Semantic search over ingested findings"),
+    ("knowledge", "chat <message>", "RAG-augmented chat with the LLM"),
+    ("knowledge", "stats", "Show knowledge base statistics"),
+    (
+        "knowledge",
+        "purge [--tool <t>] [--profile <p>]",
+        "Delete findings from the knowledge base",
+    ),
     # Reporting
-    ('reporting', None,                                  'Reporting'),
-    ('reporting', 'report',                              'Generate findings report'),
+    ("reporting", None, "Reporting"),
+    ("reporting", "report", "Generate findings report"),
     # Utility
-    ('utility',   None,                                  'Utility'),
-    ('utility',   'help',                                'Show this help table'),
-    ('utility',   'clear',                               'Clear the screen'),
-    ('utility',   'exit / quit',                         'Exit tally'),
+    ("utility", None, "Utility"),
+    ("utility", "help", "Show this help table"),
+    ("utility", "clear", "Clear the screen"),
+    ("utility", "exit / quit", "Exit tally"),
 ]
 
 _COMPLETIONS = [
-    'help', 'exit', 'quit', 'clear',
-    'project', 'repo',
-    'scan', 'run',
-    'tool',
-    'search', 'chat', 'stats', 'purge',
-    'report',
+    "help",
+    "exit",
+    "quit",
+    "clear",
+    "project",
+    "repo",
+    "scan",
+    "run",
+    "tool",
+    "search",
+    "chat",
+    "stats",
+    "purge",
+    "report",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -95,12 +114,12 @@ _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
 class REPL:
     """Interactive REPL shell with Rich UI and prompt_toolkit input."""
 
-    def __init__(self, base_path: str = '.'):
+    def __init__(self, base_path: str = "."):
         self.base_path = base_path
         self.console = Console()
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
-        self.active_project: Optional[str] = None
+        self.active_project: str | None = None
         self.project_commands = ProjectCommands(self)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
@@ -117,7 +136,7 @@ class REPL:
         self._print_banner()
         print_discovery_summary(self.console)
 
-        history_path = Path.home() / '.tally-repl-history'
+        history_path = Path.home() / ".tally-repl-history"
         session: PromptSession = PromptSession(
             history=FileHistory(str(history_path)),
             completer=WordCompleter(_TOP_TOKENS, ignore_case=True),
@@ -140,7 +159,7 @@ class REPL:
             try:
                 tokens = shlex.split(raw)
             except ValueError as exc:
-                self.console.print(f'[red]Parse error:[/red] {exc}')
+                self.console.print(f"[red]Parse error:[/red] {exc}")
                 continue
 
             cmd, args = tokens[0].lower(), tokens[1:]
@@ -149,7 +168,7 @@ class REPL:
             except EOFError:
                 break
 
-        self.console.print('Goodbye!')
+        self.console.print("Goodbye!")
 
     # ------------------------------------------------------------------
     # Command dispatch
@@ -161,20 +180,20 @@ class REPL:
         kc = self.knowledge_commands
         tc = self.tool_commands
         handlers = {
-            'help':    self._cmd_help,
-            'clear':   self._cmd_clear,
-            'exit':    self._cmd_exit,
-            'quit':    self._cmd_exit,
-            'project': pc.cmd_project,
-            'repo':    pc.cmd_repo,
-            'scan':    sc.cmd_scan,
-            'run':     sc.cmd_run,
-            'tool':    tc.cmd_tool,
-            'search':  kc.cmd_search,
-            'chat':    kc.cmd_chat,
-            'stats':   kc.cmd_stats,
-            'purge':   self.purge_commands.cmd_purge,
-            'report':  self.report_commands.execute,
+            "help": self._cmd_help,
+            "clear": self._cmd_clear,
+            "exit": self._cmd_exit,
+            "quit": self._cmd_exit,
+            "project": pc.cmd_project,
+            "repo": pc.cmd_repo,
+            "scan": sc.cmd_scan,
+            "run": sc.cmd_run,
+            "tool": tc.cmd_tool,
+            "search": kc.cmd_search,
+            "chat": kc.cmd_chat,
+            "stats": kc.cmd_stats,
+            "purge": self.purge_commands.cmd_purge,
+            "report": self.report_commands.execute,
         }
         handler = handlers.get(cmd)
         if handler is None:
@@ -188,7 +207,7 @@ class REPL:
         except EOFError:
             raise
         except Exception as exc:
-            self.console.print(f'[red]Error:[/red] {exc}')
+            self.console.print(f"[red]Error:[/red] {exc}")
 
     # ------------------------------------------------------------------
     # Implemented commands
@@ -201,23 +220,25 @@ class REPL:
         """Render a help table filtered to a single group (e.g. 'project', 'repo')."""
         self.console.print(self._build_help_table(group=group))
 
-    def _build_help_table(self, group: str = None) -> Table:
-        """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered by group."""
+    def _build_help_table(self, group: str | None = None) -> Table:
+        """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered
+        by group.
+        """
         table = Table(
             show_header=True,
-            header_style='bold',
+            header_style="bold",
             box=_HELP_BOX,
             padding=(0, 1),
         )
-        table.add_column('Command', style='cyan', no_wrap=True, min_width=26)
-        table.add_column('Description', style='white')
+        table.add_column("Command", style="cyan", no_wrap=True, min_width=26)
+        table.add_column("Description", style="white")
 
         for entry_group, command, description in _HELP_REGISTRY:
             if group is not None and entry_group != group:
                 continue
             if command is None:
                 # Section header row
-                table.add_row(f'[bold yellow]{description}[/bold yellow]', '')
+                table.add_row(f"[bold yellow]{description}[/bold yellow]", "")
             else:
                 table.add_row(command, description)
 
@@ -235,26 +256,28 @@ class REPL:
 
     def _print_banner(self) -> None:
         if self.active_project:
-            project_line = f'Active Project: [green]{self.active_project}[/green]'
+            project_line = f"Active Project: [green]{self.active_project}[/green]"
         else:
-            project_line = 'Active Project: [dim]No active project[/dim]'
+            project_line = "Active Project: [dim]No active project[/dim]"
 
         content = (
-            f'[cyan]Tally Web App Pentesting REPL v{_VERSION}[/cyan]\n'
-            'LlamaIndex + Chroma + Ollama\n'
-            f'{project_line}'
+            f"[cyan]Tally Web App Pentesting REPL v{_VERSION}[/cyan]\n"
+            "LlamaIndex + Chroma + Ollama\n"
+            f"{project_line}"
         )
-        self.console.print(
-            Panel(content, title='[cyan]Welcome[/cyan]', expand=False)
-        )
+        self.console.print(Panel(content, title="[cyan]Welcome[/cyan]", expand=False))
 
     def _get_prompt(self) -> FormattedText:
         if self.active_project:
-            return FormattedText([
-                ('ansigreen', f'[{self.active_project}]'),
-                ('', '> '),
-            ])
-        return FormattedText([
-            ('ansigray', '[no-project]'),
-            ('', '> '),
-        ])
+            return FormattedText(
+                [
+                    ("ansigreen", f"[{self.active_project}]"),
+                    ("", "> "),
+                ]
+            )
+        return FormattedText(
+            [
+                ("ansigray", "[no-project]"),
+                ("", "> "),
+            ]
+        )

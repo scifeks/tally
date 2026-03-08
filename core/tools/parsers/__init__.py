@@ -1,4 +1,7 @@
-from .composer_audit_parser import parse_composer_audit_json, parse_composer_audit_json_string
+from .composer_audit_parser import (
+    parse_composer_audit_json,
+    parse_composer_audit_json_string,
+)
 from .gitleaks_parser import parse_gitleaks_json, parse_gitleaks_json_string
 from .nmap_parser import parse_nmap_xml, parse_nmap_xml_string
 from .npm_audit_parser import parse_npm_audit_json, parse_npm_audit_json_string

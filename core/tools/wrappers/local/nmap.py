@@ -1,6 +1,6 @@
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ...base import ToolWrapper
 from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
@@ -31,13 +31,13 @@ class NmapWrapper(ToolWrapper):
         return "Network mapper for host discovery and port scanning"
 
     @property
-    def supported_languages(self) -> Optional[List[str]]:
+    def supported_languages(self) -> list[str] | None:
         return None
 
     def check_available(self) -> bool:
         return shutil.which("nmap") is not None
 
-    def build_command(self, **kwargs) -> List[str]:
+    def build_command(self, **kwargs) -> list[str]:
         """Build the nmap argv list.
 
         Keyword Args:
@@ -47,10 +47,10 @@ class NmapWrapper(ToolWrapper):
             project_name (str): Required when using *profile*.
             base_path (str|Path): App base path for ConfigManager (default ".").
         """
-        profile: Optional[str] = kwargs.get("profile")
-        hosts: Optional[List[str]] = kwargs.get("hosts")
+        profile: str | None = kwargs.get("profile")
+        hosts: list[str] | None = kwargs.get("hosts")
         args: str = kwargs.get("args", "")
-        project_name: Optional[str] = kwargs.get("project_name")
+        project_name: str | None = kwargs.get("project_name")
         base_path = kwargs.get("base_path", ".")
 
         if profile is not None:
@@ -85,7 +85,7 @@ class NmapWrapper(ToolWrapper):
         # -oX - writes XML to stdout so the executor can capture and save it
         return ["nmap"] + (args.split() if args else []) + ["-oX", "-"] + list(hosts)
 
-    def parse_output(self, output: str, files: Dict[str, Path]) -> Dict[str, Any]:
+    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse nmap XML output into structured data.
 
         Prefers the saved stdout file; falls back to parsing the output string.
