@@ -36,6 +36,8 @@ quote-style = "double"
 [tool.pyright]
 typeCheckingMode = "basic"
 pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

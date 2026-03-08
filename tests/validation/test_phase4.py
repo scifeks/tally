@@ -142,6 +142,7 @@ def _run_scan(
     base_path: Path, project_name: str, profile: str = "localhost"
 ) -> ToolResult:
     tool = tool_registry.get_tool("nmap")
+    assert tool is not None
     executor = ToolExecutor(
         project_name=project_name, base_path=base_path, auto_approve=True
     )

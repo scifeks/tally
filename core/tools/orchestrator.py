@@ -460,7 +460,7 @@ class ScanOrchestrator:
 
         total = 0
         try:
-            ingestor = FindingIngestor(self.rag_engine, self.project_name)
+            ingestor = FindingIngestor(self.rag_engine, self.project_name)  # type: ignore[arg-type]
             for result in results:
                 if (
                     result.success

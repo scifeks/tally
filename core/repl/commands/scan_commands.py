@@ -20,6 +20,7 @@ def _ingest_result(repl: REPL, result: ToolResult, profile: str | None = None) -
     """Ingest a ToolResult into the project's RAG store. Returns document count."""
     from core.rag import FindingIngestor, RAGEngine
 
+    assert repl.active_project is not None
     try:
         rag_engine = RAGEngine(
             project_name=repl.active_project,
@@ -236,7 +237,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("nmap")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -326,7 +329,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("semgrep")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -420,7 +425,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("osv-scanner")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -644,7 +651,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("pip-audit")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -737,7 +746,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("npm-audit")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -836,7 +847,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("composer-audit")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -935,7 +948,9 @@ class ScanCommands:
         Prompts once for approval (unless auto_approve), then runs both scan
         types with auto_approve=True so the executor does not prompt twice.
         """
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("gitleaks")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -1162,7 +1177,9 @@ class ScanCommands:
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool("zap")
+        assert tool is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
@@ -1370,6 +1387,7 @@ class ScanCommands:
         from core.tools.executor import ToolExecutor
         from core.tools.orchestrator import ScanOrchestrator
 
+        assert self.repl.active_project is not None
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),

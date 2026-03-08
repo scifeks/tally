@@ -108,7 +108,7 @@ class PurgeCommand:
             return rag_engine.count_documents()
 
         try:
-            result = rag_engine._collection.get(where=where, include=[])
+            result = rag_engine._collection.get(where=where, include=[])  # type: ignore[arg-type]
             return len(result.get("ids") or [])
         except Exception:
             return 0
@@ -117,6 +117,7 @@ class PurgeCommand:
         """Create and return a RAGEngine for the active project, or None on error."""
         from core.rag import RAGEngine
 
+        assert self.repl.active_project is not None
         try:
             return RAGEngine(
                 project_name=self.repl.active_project,

@@ -149,7 +149,7 @@ class FindingIngestor:
         Returns:
             List of ``(document_text, metadata, id)`` tuples.
         """
-        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         hosts: list[dict[str, Any]] = parsed.get("hosts", [])
 
         timestamp = tool_result.timestamp
@@ -231,7 +231,7 @@ class FindingIngestor:
         Returns:
             List of ``(document_text, metadata, id)`` tuples.
         """
-        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         findings: list[dict[str, Any]] = parsed.get("findings", [])
 
         timestamp = tool_result.timestamp
@@ -302,7 +302,7 @@ class FindingIngestor:
             List of ``(document_text, metadata, id)`` tuples.
         """
         tool = tool_result.tool_name
-        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         vulnerabilities: list[dict[str, Any]] = parsed.get("vulnerabilities", [])
 
         timestamp = tool_result.timestamp
@@ -376,7 +376,7 @@ class FindingIngestor:
         Returns:
             List of ``(document_text, metadata, id)`` tuples.
         """
-        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         secrets: list[dict[str, Any]] = parsed.get("secrets", [])
 
         timestamp = tool_result.timestamp
@@ -441,7 +441,7 @@ class FindingIngestor:
         Returns:
             List of ``(document_text, metadata, id)`` tuples.
         """
-        parsed = tool_result.parsed_data  # type: ignore[union-attr]
+        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         alerts: list[dict[str, Any]] = parsed.get("alerts", [])
 
         timestamp = tool_result.timestamp

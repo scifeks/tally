@@ -220,7 +220,7 @@ class REPL:
         """Render a help table filtered to a single group (e.g. 'project', 'repo')."""
         self.console.print(self._build_help_table(group=group))
 
-    def _build_help_table(self, group: str = None) -> Table:
+    def _build_help_table(self, group: str | None = None) -> Table:
         """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered
         by group.
         """

@@ -3,6 +3,7 @@ import inspect
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, ToolWrapper] = {}
-        self._configs: dict[str, object] = {}  # CommandEntry per tool
+        self._configs: dict[str, Any] = {}  # CommandEntry per tool
 
     def register(self, tool: ToolWrapper, config=None) -> None:
         self._tools[tool.name] = tool
@@ -140,7 +141,7 @@ def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
                 and obj.__module__ == module_name
             ):
                 try:
-                    tool_registry.register(obj(config=entry), config=entry)
+                    tool_registry.register(obj(config=entry), config=entry)  # type: ignore[call-arg]
                 except Exception as exc:
                     logger.warning(
                         "Skipping %r: instantiation failed — %s", tool_name, exc

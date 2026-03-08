@@ -150,7 +150,7 @@ class QueryEngine:
                 else response["message"]
             )
             content = msg.content if hasattr(msg, "content") else msg["content"]
-            return content
+            return content or ""
         except Exception as exc:
             logger.error("LLM chat failed: %s", exc)
             return f"LLM error: {exc}"

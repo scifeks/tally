@@ -118,7 +118,7 @@ class RAGEngine:
 
         self._collection_name = f"findings_{project_name}"
 
-        self._client: chromadb.PersistentClient | None = None
+        self._client: chromadb.PersistentClient | None = None  # type: ignore[type-arg]
         self._collection: chromadb.Collection | None = None
 
         self._init_chromadb()
@@ -250,7 +250,7 @@ class RAGEngine:
 
         try:
             result = self._collection.get(include=["metadatas"])
-            metadatas: list[dict[str, Any]] = result.get("metadatas") or []
+            metadatas: list[dict[str, Any]] = result.get("metadatas") or []  # type: ignore[assignment]
 
             by_tool: dict[str, int] = {}
             by_severity: dict[str, int] = {}
@@ -353,7 +353,7 @@ class RAGEngine:
             raise RuntimeError("ChromaDB collection is not initialised")
 
         try:
-            self._collection.upsert(documents=texts, metadatas=metadatas, ids=ids)
+            self._collection.upsert(documents=texts, metadatas=metadatas, ids=ids)  # type: ignore[arg-type]
             logger.debug(
                 "Upserted %d documents into '%s'", len(ids), self._collection_name
             )
