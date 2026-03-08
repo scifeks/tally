@@ -1,4 +1,4 @@
-"""Interactive REPL shell for tally web app pentesting."""
+"""Interactive REPL shell for tally web app security auditing."""
 
 import shlex
 from pathlib import Path
@@ -268,7 +268,7 @@ class REPL:
             project_line = "Active Project: [dim]No active project[/dim]"
 
         content = (
-            f"[cyan]Tally Web App Pentesting REPL v{_VERSION}[/cyan]\n"
+            f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
             "LlamaIndex + Chroma + Ollama\n"
             f"{project_line}"
         )

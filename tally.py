@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Main entry point for tally pentesting REPL."""
+"""Main entry point for tally security auditing REPL."""
 
 import argparse
 import sys
@@ -13,7 +13,7 @@ from core.tools.registry import discover_tools
 _BASE_PATH = "."
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Tally pentesting REPL")
+    parser = argparse.ArgumentParser(description="Tally security auditing REPL")
     parser.add_argument(
         "--skip-checks",
         action="store_true",
