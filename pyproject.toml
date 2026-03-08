@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tally"
+version = "0.1.0"
+description = "CLI REPL for orchestrating web application penetration testing"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0.0",
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
+    "chromadb>=0.4.0",
+    "ollama>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pyright",
+    "pytest>=7.0.0",
+    "pytest-timeout>=2.0.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+pythonVersion = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow-running (nmap scans)",
+    "requires_nmap: marks tests that need nmap installed",
+    "requires_ollama: marks tests that need Ollama running",
+]
