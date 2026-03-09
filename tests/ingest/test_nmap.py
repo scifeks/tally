@@ -137,6 +137,11 @@ def no_ports_parsed_data() -> dict:
     return _parse_fixture("nmap_no_open_ports.xml")
 
 
+@pytest.fixture()
+def scripts_parsed_data() -> dict:
+    return _parse_fixture("nmap_with_scripts.xml")
+
+
 # ---------------------------------------------------------------------------
 # Parser unit tests  (no binary, no Ollama, no ChromaDB)
 # ---------------------------------------------------------------------------
@@ -168,7 +173,7 @@ class TestNmapParser:
         assert len(host["ports"]) == 1
         port = host["ports"][0]
         assert port["port"] == 22
-        assert port["protocol"] == "tcp"
+        assert port["transport"] == "tcp"
         assert port["state"] == "open"
         assert port["service"] == "ssh"
 
@@ -193,7 +198,7 @@ class TestNmapParser:
         </nmaprun>"""
         parsed = parse_nmap_xml_string(xml)
         port = parsed["hosts"][0]["ports"][0]
-        assert port["version"] == "nginx 1.29.5"
+        assert port["service_version"] == "nginx 1.29.5"
 
     def test_version_empty_when_no_service_element(self) -> None:
         xml = """<?xml version="1.0"?>
@@ -211,7 +216,7 @@ class TestNmapParser:
         </nmaprun>"""
         parsed = parse_nmap_xml_string(xml)
         port = parsed["hosts"][0]["ports"][0]
-        assert port["version"] == ""
+        assert port["service_version"] == ""
         assert port["service"] == ""
 
     def test_hostname_falls_back_to_empty(self) -> None:
@@ -227,8 +232,8 @@ class TestNmapParser:
         parsed = parse_nmap_xml_string(xml)
         assert parsed["hosts"][0]["hostname"] == ""
 
-    def test_script_elements_ignored(self) -> None:
-        """<script> elements from vuln scripts do not appear in parsed structure."""
+    def test_unknown_scripts_not_in_port_keys(self) -> None:
+        """Unknown <script> elements do not add extra keys to the port dict."""
         xml = """<?xml version="1.0"?>
         <nmaprun>
           <host>
@@ -247,8 +252,170 @@ class TestNmapParser:
         </nmaprun>"""
         parsed = parse_nmap_xml_string(xml)
         port = parsed["hosts"][0]["ports"][0]
-        # Parser returns exactly these 5 keys for a port; no script data leaks in
-        assert set(port.keys()) == {"port", "protocol", "state", "service", "version"}
+        assert set(port.keys()) == {
+            "port",
+            "transport",
+            "state",
+            "service",
+            "service_version",
+        }
+
+    def test_ssl_enum_ciphers_sets_tls_fields(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="443">
+                <state state="open"/>
+                <service name="https" product="nginx" version="1.29.5"/>
+                <script id="ssl-enum-ciphers" output="...">
+                  <table key="TLSv1.2"><table key="ciphers"/></table>
+                  <table key="TLSv1.3"><table key="ciphers"/></table>
+                </script>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        assert port.get("tls") is True
+        assert port.get("tls_version") == "TLSv1.3"
+
+    def test_tls_version_highest_wins(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="443">
+                <state state="open"/>
+                <service name="https"/>
+                <script id="ssl-enum-ciphers" output="...">
+                  <table key="TLSv1.0"/>
+                  <table key="TLSv1.2"/>
+                </script>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        assert port.get("tls_version") == "TLSv1.2"
+
+    def test_ssh_algorithms_extracted(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="22">
+                <state state="open"/>
+                <service name="ssh" product="OpenSSH" version="8.9p1"/>
+                <script id="ssh2-enum-algos" output="...">
+                  <table key="kex_algorithms">
+                    <elem>curve25519-sha256</elem>
+                    <elem>diffie-hellman-group14-sha256</elem>
+                  </table>
+                  <table key="encryption_algorithms">
+                    <elem>aes128-ctr</elem>
+                  </table>
+                </script>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        assert "ssh_algorithms" in port
+        assert len(port["ssh_algorithms"]) > 0
+
+    def test_vulners_cve_ids_extracted(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="80">
+                <state state="open"/>
+                <service name="http" product="nginx" version="1.29.5"/>
+                <script id="vulners" output="...">
+                  <table>
+                    <elem key="id">CVE-2019-9511</elem>
+                    <elem key="cvss">7.5</elem>
+                  </table>
+                  <table>
+                    <elem key="id">CVE-2019-9513</elem>
+                    <elem key="cvss">7.5</elem>
+                  </table>
+                </script>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        assert port.get("cve_ids") == "CVE-2019-9511,CVE-2019-9513"
+
+    def test_http2_via_service_name(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="443">
+                <state state="open"/>
+                <service name="http2" product="nginx" version="1.29.5"/>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        assert port.get("http_version") == "http/2"
+
+    def test_http_methods_sets_http_version(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="80">
+                <state state="open"/>
+                <service name="http" product="nginx" version="1.29.5"/>
+                <script id="http-methods" output="GET HEAD POST OPTIONS"/>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        assert port.get("http_version") == "http/1.1"
+
+    def test_no_scripts_omits_optional_fields(self) -> None:
+        xml = """<?xml version="1.0"?>
+        <nmaprun>
+          <host>
+            <status state="up"/>
+            <address addr="1.2.3.4" addrtype="ipv4"/>
+            <hostnames/>
+            <ports>
+              <port protocol="tcp" portid="80">
+                <state state="open"/>
+                <service name="http" product="nginx" version="1.29.5"/>
+              </port>
+            </ports>
+          </host>
+        </nmaprun>"""
+        port = parse_nmap_xml_string(xml)["hosts"][0]["ports"][0]
+        for key in ("tls", "tls_version", "http_version", "ssh_algorithms", "cve_ids"):
+            assert key not in port.keys()
 
     def test_basic_fixture_host_count(self, basic_parsed_data: dict) -> None:
         assert len(basic_parsed_data["hosts"]) == 1
@@ -445,3 +612,110 @@ class TestNmapIngestor:
         ).ingest_tool_output(result, profile="test-scan")
         assert ingested == 0
         assert engine.count_documents() == 0
+
+    def test_scripts_fixture_chunk_count(
+        self, project_env: dict, scripts_parsed_data: dict
+    ) -> None:
+        """1 host + 3 open ports = 4 documents."""
+        result = _make_nmap_result(scripts_parsed_data)
+        engine = _make_rag_engine(project_env)
+        ingested = FindingIngestor(
+            engine, project_env["project_name"]
+        ).ingest_tool_output(result, profile="test-scan")
+        assert ingested == 4
+
+    def test_host_chunk_has_hostname_and_state(
+        self, project_env: dict, scripts_parsed_data: dict
+    ) -> None:
+        result = _make_nmap_result(scripts_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        host_metas = [m for m in all_docs["metadatas"] if m["finding_type"] == "host"]
+        assert len(host_metas) == 1
+        meta = host_metas[0]
+        assert meta["hostname"] == "testserver.local"
+        assert meta["state"] == "up"
+
+    def test_port_chunk_has_transport_and_service_version(
+        self, project_env: dict, scripts_parsed_data: dict
+    ) -> None:
+        result = _make_nmap_result(scripts_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_metas = [
+            m for m in all_docs["metadatas"] if m["finding_type"] == "open_port"
+        ]
+        for meta in port_metas:
+            assert "transport" in meta
+            assert "service_version" in meta
+
+    def test_port_chunk_tls_metadata(
+        self, project_env: dict, scripts_parsed_data: dict
+    ) -> None:
+        result = _make_nmap_result(scripts_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_metas = [m for m in all_docs["metadatas"] if m.get("port") == 443]
+        assert len(port_metas) == 1
+        meta = port_metas[0]
+        assert meta.get("tls") is True
+        assert meta.get("tls_version") == "TLSv1.3"
+
+    def test_port_chunk_ssh_algorithms(
+        self, project_env: dict, scripts_parsed_data: dict
+    ) -> None:
+        result = _make_nmap_result(scripts_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_metas = [m for m in all_docs["metadatas"] if m.get("port") == 22]
+        assert len(port_metas) == 1
+        assert "ssh_algorithms" in port_metas[0]
+        assert len(port_metas[0]["ssh_algorithms"]) > 0
+
+    def test_port_chunk_cve_ids(
+        self, project_env: dict, scripts_parsed_data: dict
+    ) -> None:
+        result = _make_nmap_result(scripts_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_metas = [m for m in all_docs["metadatas"] if m.get("port") == 80]
+        assert len(port_metas) == 1
+        assert "cve_ids" in port_metas[0]
+        assert "CVE-2019-9511" in port_metas[0]["cve_ids"]
+
+    def test_optional_fields_absent_when_no_scripts(
+        self, project_env: dict, basic_parsed_data: dict
+    ) -> None:
+        result = _make_nmap_result(basic_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_metas = [
+            m for m in all_docs["metadatas"] if m["finding_type"] == "open_port"
+        ]
+        for meta in port_metas:
+            for key in (
+                "tls",
+                "tls_version",
+                "http_version",
+                "ssh_algorithms",
+                "cve_ids",
+            ):
+                assert key not in meta

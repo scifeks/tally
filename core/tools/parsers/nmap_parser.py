@@ -1,6 +1,9 @@
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
+
+_TLS_VERSION_RANK = {"SSLv3": 0, "TLSv1.0": 1, "TLSv1.1": 2, "TLSv1.2": 3, "TLSv1.3": 4}
 
 
 def parse_nmap_xml(xml_path: Path) -> dict[str, Any]:
@@ -70,24 +73,72 @@ def _parse_host(host_el: ET.Element) -> dict[str, Any]:
 
 def _parse_port(port_el: ET.Element) -> dict[str, Any]:
     port_num = int(port_el.get("portid", 0))
-    protocol = port_el.get("protocol", "")
+    transport = port_el.get("protocol", "")
 
     state_el = port_el.find("state")
     port_state = state_el.get("state", "unknown") if state_el is not None else "unknown"
 
     service_name = ""
-    version = ""
+    service_version = ""
     service_el = port_el.find("service")
     if service_el is not None:
         service_name = service_el.get("name", "")
         product = service_el.get("product", "")
         ver = service_el.get("version", "")
-        version = f"{product} {ver}".strip()
+        service_version = f"{product} {ver}".strip()
 
-    return {
+    result: dict[str, Any] = {
         "port": port_num,
-        "protocol": protocol,
+        "transport": transport,
         "state": port_state,
         "service": service_name,
-        "version": version,
+        "service_version": service_version,
     }
+
+    # HTTP/2 via service name (before script loop)
+    if service_name == "http2":
+        result["http_version"] = "http/2"
+
+    # Parse known scripts
+    for script_el in port_el.findall("script"):
+        script_id = script_el.get("id", "")
+
+        if script_id == "ssl-enum-ciphers":
+            found_versions = [
+                k
+                for table in script_el.findall("table")
+                if (k := table.get("key", "")) in _TLS_VERSION_RANK
+            ]
+            if found_versions:
+                result["tls"] = True
+                result["tls_version"] = max(
+                    found_versions, key=lambda v: _TLS_VERSION_RANK[v]
+                )
+
+        elif script_id == "ssh2-enum-algos":
+            algos = [
+                elem.text
+                for table in script_el.findall("table")
+                for elem in table.findall("elem")
+                if elem.text
+            ]
+            if algos:
+                result["ssh_algorithms"] = ",".join(algos)
+
+        elif script_id == "http-methods":
+            if "http_version" not in result:
+                result["http_version"] = "http/1.1"
+
+        elif script_id == "vulners":
+            cves = list(
+                dict.fromkeys(
+                    cve
+                    for elem in script_el.iter("elem")
+                    if elem.text
+                    for cve in re.findall(r"CVE-\d{4}-\d+", elem.text)
+                )
+            )
+            if cves:
+                result["cve_ids"] = ",".join(cves)
+
+    return result

@@ -169,8 +169,8 @@ class FindingIngestor:
             port_lines = (
                 "\n".join(
                     (
-                        f"  {p['port']}/{p.get('protocol', 'tcp')} "
-                        f"{p.get('service', '')} {p.get('version', '')}"
+                        f"  {p['port']}/{p.get('transport', 'tcp')} "
+                        f"{p.get('service', '')} {p.get('service_version', '')}"
                     ).rstrip()
                     for p in open_ports
                 )
@@ -186,6 +186,8 @@ class FindingIngestor:
                 "profile": profile,
                 "finding_type": "host",
                 "ip_address": ip,
+                "hostname": hostname,
+                "state": state,
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
@@ -195,12 +197,12 @@ class FindingIngestor:
             # ---- per-port chunks ----
             for port_idx, port in enumerate(open_ports):
                 port_num = port.get("port", 0)
-                protocol = port.get("protocol", "tcp")
+                transport = port.get("transport", "tcp")
                 service = port.get("service", "")
-                version = port.get("version", "")
-                svc_str = f"{service} {version}".strip()
+                service_version = port.get("service_version", "")
+                svc_str = f"{service} {service_version}".strip()
 
-                port_text = f"[nmap] Port {port_num}/{protocol} on {ip}: {svc_str}"
+                port_text = f"[nmap] Port {port_num}/{transport} on {ip}: {svc_str}"
                 port_meta: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
@@ -208,9 +210,21 @@ class FindingIngestor:
                     "ip_address": ip,
                     "port": port_num,
                     "service": service,
+                    "transport": transport,
+                    "service_version": service_version,
                     "timestamp": timestamp,
                     "source_file": source_file,
                 }
+                for key in (
+                    "tls",
+                    "tls_version",
+                    "http_version",
+                    "ssh_algorithms",
+                    "cve_ids",
+                ):
+                    val = port.get(key)
+                    if val is not None:
+                        port_meta[key] = val
                 port_id = f"nmap_{profile}_port_{host_idx}_{port_idx}_{ts_compact}"
                 chunks.append((port_text, port_meta, port_id))
 

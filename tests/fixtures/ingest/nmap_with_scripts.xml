@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun args="nmap -sV --script ssl-enum-ciphers,ssh2-enum-algos,http-methods,vulners 10.0.0.5" startstr="2026-03-09T12:00:00" version="7.95">
+  <host>
+    <status state="up" reason="echo-reply"/>
+    <address addr="10.0.0.5" addrtype="ipv4"/>
+    <hostnames>
+      <hostname name="testserver.local" type="PTR"/>
+    </hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open" reason="syn-ack"/>
+        <service name="ssh" product="OpenSSH" version="8.9p1"/>
+        <script id="ssh2-enum-algos" output="...">
+          <table key="kex_algorithms">
+            <elem>curve25519-sha256</elem>
+            <elem>diffie-hellman-group14-sha256</elem>
+          </table>
+          <table key="server_host_key_algorithms">
+            <elem>rsa-sha2-512</elem>
+            <elem>rsa-sha2-256</elem>
+          </table>
+          <table key="encryption_algorithms">
+            <elem>aes128-ctr</elem>
+          </table>
+        </script>
+      </port>
+      <port protocol="tcp" portid="443">
+        <state state="open" reason="syn-ack"/>
+        <service name="https" product="nginx" version="1.29.5"/>
+        <script id="ssl-enum-ciphers" output="...">
+          <table key="TLSv1.2">
+            <table key="ciphers">
+              <table>
+                <elem key="name">TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</elem>
+              </table>
+            </table>
+          </table>
+          <table key="TLSv1.3">
+            <table key="ciphers">
+              <table>
+                <elem key="name">TLS_AKE_WITH_AES_256_GCM_SHA384</elem>
+              </table>
+            </table>
+          </table>
+          <elem key="least strength">A</elem>
+        </script>
+      </port>
+      <port protocol="tcp" portid="80">
+        <state state="open" reason="syn-ack"/>
+        <service name="http" product="nginx" version="1.29.5"/>
+        <script id="http-methods" output="Supported Methods: GET HEAD POST OPTIONS"/>
+        <script id="vulners" output="...">
+          <table key="CVE-2019-9511">
+            <elem key="id">CVE-2019-9511</elem>
+            <elem key="cvss">7.5</elem>
+            <elem key="type">cve</elem>
+          </table>
+          <table key="CVE-2019-9513">
+            <elem key="id">CVE-2019-9513</elem>
+            <elem key="cvss">7.5</elem>
+            <elem key="type">cve</elem>
+          </table>
+        </script>
+      </port>
+    </ports>
+  </host>
+</nmaprun>

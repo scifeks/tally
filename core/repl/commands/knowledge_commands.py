@@ -12,6 +12,20 @@ if TYPE_CHECKING:
     from core.rag.query import QueryEngine
     from core.repl.interface import REPL
 
+# Keys that have their own dedicated column — excluded from the Info column.
+_SEARCH_DEDICATED_KEYS = frozenset(
+    {
+        "tool",
+        "finding_type",
+        "ip_address",
+        "port",
+        "service",
+        "hostname",
+        "transport",
+        "cve_ids",
+    }
+)
+
 
 class KnowledgeCommands:
     """Handlers for knowledge base search, chat, and stats commands."""
@@ -49,20 +63,34 @@ class KnowledgeCommands:
             return
 
         table = Table(show_header=True, header_style="bold")
-        table.add_column("Finding", style="white", max_width=60)
         table.add_column("Tool", style="cyan", no_wrap=True)
         table.add_column("Type", style="green", no_wrap=True)
-        table.add_column("Relevance", style="yellow", no_wrap=True)
+        table.add_column("IP", style="white", no_wrap=True)
+        table.add_column("Hostname", style="white", no_wrap=True)
+        table.add_column("Port", style="white", no_wrap=True)
+        table.add_column("Transport", style="white", no_wrap=True)
+        table.add_column("Service", style="white", no_wrap=True)
+        table.add_column("CVE IDs", style="red", max_width=30)
+        table.add_column("Info", style="dim white", max_width=50)
 
         for r in results:
-            text = r["document"]
-            preview = (text[:80] + "...") if len(text) > 80 else text
             meta = r["metadata"]
+
+            port_val = meta["port"] if "port" in meta else ""
+            info = "  ".join(
+                f"{k}={v}" for k, v in meta.items() if k not in _SEARCH_DEDICATED_KEYS
+            )
+
             table.add_row(
-                preview,
                 meta.get("tool", ""),
                 meta.get("finding_type", ""),
-                f"{r['distance']:.3f}",
+                meta.get("ip_address", ""),
+                meta.get("hostname", ""),
+                str(port_val),
+                meta.get("transport", ""),
+                meta.get("service", ""),
+                meta.get("cve_ids", ""),
+                info,
             )
 
         self.repl.console.print(table)
