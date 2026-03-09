@@ -49,3 +49,6 @@ Thumbs.db
 *.pem
 config/secrets.json
 /config/commands.json
+
+#Docker
+docker/docker-compose.yaml
