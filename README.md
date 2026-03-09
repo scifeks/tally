@@ -163,6 +163,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/adding-tools.md](docs/adding-tools.md) — Developer guide for adding tool wrappers
+- [docs/docker.md](docs/docker.md) — Usage instructions for optional Docker containers
 - [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
 
 ## Legal Notice (California and Colorado)

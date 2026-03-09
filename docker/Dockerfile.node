@@ -1,0 +1,35 @@
+# ============================================================
+# Node.js Security Auditor
+# Includes: nvm, Node.js (LTS), npm, npm audit
+# ============================================================
+FROM ubuntu:24.04
+
+LABEL maintainer="security-audit"
+LABEL description="Node.js + npm security auditing container"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV NVM_DIR=/root/.nvm
+ARG NODE_VERSION=lts/*
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    curl \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install nvm and node in one layer, write resolved bin path to /etc/environment
+# so it persists across layers without shell-time evaluation
+RUN curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
+    && . "$NVM_DIR/nvm.sh" \
+    && nvm install "${NODE_VERSION}" \
+    && nvm alias default "${NODE_VERSION}" \
+    && NODE_BIN_DIR="$(dirname $(nvm which default))" \
+    && echo "PATH=${NODE_BIN_DIR}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/environment \
+    && ln -sf "$(nvm which default)" /usr/local/bin/node \
+    && ln -sf "${NODE_BIN_DIR}/npm" /usr/local/bin/npm \
+    && ln -sf "${NODE_BIN_DIR}/npx" /usr/local/bin/npx \
+    && node --version \
+    && npm --version
+
+CMD ["tail", "-f", "/dev/null"]

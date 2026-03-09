@@ -1,0 +1,28 @@
+services:
+
+  php-auditor:
+    build:
+      context: .
+      dockerfile: Dockerfile.php
+    image: security-audit/php:latest
+    volumes:
+      - "/example/php/repo1:/repos/repo-1"
+      - "/example/php/repo2:/repos/repo-2"
+    restart: "no"
+    mem_limit: 512m
+
+  node-auditor:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+      args:
+        AUDITOR_UID: ${AUDITOR_UID:-1000}
+        AUDITOR_GID: ${AUDITOR_GID:-1000}
+    image: security-audit/node:latest
+    volumes:
+      - "/example/node/repo1:/repos/repo-1"
+      - "/example/node/repo2:/repos/repo-2"
+    environment:
+      AUDIT_LEVEL: moderate
+    restart: "no"
+    mem_limit: 512m
