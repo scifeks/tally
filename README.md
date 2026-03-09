@@ -163,6 +163,22 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/adding-tools.md](docs/adding-tools.md) — Developer guide for adding tool wrappers
+- [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
+
+## Legal Notice (California and Colorado)
+
+This software is **not intended for use in the States of California or Colorado**.
+
+Recent legislation — including **California Assembly Bill AB 1043 (Digital Age Assurance Act)** and **Colorado Senate Bill SB26-051 (Age Attestation on Computing Devices)** — establishes frameworks in which operating systems collect a user's age or birth date and expose an **age-bracket signal via an API**. Under these frameworks, **applications are required to request this signal when an application is downloaded or launched**.
+
+This project does **not implement functionality to request or process operating-system age signals**, and the maintainers do not intend to add such functionality.
+
+If you are located in **California or Colorado**, **do not download, run, or use this software**.
+
+Users are responsible for ensuring that their use of this software complies with the laws applicable in their jurisdiction.
+
+See the full policy here:  
+[docs/restrictions.md](docs/restrictions.md)
 
 ## License
 
