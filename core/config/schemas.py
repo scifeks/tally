@@ -44,6 +44,9 @@ class Repository(BaseModel):
     docker_path: str = Field(
         default="", description="Container mount path for Docker tools"
     )
+    container_name: str = Field(
+        default="", description="Docker container name for docker-mode tools"
+    )
     languages: list[str] = Field(..., description="Programming languages used")
     base_urls: list[str] = Field(default_factory=list, description="API base URLs")
 

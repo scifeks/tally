@@ -206,6 +206,11 @@ class ProjectManager:
             docker_path = raw_docker.strip()
             break
 
+        # Container name (only relevant when docker_path is set)
+        container_name = ""
+        if docker_path:
+            container_name = _prompt("  Docker container name").strip()
+
         # Languages
         detect_base = Path(local_path_str) if local_path_str else None
         lang_input = _prompt("  Languages (comma-separated or 'auto')")
@@ -226,6 +231,7 @@ class ProjectManager:
             name=name,
             path=local_path_str,
             docker_path=docker_path,
+            container_name=container_name,
             languages=langs,
             base_urls=base_urls,
         )
@@ -285,6 +291,13 @@ class ProjectManager:
                 docker_path = raw_docker.strip()
                 break
 
+            # Container name (only relevant when docker_path is set)
+            container_name = existing.container_name
+            if docker_path:
+                container_name = _prompt(
+                    "  Docker container name", default=existing.container_name
+                ).strip()
+
             # Languages
             detect_base = Path(local_path_str) if local_path_str else None
             current_langs = ", ".join(existing.languages) if existing.languages else ""
@@ -311,6 +324,7 @@ class ProjectManager:
                 name=name,
                 path=local_path_str,
                 docker_path=docker_path,
+                container_name=container_name,
                 languages=langs,
                 base_urls=base_urls,
             )
