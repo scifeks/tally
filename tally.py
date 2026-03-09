@@ -2,7 +2,9 @@
 """Main entry point for tally security auditing REPL."""
 
 import argparse
+import logging
 import sys
+from datetime import date
 from pathlib import Path
 
 from core.repl import REPL
@@ -13,6 +15,18 @@ from core.tools.registry import discover_tools
 _BASE_PATH = "."
 
 if __name__ == "__main__":
+    # --- logging setup (first thing, before any module does work) ---
+    _logs_dir = Path("logs")
+    _logs_dir.mkdir(exist_ok=True)
+    logging.basicConfig(
+        filename=_logs_dir / f"{date.today()}.log",
+        level=logging.DEBUG,
+        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        encoding="utf-8",
+    )
+    # ---------------------------------------------------------------
+
     parser = argparse.ArgumentParser(description="Tally security auditing REPL")
     parser.add_argument(
         "--skip-checks",
