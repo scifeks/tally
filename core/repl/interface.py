@@ -64,6 +64,7 @@ _HELP_REGISTRY = [
     ("scan", "scan <tool>", "Run a specific tool against the active project"),
     ("scan", "scan repo", "Run language-appropriate tools on a selected repository"),
     ("scan", "scan repo <tool>", "Run a specific tool against all repositories"),
+    ("scan", "scan repo <repo> <tool>", "Run a specific tool against one repository"),
     ("scan", "run <tool> [args...]", "Execute a tool with raw arguments"),
     # Tools
     ("tool", None, "Tools"),

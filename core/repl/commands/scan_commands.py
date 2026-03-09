@@ -52,11 +52,18 @@ class ScanCommands:
             first = args[0].lower()
 
             if first == "repo":
-                # scan repo [<tool>]
                 repo_args = args[1:]
-                if repo_args and not repo_args[0].startswith("-"):
+                non_flag_args = [a for a in repo_args if not a.startswith("-")]
+                if len(non_flag_args) >= 2:
+                    # scan repo <repo> <tool>
+                    self._cmd_scan_repo_specific_tool(
+                        non_flag_args[0], non_flag_args[1].lower(), auto_approve
+                    )
+                elif repo_args and not repo_args[0].startswith("-"):
+                    # scan repo <tool>  (all repos — existing behaviour)
                     self._cmd_scan_repo_tool(repo_args[0].lower(), auto_approve)
                 else:
+                    # scan repo  (interactive multi-tool)
                     self._cmd_scan_repo(repo_args, auto_approve)
                 return
 
@@ -568,6 +575,42 @@ class ScanCommands:
 
         try:
             orchestrator.run_tool_on_all_repos(tool_name, auto_approve=auto_approve)
+        except ValueError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+
+    def _cmd_scan_repo_specific_tool(
+        self, repo_name: str, tool_name: str, auto_approve: bool = False
+    ) -> None:
+        """scan repo <repo> <tool> — run a single tool against one repository."""
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
+            )
+            return
+
+        known_tools = tool_registry.list_tool_names()
+        if tool_name not in known_tools:
+            self.repl.console.print(
+                f"[red]Unknown tool:[/red] {tool_name}\n"
+                f"Configured tools: {', '.join(sorted(known_tools))}"
+            )
+            return
+
+        if tool_name == "nmap":
+            self.repl.console.print(
+                "[red]Error:[/red] nmap is a network tool and cannot be run with "
+                "'scan repo'. Use 'scan nmap' instead."
+            )
+            return
+
+        orchestrator = self._make_orchestrator()
+        if orchestrator is None:
+            return
+
+        try:
+            orchestrator.run_tool_on_repo(
+                tool_name, repo_name, auto_approve=auto_approve
+            )
         except ValueError as exc:
             self.repl.console.print(f"[red]Error:[/red] {exc}")
 
