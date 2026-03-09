@@ -16,6 +16,22 @@ if TYPE_CHECKING:
     from core.repl.interface import REPL
 
 
+def _enrich_results(repl: REPL, doc_ids: list[str]) -> None:
+    """Run enrichment pipeline on freshly ingested document IDs."""
+    from core.rag import EnrichmentPipeline, RAGEngine
+
+    assert repl.active_project is not None
+    try:
+        rag_engine = RAGEngine(
+            project_name=repl.active_project,
+            base_path=repl.base_path,
+        )
+        pipeline = EnrichmentPipeline(rag_engine, console=repl.console)
+        pipeline.enrich(doc_ids)
+    except (RuntimeError, ValueError) as exc:
+        repl.console.print(f"[red]Enrichment error:[/red] {exc}")
+
+
 def _ingest_result(
     repl: REPL, result: ToolResult, profile: str | None = None
 ) -> list[str]:
@@ -183,6 +199,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -246,6 +263,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -339,6 +357,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -433,6 +452,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print(
                     "[yellow]No vulnerabilities to ingest.[/yellow]"
@@ -722,6 +742,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print(
                     "[yellow]No vulnerabilities to ingest.[/yellow]"
@@ -817,6 +838,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print(
                     "[yellow]No vulnerabilities to ingest.[/yellow]"
@@ -918,6 +940,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print(
                     "[yellow]No vulnerabilities to ingest.[/yellow]"
@@ -1018,6 +1041,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} secrets[/green]"
                 )
+                _enrich_results(self.repl, doc_ids)
             else:
                 self.repl.console.print("[yellow]No secrets to ingest.[/yellow]")
 
@@ -1253,6 +1277,7 @@ class ScanCommands:
                     self.repl.console.print(
                         f"[green]✓ Ingested {len(doc_ids)} alerts[/green]"
                     )
+                    _enrich_results(self.repl, doc_ids)
                 else:
                     self.repl.console.print("[yellow]No alerts to ingest.[/yellow]")
 
