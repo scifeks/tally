@@ -51,6 +51,7 @@ _HELP_REGISTRY = [
     ("project", "project switch <name>", "Switch the active project"),
     ("project", "project list", "List all projects"),
     ("project", "project info", "Show active project details"),
+    ("project", "project delete <name>", "Delete a project and all its data"),
     # Repo Management
     ("repo", None, "Repo Management"),
     ("repo", "repo add", "Add a repository to the active project"),
@@ -63,7 +64,13 @@ _HELP_REGISTRY = [
     ("scan", "scan", "Run all tools across the active project"),
     ("scan", "scan <tool>", "Run a specific tool against the active project"),
     ("scan", "scan repo", "Run language-appropriate tools on a selected repository"),
+    (
+        "scan",
+        "scan repo <repo>",
+        "Run all language-appropriate tools against one repository",
+    ),
     ("scan", "scan repo <tool>", "Run a specific tool against all repositories"),
+    ("scan", "scan repo <repo> <tool>", "Run a specific tool against one repository"),
     ("scan", "run <tool> [args...]", "Execute a tool with raw arguments"),
     # Tools
     ("tool", None, "Tools"),

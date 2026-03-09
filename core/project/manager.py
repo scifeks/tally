@@ -3,6 +3,7 @@
 # todo: Keep an eye on file size here. consider modular approach.
 import datetime
 import re
+import shutil
 from pathlib import Path
 
 from core.config import ConfigManager, ProjectConfig, Repository
@@ -206,6 +207,11 @@ class ProjectManager:
             docker_path = raw_docker.strip()
             break
 
+        # Container name (only relevant when docker_path is set)
+        container_name = ""
+        if docker_path:
+            container_name = _prompt("  Docker container name").strip()
+
         # Languages
         detect_base = Path(local_path_str) if local_path_str else None
         lang_input = _prompt("  Languages (comma-separated or 'auto')")
@@ -226,6 +232,7 @@ class ProjectManager:
             name=name,
             path=local_path_str,
             docker_path=docker_path,
+            container_name=container_name,
             languages=langs,
             base_urls=base_urls,
         )
@@ -285,6 +292,13 @@ class ProjectManager:
                 docker_path = raw_docker.strip()
                 break
 
+            # Container name (only relevant when docker_path is set)
+            container_name = existing.container_name
+            if docker_path:
+                container_name = _prompt(
+                    "  Docker container name", default=existing.container_name
+                ).strip()
+
             # Languages
             detect_base = Path(local_path_str) if local_path_str else None
             current_langs = ", ".join(existing.languages) if existing.languages else ""
@@ -311,6 +325,7 @@ class ProjectManager:
                 name=name,
                 path=local_path_str,
                 docker_path=docker_path,
+                container_name=container_name,
                 languages=langs,
                 base_urls=base_urls,
             )
@@ -322,6 +337,27 @@ class ProjectManager:
         except KeyboardInterrupt:
             print("\n\n[Cancelled]")
             return None
+
+    def delete_project(self, project_name: str) -> None:
+        """Delete a project and all its data from disk.
+
+        Raises:
+            ValueError: If the project does not exist.
+        """
+        project_dir = self.projects_dir / project_name
+        if not project_dir.exists():
+            raise ValueError(f"Project '{project_name}' not found.")
+        shutil.rmtree(project_dir)
+
+        # Clear .active file if it points to the deleted project
+        active_file = self.projects_dir / ".active"
+        if active_file.exists():
+            try:
+                current = active_file.read_text().strip()
+                if current == project_name:
+                    active_file.unlink()
+            except OSError:
+                pass
 
     def delete_repository(self, project_name: str, repo_name: str) -> None:
         """Remove a repository from project_name by name.

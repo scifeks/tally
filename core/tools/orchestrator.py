@@ -354,6 +354,82 @@ class ScanOrchestrator:
         self._print_final_line(summary)
         return summary
 
+    def run_tool_on_repo(
+        self,
+        tool_name: str,
+        repo_name: str,
+        auto_approve: bool = False,
+    ) -> ScanSummary:
+        """Run a single tool against one named repository.
+
+        Args:
+            tool_name:    Registered tool name (not 'nmap').
+            repo_name:    Repository name (case-insensitive match).
+            auto_approve: Skip approval prompt.
+
+        Raises:
+            ValueError: If repo or tool not found, or tool unavailable.
+        """
+        repos = self._config.load_repositories(self.project_name)
+        repo = next((r for r in repos if r.name.lower() == repo_name.lower()), None)
+        if repo is None:
+            raise ValueError(
+                f"Repository '{repo_name}' not found in project '{self.project_name}'"
+            )
+
+        tool = self.registry.get_tool(tool_name)
+        if tool is None:
+            raise ValueError(f"Tool '{tool_name}' is not registered.")
+        if not tool.check_available():
+            raise ValueError(f"Tool '{tool_name}' is not installed.")
+
+        self.console.print(
+            f"\n[bold cyan]Repo Tool Scan:[/bold cyan] {repo.name} — {tool_name}"
+        )
+        self.console.print("─" * 50)
+
+        start = perf_counter()
+        kwargs = self._repo_tool_kwargs(tool_name, repo)
+
+        if tool_name == "gitleaks":
+            result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
+        else:
+            result = self._run_tool_with_approval(tool, kwargs, auto_approve)
+
+        results: list[ToolResult] = []
+        total_run = total_skipped = total_failed = 0
+
+        if result is None:
+            self._print_tool_line(tool_name, "SKIPPED", 0, None)
+            total_skipped += 1
+        else:
+            result = self._normalize_success(result)
+            results.append(result)
+            findings = self._count_findings(result)
+            if result.success:
+                total_run += 1
+                self._print_tool_line(
+                    tool_name, "pass", findings, result.duration_seconds
+                )
+            else:
+                total_failed += 1
+                self._print_tool_line(tool_name, "fail", 0, result.duration_seconds)
+
+        duration = round(perf_counter() - start, 1)
+        ingested = self._batch_ingest(results, profile=repo.name)
+        self._print_summary_table(results)
+
+        summary = ScanSummary(
+            total_tools_run=total_run,
+            total_tools_skipped=total_skipped,
+            total_tools_failed=total_failed,
+            results=results,
+            duration_seconds=duration,
+            findings_ingested=ingested,
+        )
+        self._print_final_line(summary)
+        return summary
+
     def _run_tool_with_approval(
         self,
         tool: ToolWrapper,

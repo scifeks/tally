@@ -35,6 +35,8 @@ class ProjectCommands:
             self.cmd_projects(_cmd, args[1:])
         elif sub == "info":
             self.cmd_project_info(_cmd, args[1:])
+        elif sub == "delete":
+            self.cmd_delete_project(_cmd, args[1:])
         else:
             self.repl.console.print(
                 f"[red]Unknown subcommand:[/red] project {sub}\n"
@@ -113,6 +115,39 @@ class ProjectCommands:
         name = self.repl.projects.create_project()
         if name:
             self.repl.active_project = name
+
+    def cmd_delete_project(self, _cmd: str, args: list[str]) -> None:
+        """project delete <name> — delete a project and all its data."""
+        if not args:
+            self.repl.console.print("[yellow]Usage:[/yellow] project delete <name>")
+            return
+
+        project_name = args[0]
+
+        confirm = (
+            input(f"Delete project '{project_name}' and ALL its data? [y/N]: ")
+            .strip()
+            .lower()
+        )
+        if confirm not in ("y", "yes"):
+            self.repl.console.print("[yellow]Cancelled.[/yellow]")
+            return
+
+        try:
+            self.repl.projects.delete_project(project_name)
+        except ValueError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+
+        self.repl.console.print(f"[green]Project '{project_name}' deleted.[/green]")
+
+        # Clear active project in the running REPL session
+        if self.repl.active_project == project_name:
+            self.repl.active_project = None
+            self.repl.console.print(
+                "[yellow]Active project cleared. Use 'project add' or "
+                "'project switch' to set a new one.[/yellow]"
+            )
 
     def cmd_add_repo(self, _cmd: str, _args: list[str]) -> None:
         """Add a repository to the current project."""
