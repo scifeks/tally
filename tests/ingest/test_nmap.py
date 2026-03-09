@@ -446,7 +446,7 @@ class TestNmapIngestor:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert ingested == 3
+        assert len(ingested) == 3
         assert engine.count_documents() == 3
 
     def test_count_no_open_ports(
@@ -458,7 +458,7 @@ class TestNmapIngestor:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert ingested == 1
+        assert len(ingested) == 1
         assert engine.count_documents() == 1
 
     def test_host_chunk_metadata(
@@ -610,7 +610,7 @@ class TestNmapIngestor:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert ingested == 0
+        assert ingested == []
         assert engine.count_documents() == 0
 
     def test_scripts_fixture_chunk_count(
@@ -622,7 +622,7 @@ class TestNmapIngestor:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert ingested == 4
+        assert len(ingested) == 4
 
     def test_host_chunk_has_hostname_and_state(
         self, project_env: dict, scripts_parsed_data: dict
@@ -719,3 +719,52 @@ class TestNmapIngestor:
                 "cve_ids",
             ):
                 assert key not in meta
+
+    def test_host_chunk_shared_metadata(
+        self, project_env: dict, basic_parsed_data: dict
+    ) -> None:
+        """Host chunks have correct domain/tool_type/enriched/type_* fields."""
+        result = _make_nmap_result(basic_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        host_metas = [m for m in all_docs["metadatas"] if m["finding_type"] == "host"]
+        assert host_metas
+        for meta in host_metas:
+            assert meta["domain"] == "network"
+            assert meta["tool_type"] == "network"
+            assert meta["enriched"] is False
+            assert meta["type_exposure"] is True
+            assert meta["type_secret"] is False
+            assert meta["type_vulnerability"] is False
+            assert meta["type_weakness"] is False
+            assert meta["type_misconfiguration"] is False
+            assert meta["type_dependency"] is False
+
+    def test_port_chunk_shared_metadata(
+        self, project_env: dict, basic_parsed_data: dict
+    ) -> None:
+        """Open port chunks have correct shared metadata fields and state='open'."""
+        result = _make_nmap_result(basic_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_metas = [
+            m for m in all_docs["metadatas"] if m["finding_type"] == "open_port"
+        ]
+        assert port_metas
+        for meta in port_metas:
+            assert meta["domain"] == "network"
+            assert meta["tool_type"] == "network"
+            assert meta["enriched"] is False
+            assert meta["type_exposure"] is True
+            assert meta["type_secret"] is False
+            assert meta["type_vulnerability"] is False
+            assert meta["type_weakness"] is False
+            assert meta["type_misconfiguration"] is False
+            assert meta["type_dependency"] is False
+            assert meta["state"] == "open"

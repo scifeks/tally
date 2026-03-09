@@ -543,8 +543,8 @@ class ScanOrchestrator:
                     and "error" not in result.parsed_data
                 ):
                     try:
-                        count = ingestor.ingest_tool_output(result, profile=profile)
-                        total += count
+                        doc_ids = ingestor.ingest_tool_output(result, profile=profile)
+                        total += len(doc_ids)
                     except Exception as exc:
                         logger.error(
                             "Ingestion failed for %s: %s", result.tool_name, exc

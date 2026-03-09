@@ -16,8 +16,10 @@ if TYPE_CHECKING:
     from core.repl.interface import REPL
 
 
-def _ingest_result(repl: REPL, result: ToolResult, profile: str | None = None) -> int:
-    """Ingest a ToolResult into the project's RAG store. Returns document count."""
+def _ingest_result(
+    repl: REPL, result: ToolResult, profile: str | None = None
+) -> list[str]:
+    """Ingest a ToolResult into the project's RAG store. Returns list of doc IDs."""
     from core.rag import FindingIngestor, RAGEngine
 
     assert repl.active_project is not None
@@ -30,7 +32,7 @@ def _ingest_result(repl: REPL, result: ToolResult, profile: str | None = None) -
         return ingestor.ingest_tool_output(result, profile=profile)
     except (RuntimeError, ValueError) as exc:
         repl.console.print(f"[red]Ingestion error:[/red] {exc}")
-        return 0
+        return []
 
 
 class ScanCommands:
@@ -176,9 +178,11 @@ class ScanCommands:
                 self.repl.console.print(f"Output saved to: {path}")
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result)
-            if count > 0:
-                self.repl.console.print(f"[green]✓ Ingested {count} findings[/green]")
+            doc_ids = _ingest_result(self.repl, result)
+            if doc_ids:
+                self.repl.console.print(
+                    f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
+                )
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -237,9 +241,11 @@ class ScanCommands:
                 self.repl.console.print(f"Output saved to: {path}")
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=profile_name)
-            if count > 0:
-                self.repl.console.print(f"[green]✓ Ingested {count} findings[/green]")
+            doc_ids = _ingest_result(self.repl, result, profile=profile_name)
+            if doc_ids:
+                self.repl.console.print(
+                    f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
+                )
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -328,9 +334,11 @@ class ScanCommands:
             result.success = True
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=repo.name)
-            if count > 0:
-                self.repl.console.print(f"[green]✓ Ingested {count} findings[/green]")
+            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+            if doc_ids:
+                self.repl.console.print(
+                    f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
+                )
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -420,10 +428,10 @@ class ScanCommands:
             result.success = True
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=repo.name)
-            if count > 0:
+            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+            if doc_ids:
                 self.repl.console.print(
-                    f"[green]✓ Ingested {count} vulnerabilities[/green]"
+                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
             else:
                 self.repl.console.print(
@@ -709,10 +717,10 @@ class ScanCommands:
             result.success = True
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=repo.name)
-            if count > 0:
+            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+            if doc_ids:
                 self.repl.console.print(
-                    f"[green]✓ Ingested {count} vulnerabilities[/green]"
+                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
             else:
                 self.repl.console.print(
@@ -804,10 +812,10 @@ class ScanCommands:
             result.success = True
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=repo.name)
-            if count > 0:
+            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+            if doc_ids:
                 self.repl.console.print(
-                    f"[green]✓ Ingested {count} vulnerabilities[/green]"
+                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
             else:
                 self.repl.console.print(
@@ -905,10 +913,10 @@ class ScanCommands:
             result.success = True
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=repo.name)
-            if count > 0:
+            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+            if doc_ids:
                 self.repl.console.print(
-                    f"[green]✓ Ingested {count} vulnerabilities[/green]"
+                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
                 )
             else:
                 self.repl.console.print(
@@ -1005,9 +1013,11 @@ class ScanCommands:
             result.success = True
 
         if self._ask_ingest():
-            count = _ingest_result(self.repl, result, profile=repo.name)
-            if count > 0:
-                self.repl.console.print(f"[green]✓ Ingested {count} secrets[/green]")
+            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+            if doc_ids:
+                self.repl.console.print(
+                    f"[green]✓ Ingested {len(doc_ids)} secrets[/green]"
+                )
             else:
                 self.repl.console.print("[yellow]No secrets to ingest.[/yellow]")
 
@@ -1238,9 +1248,11 @@ class ScanCommands:
                 result.success = True
 
             if self._ask_ingest():
-                count = _ingest_result(self.repl, result, profile=repo.name)
-                if count > 0:
-                    self.repl.console.print(f"[green]✓ Ingested {count} alerts[/green]")
+                doc_ids = _ingest_result(self.repl, result, profile=repo.name)
+                if doc_ids:
+                    self.repl.console.print(
+                        f"[green]✓ Ingested {len(doc_ids)} alerts[/green]"
+                    )
                 else:
                     self.repl.console.print("[yellow]No alerts to ingest.[/yellow]")
 

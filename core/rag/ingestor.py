@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from core.tools.base import ToolResult
+from core.tools.constants import TOOL_DOMAIN_MAP, TOOL_TYPE_MAP
 
 from .engine import RAGEngine
 
@@ -44,7 +45,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str | None = None,
-    ) -> int:
+    ) -> list[str]:
         """Index a tool's findings into ChromaDB.
 
         Old findings for the same tool/profile are deleted before new ones are
@@ -56,7 +57,7 @@ class FindingIngestor:
                          to ``"manual"`` for ad-hoc invocations.
 
         Returns:
-            Number of documents ingested (0 if nothing to ingest).
+            List of document IDs ingested (empty list if nothing to ingest).
         """
         tool = tool_result.tool_name
         effective_profile = profile or "manual"
@@ -68,7 +69,7 @@ class FindingIngestor:
                 tool,
                 effective_profile,
             )
-            return 0
+            return []
 
         if "error" in tool_result.parsed_data:
             logger.warning(
@@ -77,7 +78,7 @@ class FindingIngestor:
                 effective_profile,
                 tool_result.parsed_data["error"],
             )
-            return 0
+            return []
 
         # Delete stale findings for this tool/profile before inserting fresh ones
         deleted = self._engine.delete_findings(tool, effective_profile)
@@ -90,18 +91,51 @@ class FindingIngestor:
 
         if not chunks:
             logger.info("No findings to ingest for %s/%s", tool, effective_profile)
-            return 0
+            return []
 
         texts, metadatas, ids = zip(*chunks)
         self._engine.add_documents(list(texts), list(metadatas), list(ids))
         logger.info(
             "Ingested %d documents for %s/%s", len(chunks), tool, effective_profile
         )
-        return len(chunks)
+        return list(ids)
 
     # ------------------------------------------------------------------
     # Chunk builders
     # ------------------------------------------------------------------
+
+    def _shared_meta(self, tool_name: str, finding_type: str) -> dict[str, Any]:
+        """Return shared metadata fields for a given tool/finding_type combination."""
+        _sca_flags = {"type_dependency", "type_vulnerability"}
+        _TYPE_FLAGS: dict[tuple[str, str], set[str]] = {
+            ("gitleaks", "secret"): {"type_secret"},
+            ("semgrep", "vulnerability"): {"type_vulnerability", "type_weakness"},
+            ("zap", "api_vulnerability"): {"type_vulnerability"},
+            ("nmap", "host"): {"type_exposure"},
+            ("nmap", "open_port"): {"type_exposure"},
+            ("pip-audit", "dependency_vulnerability"): _sca_flags,
+            ("npm-audit", "dependency_vulnerability"): _sca_flags,
+            ("osv-scanner", "dependency_vulnerability"): _sca_flags,
+            ("composer-audit", "dependency_vulnerability"): _sca_flags,
+        }
+        true_flags = _TYPE_FLAGS.get((tool_name, finding_type), set())
+        booleans = {
+            f"type_{t}": (f"type_{t}" in true_flags)
+            for t in (
+                "secret",
+                "vulnerability",
+                "weakness",
+                "misconfiguration",
+                "exposure",
+                "dependency",
+            )
+        }
+        return {
+            "domain": TOOL_DOMAIN_MAP[tool_name],
+            "tool_type": TOOL_TYPE_MAP[tool_name],
+            "enriched": False,
+            **booleans,
+        }
 
     def _build_chunks(
         self,
@@ -191,6 +225,7 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            host_meta.update(self._shared_meta("nmap", "host"))
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
             chunks.append((host_text, host_meta, host_id))
 
@@ -212,9 +247,11 @@ class FindingIngestor:
                     "service": service,
                     "transport": transport,
                     "service_version": service_version,
+                    "state": "open",
                     "timestamp": timestamp,
                     "source_file": source_file,
                 }
+                port_meta.update(self._shared_meta("nmap", "open_port"))
                 for key in (
                     "tls",
                     "tls_version",
@@ -290,6 +327,7 @@ class FindingIngestor:
                 meta["cwe"] = cwe
             if owasp:
                 meta["owasp"] = owasp
+            meta.update(self._shared_meta("semgrep", "vulnerability"))
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
@@ -370,6 +408,7 @@ class FindingIngestor:
                 meta["cvss_score"] = cvss_score
             if lockfile:
                 meta["lockfile"] = lockfile
+            meta.update(self._shared_meta(tool, "dependency_vulnerability"))
 
             doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
@@ -408,7 +447,6 @@ class FindingIngestor:
             description = secret.get("description", "")
             file_path = secret.get("file_path", "")
             line_number = secret.get("line_number", 0)
-            match = secret.get("match", "")
             tags: list[str] = secret.get("tags") or []
             commit = secret.get("commit")
             fingerprint = secret.get("fingerprint", "")
@@ -418,9 +456,8 @@ class FindingIngestor:
             text = (
                 f"[gitleaks] Secret detected: {rule_id} in {file_path}:{line_number}\n"
                 f"Type: {description}\n"
-                f"Pattern matched: {match}\n"
                 f"Tags: {tags_str}\n"
-                "Note: Actual secret value redacted for security"
+                "Note: Secret value redacted"
             )
 
             meta: dict[str, Any] = {
@@ -439,6 +476,7 @@ class FindingIngestor:
                 meta["commit"] = commit
             if fingerprint:
                 meta["fingerprint"] = fingerprint
+            meta.update(self._shared_meta("gitleaks", "secret"))
 
             doc_id = f"gitleaks_{profile}_secret_{si}_{ts_compact}"
             chunks.append((text, meta, doc_id))
@@ -503,7 +541,9 @@ class FindingIngestor:
                 "confidence": confidence,
                 "alert_name": alert_name,
                 "url": url,
-                "method": method,
+                "method": method.upper(),
+                "description": description,
+                "remediation": solution,
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
@@ -511,6 +551,7 @@ class FindingIngestor:
                 meta["param"] = param
             if cwe_id is not None:
                 meta["cwe_id"] = cwe_id
+            meta.update(self._shared_meta("zap", "api_vulnerability"))
 
             doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
             chunks.append((text, meta, doc_id))

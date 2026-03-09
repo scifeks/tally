@@ -215,7 +215,7 @@ class TestGitleaksDirScan:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-repo")
-        assert ingested == n_secrets
+        assert len(ingested) == n_secrets
         assert engine.count_documents() == n_secrets
 
     def test_identity(self, project_env: dict, dir_parsed_data: dict) -> None:
@@ -284,7 +284,7 @@ class TestGitleaksDirScan:
                 f"[gitleaks] Secret detected: {rule_id} in {file_path}:{line_number}"
                 in text
             )
-            assert "Note: Actual secret value redacted for security" in text
+            assert "Note: Secret value redacted" in text
 
     def test_no_commit_in_dir_scan(
         self, project_env: dict, dir_parsed_data: dict
@@ -326,7 +326,7 @@ class TestGitleaksDirScan:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-repo")
-        assert ingested == 0
+        assert ingested == []
         assert engine.count_documents() == 0
 
     def test_ingest_replaces_stale(
@@ -355,6 +355,41 @@ class TestGitleaksDirScan:
             "profile-b contaminated or profile-a not replaced"
         )
 
+    def test_shared_metadata_fields(
+        self, project_env: dict, dir_parsed_data: dict
+    ) -> None:
+        """Gitleaks chunks have correct domain/tool_type/enriched/type_* fields."""
+        result = _make_gitleaks_result(dir_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for meta in all_docs["metadatas"]:
+            assert meta["domain"] == "code"
+            assert meta["tool_type"] == "code"
+            assert meta["enriched"] is False
+            assert meta["type_secret"] is True
+            assert meta["type_vulnerability"] is False
+            assert meta["type_weakness"] is False
+            assert meta["type_misconfiguration"] is False
+            assert meta["type_exposure"] is False
+            assert meta["type_dependency"] is False
+
+    def test_text_no_match_value(
+        self, project_env: dict, dir_parsed_data: dict
+    ) -> None:
+        """Document text must not have 'Pattern matched'; must have redaction note."""
+        result = _make_gitleaks_result(dir_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for text in all_docs["documents"]:
+            assert "Pattern matched" not in text
+            assert "Note: Secret value redacted" in text
+
 
 # ---------------------------------------------------------------------------
 # Git-scan unit tests
@@ -370,7 +405,7 @@ class TestGitleaksGitScan:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="git-repo")
-        assert ingested == n_secrets
+        assert len(ingested) == n_secrets
         assert engine.count_documents() == n_secrets
 
     def test_commit_present_in_git_scan(
@@ -464,7 +499,7 @@ class TestGitleaksCombinedScan:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="combined-repo")
-        assert ingested == n
+        assert len(ingested) == n
         assert engine.count_documents() == n
 
     def test_combined_metadata_fidelity(
@@ -513,8 +548,8 @@ class TestGitleaksCombinedScan:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="combined-repo")
-        assert ingested == len(combined["secrets"]), (
-            f"Ingested {ingested} != combined count {len(combined['secrets'])}"
+        assert len(ingested) == len(combined["secrets"]), (
+            f"Ingested {len(ingested)} != combined count {len(combined['secrets'])}"
         )
         assert engine.count_documents() == len(combined["secrets"])
 

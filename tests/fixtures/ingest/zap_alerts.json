@@ -1,0 +1,29 @@
+{
+  "alerts": [
+    {
+      "alert_name": "SQL Injection",
+      "risk": "high",
+      "confidence": "medium",
+      "description": "SQL injection may be possible.",
+      "solution": "Use parameterized queries or prepared statements.",
+      "url": "https://example.com/api/users",
+      "method": "post",
+      "param": "id",
+      "evidence": "1=1",
+      "cwe_id": 89
+    },
+    {
+      "alert_name": "X-Content-Type-Options Header Missing",
+      "risk": "low",
+      "confidence": "medium",
+      "description": "Anti-MIME-Sniffing header missing.",
+      "solution": "Set X-Content-Type-Options: nosniff header.",
+      "url": "https://example.com/api/status",
+      "method": "get",
+      "param": null,
+      "evidence": null,
+      "cwe_id": null
+    }
+  ],
+  "summary": {"total_alerts": 2, "high": 1, "low": 1}
+}

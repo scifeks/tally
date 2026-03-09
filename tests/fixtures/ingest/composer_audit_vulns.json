@@ -1,0 +1,16 @@
+{
+  "vulnerabilities": [
+    {
+      "package_name": "symfony/http-kernel",
+      "package_version": "5.3.0",
+      "vulnerability_id": "CVE-2022-24894",
+      "severity": "low",
+      "summary": "Information disclosure via stored cookie",
+      "affected_ecosystem": "Packagist",
+      "fixed_version": null,
+      "cvss_score": null,
+      "source_file": null
+    }
+  ],
+  "summary": {"total_vulnerabilities": 1, "packages_scanned": 10}
+}

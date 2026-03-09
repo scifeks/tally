@@ -297,7 +297,7 @@ class TestPipAuditIngestor:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-repo")
-        assert ingested == n_vulns
+        assert len(ingested) == n_vulns
         assert engine.count_documents() == n_vulns
 
     def test_zero_vulns_ingests_nothing(
@@ -309,7 +309,7 @@ class TestPipAuditIngestor:
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-repo")
-        assert ingested == 0
+        assert ingested == []
         assert engine.count_documents() == 0
 
     def test_metadata_fields_always_present(
@@ -503,3 +503,259 @@ class TestPipAuditIngestor:
 
         ingestor.ingest_tool_output(result_a, profile="profile-a")
         assert engine.count_documents() == total
+
+    def test_shared_metadata_fields(
+        self, project_env: dict, vulns_parsed_data: dict
+    ) -> None:
+        """pip-audit chunks have correct domain/tool_type/enriched/type_* fields."""
+        result = _make_pip_audit_result(vulns_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for meta in all_docs["metadatas"]:
+            assert meta["domain"] == "code"
+            assert meta["tool_type"] == "code"
+            assert meta["enriched"] is False
+            assert meta["type_dependency"] is True
+            assert meta["type_vulnerability"] is True
+            assert meta["type_secret"] is False
+            assert meta["type_weakness"] is False
+            assert meta["type_misconfiguration"] is False
+            assert meta["type_exposure"] is False
+
+
+# ---------------------------------------------------------------------------
+# SCA tool helper
+# ---------------------------------------------------------------------------
+
+
+def _make_sca_result(tool_name: str, parsed_data: dict) -> ToolResult:
+    return ToolResult(
+        tool_name=tool_name,
+        success=True,
+        output="",
+        parsed_data=parsed_data,
+        output_files={},
+        timestamp=RAGEngine.now_iso(),
+        duration_seconds=0.1,
+    )
+
+
+# ---------------------------------------------------------------------------
+# npm-audit ingestor tests
+# ---------------------------------------------------------------------------
+
+
+class TestNpmAuditIngestor:
+    @pytest.fixture()
+    def npm_parsed_data(self) -> dict:
+        raw = json.loads((_FIXTURES / "npm_audit_vulns.json").read_text())
+        vulns = []
+        for v in raw["vulnerabilities"]:
+            entry: dict = {
+                "package_name": v["package_name"],
+                "package_version": v["package_version"],
+                "vulnerability_id": v["vulnerability_id"],
+                "severity": v["severity"],
+                "summary": v["summary"],
+                "affected_ecosystem": v["affected_ecosystem"],
+                "fixed_version": v.get("fixed_version"),
+                "cvss_score": v.get("cvss_score"),
+                "source_file": v.get("source_file") or "",
+            }
+            vulns.append(entry)
+        return {"vulnerabilities": vulns, "summary": raw["summary"]}
+
+    def test_tool_name_in_metadata(
+        self, project_env: dict, npm_parsed_data: dict
+    ) -> None:
+        result = _make_sca_result("npm-audit", npm_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for meta in all_docs["metadatas"]:
+            assert meta["tool"] == "npm-audit"
+
+    def test_shared_metadata(self, project_env: dict, npm_parsed_data: dict) -> None:
+        result = _make_sca_result("npm-audit", npm_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for meta in all_docs["metadatas"]:
+            assert meta["domain"] == "code"
+            assert meta["tool_type"] == "code"
+            assert meta["enriched"] is False
+            assert meta["type_dependency"] is True
+            assert meta["type_vulnerability"] is True
+
+    def test_metadata_fidelity(self, project_env: dict, npm_parsed_data: dict) -> None:
+        result = _make_sca_result("npm-audit", npm_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        assert len(all_docs["metadatas"]) == len(npm_parsed_data["vulnerabilities"])
+        meta = all_docs["metadatas"][0]
+        vuln = npm_parsed_data["vulnerabilities"][0]
+        assert meta["package_name"] == vuln["package_name"]
+        assert meta["vulnerability_id"] == vuln["vulnerability_id"]
+        assert meta["severity"] == vuln["severity"]
+
+    def test_return_type_is_list(
+        self, project_env: dict, npm_parsed_data: dict
+    ) -> None:
+        result = _make_sca_result("npm-audit", npm_parsed_data)
+        engine = _make_rag_engine(project_env)
+        doc_ids = FindingIngestor(
+            engine, project_env["project_name"]
+        ).ingest_tool_output(result, profile="test-repo")
+        assert isinstance(doc_ids, list)
+        assert len(doc_ids) == len(npm_parsed_data["vulnerabilities"])
+        assert all(isinstance(i, str) for i in doc_ids)
+
+
+# ---------------------------------------------------------------------------
+# osv-scanner ingestor tests
+# ---------------------------------------------------------------------------
+
+
+class TestOsvScannerIngestor:
+    @pytest.fixture()
+    def osv_parsed_data(self) -> dict:
+        raw = json.loads((_FIXTURES / "osv_scanner_vulns.json").read_text())
+        vulns = []
+        for v in raw["vulnerabilities"]:
+            entry: dict = {
+                "package_name": v["package_name"],
+                "package_version": v["package_version"],
+                "vulnerability_id": v["vulnerability_id"],
+                "severity": v["severity"],
+                "summary": v["summary"],
+                "affected_ecosystem": v["affected_ecosystem"],
+                "fixed_version": v.get("fixed_version"),
+                "cvss_score": v.get("cvss_score"),
+                "source_file": v.get("source_file") or "",
+            }
+            vulns.append(entry)
+        return {"vulnerabilities": vulns, "summary": raw["summary"]}
+
+    def test_shared_metadata(self, project_env: dict, osv_parsed_data: dict) -> None:
+        result = _make_sca_result("osv-scanner", osv_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for meta in all_docs["metadatas"]:
+            assert meta["domain"] == "code"
+            assert meta["tool_type"] == "code"
+            assert meta["enriched"] is False
+            assert meta["type_dependency"] is True
+            assert meta["type_vulnerability"] is True
+
+    def test_cvss_score_present(self, project_env: dict, osv_parsed_data: dict) -> None:
+        result = _make_sca_result("osv-scanner", osv_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        meta = all_docs["metadatas"][0]
+        assert "cvss_score" in meta
+        assert isinstance(meta["cvss_score"], float)
+
+    def test_lockfile_present(self, project_env: dict, osv_parsed_data: dict) -> None:
+        result = _make_sca_result("osv-scanner", osv_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        meta = all_docs["metadatas"][0]
+        assert "lockfile" in meta
+        assert meta["lockfile"] == "requirements.txt"
+
+    def test_return_type_is_list(
+        self, project_env: dict, osv_parsed_data: dict
+    ) -> None:
+        result = _make_sca_result("osv-scanner", osv_parsed_data)
+        engine = _make_rag_engine(project_env)
+        doc_ids = FindingIngestor(
+            engine, project_env["project_name"]
+        ).ingest_tool_output(result, profile="test-repo")
+        assert isinstance(doc_ids, list)
+        assert len(doc_ids) == len(osv_parsed_data["vulnerabilities"])
+        assert all(isinstance(i, str) for i in doc_ids)
+
+
+# ---------------------------------------------------------------------------
+# composer-audit ingestor tests
+# ---------------------------------------------------------------------------
+
+
+class TestComposerAuditIngestor:
+    @pytest.fixture()
+    def composer_parsed_data(self) -> dict:
+        raw = json.loads((_FIXTURES / "composer_audit_vulns.json").read_text())
+        vulns = []
+        for v in raw["vulnerabilities"]:
+            entry: dict = {
+                "package_name": v["package_name"],
+                "package_version": v["package_version"],
+                "vulnerability_id": v["vulnerability_id"],
+                "severity": v["severity"],
+                "summary": v["summary"],
+                "affected_ecosystem": v["affected_ecosystem"],
+                "fixed_version": v.get("fixed_version"),
+                "cvss_score": v.get("cvss_score"),
+                "source_file": v.get("source_file") or "",
+            }
+            vulns.append(entry)
+        return {"vulnerabilities": vulns, "summary": raw["summary"]}
+
+    def test_shared_metadata(
+        self, project_env: dict, composer_parsed_data: dict
+    ) -> None:
+        result = _make_sca_result("composer-audit", composer_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        for meta in all_docs["metadatas"]:
+            assert meta["domain"] == "code"
+            assert meta["tool_type"] == "code"
+            assert meta["enriched"] is False
+            assert meta["type_dependency"] is True
+            assert meta["type_vulnerability"] is True
+
+    def test_fixed_version_absent(
+        self, project_env: dict, composer_parsed_data: dict
+    ) -> None:
+        result = _make_sca_result("composer-audit", composer_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-repo"
+        )
+        all_docs = _get_all_docs(engine)
+        meta = all_docs["metadatas"][0]
+        assert "fixed_version" not in meta
+
+    def test_return_type_is_list(
+        self, project_env: dict, composer_parsed_data: dict
+    ) -> None:
+        result = _make_sca_result("composer-audit", composer_parsed_data)
+        engine = _make_rag_engine(project_env)
+        doc_ids = FindingIngestor(
+            engine, project_env["project_name"]
+        ).ingest_tool_output(result, profile="test-repo")
+        assert isinstance(doc_ids, list)
+        assert len(doc_ids) == len(composer_parsed_data["vulnerabilities"])
+        assert all(isinstance(i, str) for i in doc_ids)
