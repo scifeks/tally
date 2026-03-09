@@ -1,0 +1,33 @@
+{
+  "dependencies": [
+    {
+      "name": "requests",
+      "version": "2.25.0",
+      "vulns": [
+        {
+          "id": "PYSEC-2023-74",
+          "description": "Requests forwards proxy-authorization headers to destination servers when following redirects.",
+          "fix_versions": ["2.31.0"],
+          "severity": "HIGH"
+        }
+      ]
+    },
+    {
+      "name": "pillow",
+      "version": "9.0.0",
+      "vulns": [
+        {
+          "id": "PYSEC-2023-175",
+          "description": "Pillow through 10.0.0 allows DoS via uncontrolled resource consumption in PIL.ImageFont.",
+          "fix_versions": [],
+          "severity": "MEDIUM"
+        }
+      ]
+    },
+    {
+      "name": "boto3",
+      "version": "1.26.0",
+      "vulns": []
+    }
+  ]
+}
