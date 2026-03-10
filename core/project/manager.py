@@ -222,15 +222,16 @@ class ProjectManager:
 
         # Languages
         detect_base = Path(local_path_str) if local_path_str else None
-        lang_input = _prompt("  Languages (comma-separated or 'auto')")
-        if lang_input.lower() == "auto":
-            langs = _detect_languages(detect_base) if detect_base else []
-            if langs:
-                print(f"  [Detected: {', '.join(langs)}]")
-            else:
-                print("  [No languages detected]")
+        detected = _detect_languages(detect_base) if detect_base else []
+        if detected:
+            detected_label = ", ".join(detected)
+            prompt_label = f"  Languages (detected {detected_label})"
+            default_langs = detected_label
         else:
-            langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
+            prompt_label = "  Languages (comma-separated)"
+            default_langs = ""
+        lang_input = _prompt(prompt_label, default=default_langs)
+        langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
         # Base URLs
         url_input = _prompt("  Base URLs (comma-separated, optional)")
@@ -309,18 +310,19 @@ class ProjectManager:
 
             # Languages
             detect_base = Path(local_path_str) if local_path_str else None
-            current_langs = ", ".join(existing.languages) if existing.languages else ""
-            lang_input = _prompt(
-                "  Languages (comma-separated or 'auto')", default=current_langs
-            )
-            if lang_input.lower() == "auto":
-                langs = _detect_languages(detect_base) if detect_base else []
-                if langs:
-                    print(f"  [Detected: {', '.join(langs)}]")
-                else:
-                    print("  [No languages detected]")
+            detected = _detect_languages(detect_base) if detect_base else []
+            if detected:
+                detected_label = ", ".join(detected)
+                prompt_label = f"  Languages (detected {detected_label})"
+                default_langs = detected_label
             else:
-                langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
+                current_langs = (
+                    ", ".join(existing.languages) if existing.languages else ""
+                )
+                prompt_label = "  Languages (comma-separated)"
+                default_langs = current_langs
+            lang_input = _prompt(prompt_label, default=default_langs)
+            langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
             # Base URLs
             current_urls = ", ".join(existing.base_urls) if existing.base_urls else ""
