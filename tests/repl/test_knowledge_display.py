@@ -21,6 +21,7 @@ from core.repl.commands.knowledge_commands import (  # noqa: E402
     _all_from_tool,
     _build_generic_table,
     _build_gitleaks_table,
+    _build_semgrep_table,
 )
 
 # ---------------------------------------------------------------------------
@@ -352,3 +353,200 @@ class TestGenericTable:
         rendered = _render(table)
         assert "gitleaks" in rendered
         assert "nmap" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _semgrep_result helper
+# ---------------------------------------------------------------------------
+
+
+def _semgrep_result(
+    rule_id: str = "php.lang.security.injection.taint.sink",
+    file_path: str = "/src/BookingController.php",
+    line_start: int = 42,
+    severity: str = "medium",
+    cwe: str = "",
+    owasp: str = "",
+    distance: float | None = None,
+) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "tool": "semgrep",
+        "domain": "code",
+        "severity": severity,
+        "rule_id": rule_id,
+        "file_path": file_path,
+        "line_start": line_start,
+        "line_end": line_start + 2,
+        "type_vulnerability": True,
+        "type_weakness": True,
+    }
+    if cwe:
+        meta["cwe"] = cwe
+    if owasp:
+        meta["owasp"] = owasp
+    return {
+        "document": (
+            f"[semgrep] [{severity.upper()}] {rule_id} in {file_path}:{line_start}"
+        ),
+        "metadata": meta,
+        "distance": distance,
+    }
+
+
+# ---------------------------------------------------------------------------
+# _build_semgrep_table — column headers
+# ---------------------------------------------------------------------------
+
+
+class TestSemgrepTableHeaders:
+    def test_has_rule_id_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Rule ID" in rendered
+
+    def test_has_location_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Location" in rendered
+
+    def test_has_severity_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Severity" in rendered
+
+    def test_has_cwe_owasp_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "CWE / OWASP" in rendered
+
+    def test_no_finding_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Finding" not in rendered
+
+    def test_no_file_path_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "File Path" not in rendered
+
+    def test_no_line_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Line " not in rendered
+
+
+# ---------------------------------------------------------------------------
+# _build_semgrep_table — location formatting
+# ---------------------------------------------------------------------------
+
+
+class TestSemgrepTableLocation:
+    def test_location_contains_file_path_and_line(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(file_path="/src/BookingController.php", line_start=42)],
+            is_semantic=False,
+        )
+        rendered = _render(table)
+        assert "/src/BookingController.php:42" in rendered
+
+    def test_float_line_start_renders_as_int(self) -> None:
+        result = _semgrep_result(line_start=7)
+        result["metadata"]["line_start"] = 7.0  # simulate ChromaDB float storage
+        table = _build_semgrep_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "7.0" not in rendered
+        assert ":7" in rendered
+
+    def test_missing_line_start_shows_path_only(self) -> None:
+        result = _semgrep_result(file_path="/src/app.php")
+        result["metadata"].pop("line_start")
+        table = _build_semgrep_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "/src/app.php" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _build_semgrep_table — CWE / OWASP column
+# ---------------------------------------------------------------------------
+
+
+class TestSemgrepTableCweOwasp:
+    def test_both_cwe_and_owasp_combined(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(cwe="CWE-502", owasp="A8:2021")],
+            is_semantic=False,
+        )
+        rendered = _render(table)
+        assert "CWE-502" in rendered
+        assert "A8:2021" in rendered
+
+    def test_only_cwe_shows_cwe(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(cwe="CWE-502")],
+            is_semantic=False,
+        )
+        rendered = _render(table)
+        assert "CWE-502" in rendered
+        assert "A8:2021" not in rendered
+
+    def test_only_owasp_shows_owasp(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(owasp="A8:2021")],
+            is_semantic=False,
+        )
+        rendered = _render(table)
+        assert "A8:2021" in rendered
+        # "CWE" appears in the column header; verify no CWE value (e.g. "CWE-")
+        assert "CWE-" not in rendered
+
+    def test_neither_cwe_nor_owasp_blank_cell(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        # Header still present even when all cells are blank
+        assert "CWE / OWASP" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _build_semgrep_table — Relevance column
+# ---------------------------------------------------------------------------
+
+
+class TestSemgrepTableRelevance:
+    def test_relevance_absent_for_metadata_only(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(distance=None)], is_semantic=False
+        )
+        rendered = _render(table)
+        assert "Relevance" not in rendered
+
+    def test_relevance_present_for_semantic(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(distance=0.123)], is_semantic=True
+        )
+        rendered = _render(table)
+        assert "Relevance" in rendered
+
+    def test_relevance_value_formatted_to_three_decimals(self) -> None:
+        table = _build_semgrep_table(
+            [_semgrep_result(distance=0.456789)], is_semantic=True
+        )
+        rendered = _render(table)
+        assert "0.457" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _all_from_tool — semgrep
+# ---------------------------------------------------------------------------
+
+
+class TestAllFromToolSemgrep:
+    def test_all_semgrep_returns_true(self) -> None:
+        results = [_semgrep_result(), _semgrep_result(rule_id="other.rule")]
+        assert _all_from_tool(results, "semgrep") is True
+
+    def test_mixed_semgrep_and_nmap_returns_false(self) -> None:
+        results = [_semgrep_result(), _nmap_result()]
+        assert _all_from_tool(results, "semgrep") is False
+
+    def test_single_semgrep_returns_true(self) -> None:
+        assert _all_from_tool([_semgrep_result()], "semgrep") is True

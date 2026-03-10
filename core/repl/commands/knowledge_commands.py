@@ -83,6 +83,51 @@ def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> T
     return table
 
 
+def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
+    """Build a semgrep-specific Rich table."""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Rule ID", style="white", overflow="fold")
+    table.add_column("Location", style="cyan", overflow="fold")
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Type", style="green")
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("Risk Type", style="dim white")
+    table.add_column("CWE / OWASP", style="dim white")
+    if is_semantic:
+        table.add_column("Relevance", style="dim", no_wrap=True)
+
+    for r in results:
+        meta = r["metadata"]
+        sev = meta.get("severity", "")
+        file_path = meta.get("file_path", "")
+        line_start = meta.get("line_start")
+        location = (
+            f"{file_path}:{int(line_start)}" if line_start is not None else file_path
+        )
+        cwe_raw = meta.get("cwe", "")
+        owasp_raw = meta.get("owasp", "")
+        cwe = ", ".join(cwe_raw) if isinstance(cwe_raw, list) else (cwe_raw or "")
+        owasp = (
+            ", ".join(owasp_raw) if isinstance(owasp_raw, list) else (owasp_raw or "")
+        )
+        cwe_owasp = " / ".join(filter(None, [cwe, owasp]))
+        row: list[str] = [
+            meta.get("rule_id", ""),
+            location,
+            _color_severity(sev),
+            _extract_types(meta),
+            meta.get("confidence", ""),
+            meta.get("risk_type", ""),
+            cwe_owasp,
+        ]
+        if is_semantic:
+            dist = r["distance"]
+            row.append(f"{dist:.3f}" if dist is not None else "")
+        table.add_row(*row)
+
+    return table
+
+
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
@@ -162,6 +207,8 @@ class KnowledgeCommands:
 
         if _all_from_tool(results, "gitleaks"):
             table = _build_gitleaks_table(results, is_semantic)
+        elif _all_from_tool(results, "semgrep"):
+            table = _build_semgrep_table(results, is_semantic)
         else:
             table = _build_generic_table(results, is_semantic)
 
