@@ -102,6 +102,7 @@ class GlobalConfig(BaseModel):
         description="Ollama embedding model to use (e.g. nomic-embed-text)"
     )
     projects_dir: str = Field(default="./projects")
+    location_attestation_confirmed: bool = Field(default=False)
 
     @field_validator("ollama_base_url")
     @classmethod

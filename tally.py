@@ -14,8 +14,31 @@ from core.tools.registry import discover_tools
 
 _BASE_PATH = "."
 
+_ATTESTATION_TEXT = """
+This tool is not licensed for use in California or Colorado due to
+state-specific regulatory requirements (CA Age-Appropriate Design Code,
+CO Privacy Act). By continuing, you attest that you are not accessing
+this tool from either of those states.
+
+Continue? [y/N]: """
+
+
+def check_location_attestation(base_path: str) -> None:
+    from core.config.manager import ConfigManager
+
+    config_manager = ConfigManager(base_path)
+    if config_manager.global_config.location_attestation_confirmed:
+        return
+    answer = input(_ATTESTATION_TEXT).strip().lower()
+    if answer != "y":
+        sys.exit(0)
+    config_manager.global_config.location_attestation_confirmed = True
+    config_manager.save_global_config(config_manager.global_config)
+
+
 if __name__ == "__main__":
-    # --- logging setup (first thing, before any module does work) ---
+    check_location_attestation(_BASE_PATH)
+    # --- logging setup (first thing after attestation, before any module does work) ---
     _logs_dir = Path("logs")
     _logs_dir.mkdir(exist_ok=True)
     logging.basicConfig(
