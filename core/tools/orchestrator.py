@@ -569,7 +569,11 @@ class ScanOrchestrator:
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
 
-        profiles = self._config.load_nmap_hosts(self.project_name) or {}
+        from core.setup.nmap_setup import check_exclusion_conflicts
+
+        nmap_config = self._config.load_nmap_hosts(self.project_name)
+        profiles = nmap_config.profiles if nmap_config else {}
+        excluded = nmap_config.excluded_networks if nmap_config else []
         if not profiles:
             self.console.print(
                 "[yellow]No nmap profiles configured"
@@ -590,6 +594,16 @@ class ScanOrchestrator:
             return results, total_run, total_skipped, total_failed, total_ingested
 
         for profile_name in profiles:
+            profile_obj = profiles[profile_name]
+            conflicts = check_exclusion_conflicts(profile_obj.hosts, excluded)
+            if conflicts:
+                self.console.print(
+                    f"[red]nmap/{profile_name}: SKIPPED — conflicts with "
+                    f"exclusion list: {conflicts}. Fix with: tool edit nmap[/red]"
+                )
+                total_skipped += 1
+                continue
+
             self.console.print(f"  [dim][*] Running nmap ({profile_name})...[/dim]")
             kwargs = self._nmap_kwargs(profile_name)
             result = self._run_tool_with_approval(tool, kwargs, auto_approve)
