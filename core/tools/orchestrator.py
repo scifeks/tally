@@ -652,7 +652,27 @@ class ScanOrchestrator:
             self.console.print(f"  [bold]Repository:[/bold] {repo.name}")
             repo_results: list[ToolResult] = []
 
+            _lang_specific: set[str] = {
+                t for tools in LANGUAGE_TOOL_MAP.values() for t in tools
+            }
+
             for tool_name in tool_names:
+                if tool_name in _lang_specific:
+                    repo_langs = {lang.lower() for lang in (repo.languages or [])}
+                    allowed = {
+                        t
+                        for lang, tools in LANGUAGE_TOOL_MAP.items()
+                        if lang in repo_langs
+                        for t in tools
+                    }
+                    if tool_name not in allowed:
+                        self.console.print(
+                            f"  [dim]- {tool_name} | SKIPPED "
+                            f"(not applicable for {repo.name} languages)[/dim]"
+                        )
+                        total_skipped += 1
+                        continue
+
                 if tool_name == "zap" and not repo.base_urls:
                     self.console.print("  [dim]- zap | SKIPPED (no base_urls)[/dim]")
                     total_skipped += 1
