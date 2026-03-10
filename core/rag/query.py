@@ -1,7 +1,6 @@
 """Semantic search and RAG-augmented chat over a project's ChromaDB collection."""
 
 import logging
-import re
 from typing import Any
 
 import ollama
@@ -9,6 +8,7 @@ import ollama
 from core.config.manager import ConfigManager
 
 from .engine import RAGEngine, verify_ollama_available
+from .search_parser import parse_search_query
 
 logger = logging.getLogger(__name__)
 
@@ -59,29 +59,22 @@ class QueryEngine:
 
     def search(
         self,
-        query: str,
+        raw_input: str,
         n_results: int = _DEFAULT_N_RESULTS,
-        filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Semantic search against the findings collection.
+        """Parse raw_input, run semantic or metadata-only search, return results.
 
-        When no explicit ``filters`` are provided, the query is inspected for
-        a known tool name. If exactly one tool is matched, a metadata filter is
-        applied automatically and ``n_results`` is set to the full count of
-        documents for that tool so minority tools are never crowded out.
+        Each result dict has keys: 'document' (str), 'metadata' (dict),
+        'distance' (float | None). Distance is None for metadata-only searches.
 
-        Args:
-            query:     Natural-language query string.
-            n_results: Maximum number of results when no tool filter is active.
-            filters:   Optional metadata filter dict (e.g. ``{"tool": "nmap"}``).
-                       When provided, auto-detection is skipped.
+        The n_results parameter is used by chat() to override the page size for
+        context retrieval. When called from cmd_search, n_results is the default
+        and pagination is driven by --page-size/--page flags in raw_input.
 
-        Returns:
-            List of result dicts sorted by relevance (lowest distance first).
-            Each dict has keys ``"document"`` (str), ``"metadata"`` (dict),
-            and ``"distance"`` (float).
+        Raises:
+            SearchValidationError: Propagated to caller for user-friendly display.
         """
-        if not query.strip():
+        if not raw_input.strip():
             return []
 
         collection = self._engine._collection
@@ -92,47 +85,57 @@ class QueryEngine:
         if total == 0:
             return []
 
-        # Auto-detect tool filter when none is explicitly provided.
-        if filters is None:
-            filters = self._detect_tool_filter(query)
-            if filters:
-                # Retrieve all documents for this tool so volume imbalance
-                # cannot crowd them out of the result set.
-                try:
-                    id_result = collection.get(where=filters, include=[])
-                    tool_count = len(id_result.get("ids") or [])
-                except Exception:
-                    tool_count = 0
-                if tool_count > 0:
-                    n_results = tool_count
+        query = parse_search_query(raw_input, self._known_tools)
 
-        # ChromaDB errors if n_results > number of documents in the collection.
-        n = min(n_results, total)
+        # chat() passes n_results to override page_size for context retrieval
+        page_size = n_results if n_results != _DEFAULT_N_RESULTS else query.page_size
+        page = query.page
+        offset = (page - 1) * page_size
 
-        kwargs: dict[str, Any] = {
-            "query_texts": [query],
-            "n_results": n,
-            "include": ["documents", "metadatas", "distances"],
-        }
-        if filters:
-            kwargs["where"] = filters
-
-        try:
-            raw = collection.query(**kwargs)
-        except Exception as exc:
-            logger.warning("search query failed: %s", exc)
-            return []
-
-        docs = (raw.get("documents") or [[]])[0]
-        metas = (raw.get("metadatas") or [[]])[0]
-        dists = (raw.get("distances") or [[]])[0]
-
-        results = []
-        for doc, meta, dist in zip(docs, metas, dists):
-            results.append({"document": doc, "metadata": meta or {}, "distance": dist})
-
-        results.sort(key=lambda r: r["distance"])
-        return results
+        if query.is_semantic:
+            # ChromaDB query has no native offset — fetch page*page_size, then slice.
+            fetch_n = min(page_size * page, total)
+            kwargs: dict[str, Any] = {
+                "query_texts": [query.semantic_text],
+                "n_results": fetch_n,
+                "include": ["documents", "metadatas", "distances"],
+            }
+            if query.where_filter:
+                kwargs["where"] = query.where_filter
+            try:
+                raw = collection.query(**kwargs)
+            except Exception as exc:
+                logger.warning("search query failed: %s", exc)
+                return []
+            docs = (raw.get("documents") or [[]])[0]
+            metas = (raw.get("metadatas") or [[]])[0]
+            dists = (raw.get("distances") or [[]])[0]
+            all_results = [
+                {"document": doc, "metadata": meta or {}, "distance": dist}
+                for doc, meta, dist in zip(docs, metas, dists)
+            ]
+            all_results.sort(key=lambda r: r["distance"])
+            return all_results[offset : offset + page_size]
+        else:
+            # Metadata-only — use collection.get() with native limit+offset.
+            kwargs_get: dict[str, Any] = {
+                "include": ["documents", "metadatas"],
+                "limit": min(page_size, total),
+                "offset": offset,
+            }
+            if query.where_filter:
+                kwargs_get["where"] = query.where_filter
+            try:
+                raw_get = collection.get(**kwargs_get)
+            except Exception as exc:
+                logger.warning("metadata search failed: %s", exc)
+                return []
+            docs_g = raw_get.get("documents") or []
+            metas_g = raw_get.get("metadatas") or []
+            return [
+                {"document": doc, "metadata": meta or {}, "distance": None}
+                for doc, meta in zip(docs_g, metas_g)
+            ]
 
     def chat(self, message: str, n_context: int = _DEFAULT_N_RESULTS) -> str:
         """RAG-augmented chat: retrieve context then query the LLM.
@@ -187,28 +190,3 @@ class QueryEngine:
         except Exception as exc:
             logger.error("LLM chat failed: %s", exc)
             return f"LLM error: {exc}"
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
-    def _detect_tool_filter(self, query: str) -> dict[str, Any] | None:
-        """Detect a single tool name in ``query`` and return a ChromaDB filter.
-
-        Scans the lowercased query for each known tool name using word-boundary
-        matching. Returns a ``{"tool": name}`` filter if exactly one tool is
-        found. Returns ``None`` for zero or multiple matches so that general
-        queries ("summarize all findings") and multi-tool queries ("nmap and
-        gitleaks") fall through to unfiltered retrieval.
-
-        Args:
-            query: The user's raw query string.
-
-        Returns:
-            A ChromaDB ``where`` dict, or ``None``.
-        """
-        q = query.lower()
-        matched = [t for t in self._known_tools if re.search(rf"\b{re.escape(t)}\b", q)]
-        if len(matched) == 1:
-            return {"tool": matched[0]}
-        return None

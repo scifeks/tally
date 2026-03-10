@@ -30,7 +30,7 @@ Warning: 1 optional tool not found. Some scan features will be unavailable.
 Loaded 8 tools (2 available, 6 not installed)
 
 ╭─ Welcome ───────────────────────────────────╮
-│ Tally Web App Pentesting REPL v1.0          │
+│ Tally Web App Security Auditing REPL v1.0          │
 │ LlamaIndex + Chroma + Ollama                │
 │ Active Project: No active project           │
 ╰─────────────────────────────────────────────╯
@@ -65,14 +65,14 @@ Tally organizes all scans and findings by project. Before scanning, you need an 
 Tally prompts you interactively:
 
 ```
-Project name: acme-pentest
-✓ Project created: acme-pentest
-[acme-pentest]>
+Project name: acme-security-audit
+✓ Project created: acme-security-audit
+[acme-security-audit]>
 ```
 
-The new project becomes the active project immediately. The prompt changes to show `[acme-pentest]>`.
+The new project becomes the active project immediately. The prompt changes to show `[acme-security-audit]>`.
 
-Project files are created under `projects/acme-pentest/`:
+Project files are created under `projects/acme-security-audit/`:
 
 ```
 config/
@@ -96,7 +96,7 @@ reports/               # Generated reports
 A repository represents a codebase to scan. Add one with:
 
 ```
-[acme-pentest]> repo add
+[acme-security-audit]> repo add
 ```
 
 You are prompted for:
@@ -106,7 +106,7 @@ You are prompted for:
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 
 ```
-[acme-pentest]> repo add
+[acme-security-audit]> repo add
 Repository name: api-server
 Path: /home/user/projects/acme/api
 Languages (comma-separated): python
@@ -117,7 +117,7 @@ Base URLs (comma-separated, optional):
 View configured repositories:
 
 ```
-[acme-pentest]> repo list
+[acme-security-audit]> repo list
  Name        | Path                         | Languages | Base URLs
  api-server  | /home/user/projects/acme/api | python    | —
 ```
@@ -125,8 +125,8 @@ View configured repositories:
 Edit or remove a repository:
 
 ```
-[acme-pentest]> repo edit api-server
-[acme-pentest]> repo delete api-server
+[acme-security-audit]> repo edit api-server
+[acme-security-audit]> repo delete api-server
 ```
 
 ---
@@ -138,7 +138,7 @@ Tally stores tool configuration in `config/commands.json`. Use the `tool` comman
 ### Listing Tools
 
 ```
-[acme-pentest]> tool list
+[acme-security-audit]> tool list
 ```
 
 Shows all configured tools, their execution mode (local or docker), and whether they are currently available.
@@ -146,7 +146,7 @@ Shows all configured tools, their execution mode (local or docker), and whether 
 ### Adding a Tool
 
 ```
-[acme-pentest]> tool add
+[acme-security-audit]> tool add
 ```
 
 Tally lists tools that have a wrapper but are not yet configured. Select one by name or number and follow the prompts to configure the binary path (local) or container details (docker).
@@ -154,7 +154,7 @@ Tally lists tools that have a wrapper but are not yet configured. Select one by 
 ### Editing a Tool
 
 ```
-[acme-pentest]> tool edit semgrep
+[acme-security-audit]> tool edit semgrep
 ```
 
 Re-runs the configuration interview for the named tool, pre-filling current values. Press Enter to keep an existing value.
@@ -162,7 +162,7 @@ Re-runs the configuration interview for the named tool, pre-filling current valu
 ### Removing a Tool
 
 ```
-[acme-pentest]> tool remove semgrep
+[acme-security-audit]> tool remove semgrep
 ```
 
 Removes the tool from `config/commands.json`. Tally asks for confirmation before deleting.
@@ -176,13 +176,13 @@ Removes the tool from `config/commands.json`. Tally asks for confirmation before
 Runs all segments (network, sast, sca, secrets, api) in order across all configured repositories. The network segment uses nmap profiles from `nmap_hosts.json`.
 
 ```
-[acme-pentest]> scan
+[acme-security-audit]> scan
 ```
 
 Tally prompts for approval before each tool execution:
 
 ```
-Full Scan: acme-pentest
+Full Scan: acme-security-audit
 ──────────────────────────────────────────────────
 
 NETWORK
@@ -202,7 +202,7 @@ Scan complete: 5 passed, 0 failed, 2 skipped | 28 findings ingested | 89.4s tota
 Auto-approve all tool executions without prompting:
 
 ```
-[acme-pentest]> scan -y
+[acme-security-audit]> scan -y
 ```
 
 ### Segment Scan
@@ -210,11 +210,11 @@ Auto-approve all tool executions without prompting:
 Run a single segment across all repositories:
 
 ```
-[acme-pentest]> scan -s sast
-[acme-pentest]> scan -s sca
-[acme-pentest]> scan -s secrets
-[acme-pentest]> scan -s api
-[acme-pentest]> scan -s network
+[acme-security-audit]> scan -s sast
+[acme-security-audit]> scan -s sca
+[acme-security-audit]> scan -s secrets
+[acme-security-audit]> scan -s api
+[acme-security-audit]> scan -s network
 ```
 
 Valid segments: `network`, `sast`, `sca`, `secrets`, `api`
@@ -222,20 +222,20 @@ Valid segments: `network`, `sast`, `sca`, `secrets`, `api`
 ### Single Tool Scan
 
 ```
-[acme-pentest]> scan semgrep
-[acme-pentest]> scan osv-scanner
-[acme-pentest]> scan gitleaks
-[acme-pentest]> scan pip-audit
-[acme-pentest]> scan npm-audit
-[acme-pentest]> scan composer-audit
-[acme-pentest]> scan zap
+[acme-security-audit]> scan semgrep
+[acme-security-audit]> scan osv-scanner
+[acme-security-audit]> scan gitleaks
+[acme-security-audit]> scan pip-audit
+[acme-security-audit]> scan npm-audit
+[acme-security-audit]> scan composer-audit
+[acme-security-audit]> scan zap
 ```
 
 For nmap, you can optionally specify a profile name. Without a profile name, all configured profiles run:
 
 ```
-[acme-pentest]> scan nmap
-[acme-pentest]> scan nmap management
+[acme-security-audit]> scan nmap
+[acme-security-audit]> scan nmap management
 ```
 
 ### Timeout
@@ -243,8 +243,8 @@ For nmap, you can optionally specify a profile name. Without a profile name, all
 All scan commands accept `--timeout <seconds>` (default: 300):
 
 ```
-[acme-pentest]> scan nmap --timeout 600
-[acme-pentest]> scan -s sca --timeout 120
+[acme-security-audit]> scan nmap --timeout 600
+[acme-security-audit]> scan -s sca --timeout 120
 ```
 
 ### Repo Scan
@@ -257,7 +257,7 @@ Runs all language-appropriate tools for a single repository. Tool selection is a
 - PHP repos: adds composer-audit
 
 ```
-[acme-pentest]> scan repo
+[acme-security-audit]> scan repo
 ```
 
 If you have only one repository, it is selected automatically. With multiple repositories, Tally presents an interactive selection menu.
@@ -266,16 +266,16 @@ Additional flags:
 
 ```
 # Auto-approve all tool executions
-[acme-pentest]> scan repo -y
+[acme-security-audit]> scan repo -y
 
 # Exclude directories from scanning
-[acme-pentest]> scan repo --exclude tests,vendor,node_modules
+[acme-security-audit]> scan repo --exclude tests,vendor,node_modules
 
 # Filter findings by minimum severity
-[acme-pentest]> scan repo --severity high
+[acme-security-audit]> scan repo --severity high
 
 # Export results to a file
-[acme-pentest]> scan repo --export /tmp/api-server-results.json
+[acme-security-audit]> scan repo --export /tmp/api-server-results.json
 ```
 
 Valid severity values: `critical`, `high`, `medium`, `low`
@@ -283,7 +283,7 @@ Valid severity values: `critical`, `high`, `medium`, `low`
 To run a single tool against all repositories:
 
 ```
-[acme-pentest]> scan repo semgrep
+[acme-security-audit]> scan repo semgrep
 ```
 
 ### Docker vs Local Execution
@@ -293,7 +293,7 @@ Each tool runs in whichever mode is configured in `config/commands.json` — eit
 To switch a tool from local to Docker (or vice versa):
 
 ```
-[acme-pentest]> tool edit semgrep
+[acme-security-audit]> tool edit semgrep
 ```
 
 For Docker tools, repositories must have a `docker_path` set — the container-side mount path for the repository. This is set when adding or editing a repository with `repo add` / `repo edit`.
@@ -303,7 +303,7 @@ For Docker tools, repositories must have a `docker_path` set — the container-s
 Run a tool with custom arguments, bypassing orchestration:
 
 ```
-[acme-pentest]> run nmap --timeout 120 -sV 192.168.1.0/24
+[acme-security-audit]> run nmap --timeout 120 -sV 192.168.1.0/24
 ```
 
 Tally asks if you want to ingest the output into the knowledge base after execution.
@@ -319,7 +319,7 @@ Findings are automatically ingested into the RAG knowledge base after each scan.
 Semantic search over all ingested findings:
 
 ```
-[acme-pentest]> search SQL injection vulnerabilities
+[acme-security-audit]> search SQL injection vulnerabilities
 ```
 
 Output:
@@ -338,9 +338,9 @@ Results are sorted by semantic distance (lower = more relevant).
 Ask a question about the findings using RAG-augmented LLM chat:
 
 ```
-[acme-pentest]> chat What are the most critical vulnerabilities found?
-[acme-pentest]> chat Are there any exposed admin endpoints?
-[acme-pentest]> chat Summarize the open ports and services found by nmap
+[acme-security-audit]> chat What are the most critical vulnerabilities found?
+[acme-security-audit]> chat Are there any exposed admin endpoints?
+[acme-security-audit]> chat Summarize the open ports and services found by nmap
 ```
 
 Tally retrieves relevant findings from the knowledge base and passes them to the Ollama LLM as context. The response appears in a panel:
@@ -360,7 +360,7 @@ Tally retrieves relevant findings from the knowledge base and passes them to the
 View a summary of what has been ingested:
 
 ```
-[acme-pentest]> stats
+[acme-security-audit]> stats
  Metric            | Value
  Total Documents   | 42
    nmap            | 8
@@ -381,13 +381,13 @@ Remove findings from the knowledge base when you want to re-scan cleanly.
 
 ```
 # Delete all findings from a specific tool
-[acme-pentest]> purge --tool semgrep
+[acme-security-audit]> purge --tool semgrep
 
 # Delete findings for a specific tool+profile combination
-[acme-pentest]> purge --tool nmap --profile management
+[acme-security-audit]> purge --tool nmap --profile management
 
 # --profile requires --tool
-[acme-pentest]> purge --profile management   # Error: requires --tool
+[acme-security-audit]> purge --profile management   # Error: requires --tool
 ```
 
 Tally shows a count and prompts for confirmation before deleting:
@@ -405,22 +405,22 @@ Reports aggregate all findings currently in the knowledge base.
 
 ```
 # Markdown report (default) — saved to projects/[name]/reports/report_<timestamp>.md
-[acme-pentest]> report
+[acme-security-audit]> report
 
 # HTML report — self-contained, suitable for sharing
-[acme-pentest]> report --format html
+[acme-security-audit]> report --format html
 
 # JSON report — machine-readable, full data
-[acme-pentest]> report --format json
+[acme-security-audit]> report --format json
 
 # Write to a specific path
-[acme-pentest]> report --output /tmp/acme-report.html --format html
+[acme-security-audit]> report --output /tmp/acme-report.html --format html
 ```
 
 Output:
 
 ```
-✓ Report saved: projects/acme-pentest/reports/report_2024-01-15_103422.md
+✓ Report saved: projects/acme-security-audit/reports/report_2024-01-15_103422.md
 ```
 
 The Markdown report contains:
@@ -437,14 +437,14 @@ The Markdown report contains:
 
 ```
 # List all projects
-[acme-pentest]> project list
+[acme-security-audit]> project list
 
  Name          | Created    | Repositories | Active
- → acme-pentest| 2024-01-14 | 2            | ✓
+ → acme-security-audit| 2024-01-14 | 2            | ✓
  corp-audit    | 2024-01-10 | 1            |
 
 # Switch to a different project
-[acme-pentest]> project switch corp-audit
+[acme-security-audit]> project switch corp-audit
 ✓ Switched to project: corp-audit
 [corp-audit]>
 

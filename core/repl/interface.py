@@ -1,4 +1,4 @@
-"""Interactive REPL shell for tally web app pentesting."""
+"""Interactive REPL shell for tally web app security auditing."""
 
 import shlex
 from pathlib import Path
@@ -80,7 +80,6 @@ _HELP_REGISTRY = [
     ("tool", "tool list", "List all configured tools and their status"),
     # Knowledge Base
     ("knowledge", None, "Knowledge Base"),
-    ("knowledge", "search <query>", "Semantic search over ingested findings"),
     ("knowledge", "chat <message>", "RAG-augmented chat with the LLM"),
     ("knowledge", "stats", "Show knowledge base statistics"),
     (
@@ -88,6 +87,36 @@ _HELP_REGISTRY = [
         "purge [--tool <t>] [--profile <p>]",
         "Delete findings from the knowledge base",
     ),
+    # Search
+    ("search", None, "Search"),
+    ("search", "", "[dim]= exact  ~= partial  Filters combine with AND[/dim]"),
+    ("search", "search <query>", "Semantic search over ingested findings"),
+    ("search", "search tool=<name>", "Filter by configured tool name"),
+    (
+        "search",
+        "search type=<type>",
+        "Filter by type: secret, vulnerability, weakness, misconfiguration, etc.",
+    ),
+    ("search", "search type=<t1>,<t2>", "AND-filter multiple finding types"),
+    ("search", "search severity=<level>", "Filter by severity level"),
+    ("search", "search <key>=<value>", "Exact match filter on metadata key"),
+    ("search", "search <key>~=<value>", "Partial match filter on metadata key"),
+    ("search", "search tool=<n> type=<t> severity=<s>", "Chain filters (AND)"),
+    ("search", "search tool=<name> <query>", "Combine filters with semantic search"),
+    ("search", "search <filters> --page=<n>", "Show page N of results (default: 1)"),
+    (
+        "search",
+        "search <filters> --page-size=<n>",
+        "Results per page (default: 20 semantic / 200 filter-only)",
+    ),
+    (
+        "search",
+        "Filter keys (global)",
+        "tool, domain, type, severity, confidence, risk_type, profile",
+    ),
+    ("search", "Filter keys (code)", "file~=<path>, rule=<id>"),
+    ("search", "Filter keys (web)", "url~=, method=, param~=, alert~="),
+    ("search", "Filter keys (network)", "host=, port=, service~=, transport="),
     # Reporting
     ("reporting", None, "Reporting"),
     ("reporting", "report", "Generate findings report"),
@@ -268,7 +297,7 @@ class REPL:
             project_line = "Active Project: [dim]No active project[/dim]"
 
         content = (
-            f"[cyan]Tally Web App Pentesting REPL v{_VERSION}[/cyan]\n"
+            f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
             "LlamaIndex + Chroma + Ollama\n"
             f"{project_line}"
         )

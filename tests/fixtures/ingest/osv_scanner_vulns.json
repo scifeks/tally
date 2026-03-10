@@ -1,0 +1,16 @@
+{
+  "vulnerabilities": [
+    {
+      "package_name": "requests",
+      "package_version": "2.25.0",
+      "vulnerability_id": "GHSA-j8r2-6x86-q33q",
+      "severity": "medium",
+      "summary": "Unintended leak of Proxy-Authorization header",
+      "affected_ecosystem": "PyPI",
+      "fixed_version": "2.31.0",
+      "cvss_score": 6.1,
+      "source_file": "requirements.txt"
+    }
+  ],
+  "summary": {"total_vulnerabilities": 1, "packages_scanned": 3}
+}

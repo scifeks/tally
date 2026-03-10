@@ -1,0 +1,14 @@
+{
+  "dependencies": [
+    {
+      "name": "requests",
+      "version": "2.31.0",
+      "vulns": []
+    },
+    {
+      "name": "boto3",
+      "version": "1.34.0",
+      "vulns": []
+    }
+  ]
+}

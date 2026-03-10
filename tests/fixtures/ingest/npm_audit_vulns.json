@@ -1,0 +1,16 @@
+{
+  "vulnerabilities": [
+    {
+      "package_name": "lodash",
+      "package_version": ">=4.0.0 <4.17.21",
+      "vulnerability_id": "GHSA-29mw-wpgm-hmr9",
+      "severity": "high",
+      "summary": "Prototype pollution in lodash",
+      "affected_ecosystem": "npm",
+      "fixed_version": "4.17.21",
+      "cvss_score": null,
+      "source_file": null
+    }
+  ],
+  "summary": {"total_vulnerabilities": 1, "packages_scanned": 5}
+}

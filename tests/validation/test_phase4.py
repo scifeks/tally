@@ -161,7 +161,7 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
 
 def _ingest(
     base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
-) -> int:
+) -> list[str]:
     engine = _make_rag_engine(base_path, project_name)
     return FindingIngestor(engine, project_name).ingest_tool_output(
         result, profile=profile
@@ -286,7 +286,7 @@ class TestIngestionUnit:
         count = _ingest(
             project_env["base_path"], project_env["project_name"], _make_nmap_result()
         )
-        assert count >= 1
+        assert len(count) >= 1
 
     def test_stats_shows_nmap_documents(self, project_env: dict) -> None:
         _ingest(
@@ -309,7 +309,7 @@ class TestIngestionUnit:
             duration_seconds=0.0,
         )
         count = _ingest(project_env["base_path"], project_env["project_name"], failed)
-        assert count == 0
+        assert count == []
 
     def test_parse_error_result_not_ingested(self, project_env: dict) -> None:
         errored = ToolResult(
@@ -322,7 +322,7 @@ class TestIngestionUnit:
             duration_seconds=0.0,
         )
         count = _ingest(project_env["base_path"], project_env["project_name"], errored)
-        assert count == 0
+        assert count == []
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +519,7 @@ class TestUpsert:
         base, name = project_env["base_path"], project_env["project_name"]
 
         count1 = _ingest(base, name, _make_nmap_result())
-        assert count1 >= 1
+        assert len(count1) >= 1
         total_after_first = _make_rag_engine(base, name).count_documents()
 
         time.sleep(1)  # force different ts_compact → different IDs in second ingest
@@ -557,7 +557,7 @@ class TestProjectIsolation:
     def test_ingest_does_not_leak_to_other_project(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
         count = _ingest(tmp_path, "proj-a", _make_nmap_result())
-        assert count >= 1
+        assert len(count) >= 1
         assert (
             RAGEngine(project_name="proj-b", base_path=str(tmp_path)).count_documents()
             == 0

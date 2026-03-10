@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.panel import Panel
 from rich.table import Table
@@ -11,6 +11,110 @@ if TYPE_CHECKING:
     from core.rag.engine import RAGEngine
     from core.rag.query import QueryEngine
     from core.repl.interface import REPL
+
+from core.tools.constants import BOOLEAN_TYPE_FIELDS
+
+
+def _extract_types(meta: dict) -> str:
+    """Return comma-separated list of active type_* fields."""
+    active = [
+        field[5:]  # strip "type_" prefix
+        for field in sorted(BOOLEAN_TYPE_FIELDS)
+        if meta.get(field)
+    ]
+    return ", ".join(active)
+
+
+_SEVERITY_COLORS = {
+    "critical": "red",
+    "high": "orange1",
+    "medium": "yellow",
+    "low": "blue",
+    "informational": "white",
+}
+
+
+def _color_severity(sev: str) -> str:
+    color = _SEVERITY_COLORS.get(sev, "white")
+    return f"[{color}]{sev}[/{color}]" if sev else ""
+
+
+def _all_from_tool(results: list[dict[str, Any]], tool_name: str) -> bool:
+    """Return True if every result in results belongs to tool_name."""
+    return bool(results) and all(
+        r.get("metadata", {}).get("tool") == tool_name for r in results
+    )
+
+
+def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
+    """Build a gitleaks-specific Rich table with file path and line number columns."""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("File Path", style="white", overflow="fold")
+    table.add_column("Line", style="cyan", justify="right", no_wrap=True)
+    table.add_column("Tool", style="cyan", no_wrap=True)
+    table.add_column("Domain", style="white", no_wrap=True)
+    table.add_column("Type", style="green")
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("Risk Type", style="dim white")
+    if is_semantic:
+        table.add_column("Relevance", style="dim", no_wrap=True)
+
+    for r in results:
+        meta = r["metadata"]
+        sev = meta.get("severity", "")
+        line_val = meta.get("line_number")
+        line_str = str(int(line_val)) if line_val is not None else ""
+        row: list[str] = [
+            meta.get("file_path", ""),
+            line_str,
+            meta.get("tool", ""),
+            meta.get("domain", ""),
+            _extract_types(meta),
+            _color_severity(sev),
+            meta.get("confidence", ""),
+            meta.get("risk_type", ""),
+        ]
+        if is_semantic:
+            dist = r["distance"]
+            row.append(f"{dist:.3f}" if dist is not None else "")
+        table.add_row(*row)
+
+    return table
+
+
+def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
+    """Build the generic findings Rich table."""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Finding", style="white", max_width=50)
+    table.add_column("Tool", style="cyan", no_wrap=True)
+    table.add_column("Domain", style="white", no_wrap=True)
+    table.add_column("Type", style="green")
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("Risk Type", style="dim white")
+    if is_semantic:
+        table.add_column("Relevance", style="dim", no_wrap=True)
+
+    for r in results:
+        meta = r["metadata"]
+        doc_text = r["document"][:80].replace("\n", " ") if r["document"] else ""
+        sev = meta.get("severity", "")
+        row: list[str] = [
+            doc_text,
+            meta.get("tool", ""),
+            meta.get("domain", ""),
+            _extract_types(meta),
+            _color_severity(sev),
+            meta.get("confidence", ""),
+            meta.get("risk_type", ""),
+        ]
+        if is_semantic:
+            dist = r["distance"]
+            row.append(f"{dist:.3f}" if dist is not None else "")
+        table.add_row(*row)
+
+    return table
 
 
 class KnowledgeCommands:
@@ -24,48 +128,58 @@ class KnowledgeCommands:
     # ------------------------------------------------------------------
 
     def cmd_search(self, _cmd: str, args: list[str]) -> None:
-        """search <query>  — semantic search over ingested findings."""
+        """search <query>  — search over ingested findings."""
         if not args:
-            self.repl.console.print("[red]Usage:[/red] search <query>")
+            self.repl.console.print("[red]Usage:[/red] search <query or filters>")
             return
 
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. "
-                "Use 'project add' or 'project switch <name>' first.[/yellow]"
+                "Use 'project add' or 'project switch' first.[/yellow]"
             )
             return
 
-        query = " ".join(args)
+        from core.rag.search_parser import SearchValidationError
+
+        raw = " ".join(args)
         query_engine = self._get_query_engine()
         if query_engine is None:
             return
 
-        with self.repl.console.status("Searching knowledge base..."):
-            results = query_engine.search(query)
-
-        if not results:
-            self.repl.console.print("[yellow]No results found.[/yellow]")
+        try:
+            with self.repl.console.status("Searching knowledge base..."):
+                results = query_engine.search(raw)
+        except SearchValidationError as exc:
+            self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
 
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("Finding", style="white", max_width=60)
-        table.add_column("Tool", style="cyan", no_wrap=True)
-        table.add_column("Type", style="green", no_wrap=True)
-        table.add_column("Relevance", style="yellow", no_wrap=True)
+        if not results:
+            self.repl.console.print("[yellow]No findings matched your search.[/yellow]")
+            return
 
-        for r in results:
-            text = r["document"]
-            preview = (text[:80] + "...") if len(text) > 80 else text
-            meta = r["metadata"]
-            table.add_row(
-                preview,
-                meta.get("tool", ""),
-                meta.get("finding_type", ""),
-                f"{r['distance']:.3f}",
-            )
+        is_semantic = results[0]["distance"] is not None
+
+        if _all_from_tool(results, "gitleaks"):
+            table = _build_gitleaks_table(results, is_semantic)
+        else:
+            table = _build_generic_table(results, is_semantic)
 
         self.repl.console.print(table)
+
+        # Pagination hint
+        from core.rag.search_parser import parse_search_query as _parse
+
+        try:
+            sq = _parse(raw, query_engine._known_tools)
+            shown = len(results)
+            if sq.page > 1 or shown == sq.page_size:
+                page_hint = f"Page {sq.page} · {shown} results"
+                if shown == sq.page_size:
+                    page_hint += f"  [dim]Use --page={sq.page + 1} for next page[/dim]"
+                self.repl.console.print(f"[dim]{page_hint}[/dim]")
+        except Exception:
+            pass  # pagination hint is non-critical
 
     def cmd_chat(self, _cmd: str, args: list[str]) -> None:
         """chat <message>  — RAG-augmented chat with the LLM."""

@@ -68,7 +68,7 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 
 ```json
 {
-  "project_name": "acme-pentest",
+  "project_name": "acme-security-audit",
   "created": "2024-01-14T10:23:45.123456+00:00",
   "repositories": []
 }

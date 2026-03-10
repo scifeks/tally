@@ -361,6 +361,39 @@ class RAGEngine:
             logger.error("add_documents failed: %s", exc)
             raise RuntimeError(f"Failed to add documents to collection: {exc}") from exc
 
+    def get_document_by_id(self, doc_id: str) -> dict | None:
+        """Fetch a single document and its metadata by ID.
+
+        Returns:
+            Dict with keys ``id``, ``document``, ``metadata``, or ``None`` if not found.
+        """
+        assert self._collection is not None
+        result = self._collection.get(ids=[doc_id], include=["documents", "metadatas"])
+        if not result["ids"]:
+            return None
+        return {
+            "id": result["ids"][0],
+            "document": (result["documents"] or [""])[0],
+            "metadata": (result["metadatas"] or [{}])[0],
+        }
+
+    def update_metadata(self, doc_id: str, metadata_updates: dict) -> None:
+        """Merge metadata_updates into an existing document's metadata.
+
+        Does NOT re-embed or change the document text. Existing fields not present
+        in ``metadata_updates`` are preserved.
+
+        Raises:
+            ValueError: If ``doc_id`` is not found in the collection.
+        """
+        assert self._collection is not None
+        existing = self._collection.get(ids=[doc_id], include=["metadatas"])
+        if not existing["ids"]:
+            raise ValueError(f"Document {doc_id!r} not found in collection")
+        current_meta: dict = dict((existing["metadatas"] or [{}])[0])
+        merged = {**current_meta, **metadata_updates}
+        self._collection.update(ids=[doc_id], metadatas=[merged])
+
     @staticmethod
     def now_iso() -> str:
         """Return the current UTC time as an ISO-8601 string."""

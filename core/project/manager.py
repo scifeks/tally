@@ -1,4 +1,4 @@
-"""Project management for tally pentesting REPL."""
+"""Project management for tally Security Auditing REPL."""
 
 # todo: Keep an eye on file size here. consider modular approach.
 import datetime
