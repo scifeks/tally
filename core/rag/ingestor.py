@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from core.tools.base import ToolResult
-from core.tools.constants import TOOL_DOMAIN_MAP, TOOL_TYPE_MAP
+from core.tools.constants import SEVERITY_INFORMATIONAL, TOOL_DOMAIN_MAP, TOOL_TYPE_MAP
 
 from .engine import RAGEngine
 
@@ -111,8 +111,8 @@ class FindingIngestor:
             ("gitleaks", "secret"): {"type_secret"},
             ("semgrep", "vulnerability"): {"type_vulnerability", "type_weakness"},
             ("zap", "api_vulnerability"): {"type_vulnerability"},
-            ("nmap", "host"): {"type_exposure"},
-            ("nmap", "open_port"): {"type_exposure"},
+            ("nmap", "host"): set(),
+            ("nmap", "open_port"): set(),
             ("pip-audit", "dependency_vulnerability"): _sca_flags,
             ("npm-audit", "dependency_vulnerability"): _sca_flags,
             ("osv-scanner", "dependency_vulnerability"): _sca_flags,
@@ -226,6 +226,7 @@ class FindingIngestor:
                 "source_file": source_file,
             }
             host_meta.update(self._shared_meta("nmap", "host"))
+            host_meta["severity"] = SEVERITY_INFORMATIONAL
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
             chunks.append((host_text, host_meta, host_id))
 
@@ -252,6 +253,7 @@ class FindingIngestor:
                     "source_file": source_file,
                 }
                 port_meta.update(self._shared_meta("nmap", "open_port"))
+                port_meta["severity"] = SEVERITY_INFORMATIONAL
                 for key in (
                     "tls",
                     "tls_version",

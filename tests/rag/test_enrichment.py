@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import chromadb.utils.embedding_functions as ef
 import pytest
@@ -16,7 +16,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from core.project import ProjectManager  # noqa: E402
 from core.rag import EnrichmentPipeline, RAGEngine  # noqa: E402
-from core.tools.constants import ENRICHMENT_FIELDS  # noqa: E402
+from core.tools.base import ToolResult  # noqa: E402
 
 _OLLAMA_URL = "http://localhost:11434"
 
@@ -225,14 +225,20 @@ class TestEnrichmentPipeline:
 
     def test_pipeline_continues_after_one_failure(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env)
+        # Use gitleaks so LLM enrichment is invoked (severity is tool-provided,
+        # but risk_type/remediation/description still need LLM)
         engine.add_documents(
             texts=["Finding A"],
-            metadatas=[{"tool": "nmap", "enriched": False}],
+            metadatas=[
+                {"tool": "gitleaks", "enriched": False, "severity": "confirmed"}
+            ],
             ids=["cont-001"],
         )
         engine.add_documents(
             texts=["Finding B"],
-            metadatas=[{"tool": "nmap", "enriched": False}],
+            metadatas=[
+                {"tool": "gitleaks", "enriched": False, "severity": "confirmed"}
+            ],
             ids=["cont-002"],
         )
         p = EnrichmentPipeline(engine, console=None)
@@ -243,7 +249,7 @@ class TestEnrichmentPipeline:
             call_count += 1
             if call_count == 1:
                 raise json.JSONDecodeError("bad", "", 0)
-            return _make_llm_response(list(ENRICHMENT_FIELDS))
+            return _make_llm_response(["risk_type", "remediation", "description"])
 
         with patch.object(p, "_call_llm", side_effect=side_effect):
             p.enrich(["cont-001", "cont-002"])
@@ -279,10 +285,10 @@ class TestEnrichmentPipeline:
         assert "risk_type" in fields
         assert "remediation" in fields
 
-    def test_nmap_enriches_all_fields(self, pipeline: EnrichmentPipeline) -> None:
+    def test_nmap_no_fields_to_enrich(self, pipeline: EnrichmentPipeline) -> None:
         metadata = {"tool": "nmap"}
         fields = pipeline._get_fields_to_enrich(metadata)
-        assert set(fields) == set(ENRICHMENT_FIELDS)
+        assert fields == []
 
     def test_skips_field_if_already_has_value(
         self, pipeline: EnrichmentPipeline
@@ -329,3 +335,147 @@ class TestEnrichmentPipeline:
         fields = list(raw.keys())
         result = pipeline._validate_response(raw, fields)
         assert result == raw
+
+
+# ---------------------------------------------------------------------------
+# TestNmapEnrichmentBypass — nmap bypasses LLM entirely
+# ---------------------------------------------------------------------------
+
+
+class TestNmapEnrichmentBypass:
+    def test_nmap_zero_llm_calls(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["[nmap] Port 22/tcp on 10.0.0.1: ssh"],
+            metadatas=[
+                {"tool": "nmap", "enriched": False, "severity": "informational"}
+            ],
+            ids=["nmap-bypass-001"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        with patch.object(p, "_call_llm") as mock_llm:
+            p.enrich(["nmap-bypass-001"])
+            mock_llm.assert_not_called()
+
+    def test_nmap_enriched_true_after_pipeline(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["[nmap] Host: 10.0.0.1\nStatus: up"],
+            metadatas=[
+                {"tool": "nmap", "enriched": False, "severity": "informational"}
+            ],
+            ids=["nmap-bypass-002"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        with patch.object(p, "_call_llm"):
+            p.enrich(["nmap-bypass-002"])
+        doc = engine.get_document_by_id("nmap-bypass-002")
+        assert doc is not None
+        assert doc["metadata"].get("enriched") is True
+
+    def test_semgrep_still_calls_llm(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["SQL injection in login.py line 42"],
+            metadatas=[{"tool": "semgrep", "enriched": False, "severity": "confirmed"}],
+            ids=["semgrep-regression-001"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        fields = ["risk_type", "remediation", "description"]
+        with patch.object(
+            p, "_call_llm", return_value=_make_llm_response(fields)
+        ) as mock_llm:
+            p.enrich(["semgrep-regression-001"])
+            mock_llm.assert_called_once()
+
+    def test_zap_still_calls_llm(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["Reflected XSS in search param"],
+            metadatas=[
+                {
+                    "tool": "zap",
+                    "enriched": False,
+                    "severity": "confirmed",
+                    "remediation": "Encode output.",
+                    "description": "XSS via search param.",
+                }
+            ],
+            ids=["zap-regression-001"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        with patch.object(
+            p, "_call_llm", return_value=_make_llm_response(["risk_type"])
+        ) as mock_llm:
+            p.enrich(["zap-regression-001"])
+            mock_llm.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# TestNmapIngestorMetadata — chunk builders produce correct metadata
+# ---------------------------------------------------------------------------
+
+
+class TestNmapIngestorMetadata:
+    def _make_nmap_result(self) -> ToolResult:
+        return ToolResult(
+            tool_name="nmap",
+            success=True,
+            output="",
+            parsed_data={
+                "hosts": [
+                    {
+                        "ip_address": "10.0.0.1",
+                        "hostname": "target.local",
+                        "state": "up",
+                        "ports": [
+                            {
+                                "port": 22,
+                                "transport": "tcp",
+                                "state": "open",
+                                "service": "ssh",
+                                "service_version": "",
+                            }
+                        ],
+                    }
+                ]
+            },
+            output_files={},
+            timestamp="2024-01-01T00:00:00",
+            duration_seconds=0.1,
+        )
+
+    def _get_chunks(self):
+        from core.rag.ingestor import FindingIngestor
+
+        ingestor = FindingIngestor(MagicMock(), "test-proj")
+        return ingestor._build_chunks(self._make_nmap_result(), "default")
+
+    def test_host_chunk_severity_informational(self) -> None:
+        chunks = self._get_chunks()
+        host_chunks = [c for c in chunks if c[1].get("finding_type") == "host"]
+        assert host_chunks, "Expected at least one host chunk"
+        assert host_chunks[0][1]["severity"] == "informational"
+
+    def test_open_port_chunk_severity_informational(self) -> None:
+        chunks = self._get_chunks()
+        port_chunks = [c for c in chunks if c[1].get("finding_type") == "open_port"]
+        assert port_chunks, "Expected at least one open_port chunk"
+        assert port_chunks[0][1]["severity"] == "informational"
+
+    def test_host_chunk_no_risk_type(self) -> None:
+        chunks = self._get_chunks()
+        host_chunks = [c for c in chunks if c[1].get("finding_type") == "host"]
+        assert "risk_type" not in host_chunks[0][1]
+
+    def test_open_port_chunk_no_risk_type(self) -> None:
+        chunks = self._get_chunks()
+        port_chunks = [c for c in chunks if c[1].get("finding_type") == "open_port"]
+        assert "risk_type" not in port_chunks[0][1]
+
+    def test_no_type_boolean_true(self) -> None:
+        chunks = self._get_chunks()
+        for _text, meta, _id in chunks:
+            for key, val in meta.items():
+                if key.startswith("type_"):
+                    assert val is not True, f"{key} should not be True for nmap chunks"

@@ -736,7 +736,7 @@ class TestNmapIngestor:
             assert meta["domain"] == "network"
             assert meta["tool_type"] == "network"
             assert meta["enriched"] is False
-            assert meta["type_exposure"] is True
+            assert meta["type_exposure"] is False
             assert meta["type_secret"] is False
             assert meta["type_vulnerability"] is False
             assert meta["type_weakness"] is False
@@ -761,7 +761,7 @@ class TestNmapIngestor:
             assert meta["domain"] == "network"
             assert meta["tool_type"] == "network"
             assert meta["enriched"] is False
-            assert meta["type_exposure"] is True
+            assert meta["type_exposure"] is False
             assert meta["type_secret"] is False
             assert meta["type_vulnerability"] is False
             assert meta["type_weakness"] is False

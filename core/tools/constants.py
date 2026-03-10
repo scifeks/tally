@@ -29,6 +29,8 @@ SEVERITY_LEVELS: set[str] = {
     "informational",
 }
 
+SEVERITY_INFORMATIONAL = "informational"
+
 DOMAINS: set[str] = {"code", "web", "network"}
 
 TOOL_DOMAIN_MAP: dict[str, str] = {
@@ -57,7 +59,7 @@ TOOL_PROVIDED_FIELDS: dict[str, set[str]] = {
     "gitleaks": {"severity"},
     "semgrep": {"severity"},
     "zap": {"severity", "remediation", "description"},
-    "nmap": set(),
+    "nmap": {"severity", "risk_type", "remediation", "description"},
     "pip-audit": {"severity"},
     "npm-audit": {"severity"},
     "osv-scanner": {"severity"},
