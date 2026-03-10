@@ -1,0 +1,314 @@
+"""Tests for core.rag.search_parser and knowledge_commands display helpers."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+_TALLY_ROOT = Path(__file__).resolve().parents[2]
+if str(_TALLY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TALLY_ROOT))
+
+from core.rag.search_parser import (  # noqa: E402
+    SearchQuery,
+    SearchValidationError,
+    _resolve_type_filter,
+    parse_search_query,
+)
+from core.repl.commands.knowledge_commands import (  # noqa: E402
+    _color_severity,
+    _extract_types,
+)
+
+_KNOWN_TOOLS = frozenset({"nmap", "gitleaks", "semgrep", "zap", "pip-audit"})
+
+
+def _parse(raw: str) -> SearchQuery:
+    return parse_search_query(raw, _KNOWN_TOOLS)
+
+
+# ---------------------------------------------------------------------------
+# Query builder tests — pure unit, no ChromaDB
+# ---------------------------------------------------------------------------
+
+
+def test_bare_tool_name_becomes_tool_filter():
+    sq = _parse("gitleaks")
+    assert sq.where_filter == {"tool": {"$eq": "gitleaks"}}
+    assert sq.is_semantic is False
+    assert sq.semantic_text is None
+
+
+def test_explicit_tool_filter():
+    sq = _parse("tool=gitleaks")
+    assert sq.where_filter == {"tool": {"$eq": "gitleaks"}}
+    assert sq.is_semantic is False
+
+
+def test_type_secret():
+    sq = _parse("type=secret")
+    assert sq.where_filter == {"type_secret": {"$eq": True}}
+
+
+def test_type_multiple():
+    sq = _parse("type=vulnerability,misconfiguration")
+    assert sq.where_filter == {
+        "$and": [
+            {"type_vulnerability": {"$eq": True}},
+            {"type_misconfiguration": {"$eq": True}},
+        ]
+    }
+
+
+def test_severity_filter():
+    sq = _parse("severity=confirmed")
+    assert sq.where_filter == {"severity": {"$eq": "confirmed"}}
+
+
+def test_file_always_contains():
+    sq = _parse("file=auth")
+    assert sq.where_filter == {"file_path": {"$contains": "auth"}}
+
+
+def test_file_tilde_contains():
+    sq = _parse("file~=auth")
+    assert sq.where_filter == {"file_path": {"$contains": "auth"}}
+
+
+def test_host_exact():
+    sq = _parse("host=1.2.3.4")
+    assert sq.where_filter == {"ip_address": {"$eq": "1.2.3.4"}}
+
+
+def test_port_int():
+    sq = _parse("port=443")
+    assert sq.where_filter == {"port": {"$eq": 443}}
+    assert sq.where_filter is not None
+    assert isinstance(sq.where_filter["port"]["$eq"], int)
+
+
+def test_method_uppercased():
+    sq = _parse("method=get")
+    assert sq.where_filter == {"method": {"$eq": "GET"}}
+
+
+def test_compound_and():
+    sq = _parse("tool=semgrep type=vulnerability severity=confirmed")
+    assert sq.where_filter == {
+        "$and": [
+            {"tool": {"$eq": "semgrep"}},
+            {"type_vulnerability": {"$eq": True}},
+            {"severity": {"$eq": "confirmed"}},
+        ]
+    }
+
+
+def test_pure_semantic():
+    sq = _parse("cross site scripting")
+    assert sq.semantic_text == "cross site scripting"
+    assert sq.where_filter is None
+
+
+def test_semantic_with_tool():
+    sq = _parse("tool=semgrep cross site scripting")
+    assert sq.semantic_text == "cross site scripting"
+    assert sq.where_filter == {"tool": {"$eq": "semgrep"}}
+
+
+def test_bare_tool_plus_semantic():
+    sq = _parse("gitleaks aws access key")
+    assert sq.semantic_text == "aws access key"
+    assert sq.where_filter == {"tool": {"$eq": "gitleaks"}}
+
+
+def test_semantic_is_true():
+    sq = _parse("cross site scripting")
+    assert sq.is_semantic is True
+
+
+def test_metadata_only_is_false():
+    sq = _parse("type=secret")
+    assert sq.is_semantic is False
+
+
+# ---------------------------------------------------------------------------
+# Pagination tests
+# ---------------------------------------------------------------------------
+
+
+def test_default_page():
+    sq = _parse("type=secret")
+    assert sq.page == 1
+    assert sq.page_size == 200
+
+
+def test_default_semantic_page_size():
+    sq = _parse("cross site scripting")
+    assert sq.page == 1
+    assert sq.page_size == 20
+
+
+def test_page_size_flag():
+    sq = _parse("type=secret --page-size=50")
+    assert sq.page_size == 50
+
+
+def test_page_flag():
+    sq = _parse("type=secret --page=3")
+    assert sq.page == 3
+
+
+def test_both_flags():
+    sq = _parse("type=secret --page-size=10 --page=2")
+    assert sq.page_size == 10
+    assert sq.page == 2
+
+
+def test_page_size_zero_raises():
+    with pytest.raises(SearchValidationError):
+        _parse("--page-size=0")
+
+
+def test_page_zero_raises():
+    with pytest.raises(SearchValidationError):
+        _parse("--page=0")
+
+
+def test_page_non_int_raises():
+    with pytest.raises(SearchValidationError):
+        _parse("--page=abc")
+
+
+def test_unknown_flag_raises():
+    with pytest.raises(SearchValidationError, match="Unknown flag"):
+        _parse("--limit=5")
+
+
+def test_flag_without_value_raises():
+    with pytest.raises(SearchValidationError):
+        _parse("--page-size")
+
+
+# ---------------------------------------------------------------------------
+# Validation error tests
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_key_raises():
+    with pytest.raises(SearchValidationError, match="Unknown filter key"):
+        _parse("foo=bar")
+
+
+def test_invalid_type_raises():
+    with pytest.raises(SearchValidationError, match="Unknown type"):
+        _parse("type=malware")
+
+
+def test_invalid_severity_raises():
+    with pytest.raises(SearchValidationError, match="Unknown severity"):
+        _parse("severity=critical")
+
+
+def test_invalid_domain_raises():
+    with pytest.raises(SearchValidationError, match="Unknown domain"):
+        _parse("domain=cloud")
+
+
+def test_unknown_tool_raises():
+    with pytest.raises(SearchValidationError, match="not found"):
+        _parse("tool=badtool")
+
+
+def test_port_non_int_raises():
+    with pytest.raises(SearchValidationError, match="Port must be a number"):
+        _parse("port=https")
+
+
+# ---------------------------------------------------------------------------
+# Type resolver tests — direct calls to _resolve_type_filter
+# ---------------------------------------------------------------------------
+
+
+def test_single_type_resolves():
+    result = _resolve_type_filter("secret")
+    assert result == {"type_secret": {"$eq": True}}
+
+
+def test_multiple_types_resolve():
+    result = _resolve_type_filter("vulnerability,weakness")
+    assert result == {
+        "$and": [
+            {"type_vulnerability": {"$eq": True}},
+            {"type_weakness": {"$eq": True}},
+        ]
+    }
+
+
+def test_invalid_type_raises_direct():
+    with pytest.raises(SearchValidationError, match="Unknown type"):
+        _resolve_type_filter("unknown")
+
+
+# ---------------------------------------------------------------------------
+# Results display tests — pure unit, helpers only
+# ---------------------------------------------------------------------------
+
+
+def test_extract_types_single():
+    assert _extract_types({"type_vulnerability": True}) == "vulnerability"
+
+
+def test_extract_types_multiple():
+    meta = {"type_vulnerability": True, "type_weakness": True}
+    result = _extract_types(meta)
+    # sorted: ...vulnerability, weakness
+    assert result == "vulnerability, weakness"
+
+
+def test_extract_types_none_true():
+    assert _extract_types({"type_vulnerability": False}) == ""
+
+
+def test_extract_types_empty_meta():
+    assert _extract_types({}) == ""
+
+
+def test_color_severity_confirmed():
+    result = _color_severity("confirmed")
+    assert "red" in result
+
+
+def test_color_severity_unknown():
+    result = _color_severity("low")
+    assert "white" in result
+
+
+def test_color_severity_empty():
+    assert _color_severity("") == ""
+
+
+# ---------------------------------------------------------------------------
+# No results test
+# ---------------------------------------------------------------------------
+
+
+def test_no_results_message():
+    """When search returns [], cmd_search prints the 'No findings' message."""
+    from core.repl.commands.knowledge_commands import KnowledgeCommands
+
+    repl = MagicMock()
+    repl.active_project = "test_project"
+
+    kc = KnowledgeCommands(repl)
+
+    mock_qe = MagicMock()
+    mock_qe.search.return_value = []
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["type=secret"])
+
+    printed_args = [str(call) for call in repl.console.print.call_args_list]
+    assert any("No findings matched" in a for a in printed_args)
