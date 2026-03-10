@@ -112,7 +112,7 @@ _HELP_REGISTRY = [
     (
         "search",
         "Filter keys (global)",
-        "tool, domain, type, severity, risk_type, profile",
+        "tool, domain, type, severity, confidence, risk_type, profile",
     ),
     ("search", "Filter keys (code)", "file~=<path>, rule=<id>"),
     ("search", "Filter keys (web)", "url~=, method=, param~=, alert~="),

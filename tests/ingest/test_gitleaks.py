@@ -250,6 +250,7 @@ class TestGitleaksDirScan:
                 "profile": "test-repo",
                 "finding_type": "secret",
                 "severity": "high",
+                "confidence": "confirmed",
                 "rule_id": secret["rule_id"],
                 "file_path": secret["file_path"],
                 "line_number": secret["line_number"],

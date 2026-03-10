@@ -23,13 +23,22 @@ FINDING_TYPES: set[str] = {
 }
 
 SEVERITY_LEVELS: set[str] = {
-    "confirmed",
-    "probable",
-    "potential",
+    "critical",
+    "high",
+    "medium",
+    "low",
     "informational",
 }
 
+CONFIDENCE_LEVELS: set[str] = {
+    "confirmed",
+    "probable",
+    "potential",
+}
+
 SEVERITY_INFORMATIONAL = "informational"
+SEVERITY_HIGH = "high"
+CONFIDENCE_CONFIRMED = "confirmed"
 
 DOMAINS: set[str] = {"code", "web", "network"}
 
@@ -56,10 +65,10 @@ TOOL_TYPE_MAP: dict[str, str] = {
 }
 
 TOOL_PROVIDED_FIELDS: dict[str, set[str]] = {
-    "gitleaks": {"severity", "risk_type"},
+    "gitleaks": {"severity", "risk_type", "confidence"},
     "semgrep": {"severity"},
-    "zap": {"severity", "remediation", "description"},
-    "nmap": {"severity", "risk_type", "remediation", "description"},
+    "zap": {"severity", "confidence", "remediation", "description"},
+    "nmap": {"severity", "confidence", "risk_type", "remediation", "description"},
     "pip-audit": {"severity"},
     "npm-audit": {"severity"},
     "osv-scanner": {"severity"},
@@ -72,5 +81,6 @@ ENRICHMENT_FIELDS: dict[str, str] = {
     "risk_type": FieldSource.ENRICHMENT,
     "remediation": FieldSource.ENRICHMENT,
     "severity": FieldSource.ENRICHMENT,
+    "confidence": FieldSource.ENRICHMENT,
     "description": FieldSource.ENRICHMENT,
 }

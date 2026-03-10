@@ -149,6 +149,11 @@ class TestGitleaksTableHeaders:
         rendered = _render(table)
         assert "Finding" not in rendered
 
+    def test_has_confidence_column(self) -> None:
+        table = _build_gitleaks_table([_gitleaks_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Confidence" in rendered
+
 
 # ---------------------------------------------------------------------------
 # _build_gitleaks_table — file path not truncated
@@ -226,25 +231,56 @@ class TestGitleaksTableSeverity:
         rendered = _render(table)
         assert "high" in rendered
 
-    def test_confirmed_severity_uses_red_markup(self) -> None:
-        # Check markup directly without rendering
+    def test_critical_severity_uses_red_markup(self) -> None:
         from core.repl.commands.knowledge_commands import _color_severity
 
-        markup = _color_severity("confirmed")
+        markup = _color_severity("critical")
         assert "[red]" in markup
-        assert "confirmed" in markup
+        assert "critical" in markup
 
-    def test_informational_severity_uses_blue_markup(self) -> None:
+    def test_informational_severity_uses_white_markup(self) -> None:
         from core.repl.commands.knowledge_commands import _color_severity
 
         markup = _color_severity("informational")
-        assert "[blue]" in markup
+        assert "[white]" in markup
 
-    def test_probable_severity_uses_yellow_markup(self) -> None:
+    def test_medium_severity_uses_yellow_markup(self) -> None:
         from core.repl.commands.knowledge_commands import _color_severity
 
-        markup = _color_severity("probable")
+        markup = _color_severity("medium")
         assert "[yellow]" in markup
+
+    def test_low_severity_uses_blue_markup(self) -> None:
+        from core.repl.commands.knowledge_commands import _color_severity
+
+        markup = _color_severity("low")
+        assert "[blue]" in markup
+
+
+# ---------------------------------------------------------------------------
+# _build_gitleaks_table — Confidence column
+# ---------------------------------------------------------------------------
+
+
+class TestGitleaksTableConfidence:
+    def _result_with_confidence(self, confidence: str) -> dict[str, Any]:
+        r = _gitleaks_result()
+        r["metadata"]["confidence"] = confidence
+        return r
+
+    def test_confidence_displayed_in_gitleaks_table(self) -> None:
+        result = self._result_with_confidence("confirmed")
+        table = _build_gitleaks_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "confirmed" in rendered
+
+    def test_missing_confidence_renders_empty_cell(self) -> None:
+        result = _gitleaks_result()  # no confidence key in metadata
+        result["metadata"].pop("confidence", None)
+        table = _build_gitleaks_table([result], is_semantic=False)
+        rendered = _render(table)
+        # Table renders without error; Confidence column header still present
+        assert "Confidence" in rendered
 
 
 # ---------------------------------------------------------------------------

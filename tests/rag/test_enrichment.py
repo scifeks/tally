@@ -107,7 +107,14 @@ def seeded_engine(project_env: dict) -> RAGEngine:
     # doc 1: gitleaks — enriched=False, severity already set (tool-provided), needs rest
     engine.add_documents(
         texts=["Leaked AWS access key found in config.py"],
-        metadatas=[{"tool": "gitleaks", "enriched": False, "severity": "confirmed"}],
+        metadatas=[
+            {
+                "tool": "gitleaks",
+                "enriched": False,
+                "severity": "high",
+                "confidence": "confirmed",
+            }
+        ],
         ids=["gl-001"],
     )
     # doc 2: zap — enriched=False, sev/rem/desc already in meta, only risk_type needed
@@ -117,7 +124,7 @@ def seeded_engine(project_env: dict) -> RAGEngine:
             {
                 "tool": "zap",
                 "enriched": False,
-                "severity": "confirmed",
+                "severity": "high",
                 "remediation": "Encode output.",
                 "description": "XSS via search param.",
             }
@@ -156,7 +163,7 @@ class TestEnrichmentPipeline:
 
     def test_all_tool_provided_no_llm_call(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env)
-        # zap with all 4 enrichment fields already present
+        # zap with all enrichment fields already present
         engine.add_documents(
             texts=["SQL injection in login form"],
             metadatas=[
@@ -164,7 +171,8 @@ class TestEnrichmentPipeline:
                     "tool": "zap",
                     "enriched": False,
                     "risk_type": "sql_injection",
-                    "severity": "confirmed",
+                    "severity": "high",
+                    "confidence": "probable",
                     "remediation": "Use parameterized queries.",
                     "description": "SQL injection found in login form.",
                 }
@@ -286,6 +294,7 @@ class TestEnrichmentPipeline:
         fields = pipeline._get_fields_to_enrich(metadata)
         assert "severity" not in fields
         assert "risk_type" not in fields
+        assert "confidence" not in fields
         assert "remediation" in fields
 
     def test_nmap_no_fields_to_enrich(self, pipeline: EnrichmentPipeline) -> None:
@@ -332,12 +341,37 @@ class TestEnrichmentPipeline:
         raw = {
             "risk_type": "exposed_service",
             "remediation": "Block the port via firewall.",
-            "severity": "potential",
+            "severity": "medium",
+            "confidence": "probable",
             "description": "Port 22 is open and accessible.",
         }
         fields = list(raw.keys())
         result = pipeline._validate_response(raw, fields)
         assert result == raw
+
+    def test_invalid_confidence_omitted(self, pipeline: EnrichmentPipeline) -> None:
+        raw = {"confidence": "high"}  # "high" is a severity value, not a confidence
+        result = pipeline._validate_response(raw, ["confidence"])
+        assert "confidence" not in result
+
+    def test_valid_confidence_passes_through(
+        self, pipeline: EnrichmentPipeline
+    ) -> None:
+        raw = {"confidence": "confirmed"}
+        result = pipeline._validate_response(raw, ["confidence"])
+        assert result.get("confidence") == "confirmed"
+
+    def test_gitleaks_skips_confidence(self, pipeline: EnrichmentPipeline) -> None:
+        metadata = {"tool": "gitleaks"}
+        fields = pipeline._get_fields_to_enrich(metadata)
+        assert "confidence" not in fields
+
+    def test_semgrep_confidence_requested_from_llm(
+        self, pipeline: EnrichmentPipeline
+    ) -> None:
+        metadata = {"tool": "semgrep"}
+        fields = pipeline._get_fields_to_enrich(metadata)
+        assert "confidence" in fields
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +433,7 @@ class TestNmapEnrichmentBypass:
                 {
                     "tool": "zap",
                     "enriched": False,
-                    "severity": "confirmed",
+                    "severity": "high",
                     "remediation": "Encode output.",
                     "description": "XSS via search param.",
                 }
@@ -615,7 +649,7 @@ class TestGitleaksEnrichmentBypass:
                 {
                     "tool": "zap",
                     "enriched": False,
-                    "severity": "confirmed",
+                    "severity": "high",
                     "remediation": "Encode output.",
                     "description": "XSS via search param.",
                 }

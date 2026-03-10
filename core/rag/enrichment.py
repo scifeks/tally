@@ -9,6 +9,7 @@ import ollama
 from rich.console import Console
 
 from core.tools.constants import (
+    CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
     SEVERITY_LEVELS,
     TOOL_PROVIDED_FIELDS,
@@ -44,12 +45,18 @@ _USER_PROMPT_TEMPLATE = (
     " professional would recognize\n"
     "- remediation: One to two sentences maximum."
     " Specific and actionable. No padding, no generic advice.\n"
-    "- severity: Must be exactly one of:"
-    " confirmed, probable, potential, informational\n"
-    "  - confirmed: exploitable as found\n"
+    "- severity: How bad is the impact if exploited. Must be exactly one of:"
+    " critical, high, medium, low, informational\n"
+    "  - critical: system compromise, data breach, full authentication bypass\n"
+    "  - high: significant data exposure, privilege escalation, remote code execution\n"
+    "  - medium: limited data exposure, requires user interaction\n"
+    "  - low: minimal impact, difficult to exploit\n"
+    "  - informational: fact about attack surface, no direct exploitability\n"
+    "- confidence: How certain are we this is exploitable. Must be exactly one of:"
+    " confirmed, probable, potential\n"
+    "  - confirmed: exploitable as found, no conditions required\n"
     "  - probable: very likely exploitable with minimal conditions\n"
     "  - potential: condition exists but requires specific circumstances\n"
-    "  - informational: fact about attack surface, no direct exploitability\n"
     "- description: One sentence describing what was found. No padding.\n"
     "\n"
     "Only include fields from this list: {fields_to_enrich}"
@@ -172,6 +179,9 @@ class EnrichmentPipeline:
                 continue
             if key == "severity" and val not in SEVERITY_LEVELS:
                 logger.warning("Enrichment: invalid severity %r; omitting", val)
+                continue
+            if key == "confidence" and val not in CONFIDENCE_LEVELS:
+                logger.warning("Enrichment: invalid confidence %r; omitting", val)
                 continue
             if key == "risk_type" and not _SNAKE_CASE_RE.match(val):
                 logger.warning("Enrichment: risk_type %r not snake_case; omitting", val)

@@ -64,8 +64,8 @@ def test_type_multiple():
 
 
 def test_severity_filter():
-    sq = _parse("severity=confirmed")
-    assert sq.where_filter == {"severity": {"$eq": "confirmed"}}
+    sq = _parse("severity=high")
+    assert sq.where_filter == {"severity": {"$eq": "high"}}
 
 
 def test_file_always_contains():
@@ -96,12 +96,12 @@ def test_method_uppercased():
 
 
 def test_compound_and():
-    sq = _parse("tool=semgrep type=vulnerability severity=confirmed")
+    sq = _parse("tool=semgrep type=vulnerability severity=high")
     assert sq.where_filter == {
         "$and": [
             {"tool": {"$eq": "semgrep"}},
             {"type_vulnerability": {"$eq": True}},
-            {"severity": {"$eq": "confirmed"}},
+            {"severity": {"$eq": "high"}},
         ]
     }
 
@@ -209,7 +209,7 @@ def test_invalid_type_raises():
 
 def test_invalid_severity_raises():
     with pytest.raises(SearchValidationError, match="Unknown severity"):
-        _parse("severity=critical")
+        _parse("severity=confirmed")
 
 
 def test_invalid_domain_raises():
@@ -276,18 +276,43 @@ def test_extract_types_empty_meta():
     assert _extract_types({}) == ""
 
 
-def test_color_severity_confirmed():
-    result = _color_severity("confirmed")
+def test_color_severity_critical():
+    result = _color_severity("critical")
     assert "red" in result
 
 
-def test_color_severity_unknown():
+def test_color_severity_low():
     result = _color_severity("low")
+    assert "blue" in result
+
+
+def test_color_severity_unknown():
+    result = _color_severity("unknown_value")
     assert "white" in result
 
 
 def test_color_severity_empty():
     assert _color_severity("") == ""
+
+
+# ---------------------------------------------------------------------------
+# Confidence filter tests
+# ---------------------------------------------------------------------------
+
+
+def test_confidence_filter():
+    sq = _parse("confidence=confirmed")
+    assert sq.where_filter == {"confidence": {"$eq": "confirmed"}}
+
+
+def test_invalid_confidence_raises():
+    with pytest.raises(SearchValidationError, match="Valid confidence levels"):
+        _parse("confidence=high")
+
+
+def test_severity_confirmed_raises_with_new_schema():
+    with pytest.raises(SearchValidationError, match="Unknown severity"):
+        _parse("severity=confirmed")
 
 
 # ---------------------------------------------------------------------------

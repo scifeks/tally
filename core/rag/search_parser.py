@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
+from core.tools.constants import (
+    CONFIDENCE_LEVELS,
+    DOMAINS,
+    FINDING_TYPES,
+    SEVERITY_LEVELS,
+)
 
 _DEFAULT_SEMANTIC_PAGE_SIZE = 20
 _DEFAULT_METADATA_PAGE_SIZE = 200
@@ -18,7 +23,8 @@ _KEY_MAP: dict[str, tuple[str, bool]] = {
     "domain": ("domain", False),
     # "type" is handled specially — not in this dict
     "severity": ("severity", False),
-    "risk_type": ("risk_type", True),
+    "confidence": ("confidence", False),
+    "risk_type": ("risk_type", False),
     "profile": ("profile", False),
     # Code domain
     "file": ("file_path", True),
@@ -90,6 +96,11 @@ def _add_filter(
         raise SearchValidationError(
             f"Unknown severity {value!r}. "
             f"Valid severities: {', '.join(sorted(SEVERITY_LEVELS))}"
+        )
+    if key == "confidence" and value not in CONFIDENCE_LEVELS:
+        raise SearchValidationError(
+            f"Unknown confidence {value!r}. "
+            f"Valid confidence levels: {', '.join(sorted(CONFIDENCE_LEVELS))}"
         )
     if key == "domain" and value not in DOMAINS:
         raise SearchValidationError(

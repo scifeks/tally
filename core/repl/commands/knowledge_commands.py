@@ -26,10 +26,11 @@ def _extract_types(meta: dict) -> str:
 
 
 _SEVERITY_COLORS = {
-    "confirmed": "red",
-    "probable": "yellow",
-    "potential": "yellow",
-    "informational": "blue",
+    "critical": "red",
+    "high": "orange1",
+    "medium": "yellow",
+    "low": "blue",
+    "informational": "white",
 }
 
 
@@ -54,6 +55,7 @@ def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> T
     table.add_column("Domain", style="white", no_wrap=True)
     table.add_column("Type", style="green")
     table.add_column("Severity", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
     table.add_column("Risk Type", style="dim white")
     if is_semantic:
         table.add_column("Relevance", style="dim", no_wrap=True)
@@ -70,6 +72,7 @@ def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> T
             meta.get("domain", ""),
             _extract_types(meta),
             _color_severity(sev),
+            meta.get("confidence", ""),
             meta.get("risk_type", ""),
         ]
         if is_semantic:
@@ -88,6 +91,7 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
     table.add_column("Domain", style="white", no_wrap=True)
     table.add_column("Type", style="green")
     table.add_column("Severity", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
     table.add_column("Risk Type", style="dim white")
     if is_semantic:
         table.add_column("Relevance", style="dim", no_wrap=True)
@@ -102,6 +106,7 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
             meta.get("domain", ""),
             _extract_types(meta),
             _color_severity(sev),
+            meta.get("confidence", ""),
             meta.get("risk_type", ""),
         ]
         if is_semantic:

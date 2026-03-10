@@ -6,7 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from core.tools.base import ToolResult
-from core.tools.constants import SEVERITY_INFORMATIONAL, TOOL_DOMAIN_MAP, TOOL_TYPE_MAP
+from core.tools.constants import (
+    CONFIDENCE_CONFIRMED,
+    SEVERITY_HIGH,
+    SEVERITY_INFORMATIONAL,
+    TOOL_DOMAIN_MAP,
+    TOOL_TYPE_MAP,
+)
 
 from .engine import RAGEngine
 
@@ -466,7 +472,8 @@ class FindingIngestor:
                 "tool": "gitleaks",
                 "profile": profile,
                 "finding_type": "secret",
-                "severity": "high",
+                "severity": SEVERITY_HIGH,
+                "confidence": CONFIDENCE_CONFIRMED,
                 "rule_id": rule_id,
                 "file_path": file_path,
                 "line_number": line_number,
