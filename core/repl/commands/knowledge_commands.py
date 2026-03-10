@@ -88,17 +88,14 @@ def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
     table = Table(show_header=True, header_style="bold")
     table.add_column("Rule ID", style="white", overflow="fold")
     table.add_column("Location", style="cyan", overflow="fold")
-    table.add_column("Severity", no_wrap=True)
     table.add_column("Type", style="green")
     table.add_column("Confidence", no_wrap=True)
-    table.add_column("Risk Type", style="dim white")
     table.add_column("CWE / OWASP", style="dim white")
     if is_semantic:
         table.add_column("Relevance", style="dim", no_wrap=True)
 
     for r in results:
         meta = r["metadata"]
-        sev = meta.get("severity", "")
         file_path = meta.get("file_path", "")
         line_start = meta.get("line_start")
         location = (
@@ -114,10 +111,8 @@ def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
         row: list[str] = [
             meta.get("rule_id", ""),
             location,
-            _color_severity(sev),
             _extract_types(meta),
             meta.get("confidence", ""),
-            meta.get("risk_type", ""),
             cwe_owasp,
         ]
         if is_semantic:

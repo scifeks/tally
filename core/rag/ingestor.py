@@ -311,6 +311,7 @@ class FindingIngestor:
             code_snippet = finding.get("code_snippet", "")
             cwe = finding.get("cwe") or ""
             owasp = finding.get("owasp") or ""
+            confidence = finding.get("confidence") or ""
 
             text = (
                 f"[semgrep] [{severity.upper()}] {rule_id} "
@@ -335,6 +336,8 @@ class FindingIngestor:
                 meta["cwe"] = cwe
             if owasp:
                 meta["owasp"] = owasp
+            if confidence:
+                meta["confidence"] = confidence
             meta.update(self._shared_meta("semgrep", "vulnerability"))
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"

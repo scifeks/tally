@@ -70,6 +70,7 @@ def _parse_finding(result: dict[str, Any]) -> dict[str, Any]:
         "code_snippet": extra.get("lines", ""),
         "cwe": metadata["cwe"],
         "owasp": metadata["owasp"],
+        "confidence": metadata["confidence"],
     }
 
 
@@ -80,7 +81,10 @@ def _extract_severity(extra: dict[str, Any]) -> str:
 
 def _extract_metadata(extra: dict[str, Any]) -> dict[str, str | None]:
     meta = extra.get("metadata", {})
+    raw_conf = meta.get("confidence")
+    confidence = raw_conf.lower() if isinstance(raw_conf, str) else None
     return {
         "cwe": meta.get("cwe"),
         "owasp": meta.get("owasp"),
+        "confidence": confidence,
     }

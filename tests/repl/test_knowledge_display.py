@@ -409,15 +409,39 @@ class TestSemgrepTableHeaders:
         rendered = _render(table)
         assert "Location" in rendered
 
-    def test_has_severity_column(self) -> None:
+    def test_has_confidence_column(self) -> None:
         table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
         rendered = _render(table)
-        assert "Severity" in rendered
+        assert "Confidence" in rendered
+
+    def test_confidence_value_displayed(self) -> None:
+        result = _semgrep_result()
+        result["metadata"]["confidence"] = "high"
+        table = _build_semgrep_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "high" in rendered
+
+    def test_missing_confidence_renders_empty_cell(self) -> None:
+        result = _semgrep_result()
+        result["metadata"].pop("confidence", None)
+        table = _build_semgrep_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "Confidence" in rendered
 
     def test_has_cwe_owasp_column(self) -> None:
         table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
         rendered = _render(table)
         assert "CWE / OWASP" in rendered
+
+    def test_no_severity_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Severity" not in rendered
+
+    def test_no_risk_type_column(self) -> None:
+        table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
+        rendered = _render(table)
+        assert "Risk Type" not in rendered
 
     def test_no_finding_column(self) -> None:
         table = _build_semgrep_table([_semgrep_result()], is_semantic=False)
