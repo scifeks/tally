@@ -320,6 +320,35 @@ def test_severity_confirmed_raises_with_new_schema():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Contextual error message tests
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_key_error_without_tool_suggests_help_search():
+    with pytest.raises(SearchValidationError, match="help search"):
+        _parse("finding=foo")
+
+
+def test_unknown_key_error_with_nmap_suggests_help_search_nmap():
+    with pytest.raises(SearchValidationError, match="help search nmap"):
+        _parse("tool=nmap finding=foo")
+
+
+def test_unknown_key_error_with_gitleaks_suggests_help_search_gitleaks():
+    with pytest.raises(SearchValidationError, match="help search gitleaks"):
+        _parse("tool=gitleaks finding=foo")
+
+
+def test_unknown_key_error_with_tool_after_bad_key_uses_tool_context():
+    # Pre-scan finds tool=nmap even though the bad key comes first.
+    with pytest.raises(SearchValidationError, match="help search nmap"):
+        _parse("finding=foo tool=nmap")
+
+
+# ---------------------------------------------------------------------------
+
+
 def test_no_results_message():
     """When search returns [], cmd_search prints the 'No findings' message."""
     from core.repl.commands.knowledge_commands import KnowledgeCommands

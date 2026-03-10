@@ -228,11 +228,11 @@ class TestNmapConfig:
         base, name = project_env["base_path"], project_env["project_name"]
         _write_nmap_config(base, name)
 
-        profiles = ConfigManager(base_path=str(base)).load_nmap_hosts(name)
-        assert profiles is not None
-        assert "localhost" in profiles
-        assert "127.0.0.1" in profiles["localhost"].hosts
-        assert "-p 22,80,443" in profiles["localhost"].nmap_args
+        nmap_config = ConfigManager(base_path=str(base)).load_nmap_hosts(name)
+        assert nmap_config is not None
+        assert "localhost" in nmap_config.profiles
+        assert "127.0.0.1" in nmap_config.profiles["localhost"].hosts
+        assert "-p 22,80,443" in nmap_config.profiles["localhost"].nmap_args
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@ from typing import Any
 from ...base import ToolWrapper
 from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
 
+_DEFAULT_NMAP_ARGS = "-sV -sC -O"
+
 
 class NmapWrapper(ToolWrapper):
     def __init__(self, config=None) -> None:
@@ -58,23 +60,31 @@ class NmapWrapper(ToolWrapper):
                 raise ValueError("project_name is required when using a profile")
 
             from core.config import ConfigManager
+            from core.setup.nmap_setup import check_exclusion_conflicts
 
             config = ConfigManager(base_path=str(base_path))
-            profiles = config.load_nmap_hosts(project_name)
-            if not profiles:
+            nmap_config = config.load_nmap_hosts(project_name)
+            if not nmap_config or not nmap_config.profiles:
                 raise ValueError(
                     f"No nmap_hosts.json found for project: {project_name!r}"
                 )
-            if profile not in profiles:
-                available = list(profiles.keys())
+            if profile not in nmap_config.profiles:
+                available = list(nmap_config.profiles.keys())
                 raise ValueError(
                     f"Profile {profile!r} not found. Available profiles: {available}"
                 )
 
-            nmap_profile = profiles[profile]
+            nmap_profile = nmap_config.profiles[profile]
             hosts = nmap_profile.hosts
             if not args:
-                args = nmap_profile.nmap_args
+                args = nmap_profile.nmap_args or _DEFAULT_NMAP_ARGS
+
+            conflicts = check_exclusion_conflicts(hosts, nmap_config.excluded_networks)
+            if conflicts:
+                raise ValueError(
+                    f"Profile '{profile}' targets are in the exclusion list: "
+                    f"{conflicts}. Fix with: tool edit nmap"
+                )
 
         elif hosts is not None:
             if not isinstance(hosts, list):

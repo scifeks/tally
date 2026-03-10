@@ -9,6 +9,7 @@ from core.tools.constants import (
     DOMAINS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
+    TOOL_DOMAIN_MAP,
 )
 
 _DEFAULT_SEMANTIC_PAGE_SIZE = 20
@@ -43,6 +44,12 @@ _KEY_MAP: dict[str, tuple[str, bool]] = {
 
 _VALID_KEYS: frozenset[str] = frozenset(_KEY_MAP) | {"type"}
 
+_DOMAIN_KEYS: dict[str, list[str]] = {
+    "code": ["file", "rule"],
+    "web": ["url", "method", "param", "alert"],
+    "network": ["host", "port", "service", "transport"],
+}
+
 
 class SearchValidationError(Exception):
     """User-facing validation error for search query parsing."""
@@ -75,10 +82,21 @@ def _add_filter(
     contains: bool,
     filter_clauses: list[dict],
     known_tools: frozenset[str],
+    active_tool: str | None = None,
 ) -> None:
     if key not in _VALID_KEYS:
+        if active_tool is not None:
+            domain = TOOL_DOMAIN_MAP.get(active_tool)
+            if domain:
+                keys_str = ", ".join(_DOMAIN_KEYS.get(domain, []))
+                raise SearchValidationError(
+                    f"Unknown filter key {key!r}.\n"
+                    f"Valid keys for {active_tool}: {keys_str} (plus global keys).\n"
+                    f"Run 'help search {active_tool}' for full reference."
+                )
         raise SearchValidationError(
-            f"Unknown filter key {key!r}. Run 'help search' for valid keys."
+            f"Unknown filter key {key!r}.\n"
+            "Run 'help search' for valid filter keys and examples."
         )
     if key == "type":
         filter_clauses.append(_resolve_type_filter(value))
@@ -147,6 +165,15 @@ def parse_search_query(
     page_size: int | None = None
     page: int = 1
 
+    # Pre-scan for active tool so _add_filter can produce contextual errors.
+    active_tool: str | None = None
+    for token in raw.split():
+        if token.startswith("tool=") and not token.startswith("--"):
+            candidate = token[5:]
+            if candidate in known_tools:
+                active_tool = candidate
+            break
+
     for token in raw.split():
         if token.startswith("--"):
             if "=" not in token:
@@ -182,6 +209,7 @@ def parse_search_query(
                 contains=True,
                 filter_clauses=filter_clauses,
                 known_tools=known_tools,
+                active_tool=active_tool,
             )
         elif "=" in token:
             key, _, value = token.partition("=")
@@ -191,6 +219,7 @@ def parse_search_query(
                 contains=False,
                 filter_clauses=filter_clauses,
                 known_tools=known_tools,
+                active_tool=active_tool,
             )
         else:
             clean = token.lower().rstrip("?.,!:;")

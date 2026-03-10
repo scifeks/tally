@@ -7,7 +7,14 @@ class NmapProfile(BaseModel):
     """Nmap scan profile configuration."""
 
     hosts: list[str] = Field(..., description="List of hosts/subnets to scan")
-    nmap_args: str = Field(..., description="Nmap arguments for this profile")
+    nmap_args: str = Field(default="", description="Nmap arguments for this profile")
+
+
+class NmapHostsConfig(BaseModel):
+    """Full nmap_hosts.json configuration."""
+
+    profiles: dict[str, NmapProfile] = Field(default_factory=dict)
+    excluded_networks: list[str] = Field(default_factory=list)
 
 
 class DockerContainer(BaseModel):

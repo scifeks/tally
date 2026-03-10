@@ -209,6 +209,8 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def _cmd_scan_nmap(self, remaining: list[str], timeout: int) -> None:
+        from core.setup.nmap_setup import check_exclusion_conflicts
+
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'project add' first.[/yellow]"
@@ -226,60 +228,95 @@ class ScanCommands:
             )
             return
 
-        profile = remaining[0] if remaining else None
+        nmap_config = self.repl.config.load_nmap_hosts(self.repl.active_project)
+        if not nmap_config or not nmap_config.profiles:
+            self.repl.console.print(
+                "[yellow]No nmap profiles configured for this project. "
+                "Use 'tool edit nmap' to configure.[/yellow]"
+            )
+            return
 
-        if profile:
-            self.repl.console.print(f"Running nmap: {profile}...")
-            self._run_nmap_profile(profile, timeout)
-        else:
-            profiles = self.repl.config.load_nmap_hosts(self.repl.active_project)
-            if not profiles:
+        requested_profile = remaining[0] if remaining else None
+        if requested_profile:
+            if requested_profile not in nmap_config.profiles:
+                available = ", ".join(nmap_config.profiles.keys())
                 self.repl.console.print(
-                    "[yellow]No nmap profiles configured for this project.[/yellow]"
+                    f"[red]Profile not found:[/red] {requested_profile}"
                 )
+                self.repl.console.print(f"Available profiles: {available}")
+                return
+            profiles_to_run = [requested_profile]
+        else:
+            profiles_to_run = list(nmap_config.profiles.keys())
+
+        # Exclusion check before running any scan
+        for name in profiles_to_run:
+            profile_obj = nmap_config.profiles[name]
+            conflicts = check_exclusion_conflicts(
+                profile_obj.hosts, nmap_config.excluded_networks
+            )
+            if conflicts:
+                self.repl.console.print(
+                    f"[red]Profile '{name}' conflicts with exclusion list:[/red]"
+                )
+                for c in conflicts:
+                    self.repl.console.print(f"  {c}")
+                self.repl.console.print("Fix with: tool edit nmap")
                 return
 
-            profile_names = list(profiles.keys())
+        if len(profiles_to_run) > 1:
             self.repl.console.print("No profile specified. Running all profiles...\n")
-            for i, name in enumerate(profile_names, 1):
-                self.repl.console.print(
-                    f"[{i}/{len(profile_names)}] Running nmap: {name}..."
-                )
-                self._run_nmap_profile(name, timeout)
 
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
+        all_results: list[tuple[str, ToolResult]] = []
+        for i, name in enumerate(profiles_to_run):
+            self.repl.console.print(
+                f"[{i + 1}/{len(profiles_to_run)}] Running nmap: {name}..."
+            )
+            auto_approve = i > 0
+            result = self._execute_nmap_scan(
+                name, executor=executor, auto_approve=auto_approve, timeout=timeout
+            )
+            self._print_result(result)
+            if result.output_files:
+                for path in result.output_files.values():
+                    self.repl.console.print(f"Output saved to: {path}")
+            all_results.append((name, result))
+
+        if len(profiles_to_run) > 1:
             self.repl.console.print("\nAll scans complete.")
 
-    def _run_nmap_profile(self, profile_name: str, timeout: int) -> None:
-        result = self._execute_nmap_scan(profile_name, timeout=timeout)
-        self._print_result(result)
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
         if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=profile_name)
-            if doc_ids:
+            all_doc_ids: list[str] = []
+            for name, result in all_results:
+                doc_ids = _ingest_result(self.repl, result, profile=name)
+                all_doc_ids.extend(doc_ids)
+            if all_doc_ids:
                 self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
+                    f"[green]✓ Ingested {len(all_doc_ids)} findings[/green]"
                 )
-                _enrich_results(self.repl, doc_ids)
+                _enrich_results(self.repl, all_doc_ids)
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
     def _execute_nmap_scan(
         self,
         profile_name: str,
+        executor: ToolExecutor | None = None,
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
         assert self.repl.active_project is not None
         tool = tool_registry.get_tool("nmap")
         assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
+        if executor is None:
+            executor = ToolExecutor(
+                project_name=self.repl.active_project,
+                base_path=Path(self.repl.base_path),
+            )
         return executor.execute(
             tool,
             auto_approve=auto_approve,

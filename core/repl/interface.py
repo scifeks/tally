@@ -22,6 +22,7 @@ from core.repl.commands import (
     ScanCommands,
     ToolCommands,
 )
+from core.tools.constants import TOOL_DOMAIN_MAP
 from core.tools.registry import print_discovery_summary
 
 _VERSION = "1.0"
@@ -147,6 +148,146 @@ _COMPLETIONS = [
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
 
 
+_DOMAIN_KEYS_DISPLAY: dict[str, list[tuple[str, str]]] = {
+    "code": [
+        ("file~=<path>", "File path (partial match)"),
+        ("rule=<id>", "Rule ID (exact match)"),
+    ],
+    "web": [
+        ("url~=<url>", "URL (partial match)"),
+        ("method=<method>", "HTTP method (GET, POST, ...)"),
+        ("param~=<name>", "Parameter name (partial match)"),
+        ("alert~=<name>", "Alert name (partial match)"),
+    ],
+    "network": [
+        ("host=<ip>", "IP address (exact match)"),
+        ("host~=<pattern>", "IP address (partial match)"),
+        ("port=<number>", "Port number"),
+        ("service~=<name>", "Service name (partial match)"),
+        ("transport=<proto>", "Transport protocol (tcp, udp)"),
+    ],
+}
+
+_TOOL_EXAMPLES: dict[str, list[tuple[str, str]]] = {
+    "nmap": [
+        ("search nmap", "All nmap findings"),
+        ("search host=10.0.0.1", "Exact host match"),
+        ("search port=443", "Findings on port 443"),
+        ("search service~=ssh", "Services containing 'ssh'"),
+        ("search transport=tcp severity=high", "High-severity TCP findings"),
+        ("search nmap open ports", "Semantic search filtered to nmap"),
+    ],
+    "gitleaks": [
+        ("search gitleaks", "All gitleaks findings"),
+        ("search file~=config", "Secrets in paths containing 'config'"),
+        ("search rule=generic-api-key", "Findings matching a specific rule"),
+        ("search severity=high", "High-severity secrets"),
+        ("search gitleaks aws", "Semantic search for AWS secrets"),
+    ],
+    "zap": [
+        ("search zap", "All ZAP findings"),
+        ("search url~=/api/", "Findings on API endpoints"),
+        ("search method=POST", "POST request findings"),
+        ("search param~=id", "Findings with 'id' in parameter name"),
+        ("search alert~=injection", "Injection-related alerts"),
+        ("search zap severity=high", "High-severity ZAP findings"),
+    ],
+    "semgrep": [
+        ("search semgrep", "All semgrep findings"),
+        ("search file~=src/auth", "Findings in auth source files"),
+        ("search rule=python.lang.security.audit.exec", "Findings by rule ID"),
+        ("search severity=high", "High-severity findings"),
+        ("search semgrep sql injection", "Semantic search for SQL injection"),
+    ],
+}
+
+_GENERIC_EXAMPLES: list[tuple[str, str]] = [
+    ("search sql injection", "Semantic search for SQL injection"),
+    ("search tool=gitleaks", "All gitleaks findings"),
+    ("search severity=high", "High-severity findings"),
+    ("search type=secret", "Findings of type 'secret'"),
+    ("search tool=nmap port=443", "nmap findings on port 443"),
+    ("search tool=zap url~=/api/", "ZAP findings on /api/ endpoints"),
+    ("search tool=gitleaks severity=high --page-size=50", "Paginated results"),
+]
+
+
+def _build_search_help_table(tool_name: str | None = None) -> Table:
+    """Build a search reference table, optionally narrowed to a tool's domain."""
+    domain = TOOL_DOMAIN_MAP.get(tool_name) if tool_name else None
+    show_code = domain in (None, "code")
+    show_web = domain in (None, "web")
+    show_network = domain in (None, "network")
+
+    table = Table(
+        show_header=True,
+        header_style="bold",
+        box=_HELP_BOX,
+        padding=(0, 1),
+    )
+    table.add_column("Search Syntax", min_width=40, no_wrap=True, style="cyan")
+    table.add_column("Description", style="white")
+
+    # Syntax hint
+    table.add_row("[bold yellow]Search Syntax[/bold yellow]", "")
+    table.add_row("= exact match  ~= partial/contains  filters use AND", "")
+
+    # Usage examples
+    table.add_row("[bold yellow]Usage[/bold yellow]", "")
+    table.add_row("search <query>", "Semantic search over ingested findings")
+    table.add_row("search tool=<name>", "Filter by configured tool name")
+    table.add_row("search type=<type>", "Filter by type: secret, vulnerability, ...")
+    table.add_row("search <key>=<value>", "Exact match filter on metadata key")
+    table.add_row("search <key>~=<value>", "Partial match filter on metadata key")
+    table.add_row("search tool=<n> type=<t> severity=<s>", "Chain filters (AND)")
+    table.add_row("search tool=<name> <query>", "Combine filters with semantic search")
+
+    # Global filter keys
+    table.add_row("[bold yellow]Global Filter Keys[/bold yellow]", "")
+    table.add_row("tool=<name>", "Configured tool name")
+    table.add_row("domain=<domain>", "code, web, network")
+    table.add_row(
+        "type=<type>", "secret, vulnerability, weakness, misconfiguration, ..."
+    )
+    table.add_row("severity=<level>", "critical, high, medium, low, informational")
+    table.add_row("confidence=<level>", "confirmed, probable, potential")
+    table.add_row("risk_type=<value>", "Risk type label (tool-specific)")
+    table.add_row("profile=<value>", "Scan profile label")
+
+    # Domain-specific keys
+    if show_code:
+        table.add_row("[bold yellow]Code Domain Keys[/bold yellow]", "")
+        for syntax, desc in _DOMAIN_KEYS_DISPLAY["code"]:
+            table.add_row(syntax, desc)
+
+    if show_web:
+        table.add_row("[bold yellow]Web Domain Keys[/bold yellow]", "")
+        for syntax, desc in _DOMAIN_KEYS_DISPLAY["web"]:
+            table.add_row(syntax, desc)
+
+    if show_network:
+        table.add_row("[bold yellow]Network Domain Keys[/bold yellow]", "")
+        for syntax, desc in _DOMAIN_KEYS_DISPLAY["network"]:
+            table.add_row(syntax, desc)
+
+    # Pagination
+    table.add_row("[bold yellow]Pagination[/bold yellow]", "")
+    table.add_row(
+        "--page-size=<n>", "Results per page (default: 20 semantic / 200 filter-only)"
+    )
+    table.add_row("--page=<n>", "Show page N of results (default: 1)")
+
+    # Examples
+    table.add_row("[bold yellow]Examples[/bold yellow]", "")
+    examples = _TOOL_EXAMPLES.get(tool_name) if tool_name else None  # type: ignore[arg-type]
+    if examples is None:
+        examples = _GENERIC_EXAMPLES
+    for syntax, desc in examples:
+        table.add_row(syntax, desc)
+
+    return table
+
+
 class REPL:
     """Interactive REPL shell with Rich UI and prompt_toolkit input."""
 
@@ -249,8 +390,23 @@ class REPL:
     # Implemented commands
     # ------------------------------------------------------------------
 
-    def _cmd_help(self, _cmd: str, _args: list) -> None:
+    def _cmd_help(self, _cmd: str, args: list) -> None:
+        if args and args[0] == "search":
+            self._cmd_help_search(args[1:])
+            return
         self.console.print(self._build_help_table())
+
+    def _cmd_help_search(self, args: list[str]) -> None:
+        tool_name: str | None = args[0] if args else None
+        if tool_name is not None:
+            commands = self.config.load_commands_config() or {}
+            if tool_name not in commands:
+                self.console.print(
+                    f"[red]Unknown tool {tool_name!r}.[/red] "
+                    "Run 'tool list' to see configured tools."
+                )
+                return
+        self.console.print(_build_search_help_table(tool_name))
 
     def _cmd_help_scoped(self, group: str) -> None:
         """Render a help table filtered to a single group (e.g. 'project', 'repo')."""

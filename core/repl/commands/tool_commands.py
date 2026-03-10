@@ -118,6 +118,17 @@ class ToolCommands:
         self._reload_registry()
         self.repl.console.print(f"[green]Tool added:[/green] {tool_name}")
 
+        if tool_name == "nmap":
+            if not self.repl.active_project:
+                self.repl.console.print(
+                    "[yellow]No active project. "
+                    "Use 'project add' or 'project switch <name>'[/yellow]"
+                )
+            else:
+                from core.setup.nmap_setup import interview_nmap_config
+
+                interview_nmap_config(self.repl.active_project, self.repl.base_path)
+
     def _cmd_tool_edit(self, tool_name: str) -> None:
         from core.setup.commands_setup import interview_tool
 
@@ -144,6 +155,23 @@ class ToolCommands:
         self._save_commands_json(commands)
         self._reload_registry()
         self.repl.console.print(f"[green]Tool updated:[/green] {tool_name}")
+
+        if tool_name == "nmap":
+            if not self.repl.active_project:
+                self.repl.console.print(
+                    "[yellow]No active project. "
+                    "Use 'project add' or 'project switch <name>'[/yellow]"
+                )
+            else:
+                from core.config.manager import ConfigManager
+                from core.setup.nmap_setup import interview_nmap_config
+
+                existing = ConfigManager(self.repl.base_path).load_nmap_hosts(
+                    self.repl.active_project
+                )
+                interview_nmap_config(
+                    self.repl.active_project, self.repl.base_path, existing=existing
+                )
 
     def _cmd_tool_remove(self, tool_name: str) -> None:
         commands = self._load_commands_json()
