@@ -1,6 +1,7 @@
 """Dependency checker for tally startup validation."""
 
 import importlib
+import inspect
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,11 +51,10 @@ class CheckResult:
 
 
 class DependencyChecker:
-    def __init__(self, tool_registry) -> None:
-        self._registry = tool_registry
+    def __init__(self) -> None:
         self._console = Console()
 
-    def run(self, auto_fix: bool = False) -> CheckResult:
+    def run(self, auto_fix: bool = False, silent: bool = False) -> CheckResult:
         checks: list[DepCheck] = []
 
         checks.append(self.check_python_version())
@@ -72,7 +72,8 @@ class DependencyChecker:
             missing_optional=missing_optional,
         )
 
-        self.print_summary(result)
+        if not silent:
+            self.print_summary(result)
         return result
 
     def check_python_version(self) -> DepCheck:
@@ -132,43 +133,54 @@ class DependencyChecker:
         return results
 
     def check_system_tools(self) -> list[DepCheck]:
+        from core.tools.base import ToolWrapper
+
         results: list[DepCheck] = []
-        for tool in self._registry.get_all_tools():
-            config = self._registry.get_tool_config(tool.name)
-            if config is not None and config.location == "docker":
-                # Docker tools are always "installed" — the user explicitly
-                # configured them
-                results.append(
-                    DepCheck(
-                        name=tool.name,
-                        type="docker",
-                        required=False,
-                        installed=True,
-                        version=None,
-                        install_hint=f"Container: {config.container.name}",
+        local_dir = Path(__file__).parent.parent / "tools" / "wrappers" / "local"
+
+        for py_file in sorted(local_dir.glob("*.py")):
+            if py_file.name.startswith("_"):
+                continue
+
+            module_name = f"core.tools.wrappers.local.{py_file.stem}"
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                continue
+
+            for _attr, obj in inspect.getmembers(module, inspect.isclass):
+                if (
+                    issubclass(obj, ToolWrapper)
+                    and not inspect.isabstract(obj)
+                    and obj.__module__ == module_name
+                ):
+                    try:
+                        tool = obj(config=None)  # type: ignore[call-arg]
+                    except Exception:
+                        break
+                    available = tool.check_available()
+                    version = tool.get_version() if available else None
+                    results.append(
+                        DepCheck(
+                            name=tool.name,
+                            type="system_tool",
+                            required=False,
+                            installed=available,
+                            version=version,
+                            install_hint=_INSTALL_HINTS.get(tool.name),
+                        )
                     )
-                )
-            else:
-                # Local tool or fallback mode — check binary availability as before
-                available = tool.check_available()
-                version = tool.get_version() if available else None
-                results.append(
-                    DepCheck(
-                        name=tool.name,
-                        type="system_tool",
-                        required=False,
-                        installed=available,
-                        version=version,
-                        install_hint=_INSTALL_HINTS.get(tool.name),
-                    )
-                )
+                    break
+
         return results
 
     def print_summary(self, result: CheckResult) -> None:
-        self._console.print("\n[bold]Tally - Dependency Check[/bold]")
-        self._console.print("=" * 24)
+        self._console.print("\n[bold]Installed System Tools[/bold]")
+        self._console.print("=" * 22)
 
-        table = Table(show_header=True, header_style="bold", padding=(0, 1))
+        table = Table(
+            show_header=True, header_style="bold", padding=(0, 1), show_lines=True
+        )
         table.add_column("Dependency", style="cyan", min_width=18)
         table.add_column("Type", min_width=12)
         table.add_column("Status", min_width=14)
@@ -200,6 +212,29 @@ class DependencyChecker:
                 f"[red]Error: {count} required dependency missing: {names}[/red]"
             )
 
-        self._console.print(
-            "[dim]Run 'tally --check' to see full dependency status at any time.[/dim]"
-        )
+
+def print_installed_system_tools(console: Console) -> None:
+    """Print just the system tools table with 'Installed System Tools' header."""
+    checker = DependencyChecker()
+    tool_checks = checker.check_system_tools()
+
+    console.print("\n[bold]Installed System Tools[/bold]")
+    console.print("=" * 22)
+
+    table = Table(
+        show_header=True, header_style="bold", padding=(0, 1), show_lines=True
+    )
+    table.add_column("Dependency", style="cyan", min_width=18)
+    table.add_column("Type", min_width=12)
+    table.add_column("Status", min_width=14)
+    table.add_column("Install Hint")
+
+    for check in tool_checks:
+        if check.installed:
+            status = f"[green]v {check.version or 'installed'}[/green]"
+        else:
+            status = "[yellow]! NOT FOUND[/yellow]"
+        hint = check.install_hint or ""
+        table.add_row(check.name, check.type, status, hint)
+
+    console.print(table)
