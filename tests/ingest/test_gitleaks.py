@@ -573,14 +573,17 @@ class TestGitleaksRetrieval:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        qe = QueryEngine(engine)
-        results = qe.search("aws-access-token")
-        assert results, "Expected at least one search result"
-        found_tools = [r["metadata"]["tool"] for r in results]
-        assert "gitleaks" in found_tools
+        try:
+            FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+                result, profile="test-repo"
+            )
+            qe = QueryEngine(engine)
+            results = qe.search("aws-access-token")
+            assert results, "Expected at least one search result"
+            found_tools = [r["metadata"]["tool"] for r in results]
+            assert "gitleaks" in found_tools
+        finally:
+            engine.close()
 
     @requires_ollama
     def test_tool_filter_detection(
@@ -594,16 +597,19 @@ class TestGitleaksRetrieval:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        qe = QueryEngine(engine)
-        results = qe.search("what did gitleaks find?")
-        assert results, "Expected results for tool-specific query"
-        for r in results:
-            assert r["metadata"]["tool"] == "gitleaks", (
-                f"Tool filter failed — got tool={r['metadata']['tool']!r}"
+        try:
+            FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+                result, profile="test-repo"
             )
+            qe = QueryEngine(engine)
+            results = qe.search("what did gitleaks find?")
+            assert results, "Expected results for tool-specific query"
+            for r in results:
+                assert r["metadata"]["tool"] == "gitleaks", (
+                    f"Tool filter failed — got tool={r['metadata']['tool']!r}"
+                )
+        finally:
+            engine.close()
 
 
 # ---------------------------------------------------------------------------

@@ -163,9 +163,12 @@ def _ingest(
     base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
 ) -> list[str]:
     engine = _make_rag_engine(base_path, project_name)
-    return FindingIngestor(engine, project_name).ingest_tool_output(
-        result, profile=profile
-    )
+    try:
+        return FindingIngestor(engine, project_name).ingest_tool_output(
+            result, profile=profile
+        )
+    finally:
+        engine.close()
 
 
 # ---------------------------------------------------------------------------
@@ -551,14 +554,19 @@ class TestProjectIsolation:
         self._make_two_projects(tmp_path)
         engine_a = RAGEngine(project_name="proj-a", base_path=str(tmp_path))
         engine_b = RAGEngine(project_name="proj-b", base_path=str(tmp_path))
-        assert engine_a.collection_name != engine_b.collection_name
-        assert engine_b.count_documents() == 0
+        try:
+            assert engine_a.collection_name != engine_b.collection_name
+            assert engine_b.count_documents() == 0
+        finally:
+            engine_a.close()
+            engine_b.close()
 
     def test_ingest_does_not_leak_to_other_project(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
         count = _ingest(tmp_path, "proj-a", _make_nmap_result())
         assert len(count) >= 1
-        assert (
-            RAGEngine(project_name="proj-b", base_path=str(tmp_path)).count_documents()
-            == 0
-        )
+        engine_b = RAGEngine(project_name="proj-b", base_path=str(tmp_path))
+        try:
+            assert engine_b.count_documents() == 0
+        finally:
+            engine_b.close()

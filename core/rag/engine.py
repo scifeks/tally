@@ -5,9 +5,11 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import chromadb
+from chromadb.api import ClientAPI
+from chromadb.api.types import Embeddable, EmbeddingFunction
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
 
 from core.config.manager import ConfigManager
@@ -118,7 +120,7 @@ class RAGEngine:
 
         self._collection_name = f"findings_{project_name}"
 
-        self._client: chromadb.PersistentClient | None = None  # type: ignore[type-arg]
+        self._client: ClientAPI | None = None
         self._collection: chromadb.Collection | None = None
 
         self._init_chromadb()
@@ -134,10 +136,14 @@ class RAGEngine:
     # Internal initialisation
     # ------------------------------------------------------------------
 
+    def _build_chroma_client(self) -> ClientAPI:
+        """Return a configured ChromaDB client (PersistentClient by default)."""
+        return chromadb.PersistentClient(path=str(self._chroma_path))
+
     def _init_chromadb(self) -> None:
         """Create the ChromaDB persistent client and ensure the collection exists."""
         try:
-            self._client = chromadb.PersistentClient(path=str(self._chroma_path))
+            self._client = self._build_chroma_client()
         except Exception as exc:
             logger.error(
                 "Failed to create ChromaDB client at %s: %s", self._chroma_path, exc
@@ -186,7 +192,9 @@ class RAGEngine:
         if self._client is None:
             raise RuntimeError("ChromaDB client is not initialised")
 
-        embedding_fn = self._build_embedding_function()
+        embedding_fn: EmbeddingFunction[Embeddable] = cast(
+            EmbeddingFunction[Embeddable], self._build_embedding_function()
+        )
 
         try:
             collection = self._client.get_or_create_collection(
@@ -376,6 +384,16 @@ class RAGEngine:
             "document": (result["documents"] or [""])[0],
             "metadata": (result["metadatas"] or [{}])[0],
         }
+
+    def close(self) -> None:
+        """Release ChromaDB file handles held by this engine instance."""
+        if self._client is not None and hasattr(self._client, "close"):
+            try:
+                self._client.close()  # type: ignore[union-attr]
+            except Exception:
+                pass
+        self._client = None
+        self._collection = None
 
     def update_metadata(self, doc_id: str, metadata_updates: dict) -> None:
         """Merge metadata_updates into an existing document's metadata.
