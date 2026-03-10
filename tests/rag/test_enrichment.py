@@ -202,7 +202,8 @@ class TestEnrichmentPipeline:
     def test_enriched_fields_written_to_metadata(
         self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
     ) -> None:
-        fields = ["risk_type", "remediation", "description"]
+        # gitleaks: severity and risk_type are tool-provided; LLM only fills the rest
+        fields = ["remediation", "description"]
         llm_response = _make_llm_response(fields)
         with patch.object(pipeline, "_call_llm", return_value=llm_response):
             pipeline.enrich(["gl-001"])
@@ -278,11 +279,13 @@ class TestEnrichmentPipeline:
         fields = pipeline._get_fields_to_enrich(metadata)
         assert fields == ["risk_type"]
 
-    def test_gitleaks_skips_severity(self, pipeline: EnrichmentPipeline) -> None:
+    def test_gitleaks_skips_severity_and_risk_type(
+        self, pipeline: EnrichmentPipeline
+    ) -> None:
         metadata = {"tool": "gitleaks"}
         fields = pipeline._get_fields_to_enrich(metadata)
         assert "severity" not in fields
-        assert "risk_type" in fields
+        assert "risk_type" not in fields
         assert "remediation" in fields
 
     def test_nmap_no_fields_to_enrich(self, pipeline: EnrichmentPipeline) -> None:
@@ -479,3 +482,155 @@ class TestNmapIngestorMetadata:
             for key, val in meta.items():
                 if key.startswith("type_"):
                     assert val is not True, f"{key} should not be True for nmap chunks"
+
+
+# ---------------------------------------------------------------------------
+# TestGitleaksIngestorMetadata — gitleaks chunk builder produces correct metadata
+# ---------------------------------------------------------------------------
+
+
+class TestGitleaksIngestorMetadata:
+    def _make_gitleaks_result(self, rule_id: str) -> ToolResult:
+        return ToolResult(
+            tool_name="gitleaks",
+            success=True,
+            output="",
+            parsed_data={
+                "secrets": [
+                    {
+                        "rule_id": rule_id,
+                        "description": "AWS Access Token",
+                        "file_path": "config.py",
+                        "line_number": 42,
+                        "tags": ["aws"],
+                        "commit": "abc123",
+                        "fingerprint": "fp-001",
+                    }
+                ],
+                "summary": {"total": 1},
+            },
+            output_files={},
+            timestamp="2024-01-01T00:00:00",
+            duration_seconds=0.1,
+        )
+
+    def _get_chunks(self, rule_id: str):
+        from core.rag.ingestor import FindingIngestor
+
+        ingestor = FindingIngestor(MagicMock(), "test-proj")
+        return ingestor._build_chunks(self._make_gitleaks_result(rule_id), "default")
+
+    def test_known_rule_id_sets_risk_type(self) -> None:
+        chunks = self._get_chunks("aws-access-token")
+        assert len(chunks) == 1
+        assert chunks[0][1]["risk_type"] == "aws-access-token"
+
+    def test_empty_rule_id_omits_risk_type(self) -> None:
+        chunks = self._get_chunks("")
+        assert len(chunks) == 1
+        assert "risk_type" not in chunks[0][1]
+
+    def test_generic_api_key_rule_id_sets_risk_type(self) -> None:
+        chunks = self._get_chunks("generic-api-key")
+        assert chunks[0][1]["risk_type"] == "generic-api-key"
+
+    def test_jwt_rule_id_sets_risk_type(self) -> None:
+        chunks = self._get_chunks("jwt")
+        assert chunks[0][1]["risk_type"] == "jwt"
+
+
+# ---------------------------------------------------------------------------
+# TestGitleaksEnrichmentBypass — gitleaks bypasses LLM for risk_type entirely
+# ---------------------------------------------------------------------------
+
+
+class TestGitleaksEnrichmentBypass:
+    def test_gitleaks_with_rule_id_zero_llm_calls(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["[gitleaks] Secret detected: aws-access-token in config.py:42"],
+            metadatas=[
+                {
+                    "tool": "gitleaks",
+                    "enriched": False,
+                    "severity": "high",
+                    "risk_type": "aws-access-token",
+                    "remediation": "Rotate the key and remove from repository.",
+                    "description": "AWS access token found in source file.",
+                }
+            ],
+            ids=["gl-bypass-001"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        with patch.object(p, "_call_llm") as mock_llm:
+            p.enrich(["gl-bypass-001"])
+            mock_llm.assert_not_called()
+
+    def test_gitleaks_risk_type_not_requested_from_llm(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        # No risk_type in metadata — but it's tool-provided so LLM must not be asked
+        engine.add_documents(
+            texts=["[gitleaks] Secret detected: generic-api-key in .env:5"],
+            metadatas=[{"tool": "gitleaks", "enriched": False, "severity": "high"}],
+            ids=["gl-bypass-002"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        captured_fields: list[list[str]] = []
+
+        def capture_call(doc_text, metadata, fields):
+            captured_fields.append(list(fields))
+            return _make_llm_response(fields)
+
+        with patch.object(p, "_call_llm", side_effect=capture_call):
+            p.enrich(["gl-bypass-002"])
+
+        assert captured_fields, "LLM should be called for remaining fields"
+        assert "risk_type" not in captured_fields[0]
+
+    def test_semgrep_still_receives_risk_type_from_llm(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["SQL injection in login.py line 42"],
+            metadatas=[{"tool": "semgrep", "enriched": False, "severity": "confirmed"}],
+            ids=["semgrep-bypass-001"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        captured_fields: list[list[str]] = []
+
+        def capture_call(doc_text, metadata, fields):
+            captured_fields.append(list(fields))
+            return _make_llm_response(fields)
+
+        with patch.object(p, "_call_llm", side_effect=capture_call):
+            p.enrich(["semgrep-bypass-001"])
+
+        assert captured_fields, "LLM should be called for semgrep"
+        assert "risk_type" in captured_fields[0]
+
+    def test_zap_still_receives_risk_type_from_llm(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["Reflected XSS in search param"],
+            metadatas=[
+                {
+                    "tool": "zap",
+                    "enriched": False,
+                    "severity": "confirmed",
+                    "remediation": "Encode output.",
+                    "description": "XSS via search param.",
+                }
+            ],
+            ids=["zap-bypass-001"],
+        )
+        p = EnrichmentPipeline(engine, console=None)
+        captured_fields: list[list[str]] = []
+
+        def capture_call(doc_text, metadata, fields):
+            captured_fields.append(list(fields))
+            return _make_llm_response(fields)
+
+        with patch.object(p, "_call_llm", side_effect=capture_call):
+            p.enrich(["zap-bypass-001"])
+
+        assert captured_fields, "LLM should be called for zap"
+        assert "risk_type" in captured_fields[0]

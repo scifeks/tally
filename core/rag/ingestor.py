@@ -474,6 +474,8 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if rule_id:
+                meta["risk_type"] = rule_id
             if commit:
                 meta["commit"] = commit
             if fingerprint:

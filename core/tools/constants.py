@@ -56,7 +56,7 @@ TOOL_TYPE_MAP: dict[str, str] = {
 }
 
 TOOL_PROVIDED_FIELDS: dict[str, set[str]] = {
-    "gitleaks": {"severity"},
+    "gitleaks": {"severity", "risk_type"},
     "semgrep": {"severity"},
     "zap": {"severity", "remediation", "description"},
     "nmap": {"severity", "risk_type", "remediation", "description"},
