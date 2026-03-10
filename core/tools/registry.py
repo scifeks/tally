@@ -213,7 +213,7 @@ def print_discovery_summary(console: Console) -> None:
     available_count = sum(1 for t in tools if t.check_available())
     unavailable_count = len(tools) - available_count
 
-    console.print("\n[bold][*] Discovering tools...[/bold]")
+    console.print("\n[bold]Configured Tools[/bold]")
     console.print(build_tool_table(tools, tool_registry))
 
     summary = f"Loaded {len(tools)} tools ({available_count} available"

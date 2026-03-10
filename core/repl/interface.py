@@ -22,6 +22,7 @@ from core.repl.commands import (
     ScanCommands,
     ToolCommands,
 )
+from core.startup.checker import print_installed_system_tools
 from core.tools.constants import TOOL_DOMAIN_MAP
 from core.tools.registry import print_discovery_summary
 
@@ -310,7 +311,11 @@ class REPL:
 
     def run(self) -> None:
         """Start the REPL loop."""
+        self.console.print(
+            "[dim]Run 'tally --check' to see full dependency status at any time.[/dim]"
+        )
         self._print_banner()
+        print_installed_system_tools(self.console)
         print_discovery_summary(self.console)
 
         history_path = Path.home() / ".tally-repl-history"
