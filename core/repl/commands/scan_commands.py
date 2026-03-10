@@ -267,6 +267,10 @@ class ScanCommands:
         if len(profiles_to_run) > 1:
             self.repl.console.print("No profile specified. Running all profiles...\n")
 
+        executor = ToolExecutor(
+            project_name=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+        )
         all_results: list[tuple[str, ToolResult]] = []
         for i, name in enumerate(profiles_to_run):
             self.repl.console.print(
@@ -274,7 +278,7 @@ class ScanCommands:
             )
             auto_approve = i > 0
             result = self._execute_nmap_scan(
-                name, auto_approve=auto_approve, timeout=timeout
+                name, executor=executor, auto_approve=auto_approve, timeout=timeout
             )
             self._print_result(result)
             if result.output_files:
@@ -301,16 +305,18 @@ class ScanCommands:
     def _execute_nmap_scan(
         self,
         profile_name: str,
+        executor: ToolExecutor | None = None,
         auto_approve: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ) -> ToolResult:
         assert self.repl.active_project is not None
         tool = tool_registry.get_tool("nmap")
         assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
+        if executor is None:
+            executor = ToolExecutor(
+                project_name=self.repl.active_project,
+                base_path=Path(self.repl.base_path),
+            )
         return executor.execute(
             tool,
             auto_approve=auto_approve,

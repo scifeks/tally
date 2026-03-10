@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +13,20 @@ _METACHAR_TOKENS = {"&&", "||", ";", ">", ">>", "<", "<<", "|"}
 _METACHAR_CHARS = frozenset(";&|<>`$")
 
 DEFAULT_TIMEOUT = 300  # seconds
+
+_NEEDS_ROOT_PATTERNS = [
+    "requires root privileges",
+    "requires privileged access",
+    "operation not permitted",
+    "couldn't open a raw socket",
+    "socket: operation not permitted",
+    "quitting!",
+]
+
+
+def _needs_root(stderr: str) -> bool:
+    low = stderr.lower()
+    return any(pat in low for pat in _NEEDS_ROOT_PATTERNS)
 
 
 def sanitize_command(cmd: list[str]) -> list[str]:
@@ -34,6 +49,7 @@ class ToolExecutor:
         self.project_name = project_name
         self.base_path = Path(base_path)
         self.auto_approve = auto_approve
+        self._sudo_approved = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -116,6 +132,73 @@ class ToolExecutor:
         duration = round(perf_counter() - start, 3)
         success = proc.returncode == 0
 
+        # 4b. Sudo retry if the failure looks like a privilege error
+        if not success and _needs_root(proc.stderr):
+            sudo_cmd = ["sudo"] + cmd
+            if self._sudo_approved or self._prompt_sudo(tool.name, sudo_cmd):
+                self._sudo_approved = True
+                start = perf_counter()
+                try:
+                    proc = subprocess.run(
+                        sudo_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout,
+                        cwd=cwd,
+                    )
+                except subprocess.TimeoutExpired:
+                    duration = round(perf_counter() - start, 3)
+                    print(f"✗ Failed  (timeout after {timeout}s)")
+                    return ToolResult(
+                        tool_name=tool.name,
+                        success=False,
+                        output=f"Timed out after {timeout} seconds.",
+                        parsed_data=None,
+                        output_files={},
+                        timestamp=timestamp,
+                        duration_seconds=duration,
+                    )
+                except FileNotFoundError:
+                    # sudo not found — fall back to su -c
+                    su_cmd = ["su", "-c", shlex.join(cmd)]
+                    print("  (sudo not found, retrying with su -c...)")
+                    start = perf_counter()
+                    try:
+                        proc = subprocess.run(
+                            su_cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout,
+                            cwd=cwd,
+                        )
+                    except subprocess.TimeoutExpired:
+                        duration = round(perf_counter() - start, 3)
+                        print(f"✗ Failed  (timeout after {timeout}s)")
+                        return ToolResult(
+                            tool_name=tool.name,
+                            success=False,
+                            output=f"Timed out after {timeout} seconds.",
+                            parsed_data=None,
+                            output_files={},
+                            timestamp=timestamp,
+                            duration_seconds=duration,
+                        )
+                    except (FileNotFoundError, PermissionError):
+                        print("✗ Failed  (elevated privileges not available)")
+                        return self._failure(
+                            tool.name,
+                            timestamp,
+                            "Elevated privileges not available"
+                            " (sudo and su both failed)",
+                        )
+                except PermissionError:
+                    print("✗ Failed  (permission denied)")
+                    return self._failure(
+                        tool.name, timestamp, "Permission denied running sudo"
+                    )
+                duration = round(perf_counter() - start, 3)
+                success = proc.returncode == 0
+
         # 5. Persist stdout / stderr to disk
         output_files: dict[str, Path] = {}
         if proc.stdout:
@@ -171,6 +254,18 @@ class ToolExecutor:
         print(f"Command: {' '.join(cmd)}")
         try:
             answer = input("Approve execution? [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+        return answer in ("y", "yes")
+
+    @staticmethod
+    def _prompt_sudo(tool_name: str, sudo_cmd: list[str]) -> bool:
+        print()
+        print(f"[{tool_name}] This scan type requires root privileges.")
+        print(f"Command: {' '.join(sudo_cmd)}")
+        try:
+            answer = input("Retry with sudo? [y/N]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print()
             return False

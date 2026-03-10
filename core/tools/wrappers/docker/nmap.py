@@ -6,6 +6,8 @@ from typing import Any
 from ...base import DockerToolWrapper
 from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
 
+_DEFAULT_NMAP_ARGS = "-sV -sC -O"
+
 
 class DockerNmapWrapper(DockerToolWrapper):
     @property
@@ -66,7 +68,7 @@ class DockerNmapWrapper(DockerToolWrapper):
             nmap_profile = nmap_config.profiles[profile]
             hosts = nmap_profile.hosts
             if not args:
-                args = nmap_profile.nmap_args
+                args = nmap_profile.nmap_args or _DEFAULT_NMAP_ARGS
 
             conflicts = check_exclusion_conflicts(hosts, nmap_config.excluded_networks)
             if conflicts:

@@ -7,7 +7,7 @@ class NmapProfile(BaseModel):
     """Nmap scan profile configuration."""
 
     hosts: list[str] = Field(..., description="List of hosts/subnets to scan")
-    nmap_args: str = Field(..., description="Nmap arguments for this profile")
+    nmap_args: str = Field(default="", description="Nmap arguments for this profile")
 
 
 class NmapHostsConfig(BaseModel):
