@@ -175,14 +175,16 @@ class ProjectCommands:
 
         table = Table(show_header=True, header_style="bold")
         table.add_column("Name", style="cyan", no_wrap=True)
+        table.add_column("Type", style="white")
         table.add_column("Path", style="white")
         table.add_column("Languages", style="white")
         table.add_column("Base URLs", style="white")
 
         for repo in repos:
+            types = ", ".join(repo.type) if repo.type else "—"
             langs = ", ".join(repo.languages) if repo.languages else "—"
             urls = ", ".join(repo.base_urls) if repo.base_urls else "—"
-            table.add_row(repo.name, repo.path, langs, urls)
+            table.add_row(repo.name, types, repo.path, langs, urls)
 
         self.repl.console.print(table)
 

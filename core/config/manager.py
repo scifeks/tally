@@ -138,7 +138,7 @@ class ConfigManager:
             json.dump(data, f, indent=2)
 
     def load_repositories(self, project_name: str) -> list[Repository]:
-        """Load repositories configuration for a project.
+        """Load repositories from project.json for a project.
 
         Args:
             project_name: Name of the project
@@ -146,32 +146,25 @@ class ConfigManager:
         Returns:
             List of Repository objects
         """
-        config_path = self.projects_dir / project_name / "config" / "repositories.json"
-
-        if not config_path.exists():
+        config = self.load_project_config(project_name)
+        if config is None:
             return []
-
-        with open(config_path) as f:
-            data = json.load(f)
-            return [Repository(**repo) for repo in data.get("repositories", [])]
+        return config.repositories
 
     def save_repositories(
         self, project_name: str, repositories: list[Repository]
     ) -> None:
-        """Save repositories configuration.
+        """Save repositories into project.json for a project.
 
         Args:
             project_name: Name of the project
             repositories: List of Repository objects
         """
-        config_dir = self.projects_dir / project_name / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        config_path = config_dir / "repositories.json"
-        data = {"repositories": [repo.model_dump() for repo in repositories]}
-
-        with open(config_path, "w") as f:
-            json.dump(data, f, indent=2)
+        config = self.load_project_config(project_name)
+        if config is None:
+            raise ValueError(f"Project '{project_name}' not found.")
+        config.repositories = repositories
+        self.save_project_config(project_name, config)
 
     def load_endpoint_config(
         self, project_name: str, repo_name: str
