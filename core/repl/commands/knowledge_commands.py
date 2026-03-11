@@ -123,6 +123,39 @@ def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
     return table
 
 
+def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
+    """Build a ZAP-specific Rich table."""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Alert", style="white", overflow="fold")
+    table.add_column("Method", style="cyan", no_wrap=True)
+    table.add_column("URL", style="white", overflow="fold")
+    table.add_column("CWE", style="dim white", no_wrap=True)
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    if is_semantic:
+        table.add_column("Relevance", style="dim", no_wrap=True)
+
+    for r in results:
+        meta = r["metadata"]
+        sev = meta.get("severity", "")
+        cwe_id = meta.get("cwe_id")
+        cwe_str = f"CWE-{cwe_id}" if cwe_id is not None else ""
+        row: list[str] = [
+            meta.get("risk_type", ""),
+            meta.get("method", ""),
+            meta.get("url", ""),
+            cwe_str,
+            _color_severity(sev),
+            meta.get("confidence", ""),
+        ]
+        if is_semantic:
+            dist = r["distance"]
+            row.append(f"{dist:.3f}" if dist is not None else "")
+        table.add_row(*row)
+
+    return table
+
+
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
@@ -204,6 +237,8 @@ class KnowledgeCommands:
             table = _build_gitleaks_table(results, is_semantic)
         elif _all_from_tool(results, "semgrep"):
             table = _build_semgrep_table(results, is_semantic)
+        elif _all_from_tool(results, "zap"):
+            table = _build_zap_table(results, is_semantic)
         else:
             table = _build_generic_table(results, is_semantic)
 

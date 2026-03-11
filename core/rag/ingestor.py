@@ -526,7 +526,7 @@ class FindingIngestor:
         for ai, alert in enumerate(alerts):
             alert_name = alert.get("alert_name", "")
             risk = alert.get("risk", "informational")
-            confidence = alert.get("confidence", "low")
+            raw_confidence = alert.get("confidence", "low")
             description = alert.get("description", "")
             url = alert.get("url", "")
             method = alert.get("method", "")
@@ -534,6 +534,21 @@ class FindingIngestor:
             evidence = alert.get("evidence") or ""
             solution = alert.get("solution", "")
             cwe_id = alert.get("cwe_id")
+
+            # Map ZAP confidence (text or integer string) to our constants
+            _ZAP_CONFIDENCE: dict[str, str] = {
+                "confirmed": CONFIDENCE_CONFIRMED,
+                "4": CONFIDENCE_CONFIRMED,
+                "high": "probable",
+                "3": "probable",
+                "medium": "probable",
+                "2": "probable",
+                "low": "potential",
+                "1": "potential",
+                "false positive": "potential",
+                "0": "potential",
+            }
+            confidence = _ZAP_CONFIDENCE.get(str(raw_confidence).lower(), "potential")
 
             text_lines = [
                 f"[zap] [{risk.upper()}] API vulnerability: {alert_name}",
@@ -553,6 +568,7 @@ class FindingIngestor:
                 "finding_type": "api_vulnerability",
                 "severity": risk,
                 "confidence": confidence,
+                "risk_type": alert_name,
                 "alert_name": alert_name,
                 "url": url,
                 "method": method.upper(),
