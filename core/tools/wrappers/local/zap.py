@@ -1,16 +1,12 @@
 """OWASP ZAP wrapper for dynamic web application / API security testing."""
 
 import os
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from ...base import ToolWrapper
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_zap_xml
-
-# Candidate binaries in preference order
-_ZAP_CANDIDATES = ("zap.sh", "zap-cli", "zaproxy")
 
 
 class ZAPWrapper(ToolWrapper):
@@ -20,8 +16,8 @@ class ZAPWrapper(ToolWrapper):
     """
 
     def __init__(self, config=None) -> None:
-        # Populated by check_available(); used by build_command()
-        self._found_command: str | None = None
+        # Path to zap.sh from commands.json; falls back to bare "zap.sh" on PATH
+        self._zap_path: str = config.path if config is not None else "zap.sh"
         # Set by build_command(); read by parse_output()
         self._last_report_path: Path | None = None
 
@@ -50,13 +46,8 @@ class ZAPWrapper(ToolWrapper):
         return "OWASP ZAP dynamic web application security scanner"
 
     def check_available(self) -> bool:
-        """Return True if any ZAP binary variant is on PATH."""
-        for candidate in _ZAP_CANDIDATES:
-            if shutil.which(candidate) is not None:
-                self._found_command = candidate
-                return True
-        self._found_command = None
-        return False
+        """Return True if the configured zap.sh path exists."""
+        return Path(self._zap_path).exists()
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the ZAP quick-scan argv list.
@@ -79,12 +70,13 @@ class ZAPWrapper(ToolWrapper):
                 Path(tempfile.gettempdir()) / f"zap_report_{os.getpid()}.json"
             )
 
+        # zap.sh cd's to its install dir before launching Java, so any relative
+        # path would be resolved there.  Always pass an absolute path.
+        output_file = str(Path(output_file).resolve())
         self._last_report_path = Path(output_file)
 
-        zap_cmd = self._found_command or "zap.sh"
-
         return [
-            zap_cmd,
+            self._zap_path,
             "-cmd",
             "-quickurl",
             base_url,
