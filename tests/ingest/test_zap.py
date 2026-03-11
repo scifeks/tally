@@ -185,7 +185,7 @@ class TestZapIngestor:
         assert sql_meta["profile"] == "test-repo"
         assert sql_meta["finding_type"] == "api_vulnerability"
         assert sql_meta["severity"] == "high"
-        assert sql_meta["confidence"] == "medium"
+        assert sql_meta["confidence"] == "probable"
         assert sql_meta["url"] == "https://example.com/api/users"
 
     def test_remediation_promoted(
