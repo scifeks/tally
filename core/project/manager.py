@@ -10,6 +10,34 @@ from core.config import ConfigManager, ProjectConfig, Repository
 
 _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\s\-]*$")
 
+_REPO_TYPE_HELP = (
+    "  Type  valid: library | api | ui\n"
+    "        allowed combos: library  |  api  |  ui  |  api,ui\n"
+    "        library is mutually exclusive; use commas for multiple types"
+)
+
+
+def _parse_repo_types(raw: str) -> list[str]:
+    """Split comma-separated type input and strip whitespace."""
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
+def _validate_repo_types(types: list[str]) -> str | None:
+    """Return a user-facing error message, or None if types are valid."""
+    if not types:
+        return "Repository type is required."
+    valid = {"library", "api", "ui"}
+    invalid = set(types) - valid
+    if invalid:
+        bad = ", ".join(sorted(invalid))
+        return f"Invalid type(s): {bad}. Valid values: library, api, ui"
+    if "library" in types and len(types) > 1:
+        return (
+            "'library' is mutually exclusive and cannot be combined with other types."
+        )
+    return None
+
+
 _LANG_INDICATORS = [
     (["*.py", "requirements.txt", "setup.py", "pyproject.toml"], "python"),
     (["*.js", "*.jsx", "*.ts", "*.tsx"], "javascript/typescript"),
@@ -192,6 +220,17 @@ class ProjectManager:
                 break
             print("  Repository name is required.")
 
+        # Type
+        print(_REPO_TYPE_HELP)
+        while True:
+            type_input = _prompt("  Type")
+            types = _parse_repo_types(type_input)
+            err = _validate_repo_types(types)
+            if err:
+                print(f"  {err}")
+                continue
+            break
+
         # Path + Docker path (at least one required)
         local_path_str = ""
         docker_path = ""
@@ -239,6 +278,7 @@ class ProjectManager:
 
         return Repository(
             name=name,
+            type=types,
             path=local_path_str,
             docker_path=docker_path,
             container_name=container_name,
@@ -274,6 +314,18 @@ class ProjectManager:
                 if name:
                     break
                 print("  Repository name is required.")
+
+            # Type
+            print(_REPO_TYPE_HELP)
+            current_type_str = ", ".join(existing.type) if existing.type else ""
+            while True:
+                type_input = _prompt("  Type", default=current_type_str)
+                types = _parse_repo_types(type_input)
+                err = _validate_repo_types(types)
+                if err:
+                    print(f"  {err}")
+                    continue
+                break
 
             # Path + Docker path (at least one required)
             local_path_str = existing.path
@@ -333,6 +385,7 @@ class ProjectManager:
 
             updated = Repository(
                 name=name,
+                type=types,
                 path=local_path_str,
                 docker_path=docker_path,
                 container_name=container_name,
@@ -416,4 +469,3 @@ class ProjectManager:
             repositories=repositories,
         )
         self.config.save_project_config(name, project_cfg)
-        self.config.save_repositories(name, repositories)
