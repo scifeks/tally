@@ -35,98 +35,158 @@ _HELP_BOX = box.Box(
     "│ ││\n"  # head row chars
     "├─┼┤\n"  # head/data separator
     "│ ││\n"  # data row chars
-    "│ ││\n"  # row separator (show_lines=True only)
+    "├─┼┤\n"  # row separator  ← end_section=True
     "├─┼┤\n"  # foot separator
     "│ ││\n"  # foot row chars
     "└─┴┘\n"  # bottom border
 )
 
 # ---------------------------------------------------------------------------
-# Help registry: (group, command, description)
-# command=None → section header row; description holds the section title.
+# Help registry: (group, command, argument, description)
+# command=None  → section header row; description holds the section title.
+# command=_NOTE → dim informational row (no Command/Arguments cells).
 # group is used by _cmd_help_scoped() to render filtered tables.
 # ---------------------------------------------------------------------------
+_NOTE = "_NOTE_"
+
 _HELP_REGISTRY = [
     # Project Management
-    ("project", None, "Project Management"),
-    ("project", "project add", "Create a new project (interactive)"),
-    ("project", "project switch <name>", "Switch the active project"),
-    ("project", "project list", "List all projects"),
-    ("project", "project info", "Show active project details"),
-    ("project", "project delete <name>", "Delete a project and all its data"),
+    ("project", None, None, "Project Management"),
+    ("project", "project add", None, "Create a new project (interactive)"),
+    (
+        "project",
+        "project switch",
+        "<name>",
+        "Switch the active project  [dim]required[/dim]",
+    ),
+    ("project", "project list", None, "List all projects"),
+    ("project", "project info", None, "Show active project details"),
+    (
+        "project",
+        "project delete",
+        "<name>",
+        "Delete a project and all its data  [dim]required[/dim]",
+    ),
     # Repo Management
-    ("repo", None, "Repo Management"),
-    ("repo", "repo add", "Add a repository to the active project"),
-    ("repo", "repo delete <name>", "Delete a repository's config"),
-    ("repo", "repo edit <name>", "Edit a repository's config"),
-    ("repo", "repo list", "List configured repositories"),
+    ("repo", None, None, "Repo Management"),
+    ("repo", "repo add", None, "Add a repository to the active project"),
+    (
+        "repo",
+        "repo delete",
+        "<name>",
+        "Delete a repository's config  [dim]required[/dim]",
+    ),
+    (
+        "repo",
+        "repo edit",
+        "<name>",
+        "Edit a repository's config  [dim]required[/dim]",
+    ),
+    ("repo", "repo list", None, "List configured repositories"),
     # Scanning
-    ("scan", None, "Scanning"),
-    ("scan", "", "[dim]All commands accept --timeout <seconds>[/dim]"),
-    ("scan", "scan", "Run all tools across the active project"),
-    ("scan", "scan <tool>", "Run a specific tool against the active project"),
-    ("scan", "scan repo", "Run language-appropriate tools on a selected repository"),
+    ("scan", None, None, "Scanning"),
+    ("scan", "scan", None, "Run all tools across the active project"),
+    ("scan", "scan", "<tool>", "Run a specific tool against the active project"),
     (
         "scan",
-        "scan repo <repo>",
+        "scan",
+        "repo",
+        "Run language-appropriate tools on a selected repository",
+    ),
+    (
+        "scan",
+        "scan",
+        "repo <repo>",
         "Run all language-appropriate tools against one repository",
     ),
-    ("scan", "scan repo <tool>", "Run a specific tool against all repositories"),
-    ("scan", "scan repo <repo> <tool>", "Run a specific tool against one repository"),
-    ("scan", "run <tool> [args...]", "Execute a tool with raw arguments"),
+    ("scan", "scan", "repo <tool>", "Run a specific tool against all repositories"),
+    (
+        "scan",
+        "scan",
+        "repo <repo> <tool>",
+        "Run a specific tool against one repository",
+    ),
+    (
+        "scan",
+        "scan",
+        "--timeout <seconds>",
+        "[dim]Override default scan timeout[/dim]",
+    ),
+    ("scan", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
     # Tools
-    ("tool", None, "Tools"),
-    ("tool", "tool add", "Add a tool to the active configuration"),
-    ("tool", "tool edit <name>", "Edit a configured tool interactively"),
-    ("tool", "tool remove <name>", "Remove a tool from the configuration"),
-    ("tool", "tool list", "List all configured tools and their status"),
+    ("tool", None, None, "Tools"),
+    ("tool", "tool add", None, "Add a tool to the active configuration"),
+    (
+        "tool",
+        "tool edit",
+        "<name>",
+        "Edit a configured tool interactively  [dim]required[/dim]",
+    ),
+    (
+        "tool",
+        "tool remove",
+        "<name>",
+        "Remove a tool from the configuration  [dim]required[/dim]",
+    ),
+    ("tool", "tool list", None, "List all configured tools and their status"),
     # Knowledge Base
-    ("knowledge", None, "Knowledge Base"),
-    ("knowledge", "chat <message>", "RAG-augmented chat with the LLM"),
-    ("knowledge", "stats", "Show knowledge base statistics"),
+    ("knowledge", None, None, "Knowledge Base"),
+    ("knowledge", "chat", "<message>", "RAG-augmented chat with the LLM"),
+    ("knowledge", "stats", None, "Show knowledge base statistics"),
+    ("knowledge", "purge", None, "Delete findings from the knowledge base"),
     (
         "knowledge",
-        "purge [--tool <tool>]",
-        "Delete findings from the knowledge base",
+        "purge",
+        "--tool <tool>",
+        "Limit deletion to findings from one tool",
     ),
     # Search
-    ("search", None, "Search"),
-    ("search", "", "[dim]= exact  ~= partial  Filters combine with AND[/dim]"),
-    ("search", "search <query>", "Semantic search over ingested findings"),
-    ("search", "search tool=<name>", "Filter by configured tool name"),
+    ("search", None, None, "Search"),
     (
         "search",
-        "search type=<type>",
+        _NOTE,
+        None,
+        "[dim]= exact  ~= partial  Filters combine with AND[/dim]",
+    ),
+    ("search", "search", "<query>", "Semantic search over ingested findings"),
+    ("search", "search", "tool=<name>", "Filter by configured tool name"),
+    (
+        "search",
+        "search",
+        "type=<type>",
         "Filter by type: secret, vulnerability, weakness, misconfiguration, etc.",
     ),
-    ("search", "search type=<t1>,<t2>", "AND-filter multiple finding types"),
-    ("search", "search severity=<level>", "Filter by severity level"),
-    ("search", "search <key>=<value>", "Exact match filter on metadata key"),
-    ("search", "search <key>~=<value>", "Partial match filter on metadata key"),
-    ("search", "search tool=<n> type=<t> severity=<s>", "Chain filters (AND)"),
-    ("search", "search tool=<name> <query>", "Combine filters with semantic search"),
-    ("search", "search <filters> --page=<n>", "Show page N of results (default: 1)"),
+    ("search", "search", "type=<t1>,<t2>", "AND-filter multiple finding types"),
+    ("search", "search", "severity=<level>", "Filter by severity level"),
+    ("search", "search", "<key>=<value>", "Exact match filter on metadata key"),
+    ("search", "search", "<key>~=<value>", "Partial match filter on metadata key"),
+    ("search", "search", "tool=<n> type=<t> severity=<s>", "Chain filters (AND)"),
     (
         "search",
-        "search <filters> --page-size=<n>",
+        "search",
+        "tool=<name> <query>",
+        "Combine filters with semantic search",
+    ),
+    (
+        "search",
+        "search",
+        "<filters> --page=<n>",
+        "Show page N of results (default: 1)",
+    ),
+    (
+        "search",
+        "search",
+        "<filters> --page-size=<n>",
         "Results per page (default: 20 semantic / 200 filter-only)",
     ),
-    (
-        "search",
-        "Filter keys (global)",
-        "tool, domain, type, severity, confidence, risk_type, profile",
-    ),
-    ("search", "Filter keys (code)", "file~=<path>, rule=<id>"),
-    ("search", "Filter keys (web)", "url~=, method=, param~=, alert~="),
-    ("search", "Filter keys (network)", "host=, port=, service~=, transport="),
     # Reporting
-    ("reporting", None, "Reporting"),
-    ("reporting", "report", "Generate findings report"),
+    ("reporting", None, None, "Reporting"),
+    ("reporting", "report", None, "Generate findings report"),
     # Utility
-    ("utility", None, "Utility"),
-    ("utility", "help", "Show this help table"),
-    ("utility", "clear", "Clear the screen"),
-    ("utility", "exit / quit", "Exit tally"),
+    ("utility", None, None, "Utility"),
+    ("utility", "help", None, "Show this help table"),
+    ("utility", "clear", None, "Clear the screen"),
+    ("utility", "exit / quit", None, "Exit tally"),
 ]
 
 _COMPLETIONS = [
@@ -421,23 +481,42 @@ class REPL:
         """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered
         by group.
         """
+        from collections import Counter
+
         table = Table(
             show_header=True,
             header_style="bold",
             box=_HELP_BOX,
             padding=(0, 1),
         )
-        table.add_column("Command", style="cyan", no_wrap=True, min_width=26)
+        table.add_column("Command", style="cyan", no_wrap=True, min_width=20)
+        table.add_column("Arguments", style="cyan", no_wrap=True, min_width=26)
         table.add_column("Description", style="white")
 
-        for entry_group, command, description in _HELP_REGISTRY:
-            if group is not None and entry_group != group:
-                continue
-            if command is None:
-                # Section header row
-                table.add_row(f"[bold yellow]{description}[/bold yellow]", "")
+        entries = [e for e in _HELP_REGISTRY if group is None or e[0] == group]
+
+        cmd_counts: Counter[str] = Counter(
+            cmd for _, cmd, _, _ in entries if cmd is not None and cmd != _NOTE
+        )
+        last_row_idx: dict[str, int] = {}
+        for i, (_, cmd, _, _) in enumerate(entries):
+            if cmd is not None and cmd != _NOTE:
+                last_row_idx[cmd] = i
+
+        prev_cmd: str | None = None
+        for i, (_, cmd, arg, desc) in enumerate(entries):
+            if cmd is None:
+                table.add_row(f"[bold yellow]{desc}[/bold yellow]", "", "")
+                prev_cmd = None
+            elif cmd == _NOTE:
+                table.add_row("", "", desc)
             else:
-                table.add_row(command, description)
+                cmd_cell = cmd if cmd != prev_cmd else ""
+                arg_cell = arg if arg is not None else ""
+                is_last = last_row_idx[cmd] == i
+                end_sec = is_last and cmd_counts[cmd] > 1
+                table.add_row(cmd_cell, arg_cell, desc, end_section=end_sec)
+                prev_cmd = cmd
 
         return table
 
