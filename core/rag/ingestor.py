@@ -191,10 +191,15 @@ class FindingIngestor:
         """
         parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         hosts: list[dict[str, Any]] = parsed.get("hosts", [])
+        scan_info: dict[str, Any] = parsed.get("scan_info", {})
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+
+        nmap_version = scan_info.get("version", "")
+        nmap_args = scan_info.get("args", "")
+        scan_start_time = scan_info.get("start_time", "")
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
 
@@ -231,6 +236,12 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if nmap_version:
+                host_meta["nmap_version"] = nmap_version
+            if nmap_args:
+                host_meta["nmap_args"] = nmap_args
+            if scan_start_time:
+                host_meta["scan_start_time"] = scan_start_time
             host_meta.update(self._shared_meta("nmap", "host"))
             host_meta["severity"] = SEVERITY_INFORMATIONAL
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
@@ -260,6 +271,12 @@ class FindingIngestor:
                 }
                 port_meta.update(self._shared_meta("nmap", "open_port"))
                 port_meta["severity"] = SEVERITY_INFORMATIONAL
+                if nmap_version:
+                    port_meta["nmap_version"] = nmap_version
+                if nmap_args:
+                    port_meta["nmap_args"] = nmap_args
+                if scan_start_time:
+                    port_meta["scan_start_time"] = scan_start_time
                 for key in (
                     "tls",
                     "tls_version",
