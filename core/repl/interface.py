@@ -86,7 +86,7 @@ _HELP_REGISTRY = [
     ("knowledge", "stats", "Show knowledge base statistics"),
     (
         "knowledge",
-        "purge [--tool <t>] [--profile <p>]",
+        "purge [--tool <tool>]",
         "Delete findings from the knowledge base",
     ),
     # Search

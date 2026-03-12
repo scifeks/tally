@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+from rich.markup import escape
 
 if TYPE_CHECKING:
     from core.rag.engine import RAGEngine
@@ -10,14 +14,15 @@ if TYPE_CHECKING:
 
 # Help text exposed as a class attribute so smoke tests can find it.
 _HELP_TEXT = (
-    "purge [--tool <tool>] [--profile <profile>]\n"
+    "purge [--tool <tool>]\n"
     "\n"
-    "  --tool <tool>               Delete all findings from the specified tool\n"
-    "  --tool <tool> --profile <p> Delete findings for a specific tool+profile\n"
+    "  --tool <tool>   Delete all findings from the specified tool\n"
+    "\n"
+    "  With no arguments, deletes ALL findings and clears all tool output files.\n"
     "\n"
     "  Examples:\n"
+    "    purge\n"
     "    purge --tool nmap\n"
-    "    purge --tool nmap --profile management\n"
 )
 
 
@@ -34,14 +39,16 @@ class PurgeCommand:
     # ------------------------------------------------------------------
 
     def cmd_purge(self, _cmd: str, args: list[str]) -> None:
-        """purge [--tool <tool>] [--profile <profile>]  — delete findings."""
+        """purge [--tool <tool>]  — delete findings."""
         tool, args = self._parse_value_flag(args, "--tool")
-        profile, args = self._parse_value_flag(args, "--profile")
 
-        if profile is not None and tool is None:
-            self.repl.console.print(
-                "[red]Error:[/red] --profile requires --tool to be specified"
-            )
+        # Reject bare positional arguments (e.g. `purge gitleaks`)
+        if args:
+            extra = " ".join(args)
+            msg = f"[red]Error:[/red] Unexpected argument(s): {extra}"
+            if len(args) == 1:
+                msg += f"\nDid you mean: [bold]purge --tool {args[0]}[/bold]?"
+            self.repl.console.print(msg)
             return
 
         if not self.repl.active_project:
@@ -56,25 +63,20 @@ class PurgeCommand:
             return
 
         # Count matching documents before deletion
-        count = self._count_matching(rag_engine, tool=tool, profile=profile)
+        count = self._count_matching(rag_engine, tool=tool)
 
         if count == 0:
             self.repl.console.print("[yellow]No matching documents found.[/yellow]")
             return
 
         # Build confirmation prompt
-        if tool is not None and profile is not None:
-            label = f"{tool}/{profile}"
-            confirm_msg = f"Delete {label} findings?"
-        elif tool is not None:
-            label = tool
-            confirm_msg = f"Delete all {label} findings?"
+        if tool is not None:
+            confirm_msg = f"Delete all {tool} findings?"
         else:
-            label = "all"
             confirm_msg = "Delete ALL findings?"
 
         self.repl.console.print(
-            f"Found [bold]{count}[/bold] document(s). {confirm_msg} [y/N] ",
+            f"Found [bold]{count}[/bold] document(s). {confirm_msg} {escape('[y/N]')} ",
             end="",
         )
         answer = input().strip().lower()
@@ -82,36 +84,62 @@ class PurgeCommand:
             self.repl.console.print("[dim]Aborted.[/dim]")
             return
 
-        deleted = rag_engine.delete_findings(tool=tool, profile=profile)
+        deleted = rag_engine.delete_findings(tool=tool)
+        self._delete_tool_output_files(tool=tool)
         self.repl.console.print(f"[green]Deleted {deleted} document(s).[/green]")
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _delete_tool_output_files(self, tool: str | None) -> None:
+        """Delete files from tool_outputs directories.
+
+        If tool is given, delete all files in tool_outputs/<tool>/ (keep dir).
+        If tool is None, delete files in all tool_outputs subdirs (keep dirs).
+        """
+        assert self.repl.active_project is not None
+        tool_outputs_dir = (
+            Path(self.repl.base_path)
+            / "projects"
+            / self.repl.active_project
+            / "tool_outputs"
+        )
+        if not tool_outputs_dir.exists():
+            return
+
+        if tool is not None:
+            dirs_to_clear = [tool_outputs_dir / tool]
+        else:
+            dirs_to_clear = [d for d in tool_outputs_dir.iterdir() if d.is_dir()]
+
+        for tool_dir in dirs_to_clear:
+            if not tool_dir.exists():
+                continue
+            for item in tool_dir.iterdir():
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+
     def _count_matching(
         self,
         rag_engine: RAGEngine,
         tool: str | None,
-        profile: str | None,
     ) -> int:
         """Return the count of documents that match the given filters."""
         if rag_engine._collection is None:
             return 0
 
-        if tool is not None and profile is not None:
-            where = {"$and": [{"tool": tool}, {"profile": profile}]}
-        elif tool is not None:
-            where = {"tool": tool}
-        else:
-            # No filters — count everything
-            return rag_engine.count_documents()
+        if tool is not None:
+            where: dict[str, str] = {"tool": tool}
+            try:
+                result = rag_engine._collection.get(where=where, include=[])  # type: ignore[arg-type]
+                return len(result.get("ids") or [])
+            except Exception:
+                return 0
 
-        try:
-            result = rag_engine._collection.get(where=where, include=[])  # type: ignore[arg-type]
-            return len(result.get("ids") or [])
-        except Exception:
-            return 0
+        return rag_engine.count_documents()
 
     def _get_rag_engine(self) -> RAGEngine | None:
         """Create and return a RAGEngine for the active project, or None on error."""
