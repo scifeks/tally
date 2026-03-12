@@ -324,11 +324,21 @@ class FindingIngestor:
             message = finding.get("message", "")
             file_path = finding.get("file_path", "")
             line_start = finding.get("line_start", 0)
+            col_start = finding.get("col_start")
             line_end = finding.get("line_end", 0)
+            col_end = finding.get("col_end")
             code_snippet = finding.get("code_snippet", "")
+            fix = finding.get("fix")
+            fingerprint = finding.get("fingerprint")
             cwe = finding.get("cwe") or ""
             owasp = finding.get("owasp") or ""
             confidence = finding.get("confidence") or ""
+            category = finding.get("category") or ""
+            technology: list[str] = finding.get("technology") or []
+            subcategory: list[str] = finding.get("subcategory") or []
+            likelihood = finding.get("likelihood") or ""
+            impact = finding.get("impact") or ""
+            references: list[str] = finding.get("references") or []
 
             text = (
                 f"[semgrep] [{severity.upper()}] {rule_id} "
@@ -349,12 +359,32 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if col_start is not None:
+                meta["col_start"] = col_start
+            if col_end is not None:
+                meta["col_end"] = col_end
             if cwe:
                 meta["cwe"] = cwe
             if owasp:
                 meta["owasp"] = owasp
             if confidence:
                 meta["confidence"] = confidence
+            if fix:
+                meta["fix"] = fix
+            if fingerprint:
+                meta["fingerprint"] = fingerprint
+            if category:
+                meta["category"] = category
+            if technology:
+                meta["technology"] = ", ".join(technology)
+            if subcategory:
+                meta["subcategory"] = ", ".join(subcategory)
+            if likelihood:
+                meta["likelihood"] = likelihood
+            if impact:
+                meta["impact"] = impact
+            if references:
+                meta["references"] = ", ".join(references)
             meta.update(self._shared_meta("semgrep", "vulnerability"))
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"

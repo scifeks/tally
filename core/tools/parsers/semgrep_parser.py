@@ -66,11 +66,21 @@ def _parse_finding(result: dict[str, Any]) -> dict[str, Any]:
         "message": extra.get("message", ""),
         "file_path": result.get("path", ""),
         "line_start": start.get("line", 0),
+        "col_start": start.get("col"),
         "line_end": end.get("line", 0),
+        "col_end": end.get("col"),
         "code_snippet": extra.get("lines", ""),
+        "fix": extra.get("fix"),
+        "fingerprint": extra.get("fingerprint"),
         "cwe": metadata["cwe"],
         "owasp": metadata["owasp"],
         "confidence": metadata["confidence"],
+        "category": metadata["category"],
+        "technology": metadata["technology"],
+        "subcategory": metadata["subcategory"],
+        "likelihood": metadata["likelihood"],
+        "impact": metadata["impact"],
+        "references": metadata["references"],
     }
 
 
@@ -79,12 +89,23 @@ def _extract_severity(extra: dict[str, Any]) -> str:
     return _SEVERITY_MAP.get(raw, "low")
 
 
-def _extract_metadata(extra: dict[str, Any]) -> dict[str, str | None]:
+def _extract_metadata(extra: dict[str, Any]) -> dict[str, Any]:
     meta = extra.get("metadata", {})
     raw_conf = meta.get("confidence")
     confidence = raw_conf.lower() if isinstance(raw_conf, str) else None
+
+    technology = meta.get("technology")
+    subcategory = meta.get("subcategory")
+    references = meta.get("references")
+
     return {
         "cwe": meta.get("cwe"),
         "owasp": meta.get("owasp"),
         "confidence": confidence,
+        "category": meta.get("category"),
+        "technology": technology if isinstance(technology, list) else None,
+        "subcategory": subcategory if isinstance(subcategory, list) else None,
+        "likelihood": meta.get("likelihood"),
+        "impact": meta.get("impact"),
+        "references": references if isinstance(references, list) else None,
     }
