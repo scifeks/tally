@@ -128,3 +128,51 @@ def test_no_arg_syntax_in_command_column():
         assert "[" not in cmd, (
             f"Command column entry {cmd!r} contains '['; move to Arguments column"
         )
+
+
+# ---------------------------------------------------------------------------
+# test_scan_command_rows_exact
+# ---------------------------------------------------------------------------
+
+
+def test_scan_command_rows_exact():
+    """scan command rows: no-arg + --repo= + --tool= + --type= (in order)."""
+    scan_args = [arg for _, cmd, arg, _ in _HELP_REGISTRY if cmd == "scan"]
+    assert scan_args == [
+        None,
+        "--repo=<repo>",
+        "--tool=<tool,...>",
+        "--type=<type,...>",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# test_purge_command_rows_exact
+# ---------------------------------------------------------------------------
+
+
+def test_purge_command_rows_exact():
+    """purge command rows: no-arg + --tool= (in order)."""
+    purge_args = [arg for _, cmd, arg, _ in _HELP_REGISTRY if cmd == "purge"]
+    assert purge_args == [None, "--tool=<tool,...>"]
+
+
+# ---------------------------------------------------------------------------
+# test_search_command_rows_exact
+# ---------------------------------------------------------------------------
+
+
+def test_search_command_rows_exact():
+    """search command rows: no-arg + all flags in canonical order."""
+    search_args = [arg for _, cmd, arg, _ in _HELP_REGISTRY if cmd == "search"]
+    assert search_args == [
+        None,
+        "--tool=<tool,...>",
+        "--type=<type,...>",
+        "--severity=<level,...>",
+        "--<field>=<value>",
+        "--<field>~=<value>",
+        "--page=<n>",
+        "--page-size=<n>",
+        "--help",
+    ]
