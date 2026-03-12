@@ -8,7 +8,7 @@ import ollama
 from core.config.manager import ConfigManager
 
 from .engine import RAGEngine, verify_ollama_available
-from .search_parser import parse_search_query
+from .search_parser import SearchQuery, parse_search_query
 
 logger = logging.getLogger(__name__)
 
@@ -59,23 +59,27 @@ class QueryEngine:
 
     def search(
         self,
-        raw_input: str,
+        raw_input: str = "",
         n_results: int = _DEFAULT_N_RESULTS,
+        query: SearchQuery | None = None,
     ) -> list[dict[str, Any]]:
-        """Parse raw_input, run semantic or metadata-only search, return results.
+        """Run semantic or metadata-only search, return results.
 
         Each result dict has keys: 'document' (str), 'metadata' (dict),
         'distance' (float | None). Distance is None for metadata-only searches.
 
+        When query is provided it bypasses parse_search_query entirely.
         The n_results parameter is used by chat() to override the page size for
         context retrieval. When called from cmd_search, n_results is the default
-        and pagination is driven by --page-size/--page flags in raw_input.
+        and pagination is driven by the SearchQuery object.
 
         Raises:
             SearchValidationError: Propagated to caller for user-friendly display.
         """
-        if not raw_input.strip():
-            return []
+        if query is None:
+            if not raw_input.strip():
+                return []
+            query = parse_search_query(raw_input, self._known_tools)
 
         collection = self._engine._collection
         if collection is None:
@@ -84,8 +88,6 @@ class QueryEngine:
         total = self._engine.count_documents()
         if total == 0:
             return []
-
-        query = parse_search_query(raw_input, self._known_tools)
 
         # chat() passes n_results to override page_size for context retrieval
         page_size = n_results if n_results != _DEFAULT_N_RESULTS else query.page_size

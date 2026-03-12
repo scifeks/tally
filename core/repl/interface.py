@@ -129,43 +129,40 @@ _HELP_REGISTRY = [
     ),
     # Search
     ("search", None, None, "Search"),
-    (
-        "search",
-        _NOTE,
-        None,
-        "[dim]= exact  ~= partial  Filters combine with AND[/dim]",
-    ),
-    ("search", "search", "<query>", "Semantic search over ingested findings"),
-    ("search", "search", "tool=<name>", "Filter by configured tool name"),
+    ("search", "search", None, "Search findings. Run 'search --help' for full docs."),
     (
         "search",
         "search",
-        "type=<type>",
-        "Filter by type: secret, vulnerability, weakness, misconfiguration, etc.",
-    ),
-    ("search", "search", "type=<t1>,<t2>", "AND-filter multiple finding types"),
-    ("search", "search", "severity=<level>", "Filter by severity level"),
-    ("search", "search", "<key>=<value>", "Exact match filter on metadata key"),
-    ("search", "search", "<key>~=<value>", "Partial match filter on metadata key"),
-    ("search", "search", "tool=<n> type=<t> severity=<s>", "Chain filters (AND)"),
-    (
-        "search",
-        "search",
-        "tool=<name> <query>",
-        "Combine filters with semantic search",
+        "--tool=<tool,...>",
+        "Filter by configured tool name(s). Comma-separated.",
     ),
     (
         "search",
         "search",
-        "<filters> --page=<n>",
-        "Show page N of results (default: 1)",
+        "--type=<type,...>",
+        "Filter by tool domain type(s). Comma-separated.",
     ),
     (
         "search",
         "search",
-        "<filters> --page-size=<n>",
-        "Results per page (default: 20 semantic / 200 filter-only)",
+        "--severity=<level,...>",
+        "Filter by severity level(s). Comma-separated.",
     ),
+    (
+        "search",
+        "search",
+        "--<field>=<value>",
+        "Exact metadata filter. Quote values with spaces.",
+    ),
+    ("search", "search", "--<field>~=<value>", "Partial (LIKE) metadata filter."),
+    ("search", "search", "--page=<n>", "Show page N of results (default: 1)."),
+    (
+        "search",
+        "search",
+        "--page-size=<n>",
+        "Results per page (default: 200 / 20 semantic).",
+    ),
+    ("search", "search", "--help", "Show detailed search documentation inline."),
     # Reporting
     ("reporting", None, None, "Reporting"),
     ("reporting", "report", None, "Generate findings report"),
@@ -198,65 +195,65 @@ _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
 
 _DOMAIN_KEYS_DISPLAY: dict[str, list[tuple[str, str]]] = {
     "code": [
-        ("file~=<path>", "File path (partial match)"),
-        ("rule=<id>", "Rule ID (exact match)"),
+        ("--file~=<path>", "File path (partial match)"),
+        ("--rule=<id>", "Rule ID (exact match)"),
     ],
     "web": [
-        ("url~=<url>", "URL (partial match)"),
-        ("method=<method>", "HTTP method (GET, POST, ...)"),
-        ("param~=<name>", "Parameter name (partial match)"),
-        ("alert~=<name>", "Alert name (partial match)"),
+        ("--url~=<url>", "URL (partial match)"),
+        ("--method=<method>", "HTTP method (GET, POST, ...)"),
+        ("--param~=<name>", "Parameter name (partial match)"),
+        ("--alert~=<name>", "Alert name (partial match)"),
     ],
     "network": [
-        ("host=<ip>", "IP address (exact match)"),
-        ("host~=<pattern>", "IP address (partial match)"),
-        ("port=<number>", "Port number"),
-        ("service~=<name>", "Service name (partial match)"),
-        ("transport=<proto>", "Transport protocol (tcp, udp)"),
+        ("--host=<ip>", "IP address (exact match)"),
+        ("--host~=<pattern>", "IP address (partial match)"),
+        ("--port=<number>", "Port number"),
+        ("--service~=<name>", "Service name (partial match)"),
+        ("--transport=<proto>", "Transport protocol (tcp, udp)"),
     ],
 }
 
 _TOOL_EXAMPLES: dict[str, list[tuple[str, str]]] = {
     "nmap": [
-        ("search nmap", "All nmap findings"),
-        ("search host=10.0.0.1", "Exact host match"),
-        ("search port=443", "Findings on port 443"),
-        ("search service~=ssh", "Services containing 'ssh'"),
-        ("search transport=tcp severity=high", "High-severity TCP findings"),
-        ("search nmap open ports", "Semantic search filtered to nmap"),
+        ("search --tool=nmap", "All nmap findings"),
+        ("search --host=10.0.0.1", "Exact host match"),
+        ("search --port=443", "Findings on port 443"),
+        ("search --service~=ssh", "Services containing 'ssh'"),
+        ("search --tool=nmap --severity=high", "High-severity nmap findings"),
+        ("search --transport=tcp --severity=high", "High-severity TCP findings"),
     ],
     "gitleaks": [
-        ("search gitleaks", "All gitleaks findings"),
-        ("search file~=config", "Secrets in paths containing 'config'"),
-        ("search rule=generic-api-key", "Findings matching a specific rule"),
-        ("search severity=high", "High-severity secrets"),
-        ("search gitleaks aws", "Semantic search for AWS secrets"),
+        ("search --tool=gitleaks", "All gitleaks findings"),
+        ("search --file~=config", "Secrets in paths containing 'config'"),
+        ("search --rule=generic-api-key", "Findings matching a specific rule"),
+        ("search --severity=high", "High-severity secrets"),
+        ("search --tool=gitleaks --severity=high", "High-severity gitleaks findings"),
     ],
     "zap": [
-        ("search zap", "All ZAP findings"),
-        ("search url~=/api/", "Findings on API endpoints"),
-        ("search method=POST", "POST request findings"),
-        ("search param~=id", "Findings with 'id' in parameter name"),
-        ("search alert~=injection", "Injection-related alerts"),
-        ("search zap severity=high", "High-severity ZAP findings"),
+        ("search --tool=zap", "All ZAP findings"),
+        ("search --url~=/api/", "Findings on API endpoints"),
+        ("search --method=POST", "POST request findings"),
+        ("search --param~=id", "Findings with 'id' in parameter name"),
+        ("search --alert~=injection", "Injection-related alerts"),
+        ("search --tool=zap --severity=high", "High-severity ZAP findings"),
     ],
     "semgrep": [
-        ("search semgrep", "All semgrep findings"),
-        ("search file~=src/auth", "Findings in auth source files"),
-        ("search rule=python.lang.security.audit.exec", "Findings by rule ID"),
-        ("search severity=high", "High-severity findings"),
-        ("search semgrep sql injection", "Semantic search for SQL injection"),
+        ("search --tool=semgrep", "All semgrep findings"),
+        ("search --file~=src/auth", "Findings in auth source files"),
+        ("search --rule=python.lang.security.audit.exec", "Findings by rule ID"),
+        ("search --severity=high", "High-severity findings"),
+        ("search --tool=semgrep --severity=high", "High-severity semgrep findings"),
     ],
 }
 
 _GENERIC_EXAMPLES: list[tuple[str, str]] = [
-    ("search sql injection", "Semantic search for SQL injection"),
-    ("search tool=gitleaks", "All gitleaks findings"),
-    ("search severity=high", "High-severity findings"),
-    ("search type=secret", "Findings of type 'secret'"),
-    ("search tool=nmap port=443", "nmap findings on port 443"),
-    ("search tool=zap url~=/api/", "ZAP findings on /api/ endpoints"),
-    ("search tool=gitleaks severity=high --page-size=50", "Paginated results"),
+    ("search --tool=gitleaks", "All gitleaks findings"),
+    ("search --severity=high", "High-severity findings"),
+    ("search --type=secret", "Findings of type 'secret'"),
+    ("search --tool=nmap --port=443", "nmap findings on port 443"),
+    ("search --tool=zap --url~=/api/", "ZAP findings on /api/ endpoints"),
+    ("search --file~=config", "Secrets in paths containing 'config'"),
+    ("search --tool=gitleaks --severity=high --page-size=50", "Paginated results"),
 ]
 
 
@@ -278,29 +275,36 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
 
     # Syntax hint
     table.add_row("[bold yellow]Search Syntax[/bold yellow]", "")
-    table.add_row("= exact match  ~= partial/contains  filters use AND", "")
+    table.add_row(
+        "--flag=value exact  --flag~=value partial  flags combine with AND", ""
+    )
+    table.add_row(
+        "Bare words and key=value (without --) are rejected as old syntax.", ""
+    )
 
     # Usage examples
     table.add_row("[bold yellow]Usage[/bold yellow]", "")
-    table.add_row("search <query>", "Semantic search over ingested findings")
-    table.add_row("search tool=<name>", "Filter by configured tool name")
-    table.add_row("search type=<type>", "Filter by type: secret, vulnerability, ...")
-    table.add_row("search <key>=<value>", "Exact match filter on metadata key")
-    table.add_row("search <key>~=<value>", "Partial match filter on metadata key")
-    table.add_row("search tool=<n> type=<t> severity=<s>", "Chain filters (AND)")
-    table.add_row("search tool=<name> <query>", "Combine filters with semantic search")
+    table.add_row("search --tool=<name>", "Filter by configured tool name")
+    table.add_row("search --type=<type>", "Filter by type: secret, vulnerability, ...")
+    table.add_row("search --<field>=<value>", "Exact match filter on metadata key")
+    table.add_row("search --<field>~=<value>", "Partial match filter on metadata key")
+    table.add_row("search --tool=<n> --type=<t> --severity=<s>", "Chain filters (AND)")
+    table.add_row("search --help", "Show this reference inline")
 
     # Global filter keys
     table.add_row("[bold yellow]Global Filter Keys[/bold yellow]", "")
-    table.add_row("tool=<name>", "Configured tool name")
-    table.add_row("domain=<domain>", "code, web, network")
+    table.add_row("--tool=<name,...>", "Configured tool name(s). Comma-separated.")
+    table.add_row("--domain=<domain>", "code, web, network")
     table.add_row(
-        "type=<type>", "secret, vulnerability, weakness, misconfiguration, ..."
+        "--type=<type,...>",
+        "secret, vulnerability, weakness, misconfiguration, ...",
     )
-    table.add_row("severity=<level>", "critical, high, medium, low, informational")
-    table.add_row("confidence=<level>", "confirmed, probable, potential")
-    table.add_row("risk_type=<value>", "Risk type label (tool-specific)")
-    table.add_row("profile=<value>", "Scan profile label")
+    table.add_row(
+        "--severity=<level,...>", "critical, high, medium, low, informational"
+    )
+    table.add_row("--confidence=<level>", "confirmed, probable, potential")
+    table.add_row("--risk_type=<value>", "Risk type label (tool-specific)")
+    table.add_row("--profile=<value>", "Scan profile label")
 
     # Domain-specific keys
     if show_code:

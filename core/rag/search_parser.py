@@ -140,6 +140,48 @@ def _add_filter(
     filter_clauses.append({field: {op: value}})
 
 
+def _handle_search_flag(
+    key: str,
+    value: str,
+    contains: bool,
+    filter_clauses: list[dict],
+    known_tools: frozenset[str],
+) -> None:
+    """Handle a single --flag=value token from parse_search_command."""
+    if key == "type":
+        filter_clauses.append(_resolve_type_filter(value))
+    elif key == "tool":
+        tools = [t.strip() for t in value.split(",")]
+        for t in tools:
+            if t not in known_tools:
+                raise SearchValidationError(
+                    f"Tool {t!r} not found. Run 'tools' to see configured tools."
+                )
+        if len(tools) == 1:
+            filter_clauses.append({"tool": {"$eq": tools[0]}})
+        else:
+            filter_clauses.append({"$and": [{"tool": {"$eq": t}} for t in tools]})
+    elif key == "severity":
+        severities = [s.strip() for s in value.split(",")]
+        for s in severities:
+            if s not in SEVERITY_LEVELS:
+                raise SearchValidationError(
+                    f"Unknown severity {s!r}. "
+                    f"Valid severities: {', '.join(sorted(SEVERITY_LEVELS))}"
+                )
+        if len(severities) == 1:
+            filter_clauses.append({"severity": {"$eq": severities[0]}})
+        else:
+            filter_clauses.append(
+                {"$and": [{"severity": {"$eq": s}} for s in severities]}
+            )
+    elif key in _KEY_MAP:
+        _add_filter(key, value, contains, filter_clauses, known_tools)
+    else:
+        op = "$contains" if contains else "$eq"
+        filter_clauses.append({key: {op: value}})
+
+
 def _combine_clauses(clauses: list[dict]) -> dict | None:
     if not clauses:
         return None
@@ -241,6 +283,93 @@ def parse_search_query(
         semantic_text=semantic_text,
         where_filter=where_filter,
         is_semantic=is_semantic,
+        page_size=page_size,
+        page=page,
+    )
+
+
+def parse_search_command(
+    args: list[str],
+    known_tools: frozenset[str],
+) -> SearchQuery:
+    """Parse --flag=value syntax from the search REPL command.
+
+    Bare words and key=value without -- are rejected with old-syntax errors.
+    Known flags: --tool=, --type=, --severity= (validated, comma-split AND).
+    Arbitrary --<field>= and --<field>~= are passed through to ChromaDB.
+    """
+    filter_clauses: list[dict] = []
+    page_size: int | None = None
+    page: int = 1
+
+    for arg in args:
+        if not arg.startswith("--"):
+            if "~=" in arg or "=" in arg:
+                raise SearchValidationError(
+                    f"Old syntax detected: '{arg}'\n"
+                    "Use --flag=value syntax. "
+                    "Run 'search --help' for examples."
+                )
+            raise SearchValidationError(
+                f"Unexpected argument: '{arg}'\n"
+                "All search arguments use --flag=value syntax. "
+                "Run 'search --help' for examples."
+            )
+
+        rest = arg[2:]  # strip "--"
+
+        if "~=" in rest:
+            key, _, value = rest.partition("~=")
+            _handle_search_flag(
+                key,
+                value,
+                contains=True,
+                filter_clauses=filter_clauses,
+                known_tools=known_tools,
+            )
+            continue
+
+        if "=" not in rest:
+            raise SearchValidationError(
+                f"Flag '{arg}' requires a value, e.g. {arg}=<value>."
+            )
+
+        flag, _, val = rest.partition("=")
+
+        if flag == "page-size":
+            try:
+                page_size = int(val)
+                if page_size < 1:
+                    raise ValueError
+            except ValueError:
+                raise SearchValidationError("--page-size must be a positive integer.")
+        elif flag == "page":
+            try:
+                page = int(val)
+                if page < 1:
+                    raise ValueError
+            except ValueError:
+                raise SearchValidationError("--page must be a positive integer.")
+        elif flag == "help":
+            pass  # handled upstream in cmd_search
+        else:
+            _handle_search_flag(
+                flag,
+                val,
+                contains=False,
+                filter_clauses=filter_clauses,
+                known_tools=known_tools,
+            )
+
+    where_filter = _combine_clauses(filter_clauses)
+
+    if page_size is None:
+        page_size = _DEFAULT_METADATA_PAGE_SIZE
+
+    return SearchQuery(
+        semantic_text=None,
+        where_filter=where_filter,
+        is_semantic=False,
         page_size=page_size,
         page=page,
     )
