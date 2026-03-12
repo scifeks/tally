@@ -43,7 +43,9 @@ def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
     ecosystems: set = set()
 
     for result in results:
-        source_path = result.get("source", {}).get("path", "")
+        source = result.get("source", {})
+        source_path = source.get("path", "")
+        source_type = source.get("type", "")
         for pkg in result.get("packages", []):
             packages_scanned += 1
             package = pkg.get("package", {})
@@ -55,7 +57,12 @@ def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
 
             for vuln in pkg.get("vulnerabilities", []):
                 parsed_vuln = _parse_vulnerability(
-                    vuln, pkg_name, pkg_version, ecosystem, source_path
+                    vuln,
+                    pkg_name,
+                    pkg_version,
+                    ecosystem,
+                    source_path,
+                    source_type,
                 )
                 vulnerabilities.append(parsed_vuln)
 
@@ -81,9 +88,11 @@ def _parse_vulnerability(
     pkg_version: str,
     ecosystem: str,
     source_file: str,
+    source_type: str = "",
 ) -> dict[str, Any]:
     return {
         "vulnerability_id": vuln.get("id", ""),
+        "aliases": vuln.get("aliases", []),
         "package_name": pkg_name,
         "package_version": pkg_version,
         "affected_ecosystem": ecosystem,
@@ -92,6 +101,7 @@ def _parse_vulnerability(
         "fixed_version": _extract_fixed_version(vuln, ecosystem, pkg_name),
         "cvss_score": _extract_cvss_score(vuln),
         "source_file": source_file,
+        "source_type": source_type,
     }
 
 

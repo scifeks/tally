@@ -383,12 +383,14 @@ class FindingIngestor:
             pkg_name = vuln.get("package_name", "")
             pkg_version = vuln.get("package_version", "")
             vuln_id = vuln.get("vulnerability_id", "")
+            aliases: list[str] = vuln.get("aliases") or []
             severity = vuln.get("severity", "low")
             summary = vuln.get("summary", "")
             ecosystem = vuln.get("affected_ecosystem", "")
             fixed_version = vuln.get("fixed_version")
             cvss_score = vuln.get("cvss_score")
             lockfile = vuln.get("source_file", "")
+            source_type = vuln.get("source_type", "")
 
             fixed_str = fixed_version or "unknown"
             text = (
@@ -419,6 +421,10 @@ class FindingIngestor:
                 meta["cvss_score"] = cvss_score
             if lockfile:
                 meta["lockfile"] = lockfile
+            if source_type:
+                meta["source_type"] = source_type
+            if aliases:
+                meta["aliases"] = ", ".join(aliases)
             meta.update(self._shared_meta(tool, "dependency_vulnerability"))
 
             doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
