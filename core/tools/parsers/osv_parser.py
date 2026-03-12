@@ -43,7 +43,9 @@ def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
     ecosystems: set = set()
 
     for result in results:
-        source_path = result.get("source", {}).get("path", "")
+        source = result.get("source", {})
+        source_path = source.get("path", "")
+        source_type = source.get("type", "")
         for pkg in result.get("packages", []):
             packages_scanned += 1
             package = pkg.get("package", {})
@@ -55,7 +57,12 @@ def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
 
             for vuln in pkg.get("vulnerabilities", []):
                 parsed_vuln = _parse_vulnerability(
-                    vuln, pkg_name, pkg_version, ecosystem, source_path
+                    vuln,
+                    pkg_name,
+                    pkg_version,
+                    ecosystem,
+                    source_path,
+                    source_type,
                 )
                 vulnerabilities.append(parsed_vuln)
 
@@ -81,17 +88,28 @@ def _parse_vulnerability(
     pkg_version: str,
     ecosystem: str,
     source_file: str,
+    source_type: str = "",
 ) -> dict[str, Any]:
+    introduced, fixed = _extract_version_range(vuln, ecosystem, pkg_name)
     return {
         "vulnerability_id": vuln.get("id", ""),
+        "aliases": vuln.get("aliases", []),
         "package_name": pkg_name,
         "package_version": pkg_version,
         "affected_ecosystem": ecosystem,
         "severity": _normalize_severity(vuln),
         "summary": vuln.get("summary", ""),
-        "fixed_version": _extract_fixed_version(vuln, ecosystem, pkg_name),
+        "details": vuln.get("details", ""),
+        "published": vuln.get("published", ""),
+        "modified": vuln.get("modified", ""),
+        "references": [r.get("url", "") for r in vuln.get("references", [])],
+        "cwe_ids": vuln.get("database_specific", {}).get("cwe_ids", []),
+        "introduced_version": introduced,
+        "fixed_version": fixed,
         "cvss_score": _extract_cvss_score(vuln),
+        "cvss_vector": _extract_cvss_vector(vuln),
         "source_file": source_file,
+        "source_type": source_type,
     }
 
 
@@ -122,16 +140,29 @@ def _extract_cvss_score(vuln: dict[str, Any]) -> float | None:
     return None
 
 
-def _extract_fixed_version(
+def _extract_cvss_vector(vuln: dict[str, Any]) -> str:
+    """Return the raw CVSS vector string, or empty string if unavailable."""
+    for entry in vuln.get("severity", []):
+        if entry.get("type", "").startswith("CVSS_V"):
+            return entry.get("score", "")
+    return ""
+
+
+def _extract_version_range(
     vuln: dict[str, Any], ecosystem: str, pkg_name: str
-) -> str | None:
-    """Return the first fixed version from the affected ranges, or None."""
+) -> tuple[str | None, str | None]:
+    """Return (introduced, fixed) versions from the ECOSYSTEM range, or None."""
     for affected in vuln.get("affected", []):
         pkg = affected.get("package", {})
         if pkg.get("ecosystem") == ecosystem and pkg.get("name") == pkg_name:
             for rng in affected.get("ranges", []):
                 if rng.get("type") == "ECOSYSTEM":
+                    introduced = None
+                    fixed = None
                     for event in rng.get("events", []):
-                        if "fixed" in event:
-                            return event["fixed"]
-    return None
+                        if "introduced" in event and introduced is None:
+                            introduced = event["introduced"]
+                        if "fixed" in event and fixed is None:
+                            fixed = event["fixed"]
+                    return introduced, fixed
+    return None, None

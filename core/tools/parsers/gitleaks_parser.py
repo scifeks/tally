@@ -60,17 +60,24 @@ def _parse_gitleaks_data(findings: Any) -> dict[str, Any]:
 
 
 def _parse_secret(finding: dict[str, Any]) -> dict[str, Any]:
-    raw_secret = finding.get("Secret", "")
     tags: list[str] = finding.get("Tags") or []
     commit = finding.get("Commit") or None
+    symlink_file = finding.get("SymlinkFile") or None
     return {
         "rule_id": finding.get("RuleID", ""),
         "description": finding.get("Description", ""),
         "file_path": finding.get("File", ""),
         "line_number": finding.get("StartLine", 0),
+        "end_line": finding.get("EndLine", 0),
+        "start_column": finding.get("StartColumn", 0),
+        "end_column": finding.get("EndColumn", 0),
+        "entropy": finding.get("Entropy"),
+        "author": finding.get("Author", ""),
+        "email": finding.get("Email", ""),
+        "date": finding.get("Date", ""),
+        "message": finding.get("Message", ""),
         "commit": commit,
-        "secret": _redact_secret(raw_secret),
-        "match": finding.get("Match", ""),
+        "symlink_file": symlink_file,
         "tags": tags,
         "fingerprint": finding.get("Fingerprint", ""),
     }

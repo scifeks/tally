@@ -191,10 +191,15 @@ class FindingIngestor:
         """
         parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
         hosts: list[dict[str, Any]] = parsed.get("hosts", [])
+        scan_info: dict[str, Any] = parsed.get("scan_info", {})
 
         timestamp = tool_result.timestamp
         source_file = _first_output_file(tool_result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+
+        nmap_version = scan_info.get("version", "")
+        nmap_args = scan_info.get("args", "")
+        scan_start_time = scan_info.get("start_time", "")
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
 
@@ -231,6 +236,12 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if nmap_version:
+                host_meta["nmap_version"] = nmap_version
+            if nmap_args:
+                host_meta["nmap_args"] = nmap_args
+            if scan_start_time:
+                host_meta["scan_start_time"] = scan_start_time
             host_meta.update(self._shared_meta("nmap", "host"))
             host_meta["severity"] = SEVERITY_INFORMATIONAL
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
@@ -260,6 +271,12 @@ class FindingIngestor:
                 }
                 port_meta.update(self._shared_meta("nmap", "open_port"))
                 port_meta["severity"] = SEVERITY_INFORMATIONAL
+                if nmap_version:
+                    port_meta["nmap_version"] = nmap_version
+                if nmap_args:
+                    port_meta["nmap_args"] = nmap_args
+                if scan_start_time:
+                    port_meta["scan_start_time"] = scan_start_time
                 for key in (
                     "tls",
                     "tls_version",
@@ -307,11 +324,21 @@ class FindingIngestor:
             message = finding.get("message", "")
             file_path = finding.get("file_path", "")
             line_start = finding.get("line_start", 0)
+            col_start = finding.get("col_start")
             line_end = finding.get("line_end", 0)
+            col_end = finding.get("col_end")
             code_snippet = finding.get("code_snippet", "")
+            fix = finding.get("fix")
+            fingerprint = finding.get("fingerprint")
             cwe = finding.get("cwe") or ""
             owasp = finding.get("owasp") or ""
             confidence = finding.get("confidence") or ""
+            category = finding.get("category") or ""
+            technology: list[str] = finding.get("technology") or []
+            subcategory: list[str] = finding.get("subcategory") or []
+            likelihood = finding.get("likelihood") or ""
+            impact = finding.get("impact") or ""
+            references: list[str] = finding.get("references") or []
 
             text = (
                 f"[semgrep] [{severity.upper()}] {rule_id} "
@@ -332,12 +359,32 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if col_start is not None:
+                meta["col_start"] = col_start
+            if col_end is not None:
+                meta["col_end"] = col_end
             if cwe:
                 meta["cwe"] = cwe
             if owasp:
                 meta["owasp"] = owasp
             if confidence:
                 meta["confidence"] = confidence
+            if fix:
+                meta["fix"] = fix
+            if fingerprint:
+                meta["fingerprint"] = fingerprint
+            if category:
+                meta["category"] = category
+            if technology:
+                meta["technology"] = ", ".join(technology)
+            if subcategory:
+                meta["subcategory"] = ", ".join(subcategory)
+            if likelihood:
+                meta["likelihood"] = likelihood
+            if impact:
+                meta["impact"] = impact
+            if references:
+                meta["references"] = ", ".join(references)
             meta.update(self._shared_meta("semgrep", "vulnerability"))
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
@@ -383,12 +430,21 @@ class FindingIngestor:
             pkg_name = vuln.get("package_name", "")
             pkg_version = vuln.get("package_version", "")
             vuln_id = vuln.get("vulnerability_id", "")
+            aliases: list[str] = vuln.get("aliases") or []
             severity = vuln.get("severity", "low")
             summary = vuln.get("summary", "")
             ecosystem = vuln.get("affected_ecosystem", "")
             fixed_version = vuln.get("fixed_version")
+            introduced_version = vuln.get("introduced_version")
             cvss_score = vuln.get("cvss_score")
+            cvss_vector = vuln.get("cvss_vector", "")
             lockfile = vuln.get("source_file", "")
+            source_type = vuln.get("source_type", "")
+            details = vuln.get("details", "")
+            published = vuln.get("published", "")
+            modified = vuln.get("modified", "")
+            references: list[str] = vuln.get("references") or []
+            cwe_ids: list[str] = vuln.get("cwe_ids") or []
 
             fixed_str = fixed_version or "unknown"
             text = (
@@ -413,12 +469,30 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if aliases:
+                meta["aliases"] = ", ".join(aliases)
             if fixed_version:
                 meta["fixed_version"] = fixed_version
+            if introduced_version:
+                meta["introduced_version"] = introduced_version
             if cvss_score is not None:
                 meta["cvss_score"] = cvss_score
+            if cvss_vector:
+                meta["cvss_vector"] = cvss_vector
             if lockfile:
                 meta["lockfile"] = lockfile
+            if source_type:
+                meta["source_type"] = source_type
+            if details:
+                meta["details"] = details
+            if published:
+                meta["published"] = published
+            if modified:
+                meta["modified"] = modified
+            if references:
+                meta["references"] = ", ".join(references)
+            if cwe_ids:
+                meta["cwe_ids"] = ", ".join(cwe_ids)
             meta.update(self._shared_meta(tool, "dependency_vulnerability"))
 
             doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
@@ -458,8 +532,17 @@ class FindingIngestor:
             description = secret.get("description", "")
             file_path = secret.get("file_path", "")
             line_number = secret.get("line_number", 0)
-            tags: list[str] = secret.get("tags") or []
+            end_line = secret.get("end_line", 0)
+            start_column = secret.get("start_column", 0)
+            end_column = secret.get("end_column", 0)
+            entropy = secret.get("entropy")
+            author = secret.get("author", "")
+            email = secret.get("email", "")
+            date = secret.get("date", "")
+            message = secret.get("message", "")
             commit = secret.get("commit")
+            symlink_file = secret.get("symlink_file")
+            tags: list[str] = secret.get("tags") or []
             fingerprint = secret.get("fingerprint", "")
 
             tags_str = ", ".join(tags) if tags else ""
@@ -486,8 +569,26 @@ class FindingIngestor:
             }
             if rule_id:
                 meta["risk_type"] = rule_id
+            if end_line:
+                meta["end_line"] = end_line
+            if start_column:
+                meta["start_column"] = start_column
+            if end_column:
+                meta["end_column"] = end_column
+            if entropy is not None:
+                meta["entropy"] = entropy
+            if author:
+                meta["author"] = author
+            if email:
+                meta["email"] = email
+            if date:
+                meta["date"] = date
+            if message:
+                meta["message"] = message
             if commit:
                 meta["commit"] = commit
+            if symlink_file:
+                meta["symlink_file"] = symlink_file
             if fingerprint:
                 meta["fingerprint"] = fingerprint
             meta.update(self._shared_meta("gitleaks", "secret"))

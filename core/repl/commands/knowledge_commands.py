@@ -156,6 +156,40 @@ def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     return table
 
 
+def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
+    """Build an osv-scanner-specific Rich table."""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Source Type", style="dim white", no_wrap=True)
+    table.add_column("Location", style="white", overflow="fold")
+    table.add_column("Type", style="green")
+    table.add_column("Severity", no_wrap=True)
+    table.add_column("Confidence", no_wrap=True)
+    table.add_column("IDs", style="cyan", overflow="fold")
+    if is_semantic:
+        table.add_column("Relevance", style="dim", no_wrap=True)
+
+    for r in results:
+        meta = r["metadata"]
+        sev = meta.get("severity", "")
+        aliases = meta.get("aliases", "")
+        vuln_id = meta.get("vulnerability_id", "")
+        ids = ", ".join(filter(None, [vuln_id, aliases])) if aliases else vuln_id
+        row: list[str] = [
+            meta.get("source_type", ""),
+            meta.get("lockfile", meta.get("source_file", "")),
+            _extract_types(meta),
+            _color_severity(sev),
+            "probable",
+            ids,
+        ]
+        if is_semantic:
+            dist = r["distance"]
+            row.append(f"{dist:.3f}" if dist is not None else "")
+        table.add_row(*row)
+
+    return table
+
+
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
@@ -239,6 +273,8 @@ class KnowledgeCommands:
             table = _build_semgrep_table(results, is_semantic)
         elif _all_from_tool(results, "zap"):
             table = _build_zap_table(results, is_semantic)
+        elif _all_from_tool(results, "osv-scanner"):
+            table = _build_osv_table(results, is_semantic)
         else:
             table = _build_generic_table(results, is_semantic)
 
