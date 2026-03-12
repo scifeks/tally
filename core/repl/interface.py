@@ -124,8 +124,8 @@ _HELP_REGISTRY = [
     (
         "knowledge",
         "purge",
-        "--tool <tool>",
-        "Limit deletion to findings from one tool",
+        "--tool=<tool,...>",
+        "Limit deletion to the specified tool(s). Comma-separated.",
     ),
     # Search
     ("search", None, None, "Search"),
