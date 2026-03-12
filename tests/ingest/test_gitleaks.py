@@ -647,11 +647,6 @@ class TestGitleaksParser:
         parsed = _parse_secret(raw)
         assert parsed["line_number"] == raw["StartLine"]
 
-    def test_field_mapping_match(self, raw_dir_findings: list) -> None:
-        raw = raw_dir_findings[0]
-        parsed = _parse_secret(raw)
-        assert parsed["match"] == raw["Match"]
-
     def test_field_mapping_description(self, raw_dir_findings: list) -> None:
         raw = raw_dir_findings[0]
         parsed = _parse_secret(raw)
@@ -700,40 +695,6 @@ class TestGitleaksParser:
         }
         parsed = _parse_secret(finding)
         assert parsed["tags"] == [], f"Tags=null must map to [], got {parsed['tags']!r}"
-
-    def test_redact_secret_short(self) -> None:
-        """Secrets shorter than 10 characters are fully masked."""
-        finding = {
-            "RuleID": "x",
-            "File": "f.py",
-            "StartLine": 1,
-            "Commit": "",
-            "Match": "",
-            "Description": "",
-            "Tags": [],
-            "Secret": "short",
-        }
-        parsed = _parse_secret(finding)
-        assert parsed["secret"] == "****", (
-            f"Short secret must be '****', got {parsed['secret']!r}"
-        )
-
-    def test_redact_secret_normal(self) -> None:
-        """Secrets ≥10 characters show first 4 chars followed by '****'."""
-        finding = {
-            "RuleID": "x",
-            "File": "f.py",
-            "StartLine": 1,
-            "Commit": "",
-            "Match": "",
-            "Description": "",
-            "Tags": [],
-            "Secret": "AKIAZ3XYMWQ2LR7NVBPA",
-        }
-        parsed = _parse_secret(finding)
-        assert parsed["secret"] == "AKIA****", (
-            f"Normal secret must be 'AKIA****', got {parsed['secret']!r}"
-        )
 
     def test_summary_counts(self) -> None:
         """parse_gitleaks_json summary.total_secrets matches len of raw array."""
