@@ -199,92 +199,43 @@ Run semgrep? [y/N]: y
 Scan complete: 5 passed, 0 failed, 2 skipped | 28 findings ingested | 89.4s total
 ```
 
-Auto-approve all tool executions without prompting:
+### Scan Flags
+
+Use flags to scope a scan. All flags accept comma-separated lists.
+
+**Run specific tools:**
 
 ```
-[acme-security-audit]> scan -y
+[acme-security-audit]> scan --tool=semgrep
+[acme-security-audit]> scan --tool=semgrep,gitleaks
 ```
 
-### Segment Scan
+**Run all tools of a given type:**
 
-Run a single segment across all repositories:
-
-```
-[acme-security-audit]> scan -s sast
-[acme-security-audit]> scan -s sca
-[acme-security-audit]> scan -s secrets
-[acme-security-audit]> scan -s api
-[acme-security-audit]> scan -s network
-```
-
-Valid segments: `network`, `sast`, `sca`, `secrets`, `api`
-
-### Single Tool Scan
+Valid types: `network`, `sast`, `sca`, `secrets`, `api`
 
 ```
-[acme-security-audit]> scan semgrep
-[acme-security-audit]> scan osv-scanner
-[acme-security-audit]> scan gitleaks
-[acme-security-audit]> scan pip-audit
-[acme-security-audit]> scan npm-audit
-[acme-security-audit]> scan composer-audit
-[acme-security-audit]> scan zap
+[acme-security-audit]> scan --type=sast
+[acme-security-audit]> scan --type=sast,sca
 ```
 
-For nmap, you can optionally specify a profile name. Without a profile name, all configured profiles run:
+**Scope to a single repository:**
 
 ```
-[acme-security-audit]> scan nmap
-[acme-security-audit]> scan nmap management
+[acme-security-audit]> scan --repo=api-server
 ```
 
-### Timeout
+If you have only one repository, `scan` (no flags) already targets it.
 
-All scan commands accept `--timeout <seconds>` (default: 300):
-
-```
-[acme-security-audit]> scan nmap --timeout 600
-[acme-security-audit]> scan -s sca --timeout 120
-```
-
-### Repo Scan
-
-Runs all language-appropriate tools for a single repository. Tool selection is automatic based on the repository's configured languages:
-
-- Always runs: semgrep, osv-scanner, gitleaks, zap
-- Python repos: adds pip-audit
-- JavaScript/TypeScript/Node repos: adds npm-audit
-- PHP repos: adds composer-audit
+**Combine flags:**
 
 ```
-[acme-security-audit]> scan repo
+[acme-security-audit]> scan --repo=api-server --tool=semgrep
+[acme-security-audit]> scan --tool=semgrep --type=sast
 ```
 
-If you have only one repository, it is selected automatically. With multiple repositories, Tally presents an interactive selection menu.
-
-Additional flags:
-
-```
-# Auto-approve all tool executions
-[acme-security-audit]> scan repo -y
-
-# Exclude directories from scanning
-[acme-security-audit]> scan repo --exclude tests,vendor,node_modules
-
-# Filter findings by minimum severity
-[acme-security-audit]> scan repo --severity high
-
-# Export results to a file
-[acme-security-audit]> scan repo --export /tmp/api-server-results.json
-```
-
-Valid severity values: `critical`, `high`, `medium`, `low`
-
-To run a single tool against all repositories:
-
-```
-[acme-security-audit]> scan repo semgrep
-```
+Network tools (`nmap`) cannot be scoped to a repository.
+Use `scan --tool=nmap` (without `--repo`) to run nmap.
 
 ### Docker vs Local Execution
 
@@ -316,11 +267,17 @@ Findings are automatically ingested into the RAG knowledge base after each scan.
 
 ### Search
 
-Semantic search over all ingested findings:
+Structured search over all ingested findings using flags:
 
 ```
-[acme-security-audit]> search SQL injection vulnerabilities
+[acme-security-audit]> search --tool=semgrep
+[acme-security-audit]> search --severity=high
+[acme-security-audit]> search --type=sast --severity=high
+[acme-security-audit]> search --rule~=injection
+[acme-security-audit]> search --page=2 --page-size=20
 ```
+
+Run `search --help` for the full list of filter options.
 
 Output:
 
@@ -330,8 +287,6 @@ Output:
  Unparameterized query detected at api/users.py:44... | semgrep   | sast     | 0.198
  ...
 ```
-
-Results are sorted by semantic distance (lower = more relevant).
 
 ### Chat
 
@@ -381,13 +336,13 @@ Remove findings from the knowledge base when you want to re-scan cleanly.
 
 ```
 # Delete all findings from a specific tool
-[acme-security-audit]> purge --tool semgrep
+[acme-security-audit]> purge --tool=semgrep
 
-# Delete findings for a specific tool+profile combination
-[acme-security-audit]> purge --tool nmap --profile management
+# Delete findings from multiple tools (comma-separated)
+[acme-security-audit]> purge --tool=semgrep,gitleaks
 
-# --profile requires --tool
-[acme-security-audit]> purge --profile management   # Error: requires --tool
+# With no flags, deletes ALL findings and clears all tool output files
+[acme-security-audit]> purge
 ```
 
 Tally shows a count and prompts for confirmation before deleting:

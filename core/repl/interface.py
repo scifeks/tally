@@ -35,98 +35,142 @@ _HELP_BOX = box.Box(
     "│ ││\n"  # head row chars
     "├─┼┤\n"  # head/data separator
     "│ ││\n"  # data row chars
-    "│ ││\n"  # row separator (show_lines=True only)
+    "├─┼┤\n"  # row separator  ← end_section=True
     "├─┼┤\n"  # foot separator
     "│ ││\n"  # foot row chars
     "└─┴┘\n"  # bottom border
 )
 
 # ---------------------------------------------------------------------------
-# Help registry: (group, command, description)
-# command=None → section header row; description holds the section title.
+# Help registry: (group, command, argument, description)
+# command=None  → section header row; description holds the section title.
+# command=_NOTE → dim informational row (no Command/Arguments cells).
 # group is used by _cmd_help_scoped() to render filtered tables.
 # ---------------------------------------------------------------------------
+_NOTE = "_NOTE_"
+
 _HELP_REGISTRY = [
     # Project Management
-    ("project", None, "Project Management"),
-    ("project", "project add", "Create a new project (interactive)"),
-    ("project", "project switch <name>", "Switch the active project"),
-    ("project", "project list", "List all projects"),
-    ("project", "project info", "Show active project details"),
-    ("project", "project delete <name>", "Delete a project and all its data"),
+    ("project", None, None, "Project Management"),
+    ("project", "project add", None, "Create a new project (interactive)"),
+    (
+        "project",
+        "project switch",
+        "<name>",
+        "Switch the active project  [dim]required[/dim]",
+    ),
+    ("project", "project list", None, "List all projects"),
+    ("project", "project info", None, "Show active project details"),
+    (
+        "project",
+        "project delete",
+        "<name>",
+        "Delete a project and all its data  [dim]required[/dim]",
+    ),
     # Repo Management
-    ("repo", None, "Repo Management"),
-    ("repo", "repo add", "Add a repository to the active project"),
-    ("repo", "repo delete <name>", "Delete a repository's config"),
-    ("repo", "repo edit <name>", "Edit a repository's config"),
-    ("repo", "repo list", "List configured repositories"),
+    ("repo", None, None, "Repo Management"),
+    ("repo", "repo add", None, "Add a repository to the active project"),
+    (
+        "repo",
+        "repo delete",
+        "<name>",
+        "Delete a repository's config  [dim]required[/dim]",
+    ),
+    (
+        "repo",
+        "repo edit",
+        "<name>",
+        "Edit a repository's config  [dim]required[/dim]",
+    ),
+    ("repo", "repo list", None, "List configured repositories"),
     # Scanning
-    ("scan", None, "Scanning"),
-    ("scan", "", "[dim]All commands accept --timeout <seconds>[/dim]"),
-    ("scan", "scan", "Run all tools across the active project"),
-    ("scan", "scan <tool>", "Run a specific tool against the active project"),
-    ("scan", "scan repo", "Run language-appropriate tools on a selected repository"),
+    ("scan", None, None, "Scanning"),
+    ("scan", "scan", None, "Run all configured tools across the active project"),
+    ("scan", "scan", "--repo=<repo>", "Scope scan to a single configured repository"),
     (
         "scan",
-        "scan repo <repo>",
-        "Run all language-appropriate tools against one repository",
+        "scan",
+        "--tool=<tool,...>",
+        "Run only the specified tool(s). Comma-separated.",
     ),
-    ("scan", "scan repo <tool>", "Run a specific tool against all repositories"),
-    ("scan", "scan repo <repo> <tool>", "Run a specific tool against one repository"),
-    ("scan", "run <tool> [args...]", "Execute a tool with raw arguments"),
+    (
+        "scan",
+        "scan",
+        "--type=<type,...>",
+        "Run tools matching domain type(s). Comma-separated.",
+    ),
+    # Manual Run
+    ("run", None, None, "Manual Run"),
+    ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
     # Tools
-    ("tool", None, "Tools"),
-    ("tool", "tool add", "Add a tool to the active configuration"),
-    ("tool", "tool edit <name>", "Edit a configured tool interactively"),
-    ("tool", "tool remove <name>", "Remove a tool from the configuration"),
-    ("tool", "tool list", "List all configured tools and their status"),
+    ("tool", None, None, "Tools"),
+    ("tool", "tool add", None, "Add a tool to the active configuration"),
+    (
+        "tool",
+        "tool edit",
+        "<name>",
+        "Edit a configured tool interactively  [dim]required[/dim]",
+    ),
+    (
+        "tool",
+        "tool remove",
+        "<name>",
+        "Remove a tool from the configuration  [dim]required[/dim]",
+    ),
+    ("tool", "tool list", None, "List all configured tools and their status"),
     # Knowledge Base
-    ("knowledge", None, "Knowledge Base"),
-    ("knowledge", "chat <message>", "RAG-augmented chat with the LLM"),
-    ("knowledge", "stats", "Show knowledge base statistics"),
+    ("knowledge", None, None, "Knowledge Base"),
+    ("knowledge", "chat", "<message>", "RAG-augmented chat with the LLM"),
+    ("knowledge", "stats", None, "Show knowledge base statistics"),
+    ("knowledge", "purge", None, "Delete findings from the knowledge base"),
     (
         "knowledge",
-        "purge [--tool <tool>]",
-        "Delete findings from the knowledge base",
+        "purge",
+        "--tool=<tool,...>",
+        "Limit deletion to the specified tool(s). Comma-separated.",
     ),
+    ("knowledge", "report", None, "Generate findings report"),
     # Search
-    ("search", None, "Search"),
-    ("search", "", "[dim]= exact  ~= partial  Filters combine with AND[/dim]"),
-    ("search", "search <query>", "Semantic search over ingested findings"),
-    ("search", "search tool=<name>", "Filter by configured tool name"),
+    ("search", None, None, "Search"),
+    ("search", "search", None, "Search findings. Run 'search --help' for full docs."),
     (
         "search",
-        "search type=<type>",
-        "Filter by type: secret, vulnerability, weakness, misconfiguration, etc.",
-    ),
-    ("search", "search type=<t1>,<t2>", "AND-filter multiple finding types"),
-    ("search", "search severity=<level>", "Filter by severity level"),
-    ("search", "search <key>=<value>", "Exact match filter on metadata key"),
-    ("search", "search <key>~=<value>", "Partial match filter on metadata key"),
-    ("search", "search tool=<n> type=<t> severity=<s>", "Chain filters (AND)"),
-    ("search", "search tool=<name> <query>", "Combine filters with semantic search"),
-    ("search", "search <filters> --page=<n>", "Show page N of results (default: 1)"),
-    (
         "search",
-        "search <filters> --page-size=<n>",
-        "Results per page (default: 20 semantic / 200 filter-only)",
+        "--tool=<tool,...>",
+        "Filter by configured tool name(s). Comma-separated.",
     ),
     (
         "search",
-        "Filter keys (global)",
-        "tool, domain, type, severity, confidence, risk_type, profile",
+        "search",
+        "--type=<type,...>",
+        "Filter by tool domain type(s). Comma-separated.",
     ),
-    ("search", "Filter keys (code)", "file~=<path>, rule=<id>"),
-    ("search", "Filter keys (web)", "url~=, method=, param~=, alert~="),
-    ("search", "Filter keys (network)", "host=, port=, service~=, transport="),
-    # Reporting
-    ("reporting", None, "Reporting"),
-    ("reporting", "report", "Generate findings report"),
+    (
+        "search",
+        "search",
+        "--severity=<level,...>",
+        "Filter by severity level(s). Comma-separated.",
+    ),
+    (
+        "search",
+        "search",
+        "--<field>=<value>",
+        "Exact metadata filter. Quote values with spaces.",
+    ),
+    ("search", "search", "--<field>~=<value>", "Partial (LIKE) metadata filter."),
+    ("search", "search", "--page=<n>", "Show page N of results (default: 1)."),
+    (
+        "search",
+        "search",
+        "--page-size=<n>",
+        "Results per page (default: 200 / 20 semantic).",
+    ),
+    ("search", "search", "--help", "Show detailed search documentation inline."),
     # Utility
-    ("utility", None, "Utility"),
-    ("utility", "help", "Show this help table"),
-    ("utility", "clear", "Clear the screen"),
-    ("utility", "exit / quit", "Exit tally"),
+    ("utility", None, None, "Utility"),
+    ("utility", "help", None, "Show this help table"),
+    ("utility", "clear", None, "Clear the screen"),
+    ("utility", "exit / quit", None, "Exit tally"),
 ]
 
 _COMPLETIONS = [
@@ -151,65 +195,65 @@ _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
 
 _DOMAIN_KEYS_DISPLAY: dict[str, list[tuple[str, str]]] = {
     "code": [
-        ("file~=<path>", "File path (partial match)"),
-        ("rule=<id>", "Rule ID (exact match)"),
+        ("--file~=<path>", "File path (partial match)"),
+        ("--rule=<id>", "Rule ID (exact match)"),
     ],
     "web": [
-        ("url~=<url>", "URL (partial match)"),
-        ("method=<method>", "HTTP method (GET, POST, ...)"),
-        ("param~=<name>", "Parameter name (partial match)"),
-        ("alert~=<name>", "Alert name (partial match)"),
+        ("--url~=<url>", "URL (partial match)"),
+        ("--method=<method>", "HTTP method (GET, POST, ...)"),
+        ("--param~=<name>", "Parameter name (partial match)"),
+        ("--alert~=<name>", "Alert name (partial match)"),
     ],
     "network": [
-        ("host=<ip>", "IP address (exact match)"),
-        ("host~=<pattern>", "IP address (partial match)"),
-        ("port=<number>", "Port number"),
-        ("service~=<name>", "Service name (partial match)"),
-        ("transport=<proto>", "Transport protocol (tcp, udp)"),
+        ("--host=<ip>", "IP address (exact match)"),
+        ("--host~=<pattern>", "IP address (partial match)"),
+        ("--port=<number>", "Port number"),
+        ("--service~=<name>", "Service name (partial match)"),
+        ("--transport=<proto>", "Transport protocol (tcp, udp)"),
     ],
 }
 
 _TOOL_EXAMPLES: dict[str, list[tuple[str, str]]] = {
     "nmap": [
-        ("search nmap", "All nmap findings"),
-        ("search host=10.0.0.1", "Exact host match"),
-        ("search port=443", "Findings on port 443"),
-        ("search service~=ssh", "Services containing 'ssh'"),
-        ("search transport=tcp severity=high", "High-severity TCP findings"),
-        ("search nmap open ports", "Semantic search filtered to nmap"),
+        ("search --tool=nmap", "All nmap findings"),
+        ("search --host=10.0.0.1", "Exact host match"),
+        ("search --port=443", "Findings on port 443"),
+        ("search --service~=ssh", "Services containing 'ssh'"),
+        ("search --tool=nmap --severity=high", "High-severity nmap findings"),
+        ("search --transport=tcp --severity=high", "High-severity TCP findings"),
     ],
     "gitleaks": [
-        ("search gitleaks", "All gitleaks findings"),
-        ("search file~=config", "Secrets in paths containing 'config'"),
-        ("search rule=generic-api-key", "Findings matching a specific rule"),
-        ("search severity=high", "High-severity secrets"),
-        ("search gitleaks aws", "Semantic search for AWS secrets"),
+        ("search --tool=gitleaks", "All gitleaks findings"),
+        ("search --file~=config", "Secrets in paths containing 'config'"),
+        ("search --rule=generic-api-key", "Findings matching a specific rule"),
+        ("search --severity=high", "High-severity secrets"),
+        ("search --tool=gitleaks --severity=high", "High-severity gitleaks findings"),
     ],
     "zap": [
-        ("search zap", "All ZAP findings"),
-        ("search url~=/api/", "Findings on API endpoints"),
-        ("search method=POST", "POST request findings"),
-        ("search param~=id", "Findings with 'id' in parameter name"),
-        ("search alert~=injection", "Injection-related alerts"),
-        ("search zap severity=high", "High-severity ZAP findings"),
+        ("search --tool=zap", "All ZAP findings"),
+        ("search --url~=/api/", "Findings on API endpoints"),
+        ("search --method=POST", "POST request findings"),
+        ("search --param~=id", "Findings with 'id' in parameter name"),
+        ("search --alert~=injection", "Injection-related alerts"),
+        ("search --tool=zap --severity=high", "High-severity ZAP findings"),
     ],
     "semgrep": [
-        ("search semgrep", "All semgrep findings"),
-        ("search file~=src/auth", "Findings in auth source files"),
-        ("search rule=python.lang.security.audit.exec", "Findings by rule ID"),
-        ("search severity=high", "High-severity findings"),
-        ("search semgrep sql injection", "Semantic search for SQL injection"),
+        ("search --tool=semgrep", "All semgrep findings"),
+        ("search --file~=src/auth", "Findings in auth source files"),
+        ("search --rule=python.lang.security.audit.exec", "Findings by rule ID"),
+        ("search --severity=high", "High-severity findings"),
+        ("search --tool=semgrep --severity=high", "High-severity semgrep findings"),
     ],
 }
 
 _GENERIC_EXAMPLES: list[tuple[str, str]] = [
-    ("search sql injection", "Semantic search for SQL injection"),
-    ("search tool=gitleaks", "All gitleaks findings"),
-    ("search severity=high", "High-severity findings"),
-    ("search type=secret", "Findings of type 'secret'"),
-    ("search tool=nmap port=443", "nmap findings on port 443"),
-    ("search tool=zap url~=/api/", "ZAP findings on /api/ endpoints"),
-    ("search tool=gitleaks severity=high --page-size=50", "Paginated results"),
+    ("search --tool=gitleaks", "All gitleaks findings"),
+    ("search --severity=high", "High-severity findings"),
+    ("search --type=secret", "Findings of type 'secret'"),
+    ("search --tool=nmap --port=443", "nmap findings on port 443"),
+    ("search --tool=zap --url~=/api/", "ZAP findings on /api/ endpoints"),
+    ("search --file~=config", "Secrets in paths containing 'config'"),
+    ("search --tool=gitleaks --severity=high --page-size=50", "Paginated results"),
 ]
 
 
@@ -231,29 +275,36 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
 
     # Syntax hint
     table.add_row("[bold yellow]Search Syntax[/bold yellow]", "")
-    table.add_row("= exact match  ~= partial/contains  filters use AND", "")
+    table.add_row(
+        "--flag=value exact  --flag~=value partial  flags combine with AND", ""
+    )
+    table.add_row(
+        "Bare words and key=value (without --) are rejected as old syntax.", ""
+    )
 
     # Usage examples
     table.add_row("[bold yellow]Usage[/bold yellow]", "")
-    table.add_row("search <query>", "Semantic search over ingested findings")
-    table.add_row("search tool=<name>", "Filter by configured tool name")
-    table.add_row("search type=<type>", "Filter by type: secret, vulnerability, ...")
-    table.add_row("search <key>=<value>", "Exact match filter on metadata key")
-    table.add_row("search <key>~=<value>", "Partial match filter on metadata key")
-    table.add_row("search tool=<n> type=<t> severity=<s>", "Chain filters (AND)")
-    table.add_row("search tool=<name> <query>", "Combine filters with semantic search")
+    table.add_row("search --tool=<name>", "Filter by configured tool name")
+    table.add_row("search --type=<type>", "Filter by type: secret, vulnerability, ...")
+    table.add_row("search --<field>=<value>", "Exact match filter on metadata key")
+    table.add_row("search --<field>~=<value>", "Partial match filter on metadata key")
+    table.add_row("search --tool=<n> --type=<t> --severity=<s>", "Chain filters (AND)")
+    table.add_row("search --help", "Show this reference inline")
 
     # Global filter keys
     table.add_row("[bold yellow]Global Filter Keys[/bold yellow]", "")
-    table.add_row("tool=<name>", "Configured tool name")
-    table.add_row("domain=<domain>", "code, web, network")
+    table.add_row("--tool=<name,...>", "Configured tool name(s). Comma-separated.")
+    table.add_row("--domain=<domain>", "code, web, network")
     table.add_row(
-        "type=<type>", "secret, vulnerability, weakness, misconfiguration, ..."
+        "--type=<type,...>",
+        "secret, vulnerability, weakness, misconfiguration, ...",
     )
-    table.add_row("severity=<level>", "critical, high, medium, low, informational")
-    table.add_row("confidence=<level>", "confirmed, probable, potential")
-    table.add_row("risk_type=<value>", "Risk type label (tool-specific)")
-    table.add_row("profile=<value>", "Scan profile label")
+    table.add_row(
+        "--severity=<level,...>", "critical, high, medium, low, informational"
+    )
+    table.add_row("--confidence=<level>", "confirmed, probable, potential")
+    table.add_row("--risk_type=<value>", "Risk type label (tool-specific)")
+    table.add_row("--profile=<value>", "Scan profile label")
 
     # Domain-specific keys
     if show_code:
@@ -427,17 +478,41 @@ class REPL:
             box=_HELP_BOX,
             padding=(0, 1),
         )
-        table.add_column("Command", style="cyan", no_wrap=True, min_width=26)
+        table.add_column("Command", style="cyan", no_wrap=True, min_width=20)
+        table.add_column("Arguments", style="cyan", no_wrap=True, min_width=26)
         table.add_column("Description", style="white")
 
-        for entry_group, command, description in _HELP_REGISTRY:
-            if group is not None and entry_group != group:
-                continue
-            if command is None:
-                # Section header row
-                table.add_row(f"[bold yellow]{description}[/bold yellow]", "")
+        entries = [e for e in _HELP_REGISTRY if group is None or e[0] == group]
+
+        # Collect titles of section headers that need a divider above them —
+        # every header except the first one in the (filtered) list.
+        divider_sections: set[str] = set()
+        first_header_seen = False
+        for _, cmd, _, desc in entries:
+            if cmd is None:
+                if first_header_seen:
+                    divider_sections.add(desc)
+                else:
+                    first_header_seen = True
+
+        prev_cmd: str | None = None
+        for i, (_, cmd, arg, desc) in enumerate(entries):
+            next_entry = entries[i + 1] if i + 1 < len(entries) else None
+            needs_end_section = (
+                next_entry is not None
+                and next_entry[1] is None
+                and next_entry[3] in divider_sections
+            )
+            if cmd is None:
+                table.add_row(f"[bold yellow]{desc}[/bold yellow]", "", "")
+                prev_cmd = None
+            elif cmd == _NOTE:
+                table.add_row("", "", desc)
             else:
-                table.add_row(command, description)
+                cmd_cell = cmd if cmd != prev_cmd else ""
+                arg_cell = arg if arg is not None else ""
+                table.add_row(cmd_cell, arg_cell, desc, end_section=needs_end_section)
+                prev_cmd = cmd
 
         return table
 

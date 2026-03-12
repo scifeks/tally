@@ -235,9 +235,12 @@ class KnowledgeCommands:
     # ------------------------------------------------------------------
 
     def cmd_search(self, _cmd: str, args: list[str]) -> None:
-        """search <query>  — search over ingested findings."""
-        if not args:
-            self.repl.console.print("[red]Usage:[/red] search <query or filters>")
+        """search [--flags...]  — search over ingested findings."""
+        # --help is allowed without an active project
+        if "--help" in args:
+            from core.repl.interface import _build_search_help_table
+
+            self.repl.console.print(_build_search_help_table())
             return
 
         if not self.repl.active_project:
@@ -247,16 +250,21 @@ class KnowledgeCommands:
             )
             return
 
-        from core.rag.search_parser import SearchValidationError
+        from core.rag.search_parser import SearchValidationError, parse_search_command
 
-        raw = " ".join(args)
         query_engine = self._get_query_engine()
         if query_engine is None:
             return
 
         try:
+            query = parse_search_command(args, query_engine._known_tools)
+        except SearchValidationError as exc:
+            self.repl.console.print(f"[red]Search error:[/red] {exc}")
+            return
+
+        try:
             with self.repl.console.status("Searching knowledge base..."):
-                results = query_engine.search(raw)
+                results = query_engine.search(query=query)
         except SearchValidationError as exc:
             self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
@@ -280,19 +288,13 @@ class KnowledgeCommands:
 
         self.repl.console.print(table)
 
-        # Pagination hint
-        from core.rag.search_parser import parse_search_query as _parse
-
-        try:
-            sq = _parse(raw, query_engine._known_tools)
-            shown = len(results)
-            if sq.page > 1 or shown == sq.page_size:
-                page_hint = f"Page {sq.page} · {shown} results"
-                if shown == sq.page_size:
-                    page_hint += f"  [dim]Use --page={sq.page + 1} for next page[/dim]"
-                self.repl.console.print(f"[dim]{page_hint}[/dim]")
-        except Exception:
-            pass  # pagination hint is non-critical
+        # Pagination hint — use pre-parsed query directly, no re-parse needed
+        shown = len(results)
+        if query.page > 1 or shown == query.page_size:
+            page_hint = f"Page {query.page} · {shown} results"
+            if shown == query.page_size:
+                page_hint += f"  [dim]Use --page={query.page + 1} for next page[/dim]"
+            self.repl.console.print(f"[dim]{page_hint}[/dim]")
 
     def cmd_chat(self, _cmd: str, args: list[str]) -> None:
         """chat <message>  — RAG-augmented chat with the LLM."""

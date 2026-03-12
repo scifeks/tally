@@ -16,6 +16,7 @@ from core.rag.search_parser import (  # noqa: E402
     SearchQuery,
     SearchValidationError,
     _resolve_type_filter,
+    parse_search_command,
     parse_search_query,
 )
 from core.repl.commands.knowledge_commands import (  # noqa: E402
@@ -360,9 +361,115 @@ def test_no_results_message():
 
     mock_qe = MagicMock()
     mock_qe.search.return_value = []
+    mock_qe._known_tools = frozenset({"nmap", "gitleaks"})
     kc._get_query_engine = MagicMock(return_value=mock_qe)
 
-    kc.cmd_search("search", ["type=secret"])
+    kc.cmd_search("search", ["--type=secret"])
 
     printed_args = [str(call) for call in repl.console.print.call_args_list]
     assert any("No findings matched" in a for a in printed_args)
+
+
+# ---------------------------------------------------------------------------
+# parse_search_command tests
+# ---------------------------------------------------------------------------
+
+_CMD_KNOWN_TOOLS = frozenset({"nmap", "semgrep", "gitleaks", "zap"})
+
+
+def _cmd_parse(args: list[str]) -> SearchQuery:
+    return parse_search_command(args, _CMD_KNOWN_TOOLS)
+
+
+def test_search_cmd_bare_word_rejected():
+    with pytest.raises(SearchValidationError, match="Unexpected argument"):
+        _cmd_parse(["sql"])
+
+
+def test_search_cmd_old_key_equals_rejected():
+    with pytest.raises(SearchValidationError, match="Old syntax"):
+        _cmd_parse(["tool=nmap"])
+
+
+def test_search_cmd_tool_flag():
+    sq = _cmd_parse(["--tool=nmap"])
+    assert sq.where_filter == {"tool": {"$eq": "nmap"}}
+
+
+def test_search_cmd_multi_tool():
+    sq = _cmd_parse(["--tool=nmap,semgrep"])
+    assert sq.where_filter == {
+        "$and": [{"tool": {"$eq": "nmap"}}, {"tool": {"$eq": "semgrep"}}]
+    }
+
+
+def test_search_cmd_severity_flag():
+    sq = _cmd_parse(["--severity=high"])
+    assert sq.where_filter == {"severity": {"$eq": "high"}}
+
+
+def test_search_cmd_multi_severity():
+    sq = _cmd_parse(["--severity=high,critical"])
+    assert sq.where_filter == {
+        "$and": [
+            {"severity": {"$eq": "high"}},
+            {"severity": {"$eq": "critical"}},
+        ]
+    }
+
+
+def test_search_cmd_type_flag():
+    sq = _cmd_parse(["--type=secret"])
+    assert sq.where_filter == {"type_secret": {"$eq": True}}
+
+
+def test_search_cmd_arbitrary_exact():
+    sq = _cmd_parse(["--description=foo"])
+    assert sq.where_filter == {"description": {"$eq": "foo"}}
+
+
+def test_search_cmd_arbitrary_partial():
+    sq = _cmd_parse(["--url~=/api/"])
+    assert sq.where_filter == {"url": {"$contains": "/api/"}}
+
+
+def test_search_cmd_file_partial():
+    # --file uses _KEY_MAP → maps to file_path with always_contains=True
+    sq = _cmd_parse(["--file~=src/main"])
+    assert sq.where_filter == {"file_path": {"$contains": "src/main"}}
+
+
+def test_search_cmd_invalid_tool():
+    with pytest.raises(SearchValidationError, match="not found"):
+        _cmd_parse(["--tool=badtool"])
+
+
+def test_search_cmd_invalid_severity():
+    with pytest.raises(SearchValidationError, match="Unknown severity"):
+        _cmd_parse(["--severity=invalid"])
+
+
+def test_search_cmd_invalid_type():
+    with pytest.raises(SearchValidationError, match="Unknown type"):
+        _cmd_parse(["--type=invalid"])
+
+
+def test_search_cmd_page():
+    sq = _cmd_parse(["--page=3"])
+    assert sq.page == 3
+
+
+def test_search_cmd_page_size():
+    sq = _cmd_parse(["--page-size=50"])
+    assert sq.page_size == 50
+
+
+def test_search_cmd_no_args():
+    sq = _cmd_parse([])
+    assert sq.where_filter is None
+    assert sq.is_semantic is False
+
+
+def test_search_cmd_is_never_semantic():
+    sq = _cmd_parse(["--tool=nmap"])
+    assert sq.is_semantic is False

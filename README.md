@@ -43,7 +43,7 @@ cp config/global-example.json config/global.json
 # 5. Create a project and start scanning
 project add
 repo add
-scan semgrep
+scan --tool=semgrep
 report
 ```
 
@@ -78,28 +78,23 @@ report
 
 ### Scanning
 
-All scan commands accept `--timeout <seconds>`.
-
 | Command | Description |
 |---|---|
-| `scan` | Full scan: all segments across all repos |
-| `scan -s <segment>` | Segment scan (network, sast, sca, secrets, api) |
-| `scan <tool>` | Single tool scan |
-| `scan nmap [profile]` | Run nmap (all profiles or one by name) |
-| `scan -y` | Auto-approve all tool executions |
-| `scan repo` | Language-appropriate tools for an interactively selected repo |
-| `scan repo <tool>` | Run a single tool against all repositories |
+| `scan` | Full scan: all configured tools across all repos |
+| `scan --tool=<tool,...>` | Run one or more specific tools (comma-separated) |
+| `scan --repo=<repo>` | Run all repo-appropriate tools on one repository |
+| `scan --type=<type,...>` | Run all tools of one or more types |
+| `scan --repo=<repo> --tool=<tool,...>` | Run specific tools on one repository |
 | `run <tool> [args...]` | Execute a tool with raw arguments |
 
 ### Knowledge Base
 
-| Command | Description |
-|---|---|
-| `search <query>` | Semantic search over ingested findings |
-| `chat <message>` | RAG-augmented chat with the LLM |
-| `stats` | Show knowledge base statistics |
-| `purge --tool <tool>` | Delete all findings from a tool |
-| `purge --tool <tool> --profile <profile>` | Delete findings for a specific tool+profile |
+| Command | Description                                                            |
+|---|------------------------------------------------------------------------|
+| `search [--flags...]` | Structured search over ingested findings (`search --help` for options) |
+| `chat <message>` | RAG-augmented chat with the LLM                                        |
+| `stats` | Show knowledge base statistics                                         |
+| `purge --tool=<tool,...>` | Delete findings from one or more tools (comma-separated)               |
 
 ### Reporting
 

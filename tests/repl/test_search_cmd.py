@@ -1,0 +1,291 @@
+"""Tests for cmd_search at the REPL level using mocked query engine."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock
+
+_TALLY_ROOT = Path(__file__).resolve().parents[2]
+if str(_TALLY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TALLY_ROOT))
+
+from core.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
+
+_KNOWN_TOOLS = frozenset({"nmap", "semgrep", "gitleaks", "zap"})
+
+
+def _make_repl_and_kc(active_project: str | None = "testproj"):
+    repl = MagicMock()
+    repl.active_project = active_project
+    repl.console = MagicMock()
+    kc = KnowledgeCommands(repl)
+    return repl, kc
+
+
+def _make_mock_qe(results=None):
+    mock_qe = MagicMock()
+    mock_qe._known_tools = _KNOWN_TOOLS
+    mock_qe.search.return_value = results if results is not None else []
+    return mock_qe
+
+
+def _make_results(n=3, tool="nmap", distance=None):
+    return [
+        {
+            "document": f"doc{i}",
+            "metadata": {"tool": tool, "severity": "high"},
+            "distance": distance,
+        }
+        for i in range(n)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# --help flag
+# ---------------------------------------------------------------------------
+
+
+def test_search_help_flag_prints_table():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--help"])
+
+    repl.console.print.assert_called()
+    mock_qe.search.assert_not_called()
+
+
+def test_search_help_no_project_still_works():
+    repl, kc = _make_repl_and_kc(active_project=None)
+
+    kc.cmd_search("search", ["--help"])
+
+    repl.console.print.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Basic runs
+# ---------------------------------------------------------------------------
+
+
+def test_search_no_args_runs_ok():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", [])
+
+    mock_qe.search.assert_called_once()
+
+
+def test_search_tool_filter():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--tool=semgrep"])
+
+    mock_qe.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_search_multi_tool():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--tool=nmap,semgrep"])
+
+    mock_qe.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_search_severity_filter():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--severity=high"])
+
+    mock_qe.search.assert_called_once()
+
+
+def test_search_multi_severity():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--severity=high,critical"])
+
+    mock_qe.search.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# --type filter
+# ---------------------------------------------------------------------------
+
+
+def test_search_type_filter_invalid():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--type=code"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+    mock_qe.search.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Validation errors printed to console
+# ---------------------------------------------------------------------------
+
+
+def test_search_invalid_tool_prints_error():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--tool=badtool"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+
+
+def test_search_invalid_severity_prints_error():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--severity=invalid"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+
+
+def test_search_invalid_type_prints_error():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--type=invalid"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+
+
+def test_search_old_bare_word_rejected():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["sql", "injection"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+    mock_qe.search.assert_not_called()
+
+
+def test_search_old_key_equals_rejected():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe()
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["tool=semgrep"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+    mock_qe.search.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Arbitrary flag pass-through
+# ---------------------------------------------------------------------------
+
+
+def test_search_file_partial_match():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--file~=src/main"])
+
+    mock_qe.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_search_description_with_spaces():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    # shlex.split gives ["--description=sql injection"] as one token
+    kc.cmd_search("search", ["--description=sql injection"])
+
+    mock_qe.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_search_url_partial():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--url~=/api/"])
+
+    mock_qe.search.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Empty results
+# ---------------------------------------------------------------------------
+
+
+def test_search_no_results_prints_message():
+    repl, kc = _make_repl_and_kc()
+    mock_qe = _make_mock_qe([])
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--tool=nmap"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("No findings matched" in p for p in printed)
+
+
+# ---------------------------------------------------------------------------
+# Pagination hint
+# ---------------------------------------------------------------------------
+
+
+def test_search_page_hint_shown():
+    repl, kc = _make_repl_and_kc()
+    # Return page_size results to trigger the "next page" hint
+    results = _make_results(n=200, tool="nmap")
+    mock_qe = _make_mock_qe(results)
+    kc._get_query_engine = MagicMock(return_value=mock_qe)
+
+    kc.cmd_search("search", ["--tool=nmap"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("--page=2" in p for p in printed)
+
+
+# ---------------------------------------------------------------------------
+# No active project
+# ---------------------------------------------------------------------------
+
+
+def test_search_no_active_project_prints_warning():
+    repl, kc = _make_repl_and_kc(active_project=None)
+
+    kc.cmd_search("search", ["--tool=nmap"])
+
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("No active project" in p for p in printed)
