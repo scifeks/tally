@@ -485,8 +485,17 @@ class FindingIngestor:
             description = secret.get("description", "")
             file_path = secret.get("file_path", "")
             line_number = secret.get("line_number", 0)
-            tags: list[str] = secret.get("tags") or []
+            end_line = secret.get("end_line", 0)
+            start_column = secret.get("start_column", 0)
+            end_column = secret.get("end_column", 0)
+            entropy = secret.get("entropy")
+            author = secret.get("author", "")
+            email = secret.get("email", "")
+            date = secret.get("date", "")
+            message = secret.get("message", "")
             commit = secret.get("commit")
+            symlink_file = secret.get("symlink_file")
+            tags: list[str] = secret.get("tags") or []
             fingerprint = secret.get("fingerprint", "")
 
             tags_str = ", ".join(tags) if tags else ""
@@ -513,8 +522,26 @@ class FindingIngestor:
             }
             if rule_id:
                 meta["risk_type"] = rule_id
+            if end_line:
+                meta["end_line"] = end_line
+            if start_column:
+                meta["start_column"] = start_column
+            if end_column:
+                meta["end_column"] = end_column
+            if entropy is not None:
+                meta["entropy"] = entropy
+            if author:
+                meta["author"] = author
+            if email:
+                meta["email"] = email
+            if date:
+                meta["date"] = date
+            if message:
+                meta["message"] = message
             if commit:
                 meta["commit"] = commit
+            if symlink_file:
+                meta["symlink_file"] = symlink_file
             if fingerprint:
                 meta["fingerprint"] = fingerprint
             meta.update(self._shared_meta("gitleaks", "secret"))
