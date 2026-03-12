@@ -85,32 +85,19 @@ _HELP_REGISTRY = [
     ("repo", "repo list", None, "List configured repositories"),
     # Scanning
     ("scan", None, None, "Scanning"),
-    ("scan", "scan", None, "Run all tools across the active project"),
-    ("scan", "scan", "<tool>", "Run a specific tool against the active project"),
+    ("scan", "scan", None, "Run all configured tools across the active project"),
+    ("scan", "scan", "--repo=<repo>", "Scope scan to a single configured repository"),
     (
         "scan",
         "scan",
-        "repo",
-        "Run language-appropriate tools on a selected repository",
+        "--tool=<tool,...>",
+        "Run only the specified tool(s). Comma-separated.",
     ),
     (
         "scan",
         "scan",
-        "repo <repo>",
-        "Run all language-appropriate tools against one repository",
-    ),
-    ("scan", "scan", "repo <tool>", "Run a specific tool against all repositories"),
-    (
-        "scan",
-        "scan",
-        "repo <repo> <tool>",
-        "Run a specific tool against one repository",
-    ),
-    (
-        "scan",
-        "scan",
-        "--timeout <seconds>",
-        "[dim]Override default scan timeout[/dim]",
+        "--type=<type,...>",
+        "Run tools matching domain type(s). Comma-separated.",
     ),
     ("scan", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
     # Tools

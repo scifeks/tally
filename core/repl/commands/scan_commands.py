@@ -62,86 +62,133 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
-        """scan [<tool>] | scan repo [<tool>]  — run tool scans."""
-        auto_approve, args = self._parse_bool_flag(args, "-y", "--yes")
-        segment_name, args = self._parse_value_flag(args, "-s", "--segment")
+        """scan [--repo=<repo>] [--tool=<tool,...>] [--type=<type,...>]"""
+        from core.tools.constants import DOMAINS, TOOL_DOMAIN_MAP
 
-        if args:
-            first = args[0].lower()
+        repo_val: str | None = None
+        tool_val: str | None = None
+        type_val: str | None = None
+        unrecognized: list[str] = []
 
-            if first == "repo":
-                repo_args = args[1:]
-                non_flag_args = [a for a in repo_args if not a.startswith("-")]
-                if len(non_flag_args) >= 2:
-                    # scan repo <repo> <tool>
-                    self._cmd_scan_repo_specific_tool(
-                        non_flag_args[0], non_flag_args[1].lower(), auto_approve
-                    )
-                elif len(non_flag_args) == 1:
-                    arg = non_flag_args[0]
-                    if arg.lower() in tool_registry.list_tool_names():
-                        # scan repo <tool>  (all repos — existing behaviour)
-                        self._cmd_scan_repo_tool(arg.lower(), auto_approve)
-                    else:
-                        # scan repo <repo>  (all tools on one repo)
-                        self._cmd_scan_repo_named(arg, auto_approve)
-                else:
-                    # scan repo  (interactive multi-tool)
-                    self._cmd_scan_repo(repo_args, auto_approve)
-                return
-
-            # scan <tool>
-            tool_name = first
-            remaining = args[1:]
-            timeout, remaining = self._parse_timeout_arg(remaining)
-            if tool_name == "nmap":
-                self._cmd_scan_nmap(remaining, timeout)
-            elif tool_name == "semgrep":
-                self._cmd_scan_semgrep(remaining, timeout)
-            elif tool_name in ("osv-scanner", "osv"):
-                self._cmd_scan_osv(remaining, timeout)
-            elif tool_name == "pip-audit":
-                self._cmd_scan_pip_audit(remaining, timeout)
-            elif tool_name == "npm-audit":
-                self._cmd_scan_npm_audit(remaining, timeout)
-            elif tool_name == "composer-audit":
-                self._cmd_scan_composer_audit(remaining, timeout)
-            elif tool_name == "gitleaks":
-                self._cmd_scan_gitleaks(remaining, timeout)
-            elif tool_name == "zap":
-                self._cmd_scan_zap(remaining, timeout)
+        for arg in args:
+            if arg.startswith("--repo="):
+                repo_val = arg[7:]
+            elif arg.startswith("--tool="):
+                tool_val = arg[7:]
+            elif arg.startswith("--type="):
+                type_val = arg[7:]
             else:
-                known = tool_registry.list_tool_names()
-                self.repl.console.print(
-                    f"[red]Unknown tool:[/red] {tool_name}\n"
-                    f"Configured tools: {', '.join(sorted(known))}"
-                )
+                unrecognized.append(arg)
+
+        if unrecognized:
+            self.repl.console.print(
+                f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
+                "Usage: scan [--repo=<repo>] [--tool=<tool,...>] [--type=<type,...>]"
+            )
             return
 
-        # scan (no args) → full project scan or segment scan
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'project add' first.[/yellow]"
             )
             return
 
-        from core.tools.orchestrator import SCAN_SEGMENTS
+        # Validate --repo
+        repo_name: str | None = None
+        if repo_val is not None:
+            repos = self.repl.config.load_repositories(self.repl.active_project)
+            match = next((r for r in repos if r.name.lower() == repo_val.lower()), None)
+            if match is None:
+                names = sorted(r.name for r in repos)
+                self.repl.console.print(
+                    f"[red]Unknown repository:[/red] {repo_val!r}\n"
+                    f"Configured repos: {', '.join(names) or 'none'}"
+                )
+                return
+            repo_name = match.name
+
+        # Validate --tool
+        requested_tools: list[str] | None = None
+        if tool_val is not None:
+            requested_tools = [t.strip() for t in tool_val.split(",") if t.strip()]
+            known = set(tool_registry.list_tool_names())
+            invalid = [t for t in requested_tools if t not in known]
+            if invalid:
+                self.repl.console.print(
+                    f"[red]Unknown tool(s):[/red] {', '.join(invalid)}\n"
+                    f"Configured tools: {', '.join(sorted(known))}"
+                )
+                return
+
+        # Validate --type
+        requested_types: list[str] | None = None
+        if type_val is not None:
+            requested_types = [t.strip() for t in type_val.split(",") if t.strip()]
+            invalid_t = [t for t in requested_types if t not in DOMAINS]
+            if invalid_t:
+                self.repl.console.print(
+                    f"[red]Unknown type(s):[/red] {', '.join(invalid_t)}\n"
+                    f"Valid types: {', '.join(sorted(DOMAINS))}"
+                )
+                return
+
+        # Compute effective tool list (intersection of --tool and --type filters)
+        effective_tools: list[str] | None = None
+        if requested_tools is not None or requested_types is not None:
+            all_configured = list(tool_registry.list_tool_names())
+            candidates = (
+                list(requested_tools) if requested_tools is not None else all_configured
+            )
+            if requested_types is not None:
+                candidates = [
+                    t for t in candidates if TOOL_DOMAIN_MAP.get(t) in requested_types
+                ]
+            effective_tools = candidates
 
         orchestrator = self._make_orchestrator()
         if orchestrator is None:
             return
 
-        if segment_name is not None:
-            valid_segments = list(SCAN_SEGMENTS)
-            if segment_name not in valid_segments:
-                self.repl.console.print(
-                    f"[red]Invalid segment:[/red] {segment_name!r}. "
-                    f"Valid: {', '.join(valid_segments)}"
-                )
-                return
-            orchestrator.run_segment(segment_name, auto_approve=auto_approve)
-        else:
-            orchestrator.run_full_scan(auto_approve=auto_approve)
+        try:
+            if repo_name is not None:
+                if effective_tools is not None:
+                    # Network tools (nmap) cannot be scoped to a single repo
+                    net = [
+                        t
+                        for t in effective_tools
+                        if TOOL_DOMAIN_MAP.get(t) == "network"
+                    ]
+                    if net:
+                        self.repl.console.print(
+                            f"[red]Error:[/red] Network tool(s) cannot be scoped"
+                            f" to a repository: {', '.join(net)}\n"
+                            "Omit --repo to run network tools."
+                        )
+                        return
+                    for tool_name in effective_tools:
+                        orchestrator.run_tool_on_repo(tool_name, repo_name)
+                else:
+                    orchestrator.run_repo_scan(repo_name=repo_name)
+            else:
+                if effective_tools is not None:
+                    net = [
+                        t
+                        for t in effective_tools
+                        if TOOL_DOMAIN_MAP.get(t) == "network"
+                    ]
+                    repo_tools = [
+                        t
+                        for t in effective_tools
+                        if TOOL_DOMAIN_MAP.get(t) != "network"
+                    ]
+                    if net:
+                        orchestrator.run_segment("network")
+                    for tool_name in repo_tools:
+                        orchestrator.run_tool_on_all_repos(tool_name)
+                else:
+                    orchestrator.run_full_scan()
+        except ValueError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
         """run <tool> [--timeout <seconds>] [args...]  — execute a tool with raw
@@ -203,104 +250,9 @@ class ScanCommands:
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
-    # todo: These all need to be their own modules, this is getting ridiculous.
     # ------------------------------------------------------------------
     # Private — nmap scan flow
     # ------------------------------------------------------------------
-
-    def _cmd_scan_nmap(self, remaining: list[str], timeout: int) -> None:
-        from core.setup.nmap_setup import check_exclusion_conflicts
-
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("nmap")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] nmap")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] nmap. Install with: apt install nmap"
-            )
-            return
-
-        nmap_config = self.repl.config.load_nmap_hosts(self.repl.active_project)
-        if not nmap_config or not nmap_config.profiles:
-            self.repl.console.print(
-                "[yellow]No nmap profiles configured for this project. "
-                "Use 'tool edit nmap' to configure.[/yellow]"
-            )
-            return
-
-        requested_profile = remaining[0] if remaining else None
-        if requested_profile:
-            if requested_profile not in nmap_config.profiles:
-                available = ", ".join(nmap_config.profiles.keys())
-                self.repl.console.print(
-                    f"[red]Profile not found:[/red] {requested_profile}"
-                )
-                self.repl.console.print(f"Available profiles: {available}")
-                return
-            profiles_to_run = [requested_profile]
-        else:
-            profiles_to_run = list(nmap_config.profiles.keys())
-
-        # Exclusion check before running any scan
-        for name in profiles_to_run:
-            profile_obj = nmap_config.profiles[name]
-            conflicts = check_exclusion_conflicts(
-                profile_obj.hosts, nmap_config.excluded_networks
-            )
-            if conflicts:
-                self.repl.console.print(
-                    f"[red]Profile '{name}' conflicts with exclusion list:[/red]"
-                )
-                for c in conflicts:
-                    self.repl.console.print(f"  {c}")
-                self.repl.console.print("Fix with: tool edit nmap")
-                return
-
-        if len(profiles_to_run) > 1:
-            self.repl.console.print("No profile specified. Running all profiles...\n")
-
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        all_results: list[tuple[str, ToolResult]] = []
-        for i, name in enumerate(profiles_to_run):
-            self.repl.console.print(
-                f"[{i + 1}/{len(profiles_to_run)}] Running nmap: {name}..."
-            )
-            auto_approve = i > 0
-            result = self._execute_nmap_scan(
-                name, executor=executor, auto_approve=auto_approve, timeout=timeout
-            )
-            self._print_result(result)
-            if result.output_files:
-                for path in result.output_files.values():
-                    self.repl.console.print(f"Output saved to: {path}")
-            all_results.append((name, result))
-
-        if len(profiles_to_run) > 1:
-            self.repl.console.print("\nAll scans complete.")
-
-        if self._ask_ingest():
-            all_doc_ids: list[str] = []
-            for name, result in all_results:
-                doc_ids = _ingest_result(self.repl, result, profile=name)
-                all_doc_ids.extend(doc_ids)
-            if all_doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(all_doc_ids)} findings[/green]"
-                )
-                _enrich_results(self.repl, all_doc_ids)
-            else:
-                self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
     def _execute_nmap_scan(
         self,
@@ -331,73 +283,6 @@ class ScanCommands:
     # Private — semgrep scan flow
     # ------------------------------------------------------------------
 
-    def _cmd_scan_semgrep(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("semgrep")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] semgrep")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] semgrep. "
-                "Install with: pip install semgrep"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        self.repl.console.print(f"Running semgrep: {repo.name}...")
-        repo_path = tool_registry.get_repo_path("semgrep", repo)
-        result = self._execute_semgrep_scan(repo.name, repo_path, timeout=timeout)
-        self._print_semgrep_result(result)
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
-        # semgrep exits with code 1 when findings are present — not a true failure
-        if result.parsed_data and "error" not in result.parsed_data:
-            result.success = True
-
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
-                )
-                _enrich_results(self.repl, doc_ids)
-            else:
-                self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
-
     def _execute_semgrep_scan(
         self,
         repo_name: str,
@@ -423,77 +308,6 @@ class ScanCommands:
     # ------------------------------------------------------------------
     # Private — osv-scanner scan flow
     # ------------------------------------------------------------------
-
-    def _cmd_scan_osv(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("osv-scanner")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] osv-scanner")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] osv-scanner. "
-                "Install with: "
-                "go install github.com/google/osv-scanner/cmd/osv-scanner@latest"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        self.repl.console.print(f"Running osv-scanner: {repo.name}...")
-        repo_path = tool_registry.get_repo_path("osv-scanner", repo)
-        result = self._execute_osv_scan(repo.name, repo_path, timeout=timeout)
-        self._print_osv_result(result)
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
-        # osv-scanner exits with code 1 when vulnerabilities are present —
-        # not a true failure
-        if result.parsed_data and "error" not in result.parsed_data:
-            result.success = True
-
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
-                )
-                _enrich_results(self.repl, doc_ids)
-            else:
-                self.repl.console.print(
-                    "[yellow]No vulnerabilities to ingest.[/yellow]"
-                )
 
     def _execute_osv_scan(
         self,
@@ -541,249 +355,8 @@ class ScanCommands:
         return f"{total} vulnerabilities ({sev_str})"
 
     # ------------------------------------------------------------------
-    # Private — scan repo (language-aware multi-tool SCA on a single repo)
-    # ------------------------------------------------------------------
-
-    def _cmd_scan_repo(self, args: list[str], auto_approve: bool = False) -> None:
-        """scan repo [--exclude <dirs>] [--severity <level>] [--export <file>]"""
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        exclude_str, args = self._parse_value_flag(args, "--exclude")
-        severity, args = self._parse_value_flag(args, "--severity")
-        export_path, args = self._parse_value_flag(args, "--export")
-        _, args = self._parse_timeout_arg(args)  # consume --timeout if present
-
-        if severity and severity not in ("critical", "high", "medium", "low"):
-            self.repl.console.print(
-                f"[red]Invalid severity:[/red] {severity!r}. "
-                "Valid: critical, high, medium, low"
-            )
-            return
-
-        exclude_dirs = (
-            [d.strip() for d in exclude_str.split(",")] if exclude_str else None
-        )
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        # Interactive repo selection
-        if len(repos) == 1:
-            repo_name = repos[0].name
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo_name = repos[idx].name
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        orchestrator = self._make_orchestrator()
-        if orchestrator is None:
-            return
-
-        try:
-            summary = orchestrator.run_repo_scan(
-                repo_name=repo_name,
-                auto_approve=auto_approve,
-                exclude_dirs=exclude_dirs,
-                severity_filter=severity,
-            )
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Error:[/red] {exc}")
-            return
-
-        if export_path:
-            self._export_summary(summary, export_path)
-
-    # ------------------------------------------------------------------
-    # Private — scan repo <tool> (single tool against all repositories)
-    # ------------------------------------------------------------------
-
-    def _cmd_scan_repo_tool(self, tool_name: str, auto_approve: bool = False) -> None:
-        """scan repo <tool> — run a single tool against all configured repositories."""
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        known_tools = tool_registry.list_tool_names()
-        if tool_name not in known_tools:
-            self.repl.console.print(
-                f"[red]Unknown tool:[/red] {tool_name}\n"
-                f"Configured tools: {', '.join(sorted(known_tools))}"
-            )
-            return
-
-        if tool_name == "nmap":
-            self.repl.console.print(
-                "[red]Error:[/red] nmap is a network tool and cannot be run with "
-                "'scan repo'. Use 'scan nmap' instead."
-            )
-            return
-
-        orchestrator = self._make_orchestrator()
-        if orchestrator is None:
-            return
-
-        try:
-            orchestrator.run_tool_on_all_repos(tool_name, auto_approve=auto_approve)
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Error:[/red] {exc}")
-
-    def _cmd_scan_repo_named(self, repo_name: str, auto_approve: bool = False) -> None:
-        """scan repo <repo> — run all language-appropriate tools
-        against one repository."""
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        repo = next((r for r in repos if r.name.lower() == repo_name.lower()), None)
-        if repo is None:
-            self.repl.console.print(
-                f"[red]Error:[/red] Repository '{repo_name}' not found in project "
-                f"'{self.repl.active_project}'"
-            )
-            return
-
-        orchestrator = self._make_orchestrator()
-        if orchestrator is None:
-            return
-
-        try:
-            orchestrator.run_repo_scan(repo_name=repo.name, auto_approve=auto_approve)
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Error:[/red] {exc}")
-
-    def _cmd_scan_repo_specific_tool(
-        self, repo_name: str, tool_name: str, auto_approve: bool = False
-    ) -> None:
-        """scan repo <repo> <tool> — run a single tool against one repository."""
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        known_tools = tool_registry.list_tool_names()
-        if tool_name not in known_tools:
-            self.repl.console.print(
-                f"[red]Unknown tool:[/red] {tool_name}\n"
-                f"Configured tools: {', '.join(sorted(known_tools))}"
-            )
-            return
-
-        if tool_name == "nmap":
-            self.repl.console.print(
-                "[red]Error:[/red] nmap is a network tool and cannot be run with "
-                "'scan repo'. Use 'scan nmap' instead."
-            )
-            return
-
-        orchestrator = self._make_orchestrator()
-        if orchestrator is None:
-            return
-
-        try:
-            orchestrator.run_tool_on_repo(
-                tool_name, repo_name, auto_approve=auto_approve
-            )
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Error:[/red] {exc}")
-
-    # ------------------------------------------------------------------
     # Private — pip-audit scan flow
     # ------------------------------------------------------------------
-
-    def _cmd_scan_pip_audit(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("pip-audit")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] pip-audit")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] pip-audit. "
-                "Install with: pip install pip-audit"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        self.repl.console.print(f"Running pip-audit: {repo.name}...")
-        repo_path = tool_registry.get_repo_path("pip-audit", repo)
-        result = self._execute_pip_audit_scan(repo.name, repo_path, timeout=timeout)
-        self._print_sca_result(result, "pip-audit")
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
-        # pip-audit exits with code 1 when vulnerabilities are present —
-        # not a true failure
-        if result.parsed_data and "error" not in result.parsed_data:
-            result.success = True
-
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
-                )
-                _enrich_results(self.repl, doc_ids)
-            else:
-                self.repl.console.print(
-                    "[yellow]No vulnerabilities to ingest.[/yellow]"
-                )
 
     def _execute_pip_audit_scan(
         self,
@@ -810,76 +383,6 @@ class ScanCommands:
     # ------------------------------------------------------------------
     # Private — npm-audit scan flow
     # ------------------------------------------------------------------
-
-    def _cmd_scan_npm_audit(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("npm-audit")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] npm-audit")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] npm-audit (requires npm). "
-                "Install with: apt install nodejs npm"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        self.repl.console.print(f"Running npm-audit: {repo.name}...")
-        repo_path = tool_registry.get_repo_path("npm-audit", repo)
-        result = self._execute_npm_audit_scan(repo.name, repo_path, timeout=timeout)
-        self._print_sca_result(result, "npm-audit")
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
-        # npm audit exits with code 1 when vulnerabilities are present —
-        # not a true failure
-        if result.parsed_data and "error" not in result.parsed_data:
-            result.success = True
-
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
-                )
-                _enrich_results(self.repl, doc_ids)
-            else:
-                self.repl.console.print(
-                    "[yellow]No vulnerabilities to ingest.[/yellow]"
-                )
 
     def _execute_npm_audit_scan(
         self,
@@ -911,78 +414,6 @@ class ScanCommands:
     # Private — composer-audit scan flow
     # ------------------------------------------------------------------
 
-    def _cmd_scan_composer_audit(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("composer-audit")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] composer-audit")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] composer-audit (requires composer). "
-                "Install with: apt install composer"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        self.repl.console.print(f"Running composer-audit: {repo.name}...")
-        repo_path = tool_registry.get_repo_path("composer-audit", repo)
-        result = self._execute_composer_audit_scan(
-            repo.name, repo_path, timeout=timeout
-        )
-        self._print_sca_result(result, "composer-audit")
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
-        # composer audit exits with code 1 when vulnerabilities are present —
-        # not a true failure
-        if result.parsed_data and "error" not in result.parsed_data:
-            result.success = True
-
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} vulnerabilities[/green]"
-                )
-                _enrich_results(self.repl, doc_ids)
-            else:
-                self.repl.console.print(
-                    "[yellow]No vulnerabilities to ingest.[/yellow]"
-                )
-
     def _execute_composer_audit_scan(
         self,
         repo_name: str,
@@ -1012,75 +443,6 @@ class ScanCommands:
     # ------------------------------------------------------------------
     # Private — gitleaks scan flow
     # ------------------------------------------------------------------
-
-    def _cmd_scan_gitleaks(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("gitleaks")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] gitleaks")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] gitleaks. "
-                "Install with: apt install gitleaks"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        self.repl.console.print(f"Running gitleaks: {repo.name}...")
-        repo_path = tool_registry.get_repo_path("gitleaks", repo)
-        result = self._execute_gitleaks_both_scans(
-            repo.name, repo_path, timeout=timeout
-        )
-        self._print_gitleaks_result(result)
-
-        if result.output_files:
-            for path in result.output_files.values():
-                self.repl.console.print(f"Output saved to: {path}")
-
-        # gitleaks exits with code 1 when secrets are found — not a true failure
-        if result.parsed_data and "error" not in result.parsed_data:
-            result.success = True
-
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} secrets[/green]"
-                )
-                _enrich_results(self.repl, doc_ids)
-            else:
-                self.repl.console.print("[yellow]No secrets to ingest.[/yellow]")
 
     def _execute_gitleaks_both_scans(
         self,
@@ -1225,98 +587,6 @@ class ScanCommands:
     # ------------------------------------------------------------------
     # Private — ZAP scan flow
     # ------------------------------------------------------------------
-
-    def _cmd_scan_zap(self, remaining: list[str], timeout: int) -> None:
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
-
-        tool = tool_registry.get_tool("zap")
-        if tool is None:
-            self.repl.console.print("[red]Tool not found:[/red] zap")
-            return
-
-        if not tool.check_available():
-            self.repl.console.print(
-                "[red]Tool not installed:[/red] zap. "
-                "Install with: apt install zaproxy  (or download from zaproxy.org)"
-            )
-            return
-
-        repos = self.repl.config.load_repositories(self.repl.active_project)
-        if not repos:
-            self.repl.console.print(
-                "[yellow]No repositories configured. "
-                "Use 'repo add' to add one.[/yellow]"
-            )
-            return
-
-        if len(repos) == 1:
-            repo = repos[0]
-        else:
-            self.repl.console.print("\nSelect repository:")
-            for i, r in enumerate(repos, 1):
-                self.repl.console.print(f"  {i}. {r.name} ({r.path})")
-            try:
-                raw = input("\nChoice: ").strip()
-                idx = int(raw) - 1
-                if not (0 <= idx < len(repos)):
-                    self.repl.console.print("[red]Invalid choice.[/red]")
-                    return
-                repo = repos[idx]
-            except (ValueError, EOFError, KeyboardInterrupt):
-                self.repl.console.print("[red]Invalid choice.[/red]")
-                return
-
-        if not repo.base_urls:
-            self.repl.console.print(
-                "[yellow]No base_urls configured for this repository.[/yellow]\n"
-                "Add base_urls to the repository config (e.g. 'http://localhost:8080')."
-            )
-            return
-
-        endpoint_cfg = self.repl.config.load_endpoint_config(
-            self.repl.active_project, repo.name
-        )
-        if endpoint_cfg is None:
-            self.repl.console.print(
-                f"[yellow]No endpoint config found for {repo.name!r}.[/yellow]\n"
-                f"Create one at: projects/{self.repl.active_project}"
-                f"/config/endpoints/{repo.name}.json\n"
-                "ZAP will still run using quick-scan mode (spider from base_url)."
-            )
-        endpoints_dict: dict[str, list[str]] = (
-            endpoint_cfg.endpoints if endpoint_cfg else {}
-        )
-
-        for base_url in repo.base_urls:
-            self.repl.console.print(
-                f"Running ZAP: {repo.name} → [cyan]{base_url}[/cyan]..."
-            )
-            result = self._execute_zap_scan(
-                repo.name, base_url, endpoints_dict, timeout=timeout
-            )
-            self._print_zap_result(result)
-
-            if result.output_files:
-                for path in result.output_files.values():
-                    self.repl.console.print(f"Output saved to: {path}")
-
-            # ZAP exits non-zero when alerts are found — not a true failure
-            if result.parsed_data and "error" not in result.parsed_data:
-                result.success = True
-
-            if self._ask_ingest():
-                doc_ids = _ingest_result(self.repl, result, profile=repo.name)
-                if doc_ids:
-                    self.repl.console.print(
-                        f"[green]✓ Ingested {len(doc_ids)} alerts[/green]"
-                    )
-                    _enrich_results(self.repl, doc_ids)
-                else:
-                    self.repl.console.print("[yellow]No alerts to ingest.[/yellow]")
 
     def _execute_zap_scan(
         self,
