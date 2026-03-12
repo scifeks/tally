@@ -99,7 +99,9 @@ _HELP_REGISTRY = [
         "--type=<type,...>",
         "Run tools matching domain type(s). Comma-separated.",
     ),
-    ("scan", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
+    # Manual Run
+    ("run", None, None, "Manual Run"),
+    ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
     # Tools
     ("tool", None, None, "Tools"),
     ("tool", "tool add", None, "Add a tool to the active configuration"),
@@ -127,6 +129,7 @@ _HELP_REGISTRY = [
         "--tool=<tool,...>",
         "Limit deletion to the specified tool(s). Comma-separated.",
     ),
+    ("knowledge", "report", None, "Generate findings report"),
     # Search
     ("search", None, None, "Search"),
     ("search", "search", None, "Search findings. Run 'search --help' for full docs."),
@@ -163,9 +166,6 @@ _HELP_REGISTRY = [
         "Results per page (default: 200 / 20 semantic).",
     ),
     ("search", "search", "--help", "Show detailed search documentation inline."),
-    # Reporting
-    ("reporting", None, None, "Reporting"),
-    ("reporting", "report", None, "Generate findings report"),
     # Utility
     ("utility", None, None, "Utility"),
     ("utility", "help", None, "Show this help table"),
@@ -472,8 +472,6 @@ class REPL:
         """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered
         by group.
         """
-        from collections import Counter
-
         table = Table(
             show_header=True,
             header_style="bold",
@@ -486,16 +484,25 @@ class REPL:
 
         entries = [e for e in _HELP_REGISTRY if group is None or e[0] == group]
 
-        cmd_counts: Counter[str] = Counter(
-            cmd for _, cmd, _, _ in entries if cmd is not None and cmd != _NOTE
-        )
-        last_row_idx: dict[str, int] = {}
-        for i, (_, cmd, _, _) in enumerate(entries):
-            if cmd is not None and cmd != _NOTE:
-                last_row_idx[cmd] = i
+        # Collect titles of section headers that need a divider above them —
+        # every header except the first one in the (filtered) list.
+        divider_sections: set[str] = set()
+        first_header_seen = False
+        for _, cmd, _, desc in entries:
+            if cmd is None:
+                if first_header_seen:
+                    divider_sections.add(desc)
+                else:
+                    first_header_seen = True
 
         prev_cmd: str | None = None
         for i, (_, cmd, arg, desc) in enumerate(entries):
+            next_entry = entries[i + 1] if i + 1 < len(entries) else None
+            needs_end_section = (
+                next_entry is not None
+                and next_entry[1] is None
+                and next_entry[3] in divider_sections
+            )
             if cmd is None:
                 table.add_row(f"[bold yellow]{desc}[/bold yellow]", "", "")
                 prev_cmd = None
@@ -504,9 +511,7 @@ class REPL:
             else:
                 cmd_cell = cmd if cmd != prev_cmd else ""
                 arg_cell = arg if arg is not None else ""
-                is_last = last_row_idx[cmd] == i
-                end_sec = is_last and cmd_counts[cmd] > 1
-                table.add_row(cmd_cell, arg_cell, desc, end_section=end_sec)
+                table.add_row(cmd_cell, arg_cell, desc, end_section=needs_end_section)
                 prev_cmd = cmd
 
         return table

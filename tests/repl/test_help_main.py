@@ -68,31 +68,36 @@ def test_each_command_appears_once_in_command_column():
 # ---------------------------------------------------------------------------
 
 
-def test_separators_only_for_multi_row_commands():
-    from collections import Counter
-
+def test_separators_at_section_boundaries():
+    """end_section=True appears on the last row before each non-first section header."""
     entries = list(_HELP_REGISTRY)
-    cmd_counts: Counter[str] = Counter(
-        cmd for _, cmd, _, _ in entries if cmd is not None and cmd != _NOTE
-    )
-    last_row_idx: dict[str, int] = {}
-    for i, (_, cmd, _, _) in enumerate(entries):
-        if cmd is not None and cmd != _NOTE:
-            last_row_idx[cmd] = i
 
-    # Build the table and verify end_section alignment
+    # Collect section header titles that need a divider above them (all but first).
+    divider_sections: set[str] = set()
+    first_header_seen = False
+    for _, cmd, _, desc in entries:
+        if cmd is None:
+            if first_header_seen:
+                divider_sections.add(desc)
+            else:
+                first_header_seen = True
+
     table = _build_help_table()
-    # Map table rows back to registry entries (skip group-filtered rows = none here)
     row_idx = 0
-    for i, (_, cmd, _, _) in enumerate(entries):
+    for i, (_, cmd, arg, desc) in enumerate(entries):
+        next_entry = entries[i + 1] if i + 1 < len(entries) else None
+        expects_divider = (
+            next_entry is not None
+            and next_entry[1] is None
+            and next_entry[3] in divider_sections
+        )
         if cmd is None or cmd == _NOTE:
             row_idx += 1
             continue
-        is_last = last_row_idx[cmd] == i
-        expected_end_sec = is_last and cmd_counts[cmd] > 1
-        assert table.rows[row_idx].end_section == expected_end_sec, (
-            f"Row {row_idx} (cmd={cmd!r}): expected end_section="
-            f"{expected_end_sec}, got {table.rows[row_idx].end_section}"
+        assert table.rows[row_idx].end_section == expects_divider, (
+            f"Row {row_idx} (cmd={cmd!r}, arg={arg!r}): "
+            f"expected end_section={expects_divider}, "
+            f"got {table.rows[row_idx].end_section}"
         )
         row_idx += 1
 
