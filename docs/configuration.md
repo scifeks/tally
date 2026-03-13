@@ -195,8 +195,9 @@ Stores the list of repositories configured for the project.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Short identifier used in commands (e.g. `api-server`). |
-| `path` | string | no | Absolute filesystem path to the repository on the host. Required for locally-executed tools. |
-| `docker_path` | string | no | Mount path for the repository inside Docker containers. Required when any tool runs in Docker mode. At least one of `path` or `docker_path` must be set. |
+| `path` | string | yes | Absolute filesystem path to the repository on the host. Required in all modes — used for language detection and locally-executed tools. |
+| `docker_path` | string | no | Mount path for the repository inside Docker containers. Set when any tool runs in Docker mode. |
+| `container_name` | string | yes (Docker) | Name of the running Docker container (as shown by `docker ps`). Required when `docker_path` is set. |
 | `languages` | array of string | yes | Programming languages in the repo (e.g. `["python", "javascript"]`). Used to select SCA tools. |
 | `base_urls` | array of string | no | API base URLs for ZAP scanning (e.g. `["http://localhost:8080"]`). Empty list disables ZAP for this repo. |
 

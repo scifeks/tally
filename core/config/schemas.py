@@ -87,9 +87,11 @@ class Repository(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def at_least_one_path(self) -> "Repository":
+    def validate_paths(self) -> "Repository":
         if not self.path and not self.docker_path:
             raise ValueError("At least one of 'path' or 'docker_path' must be set")
+        if self.docker_path and not self.container_name:
+            raise ValueError("'container_name' is required when 'docker_path' is set")
         return self
 
 

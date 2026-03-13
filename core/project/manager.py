@@ -231,33 +231,55 @@ class ProjectManager:
                 continue
             break
 
-        # Path + Docker path (at least one required)
+        # Mode selection
+        while True:
+            mode = _prompt("  Mode [local/docker]", default="local").lower()
+            if mode in ("local", "docker"):
+                break
+            print("  Mode must be 'local' or 'docker'.")
+
         local_path_str = ""
         docker_path = ""
-        while True:
-            raw_path = _prompt("  Path (local filesystem, leave blank if docker-only)")
-            raw_docker = _prompt(
-                "  Docker path (container mount point, leave blank if local-only)"
-            )
-
-            if not raw_path and not raw_docker:
-                print("  At least one of path or docker_path is required.")
-                continue
-
-            if raw_path:
+        container_name = ""
+        if mode == "docker":
+            while True:
+                container_name = _prompt("  Docker container name").strip()
+                if container_name:
+                    break
+                print("  Docker container name is required.")
+            while True:
+                docker_path = _prompt(
+                    "  Docker mount point (path inside container)"
+                ).strip()
+                if docker_path:
+                    break
+                print("  Docker mount point is required.")
+            while True:
+                raw_path = _prompt(
+                    "  Local path"
+                    " (required for language detection and local tool execution)"
+                )
+                if not raw_path:
+                    print("  Local path is required.")
+                    continue
                 resolved = Path(raw_path).expanduser().resolve()
                 if not resolved.exists():
                     print(f"  Path does not exist: {raw_path}")
                     continue
                 local_path_str = str(resolved)
-
-            docker_path = raw_docker.strip()
-            break
-
-        # Container name (only relevant when docker_path is set)
-        container_name = ""
-        if docker_path:
-            container_name = _prompt("  Docker container name").strip()
+                break
+        else:
+            while True:
+                raw_path = _prompt("  Local path")
+                if not raw_path:
+                    print("  Local path is required.")
+                    continue
+                resolved = Path(raw_path).expanduser().resolve()
+                if not resolved.exists():
+                    print(f"  Path does not exist: {raw_path}")
+                    continue
+                local_path_str = str(resolved)
+                break
 
         # Languages
         detect_base = Path(local_path_str) if local_path_str else None
@@ -327,38 +349,53 @@ class ProjectManager:
                     continue
                 break
 
-            # Path + Docker path (at least one required)
-            local_path_str = existing.path
-            docker_path = existing.docker_path
+            # Mode selection
+            current_mode_str = "docker" if existing.docker_path else "local"
             while True:
-                raw_path = _prompt("  Path (local filesystem)", default=existing.path)
-                raw_docker = _prompt(
-                    "  Docker path (container mount point)",
-                    default=existing.docker_path,
-                )
+                mode = _prompt(
+                    "  Mode [local/docker]", default=current_mode_str
+                ).lower()
+                if mode in ("local", "docker"):
+                    break
+                print("  Mode must be 'local' or 'docker'.")
 
-                if not raw_path and not raw_docker:
-                    print("  At least one of path or docker_path is required.")
-                    continue
-
-                if raw_path:
+            local_path_str = existing.path
+            docker_path = ""
+            container_name = ""
+            if mode == "docker":
+                container_name = _prompt(
+                    "  Docker container name", default=existing.container_name
+                ).strip()
+                docker_path = _prompt(
+                    "  Docker mount point", default=existing.docker_path
+                ).strip()
+                while True:
+                    raw_path = _prompt(
+                        "  Local path"
+                        " (required for language detection and local tool execution)",
+                        default=existing.path,
+                    )
+                    if not raw_path:
+                        print("  Local path is required.")
+                        continue
                     resolved = Path(raw_path).expanduser().resolve()
                     if not resolved.exists():
                         print(f"  Path does not exist: {raw_path}")
                         continue
                     local_path_str = str(resolved)
-                else:
-                    local_path_str = ""
-
-                docker_path = raw_docker.strip()
-                break
-
-            # Container name (only relevant when docker_path is set)
-            container_name = existing.container_name
-            if docker_path:
-                container_name = _prompt(
-                    "  Docker container name", default=existing.container_name
-                ).strip()
+                    break
+            else:
+                while True:
+                    raw_path = _prompt("  Local path", default=existing.path)
+                    if not raw_path:
+                        print("  Local path is required.")
+                        continue
+                    resolved = Path(raw_path).expanduser().resolve()
+                    if not resolved.exists():
+                        print(f"  Path does not exist: {raw_path}")
+                        continue
+                    local_path_str = str(resolved)
+                    break
 
             # Languages
             detect_base = Path(local_path_str) if local_path_str else None

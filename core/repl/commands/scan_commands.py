@@ -92,6 +92,9 @@ class ScanCommands:
         """Inner scan logic — runs after registry is refreshed."""
         from core.tools.constants import DOMAINS, TOOL_DOMAIN_MAP
 
+        auto_approve = "--yes" in args
+        args = [a for a in args if a != "--yes"]
+
         repo_val: str | None = None
         tool_val: str | None = None
         type_val: str | None = None
@@ -110,7 +113,8 @@ class ScanCommands:
         if unrecognized:
             self.repl.console.print(
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
-                "Usage: scan [--repo=<repo>] [--tool=<tool,...>] [--type=<type,...>]"
+                "Usage: scan [--repo=<repo>] [--tool=<tool,...>]"
+                " [--type=<type,...>] [--yes]"
             )
             return
 
@@ -172,6 +176,9 @@ class ScanCommands:
         orchestrator = self._make_orchestrator(sqlite_store=sqlite_store, run_id=run_id)
         if orchestrator is None:
             return
+
+        if auto_approve:
+            orchestrator._auto_approve = True
 
         try:
             if repo_name is not None:

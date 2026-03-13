@@ -99,19 +99,43 @@ A repository represents a codebase to scan. Add one with:
 [acme-security-audit]> repo add
 ```
 
-You are prompted for:
+Tally first asks for the execution mode, then collects the appropriate paths.
+
+**Local mode** — the tool runs directly on the host:
+
 - **Name** — a short identifier (e.g. `api-server`)
-- **Path** — absolute filesystem path to the repository
-- **Languages** — comma-separated (e.g. `python,javascript`)
+- **Mode** — `local` (default) or `docker`
+- **Local path** — absolute filesystem path on the host (required in all modes)
+- **Languages** — comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 
 ```
 [acme-security-audit]> repo add
-Repository name: api-server
-Path: /home/user/projects/acme/api
-Languages (comma-separated): python
-Base URLs (comma-separated, optional):
-✓ Repository added: api-server
+Repository #1:
+  Name: api-server
+  Type: api
+  Mode [local/docker] [local]:
+  Local path: /home/user/projects/acme/api
+  Languages (detected python) [python]:
+  Base URLs (comma-separated, optional):
+✓ Repository 'api-server' added to project 'acme-security-audit'
+```
+
+**Docker mode** — the tool runs via `docker exec` inside a running container.
+A local path is still required so Tally can detect languages and run local tools:
+
+```
+[acme-security-audit]> repo add
+Repository #1:
+  Name: api-server
+  Type: api
+  Mode [local/docker] [local]: docker
+  Docker container name: semgrep-container
+  Docker mount point (path inside container): /mnt/api
+  Local path (required for language detection and local tool execution): /home/user/projects/acme/api
+  Languages (detected python) [python]:
+  Base URLs (comma-separated, optional):
+✓ Repository 'api-server' added to project 'acme-security-audit'
 ```
 
 View configured repositories:
@@ -128,6 +152,9 @@ Edit or remove a repository:
 [acme-security-audit]> repo edit api-server
 [acme-security-audit]> repo delete api-server
 ```
+
+When editing, Tally pre-fills current values — press Enter to keep them. Switching
+from Docker mode to local mode automatically clears the Docker fields.
 
 ---
 
