@@ -36,6 +36,11 @@ class _ProviderEmbeddingFn:
     def name(self) -> str:  # ChromaDB EmbeddingFunction protocol
         return "default"
 
+    def is_legacy(self) -> bool:  # ChromaDB >=1.5 protocol
+        # This class does not implement get_config/default_space/supported_spaces,
+        # so we declare ourselves legacy to avoid the DeprecationWarning.
+        return True
+
 
 class RAGEngine:
     """Project-isolated RAG engine backed by ChromaDB and Ollama embeddings.

@@ -9,7 +9,7 @@ Tally is a CLI REPL for orchestrating web application penetration testing. It wr
 - Wraps nmap, Semgrep, OWASP ZAP, OSV-Scanner, pip-audit, npm-audit, composer-audit, and Gitleaks
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup — skips tools that are not installed
-- RAG-powered search and chat over ingested findings using Ollama
+- RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
 - Three report formats: Markdown, HTML, JSON
 - Human-in-the-loop approval before each tool execution
 - Dependency checker validates required packages on every startup
@@ -18,7 +18,8 @@ Tally is a CLI REPL for orchestrating web application penetration testing. It wr
 ## Requirements
 
 - **Python 3.10+**
-- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled
+- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled — required for ChromaDB embeddings and for any role configured to use the `"ollama"` provider. Can be skipped if all three roles are set to `"claude"` and you manage embeddings separately, but the default configuration uses Ollama.
+- **Anthropic API key** — required only when any role is set to `"claude"` in `config/global.json`. Set via `ANTHROPIC_API_KEY` environment variable or the `claude.api_key` config field.
 - Linux or macOS
 - System tools are optional — Tally skips tools that are not installed
 
@@ -33,9 +34,10 @@ ollama pull qwen3:14b
 ollama pull nomic-embed-text
 ollama serve
 
-# 3. Edit global config (set your Ollama models)
+# 3. Edit global config (set your LLM provider and models)
 cp config/global-example.json config/global.json
-# edit config/global.json
+# edit config/global.json — set ollama.model, ollama.embedding_model,
+# and optionally switch any role to "claude" (requires ANTHROPIC_API_KEY)
 
 # 4. Start Tally — first run launches an interactive tool setup wizard
 .venv/bin/python3 tally.py

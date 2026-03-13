@@ -4,6 +4,14 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
+class LLMAdapterError(Exception):
+    """Raised by LLM adapters when a provider-specific error occurs.
+
+    Wraps SDK-specific exceptions (e.g. anthropic.APIError) so callers
+    never see provider SDK types leak across the adapter boundary.
+    """
+
+
 class LLMProvider(ABC):
     """Interface all LLM adapters must implement."""
 

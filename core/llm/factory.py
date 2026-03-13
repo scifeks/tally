@@ -8,6 +8,7 @@ from typing import Literal
 from core.config.manager import ConfigManager
 
 from .base import LLMProvider
+from .claude_adapter import ClaudeAdapter
 from .ollama_adapter import OllamaAdapter
 
 Role = Literal["chat", "enrichment", "report"]
@@ -37,7 +38,15 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
             embedding_model=config.ollama.embedding_model,
             timeout_seconds=config.ollama.timeout_seconds,
         )
+    if provider_name == "claude":
+        assert config.claude is not None
+        return ClaudeAdapter(
+            api_key=config.claude.api_key,
+            model=config.claude.model,
+            max_tokens=config.claude.max_tokens,
+            timeout_seconds=config.claude.timeout_seconds,
+        )
     raise ValueError(
         f"Unknown llm_provider {provider_name!r} for role {role!r}. "
-        "Registered providers: ollama"
+        "Registered providers: ollama, claude"
     )

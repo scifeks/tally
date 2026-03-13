@@ -129,12 +129,22 @@ class OllamaConfig(BaseModel):
         return v.rstrip("/")
 
 
+class ClaudeConfig(BaseModel):
+    """Anthropic Claude API configuration."""
+
+    api_key: str = ""
+    model: str = "claude-opus-4-5"
+    max_tokens: int = 1024
+    timeout_seconds: int = 60
+
+
 class GlobalConfig(BaseModel):
     """Global application configuration."""
 
     chat_llm_provider: str = "ollama"
     enrichment_llm_provider: str = "ollama"
     report_llm_provider: str = "ollama"
-    ollama: OllamaConfig
+    ollama: OllamaConfig | None = None
+    claude: ClaudeConfig | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
