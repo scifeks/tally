@@ -15,5 +15,5 @@
     "timeout_seconds": 60
   },
   "projects_dir": "./projects",
-  "location_attestation_confirmed": true
+  "location_attestation_confirmed": false
 }
