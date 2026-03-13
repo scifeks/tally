@@ -16,7 +16,13 @@ if TYPE_CHECKING:
     from core.repl.interface import REPL
 
 
-def _enrich_results(repl: REPL, doc_ids: list[str]) -> None:
+# todo: Implement event bus for pipelines
+def _enrich_results(
+    repl: REPL,
+    doc_ids: list[str],
+    sqlite_store: object = None,
+    run_id: int | None = None,
+) -> None:
     """Run enrichment pipeline on freshly ingested document IDs."""
     from core.rag import EnrichmentPipeline, RAGEngine
 
@@ -26,7 +32,12 @@ def _enrich_results(repl: REPL, doc_ids: list[str]) -> None:
             project_name=repl.active_project,
             base_path=repl.base_path,
         )
-        pipeline = EnrichmentPipeline(rag_engine, console=repl.console)
+        pipeline = EnrichmentPipeline(
+            rag_engine,
+            console=repl.console,
+            sqlite_store=sqlite_store,  # type: ignore[arg-type]
+            run_id=run_id,
+        )
         pipeline.enrich(doc_ids)
     except (RuntimeError, ValueError) as exc:
         repl.console.print(f"[red]Enrichment error:[/red] {exc}")
@@ -145,7 +156,8 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        orchestrator = self._make_orchestrator()
+        sqlite_store, run_id = self._create_sqlite_run(args)
+        orchestrator = self._make_orchestrator(sqlite_store=sqlite_store, run_id=run_id)
         if orchestrator is None:
             return
 
@@ -246,7 +258,10 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
                 )
-                _enrich_results(self.repl, doc_ids)
+                sqlite_store, run_id = self._create_sqlite_run(args)
+                _enrich_results(
+                    self.repl, doc_ids, sqlite_store=sqlite_store, run_id=run_id
+                )
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
@@ -797,7 +812,27 @@ class ScanCommands:
     # Private — orchestrator factory and export
     # ------------------------------------------------------------------
 
-    def _make_orchestrator(self):
+    def _create_sqlite_run(self, args: list[str]) -> tuple[object, int | None]:
+        """Instantiate SQLiteStore and create a run record.
+
+        Returns (sqlite_store, run_id).  On failure returns (None, None).
+        """
+        assert self.repl.active_project is not None
+        try:
+            from core.store.sqlite_store import SQLiteStore
+
+            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
+            run_id = store.create_run({"args": args})
+            return store, run_id
+        except Exception as exc:
+            self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
+            return None, None
+
+    def _make_orchestrator(
+        self,
+        sqlite_store: object = None,
+        run_id: int | None = None,
+    ):
         """Create a ScanOrchestrator for the active project. Returns None on failure."""
         from core.tools.executor import ToolExecutor
         from core.tools.orchestrator import ScanOrchestrator
@@ -826,6 +861,8 @@ class ScanCommands:
             tool_registry=tool_registry,
             tool_executor=executor,
             rag_engine=rag_engine,
+            sqlite_store=sqlite_store,  # type: ignore[arg-type]
+            run_id=run_id,
         )
 
     def _export_summary(self, summary, export_path: str) -> None:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.table import Table
@@ -15,6 +16,9 @@ from core.tools.base import ToolResult, ToolWrapper
 from core.tools.executor import ToolExecutor
 from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
 from core.tools.registry import ToolRegistry
+
+if TYPE_CHECKING:
+    from core.store.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
@@ -103,11 +107,15 @@ class ScanOrchestrator:
         tool_registry: ToolRegistry,
         tool_executor: ToolExecutor,
         rag_engine: object,  # Optional[RAGEngine] — avoid import cycle at module level
+        sqlite_store: SQLiteStore | None = None,
+        run_id: int | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
         self.executor = tool_executor
         self.rag_engine = rag_engine
+        self._sqlite_store = sqlite_store
+        self._run_id = run_id
         self.console = Console()
 
         from core.config.manager import ConfigManager
@@ -523,7 +531,8 @@ class ScanOrchestrator:
         """Ingest all successful ToolResults into RAG after scan completes.
 
         Uses delete-insert upsert: deletes old findings for tool+profile,
-        then inserts fresh ones.
+        then inserts fresh ones.  After ingestion, runs the enrichment pipeline
+        (which also writes enriched findings to SQLite when sqlite_store is set).
 
         Returns:
             Total number of documents ingested.
@@ -531,9 +540,11 @@ class ScanOrchestrator:
         if self.rag_engine is None:
             return 0
 
+        from core.rag.enrichment import EnrichmentPipeline
         from core.rag.ingestor import FindingIngestor
 
         total = 0
+        all_doc_ids: list[str] = []
         try:
             ingestor = FindingIngestor(self.rag_engine, self.project_name)  # type: ignore[arg-type]
             for result in results:
@@ -545,12 +556,25 @@ class ScanOrchestrator:
                     try:
                         doc_ids = ingestor.ingest_tool_output(result, profile=profile)
                         total += len(doc_ids)
+                        all_doc_ids.extend(doc_ids)
                     except Exception as exc:
                         logger.error(
                             "Ingestion failed for %s: %s", result.tool_name, exc
                         )
         except Exception as exc:
             logger.error("Batch ingestion setup error: %s", exc)
+
+        if all_doc_ids:
+            try:
+                pipeline = EnrichmentPipeline(
+                    self.rag_engine,  # type: ignore[arg-type]
+                    console=self.console,
+                    sqlite_store=self._sqlite_store,
+                    run_id=self._run_id,
+                )
+                pipeline.enrich(all_doc_ids)
+            except Exception as exc:
+                logger.error("Enrichment error in batch ingest: %s", exc)
 
         return total
 

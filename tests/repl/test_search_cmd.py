@@ -30,6 +30,13 @@ def _make_mock_qe(results=None):
     return mock_qe
 
 
+def _make_mock_store(results=None):
+    """Create a mock SQLiteStore that returns given results from search()."""
+    mock_store = MagicMock()
+    mock_store.search.return_value = results if results is not None else []
+    return mock_store
+
+
 def _make_results(n=3, tool="nmap", distance=None):
     return [
         {
@@ -48,13 +55,13 @@ def _make_results(n=3, tool="nmap", distance=None):
 
 def test_search_help_flag_prints_table():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--help"])
 
     repl.console.print.assert_called()
-    mock_qe.search.assert_not_called()
+    mock_store.search.assert_not_called()
 
 
 def test_search_help_no_project_still_works():
@@ -72,56 +79,56 @@ def test_search_help_no_project_still_works():
 
 def test_search_no_args_runs_ok():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", [])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
 
 
 def test_search_tool_filter():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=semgrep"])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Search error" in p for p in printed)
 
 
 def test_search_multi_tool():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=nmap,semgrep"])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Search error" in p for p in printed)
 
 
 def test_search_severity_filter():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--severity=high"])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
 
 
 def test_search_multi_severity():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--severity=high,critical"])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -131,14 +138,14 @@ def test_search_multi_severity():
 
 def test_search_type_filter_invalid():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--type=code"])
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Search error" in p for p in printed)
-    mock_qe.search.assert_not_called()
+    mock_store.search.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -148,8 +155,8 @@ def test_search_type_filter_invalid():
 
 def test_search_invalid_tool_prints_error():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=badtool"])
 
@@ -159,8 +166,8 @@ def test_search_invalid_tool_prints_error():
 
 def test_search_invalid_severity_prints_error():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--severity=invalid"])
 
@@ -170,8 +177,8 @@ def test_search_invalid_severity_prints_error():
 
 def test_search_invalid_type_prints_error():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--type=invalid"])
 
@@ -181,26 +188,26 @@ def test_search_invalid_type_prints_error():
 
 def test_search_old_bare_word_rejected():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["sql", "injection"])
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Search error" in p for p in printed)
-    mock_qe.search.assert_not_called()
+    mock_store.search.assert_not_called()
 
 
 def test_search_old_key_equals_rejected():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe()
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["tool=semgrep"])
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Search error" in p for p in printed)
-    mock_qe.search.assert_not_called()
+    mock_store.search.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -210,37 +217,37 @@ def test_search_old_key_equals_rejected():
 
 def test_search_file_partial_match():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--file~=src/main"])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Search error" in p for p in printed)
 
 
-def test_search_description_with_spaces():
+def test_search_description_unknown_flag_rejected():
+    """--description is not a supported SQLite filter flag."""
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
-    # shlex.split gives ["--description=sql injection"] as one token
     kc.cmd_search("search", ["--description=sql injection"])
 
-    mock_qe.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
-    assert not any("Search error" in p for p in printed)
+    assert any("Search error" in p for p in printed)
+    mock_store.search.assert_not_called()
 
 
 def test_search_url_partial():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--url~=/api/"])
 
-    mock_qe.search.assert_called_once()
+    mock_store.search.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +257,8 @@ def test_search_url_partial():
 
 def test_search_no_results_prints_message():
     repl, kc = _make_repl_and_kc()
-    mock_qe = _make_mock_qe([])
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store([])
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=nmap"])
 
@@ -266,10 +273,10 @@ def test_search_no_results_prints_message():
 
 def test_search_page_hint_shown():
     repl, kc = _make_repl_and_kc()
-    # Return page_size results to trigger the "next page" hint
+    # Return page_size (200) results to trigger the "next page" hint
     results = _make_results(n=200, tool="nmap")
-    mock_qe = _make_mock_qe(results)
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = _make_mock_store(results)
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=nmap"])
 

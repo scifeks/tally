@@ -1,4 +1,7 @@
-"""Knowledge base commands: search, chat, stats."""
+"""
+Knowledge base commands: search, chat, stats.
+todo: Refactor, this is a mess
+"""
 
 from __future__ import annotations
 
@@ -250,22 +253,28 @@ class KnowledgeCommands:
             )
             return
 
-        from core.rag.search_parser import SearchValidationError, parse_search_command
+        from core.store.sqlite_store import (
+            SearchValidationError,
+            parse_sqlite_search_command,
+        )
+        from core.tools.registry import tool_registry
 
-        query_engine = self._get_query_engine()
-        if query_engine is None:
+        sqlite_store = self._get_sqlite_store()
+        if sqlite_store is None:
             return
 
+        known_tools: frozenset[str] = frozenset(tool_registry.list_tool_names())
+
         try:
-            query = parse_search_command(args, query_engine._known_tools)
+            filters = parse_sqlite_search_command(args, known_tools)
         except SearchValidationError as exc:
             self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
 
         try:
             with self.repl.console.status("Searching knowledge base..."):
-                results = query_engine.search(query=query)
-        except SearchValidationError as exc:
+                results = sqlite_store.search(filters)
+        except Exception as exc:
             self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
 
@@ -273,7 +282,7 @@ class KnowledgeCommands:
             self.repl.console.print("[yellow]No findings matched your search.[/yellow]")
             return
 
-        is_semantic = results[0]["distance"] is not None
+        is_semantic = False  # SQLite results are never semantic
 
         if _all_from_tool(results, "gitleaks"):
             table = _build_gitleaks_table(results, is_semantic)
@@ -288,12 +297,14 @@ class KnowledgeCommands:
 
         self.repl.console.print(table)
 
-        # Pagination hint — use pre-parsed query directly, no re-parse needed
+        # Pagination hint
         shown = len(results)
-        if query.page > 1 or shown == query.page_size:
-            page_hint = f"Page {query.page} · {shown} results"
-            if shown == query.page_size:
-                page_hint += f"  [dim]Use --page={query.page + 1} for next page[/dim]"
+        page = filters.get("page", 1)
+        page_size = filters.get("page_size", 200)
+        if page > 1 or shown == page_size:
+            page_hint = f"Page {page} · {shown} results"
+            if shown == page_size:
+                page_hint += f"  [dim]Use --page={page + 1} for next page[/dim]"
             self.repl.console.print(f"[dim]{page_hint}[/dim]")
 
     def cmd_chat(self, _cmd: str, args: list[str]) -> None:
@@ -393,3 +404,16 @@ class KnowledgeCommands:
         if rag_engine is None:
             return None
         return QueryEngine(rag_engine)
+
+    def _get_sqlite_store(self):  # type: ignore[return]
+        """Return a SQLiteStore for the active project, or None on error."""
+        from core.store.sqlite_store import SQLiteStore
+
+        assert self.repl.active_project is not None
+        try:
+            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
+            store._init_schema()
+            return store
+        except Exception as exc:
+            self.repl.console.print(f"[red]SQLite error:[/red] {exc}")
+            return None

@@ -119,6 +119,7 @@ class PurgeCommand:
         else:
             total_deleted = rag_engine.delete_findings(tool=None)
         self._delete_tool_output_files(tools=tools)
+        self._purge_sqlite(tools=tools)
         self.repl.console.print(f"[green]Deleted {total_deleted} document(s).[/green]")
 
     # ------------------------------------------------------------------
@@ -176,6 +177,24 @@ class PurgeCommand:
             return total
 
         return rag_engine.count_documents()
+
+    def _purge_sqlite(self, tools: list[str] | None) -> None:
+        """Delete SQLite findings for the given tools, or full wipe if None."""
+        assert self.repl.active_project is not None
+        try:
+            from core.store.sqlite_store import SQLiteStore
+
+            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
+            if tools is None:
+                # Full wipe: delete and recreate the database file
+                db_path = store._db_path
+                if db_path.exists():
+                    db_path.unlink()
+                store._init_schema()
+            else:
+                store.delete_findings(tools=tools)
+        except Exception as exc:
+            self.repl.console.print(f"[yellow]SQLite purge warning:[/yellow] {exc}")
 
     def _get_rag_engine(self) -> RAGEngine | None:
         """Create and return a RAGEngine for the active project, or None on error."""
