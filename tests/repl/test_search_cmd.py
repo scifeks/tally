@@ -357,3 +357,73 @@ def test_show_fields_returns_sorted_fields():
     assert "file_path" in output
     assert "line_number" in output
     assert "risk_type" in output
+
+
+# ---------------------------------------------------------------------------
+# --fields
+# ---------------------------------------------------------------------------
+
+
+def test_fields_valid_calls_store():
+    """--fields with valid names calls store and prints no error."""
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store(_make_results(n=2))
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--fields=severity,tool"])
+    mock_store.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_fields_empty_value_prints_error():
+    """--fields= (empty) prints a Search error and does not call store."""
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store()
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--fields="])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Search error" in p for p in printed)
+    mock_store.search.assert_not_called()
+
+
+def test_fields_without_tool_filter_works():
+    """--fields works without --tool (absent keys render as N/A)."""
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store(_make_results(n=1))
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--fields=severity,file_path"])
+    mock_store.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_fields_combined_with_filter():
+    """--fields combined with --severity filter passes both to store."""
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store(_make_results(n=1))
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--severity=high", "--fields=severity,tool"])
+    mock_store.search.assert_called_once()
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("Search error" in p for p in printed)
+
+
+def test_fields_column_order_preserved():
+    """Column headers in the rendered table match --fields order exactly."""
+    from rich.table import Table as RichTable
+
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store(_make_results(n=1, tool="nmap"))
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--fields=severity,tool,confidence"])
+    tables = [
+        c.args[0]
+        for c in repl.console.print.call_args_list
+        if c.args and isinstance(c.args[0], RichTable)
+    ]
+    assert len(tables) == 1
+    assert [col.header for col in tables[0].columns] == [
+        "severity",
+        "tool",
+        "confidence",
+    ]

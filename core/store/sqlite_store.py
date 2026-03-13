@@ -184,6 +184,7 @@ def parse_sqlite_search_command(
     conditions: list[tuple[str, str, list[str]]] = []
     page: int = 1
     page_size: int = 200
+    fields: list[str] = []
 
     for arg in args:
         if not arg.startswith("--"):
@@ -230,6 +231,14 @@ def parse_sqlite_search_command(
                     raise ValueError
             except ValueError:
                 raise SearchValidationError("--page must be a positive integer.")
+        elif flag == "fields":
+            parsed = [f.strip() for f in val.split(",") if f.strip()]
+            if not parsed:
+                raise SearchValidationError(
+                    "--fields requires at least one field name, "
+                    "e.g. --fields=severity,file_path"
+                )
+            fields = parsed
         elif flag == "help":
             pass  # handled upstream in cmd_search
         else:
@@ -239,7 +248,12 @@ def parse_sqlite_search_command(
             if values:
                 conditions.append((col_expr, "=", values))
 
-    return {"conditions": conditions, "page": page, "page_size": page_size}
+    return {
+        "conditions": conditions,
+        "page": page,
+        "page_size": page_size,
+        "fields": fields,
+    }
 
 
 def _resolve_col_expr(flag: str) -> str:

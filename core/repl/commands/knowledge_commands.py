@@ -212,6 +212,28 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     return table
 
 
+def _build_fields_table(results: list[dict[str, Any]], fields: list[str]) -> Table:
+    """Build a custom projection table using user-specified field names."""
+    table = Table(show_header=True, header_style="bold")
+    for f in fields:
+        table.add_column(f, overflow="fold")
+    for r in results:
+        meta = r["metadata"]
+        row: list[str] = []
+        for f in fields:
+            val = meta.get(f)
+            if val is None:
+                row.append("N/A")
+            elif f == "severity":
+                row.append(_color_severity(str(val)))
+            elif isinstance(val, list):
+                row.append(", ".join(str(v) for v in val))
+            else:
+                row.append(str(val))
+        table.add_row(*row)
+    return table
+
+
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
@@ -366,7 +388,10 @@ class KnowledgeCommands:
 
         is_semantic = False  # SQLite results are never semantic
 
-        if _all_from_tool(results, "gitleaks"):
+        fields = filters.get("fields", [])
+        if fields:
+            table = _build_fields_table(results, fields)
+        elif _all_from_tool(results, "gitleaks"):
             table = _build_gitleaks_table(results, is_semantic)
         elif _all_from_tool(results, "semgrep"):
             table = _build_semgrep_table(results, is_semantic)
