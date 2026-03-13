@@ -67,7 +67,7 @@ class ToolRegistry:
 tool_registry = ToolRegistry()
 
 
-def discover_tools(base_path: str = ".") -> None:
+def discover_tools(base_path: str = ".", project_name: str | None = None) -> None:
     """Register tool wrappers, driven by commands.json when present.
 
     When commands.json exists at <base_path>/config/commands.json, only tools
@@ -76,6 +76,10 @@ def discover_tools(base_path: str = ".") -> None:
 
     When commands.json is absent (pre-setup / development), all wrappers in
     wrappers/local/ are registered as a backward-compatible fallback.
+
+    If project_name is provided and
+    projects/<project_name>/config/commands.json exists, its entries overlay the
+    global config (project entries fully replace global entries of the same name).
     """
     import json as _json
 
@@ -99,6 +103,21 @@ def discover_tools(base_path: str = ".") -> None:
                 "Failed to load commands.json (%s) — falling back to local discovery",
                 exc,
             )
+
+    if commands_config is not None and project_name is not None:
+        project_path = (
+            Path(base_path) / "projects" / project_name / "config" / "commands.json"
+        )
+        if project_path.exists():
+            try:
+                with open(project_path) as f:
+                    project_data = _json.load(f)
+                from core.config.schemas import CommandEntry
+
+                for name, entry in project_data.items():
+                    commands_config[name] = CommandEntry(**entry)
+            except Exception as exc:
+                logger.warning("Failed to load project commands.json (%s)", exc)
 
     if commands_config is not None:
         _discover_from_config(commands_config, wrappers_dir)

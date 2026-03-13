@@ -74,6 +74,22 @@ class ScanCommands:
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
         """scan [--repo=<repo>] [--tool=<tool,...>] [--type=<type,...>]"""
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
+            )
+            return
+
+        from core.tools.registry import discover_tools
+
+        discover_tools(self.repl.base_path, project_name=self.repl.active_project)
+        try:
+            self._cmd_scan_inner(args)
+        finally:
+            discover_tools(self.repl.base_path)
+
+    def _cmd_scan_inner(self, args: list[str]) -> None:
+        """Inner scan logic — runs after registry is refreshed."""
         from core.tools.constants import DOMAINS, TOOL_DOMAIN_MAP
 
         repo_val: str | None = None
@@ -98,11 +114,7 @@ class ScanCommands:
             )
             return
 
-        if not self.repl.active_project:
-            self.repl.console.print(
-                "[yellow]No active project. Use 'project add' first.[/yellow]"
-            )
-            return
+        assert self.repl.active_project is not None
 
         # Validate --repo
         repo_name: str | None = None
@@ -222,6 +234,23 @@ class ScanCommands:
             )
             return
 
+        from core.tools.registry import discover_tools
+
+        discover_tools(self.repl.base_path, project_name=self.repl.active_project)
+        try:
+            self._cmd_run_inner(tool_name, remaining, timeout, args)
+        finally:
+            discover_tools(self.repl.base_path)
+
+    def _cmd_run_inner(
+        self,
+        tool_name: str,
+        remaining: list[str],
+        timeout: int,
+        orig_args: list[str],
+    ) -> None:
+        """Inner run logic — runs after registry is refreshed with project overrides."""
+        assert self.repl.active_project is not None
         tool = tool_registry.get_tool(tool_name)
         if tool is None:
             self.repl.console.print(f"[red]Tool not found:[/red] {tool_name}")
@@ -258,7 +287,7 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
                 )
-                sqlite_store, run_id = self._create_sqlite_run(args)
+                sqlite_store, run_id = self._create_sqlite_run(orig_args)
                 _enrich_results(
                     self.repl, doc_ids, sqlite_store=sqlite_store, run_id=run_id
                 )

@@ -294,6 +294,39 @@ Configures API endpoint details for ZAP scanning of a specific repository. If th
 
 ---
 
+### commands.json (project-level overrides)
+
+**File:** `projects/<name>/config/commands.json`
+**Created:** When `tool add --project=<name>` is first run for the project.
+
+Each entry in this file fully replaces the global `config/commands.json` entry for
+the same tool name when scans run against this project. Tools not listed here
+continue to use the global configuration.
+
+The structure mirrors global `config/commands.json` exactly. See the
+[Tool Configuration](#tool-configuration) section below for field definitions.
+
+#### Example
+
+```json
+{
+  "semgrep": {
+    "type": "repo",
+    "location": "docker",
+    "container": {
+      "name": "semgrep-project-container",
+      "tool_path": "/usr/local/bin/semgrep"
+    }
+  }
+}
+```
+
+In this example, when a scan runs against the project, semgrep uses a
+project-specific Docker container instead of the globally configured one.
+All other tools use the global config.
+
+---
+
 ## Tool Configuration
 
 **File:** `config/commands.json`

@@ -167,6 +167,46 @@ Re-runs the configuration interview for the named tool, pre-filling current valu
 
 Removes the tool from `config/commands.json`. Tally asks for confirmation before deleting.
 
+### Per-Project Tool Overrides
+
+Global tool configuration in `config/commands.json` applies to all projects. If a specific project needs a different binary path, Docker container, or other configuration for a tool, you can create a project-level override without affecting the global default.
+
+Project-level overrides are stored in `projects/<name>/config/commands.json` and fully replace the global entry for the named tool whenever a scan runs against that project. Tools not listed in the project config continue to use the global config.
+
+**Requires an active project** (`project add` or `project switch <name>`).
+
+#### List project-level overrides
+
+```
+[acme-security-audit]> tool list --project=acme-security-audit
+```
+
+Shows only the overrides configured at the project level. If none exist, prints a message saying so.
+
+#### Add a project-level override
+
+```
+[acme-security-audit]> tool add --project=acme-security-audit
+```
+
+Runs the same interactive interview as the global `tool add`. If the tool is already configured globally, Tally warns you that you are creating a project-level override before proceeding.
+
+#### Edit a project-level override
+
+```
+[acme-security-audit]> tool edit semgrep --project=acme-security-audit
+```
+
+Re-runs the configuration interview for the named override, pre-filling the current project-level values. Does not fall back to the global config.
+
+#### Remove a project-level override
+
+```
+[acme-security-audit]> tool remove semgrep --project=acme-security-audit
+```
+
+Removes the project-level override. The tool reverts to the global configuration. Tally asks for confirmation before deleting.
+
 ---
 
 ## Running Scans
