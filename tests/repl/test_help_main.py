@@ -174,5 +174,7 @@ def test_search_command_rows_exact():
         "--<field>~=<value>",
         "--page=<n>",
         "--page-size=<n>",
+        "--show-fields",
+        "--fields=<f1,f2,...>",
         "--help",
     ]

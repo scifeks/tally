@@ -222,7 +222,7 @@ def _build_fields_table(results: list[dict[str, Any]], fields: list[str]) -> Tab
         row: list[str] = []
         for f in fields:
             val = meta.get(f)
-            if val is None:
+            if val is None or val == "":
                 row.append("N/A")
             elif f == "severity":
                 row.append(_color_severity(str(val)))
@@ -317,13 +317,44 @@ _ALL_NORMALIZED_FIELDS: list[str] = [
 ]
 
 
-def _discover_tool_fields(sqlite_store: Any, tool_name: str) -> list[str] | None:
-    """Return sorted field list for tool_name, or None if no rows exist."""
+_SQLITE_SCHEMA_FIELDS: frozenset[str] = frozenset(
+    {
+        "fingerprint",
+        "run_id",
+        "tool",
+        "domain",
+        "finding_type",
+        "severity",
+        "confidence",
+        "file",
+        "file_path",
+        "rule_id",
+        "url",
+        "host",
+        "ip_address",
+        "port",
+        "vulnerability_id",
+        "package_name",
+        "ecosystem",
+        "description",
+        "package_version",
+        "cwe",
+        "enriched",
+    }
+)
+
+
+def _discover_tool_fields(
+    sqlite_store: Any, tool_name: str
+) -> tuple[list[str], list[str]] | None:
+    """Return (schema_fields, meta_fields) for tool_name, or None if no rows."""
     count, meta_keys = sqlite_store.get_tool_meta_keys(tool_name)
     if count == 0:
         return None
     normalized = set(_TOOL_NORMALIZED_FIELDS.get(tool_name, _ALL_NORMALIZED_FIELDS))
-    return sorted(normalized | meta_keys)
+    schema = sorted(normalized | {"fingerprint", "run_id"})
+    meta = sorted(meta_keys - _SQLITE_SCHEMA_FIELDS)
+    return schema, meta
 
 
 class KnowledgeCommands:
@@ -553,15 +584,18 @@ class KnowledgeCommands:
         if sqlite_store is None:
             return
 
-        fields = _discover_tool_fields(sqlite_store, tool_name)
-        if fields is None:
+        result = _discover_tool_fields(sqlite_store, tool_name)
+        if result is None:
             self.repl.console.print(
                 f"[yellow]No findings found for tool '{tool_name}'. "
                 "Cannot show fields.[/yellow]"
             )
             return
 
-        self.repl.console.print(", ".join(fields))
+        schema_fields, meta_fields = result
+        self.repl.console.print(f"Schema fields: {', '.join(schema_fields)}")
+        if meta_fields:
+            self.repl.console.print(f"Meta fields:   {', '.join(meta_fields)}")
 
     def _get_sqlite_store(self):  # type: ignore[return]
         """Return a SQLiteStore for the active project, or None on error."""
