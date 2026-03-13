@@ -5,6 +5,7 @@ from .schemas import (
     EndpointConfig,
     GlobalConfig,
     NmapProfile,
+    OllamaConfig,
     ProjectConfig,
     Repository,
 )
@@ -12,6 +13,7 @@ from .schemas import (
 __all__ = [
     "ConfigManager",
     "GlobalConfig",
+    "OllamaConfig",
     "ProjectConfig",
     "Repository",
     "NmapProfile",

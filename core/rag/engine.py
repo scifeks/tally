@@ -1,55 +1,45 @@
 """RAG engine foundation using ChromaDB for project-isolated vector storage."""
 
+from __future__ import annotations
+
 import logging
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import chromadb
 from chromadb.api import ClientAPI
-from chromadb.api.types import Embeddable, EmbeddingFunction
-from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
+from chromadb.api.types import Documents, Embeddable, EmbeddingFunction, Embeddings
 
 from core.config.manager import ConfigManager
+from core.llm import LLMProvider, get_llm_provider
+from core.llm.ollama_adapter import get_ollama_models as get_ollama_models  # re-export
+from core.llm.ollama_adapter import (  # re-export
+    verify_ollama_available as verify_ollama_available,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def verify_ollama_available(base_url: str) -> bool:
-    """Check if Ollama is reachable at the given base URL.
+class _ProviderEmbeddingFn:
+    """ChromaDB EmbeddingFunction wrapper that delegates to an LLMProvider."""
 
-    Args:
-        base_url: Ollama API base URL, e.g. "http://localhost:11434"
+    def __init__(self, provider: LLMProvider) -> None:
+        self._provider = provider
 
-    Returns:
-        True if Ollama responds, False otherwise
-    """
-    try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=5) as resp:
-            return resp.status == 200
-    except (urllib.error.URLError, OSError):
-        return False
+    def __call__(self, input: Documents) -> Embeddings:  # noqa: A002
+        return [self._provider.embed(t) for t in input]  # type: ignore[return-value]
 
+    def embed_query(self, input: Documents) -> Embeddings:  # noqa: A002  # ChromaDB query path
+        return [self._provider.embed(t) for t in input]  # type: ignore[return-value]
 
-def get_ollama_models(base_url: str) -> list[str]:
-    """List models available in Ollama.
+    def name(self) -> str:  # ChromaDB EmbeddingFunction protocol
+        return "default"
 
-    Args:
-        base_url: Ollama API base URL
-
-    Returns:
-        List of model name strings; empty list if Ollama is unreachable
-    """
-    import json
-
-    try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-            return [m["name"] for m in data.get("models", [])]
-    except (urllib.error.URLError, OSError, KeyError, ValueError):
-        return []
+    def is_legacy(self) -> bool:  # ChromaDB >=1.5 protocol
+        # This class does not implement get_config/default_space/supported_spaces,
+        # so we declare ourselves legacy to avoid the DeprecationWarning.
+        return True
 
 
 class RAGEngine:
@@ -73,19 +63,14 @@ class RAGEngine:
         self,
         project_name: str,
         base_path: str = ".",
-        llm_model: str | None = None,
-        embedding_model: str | None = None,
-        ollama_base_url: str | None = None,
+        chat_provider: LLMProvider | None = None,
     ) -> None:
         """Initialise the RAG engine for a specific project.
 
         Args:
             project_name: Identifier for the current engagement project.
             base_path: Application root directory (contains projects/).
-            llm_model: Ollama chat model override; falls back to global config.
-            embedding_model: Ollama embedding model override; falls back to global
-                config.
-            ollama_base_url: Ollama API URL override; falls back to global config.
+            chat_provider: LLMProvider override; resolved from config if None.
 
         Raises:
             ValueError: If project_name is empty or the resolved project directory
@@ -98,13 +83,9 @@ class RAGEngine:
         self.project_name = project_name
         self.base_path = Path(base_path).resolve()
 
-        # Load defaults from global config
-        config_manager = ConfigManager(str(self.base_path))
-        global_config = config_manager.global_config
-
-        self.llm_model = llm_model or global_config.default_llm
-        self.embedding_model = embedding_model or global_config.default_embedding
-        self.ollama_base_url = ollama_base_url or global_config.ollama_base_url
+        self.chat_provider: LLMProvider = chat_provider or get_llm_provider(
+            "chat", self.base_path
+        )
 
         # Validate project directory
         self._project_dir = self.base_path / "projects" / project_name
@@ -126,11 +107,14 @@ class RAGEngine:
         self._init_chromadb()
         self._init_sqlite()
 
+        # Log the embedding model for observability
+        config = ConfigManager(str(self.base_path)).global_config
+        embedding_info = config.ollama.embedding_model if config.ollama else "unknown"
         logger.info(
             "RAGEngine ready — project=%s  chroma=%s  embedding=%s",
             project_name,
             self._chroma_path,
-            self.embedding_model,
+            embedding_info,
         )
 
     # ------------------------------------------------------------------
@@ -166,25 +150,23 @@ class RAGEngine:
 
         self._collection = self.get_or_create_collection()
 
-    def _build_embedding_function(self) -> OllamaEmbeddingFunction:
-        """Return a configured Ollama embedding function.
+    def _build_embedding_function(
+        self,
+    ) -> EmbeddingFunction[Embeddable]:
+        """Return an embedding function backed by the chat provider.
 
         Raises:
-            RuntimeError: If Ollama is not reachable.
+            RuntimeError: If the provider is not reachable.
         """
-        if not verify_ollama_available(self.ollama_base_url):
-            logger.error(
-                "Ollama not reachable at %s. Start Ollama with: ollama serve",
-                self.ollama_base_url,
-            )
+        if not self.chat_provider.is_available():
+            logger.error("LLM provider not reachable. Start Ollama with: ollama serve")
             raise RuntimeError(
-                f"Ollama is not running at {self.ollama_base_url}. "
-                "Please start it with: ollama serve"
+                "LLM provider is not available. Please start it with: ollama serve"
             )
 
-        return OllamaEmbeddingFunction(
-            url=f"{self.ollama_base_url}/api/embeddings",
-            model_name=self.embedding_model,
+        return cast(
+            EmbeddingFunction[Embeddable],
+            _ProviderEmbeddingFn(self.chat_provider),
         )
 
     # ------------------------------------------------------------------
@@ -203,9 +185,7 @@ class RAGEngine:
         if self._client is None:
             raise RuntimeError("ChromaDB client is not initialised")
 
-        embedding_fn: EmbeddingFunction[Embeddable] = cast(
-            EmbeddingFunction[Embeddable], self._build_embedding_function()
-        )
+        embedding_fn: EmbeddingFunction[Embeddable] = self._build_embedding_function()
 
         try:
             collection = self._client.get_or_create_collection(
@@ -315,7 +295,7 @@ class RAGEngine:
 
         Returns:
             Number of documents deleted (0 if collection is uninitialised or
-            no matching documents exist).
+                     no matching documents exist).
 
         Raises:
             ValueError: If ``profile`` is given without ``tool``.
@@ -384,7 +364,8 @@ class RAGEngine:
         """Fetch a single document and its metadata by ID.
 
         Returns:
-            Dict with keys ``id``, ``document``, ``metadata``, or ``None`` if not found.
+            Dict with keys ``id``, ``document``, ``metadata``, or ``None`` if
+            not found.
         """
         assert self._collection is not None
         result = self._collection.get(ids=[doc_id], include=["documents", "metadatas"])

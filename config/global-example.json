@@ -1,7 +1,19 @@
 {
-  "ollama_base_url": "http://localhost:11434",
-  "default_llm": "qwen2.5:7b",
-  "default_embedding": "nomic-embed-text",
+  "chat_llm_provider": "ollama",
+  "enrichment_llm_provider": "ollama",
+  "report_llm_provider": "ollama",
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen2.5:14b",
+    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "claude": {
+    "api_key": "",
+    "model": "claude-opus-4-5",
+    "max_tokens": 1024,
+    "timeout_seconds": 60
+  },
   "projects_dir": "./projects",
-  "location_attestation_confirmed": false
+  "location_attestation_confirmed": true
 }

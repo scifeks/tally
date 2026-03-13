@@ -50,9 +50,14 @@ def _write_global_config(base_path: Path) -> None:
     (config_dir / "global.json").write_text(
         json.dumps(
             {
-                "ollama_base_url": _OLLAMA_URL,
-                "default_llm": "qwen3:14b",
-                "default_embedding": "nomic-embed-text:latest",
+                "chat_llm_provider": "ollama",
+                "enrichment_llm_provider": "ollama",
+                "report_llm_provider": "ollama",
+                "ollama": {
+                    "base_url": _OLLAMA_URL,
+                    "model": "qwen3:14b",
+                    "embedding_model": "nomic-embed-text:latest",
+                },
             }
         )
     )

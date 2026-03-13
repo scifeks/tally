@@ -112,21 +112,39 @@ class ProjectConfig(BaseModel):
     repositories: list[Repository] = Field(default_factory=list)
 
 
-class GlobalConfig(BaseModel):
-    """Global application configuration."""
+class OllamaConfig(BaseModel):
+    """Ollama connection and model configuration."""
 
-    ollama_base_url: str = Field(default="http://localhost:11434")
-    default_llm: str = Field(description="Ollama chat model to use (e.g. qwen3:14b)")
-    default_embedding: str = Field(
-        description="Ollama embedding model to use (e.g. nomic-embed-text)"
-    )
-    projects_dir: str = Field(default="./projects")
-    location_attestation_confirmed: bool = Field(default=False)
+    base_url: str = "http://localhost:11434"
+    model: str
+    embedding_model: str
+    timeout_seconds: int = 60
 
-    @field_validator("ollama_base_url")
+    @field_validator("base_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
         """Ensure URL format is valid."""
         if not v.startswith(("http://", "https://")):
             raise ValueError("Ollama URL must start with http:// or https://")
         return v.rstrip("/")
+
+
+class ClaudeConfig(BaseModel):
+    """Anthropic Claude API configuration."""
+
+    api_key: str = ""
+    model: str = "claude-opus-4-5"
+    max_tokens: int = 1024
+    timeout_seconds: int = 60
+
+
+class GlobalConfig(BaseModel):
+    """Global application configuration."""
+
+    chat_llm_provider: str = "ollama"
+    enrichment_llm_provider: str = "ollama"
+    report_llm_provider: str = "ollama"
+    ollama: OllamaConfig | None = None
+    claude: ClaudeConfig | None = None
+    projects_dir: str = Field(default="./projects")
+    location_attestation_confirmed: bool = Field(default=False)

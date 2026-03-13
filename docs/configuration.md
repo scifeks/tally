@@ -11,35 +11,118 @@ Tally uses JSON files for all configuration. There are two levels: global (appli
 
 This file must exist before Tally starts. If it is missing or invalid, Tally exits with an error.
 
-### Fields
+### LLM Provider System
 
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `ollama_base_url` | string | no | `http://localhost:11434` | Ollama API endpoint. Must start with `http://` or `https://`. |
-| `default_llm` | string | **yes** | — | Ollama chat model name (e.g. `qwen3:14b`). Must be pulled before use. |
-| `default_embedding` | string | **yes** | — | Ollama embedding model name (e.g. `nomic-embed-text:latest`). Must be pulled before use. |
-| `projects_dir` | string | no | `./projects` | Directory where project workspaces are stored. |
+Tally supports multiple LLM backends. Three independent roles determine which provider
+handles each type of LLM call:
 
-### Example
+| Role key | Used by |
+|---|---|
+| `chat_llm_provider` | The `chat` REPL command |
+| `enrichment_llm_provider` | Finding enrichment during ingest |
+| `report_llm_provider` | The `report` command |
+
+Each role can be set to `"ollama"` or `"claude"` independently. The corresponding
+provider block (`ollama` or `claude`) must be present in `global.json` for any role
+that references it.
+
+### Top-level Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `chat_llm_provider` | string | `"ollama"` | Provider for the `chat` command: `"ollama"` or `"claude"`. |
+| `enrichment_llm_provider` | string | `"ollama"` | Provider for finding enrichment: `"ollama"` or `"claude"`. |
+| `report_llm_provider` | string | `"ollama"` | Provider for report generation: `"ollama"` or `"claude"`. |
+| `ollama` | object | — | Ollama connection settings. Required when any role is set to `"ollama"`. |
+| `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"`. |
+| `projects_dir` | string | `"./projects"` | Directory where project workspaces are stored. |
+| `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
+
+### `ollama` Block Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `base_url` | string | `"http://localhost:11434"` | Ollama API endpoint. Must start with `http://` or `https://`. |
+| `model` | string | — | Chat model name (e.g. `qwen3:14b`). Must be pulled before use. |
+| `embedding_model` | string | — | Embedding model name (e.g. `nomic-embed-text:latest`). Must be pulled before use. ChromaDB uses this for all vector indexing regardless of which provider handles chat/enrichment/report. |
+| `timeout_seconds` | int | `60` | Request timeout for all Ollama calls. |
+
+### `claude` Block Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). |
+| `model` | string | `"claude-opus-4-5"` | Anthropic model ID (e.g. `claude-opus-4-5`, `claude-haiku-4-5-20251001`). |
+| `max_tokens` | int | `1024` | Maximum tokens in the model response. |
+| `timeout_seconds` | int | `60` | Request timeout for all Anthropic API calls. |
+
+### Example — Ollama Only
 
 ```json
 {
-  "ollama_base_url": "http://localhost:11434",
-  "default_llm": "qwen3:14b",
-  "default_embedding": "nomic-embed-text:latest",
-  "projects_dir": "./projects"
+  "chat_llm_provider": "ollama",
+  "enrichment_llm_provider": "ollama",
+  "report_llm_provider": "ollama",
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen3:14b",
+    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "projects_dir": "./projects",
+  "location_attestation_confirmed": false
 }
 ```
 
-### Changing the Ollama Endpoint
+### Example — Claude for Chat and Reporting, Ollama for Enrichment and Embeddings
 
-If Ollama runs on a different host or port, update `ollama_base_url`:
+ChromaDB requires an embedding model. Ollama must always be configured when
+the `ollama` block is present — even if only used for embeddings. If you want to
+use Claude for chat and reporting while keeping Ollama just for the embedding layer,
+set the enrichment and embedding roles to `"ollama"`:
 
 ```json
 {
-  "ollama_base_url": "http://192.168.1.50:11434",
-  "default_llm": "qwen3:14b",
-  "default_embedding": "nomic-embed-text:latest"
+  "chat_llm_provider": "claude",
+  "enrichment_llm_provider": "ollama",
+  "report_llm_provider": "claude",
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen3:14b",
+    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "claude": {
+    "api_key": "",
+    "model": "claude-opus-4-5",
+    "max_tokens": 1024,
+    "timeout_seconds": 60
+  },
+  "projects_dir": "./projects",
+  "location_attestation_confirmed": false
+}
+```
+
+With `api_key` left empty, Tally reads the key from the `ANTHROPIC_API_KEY`
+environment variable at startup.
+
+### Example — Ollama on a Remote Host
+
+If Ollama runs on a different host or port, update `base_url` inside the `ollama` block:
+
+```json
+{
+  "chat_llm_provider": "ollama",
+  "enrichment_llm_provider": "ollama",
+  "report_llm_provider": "ollama",
+  "ollama": {
+    "base_url": "http://192.168.1.50:11434",
+    "model": "qwen3:14b",
+    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "projects_dir": "./projects",
+  "location_attestation_confirmed": false
 }
 ```
 

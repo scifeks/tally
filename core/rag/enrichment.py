@@ -7,9 +7,9 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-import ollama
 from rich.console import Console
 
+from core.llm import LLMProvider, get_llm_provider
 from core.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
@@ -85,11 +85,20 @@ class EnrichmentPipeline:
         console: Console | None = None,
         sqlite_store: SQLiteStore | None = None,
         run_id: int | None = None,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         self._engine = rag_engine
         self._console = console
         self._sqlite_store = sqlite_store
         self._run_id = run_id
+        self._llm_provider = llm_provider  # resolved lazily on first _call_llm
+
+    @property
+    def _provider(self) -> LLMProvider:
+        """Return the LLM provider, resolving from config on first access."""
+        if self._llm_provider is None:
+            self._llm_provider = get_llm_provider("enrichment", self._engine.base_path)
+        return self._llm_provider
 
     def enrich(self, ids: list[str]) -> None:
         """Enrich a list of document IDs in place.
@@ -179,22 +188,16 @@ class EnrichmentPipeline:
     def _call_llm(
         self, doc_text: str, metadata: dict[str, Any], fields: list[str]
     ) -> dict[str, Any]:
-        """Call Ollama and return the parsed JSON dict. Raises on failure."""
+        """Call LLM provider and return the parsed JSON dict. Raises on failure."""
         prompt = _USER_PROMPT_TEMPLATE.format(
             document_text=doc_text,
             fields_to_enrich=", ".join(fields),
         )
-        client = ollama.Client(host=self._engine.ollama_base_url)
-        response = client.chat(
-            model=self._engine.llm_model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            options={"temperature": 0.1, "num_predict": 500},
-        )
-        msg = response.message if hasattr(response, "message") else response["message"]
-        content = msg.content if hasattr(msg, "content") else msg["content"]
+        messages = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        content = self._provider.chat(messages, temperature=0.1, num_predict=500)
         return json.loads(content or "")
 
     def _validate_response(
