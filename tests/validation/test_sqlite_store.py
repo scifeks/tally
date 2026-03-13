@@ -178,7 +178,7 @@ class TestBasicRoundTrip:
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "file_path" in results[0]["metadata"]
-        assert "file" not in results[0]["metadata"]
+        assert "file" in results[0]["metadata"]
 
     def test_ip_address_remapped(self, tmp_path: Path) -> None:
         """SQLite column 'host' is returned as 'ip_address' in metadata."""
@@ -188,7 +188,7 @@ class TestBasicRoundTrip:
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "ip_address" in results[0]["metadata"]
-        assert "host" not in results[0]["metadata"]
+        assert "host" in results[0]["metadata"]
 
     def test_enriched_set_to_true(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)

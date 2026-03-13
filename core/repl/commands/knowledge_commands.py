@@ -212,6 +212,28 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     return table
 
 
+def _build_fields_table(results: list[dict[str, Any]], fields: list[str]) -> Table:
+    """Build a custom projection table using user-specified field names."""
+    table = Table(show_header=True, header_style="bold")
+    for f in fields:
+        table.add_column(f, overflow="fold")
+    for r in results:
+        meta = r["metadata"]
+        row: list[str] = []
+        for f in fields:
+            val = meta.get(f)
+            if val is None or val == "":
+                row.append("N/A")
+            elif f == "severity":
+                row.append(_color_severity(str(val)))
+            elif isinstance(val, list):
+                row.append(", ".join(str(v) for v in val))
+            else:
+                row.append(str(val))
+        table.add_row(*row)
+    return table
+
+
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
@@ -243,6 +265,98 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
     return table
 
 
+# Per-tool normalized field names (ChromaDB names, not SQLite column names).
+# Used by --show-fields to cross-reference schema columns relevant to each tool.
+_TOOL_NORMALIZED_FIELDS: dict[str, list[str]] = {
+    "gitleaks": [
+        "confidence",
+        "domain",
+        "file_path",
+        "finding_type",
+        "severity",
+        "tool",
+    ],
+    "semgrep": ["confidence", "cwe", "file_path", "finding_type", "rule_id"],
+    "zap": ["confidence", "cwe", "severity", "url"],
+    "osv-scanner": [
+        "ecosystem",
+        "file_path",
+        "finding_type",
+        "package_name",
+        "severity",
+        "vulnerability_id",
+    ],
+    "nmap": [
+        "confidence",
+        "domain",
+        "finding_type",
+        "ip_address",
+        "port",
+        "severity",
+    ],
+}
+
+# Fallback: all normalized fields for tools not in the mapping above
+_ALL_NORMALIZED_FIELDS: list[str] = [
+    "confidence",
+    "cwe",
+    "description",
+    "domain",
+    "ecosystem",
+    "file_path",
+    "finding_type",
+    "ip_address",
+    "package_name",
+    "package_version",
+    "port",
+    "rule_id",
+    "severity",
+    "tool",
+    "url",
+    "vulnerability_id",
+]
+
+
+_SQLITE_SCHEMA_FIELDS: frozenset[str] = frozenset(
+    {
+        "fingerprint",
+        "run_id",
+        "tool",
+        "domain",
+        "finding_type",
+        "severity",
+        "confidence",
+        "file",
+        "file_path",
+        "rule_id",
+        "url",
+        "host",
+        "ip_address",
+        "port",
+        "vulnerability_id",
+        "package_name",
+        "ecosystem",
+        "description",
+        "package_version",
+        "cwe",
+        "enriched",
+    }
+)
+
+
+def _discover_tool_fields(
+    sqlite_store: Any, tool_name: str
+) -> tuple[list[str], list[str]] | None:
+    """Return (schema_fields, meta_fields) for tool_name, or None if no rows."""
+    count, meta_keys = sqlite_store.get_tool_meta_keys(tool_name)
+    if count == 0:
+        return None
+    normalized = set(_TOOL_NORMALIZED_FIELDS.get(tool_name, _ALL_NORMALIZED_FIELDS))
+    schema = sorted(normalized | {"fingerprint", "run_id"})
+    meta = sorted(meta_keys - _SQLITE_SCHEMA_FIELDS)
+    return schema, meta
+
+
 class KnowledgeCommands:
     """Handlers for knowledge base search, chat, and stats commands."""
 
@@ -260,6 +374,11 @@ class KnowledgeCommands:
             from core.repl.interface import _build_search_help_table
 
             self.repl.console.print(_build_search_help_table())
+            return
+
+        # --show-fields is a boolean flag; intercept before the main parser
+        if "--show-fields" in args or any(a.startswith("--show-fields=") for a in args):
+            self._cmd_show_fields(args)
             return
 
         if not self.repl.active_project:
@@ -300,7 +419,10 @@ class KnowledgeCommands:
 
         is_semantic = False  # SQLite results are never semantic
 
-        if _all_from_tool(results, "gitleaks"):
+        fields = filters.get("fields", [])
+        if fields:
+            table = _build_fields_table(results, fields)
+        elif _all_from_tool(results, "gitleaks"):
             table = _build_gitleaks_table(results, is_semantic)
         elif _all_from_tool(results, "semgrep"):
             table = _build_semgrep_table(results, is_semantic)
@@ -420,6 +542,60 @@ class KnowledgeCommands:
         if rag_engine is None:
             return None
         return QueryEngine(rag_engine)
+
+    def _cmd_show_fields(self, args: list[str]) -> None:
+        """Handle search --show-fields --tool=<name>."""
+        # Reject --show-fields=<value> (flag takes no value)
+        if any(a.startswith("--show-fields=") for a in args):
+            self.repl.console.print(
+                "[red]Error:[/red] --show-fields takes no value.\n"
+                "Usage: search --show-fields --tool=<tool_name>"
+            )
+            return
+
+        rest = [a for a in args if a != "--show-fields"]
+
+        # Must be exactly: --tool=<single_tool_name>, nothing else
+        if len(rest) != 1 or not rest[0].startswith("--tool="):
+            self.repl.console.print(
+                "[red]Error:[/red] --show-fields requires exactly "
+                "--tool=<tool_name> and no other flags.\n"
+                "Usage: search --show-fields --tool=<tool_name>"
+            )
+            return
+
+        tool_name = rest[0][len("--tool=") :]
+        if not tool_name or "," in tool_name:
+            self.repl.console.print(
+                "[red]Error:[/red] --show-fields requires a single tool name "
+                "(not a comma-separated list).\n"
+                "Usage: search --show-fields --tool=<tool_name>"
+            )
+            return
+
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. "
+                "Use 'project add' or 'project switch' first.[/yellow]"
+            )
+            return
+
+        sqlite_store = self._get_sqlite_store()
+        if sqlite_store is None:
+            return
+
+        result = _discover_tool_fields(sqlite_store, tool_name)
+        if result is None:
+            self.repl.console.print(
+                f"[yellow]No findings found for tool '{tool_name}'. "
+                "Cannot show fields.[/yellow]"
+            )
+            return
+
+        schema_fields, meta_fields = result
+        self.repl.console.print(f"Schema fields: {', '.join(schema_fields)}")
+        if meta_fields:
+            self.repl.console.print(f"Meta fields:   {', '.join(meta_fields)}")
 
     def _get_sqlite_store(self):  # type: ignore[return]
         """Return a SQLiteStore for the active project, or None on error."""

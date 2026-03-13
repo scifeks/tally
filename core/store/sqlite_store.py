@@ -184,6 +184,7 @@ def parse_sqlite_search_command(
     conditions: list[tuple[str, str, list[str]]] = []
     page: int = 1
     page_size: int = 200
+    fields: list[str] = []
 
     for arg in args:
         if not arg.startswith("--"):
@@ -230,6 +231,14 @@ def parse_sqlite_search_command(
                     raise ValueError
             except ValueError:
                 raise SearchValidationError("--page must be a positive integer.")
+        elif flag == "fields":
+            parsed = [f.strip() for f in val.split(",") if f.strip()]
+            if not parsed:
+                raise SearchValidationError(
+                    "--fields requires at least one field name, "
+                    "e.g. --fields=severity,file_path"
+                )
+            fields = parsed
         elif flag == "help":
             pass  # handled upstream in cmd_search
         else:
@@ -239,7 +248,12 @@ def parse_sqlite_search_command(
             if values:
                 conditions.append((col_expr, "=", values))
 
-    return {"conditions": conditions, "page": page, "page_size": page_size}
+    return {
+        "conditions": conditions,
+        "page": page,
+        "page_size": page_size,
+        "fields": fields,
+    }
 
 
 def _resolve_col_expr(flag: str) -> str:
@@ -589,6 +603,28 @@ class SQLiteStore:
                     tools,
                 )
 
+    def get_tool_meta_keys(
+        self, tool_name: str, sample: int = 200
+    ) -> tuple[int, set[str]]:
+        """Return (total_row_count, union_of_meta_keys) for tool_name."""
+        with self._connect() as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE tool = ?", (tool_name,)
+            ).fetchone()[0]
+            if count == 0:
+                return 0, set()
+            rows = conn.execute(
+                "SELECT meta FROM findings WHERE tool = ? LIMIT ?",
+                (tool_name, sample),
+            ).fetchall()
+        keys: set[str] = set()
+        for row in rows:
+            try:
+                keys.update(json.loads(row[0] or "{}").keys())
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return count, keys
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 
@@ -654,7 +690,8 @@ class SQLiteStore:
                 params.extend(f"%{v}%" for v in values)
 
         sql = """
-            SELECT tool, domain, finding_type, severity, confidence,
+            SELECT fingerprint, run_id,
+                   tool, domain, finding_type, severity, confidence,
                    file, rule_id, url, host, port,
                    vulnerability_id, package_name, ecosystem,
                    description, package_version, cwe, enriched, meta
@@ -672,19 +709,38 @@ class SQLiteStore:
         for row in rows:
             metadata: dict[str, Any] = {}
 
-            # Direct-name columns (same in ChromaDB and SQLite)
+            # 1. Seed with meta blob (lowest priority)
+            try:
+                meta_dict: dict[str, Any] = json.loads(row["meta"] or "{}")
+                metadata.update(meta_dict)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            # 2. Named columns override meta (higher priority)
             for col in _DIRECT_COLUMNS:
                 val = row[col]
                 if val is not None:
                     metadata[col] = val
 
-            # Renamed columns
+            # Renamed + aliased columns: expose under BOTH the SQLite name
+            # and the ChromaDB-compatible name so --fields works with either.
             file_val = row["file"]
             if file_val is not None:
+                metadata["file"] = file_val
                 metadata["file_path"] = file_val
+
             host_val = row["host"]
             if host_val is not None:
+                metadata["host"] = host_val
                 metadata["ip_address"] = host_val
+
+            fp_val = row["fingerprint"]
+            if fp_val is not None:
+                metadata["fingerprint"] = fp_val
+
+            rid_val = row["run_id"]
+            if rid_val is not None:
+                metadata["run_id"] = rid_val
 
             # finding_type: stored as JSON array, return as list.
             ft_val = row["finding_type"]
@@ -703,13 +759,6 @@ class SQLiteStore:
                     metadata["cwe"] = cwe_val
 
             metadata["enriched"] = bool(row["enriched"])
-
-            # Merge meta JSON blob
-            try:
-                meta_dict: dict[str, Any] = json.loads(row["meta"] or "{}")
-                metadata.update(meta_dict)
-            except (json.JSONDecodeError, TypeError):
-                pass
 
             results.append({"metadata": metadata, "distance": None, "document": ""})
 

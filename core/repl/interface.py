@@ -165,6 +165,18 @@ _HELP_REGISTRY = [
         "--page-size=<n>",
         "Results per page (default: 200 / 20 semantic).",
     ),
+    (
+        "search",
+        "search",
+        "--show-fields",
+        "List available fields for a tool. Requires --tool=<name>.",
+    ),
+    (
+        "search",
+        "search",
+        "--fields=<f1,f2,...>",
+        "Comma-separated columns to display in results.",
+    ),
     ("search", "search", "--help", "Show detailed search documentation inline."),
     # Utility
     ("utility", None, None, "Utility"),
@@ -328,6 +340,20 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
         "--page-size=<n>", "Results per page (default: 20 semantic / 200 filter-only)"
     )
     table.add_row("--page=<n>", "Show page N of results (default: 1)")
+
+    # Field selection
+    table.add_row("[bold yellow]Field Selection[/bold yellow]", "")
+    table.add_row(
+        "--show-fields",
+        "Show all available filter/display fields for the specified tool. "
+        "Must be used with --tool=<name> only.",
+    )
+    table.add_row(
+        "--fields=<f1,f2,...>",
+        "Comma-separated list of columns to display in results. "
+        "Supports both schema columns and tool-specific meta fields. "
+        "Missing values render as N/A.",
+    )
 
     # Examples
     table.add_row("[bold yellow]Examples[/bold yellow]", "")
