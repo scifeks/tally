@@ -347,7 +347,7 @@ class TestDeleteFindings:
                 {
                     "tool": "nmap",
                     "profile": profile,
-                    "finding_type": "host",
+                    "finding_type": "informational",
                     "timestamp": ts,
                 }
                 for _ in ids

@@ -116,13 +116,12 @@ class FindingIngestor:
         _TYPE_FLAGS: dict[tuple[str, str], set[str]] = {
             ("gitleaks", "secret"): {"type_secret"},
             ("semgrep", "vulnerability"): {"type_vulnerability", "type_weakness"},
-            ("zap", "api_vulnerability"): {"type_vulnerability"},
-            ("nmap", "host"): set(),
-            ("nmap", "open_port"): set(),
-            ("pip-audit", "dependency_vulnerability"): _sca_flags,
-            ("npm-audit", "dependency_vulnerability"): _sca_flags,
-            ("osv-scanner", "dependency_vulnerability"): _sca_flags,
-            ("composer-audit", "dependency_vulnerability"): _sca_flags,
+            ("zap", "vulnerability"): {"type_vulnerability"},
+            ("nmap", "informational"): set(),
+            ("pip-audit", "dependency"): _sca_flags,
+            ("npm-audit", "dependency"): _sca_flags,
+            ("osv-scanner", "dependency"): _sca_flags,
+            ("composer-audit", "dependency"): _sca_flags,
         }
         true_flags = _TYPE_FLAGS.get((tool_name, finding_type), set())
         booleans = {
@@ -134,6 +133,7 @@ class FindingIngestor:
                 "misconfiguration",
                 "exposure",
                 "dependency",
+                "informational",
             )
         }
         return {
@@ -179,8 +179,8 @@ class FindingIngestor:
     ) -> list[tuple[str, dict[str, Any], str]]:
         """Build document chunks from an nmap ToolResult.
 
-        Each host produces one ``host`` chunk; each open port on that host
-        produces an additional ``open_port`` chunk.
+        Each host produces one ``informational`` chunk; each open port on that
+        host produces an additional ``informational`` chunk.
 
         Args:
             tool_result: Parsed nmap result.
@@ -229,7 +229,7 @@ class FindingIngestor:
             host_meta: dict[str, Any] = {
                 "tool": "nmap",
                 "profile": profile,
-                "finding_type": "host",
+                "finding_type": "informational",
                 "ip_address": ip,
                 "hostname": hostname,
                 "state": state,
@@ -242,7 +242,7 @@ class FindingIngestor:
                 host_meta["nmap_args"] = nmap_args
             if scan_start_time:
                 host_meta["scan_start_time"] = scan_start_time
-            host_meta.update(self._shared_meta("nmap", "host"))
+            host_meta.update(self._shared_meta("nmap", "informational"))
             host_meta["severity"] = SEVERITY_INFORMATIONAL
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
             chunks.append((host_text, host_meta, host_id))
@@ -259,7 +259,7 @@ class FindingIngestor:
                 port_meta: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
-                    "finding_type": "open_port",
+                    "finding_type": "informational",
                     "ip_address": ip,
                     "port": port_num,
                     "service": service,
@@ -269,7 +269,7 @@ class FindingIngestor:
                     "timestamp": timestamp,
                     "source_file": source_file,
                 }
-                port_meta.update(self._shared_meta("nmap", "open_port"))
+                port_meta.update(self._shared_meta("nmap", "informational"))
                 port_meta["severity"] = SEVERITY_INFORMATIONAL
                 if nmap_version:
                     port_meta["nmap_version"] = nmap_version
@@ -403,9 +403,8 @@ class FindingIngestor:
         Handles osv-scanner, pip-audit, npm-audit, and composer-audit, all of
         which produce ``{vulnerabilities: [...], summary: {...}}`` output.
 
-        Each vulnerability produces one ``dependency_vulnerability`` chunk
-        containing the package name, version, advisory ID, severity, and
-        description.
+        Each vulnerability produces one ``dependency`` chunk containing the
+        package name, version, advisory ID, severity, and description.
 
         Args:
             tool_result: Parsed SCA tool result.
@@ -460,7 +459,7 @@ class FindingIngestor:
             meta: dict[str, Any] = {
                 "tool": tool,
                 "profile": profile,
-                "finding_type": "dependency_vulnerability",
+                "finding_type": "dependency",
                 "severity": severity,
                 "package_name": pkg_name,
                 "package_version": pkg_version,
@@ -493,7 +492,7 @@ class FindingIngestor:
                 meta["references"] = ", ".join(references)
             if cwe_ids:
                 meta["cwe_ids"] = ", ".join(cwe_ids)
-            meta.update(self._shared_meta(tool, "dependency_vulnerability"))
+            meta.update(self._shared_meta(tool, "dependency"))
 
             doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
@@ -605,8 +604,8 @@ class FindingIngestor:
     ) -> list[tuple[str, dict[str, Any], str]]:
         """Build document chunks from a ZAP ToolResult.
 
-        Each alert instance produces one ``api_vulnerability`` chunk containing
-        the risk level, affected endpoint, description, and remediation advice.
+        Each alert instance produces one ``vulnerability`` chunk containing the
+        risk level, affected endpoint, description, and remediation advice.
 
         Args:
             tool_result: Parsed ZAP result.
@@ -666,7 +665,7 @@ class FindingIngestor:
             meta: dict[str, Any] = {
                 "tool": "zap",
                 "profile": profile,
-                "finding_type": "api_vulnerability",
+                "finding_type": "vulnerability",
                 "severity": risk,
                 "confidence": confidence,
                 "risk_type": alert_name,
@@ -682,7 +681,7 @@ class FindingIngestor:
                 meta["param"] = param
             if cwe_id is not None:
                 meta["cwe_id"] = cwe_id
-            meta.update(self._shared_meta("zap", "api_vulnerability"))
+            meta.update(self._shared_meta("zap", "vulnerability"))
 
             doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
             chunks.append((text, meta, doc_id))

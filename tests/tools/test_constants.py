@@ -35,6 +35,7 @@ def test_finding_types() -> None:
         "misconfiguration",
         "exposure",
         "dependency",
+        "informational",
     }
 
 

@@ -490,24 +490,40 @@ class TestNmapIngestorMetadata:
 
     def test_host_chunk_severity_informational(self) -> None:
         chunks = self._get_chunks()
-        host_chunks = [c for c in chunks if c[1].get("finding_type") == "host"]
+        host_chunks = [
+            c
+            for c in chunks
+            if c[1].get("finding_type") == "informational" and "port" not in c[1]
+        ]
         assert host_chunks, "Expected at least one host chunk"
         assert host_chunks[0][1]["severity"] == "informational"
 
     def test_open_port_chunk_severity_informational(self) -> None:
         chunks = self._get_chunks()
-        port_chunks = [c for c in chunks if c[1].get("finding_type") == "open_port"]
+        port_chunks = [
+            c
+            for c in chunks
+            if c[1].get("finding_type") == "informational" and "port" in c[1]
+        ]
         assert port_chunks, "Expected at least one open_port chunk"
         assert port_chunks[0][1]["severity"] == "informational"
 
     def test_host_chunk_no_risk_type(self) -> None:
         chunks = self._get_chunks()
-        host_chunks = [c for c in chunks if c[1].get("finding_type") == "host"]
+        host_chunks = [
+            c
+            for c in chunks
+            if c[1].get("finding_type") == "informational" and "port" not in c[1]
+        ]
         assert "risk_type" not in host_chunks[0][1]
 
     def test_open_port_chunk_no_risk_type(self) -> None:
         chunks = self._get_chunks()
-        port_chunks = [c for c in chunks if c[1].get("finding_type") == "open_port"]
+        port_chunks = [
+            c
+            for c in chunks
+            if c[1].get("finding_type") == "informational" and "port" in c[1]
+        ]
         assert "risk_type" not in port_chunks[0][1]
 
     def test_no_type_boolean_true(self) -> None:

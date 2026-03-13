@@ -65,7 +65,7 @@ class RAGEngine:
         - profile (str)      – nmap profile / repo name (optional)
         - timestamp (str)    – ISO-8601 UTC
         - severity (str)     – low/medium/high/critical (optional)
-        - finding_type (str) – vulnerability/host/port/secret/etc.
+        - finding_type (str) – vulnerability/informational/secret/dependency/etc.
         - source_file (str)  – path to raw output file
     """
 

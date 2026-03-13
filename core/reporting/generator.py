@@ -118,9 +118,7 @@ class ReportGenerator:
         ]
 
         # --- nmap ---
-        nmap_ports = [
-            f for f in findings.get("nmap", []) if f.get("finding_type") == "open_port"
-        ]
+        nmap_ports = [f for f in findings.get("nmap", []) if f.get("port") is not None]
         if nmap_ports:
             lines += [
                 "",
@@ -265,9 +263,7 @@ class ReportGenerator:
         sections: list[str] = []
 
         # --- nmap ---
-        nmap_ports = [
-            f for f in findings.get("nmap", []) if f.get("finding_type") == "open_port"
-        ]
+        nmap_ports = [f for f in findings.get("nmap", []) if f.get("port") is not None]
         if nmap_ports:
             rows = "".join(
                 tr(
