@@ -556,3 +556,568 @@ class TestMetaJsonExtract:
         )
         assert len(results) >= 1
         assert all(r["metadata"].get("profile") == "production" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# New named columns: description, package_version, cwe
+# ---------------------------------------------------------------------------
+
+
+class TestNewColumns:
+    _SCA_FINDING = {
+        "tool": "pip-audit",
+        "domain": "sca",
+        "finding_type": '["dependency"]',
+        "severity": "high",
+        "package_name": "requests",
+        "package_version": "2.27.0",
+        "vulnerability_id": "GHSA-1234",
+        "ecosystem": "PyPI",
+        "lockfile": "requirements.txt",
+        "cwe_ids": "CWE-400, CWE-20",
+        "profile": "repo1",
+    }
+
+    def test_file_populated_from_lockfile(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, [self._SCA_FINDING])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("file_path") == "requirements.txt"
+
+    def test_package_version_populated(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, [self._SCA_FINDING])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("package_version") == "2.27.0"
+
+    def test_package_name_populated(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, [self._SCA_FINDING])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("package_name") == "requests"
+
+    def test_cwe_is_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, [self._SCA_FINDING])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        cwe = results[0]["metadata"].get("cwe")
+        assert isinstance(cwe, list)
+        assert len(cwe) == 2
+
+    def test_file_path_takes_priority_over_lockfile(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        finding = dict(self._SCA_FINDING)
+        finding["file_path"] = "src/requirements.txt"
+        store.upsert_findings(run_id, [finding])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("file_path") == "src/requirements.txt"
+
+
+# ---------------------------------------------------------------------------
+# finding_type as JSON array
+# ---------------------------------------------------------------------------
+
+
+class TestFindingTypeArray:
+    def test_gitleaks_finding_type_is_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, _GITLEAKS_FINDINGS[:1])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        ft = results[0]["metadata"]["finding_type"]
+        assert isinstance(ft, list)
+        assert ft == ["secret"]
+
+    def test_semgrep_finding_type_is_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        ft = results[0]["metadata"]["finding_type"]
+        assert isinstance(ft, list)
+        assert ft == ["vulnerability"]
+
+    def test_nmap_finding_type_is_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, _NMAP_FINDINGS)
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        ft = results[0]["metadata"]["finding_type"]
+        assert isinstance(ft, list)
+        assert ft == ["informational"]
+
+    def test_type_secret_filter_matches_gitleaks(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_all(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["secret"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert len(results) >= 1
+        assert all(r["metadata"]["tool"] == "gitleaks" for r in results)
+
+    def test_type_secret_filter_does_not_match_semgrep(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_all(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["secret"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert not any(r["metadata"]["tool"] == "semgrep" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# CWE normalisation
+# ---------------------------------------------------------------------------
+
+
+class TestCweNormalization:
+    def test_semgrep_cwe_is_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "semgrep",
+                    "rule_id": "r1",
+                    "file_path": "a.py",
+                    "line_start": 1,
+                    "cwe": "CWE-89",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        cwe = results[0]["metadata"].get("cwe")
+        assert isinstance(cwe, list)
+
+    def test_zap_cwe_id_int_becomes_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "zap",
+                    "url": "https://example.com",
+                    "method": "GET",
+                    "alert_name": "xss",
+                    "cwe_id": 79,
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        cwe = results[0]["metadata"].get("cwe")
+        assert cwe == ["CWE-79"]
+
+    def test_sca_cwe_ids_is_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "pip-audit",
+                    "package_name": "pkg",
+                    "vulnerability_id": "GHSA-x",
+                    "cwe_ids": "CWE-89, CWE-20",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        cwe = results[0]["metadata"].get("cwe")
+        assert isinstance(cwe, list)
+        assert len(cwe) == 2
+
+    def test_gitleaks_no_cwe(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, _GITLEAKS_FINDINGS[:1])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("cwe") is None
+
+    def test_nmap_no_cwe(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, _NMAP_FINDINGS)
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("cwe") is None
+
+
+# ---------------------------------------------------------------------------
+# Description field
+# ---------------------------------------------------------------------------
+
+
+class TestDescription:
+    def test_zap_description_set(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "zap",
+                    "url": "https://example.com",
+                    "alert_name": "sqli",
+                    "description": "SQL injection in login form",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("description") == (
+            "SQL injection in login form"
+        )
+
+    def test_semgrep_description_equals_message(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "semgrep",
+                    "rule_id": "r1",
+                    "file_path": "a.py",
+                    "line_start": 1,
+                    "description": "Use of eval is dangerous",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("description") == "Use of eval is dangerous"
+
+    def test_sca_description_from_summary(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "pip-audit",
+                    "package_name": "pkg",
+                    "vulnerability_id": "GHSA-y",
+                    "description": "Remote code execution via deserialization",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("description") == (
+            "Remote code execution via deserialization"
+        )
+
+    def test_gitleaks_description_set_when_present(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "gitleaks",
+                    "rule_id": "generic-api-key",
+                    "file_path": "config.py",
+                    "line_number": 10,
+                    "description": "Generic API Key",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("description") == "Generic API Key"
+
+
+# ---------------------------------------------------------------------------
+# Nmap confidence
+# ---------------------------------------------------------------------------
+
+
+class TestNmapConfidence:
+    def test_nmap_host_chunk_confidence_confirmed(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "nmap",
+                    "ip_address": "10.0.0.1",
+                    "confidence": "confirmed",
+                    "finding_type": '["informational"]',
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("confidence") == "confirmed"
+
+    def test_nmap_port_chunk_confidence_confirmed(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "nmap",
+                    "ip_address": "10.0.0.1",
+                    "port": "22",
+                    "service": "ssh",
+                    "confidence": "confirmed",
+                    "finding_type": '["informational"]',
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert results[0]["metadata"].get("confidence") == "confirmed"
+
+
+# ---------------------------------------------------------------------------
+# No comma-joined strings in meta for _COMMA_LIST_FIELDS
+# ---------------------------------------------------------------------------
+
+
+class TestNoCommaStringsInMeta:
+    def test_ssh_algorithms_stored_as_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "nmap",
+                    "ip_address": "10.0.0.1",
+                    "port": "22",
+                    "ssh_algorithms": (
+                        "diffie-hellman-group14-sha256, curve25519-sha256"
+                    ),
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        ssh_algs = results[0]["metadata"].get("ssh_algorithms")
+        assert isinstance(ssh_algs, list)
+        assert len(ssh_algs) == 2
+
+
+# ---------------------------------------------------------------------------
+# D2: finding_type json_each filter
+# ---------------------------------------------------------------------------
+
+_VULN_FINDING = {
+    "tool": "semgrep",
+    "domain": "code",
+    "finding_type": "vulnerability",
+    "severity": "high",
+    "file_path": "app.py",
+    "rule_id": "r-vuln",
+    "line_start": 1,
+}
+
+_SECRET_FINDING = {
+    "tool": "gitleaks",
+    "domain": "code",
+    "finding_type": "secret",
+    "severity": "critical",
+    "file_path": "config.py",
+    "rule_id": "r-secret",
+    "line_number": 10,
+}
+
+_DEP_FINDING = {
+    "tool": "pip-audit",
+    "domain": "sca",
+    "finding_type": "dependency",
+    "severity": "high",
+    "package_name": "requests",
+    "vulnerability_id": "GHSA-x",
+    "ecosystem": "PyPI",
+}
+
+_MULTI_TYPE_FINDING = {
+    "tool": "semgrep",
+    "domain": "code",
+    "finding_type": '["vulnerability", "dependency"]',
+    "severity": "medium",
+    "file_path": "mix.py",
+    "rule_id": "r-multi",
+    "line_start": 5,
+}
+
+
+def _seed_d2(store: SQLiteStore) -> None:
+    run_id = store.create_run({})
+    store.upsert_findings(
+        run_id,
+        [_VULN_FINDING, _SECRET_FINDING, _DEP_FINDING, _MULTI_TYPE_FINDING],
+    )
+
+
+class TestD2FindingTypeFilter:
+    def test_type_vulnerability_matches_vuln_findings(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["vulnerability"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        tools = {r["metadata"]["tool"] for r in results}
+        assert "semgrep" in tools
+        assert "gitleaks" not in tools
+        assert "pip-audit" not in tools
+
+    def test_type_dependency_matches_dep_findings(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["dependency"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        tools = {r["metadata"]["tool"] for r in results}
+        assert "pip-audit" in tools
+        assert "gitleaks" not in tools
+
+    def test_type_contains_vuln_matches_vulnerability(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "~=", ["vuln"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert len(results) >= 1
+        for r in results:
+            ft = r["metadata"].get("finding_type", [])
+            assert any("vuln" in v for v in ft)
+
+    def test_type_contains_dep_matches_dependency(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "~=", ["dep"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert len(results) >= 1
+        for r in results:
+            ft = r["metadata"].get("finding_type", [])
+            assert any("dep" in v for v in ft)
+
+    def test_multi_type_finding_appears_for_vulnerability(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["vulnerability"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        rule_ids = {r["metadata"].get("rule_id") for r in results}
+        assert "r-multi" in rule_ids
+
+    def test_multi_type_finding_appears_for_dependency(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["dependency"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        rule_ids = {r["metadata"].get("rule_id") for r in results}
+        assert "r-multi" in rule_ids
+
+    def test_multi_type_finding_does_not_appear_for_secret(
+        self, tmp_path: Path
+    ) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, [_MULTI_TYPE_FINDING])
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["secret"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert results == []
+
+    def test_csv_type_returns_both_types_or_semantics(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_d2(store)
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["vulnerability", "dependency"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        tools = {r["metadata"]["tool"] for r in results}
+        assert "semgrep" in tools
+        assert "pip-audit" in tools
+        assert "gitleaks" not in tools
+
+
+# ---------------------------------------------------------------------------
+# D2: OSV aliases list round-trip
+# ---------------------------------------------------------------------------
+
+
+class TestD2OsvSearch:
+    _OSV_FINDING = {
+        "tool": "osv-scanner",
+        "domain": "sca",
+        "finding_type": "dependency",
+        "severity": "high",
+        "package_name": "lodash",
+        "vulnerability_id": "GHSA-abc",
+        "ecosystem": "npm",
+        "aliases": "CVE-2021-1234, CVE-2021-5678",
+        "lockfile": "package-lock.json",
+    }
+
+    def test_aliases_stored_as_list(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, [self._OSV_FINDING])
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        aliases = results[0]["metadata"].get("aliases")
+        assert isinstance(aliases, list)
+        assert len(aliases) == 2
+
+    def test_null_meta_does_not_cause_error(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {
+                    "tool": "osv-scanner",
+                    "package_name": "pkg",
+                    "vulnerability_id": "GHSA-y",
+                    "ecosystem": "PyPI",
+                }
+            ],
+        )
+        results = store.search({"conditions": [], "page": 1, "page_size": 200})
+        assert len(results) == 1
+        assert results[0]["metadata"].get("tool") == "osv-scanner"

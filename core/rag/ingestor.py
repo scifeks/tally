@@ -1,5 +1,6 @@
 """Finding ingestion pipeline — converts ToolResult output into ChromaDB documents."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -226,10 +227,12 @@ class FindingIngestor:
             host_text = (
                 f"[nmap] Host: {host_label}\nStatus: {state}\nPorts:\n{port_lines}"
             )
+            # TODO: description not set — nmap parser does not emit a description field
             host_meta: dict[str, Any] = {
                 "tool": "nmap",
                 "profile": profile,
-                "finding_type": "informational",
+                "finding_type": json.dumps(["informational"]),
+                "confidence": CONFIDENCE_CONFIRMED,
                 "ip_address": ip,
                 "hostname": hostname,
                 "state": state,
@@ -259,7 +262,8 @@ class FindingIngestor:
                 port_meta: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
-                    "finding_type": "informational",
+                    "finding_type": json.dumps(["informational"]),
+                    "confidence": CONFIDENCE_CONFIRMED,
                     "ip_address": ip,
                     "port": port_num,
                     "service": service,
@@ -350,12 +354,13 @@ class FindingIngestor:
             meta: dict[str, Any] = {
                 "tool": "semgrep",
                 "profile": profile,
-                "finding_type": "vulnerability",
+                "finding_type": json.dumps(["vulnerability"]),
                 "severity": severity,
                 "rule_id": rule_id,
                 "file_path": file_path,
                 "line_start": line_start,
                 "line_end": line_end,
+                "description": message,
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
@@ -459,7 +464,7 @@ class FindingIngestor:
             meta: dict[str, Any] = {
                 "tool": tool,
                 "profile": profile,
-                "finding_type": "dependency",
+                "finding_type": json.dumps(["dependency"]),
                 "severity": severity,
                 "package_name": pkg_name,
                 "package_version": pkg_version,
@@ -468,6 +473,8 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if summary:
+                meta["description"] = summary
             if aliases:
                 meta["aliases"] = ", ".join(aliases)
             if fixed_version:
@@ -556,7 +563,7 @@ class FindingIngestor:
             meta: dict[str, Any] = {
                 "tool": "gitleaks",
                 "profile": profile,
-                "finding_type": "secret",
+                "finding_type": json.dumps(["secret"]),
                 "severity": SEVERITY_HIGH,
                 "confidence": CONFIDENCE_CONFIRMED,
                 "rule_id": rule_id,
@@ -566,6 +573,8 @@ class FindingIngestor:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            if description:
+                meta["description"] = description
             if rule_id:
                 meta["risk_type"] = rule_id
             if end_line:
@@ -665,7 +674,7 @@ class FindingIngestor:
             meta: dict[str, Any] = {
                 "tool": "zap",
                 "profile": profile,
-                "finding_type": "vulnerability",
+                "finding_type": json.dumps(["vulnerability"]),
                 "severity": risk,
                 "confidence": confidence,
                 "risk_type": alert_name,

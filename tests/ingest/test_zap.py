@@ -183,7 +183,7 @@ class TestZapIngestor:
         sql_meta = by_name["SQL Injection"]
         assert sql_meta["tool"] == "zap"
         assert sql_meta["profile"] == "test-repo"
-        assert sql_meta["finding_type"] == "vulnerability"
+        assert sql_meta["finding_type"] == '["vulnerability"]'
         assert sql_meta["severity"] == "high"
         assert sql_meta["confidence"] == "probable"
         assert sql_meta["url"] == "https://example.com/api/users"

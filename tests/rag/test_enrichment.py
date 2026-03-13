@@ -493,7 +493,7 @@ class TestNmapIngestorMetadata:
         host_chunks = [
             c
             for c in chunks
-            if c[1].get("finding_type") == "informational" and "port" not in c[1]
+            if c[1].get("finding_type") == '["informational"]' and "port" not in c[1]
         ]
         assert host_chunks, "Expected at least one host chunk"
         assert host_chunks[0][1]["severity"] == "informational"
@@ -503,7 +503,7 @@ class TestNmapIngestorMetadata:
         port_chunks = [
             c
             for c in chunks
-            if c[1].get("finding_type") == "informational" and "port" in c[1]
+            if c[1].get("finding_type") == '["informational"]' and "port" in c[1]
         ]
         assert port_chunks, "Expected at least one open_port chunk"
         assert port_chunks[0][1]["severity"] == "informational"
@@ -513,7 +513,7 @@ class TestNmapIngestorMetadata:
         host_chunks = [
             c
             for c in chunks
-            if c[1].get("finding_type") == "informational" and "port" not in c[1]
+            if c[1].get("finding_type") == '["informational"]' and "port" not in c[1]
         ]
         assert "risk_type" not in host_chunks[0][1]
 
@@ -522,7 +522,7 @@ class TestNmapIngestorMetadata:
         port_chunks = [
             c
             for c in chunks
-            if c[1].get("finding_type") == "informational" and "port" in c[1]
+            if c[1].get("finding_type") == '["informational"]' and "port" in c[1]
         ]
         assert "risk_type" not in port_chunks[0][1]
 

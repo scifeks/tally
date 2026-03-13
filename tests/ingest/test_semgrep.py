@@ -188,7 +188,7 @@ class TestSemgrepIngestor:
             finding = fixture_by_rule[rule_id]
             assert meta["tool"] == "semgrep"
             assert meta["profile"] == "test-repo"
-            assert meta["finding_type"] == "vulnerability"
+            assert meta["finding_type"] == '["vulnerability"]'
             assert meta["file_path"] == finding["file_path"]
             assert meta["line_start"] == finding["line_start"]
             assert meta["line_end"] == finding["line_end"]

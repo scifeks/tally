@@ -248,7 +248,7 @@ class TestGitleaksDirScan:
             expected = {
                 "tool": "gitleaks",
                 "profile": "test-repo",
-                "finding_type": "secret",
+                "finding_type": '["secret"]',
                 "severity": "high",
                 "confidence": "confirmed",
                 "rule_id": secret["rule_id"],
@@ -467,7 +467,7 @@ class TestGitleaksGitScan:
         for meta in all_docs["metadatas"]:
             assert meta["tool"] == "gitleaks"
             assert meta["profile"] == "git-repo"
-            assert meta["finding_type"] == "secret"
+            assert meta["finding_type"] == '["secret"]'
             assert meta["severity"] == "high", (
                 f"severity must always be 'high', got {meta['severity']!r}"
             )

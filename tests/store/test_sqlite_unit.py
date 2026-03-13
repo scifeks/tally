@@ -15,6 +15,8 @@ if str(_TALLY_ROOT) not in sys.path:
 from core.store.sqlite_store import (  # noqa: E402
     SearchValidationError,
     SQLiteStore,
+    _normalise_cwe,
+    _normalise_finding_type,
     parse_sqlite_search_command,
 )
 
@@ -292,3 +294,210 @@ class TestIngestHook:
 
         # Must not raise
         pipeline.enrich(["doc1"])
+
+
+# ---------------------------------------------------------------------------
+# _normalise_finding_type unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestFindingTypeNormalisation:
+    def test_plain_string_secret(self) -> None:
+        assert _normalise_finding_type("secret") == '["secret"]'
+
+    def test_already_array_is_idempotent(self) -> None:
+        assert _normalise_finding_type('["secret"]') == '["secret"]'
+
+    def test_invalid_value_returns_none(self) -> None:
+        result = _normalise_finding_type("bogus")
+        assert result is None
+
+    def test_mixed_valid_and_invalid(self) -> None:
+        import json
+
+        result = _normalise_finding_type('["secret", "bogus"]')
+        assert result is not None
+        items = json.loads(result)
+        assert items == ["secret"]
+        assert "bogus" not in items
+
+
+# ---------------------------------------------------------------------------
+# _normalise_cwe unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestCweNormalisationUnit:
+    def test_none_returns_none(self) -> None:
+        assert _normalise_cwe(None) is None
+
+    def test_int_produces_cwe_prefix(self) -> None:
+        import json
+
+        result = _normalise_cwe(89)
+        assert result is not None
+        assert json.loads(result) == ["CWE-89"]
+
+    def test_plain_string(self) -> None:
+        import json
+
+        result = _normalise_cwe("CWE-89")
+        assert result is not None
+        assert json.loads(result) == ["CWE-89"]
+
+    def test_list_input(self) -> None:
+        import json
+
+        result = _normalise_cwe(["CWE-89", "CWE-20"])
+        assert result is not None
+        items = json.loads(result)
+        assert "CWE-89" in items
+        assert "CWE-20" in items
+
+    def test_comma_joined_string(self) -> None:
+        import json
+
+        result = _normalise_cwe("CWE-89, CWE-20")
+        assert result is not None
+        items = json.loads(result)
+        assert "CWE-89" in items
+        assert "CWE-20" in items
+
+
+# ---------------------------------------------------------------------------
+# finding_type json_each filter (real SQLite)
+# ---------------------------------------------------------------------------
+
+
+class TestFindingTypeJsonEach:
+    def _make_store(self, tmp_path: Path) -> SQLiteStore:
+        store = SQLiteStore(tmp_path, "proj")
+        store._init_schema()
+        return store
+
+    def _seed(self, store: SQLiteStore, findings: list[dict]) -> None:
+        run_id = store.create_run({})
+        store.upsert_findings(run_id, findings)
+
+    def test_exact_match_secret_does_not_return_vulnerability(
+        self, tmp_path: Path
+    ) -> None:
+        store = self._make_store(tmp_path)
+        self._seed(
+            store,
+            [
+                {
+                    "tool": "gitleaks",
+                    "rule_id": "r1",
+                    "file_path": "a.py",
+                    "line_number": 1,
+                    "finding_type": "secret",
+                },
+                {
+                    "tool": "semgrep",
+                    "rule_id": "r2",
+                    "file_path": "b.py",
+                    "line_start": 1,
+                    "finding_type": "vulnerability",
+                },
+            ],
+        )
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["secret"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert all(r["metadata"]["finding_type"] == ["secret"] for r in results)
+        assert not any(r["metadata"].get("tool") == "semgrep" for r in results)
+
+    def test_exact_match_multi_value_returns_both_types(self, tmp_path: Path) -> None:
+        store = self._make_store(tmp_path)
+        self._seed(
+            store,
+            [
+                {
+                    "tool": "gitleaks",
+                    "rule_id": "r1",
+                    "file_path": "a.py",
+                    "line_number": 1,
+                    "finding_type": "secret",
+                },
+                {
+                    "tool": "semgrep",
+                    "rule_id": "r2",
+                    "file_path": "b.py",
+                    "line_start": 1,
+                    "finding_type": "vulnerability",
+                },
+                {
+                    "tool": "nmap",
+                    "ip_address": "1.2.3.4",
+                    "finding_type": "informational",
+                },
+            ],
+        )
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["secret", "vulnerability"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        tools = {r["metadata"]["tool"] for r in results}
+        assert "gitleaks" in tools
+        assert "semgrep" in tools
+        assert "nmap" not in tools
+
+    def test_partial_match_vuln_matches_vulnerability(self, tmp_path: Path) -> None:
+        store = self._make_store(tmp_path)
+        self._seed(
+            store,
+            [
+                {
+                    "tool": "semgrep",
+                    "rule_id": "r2",
+                    "file_path": "b.py",
+                    "line_start": 1,
+                    "finding_type": "vulnerability",
+                },
+                {
+                    "tool": "gitleaks",
+                    "rule_id": "r1",
+                    "file_path": "a.py",
+                    "line_number": 1,
+                    "finding_type": "secret",
+                },
+            ],
+        )
+        results = store.search(
+            {
+                "conditions": [("finding_type", "~=", ["vuln"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert len(results) >= 1
+        assert all(r["metadata"]["tool"] == "semgrep" for r in results)
+
+    def test_exact_match_does_not_return_unrelated_type(self, tmp_path: Path) -> None:
+        store = self._make_store(tmp_path)
+        self._seed(
+            store,
+            [
+                {
+                    "tool": "nmap",
+                    "ip_address": "1.2.3.4",
+                    "finding_type": "informational",
+                },
+            ],
+        )
+        results = store.search(
+            {
+                "conditions": [("finding_type", "=", ["secret"])],
+                "page": 1,
+                "page_size": 200,
+            }
+        )
+        assert results == []

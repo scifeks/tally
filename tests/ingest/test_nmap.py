@@ -474,13 +474,13 @@ class TestNmapIngestor:
         host_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" not in m
+            if m["finding_type"] == '["informational"]' and "port" not in m
         ]
         assert len(host_metas) == 1
         meta = host_metas[0]
         assert meta["tool"] == "nmap"
         assert meta["profile"] == "test-scan"
-        assert meta["finding_type"] == "informational"
+        assert meta["finding_type"] == '["informational"]'
         assert meta["ip_address"] == "127.0.0.1"
         assert meta["source_file"] == ""
         assert "timestamp" in meta
@@ -498,7 +498,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" in m
+            if m["finding_type"] == '["informational"]' and "port" in m
         ]
         assert len(port_metas) == 2
         port_numbers = {m["port"] for m in port_metas}
@@ -506,7 +506,7 @@ class TestNmapIngestor:
         for meta in port_metas:
             assert meta["tool"] == "nmap"
             assert meta["profile"] == "test-scan"
-            assert meta["finding_type"] == "informational"
+            assert meta["finding_type"] == '["informational"]'
             assert meta["ip_address"] == "127.0.0.1"
             assert meta["service"] == "http"
             assert isinstance(meta["port"], int)
@@ -525,7 +525,7 @@ class TestNmapIngestor:
         host_docs = [
             d
             for d, m in zip(all_docs["documents"], all_docs["metadatas"])
-            if m["finding_type"] == "informational" and "port" not in m
+            if m["finding_type"] == '["informational"]' and "port" not in m
         ]
         assert len(host_docs) == 1
         text = host_docs[0]
@@ -574,7 +574,7 @@ class TestNmapIngestor:
         port_docs = [
             d
             for d, m in zip(all_docs["documents"], all_docs["metadatas"])
-            if m["finding_type"] == "informational" and m.get("port") == 80
+            if m["finding_type"] == '["informational"]' and m.get("port") == 80
         ]
         assert len(port_docs) == 1
         assert "[nmap] Port 80/tcp on 127.0.0.1: http nginx 1.29.5" in port_docs[0]
@@ -642,7 +642,7 @@ class TestNmapIngestor:
         host_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" not in m
+            if m["finding_type"] == '["informational"]' and "port" not in m
         ]
         assert len(host_metas) == 1
         meta = host_metas[0]
@@ -661,7 +661,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" in m
+            if m["finding_type"] == '["informational"]' and "port" in m
         ]
         for meta in port_metas:
             assert "transport" in meta
@@ -722,7 +722,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" in m
+            if m["finding_type"] == '["informational"]' and "port" in m
         ]
         for meta in port_metas:
             for key in (
@@ -747,7 +747,7 @@ class TestNmapIngestor:
         host_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" not in m
+            if m["finding_type"] == '["informational"]' and "port" not in m
         ]
         assert host_metas
         for meta in host_metas:
@@ -774,7 +774,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == "informational" and "port" in m
+            if m["finding_type"] == '["informational"]' and "port" in m
         ]
         assert port_metas
         for meta in port_metas:

@@ -32,13 +32,15 @@ _CHROMA_TO_SQLITE: dict[str, str] = {
     "vulnerability_id": "vulnerability_id",
     "package_name": "package_name",
     "ecosystem": "ecosystem",
+    "description": "description",
+    "package_version": "package_version",
+    "lockfile": "file",  # SCA: lower priority than file_path
 }
 
 # Named column names that are identical in ChromaDB and SQLite
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
-    "finding_type",
     "severity",
     "confidence",
     "rule_id",
@@ -47,6 +49,8 @@ _DIRECT_COLUMNS: tuple[str, ...] = (
     "vulnerability_id",
     "package_name",
     "ecosystem",
+    "description",
+    "package_version",
 )
 
 # Comma-joined string fields in ChromaDB → stored as JSON arrays in meta
@@ -56,8 +60,8 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
         "subcategory",
         "references",
         "aliases",
-        "cwe_ids",
         "tags",
+        "ssh_algorithms",
     }
 )
 
@@ -285,6 +289,44 @@ def _validate_flag_values(
 
 
 # ---------------------------------------------------------------------------
+# Normalisation helpers
+# ---------------------------------------------------------------------------
+
+
+def _normalise_finding_type(val: Any) -> str | None:
+    """Normalise finding_type to a JSON array string, e.g. '["secret"]'."""
+    if val is None:
+        return None
+    if isinstance(val, str) and val.startswith("["):
+        try:
+            items = json.loads(val)
+        except json.JSONDecodeError:
+            items = [val]
+    elif isinstance(val, list):
+        items = val
+    else:
+        items = [str(val)]
+    valid = [v for v in items if v in FINDING_TYPES]
+    for bad in (v for v in items if v not in FINDING_TYPES):
+        logger.warning("Invalid finding_type value %r; skipping", bad)
+    return json.dumps(valid) if valid else None
+
+
+def _normalise_cwe(val: Any) -> str | None:
+    """Normalise a CWE value to a JSON array string, e.g. '["CWE-89"]'."""
+    if val is None:
+        return None
+    if isinstance(val, int):
+        return json.dumps([f"CWE-{val}"])
+    if isinstance(val, list):
+        return json.dumps([str(v) for v in val if v])
+    if isinstance(val, str) and val.startswith("["):
+        return val  # already JSON array
+    parts = [v.strip() for v in val.split(",") if v.strip()]
+    return json.dumps(parts) if parts else None
+
+
+# ---------------------------------------------------------------------------
 # SQLiteStore
 # ---------------------------------------------------------------------------
 
@@ -350,6 +392,9 @@ class SQLiteStore:
                     vulnerability_id TEXT,
                     package_name     TEXT,
                     ecosystem        TEXT,
+                    description      TEXT,
+                    package_version  TEXT,
+                    cwe              TEXT,
                     enriched         INTEGER DEFAULT 0,
                     meta             TEXT DEFAULT '{}'
                 );
@@ -361,6 +406,28 @@ class SQLiteStore:
                 CREATE INDEX IF NOT EXISTS idx_findings_fingerprint
                     ON findings (fingerprint);
             """)
+
+        # Migration guard: add schema-v2 columns to existing databases.
+        with self._connect() as conn:
+            existing = {
+                row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()
+            }
+            for col_name, col_def in [
+                ("description", "TEXT"),
+                ("package_version", "TEXT"),
+                ("cwe", "TEXT"),
+            ]:
+                if col_name not in existing:
+                    conn.execute(
+                        f"ALTER TABLE findings ADD COLUMN {col_name} {col_def}"
+                    )
+            # Idempotent migration: convert plain-string finding_type to JSON array.
+            conn.execute(
+                """UPDATE findings
+                   SET finding_type = '["' || finding_type || '"]'
+                   WHERE finding_type IS NOT NULL
+                     AND finding_type NOT LIKE '[%'"""
+            )
 
     # ------------------------------------------------------------------
     # Run management
@@ -417,16 +484,39 @@ class SQLiteStore:
         if not findings:
             return
 
+        # Keys handled before the generic loop — excluded from meta blob.
+        _PRE_EXTRACTED: frozenset[str] = frozenset(
+            {"finding_type", "cwe", "cwe_id", "cwe_ids"}
+        )
+
         rows: list[tuple] = []
         for finding in findings:
             fingerprint = _compute_fingerprint(finding)
             named: dict[str, Any] = {}
             meta: dict[str, Any] = {}
 
+            # --- Pre-extract finding_type ---
+            named["finding_type"] = _normalise_finding_type(finding.get("finding_type"))
+
+            # --- Pre-extract cwe (any of the three source keys) ---
+            raw_cwe = (
+                finding.get("cwe") or finding.get("cwe_id") or finding.get("cwe_ids")
+            )
+            if raw_cwe is not None:
+                named["cwe"] = _normalise_cwe(raw_cwe)
+
+            # --- Generic column mapping (skip pre-extracted keys) ---
             for key, val in finding.items():
+                if key in _PRE_EXTRACTED:
+                    continue
                 col = _CHROMA_TO_SQLITE.get(key)
                 if col is not None:
-                    named[col] = str(val) if val is not None else None
+                    # file_path takes priority over lockfile for the file column.
+                    if col == "file" and key == "lockfile":
+                        if named.get("file") is None:
+                            named["file"] = str(val) if val is not None else None
+                    else:
+                        named[col] = str(val) if val is not None else None
                 else:
                     if key in _COMMA_LIST_FIELDS and isinstance(val, str) and val:
                         meta[key] = [v.strip() for v in val.split(",") if v.strip()]
@@ -450,6 +540,9 @@ class SQLiteStore:
                     named.get("vulnerability_id"),
                     named.get("package_name"),
                     named.get("ecosystem"),
+                    named.get("description"),
+                    named.get("package_version"),
+                    named.get("cwe"),
                     1,  # enriched
                     json.dumps(meta),
                 )
@@ -459,14 +552,18 @@ class SQLiteStore:
             INSERT INTO findings (
                 fingerprint, run_id, tool, domain, finding_type, severity,
                 confidence, file, rule_id, url, host, port,
-                vulnerability_id, package_name, ecosystem, enriched, meta
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                vulnerability_id, package_name, ecosystem,
+                description, package_version, cwe, enriched, meta
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
-                run_id     = excluded.run_id,
-                severity   = excluded.severity,
-                confidence = excluded.confidence,
-                enriched   = excluded.enriched,
-                meta       = excluded.meta
+                run_id          = excluded.run_id,
+                severity        = excluded.severity,
+                confidence      = excluded.confidence,
+                description     = excluded.description,
+                package_version = excluded.package_version,
+                cwe             = excluded.cwe,
+                enriched        = excluded.enriched,
+                meta            = excluded.meta
         """
         with self._connect() as conn:
             conn.executemany(sql, rows)
@@ -518,7 +615,32 @@ class SQLiteStore:
         for col_expr, op, values in conditions:
             if not values:
                 continue
-            if op == "=":
+            if col_expr == "finding_type":
+                # finding_type is stored as a JSON array; use json_each().
+                if op == "=":
+                    # OR semantics: row matches if any element equals any value.
+                    if len(values) == 1:
+                        where_parts.append(
+                            "EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
+                            " WHERE json_each.value = ?)"
+                        )
+                        params.append(values[0])
+                    else:
+                        phs = ",".join("?" * len(values))
+                        where_parts.append(
+                            f"EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
+                            f" WHERE json_each.value IN ({phs}))"
+                        )
+                        params.extend(values)
+                elif op == "~=":
+                    # OR semantics: row matches if any element contains any substring.
+                    like_clauses = " OR ".join("json_each.value LIKE ?" for _ in values)
+                    where_parts.append(
+                        f"EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
+                        f" WHERE {like_clauses})"
+                    )
+                    params.extend(f"%{v}%" for v in values)
+            elif op == "=":
                 if len(values) == 1:
                     where_parts.append(f"{col_expr} = ?")
                     params.append(values[0])
@@ -534,7 +656,8 @@ class SQLiteStore:
         sql = """
             SELECT tool, domain, finding_type, severity, confidence,
                    file, rule_id, url, host, port,
-                   vulnerability_id, package_name, ecosystem, enriched, meta
+                   vulnerability_id, package_name, ecosystem,
+                   description, package_version, cwe, enriched, meta
             FROM findings
         """
         if where_parts:
@@ -562,6 +685,22 @@ class SQLiteStore:
             host_val = row["host"]
             if host_val is not None:
                 metadata["ip_address"] = host_val
+
+            # finding_type: stored as JSON array, return as list.
+            ft_val = row["finding_type"]
+            if ft_val:
+                try:
+                    metadata["finding_type"] = json.loads(ft_val)
+                except json.JSONDecodeError:
+                    metadata["finding_type"] = ft_val
+
+            # cwe: stored as JSON array, return as list.
+            cwe_val = row["cwe"]
+            if cwe_val:
+                try:
+                    metadata["cwe"] = json.loads(cwe_val)
+                except json.JSONDecodeError:
+                    metadata["cwe"] = cwe_val
 
             metadata["enriched"] = bool(row["enriched"])
 

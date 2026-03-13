@@ -28,6 +28,16 @@ def _extract_types(meta: dict) -> str:
     return ", ".join(active)
 
 
+def _render_finding_type(meta: dict) -> str:
+    """Render finding_type for display: join list, fall back to type_* booleans."""
+    ft = meta.get("finding_type")
+    if isinstance(ft, list):
+        return ", ".join(ft)
+    if isinstance(ft, str) and ft:
+        return ft
+    return _extract_types(meta)
+
+
 _SEVERITY_COLORS = {
     "critical": "red",
     "high": "orange1",
@@ -73,7 +83,7 @@ def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> T
             line_str,
             meta.get("tool", ""),
             meta.get("domain", ""),
-            _extract_types(meta),
+            _render_finding_type(meta),
             _color_severity(sev),
             meta.get("confidence", ""),
             meta.get("risk_type", ""),
@@ -114,7 +124,7 @@ def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
         row: list[str] = [
             meta.get("rule_id", ""),
             location,
-            _extract_types(meta),
+            _render_finding_type(meta),
             meta.get("confidence", ""),
             cwe_owasp,
         ]
@@ -141,8 +151,10 @@ def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     for r in results:
         meta = r["metadata"]
         sev = meta.get("severity", "")
-        cwe_id = meta.get("cwe_id")
-        cwe_str = f"CWE-{cwe_id}" if cwe_id is not None else ""
+        cwe_list = meta.get("cwe") or []
+        cwe_str = (
+            ", ".join(cwe_list) if isinstance(cwe_list, list) else str(cwe_list or "")
+        )
         row: list[str] = [
             meta.get("risk_type", ""),
             meta.get("method", ""),
@@ -174,13 +186,20 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     for r in results:
         meta = r["metadata"]
         sev = meta.get("severity", "")
-        aliases = meta.get("aliases", "")
+        aliases_raw = meta.get("aliases")
+        aliases_str = (
+            ", ".join(aliases_raw)
+            if isinstance(aliases_raw, list)
+            else (aliases_raw or "")
+        )
         vuln_id = meta.get("vulnerability_id", "")
-        ids = ", ".join(filter(None, [vuln_id, aliases])) if aliases else vuln_id
+        ids = (
+            ", ".join(filter(None, [vuln_id, aliases_str])) if aliases_str else vuln_id
+        )
         row: list[str] = [
             meta.get("source_type", ""),
-            meta.get("lockfile", meta.get("source_file", "")),
-            _extract_types(meta),
+            meta.get("file_path") or meta.get("source_file", ""),
+            _render_finding_type(meta),
             _color_severity(sev),
             "probable",
             ids,
@@ -196,7 +215,6 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
-    table.add_column("Finding", style="white", max_width=50)
     table.add_column("Tool", style="cyan", no_wrap=True)
     table.add_column("Domain", style="white", no_wrap=True)
     table.add_column("Type", style="green")
@@ -208,13 +226,11 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
 
     for r in results:
         meta = r["metadata"]
-        doc_text = r["document"][:80].replace("\n", " ") if r["document"] else ""
         sev = meta.get("severity", "")
         row: list[str] = [
-            doc_text,
             meta.get("tool", ""),
             meta.get("domain", ""),
-            _extract_types(meta),
+            _render_finding_type(meta),
             _color_severity(sev),
             meta.get("confidence", ""),
             meta.get("risk_type", ""),

@@ -21,7 +21,10 @@ from core.repl.commands.knowledge_commands import (  # noqa: E402
     _all_from_tool,
     _build_generic_table,
     _build_gitleaks_table,
+    _build_osv_table,
     _build_semgrep_table,
+    _build_zap_table,
+    _render_finding_type,
 )
 
 # ---------------------------------------------------------------------------
@@ -315,11 +318,11 @@ class TestGitleaksTableRelevance:
 
 
 class TestGenericTable:
-    def test_has_finding_column(self) -> None:
+    def test_no_finding_column(self) -> None:
         results = [_gitleaks_result(), _nmap_result()]
         table = _build_generic_table(results, is_semantic=False)
         rendered = _render(table)
-        assert "Finding" in rendered
+        assert "Finding" not in rendered
 
     def test_no_file_path_column(self) -> None:
         results = [_gitleaks_result(), _nmap_result()]
@@ -574,3 +577,155 @@ class TestAllFromToolSemgrep:
 
     def test_single_semgrep_returns_true(self) -> None:
         assert _all_from_tool([_semgrep_result()], "semgrep") is True
+
+
+# ---------------------------------------------------------------------------
+# _render_finding_type
+# ---------------------------------------------------------------------------
+
+
+class TestRenderFindingType:
+    def test_single_element_list_renders_plain(self) -> None:
+        assert _render_finding_type({"finding_type": ["informational"]}) == (
+            "informational"
+        )
+
+    def test_two_element_list_renders_joined(self) -> None:
+        result = _render_finding_type({"finding_type": ["vulnerability", "dependency"]})
+        assert result == "vulnerability, dependency"
+
+    def test_missing_finding_type_falls_back_to_extract_types(self) -> None:
+        # No finding_type and no type_* booleans → empty string
+        assert _render_finding_type({}) == ""
+
+    def test_string_finding_type_passes_through(self) -> None:
+        assert _render_finding_type({"finding_type": "secret"}) == "secret"
+
+    def test_empty_string_finding_type_falls_back(self) -> None:
+        # Empty string → falls back to _extract_types, no flags → ""
+        assert _render_finding_type({"finding_type": ""}) == ""
+
+
+# ---------------------------------------------------------------------------
+# _build_generic_table — nmap with finding_type list
+# ---------------------------------------------------------------------------
+
+
+def _sqlite_nmap_result(distance: float | None = None) -> dict[str, Any]:
+    """Simulate a SQLite nmap result (finding_type is a list, no type_* booleans)."""
+    return {
+        "document": "",
+        "metadata": {
+            "tool": "nmap",
+            "domain": "network",
+            "severity": "informational",
+            "confidence": "confirmed",
+            "finding_type": ["informational"],
+        },
+        "distance": distance,
+    }
+
+
+class TestNmapDisplay:
+    def test_finding_type_list_shows_in_type_column(self) -> None:
+        result = _sqlite_nmap_result()
+        table = _build_generic_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "informational" in rendered
+
+    def test_confidence_confirmed_shows_in_table(self) -> None:
+        result = _sqlite_nmap_result()
+        table = _build_generic_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "confirmed" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _build_osv_table — aliases and location
+# ---------------------------------------------------------------------------
+
+
+def _osv_result(
+    aliases: Any = None,
+    vulnerability_id: str = "GHSA-1234",
+    source_file: str = "",
+    file_path: str = "",
+) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "tool": "osv-scanner",
+        "vulnerability_id": vulnerability_id,
+        "severity": "high",
+        "source_type": "lockfile",
+    }
+    if aliases is not None:
+        meta["aliases"] = aliases
+    if source_file:
+        meta["source_file"] = source_file
+    if file_path:
+        meta["file_path"] = file_path
+    return {"document": "", "metadata": meta, "distance": None}
+
+
+class TestOsvTableDisplay:
+    def test_aliases_as_list_renders_without_error(self) -> None:
+        result = _osv_result(aliases=["CVE-2021-1234", "CVE-2021-5678"])
+        table = _build_osv_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "CVE-2021-1234" in rendered
+        assert "CVE-2021-5678" in rendered
+
+    def test_aliases_as_none_does_not_throw(self) -> None:
+        result = _osv_result(aliases=None)
+        table = _build_osv_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "GHSA-1234" in rendered
+
+    def test_location_uses_file_path_when_present(self) -> None:
+        result = _osv_result(file_path="requirements.txt")
+        table = _build_osv_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "requirements.txt" in rendered
+
+    def test_location_falls_back_to_source_file(self) -> None:
+        result = _osv_result(source_file="go.sum")
+        table = _build_osv_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "go.sum" in rendered
+
+
+# ---------------------------------------------------------------------------
+# _build_zap_table — cwe as list
+# ---------------------------------------------------------------------------
+
+
+def _zap_result(
+    cwe: Any = None,
+    severity: str = "high",
+) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "tool": "zap",
+        "severity": severity,
+        "risk_type": "xss_reflected",
+        "method": "GET",
+        "url": "https://example.com/search",
+        "confidence": "probable",
+    }
+    if cwe is not None:
+        meta["cwe"] = cwe
+    return {"document": "", "metadata": meta, "distance": None}
+
+
+class TestZapTableDisplay:
+    def test_cwe_list_renders_value(self) -> None:
+        result = _zap_result(cwe=["CWE-79"])
+        table = _build_zap_table([result], is_semantic=False)
+        rendered = _render(table)
+        assert "CWE-79" in rendered
+
+    def test_cwe_none_renders_empty(self) -> None:
+        result = _zap_result(cwe=None)
+        table = _build_zap_table([result], is_semantic=False)
+        rendered = _render(table)
+        # CWE column header still present but no CWE value
+        assert "CWE" in rendered
+        assert "CWE-" not in rendered
