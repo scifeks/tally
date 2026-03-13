@@ -261,7 +261,7 @@ class ScanOrchestrator:
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = 0
 
-        for tool_name in ordered_tools:
+        for idx, tool_name in enumerate(ordered_tools):
             # ZAP requires base_urls
             if tool_name == "zap" and not repo.base_urls:
                 self.console.print(
@@ -286,11 +286,16 @@ class ScanOrchestrator:
 
             self.console.print(f"  [dim][*] Running {tool_name}...[/dim]")
             kwargs = self._repo_tool_kwargs(tool_name, repo, exclude_dirs=exclude_dirs)
+            remaining = len(ordered_tools) - idx - 1
 
             if tool_name == "gitleaks":
-                result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
+                result = self._run_gitleaks_both_scans(
+                    tool, kwargs, auto_approve, remaining
+                )
             else:
-                result = self._run_tool_with_approval(tool, kwargs, auto_approve)
+                result = self._run_tool_with_approval(
+                    tool, kwargs, auto_approve, remaining
+                )
 
             if result is None:
                 self._print_tool_line(tool_name, "SKIPPED", 0, None)
@@ -444,6 +449,7 @@ class ScanOrchestrator:
         tool: ToolWrapper,
         kwargs: dict,
         auto_approve: bool,
+        remaining: int = 0,
     ) -> ToolResult | None:
         """Prompt 'Run <tool>? [y/N]' unless auto_approve is True.
 
@@ -458,14 +464,16 @@ class ScanOrchestrator:
                 return None
             if answer not in ("y", "yes"):
                 return None
-            # Offer to approve all remaining tools
-            try:
-                all_ans = input("Approve all remaining tools? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-            else:
-                if all_ans in ("y", "yes"):
-                    self._auto_approve = True
+            if remaining > 0:
+                try:
+                    all_ans = (
+                        input("Approve all remaining tools? [y/N]: ").strip().lower()
+                    )
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                else:
+                    if all_ans in ("y", "yes"):
+                        self._auto_approve = True
 
         # Extract executor-level kwargs before passing build_command kwargs
         kwargs = dict(kwargs)
@@ -480,6 +488,7 @@ class ScanOrchestrator:
         tool: ToolWrapper,
         kwargs: dict,
         auto_approve: bool,
+        remaining: int = 0,
     ) -> ToolResult | None:
         """Run gitleaks dir + git scans, combine, and return one ToolResult.
 
@@ -494,14 +503,16 @@ class ScanOrchestrator:
                 return None
             if answer not in ("y", "yes"):
                 return None
-            # Offer to approve all remaining tools
-            try:
-                all_ans = input("Approve all remaining tools? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-            else:
-                if all_ans in ("y", "yes"):
-                    self._auto_approve = True
+            if remaining > 0:
+                try:
+                    all_ans = (
+                        input("Approve all remaining tools? [y/N]: ").strip().lower()
+                    )
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                else:
+                    if all_ans in ("y", "yes"):
+                        self._auto_approve = True
 
         base_kwargs = {k: v for k, v in kwargs.items() if k not in ("label", "cwd")}
         label = kwargs.get("label", "output")
@@ -697,7 +708,7 @@ class ScanOrchestrator:
                 t for tools in LANGUAGE_TOOL_MAP.values() for t in tools
             }
 
-            for tool_name in tool_names:
+            for idx, tool_name in enumerate(tool_names):
                 if tool_name in _lang_specific:
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}
                     allowed = {
@@ -737,11 +748,16 @@ class ScanOrchestrator:
                     f"  [dim][*] Running {tool_name} ({repo.name})...[/dim]"
                 )
                 kwargs = self._repo_tool_kwargs(tool_name, repo)
+                remaining = len(tool_names) - idx - 1
 
                 if tool_name == "gitleaks":
-                    result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
+                    result = self._run_gitleaks_both_scans(
+                        tool, kwargs, auto_approve, remaining
+                    )
                 else:
-                    result = self._run_tool_with_approval(tool, kwargs, auto_approve)
+                    result = self._run_tool_with_approval(
+                        tool, kwargs, auto_approve, remaining
+                    )
 
                 if result is None:
                     self._print_tool_line(

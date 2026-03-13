@@ -123,7 +123,7 @@ class DependencyChecker:
                 DepCheck(
                     name=pkg_name,
                     type="package",
-                    required=True,
+                    required=False,
                     installed=installed,
                     version=version,
                     install_hint=f"pip install {pkg_name}" if not installed else None,
