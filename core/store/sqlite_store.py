@@ -589,6 +589,28 @@ class SQLiteStore:
                     tools,
                 )
 
+    def get_tool_meta_keys(
+        self, tool_name: str, sample: int = 200
+    ) -> tuple[int, set[str]]:
+        """Return (total_row_count, union_of_meta_keys) for tool_name."""
+        with self._connect() as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE tool = ?", (tool_name,)
+            ).fetchone()[0]
+            if count == 0:
+                return 0, set()
+            rows = conn.execute(
+                "SELECT meta FROM findings WHERE tool = ? LIMIT ?",
+                (tool_name, sample),
+            ).fetchall()
+        keys: set[str] = set()
+        for row in rows:
+            try:
+                keys.update(json.loads(row[0] or "{}").keys())
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return count, keys
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 

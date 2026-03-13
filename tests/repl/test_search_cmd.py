@@ -296,3 +296,64 @@ def test_search_no_active_project_prints_warning():
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("No active project" in p for p in printed)
+
+
+# ---------------------------------------------------------------------------
+# --show-fields
+# ---------------------------------------------------------------------------
+
+
+def test_show_fields_without_tool_prints_error():
+    repl, kc = _make_repl_and_kc()
+    kc.cmd_search("search", ["--show-fields"])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Error" in p for p in printed)
+
+
+def test_show_fields_with_extra_flag_prints_error():
+    repl, kc = _make_repl_and_kc()
+    kc.cmd_search("search", ["--show-fields", "--tool=gitleaks", "--severity=high"])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Error" in p for p in printed)
+
+
+def test_show_fields_with_value_prints_error():
+    """--show-fields=true is invalid; flag takes no value."""
+    repl, kc = _make_repl_and_kc()
+    kc.cmd_search("search", ["--show-fields=true", "--tool=gitleaks"])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Error" in p for p in printed)
+
+
+def test_show_fields_multi_tool_prints_error():
+    """--tool=a,b is not allowed with --show-fields (single tool only)."""
+    repl, kc = _make_repl_and_kc()
+    kc.cmd_search("search", ["--show-fields", "--tool=gitleaks,semgrep"])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("Error" in p for p in printed)
+
+
+def test_show_fields_no_rows_prints_message():
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store()
+    mock_store.get_tool_meta_keys.return_value = (0, set())
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--show-fields", "--tool=gitleaks"])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    assert any("No findings" in p for p in printed)
+
+
+def test_show_fields_returns_sorted_fields():
+    """With known meta keys + gitleaks normalized config, output is sorted & merged."""
+    repl, kc = _make_repl_and_kc()
+    mock_store = _make_mock_store()
+    mock_store.get_tool_meta_keys.return_value = (5, {"risk_type", "line_number"})
+    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc.cmd_search("search", ["--show-fields", "--tool=gitleaks"])
+    printed = [str(c) for c in repl.console.print.call_args_list]
+    # Must include gitleaks normalized fields AND meta keys, sorted
+    output = " ".join(printed)
+    assert "confidence" in output
+    assert "file_path" in output
+    assert "line_number" in output
+    assert "risk_type" in output
