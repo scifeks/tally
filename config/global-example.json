@@ -2,10 +2,15 @@
   "chat_llm_provider": "ollama",
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
+  "embedding_provider": "ollama_embedding",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen2.5:14b",
-    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "ollama_embedding": {
+    "base_url": "http://localhost:11434",
+    "model": "nomic-embed-text:latest",
     "timeout_seconds": 60
   },
   "claude": {

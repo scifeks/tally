@@ -117,7 +117,6 @@ class OllamaConfig(BaseModel):
 
     base_url: str = "http://localhost:11434"
     model: str
-    embedding_model: str
     timeout_seconds: int = 60
 
     @field_validator("base_url")
@@ -138,13 +137,30 @@ class ClaudeConfig(BaseModel):
     timeout_seconds: int = 60
 
 
+class OllamaEmbeddingConfig(BaseModel):
+    """Ollama embedding model configuration."""
+
+    base_url: str = "http://localhost:11434"
+    model: str = "nomic-embed-text:latest"
+    timeout_seconds: int = 60
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("Ollama URL must start with http:// or https://")
+        return v.rstrip("/")
+
+
 class GlobalConfig(BaseModel):
     """Global application configuration."""
 
     chat_llm_provider: str = "ollama"
     enrichment_llm_provider: str = "ollama"
     report_llm_provider: str = "ollama"
+    embedding_provider: str = "ollama_embedding"
     ollama: OllamaConfig | None = None
     claude: ClaudeConfig | None = None
+    ollama_embedding: OllamaEmbeddingConfig | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)

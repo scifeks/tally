@@ -36,7 +36,7 @@ ollama serve
 
 # 3. Edit global config (set your LLM provider and models)
 cp config/global-example.json config/global.json
-# edit config/global.json — set ollama.model, ollama.embedding_model,
+# edit config/global.json — set ollama.model, ollama_embedding.model,
 # and optionally switch any role to "claude" (requires ANTHROPIC_API_KEY)
 
 # 4. Start Tally — first run launches an interactive tool setup wizard

@@ -174,17 +174,6 @@ class TestComplete:
 
 
 # ---------------------------------------------------------------------------
-# embed
-# ---------------------------------------------------------------------------
-
-
-class TestEmbed:
-    def test_raises_not_implemented(self, adapter: ClaudeAdapter) -> None:
-        with pytest.raises(NotImplementedError):
-            adapter.embed("some text")
-
-
-# ---------------------------------------------------------------------------
 # factory integration
 # ---------------------------------------------------------------------------
 
@@ -196,11 +185,12 @@ def _write_global_config(base_path: Path, overrides: dict | None = None) -> None
         "chat_llm_provider": "claude",
         "enrichment_llm_provider": "ollama",
         "report_llm_provider": "ollama",
+        "embedding_provider": "ollama_embedding",
         "ollama": {
             "base_url": "http://localhost:11434",
             "model": "qwen3:14b",
-            "embedding_model": "nomic-embed-text:latest",
         },
+        "ollama_embedding": {"model": "nomic-embed-text:latest"},
         "claude": {
             "api_key": _API_KEY,
             "model": _MODEL,

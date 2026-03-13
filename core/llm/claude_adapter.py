@@ -113,16 +113,3 @@ class ClaudeAdapter(LLMProvider):
     def complete(self, prompt: str, **kwargs: Any) -> str:
         """Delegate to chat() with a single user message."""
         return self.chat([{"role": "user", "content": prompt}], **kwargs)
-
-    def embed(self, text: str, **kwargs: Any) -> list[float]:
-        """Not supported — Anthropic does not offer an embeddings API.
-
-        Raises:
-            NotImplementedError: Always. Use an Ollama adapter for the 'chat'
-                role when ChromaDB embeddings are required.
-        """
-        raise NotImplementedError(
-            "The Anthropic API does not support text embeddings. "
-            "Set the 'chat' role to an embedding-capable provider "
-            "(e.g. ollama) when ChromaDB is in use."
-        )

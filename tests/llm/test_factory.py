@@ -20,11 +20,12 @@ def _write_global_config(base_path: Path, overrides: dict | None = None) -> None
         "chat_llm_provider": "ollama",
         "enrichment_llm_provider": "ollama",
         "report_llm_provider": "ollama",
+        "embedding_provider": "ollama_embedding",
         "ollama": {
             "base_url": _OLLAMA_URL,
             "model": "qwen3:14b",
-            "embedding_model": "nomic-embed-text:latest",
         },
+        "ollama_embedding": {"model": "nomic-embed-text:latest"},
     }
     if overrides:
         base.update(overrides)
