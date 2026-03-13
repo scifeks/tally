@@ -22,12 +22,10 @@ class OllamaAdapter(LLMProvider):
         self,
         base_url: str,
         model: str,
-        embedding_model: str,
         timeout_seconds: int = 60,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
-        self._embedding_model = embedding_model
         self._timeout = timeout_seconds
 
     # ------------------------------------------------------------------
@@ -59,18 +57,6 @@ class OllamaAdapter(LLMProvider):
     def complete(self, prompt: str, **kwargs: Any) -> str:
         """Delegate to chat() with a single user message."""
         return self.chat([{"role": "user", "content": prompt}], **kwargs)
-
-    def embed(self, text: str, **kwargs: Any) -> list[float]:
-        """POST to /api/embeddings and return the embedding vector."""
-        payload = json.dumps({"model": self._embedding_model, "prompt": text}).encode()
-        req = urllib.request.Request(
-            f"{self._base_url}/api/embeddings",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-            data = json.loads(resp.read().decode())
-        return data["embedding"]
 
 
 # ---------------------------------------------------------------------------

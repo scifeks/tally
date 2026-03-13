@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import urllib.error
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +11,6 @@ from core.llm.ollama_adapter import OllamaAdapter
 
 _URL = "http://localhost:11434"
 _MODEL = "qwen3:14b"
-_EMBED_MODEL = "nomic-embed-text:latest"
 
 
 @pytest.fixture()
@@ -20,7 +18,6 @@ def adapter() -> OllamaAdapter:
     return OllamaAdapter(
         base_url=_URL,
         model=_MODEL,
-        embedding_model=_EMBED_MODEL,
         timeout_seconds=10,
     )
 
@@ -103,38 +100,3 @@ class TestComplete:
             [{"role": "user", "content": "my prompt"}], temperature=0.3
         )
         assert out == "result"
-
-
-# ---------------------------------------------------------------------------
-# embed
-# ---------------------------------------------------------------------------
-
-
-class TestEmbed:
-    def _mock_urlopen(self, vector: list[float]) -> MagicMock:
-        body = json.dumps({"embedding": vector}).encode()
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = body
-        mock_resp.__enter__ = lambda s: s
-        mock_resp.__exit__ = MagicMock(return_value=False)
-        return mock_resp
-
-    def test_returns_float_vector(self, adapter: OllamaAdapter) -> None:
-        vector = [0.1, 0.2, 0.3]
-        with patch("urllib.request.urlopen", return_value=self._mock_urlopen(vector)):
-            result = adapter.embed("hello")
-        assert result == vector
-
-    def test_calls_embeddings_endpoint(self, adapter: OllamaAdapter) -> None:
-        vector = [0.0]
-        with patch(
-            "urllib.request.urlopen", return_value=self._mock_urlopen(vector)
-        ) as mock_open:
-            adapter.embed("text")
-        req = mock_open.call_args[0][0]
-        assert "/api/embeddings" in req.full_url
-
-    def test_error_propagates(self, adapter: OllamaAdapter) -> None:
-        with patch("urllib.request.urlopen", side_effect=OSError("network failure")):
-            with pytest.raises(OSError):
-                adapter.embed("text")

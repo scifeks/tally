@@ -40,7 +40,8 @@ class ConfigManager:
         if not self.global_config_path.exists():
             raise FileNotFoundError(
                 f"Global config not found at {self.global_config_path}. "
-                "Create it with the required fields: ollama.model, ollama.embedding_model."  # noqa: E501
+                "Create it with the required fields: ollama.model, "
+                "ollama_embedding.model."
             )
         with open(self.global_config_path) as f:
             data = json.load(f)

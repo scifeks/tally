@@ -12,6 +12,7 @@ from chromadb.api import ClientAPI
 from chromadb.api.types import Documents, Embeddable, EmbeddingFunction, Embeddings
 
 from core.config.manager import ConfigManager
+from core.embedding import EmbeddingProvider, get_embedding_provider
 from core.llm import LLMProvider, get_llm_provider
 from core.llm.ollama_adapter import get_ollama_models as get_ollama_models  # re-export
 from core.llm.ollama_adapter import (  # re-export
@@ -22,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class _ProviderEmbeddingFn:
-    """ChromaDB EmbeddingFunction wrapper that delegates to an LLMProvider."""
+    """ChromaDB EmbeddingFunction wrapper that delegates to an EmbeddingProvider."""
 
-    def __init__(self, provider: LLMProvider) -> None:
+    def __init__(self, provider: EmbeddingProvider) -> None:
         self._provider = provider
 
     def __call__(self, input: Documents) -> Embeddings:  # noqa: A002
@@ -64,6 +65,7 @@ class RAGEngine:
         project_name: str,
         base_path: str = ".",
         chat_provider: LLMProvider | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         """Initialise the RAG engine for a specific project.
 
@@ -71,6 +73,8 @@ class RAGEngine:
             project_name: Identifier for the current engagement project.
             base_path: Application root directory (contains projects/).
             chat_provider: LLMProvider override; resolved from config if None.
+            embedding_provider: EmbeddingProvider override; resolved from config
+                                if None.
 
         Raises:
             ValueError: If project_name is empty or the resolved project directory
@@ -85,6 +89,9 @@ class RAGEngine:
 
         self.chat_provider: LLMProvider = chat_provider or get_llm_provider(
             "chat", self.base_path
+        )
+        self.embedding_provider: EmbeddingProvider = (
+            embedding_provider or get_embedding_provider(self.base_path)
         )
 
         # Validate project directory
@@ -109,7 +116,9 @@ class RAGEngine:
 
         # Log the embedding model for observability
         config = ConfigManager(str(self.base_path)).global_config
-        embedding_info = config.ollama.embedding_model if config.ollama else "unknown"
+        embedding_info = (
+            config.ollama_embedding.model if config.ollama_embedding else "unknown"
+        )
         logger.info(
             "RAGEngine ready — project=%s  chroma=%s  embedding=%s",
             project_name,
@@ -153,20 +162,23 @@ class RAGEngine:
     def _build_embedding_function(
         self,
     ) -> EmbeddingFunction[Embeddable]:
-        """Return an embedding function backed by the chat provider.
+        """Return an embedding function backed by the embedding provider.
 
         Raises:
             RuntimeError: If the provider is not reachable.
         """
-        if not self.chat_provider.is_available():
-            logger.error("LLM provider not reachable. Start Ollama with: ollama serve")
+        if not self.embedding_provider.is_available():
+            logger.error(
+                "Embedding provider not reachable. Start Ollama with: ollama serve"
+            )
             raise RuntimeError(
-                "LLM provider is not available. Please start it with: ollama serve"
+                "Embedding provider is not available. "
+                "Please start it with: ollama serve"
             )
 
         return cast(
             EmbeddingFunction[Embeddable],
-            _ProviderEmbeddingFn(self.chat_provider),
+            _ProviderEmbeddingFn(self.embedding_provider),
         )
 
     # ------------------------------------------------------------------

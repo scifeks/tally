@@ -33,7 +33,9 @@ that references it.
 | `chat_llm_provider` | string | `"ollama"` | Provider for the `chat` command: `"ollama"` or `"claude"`. |
 | `enrichment_llm_provider` | string | `"ollama"` | Provider for finding enrichment: `"ollama"` or `"claude"`. |
 | `report_llm_provider` | string | `"ollama"` | Provider for report generation: `"ollama"` or `"claude"`. |
-| `ollama` | object | — | Ollama connection settings. Required when any role is set to `"ollama"`. |
+| `embedding_provider` | string | `"ollama_embedding"` | Provider for ChromaDB embeddings. Currently only `"ollama_embedding"` is supported. |
+| `ollama` | object | — | Ollama connection settings. Required when any LLM role is set to `"ollama"`. |
+| `ollama_embedding` | object | — | Ollama embedding settings. Required when `embedding_provider` is `"ollama_embedding"`. |
 | `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"`. |
 | `projects_dir` | string | `"./projects"` | Directory where project workspaces are stored. |
 | `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
@@ -43,9 +45,16 @@ that references it.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `base_url` | string | `"http://localhost:11434"` | Ollama API endpoint. Must start with `http://` or `https://`. |
-| `model` | string | — | Chat model name (e.g. `qwen3:14b`). Must be pulled before use. |
-| `embedding_model` | string | — | Embedding model name (e.g. `nomic-embed-text:latest`). Must be pulled before use. ChromaDB uses this for all vector indexing regardless of which provider handles chat/enrichment/report. |
-| `timeout_seconds` | int | `60` | Request timeout for all Ollama calls. |
+| `model` | string | — | Chat/enrichment/report model name (e.g. `qwen3:14b`). Must be pulled before use. |
+| `timeout_seconds` | int | `60` | Request timeout for all Ollama LLM calls. |
+
+### `ollama_embedding` Block Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `base_url` | string | `"http://localhost:11434"` | Ollama API endpoint for the embedding service. Must start with `http://` or `https://`. |
+| `model` | string | `"nomic-embed-text:latest"` | Embedding model name. Must be pulled before use (`ollama pull nomic-embed-text`). ChromaDB uses this for all vector indexing. |
+| `timeout_seconds` | int | `60` | Request timeout for embedding calls. |
 
 ### `claude` Block Fields
 
@@ -63,10 +72,15 @@ that references it.
   "chat_llm_provider": "ollama",
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
+  "embedding_provider": "ollama_embedding",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
-    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "ollama_embedding": {
+    "base_url": "http://localhost:11434",
+    "model": "nomic-embed-text:latest",
     "timeout_seconds": 60
   },
   "projects_dir": "./projects",
@@ -76,20 +90,24 @@ that references it.
 
 ### Example — Claude for Chat and Reporting, Ollama for Enrichment and Embeddings
 
-ChromaDB requires an embedding model. Ollama must always be configured when
-the `ollama` block is present — even if only used for embeddings. If you want to
-use Claude for chat and reporting while keeping Ollama just for the embedding layer,
-set the enrichment and embedding roles to `"ollama"`:
+ChromaDB requires an embedding model. The `ollama_embedding` block is always
+required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
+`enrichment`, `report`) and the embedding provider are configured independently:
 
 ```json
 {
   "chat_llm_provider": "claude",
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "claude",
+  "embedding_provider": "ollama_embedding",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
-    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "ollama_embedding": {
+    "base_url": "http://localhost:11434",
+    "model": "nomic-embed-text:latest",
     "timeout_seconds": 60
   },
   "claude": {
@@ -108,17 +126,23 @@ environment variable at startup.
 
 ### Example — Ollama on a Remote Host
 
-If Ollama runs on a different host or port, update `base_url` inside the `ollama` block:
+Update `base_url` in both `ollama` and `ollama_embedding` blocks if your
+Ollama instance runs on a different host or port:
 
 ```json
 {
   "chat_llm_provider": "ollama",
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
+  "embedding_provider": "ollama_embedding",
   "ollama": {
     "base_url": "http://192.168.1.50:11434",
     "model": "qwen3:14b",
-    "embedding_model": "nomic-embed-text:latest",
+    "timeout_seconds": 60
+  },
+  "ollama_embedding": {
+    "base_url": "http://192.168.1.50:11434",
+    "model": "nomic-embed-text:latest",
     "timeout_seconds": 60
   },
   "projects_dir": "./projects",

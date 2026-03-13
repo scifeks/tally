@@ -29,8 +29,3 @@ class LLMProvider(ABC):
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         """Generate a response from a list of chat messages."""
         ...
-
-    @abstractmethod
-    def embed(self, text: str, **kwargs: Any) -> list[float]:
-        """Return a float embedding vector for the given text."""
-        ...

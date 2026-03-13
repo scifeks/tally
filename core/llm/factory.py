@@ -35,7 +35,6 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
         return OllamaAdapter(
             base_url=config.ollama.base_url,
             model=config.ollama.model,
-            embedding_model=config.ollama.embedding_model,
             timeout_seconds=config.ollama.timeout_seconds,
         )
     if provider_name == "claude":
