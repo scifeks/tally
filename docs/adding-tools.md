@@ -170,7 +170,7 @@ These fields are used across all tools:
 |---|---|---|
 | `tool` | string | Tool name (from `ToolResult.tool_name`) |
 | `profile` | string | Profile or repo name passed during ingestion |
-| `finding_type` | string | Type of finding (e.g. `open_port`, `vulnerability`, `secret`) |
+| `finding_type` | string | Type of finding (e.g. `informational`, `vulnerability`, `secret`) |
 | `severity` | string | Severity level: `critical`, `high`, `medium`, `low` |
 | `timestamp` | string | ISO 8601 timestamp of the scan |
 

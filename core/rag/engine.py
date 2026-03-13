@@ -65,7 +65,7 @@ class RAGEngine:
         - profile (str)      – nmap profile / repo name (optional)
         - timestamp (str)    – ISO-8601 UTC
         - severity (str)     – low/medium/high/critical (optional)
-        - finding_type (str) – vulnerability/host/port/secret/etc.
+        - finding_type (str) – vulnerability/informational/secret/dependency/etc.
         - source_file (str)  – path to raw output file
     """
 
@@ -124,6 +124,7 @@ class RAGEngine:
         self._collection: chromadb.Collection | None = None
 
         self._init_chromadb()
+        self._init_sqlite()
 
         logger.info(
             "RAGEngine ready — project=%s  chroma=%s  embedding=%s",
@@ -135,6 +136,16 @@ class RAGEngine:
     # ------------------------------------------------------------------
     # Internal initialisation
     # ------------------------------------------------------------------
+
+    def _init_sqlite(self) -> None:
+        """Initialise SQLite schema for this project (creates tables if absent)."""
+        try:
+            from core.store import SQLiteStore
+
+            store = SQLiteStore(self.base_path, self.project_name)
+            store._init_schema()
+        except Exception as exc:
+            logger.warning("SQLite schema init failed: %s", exc)
 
     def _build_chroma_client(self) -> ClientAPI:
         """Return a configured ChromaDB client (PersistentClient by default)."""

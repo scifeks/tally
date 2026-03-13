@@ -445,6 +445,7 @@ class ProjectManager:
         dirs = [
             project_root / "config" / "endpoints",
             project_root / "chroma_db",
+            project_root / "sqlite",
             project_root / "tool_outputs" / "nmap",
             project_root / "tool_outputs" / "semgrep",
             project_root / "tool_outputs" / "osv-scanner",

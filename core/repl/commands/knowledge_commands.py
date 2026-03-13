@@ -1,4 +1,7 @@
-"""Knowledge base commands: search, chat, stats."""
+"""
+Knowledge base commands: search, chat, stats.
+todo: Refactor, this is a mess
+"""
 
 from __future__ import annotations
 
@@ -23,6 +26,16 @@ def _extract_types(meta: dict) -> str:
         if meta.get(field)
     ]
     return ", ".join(active)
+
+
+def _render_finding_type(meta: dict) -> str:
+    """Render finding_type for display: join list, fall back to type_* booleans."""
+    ft = meta.get("finding_type")
+    if isinstance(ft, list):
+        return ", ".join(ft)
+    if isinstance(ft, str) and ft:
+        return ft
+    return _extract_types(meta)
 
 
 _SEVERITY_COLORS = {
@@ -70,7 +83,7 @@ def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> T
             line_str,
             meta.get("tool", ""),
             meta.get("domain", ""),
-            _extract_types(meta),
+            _render_finding_type(meta),
             _color_severity(sev),
             meta.get("confidence", ""),
             meta.get("risk_type", ""),
@@ -111,7 +124,7 @@ def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
         row: list[str] = [
             meta.get("rule_id", ""),
             location,
-            _extract_types(meta),
+            _render_finding_type(meta),
             meta.get("confidence", ""),
             cwe_owasp,
         ]
@@ -138,8 +151,10 @@ def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     for r in results:
         meta = r["metadata"]
         sev = meta.get("severity", "")
-        cwe_id = meta.get("cwe_id")
-        cwe_str = f"CWE-{cwe_id}" if cwe_id is not None else ""
+        cwe_list = meta.get("cwe") or []
+        cwe_str = (
+            ", ".join(cwe_list) if isinstance(cwe_list, list) else str(cwe_list or "")
+        )
         row: list[str] = [
             meta.get("risk_type", ""),
             meta.get("method", ""),
@@ -171,13 +186,20 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     for r in results:
         meta = r["metadata"]
         sev = meta.get("severity", "")
-        aliases = meta.get("aliases", "")
+        aliases_raw = meta.get("aliases")
+        aliases_str = (
+            ", ".join(aliases_raw)
+            if isinstance(aliases_raw, list)
+            else (aliases_raw or "")
+        )
         vuln_id = meta.get("vulnerability_id", "")
-        ids = ", ".join(filter(None, [vuln_id, aliases])) if aliases else vuln_id
+        ids = (
+            ", ".join(filter(None, [vuln_id, aliases_str])) if aliases_str else vuln_id
+        )
         row: list[str] = [
             meta.get("source_type", ""),
-            meta.get("lockfile", meta.get("source_file", "")),
-            _extract_types(meta),
+            meta.get("file_path") or meta.get("source_file", ""),
+            _render_finding_type(meta),
             _color_severity(sev),
             "probable",
             ids,
@@ -193,7 +215,6 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
     """Build the generic findings Rich table."""
     table = Table(show_header=True, header_style="bold")
-    table.add_column("Finding", style="white", max_width=50)
     table.add_column("Tool", style="cyan", no_wrap=True)
     table.add_column("Domain", style="white", no_wrap=True)
     table.add_column("Type", style="green")
@@ -205,13 +226,11 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
 
     for r in results:
         meta = r["metadata"]
-        doc_text = r["document"][:80].replace("\n", " ") if r["document"] else ""
         sev = meta.get("severity", "")
         row: list[str] = [
-            doc_text,
             meta.get("tool", ""),
             meta.get("domain", ""),
-            _extract_types(meta),
+            _render_finding_type(meta),
             _color_severity(sev),
             meta.get("confidence", ""),
             meta.get("risk_type", ""),
@@ -250,22 +269,28 @@ class KnowledgeCommands:
             )
             return
 
-        from core.rag.search_parser import SearchValidationError, parse_search_command
+        from core.store.sqlite_store import (
+            SearchValidationError,
+            parse_sqlite_search_command,
+        )
+        from core.tools.registry import tool_registry
 
-        query_engine = self._get_query_engine()
-        if query_engine is None:
+        sqlite_store = self._get_sqlite_store()
+        if sqlite_store is None:
             return
 
+        known_tools: frozenset[str] = frozenset(tool_registry.list_tool_names())
+
         try:
-            query = parse_search_command(args, query_engine._known_tools)
+            filters = parse_sqlite_search_command(args, known_tools)
         except SearchValidationError as exc:
             self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
 
         try:
             with self.repl.console.status("Searching knowledge base..."):
-                results = query_engine.search(query=query)
-        except SearchValidationError as exc:
+                results = sqlite_store.search(filters)
+        except Exception as exc:
             self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
 
@@ -273,7 +298,7 @@ class KnowledgeCommands:
             self.repl.console.print("[yellow]No findings matched your search.[/yellow]")
             return
 
-        is_semantic = results[0]["distance"] is not None
+        is_semantic = False  # SQLite results are never semantic
 
         if _all_from_tool(results, "gitleaks"):
             table = _build_gitleaks_table(results, is_semantic)
@@ -288,12 +313,14 @@ class KnowledgeCommands:
 
         self.repl.console.print(table)
 
-        # Pagination hint — use pre-parsed query directly, no re-parse needed
+        # Pagination hint
         shown = len(results)
-        if query.page > 1 or shown == query.page_size:
-            page_hint = f"Page {query.page} · {shown} results"
-            if shown == query.page_size:
-                page_hint += f"  [dim]Use --page={query.page + 1} for next page[/dim]"
+        page = filters.get("page", 1)
+        page_size = filters.get("page_size", 200)
+        if page > 1 or shown == page_size:
+            page_hint = f"Page {page} · {shown} results"
+            if shown == page_size:
+                page_hint += f"  [dim]Use --page={page + 1} for next page[/dim]"
             self.repl.console.print(f"[dim]{page_hint}[/dim]")
 
     def cmd_chat(self, _cmd: str, args: list[str]) -> None:
@@ -393,3 +420,16 @@ class KnowledgeCommands:
         if rag_engine is None:
             return None
         return QueryEngine(rag_engine)
+
+    def _get_sqlite_store(self):  # type: ignore[return]
+        """Return a SQLiteStore for the active project, or None on error."""
+        from core.store.sqlite_store import SQLiteStore
+
+        assert self.repl.active_project is not None
+        try:
+            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
+            store._init_schema()
+            return store
+        except Exception as exc:
+            self.repl.console.print(f"[red]SQLite error:[/red] {exc}")
+            return None

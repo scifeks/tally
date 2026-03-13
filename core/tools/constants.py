@@ -20,6 +20,7 @@ FINDING_TYPES: set[str] = {
     "misconfiguration",
     "exposure",
     "dependency",
+    "informational",
 }
 
 SEVERITY_LEVELS: set[str] = {

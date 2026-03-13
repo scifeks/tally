@@ -1,9 +1,11 @@
 """LLM-based enrichment pipeline for ChromaDB security findings."""
 
+from __future__ import annotations
+
 import json
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import ollama
 from rich.console import Console
@@ -16,6 +18,9 @@ from core.tools.constants import (
 )
 
 from .engine import RAGEngine
+
+if TYPE_CHECKING:
+    from core.store.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +75,21 @@ class EnrichmentPipeline:
 
     Processes one finding at a time, sequentially and synchronously.
     Skips findings already marked ``enriched: True``.
+
+    todo: Refactor this, it's way too tightly coupled.
     """
 
-    def __init__(self, rag_engine: RAGEngine, console: Console | None = None) -> None:
+    def __init__(
+        self,
+        rag_engine: RAGEngine,
+        console: Console | None = None,
+        sqlite_store: SQLiteStore | None = None,
+        run_id: int | None = None,
+    ) -> None:
         self._engine = rag_engine
         self._console = console
+        self._sqlite_store = sqlite_store
+        self._run_id = run_id
 
     def enrich(self, ids: list[str]) -> None:
         """Enrich a list of document IDs in place.
@@ -106,6 +121,26 @@ class EnrichmentPipeline:
                 f" {enriched_count}/{total} findings enriched.[/dim]"
             )
             self._console.print(msg)
+
+        self._sqlite_upsert(ids)
+
+    def _sqlite_upsert(self, ids: list[str]) -> None:
+        """Write enriched findings to SQLite after enrich() completes.
+
+        Failures are logged and never propagate to the caller.
+        """
+        if self._sqlite_store is None or self._run_id is None:
+            return
+        try:
+            findings: list[dict] = []
+            for doc_id in ids:
+                doc = self._engine.get_document_by_id(doc_id)
+                if doc is not None:
+                    findings.append(doc["metadata"])
+            if findings:
+                self._sqlite_store.upsert_findings(self._run_id, findings)
+        except Exception as exc:
+            logger.error("SQLite upsert failed after enrichment: %s", exc)
 
     def _enrich_one(self, doc_id: str) -> int:
         """Enrich a single document. Returns 1 if processed, 0 if skipped/failed."""

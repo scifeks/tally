@@ -354,7 +354,7 @@ class TestPipAuditIngestor:
         for meta in all_docs["metadatas"]:
             assert meta["tool"] == "pip-audit"
             assert meta["profile"] == "test-repo"
-            assert meta["finding_type"] == "dependency_vulnerability"
+            assert meta["finding_type"] == '["dependency"]'
             vuln_id = meta["vulnerability_id"]
             assert vuln_id in fixture_vulns, f"Unknown vuln_id in metadata: {vuln_id}"
             expected = fixture_vulns[vuln_id]
