@@ -55,7 +55,7 @@ class OSVScannerWrapper(ToolWrapper):
         recursive: bool = kwargs.get("recursive", True)
 
         # --format json sends findings as JSON to stdout; executor captures it
-        cmd = ["osv-scanner", "--format", "json"]
+        cmd = ["osv-scanner", "--format", "json", "--allow-no-lockfiles"]
         if recursive:
             cmd.append("--recursive")
         cmd.append(repo_path)

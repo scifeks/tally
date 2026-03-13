@@ -1,3 +1,4 @@
+import logging
 import shlex
 import subprocess
 from datetime import UTC, datetime
@@ -6,6 +7,8 @@ from time import perf_counter
 from typing import Any
 
 from .base import ToolResult, ToolWrapper
+
+_log = logging.getLogger(__name__)
 
 # Tokens that are unambiguously shell operators
 _METACHAR_TOKENS = {"&&", "||", ";", ">", ">>", "<", "<<", "|"}
@@ -83,12 +86,14 @@ class ToolExecutor:
         try:
             cmd = tool.build_command(**kwargs)
         except Exception as exc:
+            _log.error("Tool %s: build_command error: %s", tool.name, exc)
             return self._failure(tool.name, timestamp, f"build_command error: {exc}")
 
         # 2. Basic safety check (no shell=True, but guard against obvious injections)
         try:
             sanitize_command(cmd)
         except ValueError as exc:
+            _log.error("Tool %s: command sanitization failed: %s", tool.name, exc)
             return self._failure(tool.name, timestamp, str(exc))
 
         # 3. Human approval gate
@@ -124,9 +129,11 @@ class ToolExecutor:
             )
         except FileNotFoundError:
             print("✗ Failed  (command not found)")
+            _log.error("Tool %s: command not found: %s", tool.name, cmd[0])
             return self._failure(tool.name, timestamp, f"Command not found: {cmd[0]!r}")
         except PermissionError:
             print("✗ Failed  (permission denied)")
+            _log.error("Tool %s: permission denied: %s", tool.name, cmd[0])
             return self._failure(tool.name, timestamp, f"Permission denied: {cmd[0]!r}")
 
         duration = round(perf_counter() - start, 3)
@@ -185,6 +192,9 @@ class ToolExecutor:
                         )
                     except (FileNotFoundError, PermissionError):
                         print("✗ Failed  (elevated privileges not available)")
+                        _log.error(
+                            "Tool %s: elevated privileges unavailable", tool.name
+                        )
                         return self._failure(
                             tool.name,
                             timestamp,
@@ -193,6 +203,7 @@ class ToolExecutor:
                         )
                 except PermissionError:
                     print("✗ Failed  (permission denied)")
+                    _log.error("Tool %s: permission denied running sudo", tool.name)
                     return self._failure(
                         tool.name, timestamp, "Permission denied running sudo"
                     )
@@ -220,10 +231,17 @@ class ToolExecutor:
         try:
             parsed = tool.parse_output(combined, output_files)
         except Exception:
-            pass
+            _log.exception("Tool %s: parse_output raised an exception", tool.name)
 
         status = "✓ Complete" if success else "✗ Failed "
         print(f"{status} (exit {proc.returncode}, {duration}s)")
+        if not success and proc.stderr:
+            _log.error(
+                "Tool %s exited %d. stderr: %s",
+                tool.name,
+                proc.returncode,
+                proc.stderr[:2000],
+            )
 
         return ToolResult(
             tool_name=tool.name,

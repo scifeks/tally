@@ -1,5 +1,6 @@
 """Interactive REPL shell for tally web app security auditing."""
 
+import logging
 import shlex
 from pathlib import Path
 
@@ -25,6 +26,8 @@ from core.repl.commands import (
 from core.startup.checker import print_installed_system_tools
 from core.tools.constants import TOOL_DOMAIN_MAP
 from core.tools.registry import print_discovery_summary
+
+_log = logging.getLogger(__name__)
 
 _VERSION = "1.0"
 
@@ -480,6 +483,7 @@ class REPL:
         except EOFError:
             raise
         except Exception as exc:
+            _log.exception("Command %r raised an unhandled exception", cmd)
             self.console.print(f"[red]Error:[/red] {exc}")
 
     # ------------------------------------------------------------------

@@ -40,13 +40,25 @@ if __name__ == "__main__":
     # --- logging setup (first thing after attestation, before any module does work) ---
     _logs_dir = Path("logs")
     _logs_dir.mkdir(exist_ok=True)
-    logging.basicConfig(
-        filename=_logs_dir / f"{date.today()}.log",
-        level=logging.DEBUG,
-        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    _log_fmt = logging.Formatter(
+        "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        encoding="utf-8",
     )
+
+    _main_handler = logging.FileHandler(
+        _logs_dir / f"{date.today()}.log", encoding="utf-8"
+    )
+    _main_handler.setLevel(logging.DEBUG)
+    _main_handler.addFilter(lambda r: r.levelno < logging.ERROR)
+    _main_handler.setFormatter(_log_fmt)
+
+    _err_handler = logging.FileHandler(
+        _logs_dir / f"errors-{date.today()}.log", encoding="utf-8"
+    )
+    _err_handler.setLevel(logging.ERROR)
+    _err_handler.setFormatter(_log_fmt)
+
+    logging.basicConfig(level=logging.DEBUG, handlers=[_main_handler, _err_handler])
     # ---------------------------------------------------------------
 
     parser = argparse.ArgumentParser(description="Tally security auditing REPL")

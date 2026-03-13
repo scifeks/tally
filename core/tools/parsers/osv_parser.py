@@ -37,7 +37,7 @@ def parse_osv_json_string(json_string: str) -> dict[str, Any]:
 
 
 def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
-    results = data.get("results", [])
+    results = data.get("results") or []
     vulnerabilities: list[dict[str, Any]] = []
     packages_scanned = 0
     ecosystems: set = set()
