@@ -105,6 +105,7 @@ _HELP_REGISTRY = [
     # Tools
     ("tool", None, None, "Tools"),
     ("tool", "tool add", None, "Add a tool to the active configuration"),
+    ("tool", "tool add", "--project=<name>", "Add or override a tool for a project"),
     (
         "tool",
         "tool edit",
@@ -113,11 +114,24 @@ _HELP_REGISTRY = [
     ),
     (
         "tool",
+        "tool edit",
+        "<name> --project=<name>",
+        "Edit a project-level tool override  [dim]required[/dim]",
+    ),
+    (
+        "tool",
         "tool remove",
         "<name>",
         "Remove a tool from the configuration  [dim]required[/dim]",
     ),
+    (
+        "tool",
+        "tool remove",
+        "<name> --project=<name>",
+        "Remove a project-level tool override  [dim]required[/dim]",
+    ),
     ("tool", "tool list", None, "List all configured tools and their status"),
+    ("tool", "tool list", "--project=<name>", "List project-level tool overrides"),
     # Knowledge Base
     ("knowledge", None, None, "Knowledge Base"),
     ("knowledge", "chat", "<message>", "RAG-augmented chat with the LLM"),

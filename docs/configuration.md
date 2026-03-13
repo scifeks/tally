@@ -195,8 +195,9 @@ Stores the list of repositories configured for the project.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Short identifier used in commands (e.g. `api-server`). |
-| `path` | string | no | Absolute filesystem path to the repository on the host. Required for locally-executed tools. |
-| `docker_path` | string | no | Mount path for the repository inside Docker containers. Required when any tool runs in Docker mode. At least one of `path` or `docker_path` must be set. |
+| `path` | string | yes | Absolute filesystem path to the repository on the host. Required in all modes — used for language detection and locally-executed tools. |
+| `docker_path` | string | no | Mount path for the repository inside Docker containers. Set when any tool runs in Docker mode. |
+| `container_name` | string | yes (Docker) | Name of the running Docker container (as shown by `docker ps`). Required when `docker_path` is set. |
 | `languages` | array of string | yes | Programming languages in the repo (e.g. `["python", "javascript"]`). Used to select SCA tools. |
 | `base_urls` | array of string | no | API base URLs for ZAP scanning (e.g. `["http://localhost:8080"]`). Empty list disables ZAP for this repo. |
 
@@ -291,6 +292,39 @@ Configures API endpoint details for ZAP scanning of a specific repository. If th
   }
 }
 ```
+
+---
+
+### commands.json (project-level overrides)
+
+**File:** `projects/<name>/config/commands.json`
+**Created:** When `tool add --project=<name>` is first run for the project.
+
+Each entry in this file fully replaces the global `config/commands.json` entry for
+the same tool name when scans run against this project. Tools not listed here
+continue to use the global configuration.
+
+The structure mirrors global `config/commands.json` exactly. See the
+[Tool Configuration](#tool-configuration) section below for field definitions.
+
+#### Example
+
+```json
+{
+  "semgrep": {
+    "type": "repo",
+    "location": "docker",
+    "container": {
+      "name": "semgrep-project-container",
+      "tool_path": "/usr/local/bin/semgrep"
+    }
+  }
+}
+```
+
+In this example, when a scan runs against the project, semgrep uses a
+project-specific Docker container instead of the globally configured one.
+All other tools use the global config.
 
 ---
 

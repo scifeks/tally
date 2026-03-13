@@ -117,6 +117,7 @@ class ScanOrchestrator:
         self._sqlite_store = sqlite_store
         self._run_id = run_id
         self.console = Console()
+        self._auto_approve: bool = False
 
         from core.config.manager import ConfigManager
 
@@ -449,7 +450,7 @@ class ScanOrchestrator:
         Returns:
             ToolResult on execution, None if user declines.
         """
-        if not auto_approve:
+        if not auto_approve and not self._auto_approve:
             try:
                 answer = input(f"Run {tool.name}? [y/N]: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
@@ -457,6 +458,14 @@ class ScanOrchestrator:
                 return None
             if answer not in ("y", "yes"):
                 return None
+            # Offer to approve all remaining tools
+            try:
+                all_ans = input("Approve all remaining tools? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+            else:
+                if all_ans in ("y", "yes"):
+                    self._auto_approve = True
 
         # Extract executor-level kwargs before passing build_command kwargs
         kwargs = dict(kwargs)
@@ -477,7 +486,7 @@ class ScanOrchestrator:
         Prompts once for approval (if not auto_approve), then runs both scan
         types with auto_approve=True.
         """
-        if not auto_approve:
+        if not auto_approve and not self._auto_approve:
             try:
                 answer = input(f"Run {tool.name} (dir + git)? [y/N]: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
@@ -485,6 +494,14 @@ class ScanOrchestrator:
                 return None
             if answer not in ("y", "yes"):
                 return None
+            # Offer to approve all remaining tools
+            try:
+                all_ans = input("Approve all remaining tools? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+            else:
+                if all_ans in ("y", "yes"):
+                    self._auto_approve = True
 
         base_kwargs = {k: v for k, v in kwargs.items() if k not in ("label", "cwd")}
         label = kwargs.get("label", "output")

@@ -99,19 +99,43 @@ A repository represents a codebase to scan. Add one with:
 [acme-security-audit]> repo add
 ```
 
-You are prompted for:
+Tally first asks for the execution mode, then collects the appropriate paths.
+
+**Local mode** — the tool runs directly on the host:
+
 - **Name** — a short identifier (e.g. `api-server`)
-- **Path** — absolute filesystem path to the repository
-- **Languages** — comma-separated (e.g. `python,javascript`)
+- **Mode** — `local` (default) or `docker`
+- **Local path** — absolute filesystem path on the host (required in all modes)
+- **Languages** — comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 
 ```
 [acme-security-audit]> repo add
-Repository name: api-server
-Path: /home/user/projects/acme/api
-Languages (comma-separated): python
-Base URLs (comma-separated, optional):
-✓ Repository added: api-server
+Repository #1:
+  Name: api-server
+  Type: api
+  Mode [local/docker] [local]:
+  Local path: /home/user/projects/acme/api
+  Languages (detected python) [python]:
+  Base URLs (comma-separated, optional):
+✓ Repository 'api-server' added to project 'acme-security-audit'
+```
+
+**Docker mode** — the tool runs via `docker exec` inside a running container.
+A local path is still required so Tally can detect languages and run local tools:
+
+```
+[acme-security-audit]> repo add
+Repository #1:
+  Name: api-server
+  Type: api
+  Mode [local/docker] [local]: docker
+  Docker container name: semgrep-container
+  Docker mount point (path inside container): /mnt/api
+  Local path (required for language detection and local tool execution): /home/user/projects/acme/api
+  Languages (detected python) [python]:
+  Base URLs (comma-separated, optional):
+✓ Repository 'api-server' added to project 'acme-security-audit'
 ```
 
 View configured repositories:
@@ -128,6 +152,9 @@ Edit or remove a repository:
 [acme-security-audit]> repo edit api-server
 [acme-security-audit]> repo delete api-server
 ```
+
+When editing, Tally pre-fills current values — press Enter to keep them. Switching
+from Docker mode to local mode automatically clears the Docker fields.
 
 ---
 
@@ -166,6 +193,46 @@ Re-runs the configuration interview for the named tool, pre-filling current valu
 ```
 
 Removes the tool from `config/commands.json`. Tally asks for confirmation before deleting.
+
+### Per-Project Tool Overrides
+
+Global tool configuration in `config/commands.json` applies to all projects. If a specific project needs a different binary path, Docker container, or other configuration for a tool, you can create a project-level override without affecting the global default.
+
+Project-level overrides are stored in `projects/<name>/config/commands.json` and fully replace the global entry for the named tool whenever a scan runs against that project. Tools not listed in the project config continue to use the global config.
+
+**Requires an active project** (`project add` or `project switch <name>`).
+
+#### List project-level overrides
+
+```
+[acme-security-audit]> tool list --project=acme-security-audit
+```
+
+Shows only the overrides configured at the project level. If none exist, prints a message saying so.
+
+#### Add a project-level override
+
+```
+[acme-security-audit]> tool add --project=acme-security-audit
+```
+
+Runs the same interactive interview as the global `tool add`. If the tool is already configured globally, Tally warns you that you are creating a project-level override before proceeding.
+
+#### Edit a project-level override
+
+```
+[acme-security-audit]> tool edit semgrep --project=acme-security-audit
+```
+
+Re-runs the configuration interview for the named override, pre-filling the current project-level values. Does not fall back to the global config.
+
+#### Remove a project-level override
+
+```
+[acme-security-audit]> tool remove semgrep --project=acme-security-audit
+```
+
+Removes the project-level override. The tool reverts to the global configuration. Tally asks for confirmation before deleting.
 
 ---
 
