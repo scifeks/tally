@@ -1,13 +1,14 @@
 """Semantic search and RAG-augmented chat over a project's ChromaDB collection."""
 
+from __future__ import annotations
+
 import logging
 from typing import Any
 
-import ollama
-
 from core.config.manager import ConfigManager
+from core.llm import LLMProvider
 
-from .engine import RAGEngine, verify_ollama_available
+from .engine import RAGEngine
 from .search_parser import SearchQuery, parse_search_query
 
 logger = logging.getLogger(__name__)
@@ -32,19 +33,17 @@ class QueryEngine:
     def __init__(
         self,
         rag_engine: RAGEngine,
-        llm_model: str | None = None,
-        ollama_base_url: str | None = None,
+        llm_provider: LLMProvider | None = None,
     ) -> None:
         """Initialise the query engine.
 
         Args:
-            rag_engine: Initialised RAGEngine for the current project.
-            llm_model: Ollama chat model override; falls back to rag_engine default.
-            ollama_base_url: Ollama API URL override; falls back to rag_engine default.
+            rag_engine:   Initialised RAGEngine for the current project.
+            llm_provider: LLMProvider override; falls back to the engine's
+                          chat_provider if None.
         """
         self._engine = rag_engine
-        self.llm_model = llm_model or rag_engine.llm_model
-        self.ollama_base_url = ollama_base_url or rag_engine.ollama_base_url
+        self._provider: LLMProvider = llm_provider or rag_engine.chat_provider
 
         # Load known tool names from commands.json at runtime — no hardcoded list.
         config_manager = ConfigManager(str(rag_engine.base_path))
@@ -153,7 +152,7 @@ class QueryEngine:
         if not message.strip():
             return "Please provide a message."
 
-        if not verify_ollama_available(self.ollama_base_url):
+        if not self._provider.is_available():
             return "Cannot connect to Ollama. Is it running? (ollama serve)"
 
         results = self.search(message, n_results=n_context)
@@ -172,23 +171,11 @@ class QueryEngine:
         system_prompt = _SYSTEM_PROMPT.format(context=context)
 
         try:
-            client = ollama.Client(host=self.ollama_base_url)
-            response = client.chat(
-                model=self.llm_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": message},
-                ],
-                options={"temperature": 0.7, "num_predict": 2000},
-            )
-            # Support both attribute access (0.2.x+) and dict access (0.1.x)
-            msg = (
-                response.message
-                if hasattr(response, "message")
-                else response["message"]
-            )
-            content = msg.content if hasattr(msg, "content") else msg["content"]
-            return content or ""
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message},
+            ]
+            return self._provider.chat(messages, temperature=0.7, num_predict=2000)
         except Exception as exc:
             logger.error("LLM chat failed: %s", exc)
             return f"LLM error: {exc}"
