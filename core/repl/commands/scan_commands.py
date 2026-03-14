@@ -901,6 +901,7 @@ class ScanCommands:
             sqlite_store=sqlite_store,  # type: ignore[arg-type]
             run_id=run_id,
             factory=ToolWrapperFactory(),
+            console=self.repl.console,
         )
 
     def _export_summary(self, summary, export_path: str) -> None:

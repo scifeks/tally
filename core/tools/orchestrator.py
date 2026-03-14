@@ -7,16 +7,16 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
-from rich.console import Console
-from rich.table import Table
-
 from core.tools.base import ToolResult
+from core.tools.display import OrchestratorDisplay, ToolDisplayRow
 from core.tools.executor import ToolExecutor
 from core.tools.factory import ToolWrapperFactory
 from core.tools.interface import ExecutionContext, ToolInterface
 from core.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
+    from rich.console import Console
+
     from core.store.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
@@ -111,6 +111,7 @@ class ScanOrchestrator:
         sqlite_store: SQLiteStore | None = None,
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
+        console: Console | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -118,7 +119,7 @@ class ScanOrchestrator:
         self.rag_engine = rag_engine
         self._sqlite_store = sqlite_store
         self._run_id = run_id
-        self.console = Console()
+        self.display = OrchestratorDisplay(console=console)
         self._auto_approve: bool = False
         self._factory = factory or ToolWrapperFactory()
 
@@ -147,15 +148,14 @@ class ScanOrchestrator:
         total_run = total_skipped = total_failed = total_ingested = 0
         merged_fbt: dict[str, int] = {}
 
-        self.console.print(f"\n[bold cyan]Full Scan:[/bold cyan] {self.project_name}")
-        self.console.print("─" * 50)
+        self.display.print_scan_header(f"Full Scan: {self.project_name}")
 
         for segment in SEGMENT_ORDER:
             if segment in exclude_segments:
-                self.console.print(f"[dim]Skipping segment: {segment}[/dim]")
+                self.display.print_status(f"[dim]Skipping segment: {segment}[/dim]")
                 continue
 
-            self.console.print(f"\n[bold yellow]{segment.upper()}[/bold yellow]")
+            self.display.print_segment_header(segment)
             seg_summary = self.run_segment(segment, auto_approve=auto_approve)
 
             all_results.extend(seg_summary.results)
@@ -167,7 +167,17 @@ class ScanOrchestrator:
                 merged_fbt[tool_name] = merged_fbt.get(tool_name, 0) + count
 
         duration = round(perf_counter() - start, 1)
-        self._print_summary_table(all_results, merged_fbt)
+        rows = [
+            ToolDisplayRow(
+                tool_name=r.tool_name,
+                success=r.success,
+                skipped=False,
+                finding_count=merged_fbt.get(r.tool_name, 0),
+                duration_seconds=r.duration_seconds,
+            )
+            for r in all_results
+        ]
+        self.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -178,7 +188,13 @@ class ScanOrchestrator:
             findings_ingested=total_ingested,
             findings_by_tool=merged_fbt,
         )
-        self._print_final_line(summary)
+        self.display.print_final_line(
+            run=summary.total_tools_run,
+            failed=summary.total_tools_failed,
+            skipped=summary.total_tools_skipped,
+            ingested=summary.findings_ingested,
+            duration=summary.duration_seconds,
+        )
         return summary
 
     def run_segment(
@@ -272,9 +288,7 @@ class ScanOrchestrator:
         ordered_tools = [t for t in _REPO_TOOL_ORDER if t in tool_set]
 
         lang_str = ", ".join(repo.languages) if repo.languages else "unknown"
-        self.console.print(f"\n[bold cyan]Repo Scan:[/bold cyan] {repo.name}")
-        self.console.print(f"Languages: {lang_str}")
-        self.console.print(f"Tools: {', '.join(ordered_tools)}\n")
+        self.display.print_repo_scan_header(repo.name, lang_str, ordered_tools)
 
         start = perf_counter()
         results: list[ToolResult] = []
@@ -284,8 +298,8 @@ class ScanOrchestrator:
         for idx, tool_name in enumerate(ordered_tools):
             config = self.registry.get_tool_config(tool_name)
             if config is None:
-                self.console.print(
-                    f"  [dim]- {tool_name} | SKIPPED (not registered)[/dim]"
+                self.display.print_tool_line(
+                    ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
                 )
                 total_skipped += 1
                 continue
@@ -294,33 +308,37 @@ class ScanOrchestrator:
                 tool: Any = self._factory.create(tool_name, config)
             except Exception as exc:
                 logger.warning("Factory failed for %r: %s", tool_name, exc)
-                self.console.print(
-                    f"  [dim]- {tool_name} | SKIPPED (factory error)[/dim]"
+                self.display.print_tool_line(
+                    ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
                 )
                 total_skipped += 1
                 continue
 
             if tool.requires_base_urls and not repo.base_urls:
-                self.console.print(
-                    f"  [dim]- {tool_name} | SKIPPED (no base_urls configured)[/dim]"
+                self.display.print_tool_line(
+                    ToolDisplayRow(
+                        tool_name, False, True, 0, 0.0, "no base_urls configured"
+                    )
                 )
                 total_skipped += 1
                 continue
 
             if not tool.check_available():
-                self.console.print(
-                    f"  [dim]- {tool_name} | SKIPPED (not installed)[/dim]"
+                self.display.print_tool_line(
+                    ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
                 )
                 total_skipped += 1
                 continue
 
-            self.console.print(f"  [dim][*] Running {tool_name}...[/dim]")
+            self.display.print_running(tool_name)
             context = self._make_context(repo, config)
             remaining = len(ordered_tools) - idx - 1
             result = self._execute_tool_passes(tool, context, auto_approve, remaining)
 
             if result is None:
-                self._print_tool_line(tool_name, "SKIPPED", 0, None)
+                self.display.print_tool_line(
+                    ToolDisplayRow(tool_name, False, True, 0, 0.0)
+                )
                 total_skipped += 1
             else:
                 result = self._normalize_success(result)
@@ -331,17 +349,33 @@ class ScanOrchestrator:
                 )
                 if result.success:
                     total_run += 1
-                    self._print_tool_line(
-                        tool_name, "pass", findings, result.duration_seconds
+                    self.display.print_tool_line(
+                        ToolDisplayRow(
+                            tool_name, True, False, findings, result.duration_seconds
+                        )
                     )
                 else:
                     total_failed += 1
-                    self._print_tool_line(tool_name, "fail", 0, result.duration_seconds)
+                    self.display.print_tool_line(
+                        ToolDisplayRow(
+                            tool_name, False, False, 0, result.duration_seconds
+                        )
+                    )
 
         duration = round(perf_counter() - start, 1)
         ingested = self._batch_ingest(results, profile=repo.name)
 
-        self._print_summary_table(results, findings_by_tool)
+        rows = [
+            ToolDisplayRow(
+                tool_name=r.tool_name,
+                success=r.success,
+                skipped=False,
+                finding_count=findings_by_tool.get(r.tool_name, 0),
+                duration_seconds=r.duration_seconds,
+            )
+            for r in results
+        ]
+        self.display.print_summary_table(rows)
         summary = ScanSummary(
             total_tools_run=total_run,
             total_tools_skipped=total_skipped,
@@ -351,7 +385,13 @@ class ScanOrchestrator:
             findings_ingested=ingested,
             findings_by_tool=findings_by_tool,
         )
-        self._print_final_line(summary)
+        self.display.print_final_line(
+            run=summary.total_tools_run,
+            failed=summary.total_tools_failed,
+            skipped=summary.total_tools_skipped,
+            ingested=summary.findings_ingested,
+            duration=summary.duration_seconds,
+        )
         return summary
 
     def run_tool_on_all_repos(
@@ -370,11 +410,9 @@ class ScanOrchestrator:
         """
         start = perf_counter()
 
-        title = (
-            f"[bold cyan]Repo Tool Scan:[/bold cyan] {self.project_name} — {tool_name}"
+        self.display.print_scan_header(
+            f"Repo Tool Scan: {self.project_name} — {tool_name}"
         )
-        self.console.print(f"\n{title}")
-        self.console.print("─" * 50)
 
         (
             results_list,
@@ -386,7 +424,17 @@ class ScanOrchestrator:
         ) = self._run_repo_segment([tool_name], auto_approve)
 
         duration = round(perf_counter() - start, 1)
-        self._print_summary_table(results_list, findings_by_tool)
+        rows = [
+            ToolDisplayRow(
+                tool_name=r.tool_name,
+                success=r.success,
+                skipped=False,
+                finding_count=findings_by_tool.get(r.tool_name, 0),
+                duration_seconds=r.duration_seconds,
+            )
+            for r in results_list
+        ]
+        self.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -397,7 +445,13 @@ class ScanOrchestrator:
             findings_ingested=total_ingested,
             findings_by_tool=findings_by_tool,
         )
-        self._print_final_line(summary)
+        self.display.print_final_line(
+            run=summary.total_tools_run,
+            failed=summary.total_tools_failed,
+            skipped=summary.total_tools_skipped,
+            ingested=summary.findings_ingested,
+            duration=summary.duration_seconds,
+        )
         return summary
 
     def run_tool_on_repo(
@@ -435,10 +489,7 @@ class ScanOrchestrator:
         if not tool.check_available():
             raise ValueError(f"Tool '{tool_name}' is not installed.")
 
-        self.console.print(
-            f"\n[bold cyan]Repo Tool Scan:[/bold cyan] {repo.name} — {tool_name}"
-        )
-        self.console.print("─" * 50)
+        self.display.print_scan_header(f"Repo Tool Scan: {repo.name} — {tool_name}")
 
         start = perf_counter()
         context = self._make_context(repo, config)
@@ -449,7 +500,7 @@ class ScanOrchestrator:
         findings_by_tool: dict[str, int] = {}
 
         if result is None:
-            self._print_tool_line(tool_name, "SKIPPED", 0, None)
+            self.display.print_tool_line(ToolDisplayRow(tool_name, False, True, 0, 0.0))
             total_skipped += 1
         else:
             result = self._normalize_success(result)
@@ -458,16 +509,30 @@ class ScanOrchestrator:
             findings_by_tool = {result.tool_name: findings}
             if result.success:
                 total_run += 1
-                self._print_tool_line(
-                    tool_name, "pass", findings, result.duration_seconds
+                self.display.print_tool_line(
+                    ToolDisplayRow(
+                        tool_name, True, False, findings, result.duration_seconds
+                    )
                 )
             else:
                 total_failed += 1
-                self._print_tool_line(tool_name, "fail", 0, result.duration_seconds)
+                self.display.print_tool_line(
+                    ToolDisplayRow(tool_name, False, False, 0, result.duration_seconds)
+                )
 
         duration = round(perf_counter() - start, 1)
         ingested = self._batch_ingest(results, profile=repo.name)
-        self._print_summary_table(results, findings_by_tool)
+        rows = [
+            ToolDisplayRow(
+                tool_name=r.tool_name,
+                success=r.success,
+                skipped=False,
+                finding_count=findings_by_tool.get(r.tool_name, 0),
+                duration_seconds=r.duration_seconds,
+            )
+            for r in results
+        ]
+        self.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -478,7 +543,13 @@ class ScanOrchestrator:
             findings_ingested=ingested,
             findings_by_tool=findings_by_tool,
         )
-        self._print_final_line(summary)
+        self.display.print_final_line(
+            run=summary.total_tools_run,
+            failed=summary.total_tools_failed,
+            skipped=summary.total_tools_skipped,
+            ingested=summary.findings_ingested,
+            duration=summary.duration_seconds,
+        )
         return summary
 
     def _batch_ingest(self, results: list[ToolResult], profile: str) -> int:
@@ -522,7 +593,8 @@ class ScanOrchestrator:
             try:
                 pipeline = EnrichmentPipeline(
                     self.rag_engine,  # type: ignore[arg-type]
-                    console=self.console,
+                    # todo: We need DI before we prop drill to the center of the Earth
+                    console=self.display.console,
                     sqlite_store=self._sqlite_store,
                     run_id=self._run_id,
                 )
@@ -595,7 +667,7 @@ class ScanOrchestrator:
         nmap_config = self._config.load_nmap_hosts(self.project_name)
         profiles = nmap_config.profiles if nmap_config else {}
         if not profiles:
-            self.console.print(
+            self.display.print_status(
                 "[yellow]No nmap profiles configured"
                 " — skipping network segment[/yellow]"
             )
@@ -611,7 +683,9 @@ class ScanOrchestrator:
 
         config = self.registry.get_tool_config("nmap")
         if config is None:
-            self.console.print("[dim]- nmap | SKIPPED (not registered)[/dim]")
+            self.display.print_tool_line(
+                ToolDisplayRow("nmap", False, True, 0, 0.0, "not registered")
+            )
             total_skipped += 1
             return (
                 results,
@@ -626,7 +700,9 @@ class ScanOrchestrator:
             tool: Any = self._factory.create("nmap", config)
         except Exception as exc:
             logger.warning("Factory failed for 'nmap': %s", exc)
-            self.console.print("[dim]- nmap | SKIPPED (factory error)[/dim]")
+            self.display.print_tool_line(
+                ToolDisplayRow("nmap", False, True, 0, 0.0, "factory error")
+            )
             total_skipped += 1
             return (
                 results,
@@ -638,7 +714,9 @@ class ScanOrchestrator:
             )
 
         if not tool.check_available():
-            self.console.print("[dim]- nmap | SKIPPED (not installed)[/dim]")
+            self.display.print_tool_line(
+                ToolDisplayRow("nmap", False, True, 0, 0.0, "not installed")
+            )
             total_skipped += 1
             return (
                 results,
@@ -649,12 +727,12 @@ class ScanOrchestrator:
                 findings_by_tool,
             )
 
-        self.console.print("  [dim][*] Running nmap...[/dim]")
+        self.display.print_running("nmap")
         context = self._make_context(None, config)
         result = self._execute_tool_passes(tool, context, auto_approve)
 
         if result is None:
-            self._print_tool_line("nmap", "SKIPPED", 0, None)
+            self.display.print_tool_line(ToolDisplayRow("nmap", False, True, 0, 0.0))
             total_skipped += 1
         else:
             results.append(result)
@@ -662,13 +740,19 @@ class ScanOrchestrator:
             findings_by_tool["nmap"] = findings_by_tool.get("nmap", 0) + findings
             if result.success:
                 total_run += 1
-                self._print_tool_line("nmap", "pass", findings, result.duration_seconds)
+                self.display.print_tool_line(
+                    ToolDisplayRow(
+                        "nmap", True, False, findings, result.duration_seconds
+                    )
+                )
                 total_ingested += self._batch_ingest(
                     [result], profile=self.project_name
                 )
             else:
                 total_failed += 1
-                self._print_tool_line("nmap", "fail", 0, result.duration_seconds)
+                self.display.print_tool_line(
+                    ToolDisplayRow("nmap", False, False, 0, result.duration_seconds)
+                )
 
         return (
             results,
@@ -690,7 +774,9 @@ class ScanOrchestrator:
         """
         repos = self._config.load_repositories(self.project_name)
         if not repos:
-            self.console.print("[yellow]No repositories configured — skipping[/yellow]")
+            self.display.print_status(
+                "[yellow]No repositories configured — skipping[/yellow]"
+            )
             return [], 0, len(tool_names), 0, 0, {}
 
         all_results: list[ToolResult] = []
@@ -698,7 +784,7 @@ class ScanOrchestrator:
         findings_by_tool: dict[str, int] = {}
 
         for repo in repos:
-            self.console.print(f"  [bold]Repository:[/bold] {repo.name}")
+            self.display.print_status(f"  [bold]Repository:[/bold] {repo.name}")
             repo_results: list[ToolResult] = []
 
             _lang_specific: set[str] = {
@@ -715,17 +801,23 @@ class ScanOrchestrator:
                         for t in tools
                     }
                     if tool_name not in allowed:
-                        self.console.print(
-                            f"  [dim]- {tool_name} | SKIPPED "
-                            f"(not applicable for {repo.name} languages)[/dim]"
+                        self.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
+                                False,
+                                True,
+                                0,
+                                0.0,
+                                f"not applicable for {repo.name} languages",
+                            )
                         )
                         total_skipped += 1
                         continue
 
                 config = self.registry.get_tool_config(tool_name)
                 if config is None:
-                    self.console.print(
-                        f"  [dim]- {tool_name} | SKIPPED (not registered)[/dim]"
+                    self.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
                     )
                     total_skipped += 1
                     continue
@@ -734,29 +826,27 @@ class ScanOrchestrator:
                     tool: Any = self._factory.create(tool_name, config)
                 except Exception as exc:
                     logger.warning("Factory failed for %r: %s", tool_name, exc)
-                    self.console.print(
-                        f"  [dim]- {tool_name} | SKIPPED (factory error)[/dim]"
+                    self.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
                     )
                     total_skipped += 1
                     continue
 
                 if tool.requires_base_urls and not repo.base_urls:
-                    self.console.print(
-                        f"  [dim]- {tool_name} | SKIPPED (no base_urls)[/dim]"
+                    self.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "no base_urls")
                     )
                     total_skipped += 1
                     continue
 
                 if not tool.check_available():
-                    self.console.print(
-                        f"  [dim]- {tool_name} | SKIPPED (not installed)[/dim]"
+                    self.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
                     )
                     total_skipped += 1
                     continue
 
-                self.console.print(
-                    f"  [dim][*] Running {tool_name} ({repo.name})...[/dim]"
-                )
+                self.display.print_running(tool_name, repo.name)
                 context = self._make_context(repo, config)
                 remaining = len(tool_names) - idx - 1
                 result = self._execute_tool_passes(
@@ -764,8 +854,8 @@ class ScanOrchestrator:
                 )
 
                 if result is None:
-                    self._print_tool_line(
-                        f"{tool_name}/{repo.name}", "SKIPPED", 0, None
+                    self.display.print_tool_line(
+                        ToolDisplayRow(f"{tool_name}/{repo.name}", False, True, 0, 0.0)
                     )
                     total_skipped += 1
                 else:
@@ -777,19 +867,25 @@ class ScanOrchestrator:
                     )
                     if result.success:
                         total_run += 1
-                        self._print_tool_line(
-                            f"{tool_name}/{repo.name}",
-                            "pass",
-                            findings,
-                            result.duration_seconds,
+                        self.display.print_tool_line(
+                            ToolDisplayRow(
+                                f"{tool_name}/{repo.name}",
+                                True,
+                                False,
+                                findings,
+                                result.duration_seconds,
+                            )
                         )
                     else:
                         total_failed += 1
-                        self._print_tool_line(
-                            f"{tool_name}/{repo.name}",
-                            "fail",
-                            0,
-                            result.duration_seconds,
+                        self.display.print_tool_line(
+                            ToolDisplayRow(
+                                f"{tool_name}/{repo.name}",
+                                False,
+                                False,
+                                0,
+                                result.duration_seconds,
+                            )
                         )
 
             all_results.extend(repo_results)
@@ -817,60 +913,3 @@ class ScanOrchestrator:
             if result.parsed_data and "error" not in result.parsed_data:
                 result.success = True
         return result
-
-    # ------------------------------------------------------------------
-    # Private — Rich display helpers
-    # ------------------------------------------------------------------
-
-    def _print_tool_line(
-        self,
-        tool_name: str,
-        status: str,
-        findings: int,
-        duration: float | None,
-    ) -> None:
-        icons = {
-            "pass": "[green]✓[/green]",
-            "fail": "[red]✗[/red]",
-            "SKIPPED": "[dim]-[/dim]",
-        }
-        icon = icons.get(status, status)
-        findings_str = (
-            f"{findings} findings"
-            if status == "pass"
-            else ("-" if status == "SKIPPED" else "FAILED")
-        )
-        dur_str = f"{duration:.1f}s" if duration is not None else "-"
-        self.console.print(
-            f"  {icon} [cyan]{tool_name:<22}[/cyan] | {findings_str:<14} | {dur_str}"
-        )
-
-    def _print_summary_table(
-        self,
-        results: list[ToolResult],
-        findings_by_tool: dict[str, int],
-    ) -> None:
-        if not results:
-            return
-        table = Table(title=None, show_header=True, header_style="bold")
-        table.add_column("Tool", style="cyan")
-        table.add_column("Status", style="white")
-        table.add_column("Findings", style="white")
-        table.add_column("Duration", style="white")
-        for r in results:
-            status = "pass" if r.success else "fail"
-            findings = str(findings_by_tool.get(r.tool_name, 0))
-            dur = f"{r.duration_seconds:.1f}s"
-            table.add_row(r.tool_name, status, findings, dur)
-        self.console.print()
-        self.console.print(table)
-
-    def _print_final_line(self, summary: ScanSummary) -> None:
-        self.console.print(
-            f"\n[bold]Scan complete:[/bold] "
-            f"[green]{summary.total_tools_run} passed[/green], "
-            f"[red]{summary.total_tools_failed} failed[/red], "
-            f"[dim]{summary.total_tools_skipped} skipped[/dim] | "
-            f"{summary.findings_ingested} findings ingested | "
-            f"{summary.duration_seconds:.1f}s total"
-        )
