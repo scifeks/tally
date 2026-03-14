@@ -3,13 +3,14 @@
 from pathlib import Path
 from typing import Any
 
-from ...base import DockerToolWrapper
+from ...base import DockerToolWrapper, ToolResult
+from ...interface import ExecutionContext, ExecutionPass, ToolInterface
 from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
 
 _DEFAULT_NMAP_ARGS = "-sV -sC -O"
 
 
-class DockerNmapWrapper(DockerToolWrapper):
+class DockerNmapWrapper(ToolInterface, DockerToolWrapper):
     @property
     def name(self) -> str:
         return "nmap"
@@ -27,8 +28,24 @@ class DockerNmapWrapper(DockerToolWrapper):
         return "Network mapper for host discovery and port scanning"
 
     @property
+    def scan_segment(self) -> str:
+        return "network"
+
+    @property
+    def findings_exit_ok(self) -> bool:
+        return False
+
+    @property
+    def language_gates(self) -> list[str]:
+        return []
+
+    @property
+    def requires_base_urls(self) -> bool:
+        return False
+
+    @property
     def supported_languages(self) -> list[str] | None:
-        return None
+        return self.language_gates or None
 
     def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for nmap.
@@ -92,3 +109,26 @@ class DockerNmapWrapper(DockerToolWrapper):
         if xml_path is not None and xml_path.exists():
             return parse_nmap_xml(xml_path)
         return parse_nmap_xml_string(output)
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        nmap_config = context.config_manager.load_nmap_hosts(context.project_name)
+        passes = []
+        for profile_name in nmap_config.profiles if nmap_config else {}:
+            passes.append(
+                ExecutionPass(
+                    label_suffix=profile_name,
+                    kwargs={
+                        "profile": profile_name,
+                        "project_name": context.project_name,
+                        "base_path": context.base_path,
+                    },
+                )
+            )
+        return passes
+
+    def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
+        return pass_results[0]
+
+    def count_findings(self, parsed_data: dict[str, Any]) -> int:
+        # TODO: revisit when normalized schema is introduced
+        return len(parsed_data.get("hosts", []))
