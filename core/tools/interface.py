@@ -45,7 +45,7 @@ class ExecutionContext:
 class ToolInterface(ABC):
     """Polymorphic interface that all tool wrappers implement.
 
-    Wrappers inherit from both ``ToolWrapper`` (or ``DockerToolWrapper``) and
+    Wrappers inherit from both ``ToolWrapper` and
     ``ToolInterface``.  Python MRO satisfies both ABCs; concrete classes
     implement each abstract member once.
     """

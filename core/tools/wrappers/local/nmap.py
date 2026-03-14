@@ -1,60 +1,22 @@
 import shutil
-from pathlib import Path
-from typing import Any
 
-from ...base import ToolResult, ToolWrapper
-from ...interface import ExecutionContext, ExecutionPass, ToolInterface
-from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
-
-_DEFAULT_NMAP_ARGS = "-sV -sC -O"
+from ...base import get_tool_version
+from ..base.nmap import BaseNmapTool
 
 
-class NmapWrapper(ToolInterface, ToolWrapper):
+class NmapLocalTool(BaseNmapTool):
     def __init__(self, config=None) -> None:
         pass
-
-    @property
-    def name(self) -> str:
-        return "nmap"
 
     @property
     def command(self) -> str:
         return "nmap"
 
-    @property
-    def category(self) -> str:
-        return "network"
-
-    @property
-    def scope(self) -> str:
-        return "project"
-
-    @property
-    def description(self) -> str:
-        return "Network mapper for host discovery and port scanning"
-
-    @property
-    def scan_segment(self) -> str:
-        return "network"
-
-    @property
-    def findings_exit_ok(self) -> bool:
-        return False
-
-    @property
-    def language_gates(self) -> list[str]:
-        return []
-
-    @property
-    def requires_base_urls(self) -> bool:
-        return False
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return self.language_gates or None
-
     def check_available(self) -> bool:
         return shutil.which("nmap") is not None
+
+    def get_version(self) -> str | None:
+        return get_tool_version(self.command)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the nmap argv list.
@@ -94,7 +56,7 @@ class NmapWrapper(ToolInterface, ToolWrapper):
             nmap_profile = nmap_config.profiles[profile]
             hosts = nmap_profile.hosts
             if not args:
-                args = nmap_profile.nmap_args or _DEFAULT_NMAP_ARGS
+                args = nmap_profile.nmap_args or self._DEFAULT_NMAP_ARGS
 
             conflicts = check_exclusion_conflicts(hosts, nmap_config.excluded_networks)
             if conflicts:
@@ -111,36 +73,3 @@ class NmapWrapper(ToolInterface, ToolWrapper):
 
         # -oX - writes XML to stdout so the executor can capture and save it
         return ["nmap"] + (args.split() if args else []) + ["-oX", "-"] + list(hosts)
-
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        """Parse nmap XML output into structured data.
-
-        Prefers the saved stdout file; falls back to parsing the output string.
-        """
-        xml_path = files.get("stdout")
-        if xml_path is not None and xml_path.exists():
-            return parse_nmap_xml(xml_path)
-        return parse_nmap_xml_string(output)
-
-    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
-        nmap_config = context.config_manager.load_nmap_hosts(context.project_name)
-        passes = []
-        for profile_name in nmap_config.profiles if nmap_config else {}:
-            passes.append(
-                ExecutionPass(
-                    label_suffix=profile_name,
-                    kwargs={
-                        "profile": profile_name,
-                        "project_name": context.project_name,
-                        "base_path": context.base_path,
-                    },
-                )
-            )
-        return passes
-
-    def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        return pass_results[0]
-
-    def count_findings(self, parsed_data: dict[str, Any]) -> int:
-        # TODO: revisit when normalized schema is introduced
-        return len(parsed_data.get("hosts", []))

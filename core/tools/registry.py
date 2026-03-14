@@ -9,16 +9,18 @@ from rich.console import Console
 from rich.table import Table
 
 from .base import ToolWrapper
+from .factory import ToolWrapperFactory
+from .interface import ToolInterface
 
 logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
     def __init__(self) -> None:
-        self._tools: dict[str, ToolWrapper] = {}
+        self._tools: dict[str, Any] = {}
         self._configs: dict[str, Any] = {}  # CommandEntry per tool
 
-    def register(self, tool: ToolWrapper, config=None) -> None:
+    def register(self, tool: Any, config=None) -> None:
         self._tools[tool.name] = tool
         if config is not None:
             self._configs[tool.name] = config
@@ -27,7 +29,7 @@ class ToolRegistry:
         self._tools.clear()
         self._configs.clear()
 
-    def get_tool(self, name: str) -> ToolWrapper | None:
+    def get_tool(self, name: str) -> Any | None:
         return self._tools.get(name)
 
     def get_tool_config(self, name: str):
@@ -132,40 +134,15 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
 
 def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
     """Register only tools listed in commands.json with their configured location."""
+    factory = ToolWrapperFactory()
     for tool_name, entry in commands_config.items():
-        location = entry.location
-        file_stem = tool_name.replace("-", "_")
-        wrapper_file = wrappers_dir / location / f"{file_stem}.py"
-
-        if not wrapper_file.exists():
-            logger.warning(
-                "Skipping %r: no %s wrapper found at %s",
-                tool_name,
-                location,
-                wrapper_file,
-            )
-            continue
-
-        module_name = f"core.tools.wrappers.{location}.{file_stem}"
         try:
-            module = importlib.import_module(module_name)
+            tool = factory.create(tool_name, entry)
+            tool_registry.register(tool, config=entry)
         except ImportError as exc:
             logger.warning("Skipping %r: import failed — %s", tool_name, exc)
-            continue
-
-        for _attr, obj in inspect.getmembers(module, inspect.isclass):
-            if (
-                issubclass(obj, ToolWrapper)
-                and not inspect.isabstract(obj)
-                and obj.__module__ == module_name
-            ):
-                try:
-                    tool_registry.register(obj(config=entry), config=entry)  # type: ignore[call-arg]
-                except Exception as exc:
-                    logger.warning(
-                        "Skipping %r: instantiation failed — %s", tool_name, exc
-                    )
-                break
+        except Exception as exc:
+            logger.warning("Skipping %r: instantiation failed — %s", tool_name, exc)
 
 
 def _discover_fallback(wrappers_dir: Path) -> None:
@@ -183,7 +160,7 @@ def _discover_fallback(wrappers_dir: Path) -> None:
 
         for _attr, obj in inspect.getmembers(module, inspect.isclass):
             if (
-                issubclass(obj, ToolWrapper)
+                issubclass(obj, ToolInterface)
                 and not inspect.isabstract(obj)
                 and obj.__module__ == module_name
             ):

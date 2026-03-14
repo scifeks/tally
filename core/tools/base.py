@@ -22,6 +22,24 @@ class ToolResult:
         return datetime.now(UTC).isoformat()
 
 
+def get_tool_version(command: str) -> str | None:
+    """Run `<command> --version` and return the first line, or None."""
+    binary = shutil.which(command)
+    if binary is None:
+        return None
+    try:
+        result = subprocess.run(
+            [binary, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        output = (result.stdout or result.stderr).strip()
+        return output.splitlines()[0] if output else None
+    except Exception:
+        return None
+
+
 class ToolWrapper(ABC):
     @property
     @abstractmethod
@@ -77,6 +95,7 @@ class ToolWrapper(ABC):
             return None
 
 
+# todo: Review if this is even used or is just dead code.
 class DockerToolWrapper(ToolWrapper, ABC):
     """Base class for tools executed via ``docker exec`` inside a container.
 
