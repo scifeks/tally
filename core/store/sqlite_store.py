@@ -430,6 +430,10 @@ class SQLiteStore:
                 ("description", "TEXT"),
                 ("package_version", "TEXT"),
                 ("cwe", "TEXT"),
+                ("first_seen", "TEXT"),
+                ("last_seen", "TEXT"),
+                ("seen_count", "INTEGER"),
+                ("status", "TEXT"),
             ]:
                 if col_name not in existing:
                     conn.execute(
@@ -562,13 +566,20 @@ class SQLiteStore:
                 )
             )
 
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC).isoformat()
+        rows_with_ts = [(*row, now, now, 1, "active") for row in rows]
+
         sql = """
             INSERT INTO findings (
                 fingerprint, run_id, tool, domain, finding_type, severity,
                 confidence, file, rule_id, url, host, port,
                 vulnerability_id, package_name, ecosystem,
-                description, package_version, cwe, enriched, meta
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                description, package_version, cwe, enriched, meta,
+                first_seen, last_seen, seen_count, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
                 run_id          = excluded.run_id,
                 severity        = excluded.severity,
@@ -577,10 +588,12 @@ class SQLiteStore:
                 package_version = excluded.package_version,
                 cwe             = excluded.cwe,
                 enriched        = excluded.enriched,
-                meta            = excluded.meta
+                meta            = excluded.meta,
+                last_seen       = excluded.last_seen,
+                seen_count      = COALESCE(seen_count, 0) + 1
         """
         with self._connect() as conn:
-            conn.executemany(sql, rows)
+            conn.executemany(sql, rows_with_ts)
 
     def delete_findings(self, tools: list[str] | None = None) -> None:
         """Delete findings from the store.

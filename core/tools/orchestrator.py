@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
+from core.pipeline.events import EventBus, ToolCompleted
 from core.tools.base import ToolResult
 from core.tools.display import OrchestratorDisplay, ToolDisplayRow
 from core.tools.executor import ToolExecutor
@@ -16,8 +17,6 @@ from core.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
     from rich.console import Console
-
-    from core.store.sqlite_store import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +97,10 @@ class ScanOrchestrator:
         project:        Active project name.
         tool_registry:  Registry of available tool wrappers.
         tool_executor:  Configured executor (carries base_path and project_name).
-        rag_engine:     Optional RAGEngine for ingestion. None disables ingestion.
+        event_bus:      EventBus for dispatching ToolCompleted events.
+        run_id:         Optional run ID forwarded through events.
         factory:        Optional ToolWrapperFactory; defaults to a fresh instance.
+        console:        Optional Rich console for display output.
     """
 
     def __init__(
@@ -107,8 +108,7 @@ class ScanOrchestrator:
         project: str,
         tool_registry: ToolRegistry,
         tool_executor: ToolExecutor,
-        rag_engine: object,  # Optional[RAGEngine] — avoid import cycle at module level
-        sqlite_store: SQLiteStore | None = None,
+        event_bus: EventBus,
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
         console: Console | None = None,
@@ -116,8 +116,7 @@ class ScanOrchestrator:
         self.project_name = project
         self.registry = tool_registry
         self.executor = tool_executor
-        self.rag_engine = rag_engine
-        self._sqlite_store = sqlite_store
+        self._event_bus = event_bus
         self._run_id = run_id
         self.display = OrchestratorDisplay(console=console)
         self._auto_approve: bool = False
@@ -363,7 +362,16 @@ class ScanOrchestrator:
                     )
 
         duration = round(perf_counter() - start, 1)
-        ingested = self._batch_ingest(results, profile=repo.name)
+        for r in results:
+            self._event_bus.dispatch(
+                ToolCompleted(
+                    r,
+                    repo.name,
+                    self._run_id,
+                    self.project_name,
+                    str(self.executor.base_path),
+                )
+            )
 
         rows = [
             ToolDisplayRow(
@@ -382,7 +390,7 @@ class ScanOrchestrator:
             total_tools_failed=total_failed,
             results=results,
             duration_seconds=duration,
-            findings_ingested=ingested,
+            findings_ingested=0,
             findings_by_tool=findings_by_tool,
         )
         self.display.print_final_line(
@@ -521,7 +529,16 @@ class ScanOrchestrator:
                 )
 
         duration = round(perf_counter() - start, 1)
-        ingested = self._batch_ingest(results, profile=repo.name)
+        for r in results:
+            self._event_bus.dispatch(
+                ToolCompleted(
+                    r,
+                    repo.name,
+                    self._run_id,
+                    self.project_name,
+                    str(self.executor.base_path),
+                )
+            )
         rows = [
             ToolDisplayRow(
                 tool_name=r.tool_name,
@@ -540,7 +557,7 @@ class ScanOrchestrator:
             total_tools_failed=total_failed,
             results=results,
             duration_seconds=duration,
-            findings_ingested=ingested,
+            findings_ingested=0,
             findings_by_tool=findings_by_tool,
         )
         self.display.print_final_line(
@@ -551,58 +568,6 @@ class ScanOrchestrator:
             duration=summary.duration_seconds,
         )
         return summary
-
-    def _batch_ingest(self, results: list[ToolResult], profile: str) -> int:
-        """Ingest all successful ToolResults into RAG after scan completes.
-
-        Uses delete-insert upsert: deletes old findings for tool+profile,
-        then inserts fresh ones.  After ingestion, runs the enrichment pipeline
-        (which also writes enriched findings to SQLite when sqlite_store is set).
-
-        Returns:
-            Total number of documents ingested.
-        """
-        if self.rag_engine is None:
-            return 0
-
-        from core.rag.enrichment import EnrichmentPipeline
-        from core.rag.ingestor import FindingIngestor
-
-        total = 0
-        all_doc_ids: list[str] = []
-        try:
-            ingestor = FindingIngestor(self.rag_engine, self.project_name)  # type: ignore[arg-type]
-            for result in results:
-                if (
-                    result.success
-                    and result.parsed_data
-                    and "error" not in result.parsed_data
-                ):
-                    try:
-                        doc_ids = ingestor.ingest_tool_output(result, profile=profile)
-                        total += len(doc_ids)
-                        all_doc_ids.extend(doc_ids)
-                    except Exception as exc:
-                        logger.error(
-                            "Ingestion failed for %s: %s", result.tool_name, exc
-                        )
-        except Exception as exc:
-            logger.error("Batch ingestion setup error: %s", exc)
-
-        if all_doc_ids:
-            try:
-                pipeline = EnrichmentPipeline(
-                    self.rag_engine,  # type: ignore[arg-type]
-                    # todo: We need DI before we prop drill to the center of the Earth
-                    console=self.display.console,
-                    sqlite_store=self._sqlite_store,
-                    run_id=self._run_id,
-                )
-                pipeline.enrich(all_doc_ids)
-            except Exception as exc:
-                logger.error("Enrichment error in batch ingest: %s", exc)
-
-        return total
 
     # ------------------------------------------------------------------
     # Private — context and execution helpers
@@ -745,8 +710,14 @@ class ScanOrchestrator:
                         "nmap", True, False, findings, result.duration_seconds
                     )
                 )
-                total_ingested += self._batch_ingest(
-                    [result], profile=self.project_name
+                self._event_bus.dispatch(
+                    ToolCompleted(
+                        result,
+                        self.project_name,
+                        self._run_id,
+                        self.project_name,
+                        str(self.executor.base_path),
+                    )
                 )
             else:
                 total_failed += 1
@@ -889,7 +860,16 @@ class ScanOrchestrator:
                         )
 
             all_results.extend(repo_results)
-            total_ingested += self._batch_ingest(repo_results, profile=repo.name)
+            for r in repo_results:
+                self._event_bus.dispatch(
+                    ToolCompleted(
+                        r,
+                        repo.name,
+                        self._run_id,
+                        self.project_name,
+                        str(self.executor.base_path),
+                    )
+                )
 
         return (
             all_results,
