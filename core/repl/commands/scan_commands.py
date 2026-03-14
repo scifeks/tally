@@ -173,8 +173,8 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        sqlite_store, run_id = self._create_sqlite_run(args)
-        orchestrator = self._make_orchestrator(sqlite_store=sqlite_store, run_id=run_id)
+        _sqlite_store, run_id = self._create_sqlite_run(args)
+        orchestrator = self._make_orchestrator(run_id=run_id)
         if orchestrator is None:
             return
 
@@ -865,12 +865,8 @@ class ScanCommands:
             self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
             return None, None
 
-    def _make_orchestrator(
-        self,
-        sqlite_store: object = None,
-        run_id: int | None = None,
-    ):
-        """Create a ScanOrchestrator for the active project. Returns None on failure."""
+    def _make_orchestrator(self, run_id: int | None = None):
+        """Create a ScanOrchestrator for the active project."""
         from core.tools.executor import ToolExecutor
         from core.tools.orchestrator import ScanOrchestrator
 
@@ -879,26 +875,11 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
         )
-
-        rag_engine = None
-        try:
-            from core.rag.engine import RAGEngine
-
-            rag_engine = RAGEngine(
-                project_name=self.repl.active_project,
-                base_path=self.repl.base_path,
-            )
-        except (RuntimeError, ValueError) as exc:
-            self.repl.console.print(
-                f"[yellow]RAG unavailable (ingestion disabled):[/yellow] {exc}"
-            )
-
         return ScanOrchestrator(
             project=self.repl.active_project,
             tool_registry=tool_registry,
             tool_executor=executor,
-            rag_engine=rag_engine,
-            sqlite_store=sqlite_store,  # type: ignore[arg-type]
+            event_bus=self.repl.event_bus,
             run_id=run_id,
             factory=ToolWrapperFactory(),
             console=self.repl.console,
