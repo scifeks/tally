@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from datetime import UTC, datetime
-from pathlib import Path
+from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 from rich.table import Table
 
-from core.tools.base import ToolResult, ToolWrapper
+from core.tools.base import ToolResult
 from core.tools.executor import ToolExecutor
-from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
+from core.tools.factory import ToolWrapperFactory
+from core.tools.interface import ExecutionContext, ToolInterface
 from core.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
@@ -84,6 +83,7 @@ class ScanSummary:
     results: list[ToolResult]
     duration_seconds: float
     findings_ingested: int
+    findings_by_tool: dict[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +99,7 @@ class ScanOrchestrator:
         tool_registry:  Registry of available tool wrappers.
         tool_executor:  Configured executor (carries base_path and project_name).
         rag_engine:     Optional RAGEngine for ingestion. None disables ingestion.
+        factory:        Optional ToolWrapperFactory; defaults to a fresh instance.
     """
 
     def __init__(
@@ -109,6 +110,7 @@ class ScanOrchestrator:
         rag_engine: object,  # Optional[RAGEngine] — avoid import cycle at module level
         sqlite_store: SQLiteStore | None = None,
         run_id: int | None = None,
+        factory: ToolWrapperFactory | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -118,6 +120,7 @@ class ScanOrchestrator:
         self._run_id = run_id
         self.console = Console()
         self._auto_approve: bool = False
+        self._factory = factory or ToolWrapperFactory()
 
         from core.config.manager import ConfigManager
 
@@ -142,6 +145,7 @@ class ScanOrchestrator:
 
         all_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
+        merged_fbt: dict[str, int] = {}
 
         self.console.print(f"\n[bold cyan]Full Scan:[/bold cyan] {self.project_name}")
         self.console.print("─" * 50)
@@ -159,9 +163,11 @@ class ScanOrchestrator:
             total_skipped += seg_summary.total_tools_skipped
             total_failed += seg_summary.total_tools_failed
             total_ingested += seg_summary.findings_ingested
+            for tool_name, count in seg_summary.findings_by_tool.items():
+                merged_fbt[tool_name] = merged_fbt.get(tool_name, 0) + count
 
         duration = round(perf_counter() - start, 1)
-        self._print_summary_table(all_results)
+        self._print_summary_table(all_results, merged_fbt)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -170,6 +176,7 @@ class ScanOrchestrator:
             results=all_results,
             duration_seconds=duration,
             findings_ingested=total_ingested,
+            findings_by_tool=merged_fbt,
         )
         self._print_final_line(summary)
         return summary
@@ -194,15 +201,26 @@ class ScanOrchestrator:
         all_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
 
+        findings_by_tool: dict[str, int] = {}
         if segment_name == "network":
-            results_list, total_run, total_skipped, total_failed, total_ingested = (
-                self._run_network_segment(auto_approve)
-            )
+            (
+                results_list,
+                total_run,
+                total_skipped,
+                total_failed,
+                total_ingested,
+                findings_by_tool,
+            ) = self._run_network_segment(auto_approve)
             all_results.extend(results_list)
         else:
-            results_list, total_run, total_skipped, total_failed, total_ingested = (
-                self._run_repo_segment(SCAN_SEGMENTS[segment_name], auto_approve)
-            )
+            (
+                results_list,
+                total_run,
+                total_skipped,
+                total_failed,
+                total_ingested,
+                findings_by_tool,
+            ) = self._run_repo_segment(SCAN_SEGMENTS[segment_name], auto_approve)
             all_results.extend(results_list)
 
         duration = round(perf_counter() - start, 1)
@@ -213,6 +231,7 @@ class ScanOrchestrator:
             results=all_results,
             duration_seconds=duration,
             findings_ingested=total_ingested,
+            findings_by_tool=findings_by_tool,
         )
 
     def run_repo_scan(
@@ -260,23 +279,34 @@ class ScanOrchestrator:
         start = perf_counter()
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = 0
+        findings_by_tool: dict[str, int] = {}
 
         for idx, tool_name in enumerate(ordered_tools):
-            # ZAP requires base_urls
-            if tool_name == "zap" and not repo.base_urls:
-                self.console.print(
-                    "  [dim]- zap | SKIPPED (no base_urls configured)[/dim]"
-                )
-                total_skipped += 1
-                continue
-
-            tool = self.registry.get_tool(tool_name)
-            if tool is None:
+            config = self.registry.get_tool_config(tool_name)
+            if config is None:
                 self.console.print(
                     f"  [dim]- {tool_name} | SKIPPED (not registered)[/dim]"
                 )
                 total_skipped += 1
                 continue
+
+            try:
+                tool: Any = self._factory.create(tool_name, config)
+            except Exception as exc:
+                logger.warning("Factory failed for %r: %s", tool_name, exc)
+                self.console.print(
+                    f"  [dim]- {tool_name} | SKIPPED (factory error)[/dim]"
+                )
+                total_skipped += 1
+                continue
+
+            if tool.requires_base_urls and not repo.base_urls:
+                self.console.print(
+                    f"  [dim]- {tool_name} | SKIPPED (no base_urls configured)[/dim]"
+                )
+                total_skipped += 1
+                continue
+
             if not tool.check_available():
                 self.console.print(
                     f"  [dim]- {tool_name} | SKIPPED (not installed)[/dim]"
@@ -285,17 +315,9 @@ class ScanOrchestrator:
                 continue
 
             self.console.print(f"  [dim][*] Running {tool_name}...[/dim]")
-            kwargs = self._repo_tool_kwargs(tool_name, repo, exclude_dirs=exclude_dirs)
+            context = self._make_context(repo, config)
             remaining = len(ordered_tools) - idx - 1
-
-            if tool_name == "gitleaks":
-                result = self._run_gitleaks_both_scans(
-                    tool, kwargs, auto_approve, remaining
-                )
-            else:
-                result = self._run_tool_with_approval(
-                    tool, kwargs, auto_approve, remaining
-                )
+            result = self._execute_tool_passes(tool, context, auto_approve, remaining)
 
             if result is None:
                 self._print_tool_line(tool_name, "SKIPPED", 0, None)
@@ -303,7 +325,10 @@ class ScanOrchestrator:
             else:
                 result = self._normalize_success(result)
                 results.append(result)
-                findings = self._count_findings(result)
+                findings = tool.count_findings(result.parsed_data or {})
+                findings_by_tool[result.tool_name] = (
+                    findings_by_tool.get(result.tool_name, 0) + findings
+                )
                 if result.success:
                     total_run += 1
                     self._print_tool_line(
@@ -316,7 +341,7 @@ class ScanOrchestrator:
         duration = round(perf_counter() - start, 1)
         ingested = self._batch_ingest(results, profile=repo.name)
 
-        self._print_summary_table(results)
+        self._print_summary_table(results, findings_by_tool)
         summary = ScanSummary(
             total_tools_run=total_run,
             total_tools_skipped=total_skipped,
@@ -324,6 +349,7 @@ class ScanOrchestrator:
             results=results,
             duration_seconds=duration,
             findings_ingested=ingested,
+            findings_by_tool=findings_by_tool,
         )
         self._print_final_line(summary)
         return summary
@@ -350,12 +376,17 @@ class ScanOrchestrator:
         self.console.print(f"\n{title}")
         self.console.print("─" * 50)
 
-        results_list, total_run, total_skipped, total_failed, total_ingested = (
-            self._run_repo_segment([tool_name], auto_approve)
-        )
+        (
+            results_list,
+            total_run,
+            total_skipped,
+            total_failed,
+            total_ingested,
+            findings_by_tool,
+        ) = self._run_repo_segment([tool_name], auto_approve)
 
         duration = round(perf_counter() - start, 1)
-        self._print_summary_table(results_list)
+        self._print_summary_table(results_list, findings_by_tool)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -364,6 +395,7 @@ class ScanOrchestrator:
             results=results_list,
             duration_seconds=duration,
             findings_ingested=total_ingested,
+            findings_by_tool=findings_by_tool,
         )
         self._print_final_line(summary)
         return summary
@@ -391,9 +423,15 @@ class ScanOrchestrator:
                 f"Repository '{repo_name}' not found in project '{self.project_name}'"
             )
 
-        tool = self.registry.get_tool(tool_name)
-        if tool is None:
+        config = self.registry.get_tool_config(tool_name)
+        if config is None:
             raise ValueError(f"Tool '{tool_name}' is not registered.")
+
+        try:
+            tool: Any = self._factory.create(tool_name, config)
+        except Exception as exc:
+            raise ValueError(f"Tool '{tool_name}' factory error: {exc}") from exc
+
         if not tool.check_available():
             raise ValueError(f"Tool '{tool_name}' is not installed.")
 
@@ -403,15 +441,12 @@ class ScanOrchestrator:
         self.console.print("─" * 50)
 
         start = perf_counter()
-        kwargs = self._repo_tool_kwargs(tool_name, repo)
-
-        if tool_name == "gitleaks":
-            result = self._run_gitleaks_both_scans(tool, kwargs, auto_approve)
-        else:
-            result = self._run_tool_with_approval(tool, kwargs, auto_approve)
+        context = self._make_context(repo, config)
+        result = self._execute_tool_passes(tool, context, auto_approve)
 
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = 0
+        findings_by_tool: dict[str, int] = {}
 
         if result is None:
             self._print_tool_line(tool_name, "SKIPPED", 0, None)
@@ -419,7 +454,8 @@ class ScanOrchestrator:
         else:
             result = self._normalize_success(result)
             results.append(result)
-            findings = self._count_findings(result)
+            findings = tool.count_findings(result.parsed_data or {})
+            findings_by_tool = {result.tool_name: findings}
             if result.success:
                 total_run += 1
                 self._print_tool_line(
@@ -431,7 +467,7 @@ class ScanOrchestrator:
 
         duration = round(perf_counter() - start, 1)
         ingested = self._batch_ingest(results, profile=repo.name)
-        self._print_summary_table(results)
+        self._print_summary_table(results, findings_by_tool)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -440,120 +476,10 @@ class ScanOrchestrator:
             results=results,
             duration_seconds=duration,
             findings_ingested=ingested,
+            findings_by_tool=findings_by_tool,
         )
         self._print_final_line(summary)
         return summary
-
-    def _run_tool_with_approval(
-        self,
-        tool: ToolWrapper,
-        kwargs: dict,
-        auto_approve: bool,
-        remaining: int = 0,
-    ) -> ToolResult | None:
-        """Prompt 'Run <tool>? [y/N]' unless auto_approve is True.
-
-        Returns:
-            ToolResult on execution, None if user declines.
-        """
-        if not auto_approve and not self._auto_approve:
-            try:
-                answer = input(f"Run {tool.name}? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                return None
-            if answer not in ("y", "yes"):
-                return None
-            if remaining > 0:
-                try:
-                    all_ans = (
-                        input("Approve all remaining tools? [y/N]: ").strip().lower()
-                    )
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                else:
-                    if all_ans in ("y", "yes"):
-                        self._auto_approve = True
-
-        # Extract executor-level kwargs before passing build_command kwargs
-        kwargs = dict(kwargs)
-        label = kwargs.pop("label", "output")
-        cwd = kwargs.pop("cwd", None)
-        return self.executor.execute(
-            tool, auto_approve=True, label=label, cwd=cwd, **kwargs
-        )
-
-    def _run_gitleaks_both_scans(
-        self,
-        tool: ToolWrapper,
-        kwargs: dict,
-        auto_approve: bool,
-        remaining: int = 0,
-    ) -> ToolResult | None:
-        """Run gitleaks dir + git scans, combine, and return one ToolResult.
-
-        Prompts once for approval (if not auto_approve), then runs both scan
-        types with auto_approve=True.
-        """
-        if not auto_approve and not self._auto_approve:
-            try:
-                answer = input(f"Run {tool.name} (dir + git)? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                return None
-            if answer not in ("y", "yes"):
-                return None
-            if remaining > 0:
-                try:
-                    all_ans = (
-                        input("Approve all remaining tools? [y/N]: ").strip().lower()
-                    )
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                else:
-                    if all_ans in ("y", "yes"):
-                        self._auto_approve = True
-
-        base_kwargs = {k: v for k, v in kwargs.items() if k not in ("label", "cwd")}
-        label = kwargs.get("label", "output")
-        cwd = kwargs.get("cwd", None)
-
-        dir_result = self.executor.execute(
-            tool,
-            auto_approve=True,
-            label=f"{label}_dir",
-            cwd=cwd,
-            scan_type="dir",
-            **base_kwargs,
-        )
-        git_result = self.executor.execute(
-            tool,
-            auto_approve=True,
-            label=f"{label}_git",
-            cwd=cwd,
-            scan_type="git",
-            **base_kwargs,
-        )
-
-        dir_data = dir_result.parsed_data or {}
-        git_data = git_result.parsed_data or {}
-        combined_data = combine_gitleaks_results(dir_data, git_data)
-
-        combined_files: dict[str, Path] = {}
-        for key, path in dir_result.output_files.items():
-            combined_files[f"dir_{key}"] = path
-        for key, path in git_result.output_files.items():
-            combined_files[f"git_{key}"] = path
-
-        return ToolResult(
-            tool_name="gitleaks",
-            success=dir_result.success or git_result.success,
-            output=(dir_result.output or "") + "\n" + (git_result.output or ""),
-            parsed_data=combined_data,
-            output_files=combined_files,
-            timestamp=dir_result.timestamp,
-            duration_seconds=dir_result.duration_seconds + git_result.duration_seconds,
-        )
 
     def _batch_ingest(self, results: list[ToolResult], profile: str) -> int:
         """Ingest all successful ToolResults into RAG after scan completes.
@@ -607,98 +533,169 @@ class ScanOrchestrator:
         return total
 
     # ------------------------------------------------------------------
+    # Private — context and execution helpers
+    # ------------------------------------------------------------------
+
+    def _make_context(self, repo: Any, config: Any) -> ExecutionContext:
+        return ExecutionContext(
+            project_name=self.project_name,
+            base_path=str(self.executor.base_path),
+            repo=repo,
+            config_manager=self._config,
+            registry=self.registry,
+            is_docker=(config.location == "docker" if config else False),
+            execution_mode="scan",
+        )
+
+    def _execute_tool_passes(
+        self,
+        tool: ToolInterface,
+        context: ExecutionContext,
+        auto_approve: bool,
+        remaining: int = 0,
+    ) -> ToolResult | None:
+        """Prompt approval once, run all ExecutionPasses, return merged result."""
+        if not auto_approve and not self._auto_approve:
+            try:
+                answer = input(f"Run {tool.name}? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return None
+            if answer not in ("y", "yes"):
+                return None
+            if remaining > 0:
+                try:
+                    all_ans = input("Approve all remaining? [y/N]: ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                else:
+                    if all_ans in ("y", "yes"):
+                        self._auto_approve = True
+
+        passes = tool.build_execution_passes(context)
+        pass_results = [self.executor.run(p, tool) for p in passes]
+        return tool.merge_pass_results(pass_results)
+
+    # ------------------------------------------------------------------
     # Private — segment runners
     # ------------------------------------------------------------------
 
     def _run_network_segment(
         self,
         auto_approve: bool,
-    ) -> tuple[list[ToolResult], int, int, int, int]:
-        """Run nmap for each configured profile.
+    ) -> tuple[list[ToolResult], int, int, int, int, dict[str, int]]:
+        """Run nmap for all configured profiles as a single merged result.
 
-        Returns (results, run, skipped, failed, ingested).
+        Returns (results, run, skipped, failed, ingested, findings_by_tool).
         """
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
-
-        from core.setup.nmap_setup import check_exclusion_conflicts
+        findings_by_tool: dict[str, int] = {}
 
         nmap_config = self._config.load_nmap_hosts(self.project_name)
         profiles = nmap_config.profiles if nmap_config else {}
-        excluded = nmap_config.excluded_networks if nmap_config else []
         if not profiles:
             self.console.print(
                 "[yellow]No nmap profiles configured"
                 " — skipping network segment[/yellow]"
             )
             total_skipped += 1
-            return results, total_run, total_skipped, total_failed, total_ingested
+            return (
+                results,
+                total_run,
+                total_skipped,
+                total_failed,
+                total_ingested,
+                findings_by_tool,
+            )
 
-        tool = self.registry.get_tool("nmap")
-        if tool is None:
+        config = self.registry.get_tool_config("nmap")
+        if config is None:
             self.console.print("[dim]- nmap | SKIPPED (not registered)[/dim]")
-            total_skipped += len(profiles)
-            return results, total_run, total_skipped, total_failed, total_ingested
+            total_skipped += 1
+            return (
+                results,
+                total_run,
+                total_skipped,
+                total_failed,
+                total_ingested,
+                findings_by_tool,
+            )
+
+        try:
+            tool: Any = self._factory.create("nmap", config)
+        except Exception as exc:
+            logger.warning("Factory failed for 'nmap': %s", exc)
+            self.console.print("[dim]- nmap | SKIPPED (factory error)[/dim]")
+            total_skipped += 1
+            return (
+                results,
+                total_run,
+                total_skipped,
+                total_failed,
+                total_ingested,
+                findings_by_tool,
+            )
 
         if not tool.check_available():
             self.console.print("[dim]- nmap | SKIPPED (not installed)[/dim]")
-            total_skipped += len(profiles)
-            return results, total_run, total_skipped, total_failed, total_ingested
+            total_skipped += 1
+            return (
+                results,
+                total_run,
+                total_skipped,
+                total_failed,
+                total_ingested,
+                findings_by_tool,
+            )
 
-        for profile_name in profiles:
-            profile_obj = profiles[profile_name]
-            conflicts = check_exclusion_conflicts(profile_obj.hosts, excluded)
-            if conflicts:
-                self.console.print(
-                    f"[red]nmap/{profile_name}: SKIPPED — conflicts with "
-                    f"exclusion list: {conflicts}. Fix with: tool edit nmap[/red]"
+        self.console.print("  [dim][*] Running nmap...[/dim]")
+        context = self._make_context(None, config)
+        result = self._execute_tool_passes(tool, context, auto_approve)
+
+        if result is None:
+            self._print_tool_line("nmap", "SKIPPED", 0, None)
+            total_skipped += 1
+        else:
+            results.append(result)
+            findings = tool.count_findings(result.parsed_data or {})
+            findings_by_tool["nmap"] = findings_by_tool.get("nmap", 0) + findings
+            if result.success:
+                total_run += 1
+                self._print_tool_line("nmap", "pass", findings, result.duration_seconds)
+                total_ingested += self._batch_ingest(
+                    [result], profile=self.project_name
                 )
-                total_skipped += 1
-                continue
-
-            self.console.print(f"  [dim][*] Running nmap ({profile_name})...[/dim]")
-            kwargs = self._nmap_kwargs(profile_name)
-            result = self._run_tool_with_approval(tool, kwargs, auto_approve)
-
-            if result is None:
-                self._print_tool_line(f"nmap/{profile_name}", "SKIPPED", 0, None)
-                total_skipped += 1
             else:
-                results.append(result)
-                findings = self._count_findings(result)
-                if result.success:
-                    total_run += 1
-                    self._print_tool_line(
-                        f"nmap/{profile_name}",
-                        "pass",
-                        findings,
-                        result.duration_seconds,
-                    )
-                    total_ingested += self._batch_ingest([result], profile=profile_name)
-                else:
-                    total_failed += 1
-                    self._print_tool_line(
-                        f"nmap/{profile_name}", "fail", 0, result.duration_seconds
-                    )
+                total_failed += 1
+                self._print_tool_line("nmap", "fail", 0, result.duration_seconds)
 
-        return results, total_run, total_skipped, total_failed, total_ingested
+        return (
+            results,
+            total_run,
+            total_skipped,
+            total_failed,
+            total_ingested,
+            findings_by_tool,
+        )
 
     def _run_repo_segment(
         self,
         tool_names: list[str],
         auto_approve: bool,
-    ) -> tuple[list[ToolResult], int, int, int, int]:
+    ) -> tuple[list[ToolResult], int, int, int, int, dict[str, int]]:
         """Run a set of tools on every configured repository.
 
-        Returns (results, run, skipped, failed, ingested).
+        Returns (results, run, skipped, failed, ingested, findings_by_tool).
         """
         repos = self._config.load_repositories(self.project_name)
         if not repos:
             self.console.print("[yellow]No repositories configured — skipping[/yellow]")
-            return [], 0, len(tool_names), 0, 0
+            return [], 0, len(tool_names), 0, 0, {}
 
         all_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
+        findings_by_tool: dict[str, int] = {}
 
         for repo in repos:
             self.console.print(f"  [bold]Repository:[/bold] {repo.name}")
@@ -725,18 +722,31 @@ class ScanOrchestrator:
                         total_skipped += 1
                         continue
 
-                if tool_name == "zap" and not repo.base_urls:
-                    self.console.print("  [dim]- zap | SKIPPED (no base_urls)[/dim]")
-                    total_skipped += 1
-                    continue
-
-                tool = self.registry.get_tool(tool_name)
-                if tool is None:
+                config = self.registry.get_tool_config(tool_name)
+                if config is None:
                     self.console.print(
                         f"  [dim]- {tool_name} | SKIPPED (not registered)[/dim]"
                     )
                     total_skipped += 1
                     continue
+
+                try:
+                    tool: Any = self._factory.create(tool_name, config)
+                except Exception as exc:
+                    logger.warning("Factory failed for %r: %s", tool_name, exc)
+                    self.console.print(
+                        f"  [dim]- {tool_name} | SKIPPED (factory error)[/dim]"
+                    )
+                    total_skipped += 1
+                    continue
+
+                if tool.requires_base_urls and not repo.base_urls:
+                    self.console.print(
+                        f"  [dim]- {tool_name} | SKIPPED (no base_urls)[/dim]"
+                    )
+                    total_skipped += 1
+                    continue
+
                 if not tool.check_available():
                     self.console.print(
                         f"  [dim]- {tool_name} | SKIPPED (not installed)[/dim]"
@@ -747,17 +757,11 @@ class ScanOrchestrator:
                 self.console.print(
                     f"  [dim][*] Running {tool_name} ({repo.name})...[/dim]"
                 )
-                kwargs = self._repo_tool_kwargs(tool_name, repo)
+                context = self._make_context(repo, config)
                 remaining = len(tool_names) - idx - 1
-
-                if tool_name == "gitleaks":
-                    result = self._run_gitleaks_both_scans(
-                        tool, kwargs, auto_approve, remaining
-                    )
-                else:
-                    result = self._run_tool_with_approval(
-                        tool, kwargs, auto_approve, remaining
-                    )
+                result = self._execute_tool_passes(
+                    tool, context, auto_approve, remaining
+                )
 
                 if result is None:
                     self._print_tool_line(
@@ -767,7 +771,10 @@ class ScanOrchestrator:
                 else:
                     result = self._normalize_success(result)
                     repo_results.append(result)
-                    findings = self._count_findings(result)
+                    findings = tool.count_findings(result.parsed_data or {})
+                    findings_by_tool[result.tool_name] = (
+                        findings_by_tool.get(result.tool_name, 0) + findings
+                    )
                     if result.success:
                         total_run += 1
                         self._print_tool_line(
@@ -788,61 +795,14 @@ class ScanOrchestrator:
             all_results.extend(repo_results)
             total_ingested += self._batch_ingest(repo_results, profile=repo.name)
 
-        return all_results, total_run, total_skipped, total_failed, total_ingested
-
-    # ------------------------------------------------------------------
-    # Private — kwargs builders
-    # ------------------------------------------------------------------
-
-    def _nmap_kwargs(self, profile_name: str) -> dict:
-        return {
-            "label": profile_name,
-            "profile": profile_name,
-            "project_name": self.project_name,
-            "base_path": str(self.executor.base_path),
-        }
-
-    def _repo_tool_kwargs(
-        self,
-        tool_name: str,
-        repo,
-        exclude_dirs: list[str] | None = None,
-    ) -> dict:
-        repo_path = self.registry.get_repo_path(tool_name, repo)
-        kwargs: dict = {"label": repo.name, "repo_path": repo_path}
-
-        if tool_name in ("npm-audit", "composer-audit"):
-            # Docker wrappers handle working directory internally via -w;
-            # only set cwd for local tools.
-            tool_config = self.registry.get_tool_config(tool_name)
-            if tool_config is None or tool_config.location == "local":
-                kwargs["cwd"] = repo_path
-
-        if tool_name == "zap" and repo.base_urls:
-            endpoint_cfg = self._config.load_endpoint_config(
-                self.project_name, repo.name
-            )
-            endpoints_dict = endpoint_cfg.endpoints if endpoint_cfg else {}
-            kwargs["base_url"] = repo.base_urls[0]
-            kwargs["endpoints"] = endpoints_dict
-            # output_file only applies to local ZAP;
-            # docker ZAP writes inside the container
-            tool_config = self.registry.get_tool_config(tool_name)
-            if tool_config is None or tool_config.location == "local":
-                output_dir = (
-                    self.executor.base_path
-                    / "projects"
-                    / self.project_name
-                    / "tool_outputs"
-                    / "zap"
-                )
-                output_dir.mkdir(parents=True, exist_ok=True)
-                ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-                kwargs["output_file"] = str(
-                    output_dir / f"{repo.name}_{ts}_report.json"
-                )
-
-        return kwargs
+        return (
+            all_results,
+            total_run,
+            total_skipped,
+            total_failed,
+            total_ingested,
+            findings_by_tool,
+        )
 
     # ------------------------------------------------------------------
     # Private — result helpers
@@ -857,32 +817,6 @@ class ScanOrchestrator:
             if result.parsed_data and "error" not in result.parsed_data:
                 result.success = True
         return result
-
-    @staticmethod
-    def _count_findings(result: ToolResult) -> int:
-        if not result.parsed_data:
-            return 0
-        pd = result.parsed_data
-        summary = pd.get("summary", {})
-        if "hosts" in pd:
-            return len(pd["hosts"])
-        if "total_findings" in summary:
-            return summary["total_findings"]
-        if "findings" in pd:
-            return len(pd["findings"])
-        if "total_vulnerabilities" in summary:
-            return summary["total_vulnerabilities"]
-        if "vulnerabilities" in pd:
-            return len(pd["vulnerabilities"])
-        if "total_secrets" in summary:
-            return summary["total_secrets"]
-        if "secrets" in pd:
-            return len(pd["secrets"])
-        if "total_alerts" in summary:
-            return summary["total_alerts"]
-        if "alerts" in pd:
-            return len(pd["alerts"])
-        return 0
 
     # ------------------------------------------------------------------
     # Private — Rich display helpers
@@ -911,7 +845,11 @@ class ScanOrchestrator:
             f"  {icon} [cyan]{tool_name:<22}[/cyan] | {findings_str:<14} | {dur_str}"
         )
 
-    def _print_summary_table(self, results: list[ToolResult]) -> None:
+    def _print_summary_table(
+        self,
+        results: list[ToolResult],
+        findings_by_tool: dict[str, int],
+    ) -> None:
         if not results:
             return
         table = Table(title=None, show_header=True, header_style="bold")
@@ -921,7 +859,7 @@ class ScanOrchestrator:
         table.add_column("Duration", style="white")
         for r in results:
             status = "pass" if r.success else "fail"
-            findings = str(self._count_findings(r))
+            findings = str(findings_by_tool.get(r.tool_name, 0))
             dur = f"{r.duration_seconds:.1f}s"
             table.add_row(r.tool_name, status, findings, dur)
         self.console.print()

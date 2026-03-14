@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import Any
 
 from .base import ToolResult, ToolWrapper
+from .interface import ExecutionPass
 
 _log = logging.getLogger(__name__)
 
@@ -251,6 +252,21 @@ class ToolExecutor:
             output_files=output_files,
             timestamp=timestamp,
             duration_seconds=duration,
+        )
+
+    def run(
+        self,
+        pass_: ExecutionPass,
+        tool: Any,  # ToolInterface at runtime; Any avoids ToolWrapper type conflict
+        auto_approve: bool = True,
+    ) -> ToolResult:
+        """Execute a single ExecutionPass."""
+        return self.execute(
+            tool,  # type: ignore[arg-type]
+            auto_approve=auto_approve,
+            label=pass_.label_suffix,
+            cwd=pass_.cwd,
+            **pass_.kwargs,
         )
 
     # ------------------------------------------------------------------
