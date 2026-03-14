@@ -331,8 +331,7 @@ class ScanOrchestrator:
 
             self.display.print_running(tool_name)
             context = self._make_context(repo, config)
-            remaining = len(ordered_tools) - idx - 1
-            result = self._execute_tool_passes(tool, context, auto_approve, remaining)
+            result = self._execute_tool_passes(tool, context, auto_approve)
 
             if result is None:
                 self.display.print_tool_line(
@@ -589,7 +588,6 @@ class ScanOrchestrator:
         tool: ToolInterface,
         context: ExecutionContext,
         auto_approve: bool,
-        remaining: int = 0,
     ) -> ToolResult | None:
         """Prompt approval once, run all ExecutionPasses, return merged result."""
         if not auto_approve and not self._auto_approve:
@@ -600,14 +598,13 @@ class ScanOrchestrator:
                 return None
             if answer not in ("y", "yes"):
                 return None
-            if remaining > 0:
-                try:
-                    all_ans = input("Approve all remaining? [y/N]: ").strip().lower()
-                except (EOFError, KeyboardInterrupt):
-                    print()
-                else:
-                    if all_ans in ("y", "yes"):
-                        self._auto_approve = True
+            try:
+                all_ans = input("Approve all remaining? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+            else:
+                if all_ans in ("y", "yes"):
+                    self._auto_approve = True
 
         passes = tool.build_execution_passes(context)
         pass_results = [self.executor.run(p, tool) for p in passes]
@@ -819,10 +816,7 @@ class ScanOrchestrator:
 
                 self.display.print_running(tool_name, repo.name)
                 context = self._make_context(repo, config)
-                remaining = len(tool_names) - idx - 1
-                result = self._execute_tool_passes(
-                    tool, context, auto_approve, remaining
-                )
+                result = self._execute_tool_passes(tool, context, auto_approve)
 
                 if result is None:
                     self.display.print_tool_line(

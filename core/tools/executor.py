@@ -138,7 +138,8 @@ class ToolExecutor:
             return self._failure(tool.name, timestamp, f"Permission denied: {cmd[0]!r}")
 
         duration = round(perf_counter() - start, 3)
-        success = proc.returncode == 0
+        findings_exit_ok = getattr(tool, "findings_exit_ok", False)
+        success = proc.returncode == 0 or (findings_exit_ok and proc.returncode == 1)
 
         # 4b. Sudo retry if the failure looks like a privilege error
         if not success and _needs_root(proc.stderr):
