@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from core.tools.base import ToolResult
 from core.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
+from core.tools.factory import ToolWrapperFactory
 from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
 from core.tools.registry import tool_registry
 
@@ -899,6 +900,7 @@ class ScanCommands:
             rag_engine=rag_engine,
             sqlite_store=sqlite_store,  # type: ignore[arg-type]
             run_id=run_id,
+            factory=ToolWrapperFactory(),
         )
 
     def _export_summary(self, summary, export_path: str) -> None:
