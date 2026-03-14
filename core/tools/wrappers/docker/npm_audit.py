@@ -1,35 +1,24 @@
 """Docker wrapper for npm-audit Node.js dependency vulnerability scanning."""
 
-from pathlib import Path
-from typing import Any
-
-from ...base import DockerToolWrapper
-from ...parsers.npm_audit_parser import (
-    parse_npm_audit_json,
-    parse_npm_audit_json_string,
-)
+from ...interface import ExecutionContext, ExecutionPass
+from ..base.npm_audit import BaseNpmAuditTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerNpmAuditWrapper(DockerToolWrapper):
-    @property
-    def name(self) -> str:
-        return "npm-audit"
+class NpmAuditDockerTool(BaseNpmAuditTool):
+    def __init__(self, config) -> None:
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
 
     @property
-    def category(self) -> str:
-        return "sca"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def scope(self) -> str:
-        return "repository"
+    def check_available(self) -> bool:
+        return True
 
-    @property
-    def description(self) -> str:
-        return "Node.js dependency vulnerability scanner using npm advisory database"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return ["javascript", "typescript", "node"]
+    def get_version(self) -> str | None:
+        return None
 
     def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for npm audit.
@@ -48,10 +37,16 @@ class DockerNpmAuditWrapper(DockerToolWrapper):
             )
 
         tool_args = ["audit", "--json"]
-        return self._build_docker_exec(tool_args, workdir=repo_path)
+        return build_docker_exec(
+            self._container_name, self._tool_path, tool_args, workdir=repo_path
+        )
 
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        json_path = files.get("stdout")
-        if json_path is not None and json_path.exists():
-            return parse_npm_audit_json(json_path)
-        return parse_npm_audit_json_string(output)
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        assert context.repo is not None
+        repo_path = context.registry.get_repo_path(self.name, context.repo)
+        return [
+            ExecutionPass(
+                label_suffix=context.repo.name,
+                kwargs={"repo_path": repo_path},
+            )
+        ]

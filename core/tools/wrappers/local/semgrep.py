@@ -1,41 +1,23 @@
 import shutil
 from pathlib import Path
-from typing import Any
 
-from ...base import ToolWrapper
-from ...parsers.semgrep_parser import parse_semgrep_json, parse_semgrep_json_string
+from ...base import get_tool_version
+from ..base.semgrep import BaseSemgrepTool
 
 
-class SemgrepWrapper(ToolWrapper):
+class SemgrepLocalTool(BaseSemgrepTool):
     def __init__(self, config=None) -> None:
         pass
-
-    @property
-    def name(self) -> str:
-        return "semgrep"
 
     @property
     def command(self) -> str:
         return "semgrep"
 
-    @property
-    def category(self) -> str:
-        return "sast"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def description(self) -> str:
-        return "Static analysis tool for finding bugs and security issues"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return None
-
     def check_available(self) -> bool:
         return shutil.which("semgrep") is not None
+
+    def get_version(self) -> str | None:
+        return get_tool_version(self.command)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the semgrep argv list.
@@ -69,13 +51,3 @@ class SemgrepWrapper(ToolWrapper):
                 cmd.extend(["--exclude", pattern])
 
         return cmd
-
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        """Parse semgrep JSON output into structured data.
-
-        Prefers the saved stdout file; falls back to parsing the output string.
-        """
-        json_path = files.get("stdout")
-        if json_path is not None and json_path.exists():
-            return parse_semgrep_json(json_path)
-        return parse_semgrep_json_string(output)

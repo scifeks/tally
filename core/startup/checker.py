@@ -133,7 +133,7 @@ class DependencyChecker:
         return results
 
     def check_system_tools(self) -> list[DepCheck]:
-        from core.tools.base import ToolWrapper
+        from core.tools.interface import ToolInterface
 
         results: list[DepCheck] = []
         local_dir = Path(__file__).parent.parent / "tools" / "wrappers" / "local"
@@ -150,7 +150,7 @@ class DependencyChecker:
 
             for _attr, obj in inspect.getmembers(module, inspect.isclass):
                 if (
-                    issubclass(obj, ToolWrapper)
+                    issubclass(obj, ToolInterface)
                     and not inspect.isabstract(obj)
                     and obj.__module__ == module_name
                 ):
@@ -158,8 +158,8 @@ class DependencyChecker:
                         tool = obj(config=None)  # type: ignore[call-arg]
                     except Exception:
                         break
-                    available = tool.check_available()
-                    version = tool.get_version() if available else None
+                    available = tool.check_available()  # type: ignore[attr-defined]
+                    version = tool.get_version() if available else None  # type: ignore[attr-defined]
                     results.append(
                         DepCheck(
                             name=tool.name,

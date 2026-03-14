@@ -14,6 +14,13 @@ from rich.panel import Panel
 from rich.table import Table
 
 from core.config import ConfigManager
+from core.pipeline.events import (
+    EnrichmentCompleted,
+    EventBus,
+    IngestCompleted,
+    ToolCompleted,
+)
+from core.pipeline.handlers import EnrichmentHandler, IngestHandler, PersistenceHandler
 from core.project import ProjectManager
 from core.repl.commands import (
     KnowledgeCommands,
@@ -392,6 +399,13 @@ class REPL:
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
         self.active_project: str | None = None
+        self.event_bus = EventBus()
+        _ingest = IngestHandler(self.event_bus, console=self.console)
+        _enrich = EnrichmentHandler(self.event_bus, console=self.console)
+        _persist = PersistenceHandler(self.event_bus)
+        self.event_bus.subscribe(ToolCompleted, _ingest.handle)
+        self.event_bus.subscribe(IngestCompleted, _enrich.handle)
+        self.event_bus.subscribe(EnrichmentCompleted, _persist.handle)
         self.project_commands = ProjectCommands(self)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)

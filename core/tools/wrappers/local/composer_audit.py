@@ -2,47 +2,25 @@
 
 import shutil
 from pathlib import Path
-from typing import Any
 
-from ...base import ToolWrapper
-from ...parsers.composer_audit_parser import (
-    parse_composer_audit_json,
-    parse_composer_audit_json_string,
-)
+from ...base import get_tool_version
+from ...interface import ExecutionContext, ExecutionPass
+from ..base.composer_audit import BaseComposerAuditTool
 
 
-class ComposerAuditWrapper(ToolWrapper):
+class ComposerAuditLocalTool(BaseComposerAuditTool):
     def __init__(self, config=None) -> None:
         pass
-
-    @property
-    def name(self) -> str:
-        return "composer-audit"
 
     @property
     def command(self) -> str:
         return "composer"
 
-    @property
-    def category(self) -> str:
-        return "sca"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def description(self) -> str:
-        return (
-            "PHP dependency vulnerability scanner using Packagist security advisories"
-        )
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return ["php"]
-
     def check_available(self) -> bool:
         return shutil.which("composer") is not None
+
+    def get_version(self) -> str | None:
+        return get_tool_version(self.command)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the composer audit argv list.
@@ -69,12 +47,13 @@ class ComposerAuditWrapper(ToolWrapper):
 
         return ["composer", "audit", "--format=json"]
 
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        """Parse composer audit JSON output into structured data.
-
-        Prefers the saved stdout file; falls back to parsing the output string.
-        """
-        json_path = files.get("stdout")
-        if json_path is not None and json_path.exists():
-            return parse_composer_audit_json(json_path)
-        return parse_composer_audit_json_string(output)
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        assert context.repo is not None
+        repo_path = context.registry.get_repo_path(self.name, context.repo)
+        return [
+            ExecutionPass(
+                label_suffix=context.repo.name,
+                kwargs={"repo_path": repo_path},
+                cwd=repo_path,
+            )
+        ]

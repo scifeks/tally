@@ -1,35 +1,23 @@
 """Docker wrapper for pip-audit Python dependency vulnerability scanning."""
 
-from pathlib import Path
-from typing import Any
-
-from ...base import DockerToolWrapper
-from ...parsers.pip_audit_parser import (
-    parse_pip_audit_json,
-    parse_pip_audit_json_string,
-)
+from ..base.pip_audit import BasePipAuditTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerPipAuditWrapper(DockerToolWrapper):
-    @property
-    def name(self) -> str:
-        return "pip-audit"
+class PipAuditDockerTool(BasePipAuditTool):
+    def __init__(self, config) -> None:
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
 
     @property
-    def category(self) -> str:
-        return "sca"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def scope(self) -> str:
-        return "repository"
+    def check_available(self) -> bool:
+        return True
 
-    @property
-    def description(self) -> str:
-        return "Python dependency vulnerability scanner using PyPI advisory database"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return ["python"]
+    def get_version(self) -> str | None:
+        return None
 
     def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for pip-audit.
@@ -48,10 +36,6 @@ class DockerPipAuditWrapper(DockerToolWrapper):
             )
 
         tool_args = ["--format", "json", "--path", "."]
-        return self._build_docker_exec(tool_args, workdir=repo_path)
-
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        json_path = files.get("stdout")
-        if json_path is not None and json_path.exists():
-            return parse_pip_audit_json(json_path)
-        return parse_pip_audit_json_string(output)
+        return build_docker_exec(
+            self._container_name, self._tool_path, tool_args, workdir=repo_path
+        )

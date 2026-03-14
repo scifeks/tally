@@ -1,42 +1,27 @@
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from ...base import ToolWrapper
+from ...base import get_tool_version
 from ...parsers.gitleaks_parser import parse_gitleaks_json, parse_gitleaks_json_string
+from ..base.gitleaks import BaseGitleaksTool
 
 
-class GitleaksWrapper(ToolWrapper):
+class GitleaksLocalTool(BaseGitleaksTool):
     def __init__(self, config=None) -> None:
         self._last_report_path: Path | None = None
-
-    @property
-    def name(self) -> str:
-        return "gitleaks"
 
     @property
     def command(self) -> str:
         return "gitleaks"
 
-    @property
-    def category(self) -> str:
-        return "secrets"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def description(self) -> str:
-        return "Secrets detection tool for git repositories and files"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return None
-
     def check_available(self) -> bool:
+        import shutil
+
         return shutil.which("gitleaks") is not None
+
+    def get_version(self) -> str | None:
+        return get_tool_version(self.command)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the gitleaks argv list.

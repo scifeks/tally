@@ -11,33 +11,26 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...base import DockerToolWrapper
+from ...interface import ExecutionContext, ExecutionPass
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string
+from ..base.zap import BaseZapTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerZAPWrapper(DockerToolWrapper):
+class ZAPDockerTool(BaseZapTool):
     def __init__(self, config) -> None:
-        super().__init__(config)
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
         self._container_report_path: str | None = None
 
     @property
-    def name(self) -> str:
-        return "zap"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def category(self) -> str:
-        return "api"
+    def check_available(self) -> bool:
+        return True
 
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def description(self) -> str:
-        return "OWASP ZAP dynamic web application security scanner"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
+    def get_version(self) -> str | None:
         return None
 
     def build_command(self, **kwargs) -> list[str]:
@@ -64,7 +57,7 @@ class DockerZAPWrapper(DockerToolWrapper):
             "-quickout",
             report_path,
         ]
-        return self._build_docker_exec(tool_args)
+        return build_docker_exec(self._container_name, self._tool_path, tool_args)
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse ZAP output from stdout.
@@ -77,3 +70,12 @@ class DockerZAPWrapper(DockerToolWrapper):
         if stdout_path is not None and stdout_path.exists():
             return parse_zap_json(stdout_path)
         return parse_zap_json_string(output)
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        assert context.repo is not None
+        return [
+            ExecutionPass(
+                label_suffix=context.repo.name,
+                kwargs={"base_url": context.repo.base_urls[0]},
+            )
+        ]

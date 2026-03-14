@@ -3,29 +3,24 @@
 from pathlib import Path
 from typing import Any
 
-from ...base import DockerToolWrapper
 from ...parsers.gitleaks_parser import parse_gitleaks_json, parse_gitleaks_json_string
+from ..base.gitleaks import BaseGitleaksTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerGitleaksWrapper(DockerToolWrapper):
-    @property
-    def name(self) -> str:
-        return "gitleaks"
-
-    @property
-    def category(self) -> str:
-        return "secrets"
+class GitleaksDockerTool(BaseGitleaksTool):
+    def __init__(self, config) -> None:
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
 
     @property
-    def scope(self) -> str:
-        return "repository"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def description(self) -> str:
-        return "Secrets detection tool for git repositories and files"
+    def check_available(self) -> bool:
+        return True
 
-    @property
-    def supported_languages(self) -> list[str] | None:
+    def get_version(self) -> str | None:
         return None
 
     def build_command(self, **kwargs) -> list[str]:
@@ -56,7 +51,7 @@ class DockerGitleaksWrapper(DockerToolWrapper):
             "0",
         ]
 
-        return self._build_docker_exec(tool_args)
+        return build_docker_exec(self._container_name, self._tool_path, tool_args)
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         json_path = files.get("stdout")

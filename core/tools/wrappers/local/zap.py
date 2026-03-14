@@ -2,14 +2,17 @@
 
 import os
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...base import ToolWrapper
+from ...base import get_tool_version
+from ...interface import ExecutionContext, ExecutionPass
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_zap_xml
+from ..base.zap import BaseZapTool
 
 
-class ZAPWrapper(ToolWrapper):
+class ZAPLocalTool(BaseZapTool):
     """Wrapper for OWASP ZAP quick-scan (DAST) mode.
 
     Quick-scan MVP: ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
@@ -22,32 +25,15 @@ class ZAPWrapper(ToolWrapper):
         self._last_report_path: Path | None = None
 
     @property
-    def name(self) -> str:
-        return "zap"
-
-    @property
     def command(self) -> str:
         return "zap.sh"
-
-    @property
-    def category(self) -> str:
-        return "api"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return None  # Tests running applications, not source code
-
-    @property
-    def description(self) -> str:
-        return "OWASP ZAP dynamic web application security scanner"
 
     def check_available(self) -> bool:
         """Return True if the configured zap.sh path exists."""
         return Path(self._zap_path).exists()
+
+    def get_version(self) -> str | None:
+        return get_tool_version(self.command)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the ZAP quick-scan argv list.
@@ -101,3 +87,25 @@ class ZAPWrapper(ToolWrapper):
 
         # 3. Raw output string (fallback — unlikely to be valid JSON)
         return parse_zap_json_string(output)
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        assert context.repo is not None
+        output_dir = (
+            Path(context.base_path)
+            / "projects"
+            / context.project_name
+            / "tool_outputs"
+            / "zap"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+        output_file = str(output_dir / f"{context.repo.name}_{ts}_report.json")
+        return [
+            ExecutionPass(
+                label_suffix=context.repo.name,
+                kwargs={
+                    "base_url": context.repo.base_urls[0],
+                    "output_file": output_file,
+                },
+            )
+        ]

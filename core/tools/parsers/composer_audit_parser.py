@@ -35,7 +35,10 @@ def parse_composer_audit_json_string(json_string: str) -> dict[str, Any]:
 def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
     vulnerabilities: list[dict[str, Any]] = []
 
-    for pkg_name, advisories in data.get("advisories", {}).items():
+    raw_advisories = data.get("advisories", {})
+    if not isinstance(raw_advisories, dict):
+        raw_advisories = {}
+    for pkg_name, advisories in raw_advisories.items():
         for advisory in advisories:
             cve = advisory.get("cve", "")
             advisory_id = advisory.get("advisoryId", "")

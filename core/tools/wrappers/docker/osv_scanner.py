@@ -1,31 +1,22 @@
 """Docker wrapper for OSV-Scanner dependency vulnerability scanning."""
 
-from pathlib import Path
-from typing import Any
-
-from ...base import DockerToolWrapper
-from ...parsers.osv_parser import parse_osv_json, parse_osv_json_string
+from ..base.osv_scanner import BaseOSVScannerTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerOSVScannerWrapper(DockerToolWrapper):
-    @property
-    def name(self) -> str:
-        return "osv-scanner"
+class OSVScannerDockerTool(BaseOSVScannerTool):
+    def __init__(self, config) -> None:
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
 
     @property
-    def category(self) -> str:
-        return "sca"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def scope(self) -> str:
-        return "repository"
+    def check_available(self) -> bool:
+        return True
 
-    @property
-    def description(self) -> str:
-        return "Dependency vulnerability scanner using OSV database"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
+    def get_version(self) -> str | None:
         return None
 
     def build_command(self, **kwargs) -> list[str]:
@@ -49,10 +40,4 @@ class DockerOSVScannerWrapper(DockerToolWrapper):
             tool_args.append("--recursive")
         tool_args.append(repo_path)
 
-        return self._build_docker_exec(tool_args)
-
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        json_path = files.get("stdout")
-        if json_path is not None and json_path.exists():
-            return parse_osv_json(json_path)
-        return parse_osv_json_string(output)
+        return build_docker_exec(self._container_name, self._tool_path, tool_args)

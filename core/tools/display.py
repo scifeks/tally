@@ -1,0 +1,111 @@
+"""Rich display layer for scan orchestration output."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from rich.console import Console
+from rich.table import Table
+
+
+@dataclass
+class ToolDisplayRow:
+    tool_name: str
+    success: bool
+    skipped: bool
+    finding_count: int
+    duration_seconds: float
+    skip_reason: str = ""
+
+
+class OrchestratorDisplay:
+    def __init__(self, console: Console | None = None) -> None:
+        self.console = console or Console()
+
+    def print_scan_header(self, label: str) -> None:
+        """Print bold-cyan label followed by a divider line."""
+        self.console.print(f"\n[bold cyan]{label}[/bold cyan]")
+        self.console.print("─" * 50)
+
+    def print_segment_header(self, segment: str) -> None:
+        """Print bold-yellow segment name."""
+        self.console.print(f"\n[bold yellow]{segment.upper()}[/bold yellow]")
+
+    def print_repo_scan_header(
+        self, repo_name: str, lang_str: str, tools: list[str]
+    ) -> None:
+        """Print 3-line repo scan preamble."""
+        self.console.print(f"\n[bold cyan]Repo Scan:[/bold cyan] {repo_name}")
+        self.console.print(f"Languages: {lang_str}")
+        self.console.print(f"Tools: {', '.join(tools)}\n")
+
+    def print_status(self, message: str) -> None:
+        """Print an arbitrary pre-formatted Rich status line."""
+        self.console.print(message)
+
+    def print_running(self, tool_name: str, repo_name: str = "") -> None:
+        """Print 'Running tool...' dim status line."""
+        if repo_name:
+            self.console.print(f"  [dim][*] Running {tool_name} ({repo_name})...[/dim]")
+        else:
+            self.console.print(f"  [dim][*] Running {tool_name}...[/dim]")
+
+    def print_tool_line(self, row: ToolDisplayRow) -> None:
+        """Print a single result row: pass / fail / skipped."""
+        if row.skipped:
+            if row.skip_reason:
+                self.console.print(
+                    f"  [dim]- {row.tool_name} | SKIPPED ({row.skip_reason})[/dim]"
+                )
+            else:
+                self.console.print(f"  [dim]- {row.tool_name} | SKIPPED[/dim]")
+            return
+
+        name = row.tool_name
+        dur_str = f"{row.duration_seconds:.1f}s"
+        if row.success:
+            findings_str = f"{row.finding_count} findings"
+            self.console.print(
+                f"  [green]✓[/green] [cyan]{name:<22}[/cyan]"
+                f" | {findings_str:<14} | {dur_str}"
+            )
+        else:
+            self.console.print(
+                f"  [red]✗[/red] [cyan]{name:<22}[/cyan] | {'FAILED':<14} | {dur_str}"
+            )
+
+    def print_summary_table(self, rows: list[ToolDisplayRow]) -> None:
+        """Print a Rich Table of non-skipped results."""
+        rows = [r for r in rows if not r.skipped]
+        if not rows:
+            return
+        table = Table(title=None, show_header=True, header_style="bold")
+        table.add_column("Tool", style="cyan")
+        table.add_column("Status", style="white")
+        table.add_column("Findings", style="white")
+        table.add_column("Duration", style="white")
+        for r in rows:
+            status = "pass" if r.success else "fail"
+            findings = str(r.finding_count)
+            dur = f"{r.duration_seconds:.1f}s"
+            table.add_row(r.tool_name, status, findings, dur)
+        self.console.print()
+        self.console.print(table)
+
+    def print_final_line(
+        self,
+        run: int,
+        failed: int,
+        skipped: int,
+        ingested: int,
+        duration: float,
+    ) -> None:
+        """Print scan-complete summary line."""
+        self.console.print(
+            f"\n[bold]Scan complete:[/bold] "
+            f"[green]{run} passed[/green], "
+            f"[red]{failed} failed[/red], "
+            f"[dim]{skipped} skipped[/dim] | "
+            f"{ingested} findings ingested | "
+            f"{duration:.1f}s total"
+        )

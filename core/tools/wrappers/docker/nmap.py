@@ -1,33 +1,22 @@
 """Docker wrapper for nmap network scanning."""
 
-from pathlib import Path
-from typing import Any
-
-from ...base import DockerToolWrapper
-from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
-
-_DEFAULT_NMAP_ARGS = "-sV -sC -O"
+from ..base.nmap import BaseNmapTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerNmapWrapper(DockerToolWrapper):
-    @property
-    def name(self) -> str:
-        return "nmap"
+class NmapDockerTool(BaseNmapTool):
+    def __init__(self, config) -> None:
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
 
     @property
-    def category(self) -> str:
-        return "network"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def scope(self) -> str:
-        return "project"
+    def check_available(self) -> bool:
+        return True
 
-    @property
-    def description(self) -> str:
-        return "Network mapper for host discovery and port scanning"
-
-    @property
-    def supported_languages(self) -> list[str] | None:
+    def get_version(self) -> str | None:
         return None
 
     def build_command(self, **kwargs) -> list[str]:
@@ -68,7 +57,7 @@ class DockerNmapWrapper(DockerToolWrapper):
             nmap_profile = nmap_config.profiles[profile]
             hosts = nmap_profile.hosts
             if not args:
-                args = nmap_profile.nmap_args or _DEFAULT_NMAP_ARGS
+                args = nmap_profile.nmap_args or self._DEFAULT_NMAP_ARGS
 
             conflicts = check_exclusion_conflicts(hosts, nmap_config.excluded_networks)
             if conflicts:
@@ -85,10 +74,4 @@ class DockerNmapWrapper(DockerToolWrapper):
 
         # -oX - writes XML to stdout; executor captures it
         tool_args = (args.split() if args else []) + ["-oX", "-"] + list(hosts)
-        return self._build_docker_exec(tool_args)
-
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        xml_path = files.get("stdout")
-        if xml_path is not None and xml_path.exists():
-            return parse_nmap_xml(xml_path)
-        return parse_nmap_xml_string(output)
+        return build_docker_exec(self._container_name, self._tool_path, tool_args)
