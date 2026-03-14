@@ -6,12 +6,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...base import ToolResult, ToolWrapper
-from ...interface import ExecutionContext, ExecutionPass, ToolInterface
+from ...base import get_tool_version
+from ...interface import ExecutionContext, ExecutionPass
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_zap_xml
+from ..base.zap import BaseZapTool
 
 
-class ZAPWrapper(ToolInterface, ToolWrapper):
+class ZAPLocalTool(BaseZapTool):
     """Wrapper for OWASP ZAP quick-scan (DAST) mode.
 
     Quick-scan MVP: ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
@@ -24,48 +25,15 @@ class ZAPWrapper(ToolInterface, ToolWrapper):
         self._last_report_path: Path | None = None
 
     @property
-    def name(self) -> str:
-        return "zap"
-
-    @property
     def command(self) -> str:
         return "zap.sh"
-
-    @property
-    def category(self) -> str:
-        return "api"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def scan_segment(self) -> str:
-        return "api"
-
-    @property
-    def findings_exit_ok(self) -> bool:
-        return True
-
-    @property
-    def language_gates(self) -> list[str]:
-        return []
-
-    @property
-    def requires_base_urls(self) -> bool:
-        return True
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return self.language_gates or None
-
-    @property
-    def description(self) -> str:
-        return "OWASP ZAP dynamic web application security scanner"
 
     def check_available(self) -> bool:
         """Return True if the configured zap.sh path exists."""
         return Path(self._zap_path).exists()
+
+    def get_version(self) -> str | None:
+        return get_tool_version(self.command)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the ZAP quick-scan argv list.
@@ -141,12 +109,3 @@ class ZAPWrapper(ToolInterface, ToolWrapper):
                 },
             )
         ]
-
-    def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        return pass_results[0]
-
-    def count_findings(self, parsed_data: dict[str, Any]) -> int:
-        summary = parsed_data.get("summary", {})
-        result = summary.get("total_alerts", len(parsed_data.get("alerts", [])))
-        # TODO: revisit when normalized schema is introduced
-        return result

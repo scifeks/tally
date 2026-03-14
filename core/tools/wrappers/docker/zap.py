@@ -11,51 +11,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...base import DockerToolWrapper, ToolResult
-from ...interface import ExecutionContext, ExecutionPass, ToolInterface
+from ...interface import ExecutionContext, ExecutionPass
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string
+from ..base.zap import BaseZapTool
+from ._docker_exec import build_docker_exec
 
 
-class DockerZAPWrapper(ToolInterface, DockerToolWrapper):
+class ZAPDockerTool(BaseZapTool):
     def __init__(self, config) -> None:
-        super().__init__(config)
+        self._container_name: str = config.container.name
+        self._tool_path: str = config.container.tool_path
         self._container_report_path: str | None = None
 
     @property
-    def name(self) -> str:
-        return "zap"
+    def command(self) -> str:
+        return "docker"
 
-    @property
-    def category(self) -> str:
-        return "api"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def description(self) -> str:
-        return "OWASP ZAP dynamic web application security scanner"
-
-    @property
-    def scan_segment(self) -> str:
-        return "api"
-
-    @property
-    def findings_exit_ok(self) -> bool:
+    def check_available(self) -> bool:
         return True
 
-    @property
-    def language_gates(self) -> list[str]:
-        return []
-
-    @property
-    def requires_base_urls(self) -> bool:
-        return True
-
-    @property
-    def supported_languages(self) -> list[str] | None:
-        return self.language_gates or None
+    def get_version(self) -> str | None:
+        return None
 
     def build_command(self, **kwargs) -> list[str]:
         """Build docker exec argv for ZAP quick-scan.
@@ -81,7 +57,7 @@ class DockerZAPWrapper(ToolInterface, DockerToolWrapper):
             "-quickout",
             report_path,
         ]
-        return self._build_docker_exec(tool_args)
+        return build_docker_exec(self._container_name, self._tool_path, tool_args)
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse ZAP output from stdout.
@@ -103,12 +79,3 @@ class DockerZAPWrapper(ToolInterface, DockerToolWrapper):
                 kwargs={"base_url": context.repo.base_urls[0]},
             )
         ]
-
-    def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        return pass_results[0]
-
-    def count_findings(self, parsed_data: dict[str, Any]) -> int:
-        summary = parsed_data.get("summary", {})
-        result = summary.get("total_alerts", len(parsed_data.get("alerts", [])))
-        # TODO: revisit when normalized schema is introduced
-        return result
