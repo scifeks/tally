@@ -2,14 +2,16 @@
 
 import os
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...base import ToolWrapper
+from ...base import ToolResult, ToolWrapper
+from ...interface import ExecutionContext, ExecutionPass, ToolInterface
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_zap_xml
 
 
-class ZAPWrapper(ToolWrapper):
+class ZAPWrapper(ToolInterface, ToolWrapper):
     """Wrapper for OWASP ZAP quick-scan (DAST) mode.
 
     Quick-scan MVP: ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
@@ -38,8 +40,24 @@ class ZAPWrapper(ToolWrapper):
         return "repository"
 
     @property
+    def scan_segment(self) -> str:
+        return "api"
+
+    @property
+    def findings_exit_ok(self) -> bool:
+        return True
+
+    @property
+    def language_gates(self) -> list[str]:
+        return []
+
+    @property
+    def requires_base_urls(self) -> bool:
+        return True
+
+    @property
     def supported_languages(self) -> list[str] | None:
-        return None  # Tests running applications, not source code
+        return self.language_gates or None
 
     @property
     def description(self) -> str:
@@ -101,3 +119,34 @@ class ZAPWrapper(ToolWrapper):
 
         # 3. Raw output string (fallback — unlikely to be valid JSON)
         return parse_zap_json_string(output)
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        assert context.repo is not None
+        output_dir = (
+            Path(context.base_path)
+            / "projects"
+            / context.project_name
+            / "tool_outputs"
+            / "zap"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+        output_file = str(output_dir / f"{context.repo.name}_{ts}_report.json")
+        return [
+            ExecutionPass(
+                label_suffix=context.repo.name,
+                kwargs={
+                    "base_url": context.repo.base_urls[0],
+                    "output_file": output_file,
+                },
+            )
+        ]
+
+    def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
+        return pass_results[0]
+
+    def count_findings(self, parsed_data: dict[str, Any]) -> int:
+        summary = parsed_data.get("summary", {})
+        result = summary.get("total_alerts", len(parsed_data.get("alerts", [])))
+        # TODO: revisit when normalized schema is introduced
+        return result
