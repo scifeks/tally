@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from core.pipeline.events import EventBus, ToolCompleted
 from core.tools.base import ToolResult
 from core.tools.display import OrchestratorDisplay, ToolDisplayRow
+from core.tools.exceptions import InvalidSegmentError
 from core.tools.executor import ToolExecutor
 from core.tools.factory import ToolWrapperFactory
 from core.tools.interface import ExecutionContext, ToolInterface
@@ -324,6 +325,20 @@ class NetworkSegmentScan(ScanType):
             findings_ingested=total_ingested,
             findings_by_tool=findings_by_tool,
         )
+
+
+class SegmentScan(ScanType):
+    """Validate a segment name and delegate to the appropriate scan type."""
+
+    def __init__(self, segment_name: str) -> None:
+        self.segment_name = segment_name
+
+    def execute(self, config: ScanTypeConfig) -> ScanSummary:
+        if self.segment_name not in SCAN_SEGMENTS:
+            raise InvalidSegmentError(self.segment_name, list(SCAN_SEGMENTS))
+        if self.segment_name == "network":
+            return NetworkSegmentScan().execute(config)
+        return RepoSegmentScan(SCAN_SEGMENTS[self.segment_name]).execute(config)
 
 
 class RepoSegmentScan(ScanType):

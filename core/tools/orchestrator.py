@@ -20,10 +20,9 @@ from core.tools.scan_types import (
     SCAN_SEGMENTS,
     SEGMENT_ORDER,
     FullScan,
-    NetworkSegmentScan,
     RepoScan,
-    RepoSegmentScan,
     ScanTypeConfig,
+    SegmentScan,
     ToolOnAllReposScan,
     ToolOnRepoScan,
 )
@@ -149,16 +148,8 @@ class ScanOrchestrator:
         segment_name: str,
         auto_approve: bool = False,
     ) -> ScanSummary:
-        if segment_name not in SCAN_SEGMENTS:
-            raise ValueError(
-                f"Unknown segment: {segment_name!r}. "
-                f"Valid segments: {list(SCAN_SEGMENTS)}"
-            )
         config = self._make_config(auto_approve)
-        if segment_name == "network":
-            result = NetworkSegmentScan().execute(config)
-        else:
-            result = RepoSegmentScan(SCAN_SEGMENTS[segment_name]).execute(config)
+        result = SegmentScan(segment_name).execute(config)
         return ScanSummary(
             total_tools_run=result.total_tools_run,
             total_tools_skipped=result.total_tools_skipped,

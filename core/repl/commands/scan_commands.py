@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from core.repl.interface import REPL
 
 
-# todo: Implement event bus for pipelines
 def _enrich_results(
     repl: REPL,
     doc_ids: list[str],
