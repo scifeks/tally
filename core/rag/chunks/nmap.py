@@ -13,7 +13,7 @@ from ._shared import _first_output_file, _shared_meta
 class NmapChunkBuilder:
     tool_name = "nmap"
     domain = "network"
-    provided_fields: frozenset[str] = frozenset(
+    non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "risk_type", "remediation", "description"}
     )
     type_flags: dict[str, set[str]] = {"informational": set()}

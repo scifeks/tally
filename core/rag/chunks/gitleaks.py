@@ -13,7 +13,9 @@ from ._shared import _first_output_file, _shared_meta
 class GitleaksChunkBuilder:
     tool_name = "gitleaks"
     domain = "code"
-    provided_fields: frozenset[str] = frozenset({"severity", "risk_type", "confidence"})
+    non_enriched_fields: frozenset[str] = frozenset(
+        {"severity", "risk_type", "confidence"}
+    )
     type_flags: dict[str, set[str]] = {"secret": {"type_secret"}}
 
     def build(

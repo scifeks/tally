@@ -13,7 +13,7 @@ from ._shared import _first_output_file, _shared_meta
 class ZapChunkBuilder:
     tool_name = "zap"
     domain = "web"
-    provided_fields: frozenset[str] = frozenset(
+    non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "remediation", "description"}
     )
     type_flags: dict[str, set[str]] = {"vulnerability": {"type_vulnerability"}}

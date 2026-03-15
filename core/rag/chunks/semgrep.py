@@ -12,7 +12,7 @@ from ._shared import _first_output_file, _shared_meta
 class SemgrepChunkBuilder:
     tool_name = "semgrep"
     domain = "code"
-    provided_fields: frozenset[str] = frozenset({"severity"})
+    non_enriched_fields: frozenset[str] = frozenset({"severity"})
     type_flags: dict[str, set[str]] = {
         "vulnerability": {"type_vulnerability", "type_weakness"}
     }

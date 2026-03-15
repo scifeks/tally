@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class ChunkBuilder(Protocol):
     tool_name: str
     domain: str
-    provided_fields: frozenset[str]
+    non_enriched_fields: frozenset[str]
     type_flags: dict[str, set[str]]
 
     def build(
