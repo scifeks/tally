@@ -1,21 +1,13 @@
 """Finding ingestion pipeline — converts ToolResult output into ChromaDB documents."""
 
+import importlib
+import inspect
 import logging
 from collections.abc import Callable
 from typing import Any, Protocol
 
 from core.tools.base import ToolResult
 
-from .chunks import (
-    ComposerAuditChunkBuilder,
-    GitleaksChunkBuilder,
-    NmapChunkBuilder,
-    NpmAuditChunkBuilder,
-    OsvScannerChunkBuilder,
-    PipAuditChunkBuilder,
-    SemgrepChunkBuilder,
-    ZapChunkBuilder,
-)
 from .engine import RAGEngine
 
 logger = logging.getLogger(__name__)
@@ -28,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 class ChunkBuilder(Protocol):
     tool_name: str
+    domain: str
+    provided_fields: frozenset[str]
+    type_flags: dict[str, set[str]]
 
     def build(
         self, result: ToolResult, profile: str
@@ -37,28 +32,59 @@ class ChunkBuilder(Protocol):
 
 
 # ------------------------------------------------------------------
+# ChunkBuilderFactory
+# ------------------------------------------------------------------
+
+
+class ChunkBuilderFactory:
+    @staticmethod
+    def load(tool_name: str) -> ChunkBuilder | None:
+        """Load and instantiate the chunk builder for tool_name, or None."""
+        stem = tool_name.replace("-", "_")
+        try:
+            module = importlib.import_module(f"core.rag.chunks.{stem}")
+        except ImportError:
+            logger.debug("No chunk builder module for tool %r", tool_name)
+            return None
+        for _, obj in inspect.getmembers(module, inspect.isclass):
+            if (
+                obj.__module__ == module.__name__
+                and getattr(obj, "tool_name", None) == tool_name
+            ):
+                return obj()
+        logger.debug("No ChunkBuilder class found in module for tool %r", tool_name)
+        return None
+
+
+# ------------------------------------------------------------------
 # Builder registry helpers
 # ------------------------------------------------------------------
 
 
 def _default_builders() -> dict[str, ChunkBuilder]:
-    builders: list[ChunkBuilder] = [
-        NmapChunkBuilder(),
-        SemgrepChunkBuilder(),
-        OsvScannerChunkBuilder(),
-        PipAuditChunkBuilder(),
-        NpmAuditChunkBuilder(),
-        ComposerAuditChunkBuilder(),
-        GitleaksChunkBuilder(),
-        ZapChunkBuilder(),
-    ]
-    return {b.tool_name: b for b in builders}
+    """Discover all chunk builders by scanning the chunks package directory."""
+    from pathlib import Path
+
+    result: dict[str, ChunkBuilder] = {}
+    chunks_dir = Path(__file__).parent / "chunks"
+    for module_file in sorted(chunks_dir.glob("*.py")):
+        if module_file.name.startswith("_") or module_file.stem == "sca":
+            continue
+        tool_name = module_file.stem.replace("_", "-")
+        builder = ChunkBuilderFactory.load(tool_name)
+        if builder is not None:
+            result[builder.tool_name] = builder
+    return result
 
 
 def get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
-    return {
-        name: builder.fingerprint_key for name, builder in _default_builders().items()
-    }
+    return {name: b.fingerprint_key for name, b in _default_builders().items()}
+
+
+def get_tool_domain(tool_name: str) -> str | None:
+    """Return the domain ('code', 'web', 'network') for a tool, or None."""
+    builder = ChunkBuilderFactory.load(tool_name)
+    return builder.domain if builder is not None else None
 
 
 # ------------------------------------------------------------------

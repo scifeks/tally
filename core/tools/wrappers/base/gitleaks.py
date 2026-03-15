@@ -8,6 +8,9 @@ from ...parsers.gitleaks_parser import combine_gitleaks_results
 
 
 class BaseGitleaksTool(ToolInterface):
+    _candidate_commands: list[str] = ["gitleaks"]
+    _command_entry_type: str = "repo"
+
     @property
     def name(self) -> str:
         return "gitleaks"
@@ -39,6 +42,14 @@ class BaseGitleaksTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return False
+
+    @property
+    def always_run(self) -> bool:
+        return True
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

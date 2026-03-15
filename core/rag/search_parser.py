@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.rag.ingestor import get_tool_domain
 from core.repl.search_command_parser import SearchValidationError
 from core.tools.constants import (
     CONFIDENCE_LEVELS,
     DOMAINS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
-    TOOL_DOMAIN_MAP,
 )
 
 _DEFAULT_SEMANTIC_PAGE_SIZE = 20
@@ -83,7 +83,7 @@ def _add_filter(
 ) -> None:
     if key not in _VALID_KEYS:
         if active_tool is not None:
-            domain = TOOL_DOMAIN_MAP.get(active_tool)
+            domain = get_tool_domain(active_tool)
             if domain:
                 keys_str = ", ".join(_DOMAIN_KEYS.get(domain, []))
                 raise SearchValidationError(

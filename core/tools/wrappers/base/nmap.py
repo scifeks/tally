@@ -10,6 +10,8 @@ from ...parsers.nmap_parser import parse_nmap_xml, parse_nmap_xml_string
 
 class BaseNmapTool(ToolInterface):
     _DEFAULT_NMAP_ARGS = "-sV -sC -O"
+    _candidate_commands: list[str] = ["nmap"]
+    _command_entry_type: str = "repo"
 
     @property
     def name(self) -> str:
@@ -42,6 +44,14 @@ class BaseNmapTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return False
+
+    @property
+    def always_run(self) -> bool:
+        return False
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

@@ -89,7 +89,8 @@ class ScanCommands:
 
     def _cmd_scan_inner(self, args: list[str]) -> None:
         """Inner scan logic — runs after registry is refreshed."""
-        from core.tools.constants import DOMAINS, TOOL_DOMAIN_MAP
+        from core.rag.ingestor import get_tool_domain
+        from core.tools.constants import DOMAINS
 
         auto_approve = "--yes" in args
         args = [a for a in args if a != "--yes"]
@@ -167,7 +168,7 @@ class ScanCommands:
             )
             if requested_domains is not None:
                 candidates = [
-                    t for t in candidates if TOOL_DOMAIN_MAP.get(t) in requested_domains
+                    t for t in candidates if get_tool_domain(t) in requested_domains
                 ]
             effective_tools = candidates
 
@@ -184,9 +185,7 @@ class ScanCommands:
                 if effective_tools is not None:
                     # Network tools (nmap) cannot be scoped to a single repo
                     net = [
-                        t
-                        for t in effective_tools
-                        if TOOL_DOMAIN_MAP.get(t) == "network"
+                        t for t in effective_tools if get_tool_domain(t) == "network"
                     ]
                     if net:
                         self.repl.console.print(
@@ -202,14 +201,10 @@ class ScanCommands:
             else:
                 if effective_tools is not None:
                     net = [
-                        t
-                        for t in effective_tools
-                        if TOOL_DOMAIN_MAP.get(t) == "network"
+                        t for t in effective_tools if get_tool_domain(t) == "network"
                     ]
                     repo_tools = [
-                        t
-                        for t in effective_tools
-                        if TOOL_DOMAIN_MAP.get(t) != "network"
+                        t for t in effective_tools if get_tool_domain(t) != "network"
                     ]
                     if net:
                         orchestrator.run_segment("network")

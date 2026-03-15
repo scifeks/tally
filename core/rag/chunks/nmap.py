@@ -12,6 +12,11 @@ from ._shared import _first_output_file, _shared_meta
 
 class NmapChunkBuilder:
     tool_name = "nmap"
+    domain = "network"
+    provided_fields: frozenset[str] = frozenset(
+        {"severity", "confidence", "risk_type", "remediation", "description"}
+    )
+    type_flags: dict[str, set[str]] = {"informational": set()}
 
     def build(
         self, result: ToolResult, profile: str
@@ -71,7 +76,7 @@ class NmapChunkBuilder:
                 host_meta["nmap_args"] = nmap_args
             if scan_start_time:
                 host_meta["scan_start_time"] = scan_start_time
-            host_meta.update(_shared_meta("nmap", "informational"))
+            host_meta.update(_shared_meta(self, "informational"))
             host_meta["severity"] = SEVERITY_INFORMATIONAL
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
             chunks.append((host_text, host_meta, host_id))
@@ -99,7 +104,7 @@ class NmapChunkBuilder:
                     "timestamp": timestamp,
                     "source_file": source_file,
                 }
-                port_meta.update(_shared_meta("nmap", "informational"))
+                port_meta.update(_shared_meta(self, "informational"))
                 port_meta["severity"] = SEVERITY_INFORMATIONAL
                 if nmap_version:
                     port_meta["nmap_version"] = nmap_version

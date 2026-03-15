@@ -12,6 +12,9 @@ from ...parsers.pip_audit_parser import (
 
 
 class BasePipAuditTool(ToolInterface):
+    _candidate_commands: list[str] = ["pip-audit"]
+    _command_entry_type: str = "repo"
+
     @property
     def name(self) -> str:
         return "pip-audit"
@@ -43,6 +46,14 @@ class BasePipAuditTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return False
+
+    @property
+    def always_run(self) -> bool:
+        return False
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

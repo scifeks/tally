@@ -13,7 +13,7 @@ from ._shared import _first_output_file, _shared_meta
 
 
 def _build_sca_chunks(
-    tool_name: str, result: ToolResult, profile: str
+    builder: Any, result: ToolResult, profile: str
 ) -> list[tuple[str, dict[str, Any], str]]:
     """Build ChromaDB document chunks for any SCA tool result."""
     tool = result.tool_name
@@ -97,7 +97,7 @@ def _build_sca_chunks(
             meta["references"] = ", ".join(references)
         if cwe_ids:
             meta["cwe_ids"] = ", ".join(cwe_ids)
-        meta.update(_shared_meta(tool, "dependency"))
+        meta.update(_shared_meta(builder, "dependency"))
 
         doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
         chunks.append((text, meta, doc_id))
@@ -106,7 +106,7 @@ def _build_sca_chunks(
 
 
 def _sca_fingerprint_key(tool_name: str, finding: dict[str, Any]) -> str:
-    tool = finding.get("tool", tool_name)
+    tool = finding.get("tool") or tool_name
     return "|".join(
         [
             str(tool),

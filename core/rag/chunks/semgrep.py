@@ -11,6 +11,11 @@ from ._shared import _first_output_file, _shared_meta
 
 class SemgrepChunkBuilder:
     tool_name = "semgrep"
+    domain = "code"
+    provided_fields: frozenset[str] = frozenset({"severity"})
+    type_flags: dict[str, set[str]] = {
+        "vulnerability": {"type_vulnerability", "type_weakness"}
+    }
 
     def build(
         self, result: ToolResult, profile: str
@@ -92,7 +97,7 @@ class SemgrepChunkBuilder:
                 meta["impact"] = impact
             if references:
                 meta["references"] = ", ".join(references)
-            meta.update(_shared_meta("semgrep", "vulnerability"))
+            meta.update(_shared_meta(self, "vulnerability"))
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
             chunks.append((text, meta, doc_id))

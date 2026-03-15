@@ -9,21 +9,8 @@ from core.tools.constants import (
     FINDING_TYPES,
     SEVERITY_HIGH,
     SEVERITY_LEVELS,
-    TOOL_DOMAIN_MAP,
-    TOOL_PROVIDED_FIELDS,
     FieldSource,
 )
-
-INGESTOR_TOOLS: set[str] = {
-    "nmap",
-    "semgrep",
-    "osv-scanner",
-    "pip-audit",
-    "npm-audit",
-    "composer-audit",
-    "gitleaks",
-    "zap",
-}
 
 
 def test_finding_types() -> None:
@@ -54,10 +41,6 @@ def test_confidence_confirmed_constant() -> None:
     assert CONFIDENCE_CONFIRMED == "confirmed"
 
 
-def test_gitleaks_tool_provided_includes_confidence() -> None:
-    assert "confidence" in TOOL_PROVIDED_FIELDS["gitleaks"]
-
-
 def test_enrichment_fields_includes_confidence() -> None:
     assert "confidence" in ENRICHMENT_FIELDS
 
@@ -75,19 +58,6 @@ def test_field_source_attributes_exist() -> None:
 def test_field_source_values_distinct() -> None:
     values = [FieldSource.TOOL, FieldSource.ENRICHMENT, FieldSource.RULE]
     assert len(set(values)) == 3
-
-
-def test_tool_domain_map_keys() -> None:
-    assert set(TOOL_DOMAIN_MAP.keys()) == INGESTOR_TOOLS
-
-
-def test_tool_provided_fields_keys() -> None:
-    assert set(TOOL_PROVIDED_FIELDS.keys()) == INGESTOR_TOOLS
-
-
-def test_tool_domain_map_values_in_domains() -> None:
-    for tool, domain in TOOL_DOMAIN_MAP.items():
-        assert domain in DOMAINS, f"{tool!r} maps to unknown domain {domain!r}"
 
 
 def test_boolean_type_fields() -> None:

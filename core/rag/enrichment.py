@@ -15,10 +15,10 @@ from core.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
     SEVERITY_LEVELS,
-    TOOL_PROVIDED_FIELDS,
 )
 
 from .engine import RAGEngine
+from .ingestor import ChunkBuilderFactory
 
 if TYPE_CHECKING:
     from core.store.sqlite_store import SQLiteStore
@@ -216,7 +216,10 @@ class EnrichmentPipeline:
     def _get_fields_to_enrich(self, metadata: dict[str, Any]) -> list[str]:
         """Return list of ENRICHMENT_FIELDS keys that still need values."""
         tool = metadata.get("tool", "")
-        tool_provided = TOOL_PROVIDED_FIELDS.get(tool, set())
+        _builder = ChunkBuilderFactory.load(tool)
+        tool_provided = (
+            _builder.provided_fields if _builder is not None else frozenset()
+        )
         fields = []
         for field in ENRICHMENT_FIELDS:
             if field in tool_provided:

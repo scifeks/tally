@@ -9,6 +9,9 @@ from ...parsers.semgrep_parser import parse_semgrep_json, parse_semgrep_json_str
 
 
 class BaseSemgrepTool(ToolInterface):
+    _candidate_commands: list[str] = ["semgrep"]
+    _command_entry_type: str = "repo"
+
     @property
     def name(self) -> str:
         return "semgrep"
@@ -40,6 +43,14 @@ class BaseSemgrepTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return False
+
+    @property
+    def always_run(self) -> bool:
+        return True
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

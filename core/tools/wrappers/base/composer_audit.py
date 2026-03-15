@@ -12,6 +12,9 @@ from ...parsers.composer_audit_parser import (
 
 
 class BaseComposerAuditTool(ToolInterface):
+    _candidate_commands: list[str] = ["composer"]
+    _command_entry_type: str = "repo"
+
     @property
     def name(self) -> str:
         return "composer-audit"
@@ -45,6 +48,14 @@ class BaseComposerAuditTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return False
+
+    @property
+    def always_run(self) -> bool:
+        return False
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

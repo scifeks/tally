@@ -22,6 +22,7 @@ from core.pipeline.events import (
 )
 from core.pipeline.handlers import EnrichmentHandler, IngestHandler, PersistenceHandler
 from core.project import ProjectManager
+from core.rag.ingestor import get_tool_domain
 from core.repl.commands import (
     KnowledgeCommands,
     ProjectCommands,
@@ -31,7 +32,6 @@ from core.repl.commands import (
     ToolCommands,
 )
 from core.startup.checker import print_installed_system_tools
-from core.tools.constants import TOOL_DOMAIN_MAP
 from core.tools.registry import print_discovery_summary
 
 _log = logging.getLogger(__name__)
@@ -301,7 +301,7 @@ _GENERIC_EXAMPLES: list[tuple[str, str]] = [
 
 def _build_search_help_table(tool_name: str | None = None) -> Table:
     """Build a search reference table, optionally narrowed to a tool's domain."""
-    domain = TOOL_DOMAIN_MAP.get(tool_name) if tool_name else None
+    domain = get_tool_domain(tool_name) if tool_name else None
     show_code = domain in (None, "code")
     show_web = domain in (None, "web")
     show_network = domain in (None, "network")

@@ -7,6 +7,9 @@ from ...interface import ToolInterface
 
 
 class BaseZapTool(ToolInterface):
+    _candidate_commands: list[str] = ["zap.sh", "zap-cli", "zaproxy"]
+    _command_entry_type: str = "api"
+
     @property
     def name(self) -> str:
         return "zap"
@@ -38,6 +41,14 @@ class BaseZapTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return True
+
+    @property
+    def always_run(self) -> bool:
+        return True
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

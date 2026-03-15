@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from core.tools.constants import FINDING_TYPES, SEVERITY_LEVELS, TOOL_DOMAIN_MAP
+from core.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
 
 _DEFAULT_PAGE_SIZE = 200
 
@@ -69,12 +69,10 @@ def _validate_flag_values(
                     f"Tool {v!r} not found. Run 'tools' to see configured tools."
                 )
     elif flag == "domain":
-        domain_values = set(TOOL_DOMAIN_MAP.values())
         for v in values:
-            if v not in domain_values:
+            if v not in DOMAINS:
                 raise SearchValidationError(
-                    f"Unknown domain {v!r}. "
-                    f"Valid domains: {', '.join(sorted(domain_values))}"
+                    f"Unknown domain {v!r}. Valid domains: {', '.join(sorted(DOMAINS))}"
                 )
     elif flag == "type":
         for v in values:

@@ -12,6 +12,11 @@ from ._shared import _first_output_file, _shared_meta
 
 class ZapChunkBuilder:
     tool_name = "zap"
+    domain = "web"
+    provided_fields: frozenset[str] = frozenset(
+        {"severity", "confidence", "remediation", "description"}
+    )
+    type_flags: dict[str, set[str]] = {"vulnerability": {"type_vulnerability"}}
 
     def build(
         self, result: ToolResult, profile: str
@@ -83,7 +88,7 @@ class ZapChunkBuilder:
                 meta["param"] = param
             if cwe_id is not None:
                 meta["cwe_id"] = cwe_id
-            meta.update(_shared_meta("zap", "vulnerability"))
+            meta.update(_shared_meta(self, "vulnerability"))
 
             doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
             chunks.append((text, meta, doc_id))
