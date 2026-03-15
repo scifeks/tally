@@ -73,7 +73,7 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
-        """scan [--repo=<repo>] [--tool=<tool,...>] [--type=<type,...>]"""
+        """scan [--repo=<repo>] [--tool=<tool,...>] [--domain=<domain,...>]"""
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'project add' first.[/yellow]"
@@ -97,7 +97,7 @@ class ScanCommands:
 
         repo_val: str | None = None
         tool_val: str | None = None
-        type_val: str | None = None
+        domain_val: str | None = None
         unrecognized: list[str] = []
 
         for arg in args:
@@ -105,8 +105,8 @@ class ScanCommands:
                 repo_val = arg[7:]
             elif arg.startswith("--tool="):
                 tool_val = arg[7:]
-            elif arg.startswith("--type="):
-                type_val = arg[7:]
+            elif arg.startswith("--domain="):
+                domain_val = arg[9:]
             else:
                 unrecognized.append(arg)
 
@@ -114,7 +114,7 @@ class ScanCommands:
             self.repl.console.print(
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
                 "Usage: scan [--repo=<repo>] [--tool=<tool,...>]"
-                " [--type=<type,...>] [--yes]"
+                " [--domain=<domain,...>] [--yes]"
             )
             return
 
@@ -147,28 +147,28 @@ class ScanCommands:
                 )
                 return
 
-        # Validate --type
-        requested_types: list[str] | None = None
-        if type_val is not None:
-            requested_types = [t.strip() for t in type_val.split(",") if t.strip()]
-            invalid_t = [t for t in requested_types if t not in DOMAINS]
-            if invalid_t:
+        # Validate --domain
+        requested_domains: list[str] | None = None
+        if domain_val is not None:
+            requested_domains = [t.strip() for t in domain_val.split(",") if t.strip()]
+            invalid_d = [t for t in requested_domains if t not in DOMAINS]
+            if invalid_d:
                 self.repl.console.print(
-                    f"[red]Unknown type(s):[/red] {', '.join(invalid_t)}\n"
-                    f"Valid types: {', '.join(sorted(DOMAINS))}"
+                    f"[red]Unknown domain(s):[/red] {', '.join(invalid_d)}\n"
+                    f"Valid domains: {', '.join(sorted(DOMAINS))}"
                 )
                 return
 
-        # Compute effective tool list (intersection of --tool and --type filters)
+        # Compute effective tool list (intersection of --tool and --domain filters)
         effective_tools: list[str] | None = None
-        if requested_tools is not None or requested_types is not None:
+        if requested_tools is not None or requested_domains is not None:
             all_configured = list(tool_registry.list_tool_names())
             candidates = (
                 list(requested_tools) if requested_tools is not None else all_configured
             )
-            if requested_types is not None:
+            if requested_domains is not None:
                 candidates = [
-                    t for t in candidates if TOOL_DOMAIN_MAP.get(t) in requested_types
+                    t for t in candidates if TOOL_DOMAIN_MAP.get(t) in requested_domains
                 ]
             effective_tools = candidates
 

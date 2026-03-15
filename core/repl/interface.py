@@ -106,8 +106,8 @@ _HELP_REGISTRY = [
     (
         "scan",
         "scan",
-        "--type=<type,...>",
-        "Run tools matching domain type(s). Comma-separated.",
+        "--domain=<domain,...>",
+        "Filter by domain: code, web, network. Comma-separated.",
     ),
     # Manual Run
     ("run", None, None, "Manual Run"),
@@ -167,7 +167,13 @@ _HELP_REGISTRY = [
         "search",
         "search",
         "--type=<type,...>",
-        "Filter by tool domain type(s). Comma-separated.",
+        "Filter by finding type: secret, vulnerability, ... Comma-separated.",
+    ),
+    (
+        "search",
+        "search",
+        "--domain=<domain,...>",
+        "Filter by domain: code, web, network. Comma-separated.",
     ),
     (
         "search",
@@ -321,7 +327,11 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
     # Usage examples
     table.add_row("[bold yellow]Usage[/bold yellow]", "")
     table.add_row("search --tool=<name>", "Filter by configured tool name")
-    table.add_row("search --type=<type>", "Filter by type: secret, vulnerability, ...")
+    table.add_row(
+        "search --type=<type>",
+        "Filter by finding type: secret, vulnerability, ...",
+    )
+    table.add_row("search --domain=<domain>", "Filter by domain: code, web, network")
     table.add_row("search --<field>=<value>", "Exact match filter on metadata key")
     table.add_row("search --<field>~=<value>", "Partial match filter on metadata key")
     table.add_row("search --tool=<n> --type=<t> --severity=<s>", "Chain filters (AND)")

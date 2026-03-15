@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from core.tools.constants import TOOL_DOMAIN_MAP, TOOL_TYPE_MAP
+from core.tools.constants import TOOL_DOMAIN_MAP
 
 
 def _first_output_file(output_files: dict[str, Path]) -> str:
@@ -41,7 +41,6 @@ def _shared_meta(tool_name: str, finding_type: str) -> dict[str, Any]:
     }
     return {
         "domain": TOOL_DOMAIN_MAP[tool_name],
-        "tool_type": TOOL_TYPE_MAP[tool_name],
         "enriched": False,
         **booleans,
     }

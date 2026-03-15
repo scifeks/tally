@@ -11,7 +11,6 @@ from core.tools.constants import (
     SEVERITY_LEVELS,
     TOOL_DOMAIN_MAP,
     TOOL_PROVIDED_FIELDS,
-    TOOL_TYPE_MAP,
     FieldSource,
 )
 
@@ -80,10 +79,6 @@ def test_field_source_values_distinct() -> None:
 
 def test_tool_domain_map_keys() -> None:
     assert set(TOOL_DOMAIN_MAP.keys()) == INGESTOR_TOOLS
-
-
-def test_tool_type_map_keys() -> None:
-    assert set(TOOL_TYPE_MAP.keys()) == INGESTOR_TOOLS
 
 
 def test_tool_provided_fields_keys() -> None:

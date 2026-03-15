@@ -45,16 +45,6 @@ TOOL_DOMAIN_MAP: dict[str, str] = {
     "nmap": "network",
 }
 
-TOOL_TYPE_MAP: dict[str, str] = {
-    "gitleaks": "code",
-    "semgrep": "code",
-    "pip-audit": "code",
-    "npm-audit": "code",
-    "osv-scanner": "code",
-    "composer-audit": "code",
-    "zap": "web",
-    "nmap": "network",
-}
 
 TOOL_PROVIDED_FIELDS: dict[str, set[str]] = {
     "gitleaks": {"severity", "risk_type", "confidence"},
