@@ -4,7 +4,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, NamedTuple
 
 from .base import ToolResult, ToolWrapper
 from .interface import ExecutionPass
@@ -41,6 +41,12 @@ def sanitize_command(cmd: list[str]) -> list[str]:
         if any(ch in token for ch in _METACHAR_CHARS):
             raise ValueError(f"Shell metacharacter in command token: {token!r}")
     return cmd
+
+
+class _RunResult(NamedTuple):
+    proc: subprocess.CompletedProcess[str]
+    start: float
+    success: bool
 
 
 class ToolExecutor:
@@ -102,115 +108,20 @@ class ToolExecutor:
             if not self._prompt_approval(tool.name, cmd):
                 return self._failure(tool.name, timestamp, "Execution denied by user.")
 
-        # 4. Run
+        # 4. Run (with privilege escalation if needed)
         print(f"Running {tool.name}...")
         output_dir = self._ensure_output_dir(tool.name)
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
+        findings_exit_ok = getattr(tool, "findings_exit_ok", False)
 
         start = perf_counter()
-        try:
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=cwd,
-            )
-        except subprocess.TimeoutExpired:
-            duration = round(perf_counter() - start, 3)
-            print(f"✗ Failed  (timeout after {timeout}s)")
-            return ToolResult(
-                tool_name=tool.name,
-                success=False,
-                output=f"Timed out after {timeout} seconds.",
-                parsed_data=None,
-                output_files={},
-                timestamp=timestamp,
-                duration_seconds=duration,
-            )
-        except FileNotFoundError:
-            print("✗ Failed  (command not found)")
-            _log.error("Tool %s: command not found: %s", tool.name, cmd[0])
-            return self._failure(tool.name, timestamp, f"Command not found: {cmd[0]!r}")
-        except PermissionError:
-            print("✗ Failed  (permission denied)")
-            _log.error("Tool %s: permission denied: %s", tool.name, cmd[0])
-            return self._failure(tool.name, timestamp, f"Permission denied: {cmd[0]!r}")
-
+        run_result = self._run_with_escalation(
+            cmd, tool.name, timestamp, timeout, cwd, start, findings_exit_ok
+        )
+        if isinstance(run_result, ToolResult):
+            return run_result
+        proc, start, success = run_result
         duration = round(perf_counter() - start, 3)
-        findings_exit_ok = getattr(tool, "findings_exit_ok", False)
-        success = proc.returncode == 0 or (findings_exit_ok and proc.returncode == 1)
-
-        # 4b. Sudo retry if the failure looks like a privilege error
-        if not success and _needs_root(proc.stderr):
-            sudo_cmd = ["sudo"] + cmd
-            if self._sudo_approved or self._prompt_sudo(tool.name, sudo_cmd):
-                self._sudo_approved = True
-                start = perf_counter()
-                try:
-                    proc = subprocess.run(
-                        sudo_cmd,
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout,
-                        cwd=cwd,
-                    )
-                except subprocess.TimeoutExpired:
-                    duration = round(perf_counter() - start, 3)
-                    print(f"✗ Failed  (timeout after {timeout}s)")
-                    return ToolResult(
-                        tool_name=tool.name,
-                        success=False,
-                        output=f"Timed out after {timeout} seconds.",
-                        parsed_data=None,
-                        output_files={},
-                        timestamp=timestamp,
-                        duration_seconds=duration,
-                    )
-                except FileNotFoundError:
-                    # sudo not found — fall back to su -c
-                    su_cmd = ["su", "-c", shlex.join(cmd)]
-                    print("  (sudo not found, retrying with su -c...)")
-                    start = perf_counter()
-                    try:
-                        proc = subprocess.run(
-                            su_cmd,
-                            capture_output=True,
-                            text=True,
-                            timeout=timeout,
-                            cwd=cwd,
-                        )
-                    except subprocess.TimeoutExpired:
-                        duration = round(perf_counter() - start, 3)
-                        print(f"✗ Failed  (timeout after {timeout}s)")
-                        return ToolResult(
-                            tool_name=tool.name,
-                            success=False,
-                            output=f"Timed out after {timeout} seconds.",
-                            parsed_data=None,
-                            output_files={},
-                            timestamp=timestamp,
-                            duration_seconds=duration,
-                        )
-                    except (FileNotFoundError, PermissionError):
-                        print("✗ Failed  (elevated privileges not available)")
-                        _log.error(
-                            "Tool %s: elevated privileges unavailable", tool.name
-                        )
-                        return self._failure(
-                            tool.name,
-                            timestamp,
-                            "Elevated privileges not available"
-                            " (sudo and su both failed)",
-                        )
-                except PermissionError:
-                    print("✗ Failed  (permission denied)")
-                    _log.error("Tool %s: permission denied running sudo", tool.name)
-                    return self._failure(
-                        tool.name, timestamp, "Permission denied running sudo"
-                    )
-                duration = round(perf_counter() - start, 3)
-                success = proc.returncode == 0
 
         # 5. Persist stdout / stderr to disk
         output_files: dict[str, Path] = {}
@@ -317,3 +228,91 @@ class ToolExecutor:
             timestamp=timestamp,
             duration_seconds=0.0,
         )
+
+    @staticmethod
+    def _timeout_result(
+        tool_name: str, timestamp: str, start: float, timeout: int
+    ) -> ToolResult:
+        duration = round(perf_counter() - start, 3)
+        print(f"✗ Failed  (timeout after {timeout}s)")
+        return ToolResult(
+            tool_name=tool_name,
+            success=False,
+            output=f"Timed out after {timeout} seconds.",
+            parsed_data=None,
+            output_files={},
+            timestamp=timestamp,
+            duration_seconds=duration,
+        )
+
+    def _run_subprocess(
+        self, cmd: list[str], timeout: int, cwd: str | None
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd
+        )
+
+    def _run_with_escalation(
+        self,
+        cmd: list[str],
+        tool_name: str,
+        timestamp: str,
+        timeout: int,
+        cwd: str | None,
+        start: float,
+        findings_exit_ok: bool,
+    ) -> _RunResult | ToolResult:
+        try:
+            proc = self._run_subprocess(cmd, timeout, cwd)
+        except subprocess.TimeoutExpired:
+            return self._timeout_result(tool_name, timestamp, start, timeout)
+        except FileNotFoundError:
+            print("✗ Failed  (command not found)")
+            _log.error("Tool %s: command not found: %s", tool_name, cmd[0])
+            return self._failure(tool_name, timestamp, f"Command not found: {cmd[0]!r}")
+        except PermissionError:
+            print("✗ Failed  (permission denied)")
+            _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
+            return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
+
+        success = proc.returncode == 0 or (findings_exit_ok and proc.returncode == 1)
+
+        if not success and _needs_root(proc.stderr):
+            sudo_cmd = ["sudo"] + cmd
+            if self._sudo_approved or self._prompt_sudo(tool_name, sudo_cmd):
+                self._sudo_approved = True
+                start = perf_counter()
+                try:
+                    proc = self._run_subprocess(sudo_cmd, timeout, cwd)
+                except subprocess.TimeoutExpired:
+                    return self._timeout_result(tool_name, timestamp, start, timeout)
+                except FileNotFoundError:
+                    su_cmd = ["su", "-c", shlex.join(cmd)]
+                    print("  (sudo not found, retrying with su -c...)")
+                    start = perf_counter()
+                    try:
+                        proc = self._run_subprocess(su_cmd, timeout, cwd)
+                    except subprocess.TimeoutExpired:
+                        return self._timeout_result(
+                            tool_name, timestamp, start, timeout
+                        )
+                    except (FileNotFoundError, PermissionError):
+                        print("✗ Failed  (elevated privileges not available)")
+                        _log.error(
+                            "Tool %s: elevated privileges unavailable", tool_name
+                        )
+                        return self._failure(
+                            tool_name,
+                            timestamp,
+                            "Elevated privileges not available"
+                            " (sudo and su both failed)",
+                        )
+                except PermissionError:
+                    print("✗ Failed  (permission denied)")
+                    _log.error("Tool %s: permission denied running sudo", tool_name)
+                    return self._failure(
+                        tool_name, timestamp, "Permission denied running sudo"
+                    )
+                success = proc.returncode == 0
+
+        return _RunResult(proc=proc, start=start, success=success)
