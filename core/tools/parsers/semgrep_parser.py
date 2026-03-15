@@ -8,6 +8,12 @@ _SEVERITY_MAP = {
     "INFO": "low",
 }
 
+_CONFIDENCE_MAP: dict[str, str] = {
+    "high": "confirmed",
+    "medium": "probable",
+    "low": "potential",
+}
+
 
 def parse_semgrep_json(json_path: Path) -> dict[str, Any]:
     """Parse a semgrep JSON output file into structured data."""
@@ -92,7 +98,9 @@ def _extract_severity(extra: dict[str, Any]) -> str:
 def _extract_metadata(extra: dict[str, Any]) -> dict[str, Any]:
     meta = extra.get("metadata", {})
     raw_conf = meta.get("confidence")
-    confidence = raw_conf.lower() if isinstance(raw_conf, str) else None
+    confidence = (
+        _CONFIDENCE_MAP.get(raw_conf.lower()) if isinstance(raw_conf, str) else None
+    )
 
     technology = meta.get("technology")
     subcategory = meta.get("subcategory")
