@@ -388,7 +388,7 @@ class KnowledgeCommands:
             )
             return
 
-        from core.store.sqlite_store import (
+        from core.repl.search_command_parser import (
             SearchValidationError,
             parse_sqlite_search_command,
         )

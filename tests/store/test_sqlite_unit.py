@@ -12,12 +12,14 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.sqlite_store import (  # noqa: E402
+from core.repl.search_command_parser import (  # noqa: E402
     SearchValidationError,
+    parse_sqlite_search_command,
+)
+from core.store.sqlite_store import (  # noqa: E402
     SQLiteStore,
     _normalise_cwe,
     _normalise_finding_type,
-    parse_sqlite_search_command,
 )
 
 # ---------------------------------------------------------------------------
