@@ -39,6 +39,7 @@ that references it.
 | `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"`. |
 | `projects_dir` | string | `"./projects"` | Directory where project workspaces are stored. |
 | `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
+| `enrichment_max_concurrency` | int | `4` | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). |
 
 ### `ollama` Block Fields
 
@@ -123,6 +124,31 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
 
 With `api_key` left empty, Tally reads the key from the `ANTHROPIC_API_KEY`
 environment variable at startup.
+
+### Enrichment Concurrency
+
+After a scan completes, Tally enriches each finding by calling the configured LLM
+to produce fields such as `severity`, `risk_type`, `remediation`, and `description`.
+By default these calls are dispatched concurrently using a thread pool with up to
+`enrichment_max_concurrency` (default: `4`) workers.
+
+**Important:** sending concurrent requests only reduces wall-clock time if your
+Ollama instance is configured to process them in parallel. Ollama's default is one
+request at a time. Set the `OLLAMA_NUM_PARALLEL` environment variable before
+starting Ollama to enable parallel slots:
+
+```bash
+OLLAMA_NUM_PARALLEL=2 ollama serve
+```
+
+`enrichment_max_concurrency` should be set to at least the value of
+`OLLAMA_NUM_PARALLEL` so that workers are never idle waiting for a free slot.
+Setting it higher than `OLLAMA_NUM_PARALLEL` has no additional benefit.
+
+Keep VRAM headroom in mind when choosing a parallel slot count. Each active slot
+holds an independent KV cache for the model. As a rough guide, if your model
+occupies X GB at rest, each additional parallel slot adds roughly 10–20% of that
+in KV cache overhead at typical enrichment prompt lengths.
 
 ### Example — Ollama on a Remote Host
 
