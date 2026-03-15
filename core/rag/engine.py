@@ -135,8 +135,7 @@ class RAGEngine:
         try:
             from core.store import SQLiteStore
 
-            store = SQLiteStore(self.base_path, self.project_name)
-            store._init_schema()
+            SQLiteStore(self.base_path, self.project_name)
         except Exception as exc:
             logger.warning("SQLite schema init failed: %s", exc)
 

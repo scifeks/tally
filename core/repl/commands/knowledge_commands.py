@@ -604,7 +604,6 @@ class KnowledgeCommands:
         assert self.repl.active_project is not None
         try:
             store = SQLiteStore(self.repl.base_path, self.repl.active_project)
-            store._init_schema()
             return store
         except Exception as exc:
             self.repl.console.print(f"[red]SQLite error:[/red] {exc}")

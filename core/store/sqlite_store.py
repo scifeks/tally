@@ -358,6 +358,7 @@ class SQLiteStore:
             Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
         )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path))
