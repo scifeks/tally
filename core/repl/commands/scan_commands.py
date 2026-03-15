@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.repl.commands.scan_result_presenter import ScanResultPresenter
 from core.tools.base import ToolResult
 from core.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from core.tools.factory import ToolWrapperFactory
-from core.tools.parsers.gitleaks_parser import combine_gitleaks_results
 from core.tools.registry import tool_registry
 
 if TYPE_CHECKING:
@@ -282,7 +281,7 @@ class ScanCommands:
             hosts=[],
         )
 
-        self._print_result(result)
+        ScanResultPresenter(self.repl.console).present(result)
 
         if result.output_files:
             for path in result.output_files.values():
@@ -302,430 +301,8 @@ class ScanCommands:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
 
     # ------------------------------------------------------------------
-    # Private — nmap scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_nmap_scan(
-        self,
-        profile_name: str,
-        executor: ToolExecutor | None = None,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("nmap")
-        assert tool is not None
-        if executor is None:
-            executor = ToolExecutor(
-                project_name=self.repl.active_project,
-                base_path=Path(self.repl.base_path),
-            )
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=profile_name,
-            profile=profile_name,
-            project_name=self.repl.active_project,
-            base_path=self.repl.base_path,
-        )
-
-    # ------------------------------------------------------------------
-    # Private — semgrep scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_semgrep_scan(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("semgrep")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            repo_path=repo_path,
-        )
-
-    # ------------------------------------------------------------------
-    # Private — osv-scanner scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_osv_scan(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("osv-scanner")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            repo_path=repo_path,
-        )
-
-    def _print_osv_result(self, result: ToolResult) -> None:
-        has_valid_data = result.parsed_data and "error" not in result.parsed_data
-        if has_valid_data or result.success:
-            summary = self._summarize_osv(result)
-            self.repl.console.print(f"[green]✓ Scan complete:[/green] {summary}")
-        else:
-            self.repl.console.print(f"[red]✗ Scan failed:[/red] {result.output}")
-
-    @staticmethod
-    def _summarize_osv(result: ToolResult) -> str:
-        if not result.parsed_data:
-            return "scan complete"
-        summary = result.parsed_data.get("summary", {})
-        total = summary.get("total_vulnerabilities", 0)
-        by_sev = summary.get("by_severity", {})
-        parts = [
-            f"{by_sev[s]} {s}"
-            for s in ("critical", "high", "medium", "low")
-            if by_sev.get(s)
-        ]
-        sev_str = ", ".join(parts) if parts else "none"
-        return f"{total} vulnerabilities ({sev_str})"
-
-    # ------------------------------------------------------------------
-    # Private — pip-audit scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_pip_audit_scan(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("pip-audit")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            repo_path=repo_path,
-        )
-
-    # ------------------------------------------------------------------
-    # Private — npm-audit scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_npm_audit_scan(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("npm-audit")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        # Docker wrappers handle cwd via -w internally; only set cwd for local tools.
-        config = tool_registry.get_tool_config("npm-audit")
-        cwd = repo_path if (config is None or config.location == "local") else None
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            cwd=cwd,
-            repo_path=repo_path,
-        )
-
-    # ------------------------------------------------------------------
-    # Private — composer-audit scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_composer_audit_scan(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("composer-audit")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        # Docker wrappers handle cwd via -w internally; only set cwd for local tools.
-        config = tool_registry.get_tool_config("composer-audit")
-        cwd = repo_path if (config is None or config.location == "local") else None
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            cwd=cwd,
-            repo_path=repo_path,
-        )
-
-    # ------------------------------------------------------------------
-    # Private — gitleaks scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_gitleaks_both_scans(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        """Run gitleaks dir + git scans and return a single combined ToolResult.
-
-        Prompts once for approval (unless auto_approve), then runs both scan
-        types with auto_approve=True so the executor does not prompt twice.
-        """
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("gitleaks")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-
-        if not auto_approve:
-            try:
-                answer = input(f"Run {tool.name} (dir + git)? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                return ToolResult(
-                    tool_name="gitleaks",
-                    success=False,
-                    output="Execution denied by user.",
-                    parsed_data=None,
-                    output_files={},
-                    timestamp=ToolResult.now_iso(),
-                    duration_seconds=0.0,
-                )
-            if answer not in ("y", "yes"):
-                return ToolResult(
-                    tool_name="gitleaks",
-                    success=False,
-                    output="Execution denied by user.",
-                    parsed_data=None,
-                    output_files={},
-                    timestamp=ToolResult.now_iso(),
-                    duration_seconds=0.0,
-                )
-
-        dir_result = executor.execute(
-            tool,
-            auto_approve=True,
-            timeout=timeout,
-            label=f"{repo_name}_dir",
-            repo_path=repo_path,
-            scan_type="dir",
-        )
-        git_result = executor.execute(
-            tool,
-            auto_approve=True,
-            timeout=timeout,
-            label=f"{repo_name}_git",
-            repo_path=repo_path,
-            scan_type="git",
-        )
-
-        dir_data = dir_result.parsed_data or {}
-        git_data = git_result.parsed_data or {}
-        combined_data = combine_gitleaks_results(dir_data, git_data)
-
-        # Write combined JSON to tool_outputs/gitleaks/
-        from datetime import datetime
-
-        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-        output_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "tool_outputs"
-            / "gitleaks"
-        )
-        output_dir.mkdir(parents=True, exist_ok=True)
-        combined_path = output_dir / f"{repo_name}_{ts}_combined.json"
-        combined_path.write_text(json.dumps(combined_data, indent=2), encoding="utf-8")
-
-        combined_files: dict[str, Path] = {}
-        for key, path in dir_result.output_files.items():
-            combined_files[f"dir_{key}"] = path
-        for key, path in git_result.output_files.items():
-            combined_files[f"git_{key}"] = path
-        combined_files["combined"] = combined_path
-
-        return ToolResult(
-            tool_name="gitleaks",
-            success=dir_result.success or git_result.success,
-            output=(dir_result.output or "") + "\n" + (git_result.output or ""),
-            parsed_data=combined_data,
-            output_files=combined_files,
-            timestamp=dir_result.timestamp,
-            duration_seconds=dir_result.duration_seconds + git_result.duration_seconds,
-        )
-
-    def _execute_gitleaks_scan(
-        self,
-        repo_name: str,
-        repo_path: str,
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        """Backward-compatible single-scan entry point; delegates to dual-scan."""
-        return self._execute_gitleaks_both_scans(
-            repo_name,
-            repo_path,
-            auto_approve=auto_approve,
-            timeout=timeout,
-        )
-
-    def _print_gitleaks_result(self, result: ToolResult) -> None:
-        has_valid_data = result.parsed_data and "error" not in result.parsed_data
-        if has_valid_data or result.success:
-            data = result.parsed_data or {}
-            total = data.get("summary", {}).get("total_secrets", 0)
-            if total > 0:
-                self.repl.console.print(
-                    "[yellow]⚠  WARNING: Secrets detected![/yellow]"
-                )
-            summary = self._summarize_gitleaks(result)
-            self.repl.console.print(f"[green]✓ Scan complete:[/green] {summary}")
-        else:
-            self.repl.console.print(f"[red]✗ Scan failed:[/red] {result.output}")
-
-    @staticmethod
-    def _summarize_gitleaks(result: ToolResult) -> str:
-        if not result.parsed_data:
-            return "scan complete"
-        summary = result.parsed_data.get("summary", {})
-        total = summary.get("total_secrets", 0)
-        if total == 0:
-            return "0 secrets found (clean)"
-        files_count = summary.get("files_with_secrets", 0)
-        by_rule = summary.get("by_rule", {})
-        rule_str = ", ".join(f"{count} {rule}" for rule, count in by_rule.items())
-        return f"{total} secrets in {files_count} file(s) ({rule_str})"
-
-    # ------------------------------------------------------------------
-    # Private — ZAP scan flow
-    # ------------------------------------------------------------------
-
-    def _execute_zap_scan(
-        self,
-        repo_name: str,
-        base_url: str,
-        endpoints: dict[str, list[str]],
-        auto_approve: bool = False,
-        timeout: int = DEFAULT_TIMEOUT,
-    ) -> ToolResult:
-        assert self.repl.active_project is not None
-        tool = tool_registry.get_tool("zap")
-        assert tool is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        # Compute report path inside the project's tool_outputs/zap directory
-        output_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "tool_outputs"
-            / "zap"
-        )
-        output_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-        output_file = str(output_dir / f"{repo_name}_{ts}_report.json")
-
-        return executor.execute(
-            tool,
-            auto_approve=auto_approve,
-            timeout=timeout,
-            label=repo_name,
-            base_url=base_url,
-            endpoints=endpoints,
-            output_file=output_file,
-        )
-
-    def _print_zap_result(self, result: ToolResult) -> None:
-        has_valid_data = result.parsed_data and "error" not in result.parsed_data
-        if has_valid_data or result.success:
-            summary = self._summarize_zap(result)
-            self.repl.console.print(f"[green]✓ Scan complete:[/green] {summary}")
-        else:
-            self.repl.console.print(f"[red]✗ Scan failed:[/red] {result.output[:200]}")
-
-    @staticmethod
-    def _summarize_zap(result: ToolResult) -> str:
-        if not result.parsed_data:
-            return "scan complete"
-        summary = result.parsed_data.get("summary", {})
-        total = summary.get("total_alerts", 0)
-        by_risk = summary.get("by_risk", {})
-        parts = [
-            f"{by_risk[r]} {r}"
-            for r in ("high", "medium", "low", "informational")
-            if by_risk.get(r)
-        ]
-        risk_str = ", ".join(parts) if parts else "none"
-        urls = summary.get("urls_scanned", 0)
-        return f"{total} alerts ({risk_str}), {urls} URLs scanned"
-
-    # ------------------------------------------------------------------
     # Private — shared SCA result helpers
     # ------------------------------------------------------------------
-
-    def _print_sca_result(self, result: ToolResult, tool_name: str) -> None:
-        has_valid_data = result.parsed_data and "error" not in result.parsed_data
-        if has_valid_data or result.success:
-            summary = self._summarize_sca(result)
-            self.repl.console.print(f"[green]✓ Scan complete:[/green] {summary}")
-        else:
-            self.repl.console.print(f"[red]✗ Scan failed:[/red] {result.output}")
-
-    @staticmethod
-    def _summarize_sca(result: ToolResult) -> str:
-        if not result.parsed_data:
-            return "scan complete"
-        summary = result.parsed_data.get("summary", {})
-        total = summary.get("total_vulnerabilities", 0)
-        by_sev = summary.get("by_severity", {})
-        parts = [
-            f"{by_sev[s]} {s}"
-            for s in ("critical", "high", "medium", "low")
-            if by_sev.get(s)
-        ]
-        sev_str = ", ".join(parts) if parts else "none"
-        return f"{total} vulnerabilities ({sev_str})"
 
     @staticmethod
     def _select_repo_tools(
@@ -752,35 +329,9 @@ class ScanCommands:
             tools.append("zap")
         return tools
 
-    def _print_semgrep_result(self, result: ToolResult) -> None:
-        has_valid_data = result.parsed_data and "error" not in result.parsed_data
-        if has_valid_data or result.success:
-            summary = self._summarize_semgrep(result)
-            self.repl.console.print(f"[green]✓ Scan complete:[/green] {summary}")
-        else:
-            self.repl.console.print(f"[red]✗ Scan failed:[/red] {result.output}")
-
-    @staticmethod
-    def _summarize_semgrep(result: ToolResult) -> str:
-        if not result.parsed_data:
-            return "scan complete"
-        summary = result.parsed_data.get("summary", {})
-        total = summary.get("total_findings", 0)
-        by_sev = summary.get("by_severity", {})
-        parts = [f"{by_sev[s]} {s}" for s in ("high", "medium", "low") if by_sev.get(s)]
-        sev_str = ", ".join(parts) if parts else "none"
-        return f"{total} findings ({sev_str})"
-
     # ------------------------------------------------------------------
     # Private — UI helpers
     # ------------------------------------------------------------------
-
-    def _print_result(self, result: ToolResult) -> None:
-        if result.success:
-            summary = self._summarize_result(result)
-            self.repl.console.print(f"[green]✓ Scan complete:[/green] {summary}")
-        else:
-            self.repl.console.print(f"[red]✗ Scan failed:[/red] {result.output}")
 
     def _ask_ingest(self) -> bool:
         try:
@@ -789,18 +340,6 @@ class ScanCommands:
             print()
             return False
         return answer in ("y", "yes")
-
-    @staticmethod
-    def _summarize_result(result: ToolResult) -> str:
-        if not result.parsed_data:
-            return "scan complete"
-        hosts = result.parsed_data.get("hosts", [])
-        up_hosts = [h for h in hosts if h.get("state") == "up"]
-        open_ports = sum(
-            len([p for p in h.get("ports", []) if p.get("state") == "open"])
-            for h in up_hosts
-        )
-        return f"{len(up_hosts)} hosts up, {open_ports} open ports"
 
     @staticmethod
     def _parse_timeout_arg(
@@ -886,8 +425,6 @@ class ScanCommands:
 
     def _export_summary(self, summary, export_path: str) -> None:
         """Export ScanSummary results to a JSON file."""
-        import json
-
         try:
             data = {
                 "total_tools_run": summary.total_tools_run,
