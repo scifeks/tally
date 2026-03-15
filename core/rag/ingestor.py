@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from core.tools.base import ToolResult
 from core.tools.constants import (
@@ -20,182 +20,82 @@ from .engine import RAGEngine
 logger = logging.getLogger(__name__)
 
 
-class FindingIngestor:
-    """Ingests tool findings into the project's ChromaDB collection.
+# ------------------------------------------------------------------
+# ChunkBuilder Protocol
+# ------------------------------------------------------------------
 
-    Uses a delete-insert (upsert) strategy: before adding new findings for a
-    given tool/profile combination the existing ones are removed, so re-running
-    a scan never produces duplicates.
 
-    Document ID format::
+class ChunkBuilder(Protocol):
+    tool_name: str
 
-        <tool>_<profile>_<type>_<indices>_<compact_utc>
-        nmap_webservers_host_0_20240228T143022
-        nmap_webservers_port_0_3_20240228T143022
-    """
+    def build(
+        self, result: ToolResult, profile: str
+    ) -> list[tuple[str, dict[str, Any], str]]: ...
 
-    def __init__(self, rag_engine: RAGEngine, project_name: str) -> None:
-        """Initialise the ingestor.
 
-        Args:
-            rag_engine:   Initialised RAGEngine for the current project.
-            project_name: Identifier for the project (used for logging).
-        """
-        self._engine = rag_engine
-        self.project_name = project_name
+# ------------------------------------------------------------------
+# Module-level helpers
+# ------------------------------------------------------------------
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
-    def ingest_tool_output(
-        self,
-        tool_result: ToolResult,
-        profile: str | None = None,
-    ) -> list[str]:
-        """Index a tool's findings into ChromaDB.
+def _first_output_file(output_files: dict[str, Path]) -> str:
+    """Return the string path of the first output file, or empty string."""
+    if not output_files:
+        return ""
+    return str(next(iter(output_files.values())))
 
-        Old findings for the same tool/profile are deleted before new ones are
-        added, ensuring the collection always reflects the latest scan.
 
-        Args:
-            tool_result: Result object returned by the tool executor.
-            profile:     Optional profile name (e.g. nmap profile). Defaults
-                         to ``"manual"`` for ad-hoc invocations.
-
-        Returns:
-            List of document IDs ingested (empty list if nothing to ingest).
-        """
-        tool = tool_result.tool_name
-        effective_profile = profile or "manual"
-
-        if not tool_result.success or tool_result.parsed_data is None:
-            logger.warning(
-                "Skipping ingestion for %s/%s: "
-                "tool did not succeed or produced no parsed data",
-                tool,
-                effective_profile,
-            )
-            return []
-
-        if "error" in tool_result.parsed_data:
-            logger.warning(
-                "Skipping ingestion for %s/%s: parse error — %s",
-                tool,
-                effective_profile,
-                tool_result.parsed_data["error"],
-            )
-            return []
-
-        # Delete stale findings for this tool/profile before inserting fresh ones
-        deleted = self._engine.delete_findings(tool, effective_profile)
-        if deleted:
-            logger.debug(
-                "Deleted %d stale findings for %s/%s", deleted, tool, effective_profile
-            )
-
-        chunks = self._build_chunks(tool_result, effective_profile)
-
-        if not chunks:
-            logger.info("No findings to ingest for %s/%s", tool, effective_profile)
-            return []
-
-        texts, metadatas, ids = zip(*chunks)
-        self._engine.add_documents(list(texts), list(metadatas), list(ids))
-        logger.info(
-            "Ingested %d documents for %s/%s", len(chunks), tool, effective_profile
+def _shared_meta(tool_name: str, finding_type: str) -> dict[str, Any]:
+    """Return shared metadata fields for a given tool/finding_type combination."""
+    _sca_flags = {"type_dependency", "type_vulnerability"}
+    _TYPE_FLAGS: dict[tuple[str, str], set[str]] = {
+        ("gitleaks", "secret"): {"type_secret"},
+        ("semgrep", "vulnerability"): {"type_vulnerability", "type_weakness"},
+        ("zap", "vulnerability"): {"type_vulnerability"},
+        ("nmap", "informational"): set(),
+        ("pip-audit", "dependency"): _sca_flags,
+        ("npm-audit", "dependency"): _sca_flags,
+        ("osv-scanner", "dependency"): _sca_flags,
+        ("composer-audit", "dependency"): _sca_flags,
+    }
+    true_flags = _TYPE_FLAGS.get((tool_name, finding_type), set())
+    booleans = {
+        f"type_{t}": (f"type_{t}" in true_flags)
+        for t in (
+            "secret",
+            "vulnerability",
+            "weakness",
+            "misconfiguration",
+            "exposure",
+            "dependency",
+            "informational",
         )
-        return list(ids)
+    }
+    return {
+        "domain": TOOL_DOMAIN_MAP[tool_name],
+        "tool_type": TOOL_TYPE_MAP[tool_name],
+        "enriched": False,
+        **booleans,
+    }
 
-    # ------------------------------------------------------------------
-    # Chunk builders
-    # ------------------------------------------------------------------
 
-    def _shared_meta(self, tool_name: str, finding_type: str) -> dict[str, Any]:
-        """Return shared metadata fields for a given tool/finding_type combination."""
-        _sca_flags = {"type_dependency", "type_vulnerability"}
-        _TYPE_FLAGS: dict[tuple[str, str], set[str]] = {
-            ("gitleaks", "secret"): {"type_secret"},
-            ("semgrep", "vulnerability"): {"type_vulnerability", "type_weakness"},
-            ("zap", "vulnerability"): {"type_vulnerability"},
-            ("nmap", "informational"): set(),
-            ("pip-audit", "dependency"): _sca_flags,
-            ("npm-audit", "dependency"): _sca_flags,
-            ("osv-scanner", "dependency"): _sca_flags,
-            ("composer-audit", "dependency"): _sca_flags,
-        }
-        true_flags = _TYPE_FLAGS.get((tool_name, finding_type), set())
-        booleans = {
-            f"type_{t}": (f"type_{t}" in true_flags)
-            for t in (
-                "secret",
-                "vulnerability",
-                "weakness",
-                "misconfiguration",
-                "exposure",
-                "dependency",
-                "informational",
-            )
-        }
-        return {
-            "domain": TOOL_DOMAIN_MAP[tool_name],
-            "tool_type": TOOL_TYPE_MAP[tool_name],
-            "enriched": False,
-            **booleans,
-        }
+# ------------------------------------------------------------------
+# Concrete ChunkBuilder classes
+# ------------------------------------------------------------------
 
-    def _build_chunks(
-        self,
-        tool_result: ToolResult,
-        profile: str,
+
+class NmapChunkBuilder:
+    tool_name = "nmap"
+
+    def build(
+        self, result: ToolResult, profile: str
     ) -> list[tuple[str, dict[str, Any], str]]:
-        """Dispatch to the appropriate per-tool chunk builder.
-
-        Args:
-            tool_result: Parsed tool result.
-            profile:     Effective profile name.
-
-        Returns:
-            List of ``(document_text, metadata, id)`` tuples.
-        """
-        tool = tool_result.tool_name
-        if tool == "nmap":
-            return self._chunks_from_nmap(tool_result, profile)
-        if tool == "semgrep":
-            return self._chunks_from_semgrep(tool_result, profile)
-        if tool in ("osv-scanner", "pip-audit", "npm-audit", "composer-audit"):
-            return self._chunks_from_sca_vulns(tool_result, profile)
-        if tool == "gitleaks":
-            return self._chunks_from_gitleaks(tool_result, profile)
-        if tool == "zap":
-            return self._chunks_from_zap(tool_result, profile)
-
-        logger.debug("No chunk builder for tool '%s'; skipping ingestion", tool)
-        return []
-
-    def _chunks_from_nmap(
-        self,
-        tool_result: ToolResult,
-        profile: str,
-    ) -> list[tuple[str, dict[str, Any], str]]:
-        """Build document chunks from an nmap ToolResult.
-
-        Each host produces one ``informational`` chunk; each open port on that
-        host produces an additional ``informational`` chunk.
-
-        Args:
-            tool_result: Parsed nmap result.
-            profile:     Effective profile name.
-
-        Returns:
-            List of ``(document_text, metadata, id)`` tuples.
-        """
-        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         hosts: list[dict[str, Any]] = parsed.get("hosts", [])
         scan_info: dict[str, Any] = parsed.get("scan_info", {})
 
-        timestamp = tool_result.timestamp
-        source_file = _first_output_file(tool_result.output_files)
+        timestamp = result.timestamp
+        source_file = _first_output_file(result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
         nmap_version = scan_info.get("version", "")
@@ -245,7 +145,7 @@ class FindingIngestor:
                 host_meta["nmap_args"] = nmap_args
             if scan_start_time:
                 host_meta["scan_start_time"] = scan_start_time
-            host_meta.update(self._shared_meta("nmap", "informational"))
+            host_meta.update(_shared_meta("nmap", "informational"))
             host_meta["severity"] = SEVERITY_INFORMATIONAL
             host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
             chunks.append((host_text, host_meta, host_id))
@@ -273,7 +173,7 @@ class FindingIngestor:
                     "timestamp": timestamp,
                     "source_file": source_file,
                 }
-                port_meta.update(self._shared_meta("nmap", "informational"))
+                port_meta.update(_shared_meta("nmap", "informational"))
                 port_meta["severity"] = SEVERITY_INFORMATIONAL
                 if nmap_version:
                     port_meta["nmap_version"] = nmap_version
@@ -296,28 +196,18 @@ class FindingIngestor:
 
         return chunks
 
-    def _chunks_from_semgrep(
-        self,
-        tool_result: ToolResult,
-        profile: str,
+
+class SemgrepChunkBuilder:
+    tool_name = "semgrep"
+
+    def build(
+        self, result: ToolResult, profile: str
     ) -> list[tuple[str, dict[str, Any], str]]:
-        """Build document chunks from a semgrep ToolResult.
-
-        Each finding produces one ``vulnerability`` chunk containing the rule
-        ID, severity, message, file path, and code snippet.
-
-        Args:
-            tool_result: Parsed semgrep result.
-            profile:     Effective profile name (repo name).
-
-        Returns:
-            List of ``(document_text, metadata, id)`` tuples.
-        """
-        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         findings: list[dict[str, Any]] = parsed.get("findings", [])
 
-        timestamp = tool_result.timestamp
-        source_file = _first_output_file(tool_result.output_files)
+        timestamp = result.timestamp
+        source_file = _first_output_file(result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
@@ -390,40 +280,29 @@ class FindingIngestor:
                 meta["impact"] = impact
             if references:
                 meta["references"] = ", ".join(references)
-            meta.update(self._shared_meta("semgrep", "vulnerability"))
+            meta.update(_shared_meta("semgrep", "vulnerability"))
 
             doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks
 
-    def _chunks_from_sca_vulns(
-        self,
-        tool_result: ToolResult,
-        profile: str,
+
+class ScaChunkBuilder:  # type: ignore[misc]
+    """Handles osv-scanner, pip-audit, npm-audit, and composer-audit."""
+
+    def __init__(self, tool_name: str) -> None:
+        self.tool_name = tool_name
+
+    def build(
+        self, result: ToolResult, profile: str
     ) -> list[tuple[str, dict[str, Any], str]]:
-        """Build document chunks from any SCA tool that emits the standard
-        vulnerability format.
-
-        Handles osv-scanner, pip-audit, npm-audit, and composer-audit, all of
-        which produce ``{vulnerabilities: [...], summary: {...}}`` output.
-
-        Each vulnerability produces one ``dependency`` chunk containing the
-        package name, version, advisory ID, severity, and description.
-
-        Args:
-            tool_result: Parsed SCA tool result.
-            profile:     Effective profile name (repo name).
-
-        Returns:
-            List of ``(document_text, metadata, id)`` tuples.
-        """
-        tool = tool_result.tool_name
-        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
+        tool = result.tool_name
+        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         vulnerabilities: list[dict[str, Any]] = parsed.get("vulnerabilities", [])
 
-        timestamp = tool_result.timestamp
-        source_file = _first_output_file(tool_result.output_files)
+        timestamp = result.timestamp
+        source_file = _first_output_file(result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         # Safe ID prefix: replace hyphens so doc IDs have consistent format
         tool_id = tool.replace("-", "_")
@@ -499,36 +378,25 @@ class FindingIngestor:
                 meta["references"] = ", ".join(references)
             if cwe_ids:
                 meta["cwe_ids"] = ", ".join(cwe_ids)
-            meta.update(self._shared_meta(tool, "dependency"))
+            meta.update(_shared_meta(tool, "dependency"))
 
             doc_id = f"{tool_id}_{profile}_vuln_{vi}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks
 
-    def _chunks_from_gitleaks(
-        self,
-        tool_result: ToolResult,
-        profile: str,
+
+class GitleaksChunkBuilder:
+    tool_name = "gitleaks"
+
+    def build(
+        self, result: ToolResult, profile: str
     ) -> list[tuple[str, dict[str, Any], str]]:
-        """Build document chunks from a gitleaks ToolResult.
-
-        Each detected secret produces one ``secret`` chunk containing the rule
-        ID, file path, line number, and match pattern.  The actual secret value
-        is never included in any chunk or metadata.
-
-        Args:
-            tool_result: Parsed gitleaks result.
-            profile:     Effective profile name (repo name).
-
-        Returns:
-            List of ``(document_text, metadata, id)`` tuples.
-        """
-        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         secrets: list[dict[str, Any]] = parsed.get("secrets", [])
 
-        timestamp = tool_result.timestamp
-        source_file = _first_output_file(tool_result.output_files)
+        timestamp = result.timestamp
+        source_file = _first_output_file(result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
@@ -599,35 +467,25 @@ class FindingIngestor:
                 meta["symlink_file"] = symlink_file
             if fingerprint:
                 meta["fingerprint"] = fingerprint
-            meta.update(self._shared_meta("gitleaks", "secret"))
+            meta.update(_shared_meta("gitleaks", "secret"))
 
             doc_id = f"gitleaks_{profile}_secret_{si}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks
 
-    def _chunks_from_zap(
-        self,
-        tool_result: ToolResult,
-        profile: str,
+
+class ZapChunkBuilder:
+    tool_name = "zap"
+
+    def build(
+        self, result: ToolResult, profile: str
     ) -> list[tuple[str, dict[str, Any], str]]:
-        """Build document chunks from a ZAP ToolResult.
-
-        Each alert instance produces one ``vulnerability`` chunk containing the
-        risk level, affected endpoint, description, and remediation advice.
-
-        Args:
-            tool_result: Parsed ZAP result.
-            profile:     Effective profile name (repo name).
-
-        Returns:
-            List of ``(document_text, metadata, id)`` tuples.
-        """
-        parsed: dict[str, Any] = tool_result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         alerts: list[dict[str, Any]] = parsed.get("alerts", [])
 
-        timestamp = tool_result.timestamp
-        source_file = _first_output_file(tool_result.output_files)
+        timestamp = result.timestamp
+        source_file = _first_output_file(result.output_files)
         ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
@@ -690,12 +548,156 @@ class FindingIngestor:
                 meta["param"] = param
             if cwe_id is not None:
                 meta["cwe_id"] = cwe_id
-            meta.update(self._shared_meta("zap", "vulnerability"))
+            meta.update(_shared_meta("zap", "vulnerability"))
 
             doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
             chunks.append((text, meta, doc_id))
 
         return chunks
+
+
+def _default_builders() -> dict[str, ChunkBuilder]:
+    builders: list[ChunkBuilder] = [
+        NmapChunkBuilder(),
+        SemgrepChunkBuilder(),
+        ScaChunkBuilder("osv-scanner"),
+        ScaChunkBuilder("pip-audit"),
+        ScaChunkBuilder("npm-audit"),
+        ScaChunkBuilder("composer-audit"),
+        GitleaksChunkBuilder(),
+        ZapChunkBuilder(),
+    ]
+    return {b.tool_name: b for b in builders}
+
+
+# ------------------------------------------------------------------
+# FindingIngestor
+# ------------------------------------------------------------------
+
+
+class FindingIngestor:
+    """Ingests tool findings into the project's ChromaDB collection.
+
+    Uses a delete-insert (upsert) strategy: before adding new findings for a
+    given tool/profile combination the existing ones are removed, so re-running
+    a scan never produces duplicates.
+
+    Document ID format::
+
+        <tool>_<profile>_<type>_<indices>_<compact_utc>
+        nmap_webservers_host_0_20240228T143022
+        nmap_webservers_port_0_3_20240228T143022
+    """
+
+    def __init__(
+        self,
+        rag_engine: RAGEngine,
+        project_name: str,
+        builders: dict[str, ChunkBuilder] | None = None,
+    ) -> None:
+        """Initialise the ingestor.
+
+        Args:
+            rag_engine:   Initialised RAGEngine for the current project.
+            project_name: Identifier for the project (used for logging).
+            builders:     Optional mapping of tool name to ChunkBuilder. Defaults
+                          to the standard set of builders for all supported tools.
+        """
+        self._engine = rag_engine
+        self.project_name = project_name
+        self._builders: dict[str, ChunkBuilder] = (
+            builders if builders is not None else _default_builders()
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def ingest_tool_output(
+        self,
+        tool_result: ToolResult,
+        profile: str | None = None,
+    ) -> list[str]:
+        """Index a tool's findings into ChromaDB.
+
+        Old findings for the same tool/profile are deleted before new ones are
+        added, ensuring the collection always reflects the latest scan.
+
+        Args:
+            tool_result: Result object returned by the tool executor.
+            profile:     Optional profile name (e.g. nmap profile). Defaults
+                         to ``"manual"`` for ad-hoc invocations.
+
+        Returns:
+            List of document IDs ingested (empty list if nothing to ingest).
+        """
+        tool = tool_result.tool_name
+        effective_profile = profile or "manual"
+
+        if not tool_result.success or tool_result.parsed_data is None:
+            logger.warning(
+                "Skipping ingestion for %s/%s: "
+                "tool did not succeed or produced no parsed data",
+                tool,
+                effective_profile,
+            )
+            return []
+
+        if "error" in tool_result.parsed_data:
+            logger.warning(
+                "Skipping ingestion for %s/%s: parse error — %s",
+                tool,
+                effective_profile,
+                tool_result.parsed_data["error"],
+            )
+            return []
+
+        # Delete stale findings for this tool/profile before inserting fresh ones
+        deleted = self._engine.delete_findings(tool, effective_profile)
+        if deleted:
+            logger.debug(
+                "Deleted %d stale findings for %s/%s", deleted, tool, effective_profile
+            )
+
+        chunks = self._build_chunks(tool_result, effective_profile)
+
+        if not chunks:
+            logger.info("No findings to ingest for %s/%s", tool, effective_profile)
+            return []
+
+        texts, metadatas, ids = zip(*chunks)
+        self._engine.add_documents(list(texts), list(metadatas), list(ids))
+        logger.info(
+            "Ingested %d documents for %s/%s", len(chunks), tool, effective_profile
+        )
+        return list(ids)
+
+    # ------------------------------------------------------------------
+    # Chunk dispatch
+    # ------------------------------------------------------------------
+
+    def _build_chunks(
+        self,
+        tool_result: ToolResult,
+        profile: str,
+    ) -> list[tuple[str, dict[str, Any], str]]:
+        """Dispatch to the registered ChunkBuilder for the tool.
+
+        Args:
+            tool_result: Parsed tool result.
+            profile:     Effective profile name.
+
+        Returns:
+            List of ``(document_text, metadata, id)`` tuples.
+        """
+        tool = tool_result.tool_name
+        builder = self._builders.get(tool)
+        if builder is None:
+            logger.debug(
+                "No chunk builder registered for tool '%s'; skipping ingestion", tool
+            )
+            return []
+        return builder.build(tool_result, profile)
 
     def _process_finding(
         self,
@@ -723,15 +725,3 @@ class FindingIngestor:
             "timestamp": RAGEngine.now_iso(),
         }
         return text, metadata
-
-
-# ------------------------------------------------------------------
-# Module-level helpers
-# ------------------------------------------------------------------
-
-
-def _first_output_file(output_files: dict[str, Path]) -> str:
-    """Return the string path of the first output file, or empty string."""
-    if not output_files:
-        return ""
-    return str(next(iter(output_files.values())))
