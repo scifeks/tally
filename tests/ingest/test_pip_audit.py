@@ -513,7 +513,7 @@ class TestPipAuditIngestor:
     def test_shared_metadata_fields(
         self, project_env: dict, vulns_parsed_data: dict
     ) -> None:
-        """pip-audit chunks have correct domain/tool_type/enriched/type_* fields."""
+        """pip-audit chunks have correct domain/enriched/type_* fields."""
         result = _make_pip_audit_result(vulns_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -522,7 +522,7 @@ class TestPipAuditIngestor:
         all_docs = _get_all_docs(engine)
         for meta in all_docs["metadatas"]:
             assert meta["domain"] == "code"
-            assert meta["tool_type"] == "code"
+
             assert meta["enriched"] is False
             assert meta["type_dependency"] is True
             assert meta["type_vulnerability"] is True
@@ -595,7 +595,7 @@ class TestNpmAuditIngestor:
         all_docs = _get_all_docs(engine)
         for meta in all_docs["metadatas"]:
             assert meta["domain"] == "code"
-            assert meta["tool_type"] == "code"
+
             assert meta["enriched"] is False
             assert meta["type_dependency"] is True
             assert meta["type_vulnerability"] is True
@@ -661,7 +661,7 @@ class TestOsvScannerIngestor:
         all_docs = _get_all_docs(engine)
         for meta in all_docs["metadatas"]:
             assert meta["domain"] == "code"
-            assert meta["tool_type"] == "code"
+
             assert meta["enriched"] is False
             assert meta["type_dependency"] is True
             assert meta["type_vulnerability"] is True
@@ -737,7 +737,7 @@ class TestComposerAuditIngestor:
         all_docs = _get_all_docs(engine)
         for meta in all_docs["metadatas"]:
             assert meta["domain"] == "code"
-            assert meta["tool_type"] == "code"
+
             assert meta["enriched"] is False
             assert meta["type_dependency"] is True
             assert meta["type_vulnerability"] is True

@@ -743,7 +743,7 @@ class TestNmapIngestor:
     def test_host_chunk_shared_metadata(
         self, project_env: dict, basic_parsed_data: dict
     ) -> None:
-        """Host chunks have correct domain/tool_type/enriched/type_* fields."""
+        """Host chunks have correct domain/enriched/type_* fields."""
         result = _make_nmap_result(basic_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -758,7 +758,7 @@ class TestNmapIngestor:
         assert host_metas
         for meta in host_metas:
             assert meta["domain"] == "network"
-            assert meta["tool_type"] == "network"
+
             assert meta["enriched"] is False
             assert meta["type_exposure"] is False
             assert meta["type_secret"] is False
@@ -785,7 +785,7 @@ class TestNmapIngestor:
         assert port_metas
         for meta in port_metas:
             assert meta["domain"] == "network"
-            assert meta["tool_type"] == "network"
+
             assert meta["enriched"] is False
             assert meta["type_exposure"] is False
             assert meta["type_secret"] is False

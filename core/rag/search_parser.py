@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.rag.ingestor import get_tool_domain
+from core.repl.search_command_parser import SearchValidationError
 from core.tools.constants import (
     CONFIDENCE_LEVELS,
     DOMAINS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
-    TOOL_DOMAIN_MAP,
 )
 
 _DEFAULT_SEMANTIC_PAGE_SIZE = 20
@@ -51,10 +52,6 @@ _DOMAIN_KEYS: dict[str, list[str]] = {
 }
 
 
-class SearchValidationError(Exception):
-    """User-facing validation error for search query parsing."""
-
-
 @dataclass
 class SearchQuery:
     semantic_text: str | None  # free text for embedding search
@@ -86,7 +83,7 @@ def _add_filter(
 ) -> None:
     if key not in _VALID_KEYS:
         if active_tool is not None:
-            domain = TOOL_DOMAIN_MAP.get(active_tool)
+            domain = get_tool_domain(active_tool)
             if domain:
                 keys_str = ", ".join(_DOMAIN_KEYS.get(domain, []))
                 raise SearchValidationError(
@@ -283,93 +280,6 @@ def parse_search_query(
         semantic_text=semantic_text,
         where_filter=where_filter,
         is_semantic=is_semantic,
-        page_size=page_size,
-        page=page,
-    )
-
-
-def parse_search_command(
-    args: list[str],
-    known_tools: frozenset[str],
-) -> SearchQuery:
-    """Parse --flag=value syntax from the search REPL command.
-
-    Bare words and key=value without -- are rejected with old-syntax errors.
-    Known flags: --tool=, --type=, --severity= (validated, comma-split AND).
-    Arbitrary --<field>= and --<field>~= are passed through to ChromaDB.
-    """
-    filter_clauses: list[dict] = []
-    page_size: int | None = None
-    page: int = 1
-
-    for arg in args:
-        if not arg.startswith("--"):
-            if "~=" in arg or "=" in arg:
-                raise SearchValidationError(
-                    f"Old syntax detected: '{arg}'\n"
-                    "Use --flag=value syntax. "
-                    "Run 'search --help' for examples."
-                )
-            raise SearchValidationError(
-                f"Unexpected argument: '{arg}'\n"
-                "All search arguments use --flag=value syntax. "
-                "Run 'search --help' for examples."
-            )
-
-        rest = arg[2:]  # strip "--"
-
-        if "~=" in rest:
-            key, _, value = rest.partition("~=")
-            _handle_search_flag(
-                key,
-                value,
-                contains=True,
-                filter_clauses=filter_clauses,
-                known_tools=known_tools,
-            )
-            continue
-
-        if "=" not in rest:
-            raise SearchValidationError(
-                f"Flag '{arg}' requires a value, e.g. {arg}=<value>."
-            )
-
-        flag, _, val = rest.partition("=")
-
-        if flag == "page-size":
-            try:
-                page_size = int(val)
-                if page_size < 1:
-                    raise ValueError
-            except ValueError:
-                raise SearchValidationError("--page-size must be a positive integer.")
-        elif flag == "page":
-            try:
-                page = int(val)
-                if page < 1:
-                    raise ValueError
-            except ValueError:
-                raise SearchValidationError("--page must be a positive integer.")
-        elif flag == "help":
-            pass  # handled upstream in cmd_search
-        else:
-            _handle_search_flag(
-                flag,
-                val,
-                contains=False,
-                filter_clauses=filter_clauses,
-                known_tools=known_tools,
-            )
-
-    where_filter = _combine_clauses(filter_clauses)
-
-    if page_size is None:
-        page_size = _DEFAULT_METADATA_PAGE_SIZE
-
-    return SearchQuery(
-        semantic_text=None,
-        where_filter=where_filter,
-        is_semantic=False,
         page_size=page_size,
         page=page,
     )

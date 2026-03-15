@@ -135,8 +135,7 @@ class RAGEngine:
         try:
             from core.store import SQLiteStore
 
-            store = SQLiteStore(self.base_path, self.project_name)
-            store._init_schema()
+            SQLiteStore(self.base_path, self.project_name)
         except Exception as exc:
             logger.warning("SQLite schema init failed: %s", exc)
 
@@ -232,6 +231,45 @@ class RAGEngine:
         except Exception as exc:
             logger.warning("count_documents failed: %s", exc)
             return 0
+
+    # ------------------------------------------------------------------
+    # Collection access — callers must use these instead of _collection
+    # ------------------------------------------------------------------
+
+    def query_collection(self, **kwargs: Any) -> dict[str, Any]:
+        """Run a ChromaDB vector query against the project collection.
+
+        Wraps ``_collection.query()``. Returns an empty dict if the
+        collection is uninitialised rather than raising.
+
+        Typical kwargs: query_texts, n_results, include, where.
+        """
+        if self._collection is None:
+            return {}
+        return self._collection.query(**kwargs)  # type: ignore[return-value]
+
+    def get_documents(self, **kwargs: Any) -> dict[str, Any]:
+        """Fetch documents from the project collection via ChromaDB .get().
+
+        Wraps ``_collection.get()``. Returns an empty dict if the
+        collection is uninitialised rather than raising.
+
+        Typical kwargs: include, limit, offset, where, ids.
+        """
+        if self._collection is None:
+            return {}
+        return self._collection.get(**kwargs)  # type: ignore[return-value]
+
+    def get_all_metadatas(self) -> list[dict[str, Any]]:
+        """Return every document's metadata from the project collection.
+
+        Convenience wrapper for ``get_documents(include=["metadatas"])``.
+        Returns an empty list if the collection is uninitialised or empty.
+        """
+        if self._collection is None:
+            return []
+        result = self._collection.get(include=["metadatas"])
+        return result.get("metadatas") or []  # type: ignore[return-value]
 
     def get_stats(self) -> dict[str, Any]:
         """Return statistics for the project's vector store.

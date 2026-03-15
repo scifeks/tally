@@ -9,6 +9,9 @@ from ...parsers.osv_parser import parse_osv_json, parse_osv_json_string
 
 
 class BaseOSVScannerTool(ToolInterface):
+    _candidate_commands: list[str] = ["osv-scanner"]
+    _command_entry_type: str = "repo"
+
     @property
     def name(self) -> str:
         return "osv-scanner"
@@ -40,6 +43,14 @@ class BaseOSVScannerTool(ToolInterface):
     @property
     def requires_base_urls(self) -> bool:
         return False
+
+    @property
+    def always_run(self) -> bool:
+        return True
+
+    @property
+    def candidate_commands(self) -> list[str]:
+        return self._candidate_commands
 
     @property
     def supported_languages(self) -> list[str] | None:

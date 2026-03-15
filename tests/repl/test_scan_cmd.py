@@ -61,16 +61,16 @@ def test_scan_tool_comma_list_calls_for_each_tool() -> None:
     assert "gitleaks" in called_tools
 
 
-def test_scan_type_code_runs_only_code_tools() -> None:
-    _repl, orchestrator = _run(["--type=code"])
+def test_scan_domain_code_runs_only_code_tools() -> None:
+    _repl, orchestrator = _run(["--domain=code"])
     calls = orchestrator.run_tool_on_all_repos.call_args_list
     called_tools = [c.args[0] for c in calls]
     assert "nmap" not in called_tools
     assert "zap" not in called_tools
 
 
-def test_scan_type_code_web_runs_both_type_tools() -> None:
-    _repl, orchestrator = _run(["--type=code,web"])
+def test_scan_domain_code_web_runs_both_domain_tools() -> None:
+    _repl, orchestrator = _run(["--domain=code,web"])
     calls = orchestrator.run_tool_on_all_repos.call_args_list
     called_tools = [c.args[0] for c in calls]
     assert "zap" in called_tools
@@ -86,10 +86,10 @@ def test_scan_invalid_tool_prints_error() -> None:
     assert not orchestrator.run_tool_on_all_repos.called
 
 
-def test_scan_invalid_type_prints_error() -> None:
-    repl, orchestrator = _run(["--type=badtype"])
+def test_scan_invalid_domain_prints_error() -> None:
+    repl, orchestrator = _run(["--domain=badtype"])
     printed = repl.console.print.call_args[0][0]
-    assert "Unknown type" in printed
+    assert "Unknown domain" in printed
     assert not orchestrator.run_full_scan.called
 
 

@@ -12,12 +12,14 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.sqlite_store import (  # noqa: E402
+from core.repl.search_command_parser import (  # noqa: E402
     SearchValidationError,
+    parse_sqlite_search_command,
+)
+from core.store.sqlite_store import (  # noqa: E402
     SQLiteStore,
     _normalise_cwe,
     _normalise_finding_type,
-    parse_sqlite_search_command,
 )
 
 # ---------------------------------------------------------------------------
@@ -112,14 +114,12 @@ class TestValidatedFlags:
 class TestRunManagement:
     def test_create_run_returns_int(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         run_id = store.create_run({"tool": "gitleaks"})
         assert isinstance(run_id, int)
         assert run_id >= 1
 
     def test_add_run_tools_inserts_row_per_tool(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         run_id = store.create_run({})
         store.add_run_tools(
             run_id,
@@ -139,7 +139,6 @@ class TestRunManagement:
 
     def test_add_run_repos_inserts_row_per_repo(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         run_id = store.create_run({})
         store.add_run_repos(run_id, ["repo-a", "repo-b", "repo-c"])
         conn = store._connect()
@@ -179,7 +178,6 @@ def _seed_two_tools(store: SQLiteStore) -> None:
 class TestDeleteFindings:
     def test_delete_none_clears_all_tables(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         _seed_two_tools(store)
 
         store.delete_findings(tools=None)
@@ -192,7 +190,6 @@ class TestDeleteFindings:
 
     def test_delete_by_tool_removes_only_that_tool(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         _seed_two_tools(store)
 
         store.delete_findings(tools=["semgrep"])
@@ -205,7 +202,6 @@ class TestDeleteFindings:
 
     def test_delete_by_tool_keeps_runs(self, tmp_path: Path) -> None:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         _seed_two_tools(store)
 
         store.delete_findings(tools=["semgrep"])
@@ -386,7 +382,6 @@ class TestCweNormalisationUnit:
 class TestFindingTypeJsonEach:
     def _make_store(self, tmp_path: Path) -> SQLiteStore:
         store = SQLiteStore(tmp_path, "proj")
-        store._init_schema()
         return store
 
     def _seed(self, store: SQLiteStore, findings: list[dict]) -> None:

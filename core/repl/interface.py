@@ -22,6 +22,7 @@ from core.pipeline.events import (
 )
 from core.pipeline.handlers import EnrichmentHandler, IngestHandler, PersistenceHandler
 from core.project import ProjectManager
+from core.rag.ingestor import get_tool_domain
 from core.repl.commands import (
     KnowledgeCommands,
     ProjectCommands,
@@ -31,7 +32,6 @@ from core.repl.commands import (
     ToolCommands,
 )
 from core.startup.checker import print_installed_system_tools
-from core.tools.constants import TOOL_DOMAIN_MAP
 from core.tools.registry import print_discovery_summary
 
 _log = logging.getLogger(__name__)
@@ -106,8 +106,8 @@ _HELP_REGISTRY = [
     (
         "scan",
         "scan",
-        "--type=<type,...>",
-        "Run tools matching domain type(s). Comma-separated.",
+        "--domain=<domain,...>",
+        "Filter by domain: code, web, network. Comma-separated.",
     ),
     # Manual Run
     ("run", None, None, "Manual Run"),
@@ -167,7 +167,13 @@ _HELP_REGISTRY = [
         "search",
         "search",
         "--type=<type,...>",
-        "Filter by tool domain type(s). Comma-separated.",
+        "Filter by finding type: secret, vulnerability, ... Comma-separated.",
+    ),
+    (
+        "search",
+        "search",
+        "--domain=<domain,...>",
+        "Filter by domain: code, web, network. Comma-separated.",
     ),
     (
         "search",
@@ -295,7 +301,7 @@ _GENERIC_EXAMPLES: list[tuple[str, str]] = [
 
 def _build_search_help_table(tool_name: str | None = None) -> Table:
     """Build a search reference table, optionally narrowed to a tool's domain."""
-    domain = TOOL_DOMAIN_MAP.get(tool_name) if tool_name else None
+    domain = get_tool_domain(tool_name) if tool_name else None
     show_code = domain in (None, "code")
     show_web = domain in (None, "web")
     show_network = domain in (None, "network")
@@ -321,7 +327,11 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
     # Usage examples
     table.add_row("[bold yellow]Usage[/bold yellow]", "")
     table.add_row("search --tool=<name>", "Filter by configured tool name")
-    table.add_row("search --type=<type>", "Filter by type: secret, vulnerability, ...")
+    table.add_row(
+        "search --type=<type>",
+        "Filter by finding type: secret, vulnerability, ...",
+    )
+    table.add_row("search --domain=<domain>", "Filter by domain: code, web, network")
     table.add_row("search --<field>=<value>", "Exact match filter on metadata key")
     table.add_row("search --<field>~=<value>", "Partial match filter on metadata key")
     table.add_row("search --tool=<n> --type=<t> --severity=<s>", "Chain filters (AND)")

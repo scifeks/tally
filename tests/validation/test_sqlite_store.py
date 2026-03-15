@@ -29,7 +29,6 @@ _PROJECT_NAME = "test-proj"
 
 def _make_store(tmp_path: Path) -> SQLiteStore:
     store = SQLiteStore(tmp_path, _PROJECT_NAME)
-    store._init_schema()
     return store
 
 

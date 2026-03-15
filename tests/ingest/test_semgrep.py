@@ -159,7 +159,7 @@ class TestSemgrepIngestor:
     def test_shared_metadata(
         self, project_env: dict, findings_parsed_data: dict
     ) -> None:
-        """Semgrep chunks have correct domain/tool_type/enriched/type_* fields."""
+        """Semgrep chunks have correct domain/enriched/type_* fields."""
         result = _make_semgrep_result(findings_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -168,7 +168,6 @@ class TestSemgrepIngestor:
         all_docs = _get_all_docs(engine)
         for meta in all_docs["metadatas"]:
             assert meta["domain"] == "code"
-            assert meta["tool_type"] == "code"
             assert meta["enriched"] is False
             assert meta["type_vulnerability"] is True
             assert meta["type_weakness"] is True

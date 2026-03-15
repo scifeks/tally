@@ -14,14 +14,16 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from core.rag.search_parser import (  # noqa: E402
     SearchQuery,
-    SearchValidationError,
     _resolve_type_filter,
-    parse_search_command,
     parse_search_query,
 )
-from core.repl.commands.knowledge_commands import (  # noqa: E402
+from core.repl.commands.findings_table import (  # noqa: E402
     _color_severity,
     _extract_types,
+)
+from core.repl.search_command_parser import (  # noqa: E402
+    SearchValidationError,
+    parse_chromadb_search_command,
 )
 
 _KNOWN_TOOLS = frozenset({"nmap", "gitleaks", "semgrep", "zap", "pip-audit"})
@@ -378,7 +380,7 @@ _CMD_KNOWN_TOOLS = frozenset({"nmap", "semgrep", "gitleaks", "zap"})
 
 
 def _cmd_parse(args: list[str]) -> SearchQuery:
-    return parse_search_command(args, _CMD_KNOWN_TOOLS)
+    return parse_chromadb_search_command(args, _CMD_KNOWN_TOOLS)
 
 
 def test_search_cmd_bare_word_rejected():

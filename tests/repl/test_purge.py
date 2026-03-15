@@ -29,10 +29,9 @@ def _make_repl(tmp_path: Path, active_project: str = "testproj") -> MagicMock:
 def _make_rag_engine(doc_count: int = 5) -> MagicMock:
     """Return a RAGEngine mock that reports doc_count documents."""
     engine = MagicMock()
-    engine._collection = MagicMock()
-    engine._collection.get.return_value = {"ids": [f"id-{i}" for i in range(doc_count)]}
     engine.count_documents.return_value = doc_count
     engine.delete_findings.return_value = doc_count
+    engine.get_documents.return_value = {"ids": [f"id-{i}" for i in range(doc_count)]}
     return engine
 
 

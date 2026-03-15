@@ -156,7 +156,7 @@ class TestZapIngestor:
         assert engine.count_documents() == 2
 
     def test_shared_metadata(self, project_env: dict, alerts_parsed_data: dict) -> None:
-        """ZAP chunks have domain='web', tool_type='web', type_vulnerability=True."""
+        """ZAP chunks have domain='web', type_vulnerability=True."""
         result = _make_zap_result(alerts_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -165,7 +165,6 @@ class TestZapIngestor:
         all_docs = _get_all_docs(engine)
         for meta in all_docs["metadatas"]:
             assert meta["domain"] == "web"
-            assert meta["tool_type"] == "web"
             assert meta["enriched"] is False
             assert meta["type_vulnerability"] is True
             assert meta["type_secret"] is False

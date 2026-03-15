@@ -78,6 +78,18 @@ class ToolInterface(ABC):
         """True if the tool requires repo.base_urls to be configured."""
         ...
 
+    @property
+    @abstractmethod
+    def always_run(self) -> bool:
+        """True if this tool runs on every repo scan regardless of language gates."""
+        ...
+
+    @property
+    @abstractmethod
+    def candidate_commands(self) -> list[str]:
+        """Binary names to try with shutil.which during setup auto-detection."""
+        ...
+
     @abstractmethod
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass per subprocess invocation required."""

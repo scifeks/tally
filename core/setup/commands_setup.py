@@ -1,35 +1,38 @@
 """First-run interactive setup: generates config/commands.json."""
 
+import importlib
+import inspect
 import json
 import shutil
 from pathlib import Path
 
-# todo: tool mapping should be dynamic and based on available wrappers.
-# This should be handled in each wrapper.
-# Maps tool name → candidate binary names to try with shutil.which
-_TOOL_COMMANDS: dict[str, list[str]] = {
-    "semgrep": ["semgrep"],
-    "gitleaks": ["gitleaks"],
-    "osv-scanner": ["osv-scanner"],
-    "pip-audit": ["pip-audit"],
-    "npm-audit": ["npm"],
-    "composer-audit": ["composer"],
-    "nmap": ["nmap"],
-    "zap": ["zap.sh", "zap-cli", "zaproxy"],
-}
 
-# todo: Again, this mapping should be handled by each wrapper
-# CommandEntry.type for each tool
-_TOOL_TYPES: dict[str, str] = {
-    "semgrep": "repo",
-    "gitleaks": "repo",
-    "osv-scanner": "repo",
-    "pip-audit": "repo",
-    "npm-audit": "repo",
-    "composer-audit": "repo",
-    "nmap": "repo",
-    "zap": "api",
-}
+def _get_wrapper_meta(tool_name: str, location: str = "local") -> dict:
+    """Return {candidate_commands, tool_type} derived from wrapper class attributes.
+
+    Reads ``_candidate_commands`` and ``_command_entry_type`` class-level attrs set
+    on each base wrapper class.  Falls back to sane defaults when the module cannot
+    be imported or the class does not define those attrs.
+    """
+    from core.tools.interface import ToolInterface
+
+    stem = tool_name.replace("-", "_")
+    try:
+        module = importlib.import_module(f"core.tools.wrappers.{location}.{stem}")
+    except ImportError:
+        return {"candidate_commands": [tool_name], "tool_type": "repo"}
+    for _, obj in inspect.getmembers(module, inspect.isclass):
+        if (
+            issubclass(obj, ToolInterface)
+            and not inspect.isabstract(obj)
+            and obj.__module__ == module.__name__
+        ):
+            return {
+                "candidate_commands": getattr(obj, "_candidate_commands", [tool_name]),
+                "tool_type": getattr(obj, "_command_entry_type", "repo"),
+            }
+    return {"candidate_commands": [tool_name], "tool_type": "repo"}
+
 
 # Characters that are unsafe in command tokens
 _METACHAR_CHARS = frozenset(";&|<>`$")
@@ -49,7 +52,8 @@ def _warn_metachar(label: str, value: str) -> None:
 
 def find_local_binary(tool_name: str) -> str | None:
     """Return the first binary found on PATH for tool_name, or None."""
-    for cmd in _TOOL_COMMANDS.get(tool_name, [tool_name]):
+    meta = _get_wrapper_meta(tool_name, location="local")
+    for cmd in meta["candidate_commands"]:
         found = shutil.which(cmd)
         if found:
             return found
@@ -88,8 +92,9 @@ def interview_local(tool_name: str, defaults: dict | None = None) -> dict | None
 
     path = path.strip()
     _warn_metachar("binary path", path)
+    tool_type = _get_wrapper_meta(tool_name, location="local")["tool_type"]
     return {
-        "type": _TOOL_TYPES.get(tool_name, "repo"),
+        "type": tool_type,
         "location": "local",
         "path": path,
     }
@@ -140,8 +145,9 @@ def interview_docker(tool_name: str, defaults: dict | None = None) -> dict | Non
         return None
     _warn_metachar("binary path", tool_path)
 
+    tool_type = _get_wrapper_meta(tool_name, location="docker")["tool_type"]
     return {
-        "type": _TOOL_TYPES.get(tool_name, "repo"),
+        "type": tool_type,
         "location": "docker",
         "container": {"name": container, "tool_path": tool_path},
     }

@@ -12,11 +12,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from core.pipeline.events import EventBus, ToolCompleted
 from core.tools.base import ToolResult
 from core.tools.display import OrchestratorDisplay, ToolDisplayRow
+from core.tools.exceptions import InvalidSegmentError
 from core.tools.executor import ToolExecutor
 from core.tools.factory import ToolWrapperFactory
 from core.tools.interface import ExecutionContext, ToolInterface
@@ -31,49 +32,7 @@ logger = logging.getLogger(__name__)
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-SCAN_SEGMENTS: dict[str, list[str]] = {
-    "network": ["nmap"],
-    "sast": ["semgrep"],
-    "sca": ["osv-scanner", "pip-audit", "npm-audit", "composer-audit"],
-    "secrets": ["gitleaks"],
-    "api": ["zap"],
-}
-
 SEGMENT_ORDER: list[str] = ["network", "sast", "sca", "secrets", "api"]
-
-LANGUAGE_TOOL_MAP: dict[str, list[str]] = {
-    "python": ["pip-audit"],
-    "javascript": ["npm-audit"],
-    "typescript": ["npm-audit"],
-    "node": ["npm-audit"],
-    "php": ["composer-audit"],
-}
-
-ALWAYS_RUN_REPO_TOOLS: list[str] = ["semgrep", "osv-scanner", "gitleaks", "zap"]
-
-# Tools that exit non-zero when findings are present (not true failures)
-_FINDINGS_EXIT_TOOLS: frozenset = frozenset(
-    {
-        "semgrep",
-        "osv-scanner",
-        "pip-audit",
-        "npm-audit",
-        "composer-audit",
-        "gitleaks",
-        "zap",
-    }
-)
-
-# Canonical ordering for repo-scan tool execution
-_REPO_TOOL_ORDER: list[str] = [
-    "semgrep",
-    "osv-scanner",
-    "pip-audit",
-    "npm-audit",
-    "composer-audit",
-    "gitleaks",
-    "zap",
-]
 
 
 # ---------------------------------------------------------------------------
@@ -174,13 +133,35 @@ def _execute_tool_passes(
     return tool.merge_pass_results(pass_results)
 
 
-def _normalize_success(result: ToolResult) -> ToolResult:
+def _normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
     """Mark tools that exit non-zero on findings as successful when
     parsed_data is valid.
     """
-    if result.tool_name in _FINDINGS_EXIT_TOOLS:
+    if tool.findings_exit_ok:
         if result.parsed_data and "error" not in result.parsed_data:
             result.success = True
+    return result
+
+
+def _tools_for_segment(segment: str, registry: ToolRegistry) -> list[str]:
+    """Return tool names registered under the given scan segment."""
+    tools: list[Any] = registry.get_all_tools()
+    return [t.name for t in tools if t.scan_segment == segment]
+
+
+def _ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
+    """Order tool_set by SEGMENT_ORDER, then alphabetically within each segment."""
+    result: list[str] = []
+    for segment in SEGMENT_ORDER:
+        if segment == "network":
+            continue
+        tools_in_seg = sorted(
+            name
+            for name in tool_set
+            if registry.get_tool(name) is not None
+            and cast(Any, registry.get_tool(name)).scan_segment == segment
+        )
+        result.extend(tools_in_seg)
     return result
 
 
@@ -326,6 +307,24 @@ class NetworkSegmentScan(ScanType):
         )
 
 
+class SegmentScan(ScanType):
+    """Validate a segment name and delegate to the appropriate scan type."""
+
+    def __init__(self, segment_name: str) -> None:
+        self.segment_name = segment_name
+
+    def execute(self, config: ScanTypeConfig) -> ScanSummary:
+        _all_tools: list[Any] = config.registry.get_all_tools()
+        valid_segments = {t.scan_segment for t in _all_tools}
+        if self.segment_name not in valid_segments:
+            raise InvalidSegmentError(self.segment_name, sorted(valid_segments))
+        if self.segment_name == "network":
+            return NetworkSegmentScan().execute(config)
+        return RepoSegmentScan(
+            _tools_for_segment(self.segment_name, config.registry)
+        ).execute(config)
+
+
 class RepoSegmentScan(ScanType):
     """Run a set of tools on every configured repository."""
 
@@ -353,8 +352,9 @@ class RepoSegmentScan(ScanType):
         total_run = total_skipped = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
+        _reg_tools: list[Any] = config.registry.get_all_tools()
         _lang_specific: set[str] = {
-            t for tools in LANGUAGE_TOOL_MAP.values() for t in tools
+            t.name for t in _reg_tools if t.name in self.tool_names and t.language_gates
         }
 
         for repo in repos:
@@ -364,13 +364,13 @@ class RepoSegmentScan(ScanType):
             for tool_name in self.tool_names:
                 if tool_name in _lang_specific:
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}
-                    allowed = {
-                        t
-                        for lang, tools in LANGUAGE_TOOL_MAP.items()
-                        if lang in repo_langs
-                        for t in tools
-                    }
-                    if tool_name not in allowed:
+                    tool_inst: Any = config.registry.get_tool(tool_name)
+                    gates = (
+                        [g.lower() for g in tool_inst.language_gates]
+                        if tool_inst is not None
+                        else []
+                    )
+                    if not any(lang in gates for lang in repo_langs):
                         config.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name,
@@ -433,7 +433,7 @@ class RepoSegmentScan(ScanType):
                     )
                     total_skipped += 1
                 else:
-                    result = _normalize_success(result)
+                    result = _normalize_success(result, tool)
                     repo_results.append(result)
                     findings = tool.count_findings(result.parsed_data or {})
                     findings_by_tool[result.tool_name] = (
@@ -500,11 +500,18 @@ class RepoScan(ScanType):
                 f" project '{config.project_name}'"
             )
 
-        tool_set: set = set(ALWAYS_RUN_REPO_TOOLS)
-        for lang in repo.languages or []:
-            tool_set.update(LANGUAGE_TOOL_MAP.get(lang.lower(), []))
+        tool_set: set[str] = set()
+        for registered_tool in cast(list[Any], config.registry.get_all_tools()):
+            if registered_tool.always_run:
+                tool_set.add(registered_tool.name)
+            elif registered_tool.language_gates:
+                gates = [g.lower() for g in registered_tool.language_gates]
+                for lang in repo.languages or []:
+                    if lang.lower() in gates:
+                        tool_set.add(registered_tool.name)
+                        break
 
-        ordered_tools = [t for t in _REPO_TOOL_ORDER if t in tool_set]
+        ordered_tools = _ordered_repo_tools(tool_set, config.registry)
 
         lang_str = ", ".join(repo.languages) if repo.languages else "unknown"
         config.display.print_repo_scan_header(repo.name, lang_str, ordered_tools)
@@ -566,7 +573,7 @@ class RepoScan(ScanType):
                 )
                 total_skipped += 1
             else:
-                result = _normalize_success(result)
+                result = _normalize_success(result, tool)
                 results.append(result)
                 findings = tool.count_findings(result.parsed_data or {})
                 findings_by_tool[result.tool_name] = (
@@ -735,7 +742,7 @@ class ToolOnRepoScan(ScanType):
             )
             total_skipped += 1
         else:
-            result = _normalize_success(result)
+            result = _normalize_success(result, tool)
             results.append(result)
             findings = tool.count_findings(result.parsed_data or {})
             findings_by_tool = {result.tool_name: findings}
@@ -825,7 +832,9 @@ class FullScan(ScanType):
             if segment == "network":
                 seg_summary = NetworkSegmentScan().execute(config)
             else:
-                seg_summary = RepoSegmentScan(SCAN_SEGMENTS[segment]).execute(config)
+                seg_summary = RepoSegmentScan(
+                    _tools_for_segment(segment, config.registry)
+                ).execute(config)
 
             all_results.extend(seg_summary.results)
             total_run += seg_summary.total_tools_run

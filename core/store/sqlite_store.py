@@ -6,12 +6,32 @@ import hashlib
 import json
 import logging
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from core.tools.constants import FINDING_TYPES, SEVERITY_LEVELS, TOOL_DOMAIN_MAP
+from core.tools.constants import FINDING_TYPES
 
 logger = logging.getLogger(__name__)
+
+_FINGERPRINT_REGISTRY: dict[str, Callable[[dict[str, Any]], str]] | None = None
+
+
+def _generic_fingerprint_key(finding: dict[str, Any]) -> str:
+    safe = {
+        k: v for k, v in sorted(finding.items()) if isinstance(v, (str, int, float))
+    }
+    return json.dumps(safe, sort_keys=True)
+
+
+def _get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
+    global _FINGERPRINT_REGISTRY
+    if _FINGERPRINT_REGISTRY is None:
+        from core.rag.ingestor import get_fingerprint_registry
+
+        _FINGERPRINT_REGISTRY = get_fingerprint_registry()
+    return _FINGERPRINT_REGISTRY
+
 
 # ---------------------------------------------------------------------------
 # Column mappings
@@ -73,233 +93,9 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
 def _compute_fingerprint(finding: dict[str, Any]) -> str:
     """Compute a stable sha256 fingerprint from per-tool key fields."""
     tool = finding.get("tool", "")
-
-    if tool == "gitleaks":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("rule_id", "")),
-                str(finding.get("file_path", "")),
-                str(finding.get("line_number", "")),
-            ]
-        )
-    elif tool == "semgrep":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("rule_id", "")),
-                str(finding.get("file_path", "")),
-                str(finding.get("line_start", "")),
-            ]
-        )
-    elif tool == "nmap":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("ip_address", "")),
-                str(finding.get("port", "")),
-                str(finding.get("transport", "")),
-            ]
-        )
-    elif tool in ("pip-audit", "npm-audit", "osv-scanner", "composer-audit"):
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("package_name", "")),
-                str(finding.get("vulnerability_id", "")),
-                str(finding.get("ecosystem", "")),
-            ]
-        )
-    elif tool == "zap":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("url", "")),
-                str(finding.get("method", "")),
-                str(finding.get("alert_name", "")),
-            ]
-        )
-    else:
-        safe = {
-            k: v for k, v in sorted(finding.items()) if isinstance(v, (str, int, float))
-        }
-        key = json.dumps(safe, sort_keys=True)
-
+    key_fn = _get_fingerprint_registry().get(tool, _generic_fingerprint_key)
+    key = key_fn(finding)
     return hashlib.sha256(key.encode()).hexdigest()
-
-
-# ---------------------------------------------------------------------------
-# Search parser
-# ---------------------------------------------------------------------------
-
-# Flag name → SQLite column name
-_FLAG_TO_COLUMN: dict[str, str] = {
-    "tool": "tool",
-    "domain": "domain",
-    "type": "finding_type",
-    "severity": "severity",
-    "confidence": "confidence",
-    "file": "file",
-    "rule": "rule_id",
-    "url": "url",
-    "host": "host",
-    "port": "port",
-    "vulnerability_id": "vulnerability_id",
-    "package_name": "package_name",
-    "ecosystem": "ecosystem",
-}
-
-# Meta flags and their actual JSON path field names
-_META_FLAG_FIELDS: dict[str, str] = {
-    "risk_type": "risk_type",
-    "profile": "profile",
-    "param": "param",
-    "alert": "alert_name",
-    "method": "method",
-    "service": "service",
-    "transport": "transport",
-}
-
-
-class SearchValidationError(Exception):
-    """User-facing validation error for SQLite search parsing."""
-
-
-def parse_sqlite_search_command(
-    args: list[str], known_tools: frozenset[str]
-) -> dict[str, Any]:
-    """Parse --flag=value search args into a structured filter dict.
-
-    Returns::
-
-        {
-            "conditions": [(col_expr, op, values_list), ...],
-            "page": 1,
-            "page_size": 200,
-        }
-
-    Where ``col_expr`` is a SQLite column name or ``json_extract(meta, '$.field')``.
-    ``op`` is ``"="`` or ``"~="``.  ``values_list`` is a non-empty list of strings.
-    """
-    conditions: list[tuple[str, str, list[str]]] = []
-    page: int = 1
-    page_size: int = 200
-    fields: list[str] = []
-
-    for arg in args:
-        if not arg.startswith("--"):
-            if "~=" in arg or "=" in arg:
-                raise SearchValidationError(
-                    f"Old syntax detected: '{arg}'\n"
-                    "Use --flag=value syntax. "
-                    "Run 'search --help' for examples."
-                )
-            raise SearchValidationError(
-                f"Unexpected argument: '{arg}'\n"
-                "All search arguments use --flag=value syntax. "
-                "Run 'search --help' for examples."
-            )
-
-        rest = arg[2:]  # strip "--"
-
-        if "~=" in rest:
-            flag, _, val = rest.partition("~=")
-            col_expr = _resolve_col_expr(flag)
-            values = [v.strip() for v in val.split(",") if v.strip()]
-            if values:
-                conditions.append((col_expr, "~=", values))
-            continue
-
-        if "=" not in rest:
-            raise SearchValidationError(
-                f"Flag '{arg}' requires a value, e.g. {arg}=<value>."
-            )
-
-        flag, _, val = rest.partition("=")
-
-        if flag == "page-size":
-            try:
-                page_size = int(val)
-                if page_size < 1:
-                    raise ValueError
-            except ValueError:
-                raise SearchValidationError("--page-size must be a positive integer.")
-        elif flag == "page":
-            try:
-                page = int(val)
-                if page < 1:
-                    raise ValueError
-            except ValueError:
-                raise SearchValidationError("--page must be a positive integer.")
-        elif flag == "fields":
-            parsed = [f.strip() for f in val.split(",") if f.strip()]
-            if not parsed:
-                raise SearchValidationError(
-                    "--fields requires at least one field name, "
-                    "e.g. --fields=severity,file_path"
-                )
-            fields = parsed
-        elif flag == "help":
-            pass  # handled upstream in cmd_search
-        else:
-            col_expr = _resolve_col_expr(flag)
-            values = [v.strip() for v in val.split(",") if v.strip()]
-            _validate_flag_values(flag, values, known_tools)
-            if values:
-                conditions.append((col_expr, "=", values))
-
-    return {
-        "conditions": conditions,
-        "page": page,
-        "page_size": page_size,
-        "fields": fields,
-    }
-
-
-def _resolve_col_expr(flag: str) -> str:
-    """Return the SQLite column expression for a flag name."""
-    if flag in _META_FLAG_FIELDS:
-        field = _META_FLAG_FIELDS[flag]
-        return f"json_extract(meta, '$.{field}')"
-    if flag in _FLAG_TO_COLUMN:
-        return _FLAG_TO_COLUMN[flag]
-    raise SearchValidationError(
-        f"Unknown filter flag '--{flag}'. Run 'search --help' for valid flags."
-    )
-
-
-def _validate_flag_values(
-    flag: str, values: list[str], known_tools: frozenset[str]
-) -> None:
-    """Validate controlled-vocabulary flags. Raises SearchValidationError."""
-    if flag == "tool":
-        for v in values:
-            if v not in known_tools:
-                raise SearchValidationError(
-                    f"Tool {v!r} not found. Run 'tools' to see configured tools."
-                )
-    elif flag == "domain":
-        domain_values = set(TOOL_DOMAIN_MAP.values())
-        for v in values:
-            if v not in domain_values:
-                raise SearchValidationError(
-                    f"Unknown domain {v!r}. "
-                    f"Valid domains: {', '.join(sorted(domain_values))}"
-                )
-    elif flag == "type":
-        for v in values:
-            if v not in FINDING_TYPES:
-                raise SearchValidationError(
-                    f"Unknown type {v!r}. "
-                    f"Valid types: {', '.join(sorted(FINDING_TYPES))}"
-                )
-    elif flag == "severity":
-        for v in values:
-            if v not in SEVERITY_LEVELS:
-                raise SearchValidationError(
-                    f"Unknown severity {v!r}. "
-                    f"Valid severities: {', '.join(sorted(SEVERITY_LEVELS))}"
-                )
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +154,7 @@ class SQLiteStore:
             Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
         )
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path))
