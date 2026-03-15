@@ -80,10 +80,6 @@ class QueryEngine:
                 return []
             query = parse_search_query(raw_input, self._known_tools)
 
-        collection = self._engine._collection
-        if collection is None:
-            return []
-
         total = self._engine.count_documents()
         if total == 0:
             return []
@@ -104,7 +100,7 @@ class QueryEngine:
             if query.where_filter:
                 kwargs["where"] = query.where_filter
             try:
-                raw = collection.query(**kwargs)
+                raw = self._engine.query_collection(**kwargs)
             except Exception as exc:
                 logger.warning("search query failed: %s", exc)
                 return []
@@ -127,7 +123,7 @@ class QueryEngine:
             if query.where_filter:
                 kwargs_get["where"] = query.where_filter
             try:
-                raw_get = collection.get(**kwargs_get)
+                raw_get = self._engine.get_documents(**kwargs_get)
             except Exception as exc:
                 logger.warning("metadata search failed: %s", exc)
                 return []

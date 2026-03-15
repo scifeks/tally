@@ -63,11 +63,9 @@ class ReportGenerator:
         findings_by_tool: dict[str, list[dict[str, Any]]] = {}
         by_severity = {level: 0 for level in _SEVERITY_LEVELS}
 
-        collection = self._engine._collection
-        if collection is not None and self._engine.count_documents() > 0:
+        if self._engine.count_documents() > 0:
             try:
-                result = collection.get(include=["metadatas"])
-                metadatas: list[dict[str, Any]] = result.get("metadatas") or []
+                metadatas: list[dict[str, Any]] = self._engine.get_all_metadatas()
 
                 for meta in metadatas:
                     tool = meta.get("tool", "unknown")

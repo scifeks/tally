@@ -162,15 +162,12 @@ class PurgeCommand:
         tools: list[str] | None,
     ) -> int:
         """Return the count of documents that match the given filters."""
-        if rag_engine._collection is None:
-            return 0
-
         if tools is not None:
             total = 0
             for t in tools:
                 where: dict[str, str] = {"tool": t}
                 try:
-                    result = rag_engine._collection.get(where=where, include=[])  # type: ignore[arg-type]
+                    result = rag_engine.get_documents(where=where, include=[])  # type: ignore[arg-type]
                     total += len(result.get("ids") or [])
                 except Exception:
                     pass
