@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
@@ -73,10 +74,9 @@ _SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 class EnrichmentPipeline:
     """Enriches ChromaDB findings with LLM-generated semantic fields.
 
-    Processes one finding at a time, sequentially and synchronously.
+    LLM calls run concurrently via ThreadPoolExecutor (Phase 2).
+    ChromaDB writes are serialized after all LLM calls complete (Phase 3).
     Skips findings already marked ``enriched: True``.
-
-    todo: Refactor this, it's way too tightly coupled.
     """
 
     def __init__(
@@ -86,12 +86,14 @@ class EnrichmentPipeline:
         sqlite_store: SQLiteStore | None = None,
         run_id: int | None = None,
         llm_provider: LLMProvider | None = None,
+        max_workers: int = 4,
     ) -> None:
         self._engine = rag_engine
         self._console = console
         self._sqlite_store = sqlite_store
         self._run_id = run_id
         self._llm_provider = llm_provider  # resolved lazily on first _call_llm
+        self._max_workers = max_workers
 
     @property
     def _provider(self) -> LLMProvider:
@@ -100,29 +102,82 @@ class EnrichmentPipeline:
             self._llm_provider = get_llm_provider("enrichment", self._engine.base_path)
         return self._llm_provider
 
+    def _resolve_max_workers(self) -> int:
+        """Read enrichment_max_concurrency from global config; fall back to default."""
+        try:
+            from core.config.manager import ConfigManager
+
+            cfg = ConfigManager(str(self._engine.base_path)).global_config
+            return cfg.enrichment_max_concurrency
+        except Exception:
+            return self._max_workers
+
     def enrich(self, ids: list[str]) -> None:
         """Enrich a list of document IDs in place.
 
-        Fetches each document, determines which fields need enrichment,
-        calls the LLM, validates the response, and updates metadata.
+        Phase 1 (sequential): Fetch docs from ChromaDB, build work list.
+        Phase 2 (concurrent): Run LLM calls in a thread pool.
+        Phase 3 (sequential): Write validated metadata back to ChromaDB.
         Failures on individual findings are logged but do not stop the pipeline.
         """
         if not ids:
             return
 
         total = len(ids)
-        enriched_count = 0
+        max_workers = self._resolve_max_workers()
 
-        for i, doc_id in enumerate(ids, 1):
-            if self._console:
-                self._console.print(
-                    f"[dim]Enriching findings... {i}/{total}[/dim]", end="\r"
-                )
-            try:
-                enriched_count += self._enrich_one(doc_id)
-            except Exception as exc:
-                logger.error("Enrichment failed for %s: %s", doc_id, exc)
+        # Phase 1: Fetch and classify (sequential — ChromaDB reads)
+        work_items: list[tuple[str, str, dict[str, Any], list[str]]] = []
+        auto_enriched = 0
+        for doc_id in ids:
+            doc = self._engine.get_document_by_id(doc_id)
+            if doc is None:
+                logger.warning("Document %s not found; skipping enrichment", doc_id)
+                continue
+            if doc["metadata"].get("enriched"):
+                auto_enriched += 1
+                continue
+            fields = self._get_fields_to_enrich(doc["metadata"])
+            if not fields:
+                self._engine.update_metadata(doc_id, {"enriched": True})
+                auto_enriched += 1
+                continue
+            work_items.append((doc_id, doc["document"], doc["metadata"], fields))
 
+        # Phase 2: LLM calls (concurrent)
+        updates: list[tuple[str, dict[str, Any]]] = []
+        completed = 0
+        n_work = len(work_items)
+
+        if work_items:
+            # Pre-resolve LLM provider once before spawning threads
+            _ = self._provider
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_id = {
+                executor.submit(self._call_llm_worker, text, meta, fields): doc_id
+                for doc_id, text, meta, fields in work_items
+            }
+            for future in as_completed(future_to_id):
+                doc_id = future_to_id[future]
+                completed += 1
+                if self._console:
+                    self._console.print(
+                        f"[dim]Enriching findings... {completed}/{n_work}[/dim]",
+                        end="\r",
+                    )
+                try:
+                    validated = future.result()
+                    validated["enriched"] = True
+                    updates.append((doc_id, validated))
+                except Exception as exc:
+                    logger.error("Enrichment failed for %s: %s", doc_id, exc)
+
+        # Phase 3: ChromaDB writes (sequential — avoids write contention)
+        for doc_id, validated in updates:
+            self._engine.update_metadata(doc_id, validated)
+
+        enriched_count = len(updates) + auto_enriched
         if self._console:
             self._console.print()  # newline after \r progress
             msg = (
@@ -141,7 +196,7 @@ class EnrichmentPipeline:
         if self._sqlite_store is None or self._run_id is None:
             return
         try:
-            findings: list[dict] = []
+            findings: list[dict[str, Any]] = []
             for doc_id in ids:
                 doc = self._engine.get_document_by_id(doc_id)
                 if doc is not None:
@@ -151,26 +206,12 @@ class EnrichmentPipeline:
         except Exception as exc:
             logger.error("SQLite upsert failed after enrichment: %s", exc)
 
-    def _enrich_one(self, doc_id: str) -> int:
-        """Enrich a single document. Returns 1 if processed, 0 if skipped/failed."""
-        doc = self._engine.get_document_by_id(doc_id)
-        if doc is None:
-            logger.warning("Document %s not found; skipping enrichment", doc_id)
-            return 0
-
-        if doc["metadata"].get("enriched"):
-            return 1  # already done
-
-        fields = self._get_fields_to_enrich(doc["metadata"])
-        if not fields:
-            self._engine.update_metadata(doc_id, {"enriched": True})
-            return 1
-
-        raw = self._call_llm(doc["document"], doc["metadata"], fields)
-        validated = self._validate_response(raw, fields)
-        validated["enriched"] = True
-        self._engine.update_metadata(doc_id, validated)
-        return 1
+    def _call_llm_worker(
+        self, doc_text: str, metadata: dict[str, Any], fields: list[str]
+    ) -> dict[str, Any]:
+        """Thread-safe worker: call LLM and validate. Raises on failure."""
+        raw = self._call_llm(doc_text, metadata, fields)
+        return self._validate_response(raw, fields)
 
     def _get_fields_to_enrich(self, metadata: dict[str, Any]) -> list[str]:
         """Return list of ENRICHMENT_FIELDS keys that still need values."""
