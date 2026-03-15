@@ -232,9 +232,14 @@ class TestIngestHook:
             "metadata": {"tool": "gitleaks", "severity": "high"},
         }
         mock_store = MagicMock()
-        pipeline = EnrichmentPipeline(mock_engine, sqlite_store=mock_store, run_id=42)
+        pipeline = EnrichmentPipeline(
+            mock_engine,
+            sqlite_store=mock_store,
+            run_id=42,
+            llm_provider=MagicMock(),
+        )
         # Bypass actual LLM call
-        pipeline._enrich_one = MagicMock(return_value=1)
+        pipeline._call_llm_worker = MagicMock(return_value={})  # type: ignore[method-assign]
 
         pipeline.enrich(["doc1"])
 
@@ -252,8 +257,13 @@ class TestIngestHook:
             "metadata": {"tool": "semgrep", "rule_id": doc_id},
         }
         mock_store = MagicMock()
-        pipeline = EnrichmentPipeline(mock_engine, sqlite_store=mock_store, run_id=7)
-        pipeline._enrich_one = MagicMock(return_value=1)
+        pipeline = EnrichmentPipeline(
+            mock_engine,
+            sqlite_store=mock_store,
+            run_id=7,
+            llm_provider=MagicMock(),
+        )
+        pipeline._call_llm_worker = MagicMock(return_value={})  # type: ignore[method-assign]
 
         pipeline.enrich(["d1", "d2", "d3"])
 
@@ -272,9 +282,8 @@ class TestIngestHook:
             "metadata": {"tool": "nmap"},
         }
         pipeline = EnrichmentPipeline(mock_engine)
-        pipeline._enrich_one = MagicMock(return_value=1)
 
-        # Should not raise even without store
+        # Should not raise even without store; nmap provides all fields so no LLM call
         pipeline.enrich(["doc1"])
 
     def test_hook_failure_does_not_raise(self) -> None:
@@ -289,8 +298,13 @@ class TestIngestHook:
         }
         mock_store = MagicMock()
         mock_store.upsert_findings.side_effect = RuntimeError("DB locked")
-        pipeline = EnrichmentPipeline(mock_engine, sqlite_store=mock_store, run_id=1)
-        pipeline._enrich_one = MagicMock(return_value=1)
+        pipeline = EnrichmentPipeline(
+            mock_engine,
+            sqlite_store=mock_store,
+            run_id=1,
+            llm_provider=MagicMock(),
+        )
+        pipeline._call_llm_worker = MagicMock(return_value={})  # type: ignore[method-assign]
 
         # Must not raise
         pipeline.enrich(["doc1"])

@@ -166,3 +166,4 @@ class GlobalConfig(BaseModel):
     ollama_embedding: OllamaEmbeddingConfig | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
+    enrichment_max_concurrency: int = Field(default=4)
