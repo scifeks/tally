@@ -2,6 +2,7 @@
 
 import json
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -31,6 +32,8 @@ class ChunkBuilder(Protocol):
     def build(
         self, result: ToolResult, profile: str
     ) -> list[tuple[str, dict[str, Any], str]]: ...
+
+    def fingerprint_key(self, finding: dict[str, Any]) -> str: ...
 
 
 # ------------------------------------------------------------------
@@ -196,6 +199,16 @@ class NmapChunkBuilder:
 
         return chunks
 
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return "|".join(
+            [
+                "nmap",
+                str(finding.get("ip_address", "")),
+                str(finding.get("port", "")),
+                str(finding.get("transport", "")),
+            ]
+        )
+
 
 class SemgrepChunkBuilder:
     tool_name = "semgrep"
@@ -286,6 +299,16 @@ class SemgrepChunkBuilder:
             chunks.append((text, meta, doc_id))
 
         return chunks
+
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return "|".join(
+            [
+                "semgrep",
+                str(finding.get("rule_id", "")),
+                str(finding.get("file_path", "")),
+                str(finding.get("line_start", "")),
+            ]
+        )
 
 
 class ScaChunkBuilder:  # type: ignore[misc]
@@ -385,6 +408,17 @@ class ScaChunkBuilder:  # type: ignore[misc]
 
         return chunks
 
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        tool = finding.get("tool", self.tool_name)
+        return "|".join(
+            [
+                str(tool),
+                str(finding.get("package_name", "")),
+                str(finding.get("vulnerability_id", "")),
+                str(finding.get("ecosystem", "")),
+            ]
+        )
+
 
 class GitleaksChunkBuilder:
     tool_name = "gitleaks"
@@ -474,6 +508,16 @@ class GitleaksChunkBuilder:
 
         return chunks
 
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return "|".join(
+            [
+                "gitleaks",
+                str(finding.get("rule_id", "")),
+                str(finding.get("file_path", "")),
+                str(finding.get("line_number", "")),
+            ]
+        )
+
 
 class ZapChunkBuilder:
     tool_name = "zap"
@@ -555,6 +599,16 @@ class ZapChunkBuilder:
 
         return chunks
 
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return "|".join(
+            [
+                "zap",
+                str(finding.get("url", "")),
+                str(finding.get("method", "")),
+                str(finding.get("alert_name", "")),
+            ]
+        )
+
 
 def _default_builders() -> dict[str, ChunkBuilder]:
     builders: list[ChunkBuilder] = [
@@ -568,6 +622,12 @@ def _default_builders() -> dict[str, ChunkBuilder]:
         ZapChunkBuilder(),
     ]
     return {b.tool_name: b for b in builders}
+
+
+def get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
+    return {
+        name: builder.fingerprint_key for name, builder in _default_builders().items()
+    }
 
 
 # ------------------------------------------------------------------

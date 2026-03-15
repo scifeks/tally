@@ -6,12 +6,32 @@ import hashlib
 import json
 import logging
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from core.tools.constants import FINDING_TYPES
 
 logger = logging.getLogger(__name__)
+
+_FINGERPRINT_REGISTRY: dict[str, Callable[[dict[str, Any]], str]] | None = None
+
+
+def _generic_fingerprint_key(finding: dict[str, Any]) -> str:
+    safe = {
+        k: v for k, v in sorted(finding.items()) if isinstance(v, (str, int, float))
+    }
+    return json.dumps(safe, sort_keys=True)
+
+
+def _get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
+    global _FINGERPRINT_REGISTRY
+    if _FINGERPRINT_REGISTRY is None:
+        from core.rag.ingestor import get_fingerprint_registry
+
+        _FINGERPRINT_REGISTRY = get_fingerprint_registry()
+    return _FINGERPRINT_REGISTRY
+
 
 # ---------------------------------------------------------------------------
 # Column mappings
@@ -73,58 +93,8 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
 def _compute_fingerprint(finding: dict[str, Any]) -> str:
     """Compute a stable sha256 fingerprint from per-tool key fields."""
     tool = finding.get("tool", "")
-
-    if tool == "gitleaks":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("rule_id", "")),
-                str(finding.get("file_path", "")),
-                str(finding.get("line_number", "")),
-            ]
-        )
-    elif tool == "semgrep":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("rule_id", "")),
-                str(finding.get("file_path", "")),
-                str(finding.get("line_start", "")),
-            ]
-        )
-    elif tool == "nmap":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("ip_address", "")),
-                str(finding.get("port", "")),
-                str(finding.get("transport", "")),
-            ]
-        )
-    elif tool in ("pip-audit", "npm-audit", "osv-scanner", "composer-audit"):
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("package_name", "")),
-                str(finding.get("vulnerability_id", "")),
-                str(finding.get("ecosystem", "")),
-            ]
-        )
-    elif tool == "zap":
-        key = "|".join(
-            [
-                tool,
-                str(finding.get("url", "")),
-                str(finding.get("method", "")),
-                str(finding.get("alert_name", "")),
-            ]
-        )
-    else:
-        safe = {
-            k: v for k, v in sorted(finding.items()) if isinstance(v, (str, int, float))
-        }
-        key = json.dumps(safe, sort_keys=True)
-
+    key_fn = _get_fingerprint_registry().get(tool, _generic_fingerprint_key)
+    key = key_fn(finding)
     return hashlib.sha256(key.encode()).hexdigest()
 
 
