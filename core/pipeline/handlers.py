@@ -23,13 +23,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class IngestHandler:
+class BaseHandler:
+    """Shared RAGEngine cache used by all pipeline handlers."""
+
+    def __init__(self) -> None:
+        self._engines: dict[str, RAGEngine] = {}
+
+    def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
+        key = f"{project_name}:{base_path}"
+        if key not in self._engines:
+            from core.rag.engine import RAGEngine
+
+            self._engines[key] = RAGEngine(
+                project_name=project_name,
+                base_path=base_path,
+            )
+        return self._engines[key]
+
+
+class IngestHandler(BaseHandler):
     """Handles ToolCompleted: ingests findings into ChromaDB, emits IngestCompleted."""
 
     def __init__(self, bus: EventBus, console: Console | None = None) -> None:
+        super().__init__()
         self._bus = bus
         self._console = console
-        self._engines: dict[str, RAGEngine] = {}
 
     def handle(self, event: ToolCompleted) -> None:
         try:
@@ -85,25 +103,14 @@ class IngestHandler:
             )
         )
 
-    def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
-        key = f"{project_name}:{base_path}"
-        if key not in self._engines:
-            from core.rag.engine import RAGEngine
 
-            self._engines[key] = RAGEngine(
-                project_name=project_name,
-                base_path=base_path,
-            )
-        return self._engines[key]
-
-
-class EnrichmentHandler:
+class EnrichmentHandler(BaseHandler):
     """Handles IngestCompleted: runs LLM enrichment, emits EnrichmentCompleted."""
 
     def __init__(self, bus: EventBus, console: Console | None = None) -> None:
+        super().__init__()
         self._bus = bus
         self._console = console
-        self._engines: dict[str, RAGEngine] = {}
 
     def handle(self, event: IngestCompleted) -> None:
         if not event.doc_ids:
@@ -150,24 +157,13 @@ class EnrichmentHandler:
             )
         )
 
-    def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
-        key = f"{project_name}:{base_path}"
-        if key not in self._engines:
-            from core.rag.engine import RAGEngine
 
-            self._engines[key] = RAGEngine(
-                project_name=project_name,
-                base_path=base_path,
-            )
-        return self._engines[key]
-
-
-class PersistenceHandler:
+class PersistenceHandler(BaseHandler):
     """Handles EnrichmentCompleted: persists enriched findings to SQLite."""
 
     def __init__(self, bus: EventBus) -> None:
+        super().__init__()
         self._bus = bus
-        self._engines: dict[str, RAGEngine] = {}
 
     def handle(self, event: EnrichmentCompleted) -> None:
         if event.run_id is None:
@@ -190,14 +186,3 @@ class PersistenceHandler:
                 sqlite_store.upsert_findings(event.run_id, findings_metadata)
         except Exception as exc:
             logger.error("PersistenceHandler: persistence error: %s", exc)
-
-    def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
-        key = f"{project_name}:{base_path}"
-        if key not in self._engines:
-            from core.rag.engine import RAGEngine
-
-            self._engines[key] = RAGEngine(
-                project_name=project_name,
-                base_path=base_path,
-            )
-        return self._engines[key]
