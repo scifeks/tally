@@ -1,4 +1,4 @@
-"""Tests for search results display logic in knowledge_commands.py.
+"""Tests for search results display logic in findings_table.py.
 
 No external services required — all tests use synthetic result dicts
 and capture Rich table output via StringIO.
@@ -17,15 +17,15 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.commands.knowledge_commands import (  # noqa: E402
+from core.repl.commands.findings_table import (  # noqa: E402
     _all_from_tool,
     _build_generic_table,
-    _build_gitleaks_table,
-    _build_osv_table,
-    _build_semgrep_table,
-    _build_zap_table,
     _render_finding_type,
 )
+from core.repl.commands.renderers.gitleaks import _build_gitleaks_table  # noqa: E402
+from core.repl.commands.renderers.osv_scanner import _build_osv_table  # noqa: E402
+from core.repl.commands.renderers.semgrep import _build_semgrep_table  # noqa: E402
+from core.repl.commands.renderers.zap import _build_zap_table  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -236,26 +236,26 @@ class TestGitleaksTableSeverity:
         assert "high" in rendered
 
     def test_critical_severity_uses_red_markup(self) -> None:
-        from core.repl.commands.knowledge_commands import _color_severity
+        from core.repl.commands.findings_table import _color_severity
 
         markup = _color_severity("critical")
         assert "[red]" in markup
         assert "critical" in markup
 
     def test_informational_severity_uses_white_markup(self) -> None:
-        from core.repl.commands.knowledge_commands import _color_severity
+        from core.repl.commands.findings_table import _color_severity
 
         markup = _color_severity("informational")
         assert "[white]" in markup
 
     def test_medium_severity_uses_yellow_markup(self) -> None:
-        from core.repl.commands.knowledge_commands import _color_severity
+        from core.repl.commands.findings_table import _color_severity
 
         markup = _color_severity("medium")
         assert "[yellow]" in markup
 
     def test_low_severity_uses_blue_markup(self) -> None:
-        from core.repl.commands.knowledge_commands import _color_severity
+        from core.repl.commands.findings_table import _color_severity
 
         markup = _color_severity("low")
         assert "[blue]" in markup

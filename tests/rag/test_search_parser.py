@@ -17,7 +17,7 @@ from core.rag.search_parser import (  # noqa: E402
     _resolve_type_filter,
     parse_search_query,
 )
-from core.repl.commands.knowledge_commands import (  # noqa: E402
+from core.repl.commands.findings_table import (  # noqa: E402
     _color_severity,
     _extract_types,
 )
