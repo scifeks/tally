@@ -32,7 +32,7 @@ SEVERITY_INFORMATIONAL = "informational"
 SEVERITY_HIGH = "high"
 CONFIDENCE_CONFIRMED = "confirmed"
 
-DOMAINS: set[str] = {"code", "web", "network"}
+DOMAINS: set[str] = {"structure", "code", "web", "network"}
 
 BOOLEAN_TYPE_FIELDS: set[str] = {f"type_{t}" for t in FINDING_TYPES}
 

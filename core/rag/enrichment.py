@@ -217,6 +217,8 @@ class EnrichmentPipeline:
         """Return list of ENRICHMENT_FIELDS keys that still need values."""
         tool = metadata.get("tool", "")
         _builder = ChunkBuilderFactory.load(tool)
+        if not getattr(_builder, "should_enrich", True):
+            return []
         tool_provided = (
             _builder.non_enriched_fields if _builder is not None else frozenset()
         )
