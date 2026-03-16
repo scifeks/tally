@@ -1,12 +1,12 @@
 """OWASP ZAP wrapper for dynamic web application / API security testing."""
 
 import os
+import shutil
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ...base import get_tool_version
 from ...interface import ExecutionContext, ExecutionPass
 from ...parsers.zap_parser import parse_zap_json, parse_zap_json_string, parse_zap_xml
 from ..base.zap import BaseZapTool
@@ -30,10 +30,13 @@ class ZAPLocalTool(BaseZapTool):
 
     def check_available(self) -> bool:
         """Return True if the configured zap.sh path exists."""
-        return Path(self._zap_path).exists()
+        return shutil.which("zap.sh") is not None
 
     def get_version(self) -> str | None:
-        return get_tool_version(self.command)
+        # calling zap.sh with the --version argument
+        # takes a long time and delays boot
+        # todo: Find more performant way to get version at boot
+        return shutil.which(self._zap_path)
 
     def build_command(self, **kwargs) -> list[str]:
         """Build the ZAP quick-scan argv list.
