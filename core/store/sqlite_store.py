@@ -207,7 +207,13 @@ class SQLiteStore:
                     package_version  TEXT,
                     cwe              TEXT,
                     enriched         INTEGER DEFAULT 0,
-                    meta             TEXT DEFAULT '{}'
+                    meta             TEXT DEFAULT '{}',
+                    first_seen       TEXT,
+                    last_seen        TEXT,
+                    seen_count       INTEGER,
+                    status           TEXT,
+                    triaged_at       TEXT,
+                    triaged_by       TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_findings_tool
@@ -216,33 +222,17 @@ class SQLiteStore:
                     ON findings (severity);
                 CREATE INDEX IF NOT EXISTS idx_findings_fingerprint
                     ON findings (fingerprint);
-            """)
 
-        # Migration guard: add schema-v2 columns to existing databases.
-        with self._connect() as conn:
-            existing = {
-                row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()
-            }
-            for col_name, col_def in [
-                ("description", "TEXT"),
-                ("package_version", "TEXT"),
-                ("cwe", "TEXT"),
-                ("first_seen", "TEXT"),
-                ("last_seen", "TEXT"),
-                ("seen_count", "INTEGER"),
-                ("status", "TEXT"),
-            ]:
-                if col_name not in existing:
-                    conn.execute(
-                        f"ALTER TABLE findings ADD COLUMN {col_name} {col_def}"
-                    )
-            # Idempotent migration: convert plain-string finding_type to JSON array.
-            conn.execute(
-                """UPDATE findings
-                   SET finding_type = '["' || finding_type || '"]'
-                   WHERE finding_type IS NOT NULL
-                     AND finding_type NOT LIKE '[%'"""
-            )
+                CREATE TABLE IF NOT EXISTS tool_audit_log (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_name   TEXT    NOT NULL,
+                    arguments   TEXT,
+                    success     INTEGER NOT NULL DEFAULT 1,
+                    error       TEXT,
+                    duration_ms INTEGER,
+                    called_at   TEXT    NOT NULL
+                );
+            """)
 
     # ------------------------------------------------------------------
     # Run management
