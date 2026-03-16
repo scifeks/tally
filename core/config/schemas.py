@@ -169,3 +169,6 @@ class GlobalConfig(BaseModel):
     enrichment_max_concurrency: int = Field(default=4)
     mcp_batch_size: int = Field(default=10, ge=1)
     mcp_batch_timeout_seconds: int = Field(default=30, ge=1)
+    mcp_session_timeout_seconds: int = Field(
+        default=300, description="Max seconds for a single Claude triage session"
+    )

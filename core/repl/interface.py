@@ -30,6 +30,7 @@ from core.repl.commands import (
     ReportCommand,
     ScanCommands,
     ToolCommands,
+    TriageCommands,
 )
 from core.startup.checker import print_installed_system_tools
 from core.tools.registry import print_discovery_summary
@@ -208,6 +209,14 @@ _HELP_REGISTRY = [
         "Comma-separated columns to display in results.",
     ),
     ("search", "search", "--help", "Show detailed search documentation inline."),
+    # Triage
+    ("triage", None, None, "Triage"),
+    (
+        "triage",
+        "triage",
+        None,
+        "Run AI triage on untriaged findings for the active project",
+    ),
     # Utility
     ("utility", None, None, "Utility"),
     ("utility", "help", None, "Show this help table"),
@@ -230,6 +239,7 @@ _COMPLETIONS = [
     "stats",
     "purge",
     "report",
+    "triage",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -424,6 +434,7 @@ class REPL:
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self)
+        self.triage_commands = TriageCommands(self)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -496,6 +507,7 @@ class REPL:
             "stats": kc.cmd_stats,
             "purge": self.purge_commands.cmd_purge,
             "report": self.report_commands.execute,
+            "triage": self.triage_commands.cmd_triage,
         }
         handler = handlers.get(cmd)
         if handler is None:
