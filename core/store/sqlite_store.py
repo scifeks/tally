@@ -425,6 +425,45 @@ class SQLiteStore:
                 pass
         return count, keys
 
+    def get_finding(self, finding_id: int) -> dict | None:
+        """Return a single finding row by primary key, or None if not found."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM findings WHERE id = ?", (finding_id,)
+            ).fetchone()
+            return dict(row) if row is not None else None
+
+    def get_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        file_prefix: str | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Return findings matching optional filters, capped at *limit* rows."""
+        clauses: list[str] = []
+        params: list[object] = []
+        if tools:
+            placeholders = ",".join("?" * len(tools))
+            clauses.append(f"tool IN ({placeholders})")
+            params.extend(tools)
+        if domain:
+            clauses.append("domain = ?")
+            params.append(domain)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if file_prefix:
+            clauses.append("file LIKE ?")
+            params.append(file_prefix + "%")
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        sql = f"SELECT * FROM findings {where} LIMIT ?"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 

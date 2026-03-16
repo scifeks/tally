@@ -54,6 +54,7 @@ _app_root = Path(__file__).parent.parent
 _project_name: str = _args.project
 _cfg = ConfigManager(str(_app_root)).global_config  # noqa: F841 — reserved for Phase 2
 _store = SQLiteStore(_app_root, _project_name)
+findings._store = _store
 
 logger.info("Tally MCP server starting — project=%s", _project_name)
 
@@ -101,7 +102,7 @@ async def _run_with_audit(tool_name: str, arguments: dict, fn, *args, **kwargs):
     error: str | None = None
     result = None
     try:
-        result = fn(*args, **kwargs)
+        result = await fn(*args, **kwargs)
     except NotImplementedError:
         error = "not implemented"
         raise
@@ -144,6 +145,7 @@ async def get_findings_batch(
     tools: list[str] | None = None,
     domain: str | None = None,
     status: str | None = None,
+    max_results: int | None = None,
 ) -> list[dict]:
     """Retrieve a filtered batch of findings for triage."""
     args = {
@@ -152,6 +154,7 @@ async def get_findings_batch(
         "tools": tools,
         "domain": domain,
         "status": status,
+        "max_results": max_results,
     }
     return await _run_with_audit(
         "get_findings_batch",
@@ -162,6 +165,7 @@ async def get_findings_batch(
         tools,
         domain,
         status,
+        max_results,
     )
 
 

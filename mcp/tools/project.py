@@ -1,7 +1,13 @@
-"""Project-related MCP tool stubs."""
+"""Project-related MCP tools."""
+
+import asyncio
+import json
+from pathlib import Path
+
+_app_root: Path = Path(__file__).parent.parent.parent
 
 
-def get_project_config(project: str) -> dict:
+async def get_project_config(project: str) -> dict:
     """Retrieve configuration metadata for a project.
 
     Args:
@@ -12,6 +18,9 @@ def get_project_config(project: str) -> dict:
         enabled tools, and project-level settings.
 
     Raises:
-        NotImplementedError: Phase 1 skeleton — not yet implemented.
+        FileNotFoundError: If no project.json exists for the given project.
     """
-    raise NotImplementedError("not implemented")
+    path = _app_root / "projects" / project / "config" / "project.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Project config not found: {path}")
+    return await asyncio.to_thread(lambda: json.loads(path.read_text()))
