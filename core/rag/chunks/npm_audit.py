@@ -10,7 +10,7 @@ from .sca import _build_sca_chunks, _sca_fingerprint_key
 class NpmAuditChunkBuilder:
     tool_name = "npm-audit"
     domain = "code"
-    provided_fields: frozenset[str] = frozenset({"severity"})
+    non_enriched_fields: frozenset[str] = frozenset({"severity"})
     type_flags: dict[str, set[str]] = {
         "dependency": {"type_dependency", "type_vulnerability"}
     }

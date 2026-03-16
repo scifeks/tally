@@ -218,7 +218,7 @@ class EnrichmentPipeline:
         tool = metadata.get("tool", "")
         _builder = ChunkBuilderFactory.load(tool)
         tool_provided = (
-            _builder.provided_fields if _builder is not None else frozenset()
+            _builder.non_enriched_fields if _builder is not None else frozenset()
         )
         fields = []
         for field in ENRICHMENT_FIELDS:
