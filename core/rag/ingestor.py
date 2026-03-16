@@ -23,6 +23,7 @@ class ChunkBuilder(Protocol):
     domain: str
     non_enriched_fields: frozenset[str]
     type_flags: dict[str, set[str]]
+    should_enrich: bool
 
     def build(
         self, result: ToolResult, profile: str
