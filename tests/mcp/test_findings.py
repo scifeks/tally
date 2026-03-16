@@ -164,10 +164,12 @@ async def test_get_findings_batch_timeout_returns_empty(
     store: SQLiteStore,
 ) -> None:
     _seed(store)
-    with patch(
-        "mcp.tools.findings.asyncio.wait_for",
-        side_effect=TimeoutError,
-    ):
+
+    async def _fake_wait_for(coro, *_a, **_kw):
+        coro.close()
+        raise TimeoutError
+
+    with patch("mcp.tools.findings.asyncio.wait_for", new=_fake_wait_for):
         rows = await findings.get_findings_batch("testproject")
 
     assert rows == []
