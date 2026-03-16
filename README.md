@@ -6,7 +6,7 @@ Tally is a CLI REPL for orchestrating web application penetration testing. It wr
 
 ## Features
 
-- Wraps nmap, Semgrep, OWASP ZAP, OSV-Scanner, pip-audit, npm-audit, composer-audit, and Gitleaks
+- Wraps tools like nmap, OWASP ZAP, OSV-Scanner, and [more](docs/tools.md)
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup — skips tools that are not installed
 - RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
@@ -159,6 +159,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
 - [docs/configuration.md](docs/configuration.md) — Config file reference
+- [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
 - [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers
 - [docs/docker.md](docs/docker.md) — Usage instructions for optional Docker containers
 - [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
