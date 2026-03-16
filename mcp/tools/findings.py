@@ -13,6 +13,12 @@ if TYPE_CHECKING:
 # Injected at startup by server.py
 _store: SQLiteStore | None = None
 
+from core.tools.constants import (  # noqa: E402
+    CONFIDENCE_LEVELS,
+    FINDING_TYPES,
+    SEVERITY_LEVELS,
+)
+
 from ..config import BATCH_TIMEOUT_SECONDS, MAX_BATCH_SIZE  # noqa: E402
 from .project import get_project_config  # noqa: E402
 
@@ -135,12 +141,7 @@ async def get_findings_batch(
     return rows
 
 
-# ---------------------------------------------------------------------------
-# Phase 3 stubs (kept async so _run_with_audit can always await)
-# ---------------------------------------------------------------------------
-
-
-async def update_finding(  # type: ignore[return]
+async def update_finding(
     finding_id: int,
     confidence: str | None = None,
     finding_type: str | None = None,
@@ -149,11 +150,128 @@ async def update_finding(  # type: ignore[return]
     remediation: str | None = None,
     attack_vector: str | None = None,
     call_stack: str | None = None,
+    strategy: str = "",
 ) -> bool:
     """Update enrichment fields on a single finding."""
-    raise NotImplementedError("not implemented")
+    assert _store is not None
+    start = datetime.now(UTC)
+    call_args: dict = {
+        "finding_id": finding_id,
+        "confidence": confidence,
+        "finding_type": finding_type,
+        "severity": severity,
+        "reasoning": reasoning,
+        "remediation": remediation,
+        "attack_vector": attack_vector,
+        "call_stack": call_stack,
+        "strategy": strategy,
+    }
+
+    def _fail(err: str) -> None:
+        duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+        _write_audit("update_finding", call_args, False, err, duration_ms)
+
+    # Validate required fields not None
+    if confidence is None:
+        err = "Missing required field: confidence"
+        _fail(err)
+        raise ValueError(err)
+    if finding_type is None:
+        err = "Missing required field: finding_type"
+        _fail(err)
+        raise ValueError(err)
+    if severity is None:
+        err = "Missing required field: severity"
+        _fail(err)
+        raise ValueError(err)
+    if reasoning is None:
+        err = "Missing required field: reasoning"
+        _fail(err)
+        raise ValueError(err)
+    if remediation is None:
+        err = "Missing required field: remediation"
+        _fail(err)
+        raise ValueError(err)
+
+    # Validate enum values
+    if confidence not in CONFIDENCE_LEVELS:
+        err = f"Invalid confidence: '{confidence}'. Must be one of: {CONFIDENCE_LEVELS}"
+        _fail(err)
+        raise ValueError(err)
+    if finding_type not in FINDING_TYPES:
+        err = f"Invalid finding_type: '{finding_type}'. Must be one of: {FINDING_TYPES}"
+        _fail(err)
+        raise ValueError(err)
+    if severity not in SEVERITY_LEVELS:
+        err = f"Invalid severity: '{severity}'. Must be one of: {SEVERITY_LEVELS}"
+        _fail(err)
+        raise ValueError(err)
+
+    def _do_update() -> bool:
+        assert _store is not None
+        row = _store.get_finding(finding_id)
+        if row is None:
+            raise ValueError(f"Finding {finding_id} not found")
+        previous_confidence = row["confidence"]
+        existing_meta = json.loads(row["meta"] or "{}")
+        now_iso = datetime.now(UTC).isoformat()
+        existing_meta["triage"] = {
+            "confidence": confidence,
+            "previous_confidence": previous_confidence,
+            "reasoning": reasoning,
+            "remediation": remediation,
+            "attack_vector": attack_vector,
+            "call_stack": call_stack,
+            "triaged_by": "claude-code",
+            "triaged_at": now_iso,
+            "strategy": strategy,
+        }
+        updated_meta = json.dumps(existing_meta)
+        finding_type_db = json.dumps([finding_type])
+        with _store._connect() as conn:  # noqa: SLF001
+            conn.execute(
+                "UPDATE findings "
+                "SET confidence = ?, "
+                "    finding_type = ?, "
+                "    severity = ?, "
+                "    enriched = 1, "
+                "    last_seen = ?, "
+                "    triaged_at = ?, "
+                "    triaged_by = 'claude-code', "
+                "    meta = ? "
+                "WHERE id = ?",
+                (
+                    confidence,
+                    finding_type_db,
+                    severity,
+                    now_iso,
+                    now_iso,
+                    updated_meta,
+                    finding_id,
+                ),
+            )
+        return True
+
+    try:
+        result = await asyncio.to_thread(_do_update)
+    except Exception as exc:
+        duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+        _write_audit("update_finding", call_args, False, str(exc), duration_ms)
+        raise
+
+    duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
+    _write_audit("update_finding", call_args, True, None, duration_ms)
+    return result
 
 
-async def update_findings_batch(updates: list[dict]) -> dict:  # type: ignore[return]
+async def update_findings_batch(updates: list[dict]) -> dict:
     """Apply updates to multiple findings in a single call."""
-    raise NotImplementedError("not implemented")
+    results: dict = {}
+    for payload in updates:
+        finding_id = payload["finding_id"]
+        try:
+            await update_finding(**payload)
+            results[finding_id] = True
+        except Exception:
+            results[finding_id] = False
+    return results

@@ -179,6 +179,7 @@ async def update_finding(
     remediation: str | None = None,
     attack_vector: str | None = None,
     call_stack: str | None = None,
+    strategy: str = "",
 ) -> bool:
     """Update enrichment fields on a single finding."""
     args = {
@@ -190,6 +191,7 @@ async def update_finding(
         "remediation": remediation,
         "attack_vector": attack_vector,
         "call_stack": call_stack,
+        "strategy": strategy,
     }
     return await _run_with_audit(
         "update_finding",
@@ -203,6 +205,7 @@ async def update_finding(
         remediation,
         attack_vector,
         call_stack,
+        strategy,
     )
 
 

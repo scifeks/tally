@@ -181,3 +181,220 @@ async def test_get_findings_batch_timeout_returns_empty(
     assert row is not None
     assert row["success"] == 0
     assert row["error"] == "timeout"
+
+
+# ---------------------------------------------------------------------------
+# update_finding helpers
+# ---------------------------------------------------------------------------
+
+_VALID_UPDATE = {
+    "confidence": "probable",
+    "finding_type": "vulnerability",
+    "severity": "high",
+    "reasoning": "Code review confirms taint flow reaches sink.",
+    "remediation": "Parameterise the query.",
+    "attack_vector": "network",
+    "call_stack": None,
+    "strategy": "manual",
+}
+
+
+# ---------------------------------------------------------------------------
+# AC1–3: enum validation
+# ---------------------------------------------------------------------------
+
+
+async def test_invalid_confidence_raises(store: SQLiteStore) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    with pytest.raises(ValueError, match="Invalid confidence"):
+        await findings.update_finding(
+            fid, **{**_VALID_UPDATE, "confidence": "definitely"}
+        )
+    # DB row unchanged
+    row = await findings.get_finding(fid)
+    assert row["confidence"] == _BASE_FINDING["confidence"]
+
+
+async def test_invalid_severity_raises(store: SQLiteStore) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    with pytest.raises(ValueError, match="Invalid severity"):
+        await findings.update_finding(fid, **{**_VALID_UPDATE, "severity": "extreme"})
+    row = await findings.get_finding(fid)
+    assert row["severity"] == _BASE_FINDING["severity"]
+
+
+async def test_invalid_finding_type_raises(store: SQLiteStore) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    with pytest.raises(ValueError, match="Invalid finding_type"):
+        await findings.update_finding(fid, **{**_VALID_UPDATE, "finding_type": "ghost"})
+    # DB row unchanged (finding still exists and was not updated)
+    db_row = await findings.get_finding(fid)
+    assert db_row["finding_type"] == [_BASE_FINDING["finding_type"]]
+
+
+# ---------------------------------------------------------------------------
+# AC4: valid update
+# ---------------------------------------------------------------------------
+
+
+async def test_valid_update_returns_true_and_persists(
+    store: SQLiteStore,
+) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    result = await findings.update_finding(fid, **_VALID_UPDATE)
+    assert result is True
+
+    with store._connect() as conn:  # noqa: SLF001
+        db_row = conn.execute("SELECT * FROM findings WHERE id = ?", (fid,)).fetchone()
+
+    assert db_row["confidence"] == "probable"
+    assert db_row["severity"] == "high"
+    assert db_row["enriched"] == 1
+    assert db_row["triaged_by"] == "claude-code"
+    assert db_row["triaged_at"] is not None
+
+    import json as _json
+
+    ft = _json.loads(db_row["finding_type"])
+    assert isinstance(ft, list)
+    assert ft == ["vulnerability"]
+
+    meta = _json.loads(db_row["meta"])
+    triage = meta["triage"]
+    assert triage["confidence"] == "probable"
+    assert triage["strategy"] == "manual"
+    assert triage["triaged_by"] == "claude-code"
+    assert "triaged_at" in triage
+
+
+# ---------------------------------------------------------------------------
+# AC5: false_positive is a valid confidence level
+# ---------------------------------------------------------------------------
+
+
+async def test_false_positive_confidence_accepted(
+    store: SQLiteStore,
+) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    result = await findings.update_finding(
+        fid, **{**_VALID_UPDATE, "confidence": "false_positive"}
+    )
+    assert result is True
+    row = await findings.get_finding(fid)
+    assert row["confidence"] == "false_positive"
+
+
+# ---------------------------------------------------------------------------
+# AC6: not-found
+# ---------------------------------------------------------------------------
+
+
+async def test_nonexistent_finding_id_raises(store: SQLiteStore) -> None:
+    with pytest.raises(ValueError, match="not found"):
+        await findings.update_finding(999_999, **_VALID_UPDATE)
+
+
+# ---------------------------------------------------------------------------
+# AC7: batch with mix of valid and invalid
+# ---------------------------------------------------------------------------
+
+
+async def test_update_findings_batch_mixed(store: SQLiteStore) -> None:
+    run_id = store.create_run({})
+    store.upsert_findings(
+        run_id,
+        [
+            {**_BASE_FINDING, "rule_id": "rule-a", "file_path": "src/a.py"},
+            {**_BASE_FINDING, "rule_id": "rule-b", "file_path": "src/b.py"},
+        ],
+    )
+    with store._connect() as conn:  # noqa: SLF001
+        ids = [
+            r["id"]
+            for r in conn.execute("SELECT id FROM findings ORDER BY id").fetchall()
+        ]
+    fid_valid, fid_bad = ids[0], ids[1]
+
+    updates = [
+        {"finding_id": fid_valid, **_VALID_UPDATE},
+        {"finding_id": fid_bad, **{**_VALID_UPDATE, "confidence": "bogus"}},
+    ]
+    result = await findings.update_findings_batch(updates)
+
+    assert result[fid_valid] is True
+    assert result[fid_bad] is False
+
+    # Valid one was actually updated
+    row = await findings.get_finding(fid_valid)
+    assert row["confidence"] == "probable"
+
+
+# ---------------------------------------------------------------------------
+# AC8: audit log written after every call
+# ---------------------------------------------------------------------------
+
+
+async def test_audit_written_on_success(store: SQLiteStore) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    await findings.update_finding(fid, **_VALID_UPDATE)
+
+    with store._connect() as conn:  # noqa: SLF001
+        row = conn.execute(
+            "SELECT tool_name, success, duration_ms FROM tool_audit_log"
+            " WHERE tool_name = 'update_finding'"
+            " ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert row["success"] == 1
+    assert row["duration_ms"] >= 0
+
+
+async def test_audit_written_on_validation_failure(
+    store: SQLiteStore,
+) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    with pytest.raises(ValueError):
+        await findings.update_finding(fid, **{**_VALID_UPDATE, "severity": "unknown"})
+
+    with store._connect() as conn:  # noqa: SLF001
+        row = conn.execute(
+            "SELECT success FROM tool_audit_log"
+            " WHERE tool_name = 'update_finding'"
+            " ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert row["success"] == 0
+
+
+# ---------------------------------------------------------------------------
+# AC9: previous_confidence tracks the prior value
+# ---------------------------------------------------------------------------
+
+
+async def test_previous_confidence_tracked_across_updates(
+    store: SQLiteStore,
+) -> None:
+    _seed(store)  # initial confidence = "medium"
+    fid = _first_id(store)
+
+    # First update: medium → probable
+    await findings.update_finding(fid, **{**_VALID_UPDATE, "confidence": "probable"})
+    # Second update: probable → confirmed
+    await findings.update_finding(fid, **{**_VALID_UPDATE, "confidence": "confirmed"})
+
+    with store._connect() as conn:  # noqa: SLF001
+        db_row = conn.execute(
+            "SELECT meta FROM findings WHERE id = ?", (fid,)
+        ).fetchone()
+    import json as _json
+
+    meta = _json.loads(db_row["meta"])
+    assert meta["triage"]["previous_confidence"] == "probable"
+    assert meta["triage"]["confidence"] == "confirmed"
