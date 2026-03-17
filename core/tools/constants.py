@@ -26,6 +26,7 @@ CONFIDENCE_LEVELS: set[str] = {
     "confirmed",
     "probable",
     "potential",
+    "false_positive",
 }
 
 SEVERITY_INFORMATIONAL = "informational"

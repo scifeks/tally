@@ -158,6 +158,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 ## Documentation
 
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
+- [docs/mcp.md](docs/mcp.md) — MCP triage system setup and usage guide
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
 - [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers

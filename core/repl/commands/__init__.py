@@ -6,6 +6,7 @@ from .purge import PurgeCommand
 from .report import ReportCommand
 from .scan_commands import ScanCommands
 from .tool_commands import ToolCommands
+from .triage_commands import TriageCommands
 
 __all__ = [
     "ProjectCommands",
@@ -14,4 +15,5 @@ __all__ = [
     "PurgeCommand",
     "ReportCommand",
     "ToolCommands",
+    "TriageCommands",
 ]

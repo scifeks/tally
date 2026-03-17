@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__tally-mcp__get_finding",
+      "mcp__tally-mcp__get_findings_batch",
+      "mcp__tally-mcp__get_project_config",
+      "mcp__tally-mcp__update_finding",
+      "mcp__tally-mcp__update_findings_batch",
+      "Read(*)",
+      "Grep(*)",
+      "Glob(*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [{"type": "command", "command": "python3 mcp/hooks/pre_tool_use.py"}]
+      }
+    ]
+  }
+}

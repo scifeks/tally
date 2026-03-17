@@ -207,7 +207,13 @@ class SQLiteStore:
                     package_version  TEXT,
                     cwe              TEXT,
                     enriched         INTEGER DEFAULT 0,
-                    meta             TEXT DEFAULT '{}'
+                    meta             TEXT DEFAULT '{}',
+                    first_seen       TEXT,
+                    last_seen        TEXT,
+                    seen_count       INTEGER,
+                    status           TEXT,
+                    triaged_at       TEXT,
+                    triaged_by       TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_findings_tool
@@ -216,33 +222,17 @@ class SQLiteStore:
                     ON findings (severity);
                 CREATE INDEX IF NOT EXISTS idx_findings_fingerprint
                     ON findings (fingerprint);
-            """)
 
-        # Migration guard: add schema-v2 columns to existing databases.
-        with self._connect() as conn:
-            existing = {
-                row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()
-            }
-            for col_name, col_def in [
-                ("description", "TEXT"),
-                ("package_version", "TEXT"),
-                ("cwe", "TEXT"),
-                ("first_seen", "TEXT"),
-                ("last_seen", "TEXT"),
-                ("seen_count", "INTEGER"),
-                ("status", "TEXT"),
-            ]:
-                if col_name not in existing:
-                    conn.execute(
-                        f"ALTER TABLE findings ADD COLUMN {col_name} {col_def}"
-                    )
-            # Idempotent migration: convert plain-string finding_type to JSON array.
-            conn.execute(
-                """UPDATE findings
-                   SET finding_type = '["' || finding_type || '"]'
-                   WHERE finding_type IS NOT NULL
-                     AND finding_type NOT LIKE '[%'"""
-            )
+                CREATE TABLE IF NOT EXISTS tool_audit_log (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_name   TEXT    NOT NULL,
+                    arguments   TEXT,
+                    success     INTEGER NOT NULL DEFAULT 1,
+                    error       TEXT,
+                    duration_ms INTEGER,
+                    called_at   TEXT    NOT NULL
+                );
+            """)
 
     # ------------------------------------------------------------------
     # Run management
@@ -434,6 +424,45 @@ class SQLiteStore:
             except (json.JSONDecodeError, TypeError):
                 pass
         return count, keys
+
+    def get_finding(self, finding_id: int) -> dict | None:
+        """Return a single finding row by primary key, or None if not found."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM findings WHERE id = ?", (finding_id,)
+            ).fetchone()
+            return dict(row) if row is not None else None
+
+    def get_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        file_prefix: str | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Return findings matching optional filters, capped at *limit* rows."""
+        clauses: list[str] = []
+        params: list[object] = []
+        if tools:
+            placeholders = ",".join("?" * len(tools))
+            clauses.append(f"tool IN ({placeholders})")
+            params.extend(tools)
+        if domain:
+            clauses.append("domain = ?")
+            params.append(domain)
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if file_prefix:
+            clauses.append("file LIKE ?")
+            params.append(file_prefix + "%")
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        sql = f"SELECT * FROM findings {where} LIMIT ?"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

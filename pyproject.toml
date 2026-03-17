@@ -31,6 +31,7 @@ dependencies = [
     "tree-sitter-yaml",
     "tree-sitter-dockerfile",
     "tree-sitter-sql",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +41,7 @@ dev = [
     "pre-commit",
     "pytest>=7.0.0",
     "pytest-timeout>=2.0.0",
+    "pytest-asyncio>=0.23",
 ]
 
 [tool.ruff]
@@ -58,9 +60,11 @@ typeCheckingMode = "basic"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
+extraPaths = ["mcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 markers = [
     "slow: marks tests as slow-running (nmap scans)",
     "requires_nmap: marks tests that need nmap installed",

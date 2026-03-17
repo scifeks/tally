@@ -30,7 +30,7 @@ def test_severity_levels() -> None:
 
 
 def test_confidence_levels() -> None:
-    assert CONFIDENCE_LEVELS == {"confirmed", "probable", "potential"}
+    assert CONFIDENCE_LEVELS == {"confirmed", "probable", "potential", "false_positive"}
 
 
 def test_severity_high_constant() -> None:
