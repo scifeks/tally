@@ -14,23 +14,6 @@ dependencies = [
     "chromadb>=0.4.0",
     "ollama>=0.1.0",
     "anthropic>=0.50.0",
-    "tree-sitter",
-    "tree-sitter-language-pack",
-    "tree-sitter-python",
-    "tree-sitter-javascript",
-    "tree-sitter-typescript",
-    "tree-sitter-php",
-    "tree-sitter-ruby",
-    "tree-sitter-go",
-    "tree-sitter-rust",
-    "tree-sitter-java",
-    "tree-sitter-c-sharp",
-    "tree-sitter-html",
-    "tree-sitter-css",
-    "tree-sitter-bash",
-    "tree-sitter-yaml",
-    "tree-sitter-dockerfile",
-    "tree-sitter-sql",
     "mcp>=1.0",
 ]
 
@@ -60,7 +43,7 @@ typeCheckingMode = "basic"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-extraPaths = ["mcp"]
+extraPaths = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

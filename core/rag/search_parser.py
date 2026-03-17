@@ -46,7 +46,6 @@ _KEY_MAP: dict[str, tuple[str, bool]] = {
 _VALID_KEYS: frozenset[str] = frozenset(_KEY_MAP) | {"type"}
 
 _DOMAIN_KEYS: dict[str, list[str]] = {
-    "structure": ["file", "rule"],
     "code": ["file", "rule"],
     "web": ["url", "method", "param", "alert"],
     "network": ["host", "port", "service", "transport"],
