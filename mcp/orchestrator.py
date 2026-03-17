@@ -8,7 +8,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from mcp.config import SESSION_TIMEOUT_SECONDS
-from mcp.prompts import stub as _stub
+from mcp.prompts import api_trace as _api_trace
+from mcp.prompts import code_trace as _code_trace
+from mcp.prompts import dependency as _dependency
+from mcp.prompts import enrich_only as _enrich_only
 
 _log = logging.getLogger(__name__)
 
@@ -27,10 +30,10 @@ TOOL_STRATEGY: dict[str, str] = {
 }
 
 STRATEGY_PROMPT: dict[str, object] = {
-    "code_trace": _stub.render,
-    "api_trace": _stub.render,
-    "dependency": _stub.render,
-    "enrich_only": _stub.render,
+    "code_trace": _code_trace.render,
+    "api_trace": _api_trace.render,
+    "dependency": _dependency.render,
+    "enrich_only": _enrich_only.render,
 }
 
 
