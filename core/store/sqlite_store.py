@@ -242,6 +242,18 @@ class SQLiteStore:
                     duration_ms INTEGER,
                     called_at   TEXT    NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS triage_batches (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id       INTEGER,
+                    finding_ids  JSON NOT NULL,
+                    batch_data   JSON NOT NULL,
+                    status       TEXT NOT NULL DEFAULT 'pending',
+                    run_attempts INTEGER NOT NULL DEFAULT 0,
+                    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+                    started_at   TEXT,
+                    completed_at TEXT
+                );
             """)
 
     # ------------------------------------------------------------------
