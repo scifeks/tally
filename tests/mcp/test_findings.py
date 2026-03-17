@@ -11,6 +11,9 @@ import pytest
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
+_MCP_DIR = _TALLY_ROOT / "mcp"
+if str(_MCP_DIR) not in sys.path:
+    sys.path.insert(1, str(_MCP_DIR))
 
 from core.store.sqlite_store import SQLiteStore  # noqa: E402
 from mcp.config import MAX_BATCH_SIZE  # noqa: E402
