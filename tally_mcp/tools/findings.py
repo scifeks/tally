@@ -157,7 +157,7 @@ async def get_findings_batch(
                 domain,
                 status,
                 repo,
-                ["sast", "sca", "api"],
+                ["sast", "api"],
                 True,
                 limit,
             ),
