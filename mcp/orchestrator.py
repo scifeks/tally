@@ -43,11 +43,16 @@ def _db_path(project: str) -> Path:
 
 def _write_mcp_json(project: str) -> Path:
     mcp_json_path = _APP_ROOT / ".mcp.json"
+    venv_python = _APP_ROOT / ".venv" / "bin" / "python"
+
+    if not venv_python.exists():
+        raise RuntimeError(f"Venv Python not found at {venv_python}")
+
     payload = {
         "mcpServers": {
             "tally-mcp": {
                 "type": "stdio",
-                "command": "python3",
+                "command": str(venv_python),
                 "args": [
                     "mcp/server.py",
                     "--project",
