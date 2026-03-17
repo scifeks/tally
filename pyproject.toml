@@ -60,6 +60,7 @@ typeCheckingMode = "basic"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
+extraPaths = ["mcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

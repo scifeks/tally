@@ -53,11 +53,7 @@ def _write_mcp_json(project: str) -> Path:
             "tally-mcp": {
                 "type": "stdio",
                 "command": str(venv_python),
-                "args": [
-                    "mcp/server.py",
-                    "--project",
-                    project,
-                ],
+                "args": [str(_APP_ROOT / "mcp" / "server.py"), "--project", project],
             }
         }
     }

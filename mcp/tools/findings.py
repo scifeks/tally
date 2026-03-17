@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 # Injected at startup by server.py
 _store: SQLiteStore | None = None
 
+from config import BATCH_TIMEOUT_SECONDS, MAX_BATCH_SIZE  # noqa: E402
 from core.tools.constants import (  # noqa: E402
     CONFIDENCE_LEVELS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
 )
 
-from ..config import BATCH_TIMEOUT_SECONDS, MAX_BATCH_SIZE  # noqa: E402
 from .project import get_project_config  # noqa: E402
 
 
