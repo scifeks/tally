@@ -73,6 +73,9 @@ def project_db(tmp_path: Path):
     """Create a minimal project DB and patch _APP_ROOT."""
     project = "test-project"
     db = tmp_path / "projects" / project / "sqlite" / "findings.db"
+    venv_python = tmp_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.touch()
     return project, tmp_path, db
 
 
@@ -108,19 +111,32 @@ def _run_with_root(orch_mod, project: str, tmp_root: Path) -> dict:
 
 def test_mcp_json_written(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db(db, [("nmap",)])
+    _make_db(db, [("semgrep",)])  # non-skip tool so a session runs
+
+    import json
 
     import mcp.orchestrator as orch
 
-    with patch.object(orch, "_APP_ROOT", tmp_root):
+    captured: dict = {}
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stderr = ""
+
+    def fake_run(*args, **kwargs):
+        mcp_json = tmp_root / ".mcp.json"
+        captured["exists"] = mcp_json.exists()
+        if mcp_json.exists():
+            captured["data"] = json.loads(mcp_json.read_text())
+        return mock_result
+
+    with (
+        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch("subprocess.run", side_effect=fake_run),
+    ):
         orch.run_triage(project)
 
-    mcp_json = tmp_root / ".mcp.json"
-    assert mcp_json.exists()
-    import json
-
-    data = json.loads(mcp_json.read_text())
-    assert project in str(data)
+    assert captured.get("exists") is True
+    assert project in str(captured.get("data", {}))
 
 
 def test_success_outcome(project_db) -> None:
