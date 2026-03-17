@@ -39,6 +39,7 @@ _project_name: str = _args.project
 _cfg = ConfigManager(str(_app_root)).global_config  # noqa: F841 — reserved for Phase 2
 _store = SQLiteStore(_app_root, _project_name)
 findings._store = _store
+findings._project_name = _project_name
 
 logger.info("Tally MCP server starting — project=%s", _project_name)
 

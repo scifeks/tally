@@ -41,6 +41,8 @@ def _get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
 _CHROMA_TO_SQLITE: dict[str, str] = {
     "tool": "tool",
     "domain": "domain",
+    "segment": "segment",
+    "repo": "repo",
     "finding_type": "finding_type",
     "severity": "severity",
     "confidence": "confidence",
@@ -61,6 +63,8 @@ _CHROMA_TO_SQLITE: dict[str, str] = {
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
+    "segment",
+    "repo",
     "severity",
     "confidence",
     "rule_id",
@@ -192,6 +196,8 @@ class SQLiteStore:
                     run_id           INTEGER,
                     tool             TEXT,
                     domain           TEXT,
+                    segment          TEXT,
+                    repo             TEXT,
                     finding_type     TEXT,
                     severity         TEXT,
                     confidence       TEXT,
@@ -222,6 +228,10 @@ class SQLiteStore:
                     ON findings (severity);
                 CREATE INDEX IF NOT EXISTS idx_findings_fingerprint
                     ON findings (fingerprint);
+                CREATE INDEX IF NOT EXISTS idx_findings_segment
+                    ON findings (segment);
+                CREATE INDEX IF NOT EXISTS idx_findings_repo
+                    ON findings (repo);
 
                 CREATE TABLE IF NOT EXISTS tool_audit_log (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -334,6 +344,8 @@ class SQLiteStore:
                     run_id,
                     named.get("tool"),
                     named.get("domain"),
+                    named.get("segment"),
+                    named.get("repo"),
                     named.get("finding_type"),
                     named.get("severity"),
                     named.get("confidence"),
@@ -360,13 +372,14 @@ class SQLiteStore:
 
         sql = """
             INSERT INTO findings (
-                fingerprint, run_id, tool, domain, finding_type, severity,
+                fingerprint, run_id, tool, domain, segment, repo,
+                finding_type, severity,
                 confidence, file, rule_id, url, host, port,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
                 first_seen, last_seen, seen_count, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?)
+                       ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
                 run_id          = excluded.run_id,
                 severity        = excluded.severity,
@@ -438,12 +451,20 @@ class SQLiteStore:
         tools: list[str] | None = None,
         domain: str | None = None,
         status: str | None = None,
-        file_prefix: str | None = None,
+        repo: str | None = None,
+        segments: list[str] | None = None,
+        require_file: bool = False,
         limit: int = 10,
     ) -> list[dict]:
         """Return findings matching optional filters, capped at *limit* rows."""
         clauses: list[str] = []
         params: list[object] = []
+        if segments:
+            placeholders = ",".join("?" * len(segments))
+            clauses.append(f"segment IN ({placeholders})")
+            params.extend(segments)
+        if require_file:
+            clauses.append("(file IS NOT NULL AND file != '')")
         if tools:
             placeholders = ",".join("?" * len(tools))
             clauses.append(f"tool IN ({placeholders})")
@@ -454,9 +475,9 @@ class SQLiteStore:
         if status:
             clauses.append("status = ?")
             params.append(status)
-        if file_prefix:
-            clauses.append("file LIKE ?")
-            params.append(file_prefix + "%")
+        if repo:
+            clauses.append("repo = ?")
+            params.append(repo)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         params.append(limit)
         sql = f"SELECT * FROM findings {where} LIMIT ?"
@@ -464,6 +485,7 @@ class SQLiteStore:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
+    # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 
@@ -530,7 +552,8 @@ class SQLiteStore:
 
         sql = """
             SELECT fingerprint, run_id,
-                   tool, domain, finding_type, severity, confidence,
+                   tool, domain, segment, repo,
+                   finding_type, severity, confidence,
                    file, rule_id, url, host, port,
                    vulnerability_id, package_name, ecosystem,
                    description, package_version, cwe, enriched, meta

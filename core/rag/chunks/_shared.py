@@ -28,6 +28,7 @@ def _shared_meta(builder: Any, finding_type: str) -> dict[str, Any]:
     }
     return {
         "domain": builder.domain,
+        "segment": builder.segment,
         "enriched": False,
         **booleans,
     }

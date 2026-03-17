@@ -10,6 +10,7 @@ from .sca import _build_sca_chunks, _sca_fingerprint_key
 class ComposerAuditChunkBuilder:
     tool_name = "composer-audit"
     domain = "code"
+    segment = "sca"
     non_enriched_fields: frozenset[str] = frozenset()
     type_flags: dict[str, set[str]] = {
         "dependency": {"type_dependency", "type_vulnerability"}

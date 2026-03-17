@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from core.config.manager import ConfigManager
 from core.pipeline.events import (
     EnrichmentCompleted,
     EventBus,
@@ -85,7 +86,13 @@ class IngestHandler(BaseHandler):
         doc_ids: list[str] = []
         failed_tools: list[str] = []
         try:
-            ingestor = FindingIngestor(engine, event.project_name)
+            try:
+                repos = ConfigManager(event.base_path).load_repositories(
+                    event.project_name
+                )
+            except Exception:
+                repos = None
+            ingestor = FindingIngestor(engine, event.project_name, repositories=repos)
             doc_ids = ingestor.ingest_tool_output(result, profile=event.profile)
         except Exception as exc:
             logger.error(

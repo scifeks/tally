@@ -23,6 +23,7 @@ from tally_mcp.tools import findings  # noqa: E402
 _BASE_FINDING = {
     "tool": "semgrep",
     "domain": "sast",
+    "segment": "sast",
     "finding_type": "vulnerability",
     "severity": "high",
     "confidence": "medium",
@@ -400,3 +401,100 @@ async def test_previous_confidence_tracked_across_updates(
     meta = _json.loads(db_row["meta"])
     assert meta["triage"]["previous_confidence"] == "probable"
     assert meta["triage"]["confidence"] == "confirmed"
+
+
+# ---------------------------------------------------------------------------
+# _reconstruct_abs_path unit tests
+# ---------------------------------------------------------------------------
+
+_REPOS = [{"name": "myapp", "path": "/repos/myapp"}]
+
+
+def test_reconstruct_abs_path_known_repo() -> None:
+    result = findings._reconstruct_abs_path("/src/app.py", "myapp", _REPOS)
+    assert result == "/repos/myapp/src/app.py"
+
+
+def test_reconstruct_abs_path_unknown_repo() -> None:
+    result = findings._reconstruct_abs_path("/src/app.py", "unknown", _REPOS)
+    assert result is None
+
+
+def test_reconstruct_abs_path_none_file() -> None:
+    result = findings._reconstruct_abs_path(None, "myapp", _REPOS)
+    assert result is None
+
+
+def test_reconstruct_abs_path_none_repo_name() -> None:
+    result = findings._reconstruct_abs_path("/src/app.py", None, _REPOS)
+    assert result is None
+
+
+def test_reconstruct_abs_path_trailing_slash_stripped() -> None:
+    repos = [{"name": "myapp", "path": "/repos/myapp/"}]
+    result = findings._reconstruct_abs_path("/src/app.py", "myapp", repos)
+    assert result == "/repos/myapp/src/app.py"
+
+
+# ---------------------------------------------------------------------------
+# get_finding includes abs_path
+# ---------------------------------------------------------------------------
+
+
+async def test_get_finding_includes_abs_path(store: SQLiteStore) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    row = await findings.get_finding(fid)
+    assert "abs_path" in row
+
+
+# ---------------------------------------------------------------------------
+# get_findings_batch segment and file filters
+# ---------------------------------------------------------------------------
+
+
+async def test_get_findings_batch_only_returns_sast_sca_api(
+    store: SQLiteStore,
+) -> None:
+    run_id = store.create_run({})
+    store.upsert_findings(
+        run_id,
+        [
+            {**_BASE_FINDING, "segment": "sast"},
+            {
+                **_BASE_FINDING,
+                "segment": "secrets",
+                "rule_id": "other-rule",
+                "file_path": "config.py",
+            },
+        ],
+    )
+    rows = await findings.get_findings_batch("testproject")
+    assert all(r.get("segment") in ("sast", "sca", "api") for r in rows)
+    assert not any(r.get("segment") == "secrets" for r in rows)
+
+
+async def test_get_findings_batch_excludes_findings_with_no_file(
+    store: SQLiteStore,
+) -> None:
+    run_id = store.create_run({})
+    store.upsert_findings(
+        run_id,
+        [
+            {**_BASE_FINDING, "rule_id": "has-file"},
+            {
+                "tool": "semgrep",
+                "domain": "sast",
+                "segment": "sast",
+                "finding_type": "vulnerability",
+                "severity": "high",
+                "confidence": "medium",
+                "rule_id": "no-file",
+                "description": "no file path finding",
+            },
+        ],
+    )
+    rows = await findings.get_findings_batch("testproject")
+    assert all(r.get("file") for r in rows)
+    rule_ids = {r.get("rule_id") for r in rows}
+    assert "no-file" not in rule_ids

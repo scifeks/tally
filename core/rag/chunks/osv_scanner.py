@@ -10,6 +10,7 @@ from .sca import _build_sca_chunks, _sca_fingerprint_key
 class OsvScannerChunkBuilder:
     tool_name = "osv-scanner"
     domain = "code"
+    segment = "sca"
     non_enriched_fields: frozenset[str] = frozenset({"severity"})
     type_flags: dict[str, set[str]] = {
         "dependency": {"type_dependency", "type_vulnerability"}

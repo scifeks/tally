@@ -44,7 +44,7 @@ def test_code_trace_contains_project() -> None:
 def test_code_trace_key_instructions() -> None:
     result = code_trace.render(_IDS, _PROJECT)
     assert "get_findings_batch" in result
-    assert "get_project_config" in result
+    assert "abs_path" in result
     assert "update_findings_batch" in result
     assert "confidence" in result
     assert "reasoning" in result

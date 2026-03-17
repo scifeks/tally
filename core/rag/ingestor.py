@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from core.config.schemas import Repository
 from core.tools.base import ToolResult
 
 from .engine import RAGEngine
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 class ChunkBuilder(Protocol):
     tool_name: str
     domain: str
+    segment: str
     non_enriched_fields: frozenset[str]
     type_flags: dict[str, set[str]]
     should_enrich: bool
@@ -88,6 +90,22 @@ def get_tool_domain(tool_name: str) -> str | None:
     return builder.domain if builder is not None else None
 
 
+def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, str | None]:
+    """Return (relative_path, repo_name) for file_path.
+
+    If file_path starts with repo.path, strip that prefix.
+    If no repo matches, return (file_path, None) unchanged.
+    repo_name is None when no match found or file_path is empty.
+    """
+    if not file_path:
+        return (file_path, None)
+    for repo in repos:
+        if repo.path and file_path.startswith(repo.path):
+            rel = "/" + file_path[len(repo.path) :].lstrip("/")
+            return (rel, repo.name)
+    return (file_path, None)
+
+
 # ------------------------------------------------------------------
 # FindingIngestor
 # ------------------------------------------------------------------
@@ -110,12 +128,14 @@ class FindingIngestor:
         rag_engine: RAGEngine,
         project_name: str,
         builders: dict[str, ChunkBuilder] | None = None,
+        repositories: list[Repository] | None = None,
     ) -> None:
         self._engine = rag_engine
         self.project_name = project_name
         self._builders: dict[str, ChunkBuilder] = (
             builders if builders is not None else _default_builders()
         )
+        self._repositories = repositories
 
     def ingest_tool_output(
         self,
@@ -176,7 +196,31 @@ class FindingIngestor:
                 "No chunk builder registered for tool '%s'; skipping ingestion", tool
             )
             return []
-        return builder.build(tool_result, profile)
+
+        raw_chunks = builder.build(tool_result, profile)
+
+        if self._repositories is None:
+            return raw_chunks
+
+        chunks: list[tuple[str, dict[str, Any], str]] = []
+        for text, meta, doc_id in raw_chunks:
+            file_path: str = meta.get("file_path", "") or ""
+            rel_path, repo_name = _normalize_path(file_path, self._repositories)
+            meta["file_path"] = rel_path
+            if repo_name is not None:
+                meta["repo"] = repo_name
+
+            if builder.domain == "code" and not rel_path:
+                logger.error(
+                    "Excluding chunk with missing file path: tool=%s rule_id=%s",
+                    tool,
+                    meta.get("rule_id", ""),
+                )
+                continue
+
+            chunks.append((text, meta, doc_id))
+
+        return chunks
 
     def _process_finding(
         self,

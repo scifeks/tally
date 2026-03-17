@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 # Injected at startup by server.py
 _store: SQLiteStore | None = None
+_project_name: str | None = None
 
 from core.tools.constants import (  # noqa: E402
     CONFIDENCE_LEVELS,
@@ -64,6 +65,18 @@ def _write_audit(
         )
 
 
+def _reconstruct_abs_path(
+    file: str | None, repo_name: str | None, repos: list[dict]
+) -> str | None:
+    """Reconstruct absolute path from relative file + repo name."""
+    if not file or not repo_name:
+        return None
+    for r in repos:
+        if r["name"] == repo_name:
+            return r["path"].rstrip("/") + file
+    return None
+
+
 async def get_finding(finding_id: int) -> dict:
     """Retrieve a single finding by its primary-key ID.
 
@@ -80,7 +93,16 @@ async def get_finding(finding_id: int) -> dict:
     row = await asyncio.to_thread(_store.get_finding, finding_id)
     if row is None:
         raise ValueError(f"Finding {finding_id} not found")
-    return _parse_row(row)
+    row = _parse_row(row)
+    repos: list[dict] = []
+    if _project_name:
+        try:
+            cfg = await get_project_config(_project_name)
+            repos = cfg.get("repositories", [])
+        except FileNotFoundError:
+            pass
+    row["abs_path"] = _reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
+    return row
 
 
 async def get_findings_batch(
@@ -107,13 +129,16 @@ async def get_findings_batch(
     """
     assert _store is not None
     limit = min(max_results, MAX_BATCH_SIZE) if max_results else MAX_BATCH_SIZE
-    file_prefix: str | None = None
-    if repo:
+
+    repos: list[dict] = []
+    try:
         cfg = await get_project_config(project)
-        repos = {r["name"]: r["path"] for r in cfg.get("repositories", [])}
-        if repo not in repos:
-            raise ValueError(f"Repo '{repo}' not in project config")
-        file_prefix = repos[repo]
+        repos = cfg.get("repositories", [])
+    except FileNotFoundError:
+        pass
+
+    if repo and repo not in {r["name"] for r in repos}:
+        raise ValueError(f"Repo '{repo}' not in project config")
 
     call_args: dict = {
         "project": project,
@@ -127,7 +152,14 @@ async def get_findings_batch(
     try:
         rows = await asyncio.wait_for(
             asyncio.to_thread(
-                _store.get_findings, tools, domain, status, file_prefix, limit
+                _store.get_findings,
+                tools,
+                domain,
+                status,
+                repo,
+                ["sast", "sca", "api"],
+                True,
+                limit,
             ),
             timeout=BATCH_TIMEOUT_SECONDS,
         )
@@ -137,6 +169,8 @@ async def get_findings_batch(
         return []
 
     rows = [_parse_row(r) for r in rows]
+    for row in rows:
+        row["abs_path"] = _reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
     rows.sort(key=lambda r: (r.get("file") or "", _extract_line(r.get("meta") or {})))
     return rows
 
@@ -171,6 +205,7 @@ async def update_finding(
         duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
         _write_audit("update_finding", call_args, False, err, duration_ms)
 
+    # todo: this repeating error raising is dumb
     # Validate required fields not None
     if confidence is None:
         err = "Missing required field: confidence"
