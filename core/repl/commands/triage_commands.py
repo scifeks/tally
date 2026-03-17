@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mcp.orchestrator import run_triage
+from tally_mcp.orchestrator import run_triage
 
 if TYPE_CHECKING:
     from core.repl.interface import REPL

@@ -7,11 +7,11 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
-from mcp.config import SESSION_TIMEOUT_SECONDS
-from mcp.prompts import api_trace as _api_trace
-from mcp.prompts import code_trace as _code_trace
-from mcp.prompts import dependency as _dependency
-from mcp.prompts import enrich_only as _enrich_only
+from .config import SESSION_TIMEOUT_SECONDS
+from .prompts import api_trace as _api_trace
+from .prompts import code_trace as _code_trace
+from .prompts import dependency as _dependency
+from .prompts import enrich_only as _enrich_only
 
 _log = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _write_mcp_json(project: str) -> Path:
             "tally-mcp": {
                 "type": "stdio",
                 "command": str(venv_python),
-                "args": [str(_APP_ROOT / "mcp" / "server.py"), "--project", project],
+                "args": ["-m", "tally_mcp.server", "--project", project],
             }
         }
     }

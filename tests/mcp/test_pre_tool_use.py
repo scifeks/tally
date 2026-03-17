@@ -14,7 +14,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from mcp.hooks.pre_tool_use import main  # noqa: E402
+from tally_mcp.hooks.pre_tool_use import main  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

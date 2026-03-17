@@ -1,38 +1,22 @@
 """MCP server entry point for Tally triage agent.
 
 Run as:
-    python3 mcp/server.py --project <name>
-
-Critical import order: the mcp SDK must be imported before the project root
-is added to sys.path, otherwise this local ``mcp/`` package shadows the SDK.
+    python -m tally_mcp.server --project <name>
 """
-# ruff: noqa: I001  — import order is intentional (SDK before sys.path insert)
 
-# ---------------------------------------------------------------------------
-# 1. SDK imports FIRST — before project root enters sys.path
-# ---------------------------------------------------------------------------
-from mcp.server.fastmcp import FastMCP
-
-# ---------------------------------------------------------------------------
-# 2. Add project root to sys.path
-# ---------------------------------------------------------------------------
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-# ---------------------------------------------------------------------------
-# 3. Standard-library and project imports
-# ---------------------------------------------------------------------------
 import argparse
 import asyncio
 import json
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
 
 from core.config.manager import ConfigManager
 from core.store.sqlite_store import SQLiteStore
-from tools import findings, project  # noqa: E402
+
+from .tools import findings, project
 
 # ---------------------------------------------------------------------------
 # Logging

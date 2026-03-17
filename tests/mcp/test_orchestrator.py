@@ -15,7 +15,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from mcp.orchestrator import run_triage  # noqa: E402
+from tally_mcp.orchestrator import run_triage  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -88,7 +88,7 @@ def test_all_skip_tools(project_db, caplog) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("nmap",), ("tree-sitter",)])
 
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     with patch.object(orch, "_APP_ROOT", tmp_root):
         result = (
@@ -115,7 +115,7 @@ def test_mcp_json_written(project_db) -> None:
 
     import json
 
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     captured: dict = {}
     mock_result = MagicMock()
@@ -143,7 +143,7 @@ def test_success_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -174,7 +174,7 @@ def test_incomplete_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -196,7 +196,7 @@ def test_timeout_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     with (
         patch.object(orch, "_APP_ROOT", tmp_root),
@@ -214,7 +214,7 @@ def test_nonzero_exit_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     mock_result = MagicMock()
     mock_result.returncode = 1
@@ -233,7 +233,7 @@ def test_nonzero_exit_outcome(project_db) -> None:
 
 
 def test_missing_db_raises(tmp_path: Path) -> None:
-    import mcp.orchestrator as orch
+    import tally_mcp.orchestrator as orch
 
     with patch.object(orch, "_APP_ROOT", tmp_path):
         with pytest.raises(FileNotFoundError):
@@ -241,6 +241,6 @@ def test_missing_db_raises(tmp_path: Path) -> None:
 
 
 def test_standalone_import() -> None:
-    import mcp.orchestrator  # noqa: F401
+    import tally_mcp.orchestrator  # noqa: F401
 
-    assert callable(mcp.orchestrator.run_triage)
+    assert callable(tally_mcp.orchestrator.run_triage)

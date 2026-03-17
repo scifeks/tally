@@ -11,13 +11,10 @@ import pytest
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
-_MCP_DIR = _TALLY_ROOT / "mcp"
-if str(_MCP_DIR) not in sys.path:
-    sys.path.insert(1, str(_MCP_DIR))
 
 from core.store.sqlite_store import SQLiteStore  # noqa: E402
-from mcp.config import MAX_BATCH_SIZE  # noqa: E402
-from mcp.tools import findings  # noqa: E402
+from tally_mcp.config import MAX_BATCH_SIZE  # noqa: E402
+from tally_mcp.tools import findings  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -172,7 +169,7 @@ async def test_get_findings_batch_timeout_returns_empty(
         coro.close()
         raise TimeoutError
 
-    with patch("mcp.tools.findings.asyncio.wait_for", new=_fake_wait_for):
+    with patch("tally_mcp.tools.findings.asyncio.wait_for", new=_fake_wait_for):
         rows = await findings.get_findings_batch("testproject")
 
     assert rows == []

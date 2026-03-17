@@ -87,7 +87,8 @@ The generated file looks like this (with the active project name substituted):
       "type": "stdio",
       "command": "python3",
       "args": [
-        "mcp/server.py",
+        "-m",
+        "tally_mcp.server",
         "--project",
         "<project-name>"
       ]
@@ -98,11 +99,11 @@ The generated file looks like this (with the active project name substituted):
 
 Because Claude Code looks for `.mcp.json` in its working directory, the orchestrator
 must be invoked from the Tally application root (the directory that contains `tally.py`).
-The Tally REPL does this automatically. If you invoke `mcp/orchestrator.py` directly,
+The Tally REPL does this automatically. If you invoke `tally_mcp/orchestrator.py` directly,
 run it from the project root:
 
 ```bash
-.venv/bin/python3 mcp/orchestrator.py --project <name>
+.venv/bin/python3 -m tally_mcp.orchestrator --project <name>
 ```
 
 ### `.claude.json` — tool allowlist and hooks
@@ -129,7 +130,7 @@ to call and which hooks run on every tool use. Its exact contents are:
     "PreToolUse": [
       {
         "matcher": ".*",
-        "hooks": [{"type": "command", "command": "python3 mcp/hooks/pre_tool_use.py"}]
+        "hooks": [{"type": "command", "command": "python3 tally_mcp/hooks/pre_tool_use.py"}]
       }
     ]
   }
@@ -154,7 +155,7 @@ Claude Code is not allowed to write files, run shell commands, or access the net
 ### `PreToolUse` hook
 
 Every tool call Claude attempts — including MCP tools and file operations — triggers
-`mcp/hooks/pre_tool_use.py` before the call executes. The hook reads a JSON payload
+`tally_mcp/hooks/pre_tool_use.py` before the call executes. The hook reads a JSON payload
 from stdin, looks up the active project from `.mcp.json`, and inserts a row into the
 `tool_audit_log` table with the tool name, arguments, and a UTC timestamp.
 
@@ -181,7 +182,7 @@ pipeline unless you understand the implications.
 
 All three MCP config values live under the top-level keys of `config/global.json` and
 are validated by `GlobalConfig` in `core/config/schemas.py`. If the config file is not
-found, `mcp/config.py` falls back to the defaults shown below.
+found, `tally_mcp/config.py` falls back to the defaults shown below.
 
 ### `mcp_batch_size`
 
@@ -256,7 +257,7 @@ The command takes no flags. It uses the active project set with `project switch 
    `.mcp.json` in the application root.
 
 4. **Claude session per strategy** — For each strategy that has at least one finding,
-   the orchestrator renders a prompt (from `mcp/prompts/<strategy>.py`), then runs:
+   the orchestrator renders a prompt (from `tally_mcp/prompts/<strategy>.py`), then runs:
 
    ```bash
    claude --print --dangerously-skip-permissions "<prompt text>"
@@ -449,14 +450,14 @@ the subprocess is wrong.
 
 **Fix:** Confirm that the `triage` command is being run from inside the Tally REPL
 started from the application root (the directory containing `tally.py`). If you are
-invoking `mcp/orchestrator.py` directly, run it from the application root:
+invoking `tally_mcp/orchestrator.py` directly, run it from the application root:
 
 ```bash
 cd /path/to/tally
-.venv/bin/python3 mcp/orchestrator.py --project <name>
+.venv/bin/python3 -m tally_mcp.orchestrator --project <name>
 ```
 
-Do not `cd` into `mcp/` before running the orchestrator.
+Do not `cd` into `tally_mcp/` before running the orchestrator.
 
 ### Session completes but no findings are updated
 
