@@ -76,6 +76,16 @@ def _reconstruct_abs_path(
     return None
 
 
+def _resolve_repo_path(repo_name: str | None, repos: list[dict]) -> str | None:
+    """Return the base directory path for *repo_name*, or None."""
+    if not repo_name:
+        return None
+    for r in repos:
+        if r["name"] == repo_name:
+            return r["path"]
+    return None
+
+
 async def get_finding(finding_id: int) -> dict:
     """Retrieve a single finding by its primary-key ID.
 
@@ -101,17 +111,22 @@ async def get_finding(finding_id: int) -> dict:
         except FileNotFoundError:
             pass
     row["abs_path"] = _reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
+    row["repo_path"] = _resolve_repo_path(row.get("repo"), repos)
     return row
 
 
 async def get_findings_batch(run_id: int) -> dict | None:
     """Atomically claims and returns the next pending batch for *run_id*.
 
-    Returns the batch dict (including batch_data and finding_ids) or None
-    if no pending batches remain.
+    Returns the batch dict with batch_data enriched via get_finding (includes
+    abs_path and repo_path), or None if no pending batches remain.
     """
     assert _store is not None
-    return await asyncio.to_thread(_store.claim_triage_batch, run_id)
+    batch = await asyncio.to_thread(_store.claim_triage_batch, run_id)
+    if batch is None:
+        return None
+    batch["batch_data"] = [await get_finding(fid) for fid in batch["finding_ids"]]
+    return batch
 
 
 async def complete_triage_batch(

@@ -16,7 +16,7 @@ from mcp.server.fastmcp import FastMCP
 from core.config.manager import ConfigManager
 from core.store.sqlite_store import SQLiteStore
 
-from .tools import findings, project
+from .tools import findings
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -113,17 +113,6 @@ async def _run_with_audit(tool_name: str, arguments: dict, fn, *args, **kwargs):
 
 
 @mcp.tool()
-async def get_finding(finding_id: int) -> dict:
-    """Retrieve a single finding by its primary-key ID."""
-    return await _run_with_audit(
-        "get_finding",
-        {"finding_id": finding_id},
-        findings.get_finding,
-        finding_id,
-    )
-
-
-@mcp.tool()
 async def get_findings_batch(run_id: int) -> dict | None:
     """Atomically claims and returns the next pending batch for the given run."""
     return await _run_with_audit(
@@ -135,58 +124,6 @@ async def get_findings_batch(run_id: int) -> dict | None:
 
 
 @mcp.tool()
-async def complete_triage_batch(batch_id: int, status: str) -> None:
-    """Mark a triage batch as success or failed."""
-    return await _run_with_audit(
-        "complete_triage_batch",
-        {"batch_id": batch_id, "status": status},
-        findings.complete_triage_batch,
-        batch_id,
-        status,
-    )
-
-
-@mcp.tool()
-async def update_finding(
-    finding_id: int,
-    confidence: str | None = None,
-    finding_type: str | None = None,
-    severity: str | None = None,
-    reasoning: str | None = None,
-    remediation: str | None = None,
-    attack_vector: str | None = None,
-    call_stack: str | None = None,
-    strategy: str = "",
-) -> bool:
-    """Update enrichment fields on a single finding."""
-    args = {
-        "finding_id": finding_id,
-        "confidence": confidence,
-        "finding_type": finding_type,
-        "severity": severity,
-        "reasoning": reasoning,
-        "remediation": remediation,
-        "attack_vector": attack_vector,
-        "call_stack": call_stack,
-        "strategy": strategy,
-    }
-    return await _run_with_audit(
-        "update_finding",
-        args,
-        findings.update_finding,
-        finding_id,
-        confidence,
-        finding_type,
-        severity,
-        reasoning,
-        remediation,
-        attack_vector,
-        call_stack,
-        strategy,
-    )
-
-
-@mcp.tool()
 async def update_findings_batch(updates: list[dict]) -> dict:
     """Apply updates to multiple findings in a single call."""
     return await _run_with_audit(
@@ -194,17 +131,6 @@ async def update_findings_batch(updates: list[dict]) -> dict:
         {"updates": updates},
         findings.update_findings_batch,
         updates,
-    )
-
-
-@mcp.tool()
-async def get_project_config(project_name: str) -> dict:
-    """Retrieve configuration metadata for a project."""
-    return await _run_with_audit(
-        "get_project_config",
-        {"project": project_name},
-        project.get_project_config,
-        project_name,
     )
 
 

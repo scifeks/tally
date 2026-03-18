@@ -78,7 +78,6 @@ def test_batch_passes_skip_tools_to_store(tmp_path: Path) -> None:
 
     skip_tools = store.get_active_finding_combos.call_args[0][0]
     assert "nmap" in skip_tools
-    assert "tree-sitter" in skip_tools
 
 
 def test_batch_resets_before_fetching_combos(tmp_path: Path) -> None:

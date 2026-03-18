@@ -22,22 +22,27 @@ _log = logging.getLogger(__name__)
 
 _APP_ROOT = Path(__file__).parent.parent
 
+# todo: This is bad. We're back do defining every tool in multiple files now.
+# todo: We can just infer what strategy to use based on the tool segment
+# todo: Review how the segments are assigned by looking at
+#  how they are resolved from the tool registry.
+# todo: Then, construct `TOOL_STRATEGY` dynamically without having
+#  to define a single tool in here.
 TOOL_STRATEGY: dict[str, str] = {
     "semgrep": "code_trace",
     "zap": "api_trace",
     "osv-scanner": "dependency",
-    "pip-audit": "dependency",  # todo: remove
-    "npm-audit": "dependency",  # todo: remove
-    "composer-audit": "dependency",  # todo: remove
-    "gitleaks": "enrich_only",  # todo: remove
-    "nmap": "skip",  # todo: remove
-    "tree-sitter": "skip",  # todo: remove
+    "pip-audit": "dependency",
+    "npm-audit": "dependency",
+    "composer-audit": "dependency",
+    "gitleaks": "enrich_only",
+    "nmap": "skip",
 }
 
 STRATEGY_PROMPT: dict[str, object] = {
     "code_trace": _code_trace.render,
-    "api_trace": _api_trace.render,  # todo: probably won't even do this one
-    "dependency": _dependency.render,  # todo: probably won't even do this one
+    "api_trace": _api_trace.render,
+    "dependency": _dependency.render,
     "enrich_only": _enrich_only.render,
 }
 

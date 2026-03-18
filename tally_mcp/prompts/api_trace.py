@@ -20,13 +20,11 @@ Finding IDs: [{ids_repr}]
    - finding_ids: [{ids_repr}]
    - project: "{project}"
 
-2. Call `get_project_config` to retrieve the project's repository paths and
-   known route definition files.
-
-3. For each finding:
+2. For each finding:
    a. Parse the finding URL to extract the HTTP method and path.
-   b. Use the Grep tool to search route/controller files for a handler
-      matching that HTTP method and path pattern.
+   b. Use the Grep tool to search route/controller files within
+      `finding["repo_path"]` for a handler matching that HTTP method and
+      path pattern.
    c. If no handler is found:
         - Set confidence=potential
         - Note "handler not located" in reasoning
@@ -37,7 +35,7 @@ Finding IDs: [{ids_repr}]
           vulnerable operation (e.g. query execution, HTML output, redirect)
         - Assess whether sanitisation or parameterisation is present
 
-4. Call `update_findings_batch` with your assessment for ALL findings before
+3. Call `update_findings_batch` with your assessment for ALL findings before
    exiting. You MUST call this tool — do not exit without writing results.
    Use ONLY `update_findings_batch` to write results. Do NOT call
    `update_finding` directly. Once `update_findings_batch` returns a result,
