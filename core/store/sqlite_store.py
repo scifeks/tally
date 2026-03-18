@@ -522,7 +522,7 @@ class SQLiteStore:
                 WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
                 ORDER BY severity DESC, url, json_extract(meta, '$.risk_type')
             """
-        else:
+        elif segment == "sast":
             sql = """
                 SELECT
                     id, repo, file, tool, rule_id, severity, confidence,
@@ -539,6 +539,9 @@ class SQLiteStore:
                     json_extract(meta, '$.risk_type'),
                     CAST(json_extract(meta, '$.line_start') AS INTEGER)
             """
+        else:
+            return 0
+
         with self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         findings = [dict(row) for row in rows]
