@@ -566,6 +566,51 @@ class SQLiteStore:
             )
         return len(batches)
 
+    def claim_triage_batch(self, run_id: int) -> dict | None:
+        """Atomically claims the next pending batch for *run_id*.
+
+        Returns the batch row as a dict (with JSON columns parsed) or None
+        if no claimable batch exists.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                UPDATE triage_batches
+                SET
+                    status       = 'in_progress',
+                    started_at   = datetime('now'),
+                    run_attempts = run_attempts + 1
+                WHERE id = (
+                    SELECT id FROM triage_batches
+                    WHERE  status       = 'pending'
+                      AND  run_attempts < 3
+                      AND  run_id       = ?
+                    ORDER BY id ASC
+                    LIMIT 1
+                )
+                RETURNING *
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["batch_data"] = json.loads(result["batch_data"])
+        result["finding_ids"] = json.loads(result["finding_ids"])
+        return result
+
+    def complete_triage_batch(self, batch_id: int, status: str) -> None:
+        """Sets status and completed_at on the given batch."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE triage_batches
+                SET status = ?, completed_at = datetime('now')
+                WHERE id = ?
+                """,
+                (status, batch_id),
+            )
+
     # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

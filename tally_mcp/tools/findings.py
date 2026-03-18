@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from core.store.sqlite_store import SQLiteStore
@@ -20,7 +20,6 @@ from core.tools.constants import (  # noqa: E402
     SEVERITY_LEVELS,
 )
 
-from ..config import BATCH_TIMEOUT_SECONDS, MAX_BATCH_SIZE  # noqa: E402
 from .project import get_project_config  # noqa: E402
 
 
@@ -105,74 +104,22 @@ async def get_finding(finding_id: int) -> dict:
     return row
 
 
-async def get_findings_batch(
-    project: str,
-    repo: str | None = None,
-    tools: list[str] | None = None,
-    domain: str | None = None,
-    status: str | None = None,
-    max_results: int | None = None,
-) -> list[dict]:
-    """Retrieve a filtered batch of findings for triage.
+async def get_findings_batch(run_id: int) -> dict | None:
+    """Atomically claims and returns the next pending batch for *run_id*.
 
-    Args:
-        project: Project name to query findings for.
-        repo: Optional repository filter — resolved via project config.
-        tools: Optional list of tool names to restrict results to.
-        domain: Optional domain filter (e.g. ``"sast"``, ``"secrets"``).
-        status: Optional status filter (e.g. ``"open"``, ``"fixed"``).
-        max_results: Optional cap; clamped to MAX_BATCH_SIZE.
-
-    Returns:
-        A list of finding dicts sorted by (file, line). Returns ``[]`` on
-        timeout without raising.
+    Returns the batch dict (including batch_data and finding_ids) or None
+    if no pending batches remain.
     """
     assert _store is not None
-    limit = min(max_results, MAX_BATCH_SIZE) if max_results else MAX_BATCH_SIZE
+    return await asyncio.to_thread(_store.claim_triage_batch, run_id)
 
-    repos: list[dict] = []
-    try:
-        cfg = await get_project_config(project)
-        repos = cfg.get("repositories", [])
-    except FileNotFoundError:
-        pass
 
-    if repo and repo not in {r["name"] for r in repos}:
-        raise ValueError(f"Repo '{repo}' not in project config")
-
-    call_args: dict = {
-        "project": project,
-        "repo": repo,
-        "tools": tools,
-        "domain": domain,
-        "status": status,
-        "max_results": max_results,
-    }
-    start = datetime.now(UTC)
-    try:
-        rows = await asyncio.wait_for(
-            asyncio.to_thread(
-                _store.get_findings,
-                tools,
-                domain,
-                status,
-                repo,
-                ["sast", "api"],
-                True,
-                limit,
-            ),
-            timeout=BATCH_TIMEOUT_SECONDS,
-        )
-    except TimeoutError:
-        duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
-        _write_audit("get_findings_batch", call_args, False, "timeout", duration_ms)
-        return []
-
-    rows = [_parse_row(r) for r in rows]
-    for row in rows:
-        row["abs_path"] = _reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
-    rows.sort(key=lambda r: (r.get("file") or "", _extract_line(r.get("meta") or {})))
-    return rows
+async def complete_triage_batch(
+    batch_id: int, status: Literal["success", "failed"]
+) -> None:
+    """Sets status and completed_at on the given batch."""
+    assert _store is not None
+    await asyncio.to_thread(_store.complete_triage_batch, batch_id, status)
 
 
 async def update_finding(

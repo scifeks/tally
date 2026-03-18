@@ -124,33 +124,25 @@ async def get_finding(finding_id: int) -> dict:
 
 
 @mcp.tool()
-async def get_findings_batch(
-    project: str,
-    repo: str | None = None,
-    tools: list[str] | None = None,
-    domain: str | None = None,
-    status: str | None = None,
-    max_results: int | None = None,
-) -> list[dict]:
-    """Retrieve a filtered batch of findings for triage."""
-    args = {
-        "project": project,
-        "repo": repo,
-        "tools": tools,
-        "domain": domain,
-        "status": status,
-        "max_results": max_results,
-    }
+async def get_findings_batch(run_id: int) -> dict | None:
+    """Atomically claims and returns the next pending batch for the given run."""
     return await _run_with_audit(
         "get_findings_batch",
-        args,
+        {"run_id": run_id},
         findings.get_findings_batch,
-        project,
-        repo,
-        tools,
-        domain,
+        run_id,
+    )
+
+
+@mcp.tool()
+async def complete_triage_batch(batch_id: int, status: str) -> None:
+    """Mark a triage batch as success or failed."""
+    return await _run_with_audit(
+        "complete_triage_batch",
+        {"batch_id": batch_id, "status": status},
+        findings.complete_triage_batch,
+        batch_id,
         status,
-        max_results,
     )
 
 
