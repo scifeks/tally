@@ -7,6 +7,8 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+from core.store.sqlite_store import SQLiteStore
+
 from .config import SESSION_TIMEOUT_SECONDS
 from .prompts import api_trace as _api_trace
 from .prompts import code_trace as _code_trace
@@ -70,6 +72,48 @@ def run_triage(project: str) -> dict[str, int]:
     db = _db_path(project)
     if not db.exists():
         raise FileNotFoundError(f"Project database not found: {db}")
+
+    # --- Batching phase ---
+    store = SQLiteStore(_APP_ROOT, project)
+    run_id = store.create_run({})
+
+    reset_count = store.reset_stale_triage_batches(run_id)
+    if reset_count:
+        _log.info(
+            "Reset %d stale in_progress batches for run_id=%d",
+            reset_count,
+            run_id,
+        )
+
+    skip_tools = {t for t, s in TOOL_STRATEGY.items() if s == "skip"}
+
+    conn = sqlite3.connect(str(db))
+    try:
+        combo_rows = conn.execute(
+            "SELECT DISTINCT tool, repo, segment FROM findings"
+            " WHERE status = 'active' AND segment IS NOT NULL",
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for tool, repo, segment in combo_rows:
+        if tool in skip_tools:
+            continue
+        try:
+            batch_count = store.create_triage_batches(run_id, tool, repo, segment)
+            _log.info(
+                "Created %d batches for tool=%s repo=%s segment=%s",
+                batch_count,
+                tool,
+                repo,
+                segment,
+            )
+            print(f"  Batched {batch_count} batch(es) for {tool}/{repo}/{segment}")
+        except Exception as exc:
+            raise RuntimeError(
+                f"Batching failed for {tool}/{repo}/{segment}: {exc}"
+            ) from exc
+    # --- End batching phase ---
 
     conn = sqlite3.connect(str(db))
     try:

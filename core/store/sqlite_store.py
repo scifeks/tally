@@ -611,6 +611,20 @@ class SQLiteStore:
                 (status, batch_id),
             )
 
+    def reset_stale_triage_batches(self, run_id: int) -> int:
+        """Reset in_progress batches for run_id back to pending.
+
+        Returns the number of batches reset.
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE triage_batches"
+                " SET status = 'pending', started_at = NULL"
+                " WHERE status = 'in_progress' AND run_id = ?",
+                (run_id,),
+            )
+            return cur.rowcount
+
     # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

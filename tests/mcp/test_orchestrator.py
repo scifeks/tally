@@ -24,7 +24,12 @@ from tally_mcp.orchestrator import run_triage  # noqa: E402
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS findings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT UNIQUE,
     tool TEXT,
+    severity TEXT,
+    status TEXT,
+    segment TEXT,
+    repo TEXT,
     triaged_at TEXT,
     triaged_by TEXT
 );
@@ -47,6 +52,24 @@ def _make_db(db_path: Path, rows: list[tuple[str]]) -> None:
     for (tool,) in rows:
         conn.execute(
             "INSERT INTO findings (tool, triaged_at) VALUES (?, NULL)", (tool,)
+        )
+    conn.commit()
+    conn.close()
+
+
+def _make_db_active(
+    db_path: Path,
+    rows: list[tuple[str, str, str]],
+) -> None:
+    """Seed active findings with (tool, repo, segment) tuples."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(_SCHEMA)
+    for tool, repo, segment in rows:
+        conn.execute(
+            "INSERT INTO findings (tool, status, repo, segment, triaged_at)"
+            " VALUES (?, 'active', ?, ?, NULL)",
+            (tool, repo, segment),
         )
     conn.commit()
     conn.close()
@@ -244,3 +267,177 @@ def test_standalone_import() -> None:
     import tally_mcp.orchestrator  # noqa: F401
 
     assert callable(tally_mcp.orchestrator.run_triage)
+
+
+# ---------------------------------------------------------------------------
+# Batching phase tests
+# ---------------------------------------------------------------------------
+
+
+def test_stale_batches_for_current_run_are_reset(project_db) -> None:
+    """in_progress batches for the current run_id are reset to pending."""
+    from core.store.sqlite_store import SQLiteStore
+
+    project, tmp_root, db = project_db
+    _make_db(db, [])
+
+    store = SQLiteStore(tmp_root, project)
+    run_id = store.create_run({})
+
+    # Insert a stale in_progress batch for this run
+    with store._connect() as conn:
+        conn.execute(
+            "INSERT INTO triage_batches"
+            " (run_id, finding_ids, batch_data, status, run_attempts)"
+            " VALUES (?, '[]', '[]', 'in_progress', 0)",
+            (run_id,),
+        )
+
+    import tally_mcp.orchestrator as orch
+
+    with (
+        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id),
+    ):
+        orch.run_triage(project)
+
+    with store._connect() as conn:
+        row = conn.execute(
+            "SELECT status FROM triage_batches WHERE run_id = ?", (run_id,)
+        ).fetchone()
+    assert row is not None
+    assert row["status"] == "pending"
+
+
+def test_stale_batches_other_run_not_touched(project_db) -> None:
+    """in_progress batches from a different run_id are not reset."""
+    from core.store.sqlite_store import SQLiteStore
+
+    project, tmp_root, db = project_db
+    _make_db(db, [])
+
+    store = SQLiteStore(tmp_root, project)
+    run_id_a = store.create_run({})
+    run_id_b = store.create_run({})
+
+    for rid in (run_id_a, run_id_b):
+        with store._connect() as conn:
+            conn.execute(
+                "INSERT INTO triage_batches"
+                " (run_id, finding_ids, batch_data, status, run_attempts)"
+                " VALUES (?, '[]', '[]', 'in_progress', 0)",
+                (rid,),
+            )
+
+    import tally_mcp.orchestrator as orch
+
+    with (
+        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id_a),
+    ):
+        orch.run_triage(project)
+
+    with store._connect() as conn:
+        rows = conn.execute(
+            "SELECT run_id, status FROM triage_batches ORDER BY run_id"
+        ).fetchall()
+
+    status_by_run = {r["run_id"]: r["status"] for r in rows}
+    assert status_by_run[run_id_a] == "pending"
+    assert status_by_run[run_id_b] == "in_progress"
+
+
+def test_create_triage_batches_called_per_combo(project_db) -> None:
+    """create_triage_batches is called once per distinct tool/repo/segment combo."""
+    project, tmp_root, db = project_db
+    _make_db_active(
+        db,
+        [
+            ("semgrep", "repo1", "sast"),
+            ("semgrep", "repo1", "sast"),  # duplicate — same combo
+            ("zap", "repo1", "api"),
+        ],
+    )
+
+    import tally_mcp.orchestrator as orch
+
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stderr = ""
+
+    with (
+        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch(
+            "core.store.sqlite_store.SQLiteStore.create_triage_batches",
+            return_value=1,
+        ) as mock_create,
+        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=1),
+        patch(
+            "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
+            return_value=0,
+        ),
+        patch("subprocess.run", return_value=mock_run),
+    ):
+        orch.run_triage(project)
+
+    assert mock_create.call_count == 2
+    calls = {(c.args[1], c.args[2], c.args[3]) for c in mock_create.call_args_list}
+    assert ("semgrep", "repo1", "sast") in calls
+    assert ("zap", "repo1", "api") in calls
+
+
+def test_batching_error_aborts_before_mcp_json(project_db) -> None:
+    """A batching error raises RuntimeError and _write_mcp_json is not called."""
+    project, tmp_root, db = project_db
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
+
+    import tally_mcp.orchestrator as orch
+
+    with (
+        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch(
+            "core.store.sqlite_store.SQLiteStore.create_triage_batches",
+            side_effect=RuntimeError("db locked"),
+        ),
+        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=1),
+        patch(
+            "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
+            return_value=0,
+        ),
+        patch.object(orch, "_write_mcp_json") as mock_write,
+    ):
+        with pytest.raises(RuntimeError, match="Batching failed"):
+            orch.run_triage(project)
+
+    mock_write.assert_not_called()
+
+
+def test_batch_count_reported(project_db, capsys) -> None:
+    """Batch count and combo identifier appear in stdout."""
+    project, tmp_root, db = project_db
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
+
+    import tally_mcp.orchestrator as orch
+
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stderr = ""
+
+    with (
+        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch(
+            "core.store.sqlite_store.SQLiteStore.create_triage_batches",
+            return_value=3,
+        ),
+        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=1),
+        patch(
+            "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
+            return_value=0,
+        ),
+        patch("subprocess.run", return_value=mock_run),
+    ):
+        orch.run_triage(project)
+
+    out = capsys.readouterr().out
+    assert "3" in out
+    assert "semgrep" in out
