@@ -497,6 +497,75 @@ class SQLiteStore:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
+    def create_triage_batches(
+        self, run_id: int, tool: str, repo: str, segment: str
+    ) -> int:
+        """Fetch active findings, compute batches, and persist to triage_batches.
+
+        Returns the number of batches written.
+        """
+        from tally_mcp.batching import compute_batches
+
+        params = (segment, tool, repo)
+        if segment == "api":
+            sql = """
+                SELECT
+                    id, repo, url, tool, severity, confidence, description,
+                    json_extract(meta, '$.remediation') AS remediation,
+                    json_extract(meta, '$.method') AS method,
+                    json_extract(meta, '$.param') AS param,
+                    json_extract(meta, '$.evidence') AS evidence,
+                    json_extract(meta, '$.risk_type') AS risk_type,
+                    json_extract(meta, '$.cwe_id') AS cwe_id,
+                    json_extract(meta, '$.alert_name') AS alert_name
+                FROM findings
+                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
+                ORDER BY severity DESC, url, json_extract(meta, '$.risk_type')
+            """
+        else:
+            sql = """
+                SELECT
+                    id, repo, file, tool, rule_id, severity, confidence,
+                    description, cwe,
+                    json_extract(meta, '$.line_start') AS line_start,
+                    json_extract(meta, '$.code_snippet') AS code_snippet,
+                    json_extract(meta, '$.risk_type') AS risk_type,
+                    json_extract(meta, '$.owasp') AS owasp
+                FROM findings
+                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
+                ORDER BY
+                    severity DESC,
+                    file,
+                    json_extract(meta, '$.risk_type'),
+                    CAST(json_extract(meta, '$.line_start') AS INTEGER)
+            """
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        findings = [dict(row) for row in rows]
+
+        batches = compute_batches(findings)
+        if not batches:
+            return 0
+
+        insert_rows = [
+            (
+                run_id,
+                json.dumps([f["id"] for f in batch]),
+                json.dumps(batch),
+                "pending",
+                0,
+            )
+            for batch in batches
+        ]
+        with self._connect() as conn:
+            conn.executemany(
+                "INSERT INTO triage_batches"
+                " (run_id, finding_ids, batch_data, status, run_attempts)"
+                " VALUES (?, ?, ?, ?, ?)",
+                insert_rows,
+            )
+        return len(batches)
+
     # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

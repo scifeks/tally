@@ -1,0 +1,157 @@
+"""Integration tests for SQLiteStore.create_triage_batches."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+_TALLY_ROOT = Path(__file__).resolve().parents[2]
+if str(_TALLY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_TALLY_ROOT))
+
+from core.store.sqlite_store import SQLiteStore  # noqa: E402
+
+
+def _seed_findings(store: SQLiteStore, findings: list[dict]) -> None:
+    """Upsert a list of findings into the store under a fresh run."""
+    run_id = store.create_run({})
+    store.upsert_findings(run_id, findings)
+
+
+def _make_sast_finding(
+    tool: str = "semgrep",
+    repo: str = "myrepo",
+    file_path: str = "src/foo.py",
+    rule_id: str = "r1",
+    severity: str = "medium",
+    risk_type: str = "injection",
+    line_start: int = 10,
+) -> dict:
+    return {
+        "tool": tool,
+        "repo": repo,
+        "segment": "sast",
+        "file_path": file_path,
+        "rule_id": rule_id,
+        "severity": severity,
+        "risk_type": risk_type,
+        "line_start": line_start,
+    }
+
+
+def _make_api_finding(
+    tool: str = "zap",
+    repo: str = "myrepo",
+    url: str = "http://example.com/api/v1",
+    severity: str = "medium",
+    risk_type: str = "xss",
+) -> dict:
+    return {
+        "tool": tool,
+        "repo": repo,
+        "segment": "api",
+        "url": url,
+        "severity": severity,
+        "risk_type": risk_type,
+    }
+
+
+class TestCreateTriageBatches:
+    def test_writes_correct_batch_count(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        # 2 pairs: same file+risk_type → 2 batches
+        findings = [
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=1),
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=2),
+            _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=1),
+            _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=2),
+        ]
+        _seed_findings(store, findings)
+        count = store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        assert count == 2
+        with store._connect() as conn:
+            row_count = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[
+                0
+            ]
+        assert row_count == 2
+
+    def test_batch_row_fields(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        findings = [
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli"),
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=20),
+        ]
+        _seed_findings(store, findings)
+        store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        with store._connect() as conn:
+            row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
+        assert row["run_id"] == run_id
+        assert row["status"] == "pending"
+        assert row["run_attempts"] == 0
+
+    def test_finding_ids_match_batch_data(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        # 3 findings, same file+risk_type → 1 batch (≤ MAX_FINDINGS_PER_BATCH=4)
+        findings = [
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=i)
+            for i in range(1, 4)
+        ]
+        _seed_findings(store, findings)
+        store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        with store._connect() as conn:
+            row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
+        finding_ids = json.loads(row["finding_ids"])
+        batch_data = json.loads(row["batch_data"])
+        assert finding_ids == [f["id"] for f in batch_data]
+
+    def test_started_at_completed_at_null(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        _seed_findings(store, [_make_sast_finding()])
+        store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        with store._connect() as conn:
+            row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
+        assert row["started_at"] is None
+        assert row["completed_at"] is None
+
+    def test_not_idempotent(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        findings = [
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=1),
+            _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=2),
+        ]
+        _seed_findings(store, findings)
+        store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        with store._connect() as conn:
+            row_count = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[
+                0
+            ]
+        assert row_count == 2
+
+    def test_empty_findings_writes_nothing(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        count = store.create_triage_batches(run_id, "semgrep", "myrepo", "sast")
+        assert count == 0
+        with store._connect() as conn:
+            row_count = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[
+                0
+            ]
+        assert row_count == 0
+
+    def test_api_segment_uses_url_query(self, tmp_path: Path) -> None:
+        store = SQLiteStore(tmp_path, "proj")
+        run_id = store.create_run({})
+        findings = [
+            _make_api_finding(url="http://example.com/api/login", risk_type="xss"),
+            _make_api_finding(url="http://example.com/api/search", risk_type="sqli"),
+        ]
+        _seed_findings(store, findings)
+        count = store.create_triage_batches(run_id, "zap", "myrepo", "api")
+        assert count >= 1
