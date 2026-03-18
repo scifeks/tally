@@ -63,18 +63,12 @@ def _write_mcp_json(project: str) -> Path:
     return mcp_json_path
 
 
-def run_triage(project: str) -> dict[str, int]:
-    """Run AI triage sessions for untriaged findings.
+def _batching_phase(store: SQLiteStore, db: Path) -> tuple[int, int]:
+    """Create triage batches for all active findings.
 
-    Returns a dict with keys: sessions_run, success, failed, incomplete.
-    Raises FileNotFoundError if the project database does not exist.
+    Returns (run_id, total_batches_created).
+    Raises RuntimeError if any combo fails to batch.
     """
-    db = _db_path(project)
-    if not db.exists():
-        raise FileNotFoundError(f"Project database not found: {db}")
-
-    # --- Batching phase ---
-    store = SQLiteStore(_APP_ROOT, project)
     run_id = store.create_run({})
 
     reset_count = store.reset_stale_triage_batches(run_id)
@@ -96,6 +90,7 @@ def run_triage(project: str) -> dict[str, int]:
     finally:
         conn.close()
 
+    total = 0
     for tool, repo, segment in combo_rows:
         if tool in skip_tools:
             continue
@@ -109,11 +104,41 @@ def run_triage(project: str) -> dict[str, int]:
                 segment,
             )
             print(f"  Batched {batch_count} batch(es) for {tool}/{repo}/{segment}")
+            total += batch_count
         except Exception as exc:
             raise RuntimeError(
                 f"Batching failed for {tool}/{repo}/{segment}: {exc}"
             ) from exc
-    # --- End batching phase ---
+    return run_id, total
+
+
+def run_triage_batch_only(project: str) -> int:
+    """Run only the batching phase — no MCP server, no Claude sessions.
+
+    Returns the total number of batches created.
+    Raises FileNotFoundError if the project database does not exist.
+    """
+    db = _db_path(project)
+    if not db.exists():
+        raise FileNotFoundError(f"Project database not found: {db}")
+
+    store = SQLiteStore(_APP_ROOT, project)
+    _run_id, total = _batching_phase(store, db)
+    return total
+
+
+def run_triage(project: str) -> dict[str, int]:
+    """Run AI triage sessions for untriaged findings.
+
+    Returns a dict with keys: sessions_run, success, failed, incomplete.
+    Raises FileNotFoundError if the project database does not exist.
+    """
+    db = _db_path(project)
+    if not db.exists():
+        raise FileNotFoundError(f"Project database not found: {db}")
+
+    store = SQLiteStore(_APP_ROOT, project)
+    _batching_phase(store, db)
 
     conn = sqlite3.connect(str(db))
     try:
