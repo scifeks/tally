@@ -59,6 +59,10 @@ class Repository(BaseModel):
     )
     languages: list[str] = Field(..., description="Programming languages used")
     base_urls: list[str] = Field(default_factory=list, description="API base URLs")
+    test_dirs: list[str] = Field(
+        default_factory=list,
+        description="Test directory names/paths to exclude from scan findings",
+    )
 
     @field_validator("type")
     @classmethod

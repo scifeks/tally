@@ -26,18 +26,18 @@ TOOL_STRATEGY: dict[str, str] = {
     "semgrep": "code_trace",
     "zap": "api_trace",
     "osv-scanner": "dependency",
-    "pip-audit": "dependency",
-    "npm-audit": "dependency",
-    "composer-audit": "dependency",
-    "gitleaks": "enrich_only",
-    "nmap": "skip",
-    "tree-sitter": "skip",
+    "pip-audit": "dependency",  # todo: remove
+    "npm-audit": "dependency",  # todo: remove
+    "composer-audit": "dependency",  # todo: remove
+    "gitleaks": "enrich_only",  # todo: remove
+    "nmap": "skip",  # todo: remove
+    "tree-sitter": "skip",  # todo: remove
 }
 
 STRATEGY_PROMPT: dict[str, object] = {
     "code_trace": _code_trace.render,
-    "api_trace": _api_trace.render,
-    "dependency": _dependency.render,
+    "api_trace": _api_trace.render,  # todo: probably won't even do this one
+    "dependency": _dependency.render,  # todo: probably won't even do this one
     "enrich_only": _enrich_only.render,
 }
 
@@ -208,8 +208,10 @@ class TriageRunner:
                     "claude",
                     "--print",
                     "--dangerously-skip-permissions",
-                    prompt_text,
+                    "--disallowedTools",
+                    "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch",
                 ],
+                input=prompt_text,
                 capture_output=True,
                 text=True,
                 timeout=SESSION_TIMEOUT_SECONDS,
@@ -276,6 +278,10 @@ class TriageRunner:
                         "--project",
                         self._project,
                     ],
+                    "permissions": {
+                        "allow": ["get_findings_batch", "update_findings_batch"],
+                        "deny": ["*"],
+                    },
                 }
             }
         }

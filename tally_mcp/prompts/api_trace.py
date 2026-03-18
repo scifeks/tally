@@ -25,8 +25,8 @@ Finding IDs: [{ids_repr}]
 
 3. For each finding:
    a. Parse the finding URL to extract the HTTP method and path.
-   b. Use ripgrep to search route/controller files for a handler matching
-      that HTTP method and path pattern.
+   b. Use the Grep tool to search route/controller files for a handler
+      matching that HTTP method and path pattern.
    c. If no handler is found:
         - Set confidence=potential
         - Note "handler not located" in reasoning

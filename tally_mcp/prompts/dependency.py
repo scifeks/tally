@@ -32,8 +32,8 @@ context and provide actionable remediation.
 2. Call `get_project_config` to get repository paths.
 
 3. For each finding:
-   a. Use ripgrep to check whether the vulnerable package is actively imported
-      or used in the project source (not just listed in a manifest).
+   a. Use the Grep tool to check whether the vulnerable package is actively
+      imported or used in the project source (not just listed in a manifest).
    b. If the CVSS vector is present in the finding data, confirm or adjust
       the severity score in context — a network-exploitable vuln in a
       package used only for CLI tooling may warrant a lower effective

@@ -214,7 +214,7 @@ class TestInterviewSingleRepo:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", ""]
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = pm._interview_single_repo(1)
         assert repo is not None
@@ -235,6 +235,7 @@ class TestInterviewSingleRepo:
             str(repo_dir),
             "python",
             "",
+            "",
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = pm._interview_single_repo(1)
@@ -247,7 +248,7 @@ class TestInterviewSingleRepo:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
-        inputs = ["my-repo", "api", "nope", "local", str(repo_dir), "python", ""]
+        inputs = ["my-repo", "api", "nope", "local", str(repo_dir), "python", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = pm._interview_single_repo(1)
         assert repo is not None
@@ -265,11 +266,47 @@ class TestInterviewSingleRepo:
             str(repo_dir),
             "python",
             "",
+            "",
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = pm._interview_single_repo(1)
         assert repo is not None
         assert repo.path == str(repo_dir)
+
+    def test_auto_detected_test_dirs_accepted(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        (repo_dir / "tests").mkdir()
+        pm = _make_pm(tmp_path / "pm")
+        # last "" accepts the auto-detected "tests" default
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
+        with patch("builtins.input", side_effect=inputs):
+            repo = pm._interview_single_repo(1)
+        assert repo is not None
+        assert repo.test_dirs == ["tests"]
+
+    def test_test_dirs_overridden_by_user(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        (repo_dir / "tests").mkdir()
+        pm = _make_pm(tmp_path / "pm")
+        # user overrides detected "tests" with "spec, e2e"
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "spec, e2e"]
+        with patch("builtins.input", side_effect=inputs):
+            repo = pm._interview_single_repo(1)
+        assert repo is not None
+        assert repo.test_dirs == ["spec", "e2e"]
+
+    def test_no_test_dirs_empty_input(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        # no test subdirs present; user presses Enter → empty list
+        pm = _make_pm(tmp_path / "pm")
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
+        with patch("builtins.input", side_effect=inputs):
+            repo = pm._interview_single_repo(1)
+        assert repo is not None
+        assert repo.test_dirs == []
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +337,7 @@ class TestEditRepository:
         )
         pm = self._setup_project(tmp_path / "pm", repo)
         # Switch from docker to local; keep all other defaults
-        inputs = ["", "", "local", "", "", ""]
+        inputs = ["", "", "local", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = pm.edit_repository("test-project", "my-repo")
         assert updated is not None
@@ -314,7 +351,7 @@ class TestEditRepository:
         repo = _make_repo(name="my-repo", path=str(repo_dir))
         pm = self._setup_project(tmp_path / "pm", repo)
         # Press Enter for everything — keep existing values
-        inputs = ["", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = pm.edit_repository("test-project", "my-repo")
         assert updated is not None
