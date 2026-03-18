@@ -18,6 +18,7 @@ class NmapChunkBuilder:
         {"severity", "confidence", "risk_type", "remediation", "description"}
     )
     type_flags: dict[str, set[str]] = {"informational": set()}
+    should_enrich = False
 
     def build(
         self, result: ToolResult, profile: str

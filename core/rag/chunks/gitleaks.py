@@ -18,6 +18,7 @@ class GitleaksChunkBuilder:
         {"severity", "risk_type", "confidence"}
     )
     type_flags: dict[str, set[str]] = {"secret": {"type_secret"}}
+    should_enrich = False
 
     def build(
         self, result: ToolResult, profile: str
