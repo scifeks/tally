@@ -20,10 +20,8 @@ Finding IDs: [{ids_repr}]
    - finding_ids: [{ids_repr}]
    - project: "{project}"
 
-2. Group findings by file. For each finding, use `finding["abs_path"]` as the
-   absolute file path to read. Read each source file ONCE — do not re-read a
-   file for every finding within it. For each file, examine the lines around
-   `meta.line_start` and `meta.line_end`.
+2. For each finding, use `finding["abs_path"]` as the absolute file path to
+   read. Examine the lines around `meta.line_start` and `meta.line_end`.
 
 3. Trace backward from the flagged sink to the nearest HTTP entry point.
    Determine whether user-controlled input reaches the sink without adequate

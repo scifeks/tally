@@ -52,6 +52,16 @@ def test_code_trace_key_instructions() -> None:
     assert "call_stack" in result
 
 
+def test_code_trace_no_grouping_instructions() -> None:
+    result = code_trace.render(_IDS, _PROJECT)
+    assert "group" not in result.lower()
+
+
+def test_api_trace_no_grouping_instructions() -> None:
+    result = api_trace.render(_IDS, _PROJECT)
+    assert "group" not in result.lower()
+
+
 # ---------------------------------------------------------------------------
 # api_trace
 # ---------------------------------------------------------------------------
