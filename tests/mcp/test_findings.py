@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import sys
+import threading
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
-_MCP_DIR = _TALLY_ROOT / "mcp"
-if str(_MCP_DIR) not in sys.path:
-    sys.path.insert(1, str(_MCP_DIR))
 
 from core.store.sqlite_store import SQLiteStore  # noqa: E402
-from mcp.config import MAX_BATCH_SIZE  # noqa: E402
-from mcp.tools import findings  # noqa: E402
+from tally_mcp.tools import findings  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -26,6 +23,7 @@ from mcp.tools import findings  # noqa: E402
 _BASE_FINDING = {
     "tool": "semgrep",
     "domain": "sast",
+    "segment": "sast",
     "finding_type": "vulnerability",
     "severity": "high",
     "confidence": "medium",
@@ -89,103 +87,6 @@ async def test_null_severity_confidence_returned_as_none(
     row = await findings.get_finding(fid)
     assert row["severity"] is None
     assert row["confidence"] is None
-
-
-# ---------------------------------------------------------------------------
-# get_findings_batch tests
-# ---------------------------------------------------------------------------
-
-
-async def test_get_findings_batch_returns_sorted(store: SQLiteStore) -> None:
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
-        [
-            {**_BASE_FINDING, "file_path": "src/z.py", "line_start": 10},
-            {**_BASE_FINDING, "file_path": "src/a.py", "line_start": 5},
-            {**_BASE_FINDING, "file_path": "src/a.py", "line_start": 1},
-        ],
-    )
-    rows = await findings.get_findings_batch("testproject")
-    files = [r.get("file") or "" for r in rows]
-    assert files == sorted(files)
-    a_rows = [r for r in rows if r.get("file") == "src/a.py"]
-    lines = [(r.get("meta") or {}).get("line_start") or 0 for r in a_rows]
-    assert lines == sorted(lines)
-
-
-async def test_get_findings_batch_tool_filter(store: SQLiteStore) -> None:
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
-        [
-            {**_BASE_FINDING, "tool": "semgrep"},
-            {
-                "tool": "gitleaks",
-                "domain": "secrets",
-                "finding_type": "secret",
-                "severity": "critical",
-                "file_path": ".env",
-                "rule_id": "aws-key",
-                "description": "AWS key",
-            },
-        ],
-    )
-    rows = await findings.get_findings_batch("testproject", tools=["semgrep"])
-    assert all(r["tool"] == "semgrep" for r in rows)
-    assert len(rows) >= 1
-
-
-async def test_get_findings_batch_domain_filter(store: SQLiteStore) -> None:
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
-        [
-            {**_BASE_FINDING, "domain": "sast"},
-            {**_BASE_FINDING, "domain": "secrets", "rule_id": "other-rule"},
-        ],
-    )
-    rows = await findings.get_findings_batch("testproject", domain="sast")
-    assert all(r["domain"] == "sast" for r in rows)
-
-
-async def test_get_findings_batch_respects_max_batch_size(
-    store: SQLiteStore,
-) -> None:
-    run_id = store.create_run({})
-    n = MAX_BATCH_SIZE + 5
-    batch = [
-        {**_BASE_FINDING, "rule_id": f"rule-{i}", "file_path": f"src/f{i}.py"}
-        for i in range(n)
-    ]
-    store.upsert_findings(run_id, batch)
-    rows = await findings.get_findings_batch("testproject")
-    assert len(rows) <= MAX_BATCH_SIZE
-
-
-async def test_get_findings_batch_timeout_returns_empty(
-    store: SQLiteStore,
-) -> None:
-    _seed(store)
-
-    async def _fake_wait_for(coro, *_a, **_kw):
-        coro.close()
-        raise TimeoutError
-
-    with patch("mcp.tools.findings.asyncio.wait_for", new=_fake_wait_for):
-        rows = await findings.get_findings_batch("testproject")
-
-    assert rows == []
-    # Audit row must be written with success=0
-    with store._connect() as conn:  # noqa: SLF001
-        row = conn.execute(
-            "SELECT success, error FROM tool_audit_log"
-            " WHERE tool_name = 'get_findings_batch'"
-            " ORDER BY id DESC LIMIT 1"
-        ).fetchone()
-    assert row is not None
-    assert row["success"] == 0
-    assert row["error"] == "timeout"
 
 
 # ---------------------------------------------------------------------------
@@ -403,3 +304,168 @@ async def test_previous_confidence_tracked_across_updates(
     meta = _json.loads(db_row["meta"])
     assert meta["triage"]["previous_confidence"] == "probable"
     assert meta["triage"]["confidence"] == "confirmed"
+
+
+# ---------------------------------------------------------------------------
+# _reconstruct_abs_path unit tests
+# ---------------------------------------------------------------------------
+
+_REPOS = [{"name": "myapp", "path": "/repos/myapp"}]
+
+
+def test_reconstruct_abs_path_known_repo() -> None:
+    result = findings._reconstruct_abs_path("/src/app.py", "myapp", _REPOS)
+    assert result == "/repos/myapp/src/app.py"
+
+
+def test_reconstruct_abs_path_unknown_repo() -> None:
+    result = findings._reconstruct_abs_path("/src/app.py", "unknown", _REPOS)
+    assert result is None
+
+
+def test_reconstruct_abs_path_none_file() -> None:
+    result = findings._reconstruct_abs_path(None, "myapp", _REPOS)
+    assert result is None
+
+
+def test_reconstruct_abs_path_none_repo_name() -> None:
+    result = findings._reconstruct_abs_path("/src/app.py", None, _REPOS)
+    assert result is None
+
+
+def test_reconstruct_abs_path_trailing_slash_stripped() -> None:
+    repos = [{"name": "myapp", "path": "/repos/myapp/"}]
+    result = findings._reconstruct_abs_path("/src/app.py", "myapp", repos)
+    assert result == "/repos/myapp/src/app.py"
+
+
+# ---------------------------------------------------------------------------
+# get_finding includes abs_path
+# ---------------------------------------------------------------------------
+
+
+async def test_get_finding_includes_abs_path(store: SQLiteStore) -> None:
+    _seed(store)
+    fid = _first_id(store)
+    row = await findings.get_finding(fid)
+    assert "abs_path" in row
+
+
+# ---------------------------------------------------------------------------
+# TestAtomicBatchClaim
+# ---------------------------------------------------------------------------
+
+
+def _seed_batch(
+    store: SQLiteStore,
+    run_id: int,
+    status: str = "pending",
+    attempts: int = 0,
+) -> None:
+    with store._connect() as conn:  # noqa: SLF001
+        conn.execute(
+            "INSERT INTO triage_batches"
+            " (run_id, finding_ids, batch_data, status, run_attempts)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                run_id,
+                json.dumps([1, 2]),
+                json.dumps([{"id": 1}, {"id": 2}]),
+                status,
+                attempts,
+            ),
+        )
+
+
+class TestAtomicBatchClaim:
+    def test_claim_sets_in_progress_increments_attempts_sets_started_at(
+        self, store: SQLiteStore
+    ) -> None:
+        run_id = store.create_run({})
+        _seed_batch(store, run_id)
+
+        result = store.claim_triage_batch(run_id)
+
+        assert result is not None
+        assert result["status"] == "in_progress"
+        assert result["run_attempts"] == 1
+        assert result["started_at"] is not None
+
+    def test_two_concurrent_claims_no_duplication(self, store: SQLiteStore) -> None:
+        run_id = store.create_run({})
+        _seed_batch(store, run_id)
+
+        results: list[dict | None] = [None, None]
+
+        def _claim(idx: int) -> None:
+            results[idx] = store.claim_triage_batch(run_id)
+
+        t1 = threading.Thread(target=_claim, args=(0,))
+        t2 = threading.Thread(target=_claim, args=(1,))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        claimed = [r for r in results if r is not None]
+        assert len(claimed) == 1, "exactly one thread should have claimed the batch"
+
+    def test_no_pending_batches_returns_none(self, store: SQLiteStore) -> None:
+        run_id = store.create_run({})
+        result = store.claim_triage_batch(run_id)
+        assert result is None
+
+    def test_exhausted_attempts_never_claimed(self, store: SQLiteStore) -> None:
+        run_id = store.create_run({})
+        _seed_batch(store, run_id, status="pending", attempts=3)
+
+        result = store.claim_triage_batch(run_id)
+        assert result is None
+
+    def test_complete_success_sets_status_and_completed_at(
+        self, store: SQLiteStore
+    ) -> None:
+        run_id = store.create_run({})
+        _seed_batch(store, run_id)
+        batch = store.claim_triage_batch(run_id)
+        assert batch is not None
+
+        store.complete_triage_batch(batch["id"], "success")
+
+        with store._connect() as conn:  # noqa: SLF001
+            row = conn.execute(
+                "SELECT status, completed_at FROM triage_batches WHERE id = ?",
+                (batch["id"],),
+            ).fetchone()
+        assert row["status"] == "success"
+        assert row["completed_at"] is not None
+
+    def test_complete_failed_sets_status_and_completed_at(
+        self, store: SQLiteStore
+    ) -> None:
+        run_id = store.create_run({})
+        _seed_batch(store, run_id)
+        batch = store.claim_triage_batch(run_id)
+        assert batch is not None
+
+        store.complete_triage_batch(batch["id"], "failed")
+
+        with store._connect() as conn:  # noqa: SLF001
+            row = conn.execute(
+                "SELECT status, completed_at FROM triage_batches WHERE id = ?",
+                (batch["id"],),
+            ).fetchone()
+        assert row["status"] == "failed"
+        assert row["completed_at"] is not None
+
+    def test_claim_scoped_to_correct_run_id(self, store: SQLiteStore) -> None:
+        run_a = store.create_run({})
+        run_b = store.create_run({})
+        _seed_batch(store, run_b)
+
+        result = store.claim_triage_batch(run_a)
+        assert result is None
+
+        result_b = store.claim_triage_batch(run_b)
+        assert result_b is not None
+        assert result_b["run_id"] == run_b

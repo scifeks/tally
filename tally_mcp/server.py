@@ -1,38 +1,22 @@
 """MCP server entry point for Tally triage agent.
 
 Run as:
-    python3 mcp/server.py --project <name>
-
-Critical import order: the mcp SDK must be imported before the project root
-is added to sys.path, otherwise this local ``mcp/`` package shadows the SDK.
+    python -m tally_mcp.server --project <name>
 """
-# ruff: noqa: I001  — import order is intentional (SDK before sys.path insert)
 
-# ---------------------------------------------------------------------------
-# 1. SDK imports FIRST — before project root enters sys.path
-# ---------------------------------------------------------------------------
-from mcp.server.fastmcp import FastMCP
-
-# ---------------------------------------------------------------------------
-# 2. Add project root to sys.path
-# ---------------------------------------------------------------------------
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-# ---------------------------------------------------------------------------
-# 3. Standard-library and project imports
-# ---------------------------------------------------------------------------
 import argparse
 import asyncio
 import json
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
 
 from core.config.manager import ConfigManager
 from core.store.sqlite_store import SQLiteStore
-from tools import findings, project  # noqa: E402
+
+from .tools import findings, project
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -55,6 +39,7 @@ _project_name: str = _args.project
 _cfg = ConfigManager(str(_app_root)).global_config  # noqa: F841 — reserved for Phase 2
 _store = SQLiteStore(_app_root, _project_name)
 findings._store = _store
+findings._project_name = _project_name
 
 logger.info("Tally MCP server starting — project=%s", _project_name)
 
@@ -139,33 +124,25 @@ async def get_finding(finding_id: int) -> dict:
 
 
 @mcp.tool()
-async def get_findings_batch(
-    project: str,
-    repo: str | None = None,
-    tools: list[str] | None = None,
-    domain: str | None = None,
-    status: str | None = None,
-    max_results: int | None = None,
-) -> list[dict]:
-    """Retrieve a filtered batch of findings for triage."""
-    args = {
-        "project": project,
-        "repo": repo,
-        "tools": tools,
-        "domain": domain,
-        "status": status,
-        "max_results": max_results,
-    }
+async def get_findings_batch(run_id: int) -> dict | None:
+    """Atomically claims and returns the next pending batch for the given run."""
     return await _run_with_audit(
         "get_findings_batch",
-        args,
+        {"run_id": run_id},
         findings.get_findings_batch,
-        project,
-        repo,
-        tools,
-        domain,
+        run_id,
+    )
+
+
+@mcp.tool()
+async def complete_triage_batch(batch_id: int, status: str) -> None:
+    """Mark a triage batch as success or failed."""
+    return await _run_with_audit(
+        "complete_triage_batch",
+        {"batch_id": batch_id, "status": status},
+        findings.complete_triage_batch,
+        batch_id,
         status,
-        max_results,
     )
 
 

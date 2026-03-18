@@ -5,15 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from core.store.sqlite_store import SQLiteStore
 
 # Injected at startup by server.py
 _store: SQLiteStore | None = None
+_project_name: str | None = None
 
-from config import BATCH_TIMEOUT_SECONDS, MAX_BATCH_SIZE  # noqa: E402
 from core.tools.constants import (  # noqa: E402
     CONFIDENCE_LEVELS,
     FINDING_TYPES,
@@ -64,6 +64,18 @@ def _write_audit(
         )
 
 
+def _reconstruct_abs_path(
+    file: str | None, repo_name: str | None, repos: list[dict]
+) -> str | None:
+    """Reconstruct absolute path from relative file + repo name."""
+    if not file or not repo_name:
+        return None
+    for r in repos:
+        if r["name"] == repo_name:
+            return r["path"].rstrip("/") + file
+    return None
+
+
 async def get_finding(finding_id: int) -> dict:
     """Retrieve a single finding by its primary-key ID.
 
@@ -80,65 +92,34 @@ async def get_finding(finding_id: int) -> dict:
     row = await asyncio.to_thread(_store.get_finding, finding_id)
     if row is None:
         raise ValueError(f"Finding {finding_id} not found")
-    return _parse_row(row)
+    row = _parse_row(row)
+    repos: list[dict] = []
+    if _project_name:
+        try:
+            cfg = await get_project_config(_project_name)
+            repos = cfg.get("repositories", [])
+        except FileNotFoundError:
+            pass
+    row["abs_path"] = _reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
+    return row
 
 
-async def get_findings_batch(
-    project: str,
-    repo: str | None = None,
-    tools: list[str] | None = None,
-    domain: str | None = None,
-    status: str | None = None,
-    max_results: int | None = None,
-) -> list[dict]:
-    """Retrieve a filtered batch of findings for triage.
+async def get_findings_batch(run_id: int) -> dict | None:
+    """Atomically claims and returns the next pending batch for *run_id*.
 
-    Args:
-        project: Project name to query findings for.
-        repo: Optional repository filter — resolved via project config.
-        tools: Optional list of tool names to restrict results to.
-        domain: Optional domain filter (e.g. ``"sast"``, ``"secrets"``).
-        status: Optional status filter (e.g. ``"open"``, ``"fixed"``).
-        max_results: Optional cap; clamped to MAX_BATCH_SIZE.
-
-    Returns:
-        A list of finding dicts sorted by (file, line). Returns ``[]`` on
-        timeout without raising.
+    Returns the batch dict (including batch_data and finding_ids) or None
+    if no pending batches remain.
     """
     assert _store is not None
-    limit = min(max_results, MAX_BATCH_SIZE) if max_results else MAX_BATCH_SIZE
-    file_prefix: str | None = None
-    if repo:
-        cfg = await get_project_config(project)
-        repos = {r["name"]: r["path"] for r in cfg.get("repositories", [])}
-        if repo not in repos:
-            raise ValueError(f"Repo '{repo}' not in project config")
-        file_prefix = repos[repo]
+    return await asyncio.to_thread(_store.claim_triage_batch, run_id)
 
-    call_args: dict = {
-        "project": project,
-        "repo": repo,
-        "tools": tools,
-        "domain": domain,
-        "status": status,
-        "max_results": max_results,
-    }
-    start = datetime.now(UTC)
-    try:
-        rows = await asyncio.wait_for(
-            asyncio.to_thread(
-                _store.get_findings, tools, domain, status, file_prefix, limit
-            ),
-            timeout=BATCH_TIMEOUT_SECONDS,
-        )
-    except TimeoutError:
-        duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
-        _write_audit("get_findings_batch", call_args, False, "timeout", duration_ms)
-        return []
 
-    rows = [_parse_row(r) for r in rows]
-    rows.sort(key=lambda r: (r.get("file") or "", _extract_line(r.get("meta") or {})))
-    return rows
+async def complete_triage_batch(
+    batch_id: int, status: Literal["success", "failed"]
+) -> None:
+    """Sets status and completed_at on the given batch."""
+    assert _store is not None
+    await asyncio.to_thread(_store.complete_triage_batch, batch_id, status)
 
 
 async def update_finding(
@@ -171,6 +152,7 @@ async def update_finding(
         duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
         _write_audit("update_finding", call_args, False, err, duration_ms)
 
+    # todo: this repeating error raising is dumb
     # Validate required fields not None
     if confidence is None:
         err = "Missing required field: confidence"

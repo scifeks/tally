@@ -54,7 +54,8 @@ def _ingest_result(
             project_name=repl.active_project,
             base_path=repl.base_path,
         )
-        ingestor = FindingIngestor(rag_engine, repl.active_project)
+        repos = repl.config.load_repositories(repl.active_project)
+        ingestor = FindingIngestor(rag_engine, repl.active_project, repositories=repos)
         return ingestor.ingest_tool_output(result, profile=profile)
     except (RuntimeError, ValueError) as exc:
         repl.console.print(f"[red]Ingestion error:[/red] {exc}")

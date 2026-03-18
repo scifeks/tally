@@ -191,14 +191,13 @@ class TestEnrichmentPipeline:
             mock_llm.assert_not_called()
 
     def test_missing_fields_calls_llm_once(self, pipeline: EnrichmentPipeline) -> None:
+        # zap-001 is missing risk_type → exactly one LLM call expected
         with patch.object(
             pipeline,
             "_call_llm",
-            return_value=_make_llm_response(
-                ["risk_type", "remediation", "description"]
-            ),
+            return_value=_make_llm_response(["risk_type"]),
         ) as mock_llm:
-            pipeline.enrich(["gl-001"])
+            pipeline.enrich(["zap-001"])
             mock_llm.assert_called_once()
 
     def test_enriched_true_after_success(
@@ -216,12 +215,12 @@ class TestEnrichmentPipeline:
     def test_enriched_fields_written_to_metadata(
         self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
     ) -> None:
-        # gitleaks: severity and risk_type are tool-provided; LLM only fills the rest
-        fields = ["remediation", "description"]
+        # zap-001: severity/remediation/description tool-provided; LLM fills risk_type
+        fields = ["risk_type"]
         llm_response = _make_llm_response(fields)
         with patch.object(pipeline, "_call_llm", return_value=llm_response):
-            pipeline.enrich(["gl-001"])
-        doc = seeded_engine.get_document_by_id("gl-001")
+            pipeline.enrich(["zap-001"])
+        doc = seeded_engine.get_document_by_id("zap-001")
         assert doc is not None
         for field in fields:
             assert field in doc["metadata"]
@@ -230,30 +229,26 @@ class TestEnrichmentPipeline:
     def test_invalid_json_leaves_enriched_false(
         self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
     ) -> None:
+        # zap-001 needs risk_type from LLM; simulate a bad JSON response
         with patch.object(
             pipeline, "_call_llm", side_effect=json.JSONDecodeError("err", "", 0)
         ):
-            pipeline.enrich(["gl-001"])
-        doc = seeded_engine.get_document_by_id("gl-001")
+            pipeline.enrich(["zap-001"])
+        doc = seeded_engine.get_document_by_id("zap-001")
         assert doc is not None
         assert not doc["metadata"].get("enriched")
 
     def test_pipeline_continues_after_one_failure(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env)
-        # Use gitleaks so LLM enrichment is invoked (severity is tool-provided,
-        # but risk_type/remediation/description still need LLM)
+        # Use semgrep (calls LLM) to verify the pipeline continues past one failure
         engine.add_documents(
             texts=["Finding A"],
-            metadatas=[
-                {"tool": "gitleaks", "enriched": False, "severity": "confirmed"}
-            ],
+            metadatas=[{"tool": "semgrep", "enriched": False, "severity": "medium"}],
             ids=["cont-001"],
         )
         engine.add_documents(
             texts=["Finding B"],
-            metadatas=[
-                {"tool": "gitleaks", "enriched": False, "severity": "confirmed"}
-            ],
+            metadatas=[{"tool": "semgrep", "enriched": False, "severity": "medium"}],
             ids=["cont-002"],
         )
         p = EnrichmentPipeline(engine, console=None)
@@ -274,12 +269,13 @@ class TestEnrichmentPipeline:
         assert doc2["metadata"].get("enriched") is True
 
     def test_idempotent_second_run_skips(self, pipeline: EnrichmentPipeline) -> None:
-        fields = ["risk_type", "remediation", "description"]
+        # zap-001 needs risk_type; second call should skip (already enriched=True)
+        fields = ["risk_type"]
         with patch.object(
             pipeline, "_call_llm", return_value=_make_llm_response(fields)
         ) as mock_llm:
-            pipeline.enrich(["gl-001"])
-            pipeline.enrich(["gl-001"])
+            pipeline.enrich(["zap-001"])
+            pipeline.enrich(["zap-001"])
             assert mock_llm.call_count == 1
 
     # -------------------------------------------------------------------
@@ -296,12 +292,10 @@ class TestEnrichmentPipeline:
     def test_gitleaks_skips_severity_and_risk_type(
         self, pipeline: EnrichmentPipeline
     ) -> None:
+        # gitleaks has should_enrich=False — no fields requested from LLM
         metadata = {"tool": "gitleaks"}
         fields = pipeline._get_fields_to_enrich(metadata)
-        assert "severity" not in fields
-        assert "risk_type" not in fields
-        assert "confidence" not in fields
-        assert "remediation" in fields
+        assert fields == []
 
     def test_nmap_no_fields_to_enrich(self, pipeline: EnrichmentPipeline) -> None:
         metadata = {"tool": "nmap"}
@@ -640,8 +634,8 @@ class TestGitleaksEnrichmentBypass:
         with patch.object(p, "_call_llm", side_effect=capture_call):
             p.enrich(["gl-bypass-002"])
 
-        assert captured_fields, "LLM should be called for remaining fields"
-        assert "risk_type" not in captured_fields[0]
+        # gitleaks has should_enrich=False — LLM must not be called at all
+        assert not captured_fields, "LLM must not be called for gitleaks"
 
     def test_semgrep_still_receives_risk_type_from_llm(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env)

@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-SEGMENT_ORDER: list[str] = ["network", "sast", "structure", "sca", "secrets", "api"]
+SEGMENT_ORDER: list[str] = ["network", "sast", "sca", "secrets", "api"]
 
 
 # ---------------------------------------------------------------------------

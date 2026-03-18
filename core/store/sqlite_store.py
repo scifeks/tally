@@ -41,6 +41,8 @@ def _get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
 _CHROMA_TO_SQLITE: dict[str, str] = {
     "tool": "tool",
     "domain": "domain",
+    "segment": "segment",
+    "repo": "repo",
     "finding_type": "finding_type",
     "severity": "severity",
     "confidence": "confidence",
@@ -61,6 +63,8 @@ _CHROMA_TO_SQLITE: dict[str, str] = {
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
+    "segment",
+    "repo",
     "severity",
     "confidence",
     "rule_id",
@@ -192,6 +196,8 @@ class SQLiteStore:
                     run_id           INTEGER,
                     tool             TEXT,
                     domain           TEXT,
+                    segment          TEXT,
+                    repo             TEXT,
                     finding_type     TEXT,
                     severity         TEXT,
                     confidence       TEXT,
@@ -222,6 +228,10 @@ class SQLiteStore:
                     ON findings (severity);
                 CREATE INDEX IF NOT EXISTS idx_findings_fingerprint
                     ON findings (fingerprint);
+                CREATE INDEX IF NOT EXISTS idx_findings_segment
+                    ON findings (segment);
+                CREATE INDEX IF NOT EXISTS idx_findings_repo
+                    ON findings (repo);
 
                 CREATE TABLE IF NOT EXISTS tool_audit_log (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,6 +241,18 @@ class SQLiteStore:
                     error       TEXT,
                     duration_ms INTEGER,
                     called_at   TEXT    NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS triage_batches (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id       INTEGER,
+                    finding_ids  JSON NOT NULL,
+                    batch_data   JSON NOT NULL,
+                    status       TEXT NOT NULL DEFAULT 'pending',
+                    run_attempts INTEGER NOT NULL DEFAULT 0,
+                    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+                    started_at   TEXT,
+                    completed_at TEXT
                 );
             """)
 
@@ -334,6 +356,8 @@ class SQLiteStore:
                     run_id,
                     named.get("tool"),
                     named.get("domain"),
+                    named.get("segment"),
+                    named.get("repo"),
                     named.get("finding_type"),
                     named.get("severity"),
                     named.get("confidence"),
@@ -360,13 +384,14 @@ class SQLiteStore:
 
         sql = """
             INSERT INTO findings (
-                fingerprint, run_id, tool, domain, finding_type, severity,
+                fingerprint, run_id, tool, domain, segment, repo,
+                finding_type, severity,
                 confidence, file, rule_id, url, host, port,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
                 first_seen, last_seen, seen_count, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?)
+                       ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
                 run_id          = excluded.run_id,
                 severity        = excluded.severity,
@@ -438,12 +463,20 @@ class SQLiteStore:
         tools: list[str] | None = None,
         domain: str | None = None,
         status: str | None = None,
-        file_prefix: str | None = None,
+        repo: str | None = None,
+        segments: list[str] | None = None,
+        require_file: bool = False,
         limit: int = 10,
     ) -> list[dict]:
         """Return findings matching optional filters, capped at *limit* rows."""
         clauses: list[str] = []
         params: list[object] = []
+        if segments:
+            placeholders = ",".join("?" * len(segments))
+            clauses.append(f"segment IN ({placeholders})")
+            params.extend(segments)
+        if require_file:
+            clauses.append("(file IS NOT NULL AND file != '')")
         if tools:
             placeholders = ",".join("?" * len(tools))
             clauses.append(f"tool IN ({placeholders})")
@@ -454,9 +487,9 @@ class SQLiteStore:
         if status:
             clauses.append("status = ?")
             params.append(status)
-        if file_prefix:
-            clauses.append("file LIKE ?")
-            params.append(file_prefix + "%")
+        if repo:
+            clauses.append("repo = ?")
+            params.append(repo)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         params.append(limit)
         sql = f"SELECT * FROM findings {where} LIMIT ?"
@@ -464,6 +497,174 @@ class SQLiteStore:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
+    def create_triage_batches(
+        self, run_id: int, tool: str, repo: str, segment: str
+    ) -> int:
+        """Fetch active findings, compute batches, and persist to triage_batches.
+
+        Returns the number of batches written.
+        """
+        from tally_mcp.batching import compute_batches
+
+        params = (segment, tool, repo)
+        if segment == "api":
+            sql = """
+                SELECT
+                    id, repo, url, tool, severity, confidence, description,
+                    json_extract(meta, '$.remediation') AS remediation,
+                    json_extract(meta, '$.method') AS method,
+                    json_extract(meta, '$.param') AS param,
+                    json_extract(meta, '$.evidence') AS evidence,
+                    json_extract(meta, '$.risk_type') AS risk_type,
+                    json_extract(meta, '$.cwe_id') AS cwe_id,
+                    json_extract(meta, '$.alert_name') AS alert_name
+                FROM findings
+                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
+                ORDER BY severity DESC, url, json_extract(meta, '$.risk_type')
+            """
+        elif segment == "sast":
+            sql = """
+                SELECT
+                    id, repo, file, tool, rule_id, severity, confidence,
+                    description, cwe,
+                    json_extract(meta, '$.line_start') AS line_start,
+                    json_extract(meta, '$.code_snippet') AS code_snippet,
+                    json_extract(meta, '$.risk_type') AS risk_type,
+                    json_extract(meta, '$.owasp') AS owasp
+                FROM findings
+                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
+                ORDER BY
+                    severity DESC,
+                    file,
+                    CAST(json_extract(meta, '$.line_start') AS INTEGER)
+            """
+        else:
+            return 0
+
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        findings = [dict(row) for row in rows]
+
+        batches = compute_batches(findings)
+        if not batches:
+            return 0
+
+        insert_rows = [
+            (
+                run_id,
+                json.dumps([f["id"] for f in batch]),
+                json.dumps(batch),
+                "pending",
+                0,
+            )
+            for batch in batches
+        ]
+        with self._connect() as conn:
+            conn.executemany(
+                "INSERT INTO triage_batches"
+                " (run_id, finding_ids, batch_data, status, run_attempts)"
+                " VALUES (?, ?, ?, ?, ?)",
+                insert_rows,
+            )
+        return len(batches)
+
+    def claim_triage_batch(self, run_id: int) -> dict | None:
+        """Atomically claims the next pending batch for *run_id*.
+
+        Returns the batch row as a dict (with JSON columns parsed) or None
+        if no claimable batch exists.
+        """
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                UPDATE triage_batches
+                SET
+                    status       = 'in_progress',
+                    started_at   = datetime('now'),
+                    run_attempts = run_attempts + 1
+                WHERE id = (
+                    SELECT id FROM triage_batches
+                    WHERE  status       = 'pending'
+                      AND  run_attempts < 3
+                      AND  run_id       = ?
+                    ORDER BY id ASC
+                    LIMIT 1
+                )
+                RETURNING *
+                """,
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["batch_data"] = json.loads(result["batch_data"])
+        result["finding_ids"] = json.loads(result["finding_ids"])
+        return result
+
+    def complete_triage_batch(self, batch_id: int, status: str) -> None:
+        """Sets status and completed_at on the given batch."""
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE triage_batches
+                SET status = ?, completed_at = datetime('now')
+                WHERE id = ?
+                """,
+                (status, batch_id),
+            )
+
+    def reset_stale_triage_batches(self, run_id: int) -> int:
+        """Reset in_progress batches for run_id back to pending.
+
+        Returns the number of batches reset.
+        """
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE triage_batches"
+                " SET status = 'pending', started_at = NULL"
+                " WHERE status = 'in_progress' AND run_id = ?",
+                (run_id,),
+            )
+            return cur.rowcount
+
+    def get_active_finding_combos(
+        self, skip_tools: frozenset[str]
+    ) -> list[tuple[str, str, str]]:
+        """Return distinct (tool, repo, segment) tuples for active, segmented findings.
+
+        Excludes any tool in skip_tools.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT tool, repo, segment FROM findings"
+                " WHERE status = 'active' AND segment IS NOT NULL",
+            ).fetchall()
+        return [
+            (r["tool"], r["repo"], r["segment"])
+            for r in rows
+            if r["tool"] not in skip_tools
+        ]
+
+    def get_untriaged_findings(self) -> list[tuple[int, str]]:
+        """Return (id, tool) for all findings where triaged_at IS NULL."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, tool FROM findings WHERE triaged_at IS NULL"
+            ).fetchall()
+        return [(r["id"], r["tool"]) for r in rows]
+
+    def count_audit_events_since(self, tool_names: tuple[str, ...], since: str) -> int:
+        """Count audit log entries for tool_names recorded at or after since."""
+        placeholders = ",".join("?" * len(tool_names))
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM tool_audit_log"
+                f" WHERE tool_name IN ({placeholders}) AND called_at >= ?",
+                (*tool_names, since),
+            ).fetchone()
+        return row[0] if row else 0
+
+    # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 
@@ -530,7 +731,8 @@ class SQLiteStore:
 
         sql = """
             SELECT fingerprint, run_id,
-                   tool, domain, finding_type, severity, confidence,
+                   tool, domain, segment, repo,
+                   finding_type, severity, confidence,
                    file, rule_id, url, host, port,
                    vulnerability_id, package_name, ecosystem,
                    description, package_version, cwe, enriched, meta

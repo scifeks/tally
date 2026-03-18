@@ -1120,3 +1120,125 @@ class TestD2OsvSearch:
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert len(results) == 1
         assert results[0]["metadata"].get("tool") == "osv-scanner"
+
+
+# ---------------------------------------------------------------------------
+# get_findings() — segment and require_file parameters
+# ---------------------------------------------------------------------------
+
+_SAST_FINDING = {
+    "tool": "semgrep",
+    "domain": "code",
+    "segment": "sast",
+    "finding_type": "vulnerability",
+    "severity": "high",
+    "file_path": "src/app.py",
+    "rule_id": "python.sqli",
+}
+
+_SECRETS_FINDING = {
+    "tool": "gitleaks",
+    "domain": "code",
+    "segment": "secrets",
+    "finding_type": "secret",
+    "severity": "critical",
+    "file_path": "config.py",
+    "rule_id": "generic-api-key",
+}
+
+_SCA_FINDING_GF = {
+    "tool": "pip-audit",
+    "domain": "sca",
+    "segment": "sca",
+    "finding_type": "dependency",
+    "severity": "high",
+    "package_name": "requests",
+    "vulnerability_id": "GHSA-abc",
+    "ecosystem": "PyPI",
+    "lockfile": "requirements.txt",
+}
+
+_NO_FILE_FINDING = {
+    "tool": "semgrep",
+    "domain": "code",
+    "segment": "sast",
+    "finding_type": "vulnerability",
+    "severity": "medium",
+    "rule_id": "python.xss",
+}
+
+
+def _seed_gf(store: SQLiteStore) -> None:
+    run_id = store.create_run({})
+    store.upsert_findings(
+        run_id,
+        [_SAST_FINDING, _SECRETS_FINDING, _SCA_FINDING_GF, _NO_FILE_FINDING],
+    )
+
+
+class TestGetFindings:
+    def test_get_findings_segment_filter(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(segments=["sast"], limit=100)
+        assert all(r["segment"] == "sast" for r in rows)
+        assert len(rows) >= 1
+
+    def test_get_findings_no_segment_filter_returns_all(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(segments=None, limit=100)
+        segments = {r["segment"] for r in rows}
+        assert "sast" in segments
+        assert "secrets" in segments
+
+    def test_get_findings_require_file_excludes_nulls(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(require_file=True, limit=100)
+        assert all(r["file"] for r in rows)
+
+    def test_get_findings_require_file_false_includes_nulls(
+        self, tmp_path: Path
+    ) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(require_file=False, limit=100)
+        null_file_rows = [r for r in rows if not r["file"]]
+        assert len(null_file_rows) >= 1
+
+    def test_get_findings_repo_equality(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {**_SAST_FINDING, "repo": "myrepo"},
+                {**_SAST_FINDING, "repo": "otherrepo", "rule_id": "r2"},
+            ],
+        )
+        rows = store.get_findings(repo="myrepo", limit=100)
+        assert all(r["repo"] == "myrepo" for r in rows)
+        assert len(rows) == 1
+
+    def test_get_findings_combined_filters(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {**_SAST_FINDING},
+                {**_SECRETS_FINDING},
+                {**_SCA_FINDING_GF},
+                {**_NO_FILE_FINDING},
+            ],
+        )
+        rows = store.get_findings(
+            tools=["semgrep"],
+            segments=["sast", "sca", "api"],
+            require_file=True,
+            limit=100,
+        )
+        assert all(r["tool"] == "semgrep" for r in rows)
+        assert all(r["segment"] in ("sast", "sca", "api") for r in rows)
+        assert all(r["file"] for r in rows)

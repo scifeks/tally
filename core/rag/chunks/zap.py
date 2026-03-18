@@ -13,6 +13,7 @@ from ._shared import _first_output_file, _shared_meta
 class ZapChunkBuilder:
     tool_name = "zap"
     domain = "web"
+    segment = "api"
     non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "remediation", "description"}
     )

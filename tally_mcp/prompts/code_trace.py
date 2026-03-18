@@ -20,23 +20,17 @@ Finding IDs: [{ids_repr}]
    - finding_ids: [{ids_repr}]
    - project: "{project}"
 
-2. Call `get_project_config` to retrieve the project's repository paths.
+2. For each finding, use `finding["abs_path"]` as the absolute file path to
+   read. Examine the lines around `meta.line_start` and `meta.line_end`.
 
-3. For each finding, resolve the absolute file path:
-     absolute_path = repo["path"] + "/" + finding["file"]
-
-4. Group findings by file. Read each source file ONCE — do not re-read a file
-   for every finding within it. For each file, examine the lines around
-   `meta.line_start` and `meta.line_end`.
-
-5. Trace backward from the flagged sink to the nearest HTTP entry point.
+3. Trace backward from the flagged sink to the nearest HTTP entry point.
    Determine whether user-controlled input reaches the sink without adequate
    sanitisation or validation.
 
-6. For confirmed findings, record the full call stack in the `call_stack`
+4. For confirmed findings, record the full call stack in the `call_stack`
    field (list of "file:line function" strings, outermost → innermost).
 
-7. Call `update_findings_batch` with your assessment for ALL findings before
+5. Call `update_findings_batch` with your assessment for ALL findings before
    exiting. You MUST call this tool — do not exit without writing results.
 
 ## Epistemic Conservatism

@@ -9,7 +9,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from mcp.prompts import (  # noqa: E402
+from tally_mcp.prompts import (  # noqa: E402
     api_trace,
     code_trace,
     dependency,
@@ -44,12 +44,22 @@ def test_code_trace_contains_project() -> None:
 def test_code_trace_key_instructions() -> None:
     result = code_trace.render(_IDS, _PROJECT)
     assert "get_findings_batch" in result
-    assert "get_project_config" in result
+    assert "abs_path" in result
     assert "update_findings_batch" in result
     assert "confidence" in result
     assert "reasoning" in result
     assert "remediation" in result
     assert "call_stack" in result
+
+
+def test_code_trace_no_grouping_instructions() -> None:
+    result = code_trace.render(_IDS, _PROJECT)
+    assert "group" not in result.lower()
+
+
+def test_api_trace_no_grouping_instructions() -> None:
+    result = api_trace.render(_IDS, _PROJECT)
+    assert "group" not in result.lower()
 
 
 # ---------------------------------------------------------------------------
