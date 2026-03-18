@@ -44,6 +44,9 @@ context and provide actionable remediation.
 
 4. Call `update_findings_batch` with your assessment for ALL findings before
    exiting. You MUST call this tool — do not exit without writing results.
+   Use ONLY `update_findings_batch` to write results. Do NOT call
+   `update_finding` directly. Once `update_findings_batch` returns a result,
+   immediately exit. Do NOT call any tools after this point.
 
 ## Epistemic Conservatism
 
@@ -56,10 +59,11 @@ context and provide actionable remediation.
 ## Output Fields (per finding)
 
 Each update must include:
-- id            : the finding ID (required — never omit)
+- finding_id    : the finding ID (required — never omit)
 - confidence    : one of confirmed | probable | potential | false_positive
-- finding_type  : short label, e.g. "vulnerable_dependency", "outdated_package"
-- severity      : critical | high | medium | low | info
+- finding_type  : one of vulnerability | weakness | misconfiguration |
+                  exposure | dependency | informational | secret
+- severity      : critical | high | medium | low | informational
 - reasoning     : whether the package is actively used, CVSS context, PoC
                   availability, and your overall risk assessment
 - remediation   : specific fix — "upgrade X to >= Y.Z" or "replace X with W"

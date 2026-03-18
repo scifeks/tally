@@ -249,11 +249,16 @@ async def update_finding(
 async def update_findings_batch(updates: list[dict]) -> dict:
     """Apply updates to multiple findings in a single call."""
     results: dict = {}
-    for payload in updates:
-        finding_id = payload["finding_id"]
+    for i, payload in enumerate(updates):
         try:
+            finding_id = payload["finding_id"]
             await update_finding(**payload)
-            results[finding_id] = True
-        except Exception:
-            results[finding_id] = False
+            results[str(finding_id)] = {"finding_id": finding_id, "status": "updated"}
+        except Exception as exc:
+            key = payload.get("finding_id", i)
+            results[str(key)] = {
+                "finding_id": key,
+                "status": "error",
+                "error": str(exc),
+            }
     return results

@@ -39,6 +39,9 @@ Finding IDs: [{ids_repr}]
 
 4. Call `update_findings_batch` with your assessment for ALL findings before
    exiting. You MUST call this tool — do not exit without writing results.
+   Use ONLY `update_findings_batch` to write results. Do NOT call
+   `update_finding` directly. Once `update_findings_batch` returns a result,
+   immediately exit. Do NOT call any tools after this point.
 
 ## Epistemic Conservatism
 
@@ -53,10 +56,11 @@ Finding IDs: [{ids_repr}]
 ## Output Fields (per finding)
 
 Each update must include:
-- id            : the finding ID (required — never omit)
+- finding_id    : the finding ID (required — never omit)
 - confidence    : one of confirmed | probable | potential | false_positive
-- finding_type  : short label, e.g. "reflected_xss", "sqli", "open_redirect"
-- severity      : critical | high | medium | low | info
+- finding_type  : one of vulnerability | weakness | misconfiguration |
+                  exposure | dependency | informational | secret
+- severity      : critical | high | medium | low | informational
 - reasoning     : explanation of the handler code path and your conclusion
 - remediation   : specific, actionable fix (not generic advice)
 - attack_vector : HTTP method, path, and parameter(s) observed in the scan

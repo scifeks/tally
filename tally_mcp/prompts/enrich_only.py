@@ -46,6 +46,9 @@ occurred. Your job is enrichment, not re-validation.
 
 3. Call `update_findings_batch` with your enrichment for ALL findings before
    exiting. You MUST call this tool — do not exit without writing results.
+   Use ONLY `update_findings_batch` to write results. Do NOT call
+   `update_finding` directly. Once `update_findings_batch` returns a result,
+   immediately exit. Do NOT call any tools after this point.
 
 ## Severity Assignment
 
@@ -56,7 +59,7 @@ Severity reflects the credential type and blast radius:
 - medium   : internal service credentials, low-privilege tokens
 - low      : dev/staging credentials, test credentials with limited blast
              radius
-- info     : test fixtures with dummy values (no real credential)
+- informational : test fixtures with dummy values (no real credential)
 
 ## Remediation
 
@@ -69,11 +72,12 @@ Always provide:
 ## Output Fields (per finding)
 
 Each update must include:
-- id            : the finding ID (required — never omit)
+- finding_id    : the finding ID (required — never omit)
 - confidence    : confirmed (always; do NOT downgrade without definitive
                   test-fixture evidence)
-- finding_type  : short label, e.g. "exposed_api_key", "hardcoded_password"
-- severity      : critical | high | medium | low | info (per guidance above)
+- finding_type  : one of secret | vulnerability | weakness | misconfiguration |
+                  exposure | dependency | informational
+- severity      : critical | high | medium | low | informational (per guidance above)
 - reasoning     : credential type, blast radius assessment, test vs production
                   determination, and urgency justification
 - remediation   : specific three-step remediation (remove, rotate, replace)
