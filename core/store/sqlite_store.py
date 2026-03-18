@@ -625,6 +625,43 @@ class SQLiteStore:
             )
             return cur.rowcount
 
+    def get_active_finding_combos(
+        self, skip_tools: frozenset[str]
+    ) -> list[tuple[str, str, str]]:
+        """Return distinct (tool, repo, segment) tuples for active, segmented findings.
+
+        Excludes any tool in skip_tools.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT tool, repo, segment FROM findings"
+                " WHERE status = 'active' AND segment IS NOT NULL",
+            ).fetchall()
+        return [
+            (r["tool"], r["repo"], r["segment"])
+            for r in rows
+            if r["tool"] not in skip_tools
+        ]
+
+    def get_untriaged_findings(self) -> list[tuple[int, str]]:
+        """Return (id, tool) for all findings where triaged_at IS NULL."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id, tool FROM findings WHERE triaged_at IS NULL"
+            ).fetchall()
+        return [(r["id"], r["tool"]) for r in rows]
+
+    def count_audit_events_since(self, tool_names: tuple[str, ...], since: str) -> int:
+        """Count audit log entries for tool_names recorded at or after since."""
+        placeholders = ",".join("?" * len(tool_names))
+        with self._connect() as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM tool_audit_log"
+                f" WHERE tool_name IN ({placeholders}) AND called_at >= ?",
+                (*tool_names, since),
+            ).fetchone()
+        return row[0] if row else 0
+
     # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

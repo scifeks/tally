@@ -217,6 +217,12 @@ _HELP_REGISTRY = [
         None,
         "Run AI triage on untriaged findings for the active project",
     ),
+    (
+        "triage",
+        "triage",
+        "--batch",
+        "Run batching phase only — no Claude sessions",
+    ),
     # Utility
     ("utility", None, None, "Utility"),
     ("utility", "help", None, "Show this help table"),

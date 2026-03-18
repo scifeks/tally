@@ -15,7 +15,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+import tally_mcp.triage as triage_mod  # noqa: E402
 from tally_mcp.orchestrator import run_triage  # noqa: E402
+from tally_mcp.triage import TriageRunner  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -103,6 +105,17 @@ def project_db(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _run_with_root(project: str, tmp_root: Path) -> dict:
+    """Invoke run_triage with _APP_ROOT patched."""
+    with patch.object(triage_mod, "_APP_ROOT", tmp_root):
+        return run_triage(project)
+
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
@@ -111,14 +124,7 @@ def test_all_skip_tools(project_db, caplog) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("nmap",), ("tree-sitter",)])
 
-    import tally_mcp.orchestrator as orch
-
-    with patch.object(orch, "_APP_ROOT", tmp_root):
-        result = (
-            run_triage.__wrapped__(project)
-            if hasattr(run_triage, "__wrapped__")
-            else _run_with_root(orch, project, tmp_root)
-        )
+    result = _run_with_root(project, tmp_root)
 
     assert result["sessions_run"] == 0
     assert result["success"] == 0
@@ -126,19 +132,11 @@ def test_all_skip_tools(project_db, caplog) -> None:
     assert result["incomplete"] == 0
 
 
-def _run_with_root(orch_mod, project: str, tmp_root: Path) -> dict:
-    """Invoke run_triage with _APP_ROOT patched."""
-    with patch.object(orch_mod, "_APP_ROOT", tmp_root):
-        return orch_mod.run_triage(project)
-
-
 def test_mcp_json_written(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])  # non-skip tool so a session runs
 
     import json
-
-    import tally_mcp.orchestrator as orch
 
     captured: dict = {}
     mock_result = MagicMock()
@@ -153,10 +151,10 @@ def test_mcp_json_written(project_db) -> None:
         return mock_result
 
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", side_effect=fake_run),
     ):
-        orch.run_triage(project)
+        run_triage(project)
 
     assert captured.get("exists") is True
     assert project in str(captured.get("data", {}))
@@ -165,8 +163,6 @@ def test_mcp_json_written(project_db) -> None:
 def test_success_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
-
-    import tally_mcp.orchestrator as orch
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -182,10 +178,10 @@ def test_success_outcome(project_db) -> None:
         return mock_result
 
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", side_effect=fake_run),
     ):
-        result = orch.run_triage(project)
+        result = run_triage(project)
 
     assert result["sessions_run"] == 1
     assert result["success"] == 1
@@ -197,17 +193,15 @@ def test_incomplete_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import tally_mcp.orchestrator as orch
-
     mock_result = MagicMock()
     mock_result.returncode = 0
     mock_result.stderr = ""
 
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", return_value=mock_result),
     ):
-        result = orch.run_triage(project)
+        result = run_triage(project)
 
     assert result["sessions_run"] == 1
     assert result["incomplete"] == 1
@@ -219,13 +213,11 @@ def test_timeout_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import tally_mcp.orchestrator as orch
-
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", side_effect=TimeoutExpired(cmd="claude", timeout=300)),
     ):
-        result = orch.run_triage(project)
+        result = run_triage(project)
 
     assert result["sessions_run"] == 1
     assert result["failed"] == 1
@@ -237,17 +229,15 @@ def test_nonzero_exit_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db(db, [("semgrep",)])
 
-    import tally_mcp.orchestrator as orch
-
     mock_result = MagicMock()
     mock_result.returncode = 1
     mock_result.stderr = "some error"
 
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", return_value=mock_result),
     ):
-        result = orch.run_triage(project)
+        result = run_triage(project)
 
     assert result["sessions_run"] == 1
     assert result["failed"] == 1
@@ -256,11 +246,9 @@ def test_nonzero_exit_outcome(project_db) -> None:
 
 
 def test_missing_db_raises(tmp_path: Path) -> None:
-    import tally_mcp.orchestrator as orch
-
-    with patch.object(orch, "_APP_ROOT", tmp_path):
+    with patch.object(triage_mod, "_APP_ROOT", tmp_path):
         with pytest.raises(FileNotFoundError):
-            orch.run_triage("nonexistent-project")
+            run_triage("nonexistent-project")
 
 
 def test_standalone_import() -> None:
@@ -293,13 +281,11 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
             (run_id,),
         )
 
-    import tally_mcp.orchestrator as orch
-
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id),
     ):
-        orch.run_triage(project)
+        run_triage(project)
 
     with store._connect() as conn:
         row = conn.execute(
@@ -329,13 +315,11 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
                 (rid,),
             )
 
-    import tally_mcp.orchestrator as orch
-
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id_a),
     ):
-        orch.run_triage(project)
+        run_triage(project)
 
     with store._connect() as conn:
         rows = conn.execute(
@@ -359,14 +343,12 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
         ],
     )
 
-    import tally_mcp.orchestrator as orch
-
     mock_run = MagicMock()
     mock_run.returncode = 0
     mock_run.stderr = ""
 
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
             "core.store.sqlite_store.SQLiteStore.create_triage_batches",
             return_value=1,
@@ -378,7 +360,7 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
         ),
         patch("subprocess.run", return_value=mock_run),
     ):
-        orch.run_triage(project)
+        run_triage(project)
 
     assert mock_create.call_count == 2
     calls = {(c.args[1], c.args[2], c.args[3]) for c in mock_create.call_args_list}
@@ -387,14 +369,12 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
 
 
 def test_batching_error_aborts_before_mcp_json(project_db) -> None:
-    """A batching error raises RuntimeError and _write_mcp_json is not called."""
+    """A batching error raises RuntimeError and _write_mcp_config is not called."""
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
-    import tally_mcp.orchestrator as orch
-
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
             "core.store.sqlite_store.SQLiteStore.create_triage_batches",
             side_effect=RuntimeError("db locked"),
@@ -404,10 +384,10 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
             "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
             return_value=0,
         ),
-        patch.object(orch, "_write_mcp_json") as mock_write,
+        patch.object(TriageRunner, "_write_mcp_config") as mock_write,
     ):
         with pytest.raises(RuntimeError, match="Batching failed"):
-            orch.run_triage(project)
+            run_triage(project)
 
     mock_write.assert_not_called()
 
@@ -417,14 +397,12 @@ def test_batch_count_reported(project_db, capsys) -> None:
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
-    import tally_mcp.orchestrator as orch
-
     mock_run = MagicMock()
     mock_run.returncode = 0
     mock_run.stderr = ""
 
     with (
-        patch.object(orch, "_APP_ROOT", tmp_root),
+        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
             "core.store.sqlite_store.SQLiteStore.create_triage_batches",
             return_value=3,
@@ -436,7 +414,7 @@ def test_batch_count_reported(project_db, capsys) -> None:
         ),
         patch("subprocess.run", return_value=mock_run),
     ):
-        orch.run_triage(project)
+        run_triage(project)
 
     out = capsys.readouterr().out
     assert "3" in out
