@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tally_mcp.orchestrator import run_triage, run_triage_batch_only
+from tally_mcp.orchestrator import run_triage, run_triage_batch_only, run_triage_dry_run
 
 if TYPE_CHECKING:
     from core.repl.interface import REPL
@@ -21,6 +21,12 @@ class TriageCommands:
         if "--batch" in args:
             count = run_triage_batch_only(self._repl.active_project)
             self._repl.console.print(f"Created {count} batches")
+            return
+        elif "--dry-run" in args:
+            count = run_triage_dry_run(self._repl.active_project)
+            self._repl.console.print(
+                f"Rendered {count} batch prompt(s) — see DEBUG log"
+            )
             return
         result = run_triage(self._repl.active_project)
         self._repl.console.print(

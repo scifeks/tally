@@ -223,6 +223,12 @@ _HELP_REGISTRY = [
         "--batch",
         "Run batching phase only — no Claude sessions",
     ),
+    (
+        "triage",
+        "triage",
+        "--dry-run",
+        "Batch + render prompts to DEBUG log — no MCP server, no Claude",
+    ),
     # Utility
     ("utility", None, None, "Utility"),
     ("utility", "help", None, "Show this help table"),

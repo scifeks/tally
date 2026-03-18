@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -109,37 +110,84 @@ class TriageRunner:
 
     def run(self) -> TriageResult:
         """Run full triage pipeline (batch → MCP setup → Claude sessions)."""
-        self.batch()
-
-        findings = self._store.get_untriaged_findings()
-
-        strategy_batches: dict[str, list[int]] = {}
-        skipped = 0
-        for finding_id, tool in findings:
-            strategy = TOOL_STRATEGY.get(tool or "", "enrich_only")
-            if strategy == "skip":
-                skipped += 1
-                continue
-            strategy_batches.setdefault(strategy, []).append(finding_id)
-
-        if skipped:
-            _log.info("Skipped %d findings with skip-strategy tools", skipped)
-
+        run_id, _total = self.batch()
         mcp_json_path = self._write_mcp_config()
-
-        sessions_run = success = failed = incomplete = 0
         try:
-            for strategy, finding_ids in strategy_batches.items():
-                sessions_run += 1
-                outcome = self._run_session(strategy, finding_ids)
-                if outcome == "success":
-                    success += 1
-                elif outcome == "failed":
-                    failed += 1
-                else:
-                    incomplete += 1
+            return self._run_batch_loop(
+                run_id,
+                lambda batch_id, strategy, finding_ids: self._run_session(
+                    strategy, finding_ids
+                ),
+            )
         finally:
             mcp_json_path.unlink(missing_ok=True)
+
+    def run_dry_run(self) -> int:
+        """Batch phase + render prompts to DEBUG log. No MCP server, no Claude.
+
+        Returns the number of non-skip batches processed.
+        """
+        run_id, _total = self.batch()
+
+        def _handler(batch_id: int, strategy: str, finding_ids: list[int]) -> str:
+            render_fn = STRATEGY_PROMPT[strategy]
+            prompt_text = render_fn(  # type: ignore[operator]
+                finding_ids, self._project
+            )
+            _log.debug(
+                "========== BATCH %d (%d findings) ==========\n%s\n"
+                "========== END BATCH %d ==========",
+                batch_id,
+                len(finding_ids),
+                prompt_text,
+                batch_id,
+            )
+            return "success"
+
+        result = self._run_batch_loop(run_id, _handler)
+        return result.sessions_run
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _run_batch_loop(
+        self,
+        run_id: int,
+        handler: Callable[[int, str, list[int]], str],
+    ) -> TriageResult:
+        """Claim and process every pending batch for run_id.
+
+        handler(batch_id, strategy, finding_ids) -> outcome string.
+        Skip-strategy batches are auto-completed without calling handler.
+        """
+        sessions_run = success = failed = incomplete = 0
+        while True:
+            batch = self._store.claim_triage_batch(run_id)
+            if batch is None:
+                break
+
+            batch_id: int = batch["id"]
+            finding_ids: list[int] = batch["finding_ids"]
+            batch_data: list[dict] = batch["batch_data"]
+
+            tool = batch_data[0]["tool"] if batch_data else None
+            strategy = TOOL_STRATEGY.get(tool or "", "enrich_only")
+
+            if strategy == "skip":
+                self._store.complete_triage_batch(batch_id, "success")
+                continue
+
+            sessions_run += 1
+            outcome = handler(batch_id, strategy, finding_ids)
+            self._store.complete_triage_batch(batch_id, outcome)
+
+            if outcome == "success":
+                success += 1
+            elif outcome == "failed":
+                failed += 1
+            else:
+                incomplete += 1
 
         return TriageResult(
             sessions_run=sessions_run,
@@ -147,10 +195,6 @@ class TriageRunner:
             failed=failed,
             incomplete=incomplete,
         )
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     def _run_session(self, strategy: str, finding_ids: list[int]) -> str:
         """Run one Claude session. Returns 'success', 'failed', or 'incomplete'."""

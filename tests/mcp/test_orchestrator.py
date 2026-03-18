@@ -16,6 +16,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 import tally_mcp.triage as triage_mod  # noqa: E402
+from core.store.sqlite_store import SQLiteStore  # noqa: E402
 from tally_mcp.orchestrator import run_triage  # noqa: E402
 from tally_mcp.triage import TriageRunner  # noqa: E402
 
@@ -23,34 +24,23 @@ from tally_mcp.triage import TriageRunner  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS findings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fingerprint TEXT UNIQUE,
-    tool TEXT,
-    severity TEXT,
-    status TEXT,
-    segment TEXT,
-    repo TEXT,
-    triaged_at TEXT,
-    triaged_by TEXT
-);
-CREATE TABLE IF NOT EXISTS tool_audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tool_name TEXT NOT NULL,
-    arguments TEXT,
-    success INTEGER NOT NULL DEFAULT 1,
-    error TEXT,
-    duration_ms INTEGER,
-    called_at TEXT NOT NULL
-);
-"""
+
+def _init_store(db_path: Path) -> None:
+    """Initialise the real schema via SQLiteStore (no schema drift)."""
+    # db_path = <tmp_root>/projects/<project>/sqlite/findings.db
+    #   parents[0] = .../sqlite
+    #   parents[1] = .../<project>
+    #   parents[2] = .../projects
+    #   parents[3] = <tmp_root>
+    tmp_root = db_path.parents[3]
+    project = db_path.parents[1].name
+    SQLiteStore(tmp_root, project)  # __init__ calls _init_schema
 
 
 def _make_db(db_path: Path, rows: list[tuple[str]]) -> None:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _init_store(db_path)
     conn = sqlite3.connect(str(db_path))
-    conn.executescript(_SCHEMA)
+    conn.row_factory = sqlite3.Row
     for (tool,) in rows:
         conn.execute(
             "INSERT INTO findings (tool, triaged_at) VALUES (?, NULL)", (tool,)
@@ -64,9 +54,9 @@ def _make_db_active(
     rows: list[tuple[str, str, str]],
 ) -> None:
     """Seed active findings with (tool, repo, segment) tuples."""
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    _init_store(db_path)
     conn = sqlite3.connect(str(db_path))
-    conn.executescript(_SCHEMA)
+    conn.row_factory = sqlite3.Row
     for tool, repo, segment in rows:
         conn.execute(
             "INSERT INTO findings (tool, status, repo, segment, triaged_at)"
@@ -134,7 +124,7 @@ def test_all_skip_tools(project_db, caplog) -> None:
 
 def test_mcp_json_written(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db(db, [("semgrep",)])  # non-skip tool so a session runs
+    _make_db_active(db, [("semgrep", "repo1", "sast")])  # non-skip → session runs
 
     import json
 
@@ -162,7 +152,7 @@ def test_mcp_json_written(project_db) -> None:
 
 def test_success_outcome(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db(db, [("semgrep",)])
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -191,7 +181,7 @@ def test_success_outcome(project_db) -> None:
 
 def test_incomplete_outcome(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db(db, [("semgrep",)])
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -211,7 +201,7 @@ def test_incomplete_outcome(project_db) -> None:
 
 def test_timeout_outcome(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db(db, [("semgrep",)])
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
 
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
@@ -227,7 +217,7 @@ def test_timeout_outcome(project_db) -> None:
 
 def test_nonzero_exit_outcome(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db(db, [("semgrep",)])
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
 
     mock_result = MagicMock()
     mock_result.returncode = 1
@@ -263,7 +253,7 @@ def test_standalone_import() -> None:
 
 
 def test_stale_batches_for_current_run_are_reset(project_db) -> None:
-    """in_progress batches for the current run_id are reset to pending."""
+    """in_progress batches for the current run_id are reset and then processed."""
     from core.store.sqlite_store import SQLiteStore
 
     project, tmp_root, db = project_db
@@ -281,9 +271,14 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
             (run_id,),
         )
 
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stderr = ""
+
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id),
+        patch("subprocess.run", return_value=mock_result),
     ):
         run_triage(project)
 
@@ -292,7 +287,7 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
             "SELECT status FROM triage_batches WHERE run_id = ?", (run_id,)
         ).fetchone()
     assert row is not None
-    assert row["status"] == "pending"
+    assert row["status"] != "in_progress"
 
 
 def test_stale_batches_other_run_not_touched(project_db) -> None:
@@ -315,9 +310,14 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
                 (rid,),
             )
 
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stderr = ""
+
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id_a),
+        patch("subprocess.run", return_value=mock_result),
     ):
         run_triage(project)
 
@@ -327,7 +327,7 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
         ).fetchall()
 
     status_by_run = {r["run_id"]: r["status"] for r in rows}
-    assert status_by_run[run_id_a] == "pending"
+    assert status_by_run[run_id_a] != "in_progress"
     assert status_by_run[run_id_b] == "in_progress"
 
 
