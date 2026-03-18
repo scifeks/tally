@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import os
+from collections import Counter
 from typing import Any
 
-MAX_FINDINGS_PER_BATCH = 4
-MAX_SIBLING_FINDINGS = 2
+MAX_SAME_FILE_FINDINGS = 3
+MAX_SIBLING_FINDINGS = 1
 MAX_FILES_PER_BATCH = 2
+MAX_FINDINGS_PER_BATCH = 4
 _NO_FILL_SEVERITIES: frozenset[str] = frozenset({"critical", "high"})
 
 
@@ -30,32 +32,51 @@ def _are_siblings(file_a: str | None, file_b: str | None) -> bool:
     return dir_a is not None and dir_a == dir_b
 
 
+def _split_consecutive_by_file(
+    queue: list[dict[str, Any]], anchor_file: str | None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Extract leading consecutive findings that match anchor_file."""
+    cluster: list[dict[str, Any]] = []
+    rest: list[dict[str, Any]] = []
+    consuming = True
+    for f in queue:
+        if consuming and f.get("file") == anchor_file:
+            cluster.append(f)
+        else:
+            consuming = False
+            rest.append(f)
+    return cluster, rest
+
+
 def _fill_siblings(
     batch: list[dict[str, Any]],
     queue: list[dict[str, Any]],
     primary_file: str | None,
     primary_rt: str | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Try to fill batch with sibling findings.
+    """Try to fill a single-finding batch with one sibling finding.
 
+    Only called when the primary file contributes exactly 1 finding.
     Returns (updated_batch, updated_queue).
     """
-    # 2-file decay: with 2 files, max total = 3
-    available = min(MAX_SIBLING_FINDINGS, 3 - len(batch))
-    if available <= 0:
-        return batch, queue
+    # Candidate siblings: same directory, different file, fill-eligible severity,
+    # and that file appears exactly once in the queue (multi-finding files anchor
+    # their own batches and must not donate a finding here).
+    file_counts = Counter(f.get("file") for f in queue)
 
-    # Candidate siblings: same directory, different file
     sibling_candidates = [
         f
         for f in queue
-        if _are_siblings(f.get("file"), primary_file) and f.get("file") != primary_file
+        if _are_siblings(f.get("file"), primary_file)
+        and f.get("file") != primary_file
+        and _severity_allows_fill(f.get("severity"))
+        and file_counts[f.get("file")] == 1
     ]
 
     if not sibling_candidates:
         return batch, queue
 
-    # Prefer same risk_type; fall back to any sibling rt
+    # Prefer same risk_type; fall back to any eligible sibling
     same_rt = [f for f in sibling_candidates if f.get("risk_type") == primary_rt]
     pool = same_rt if same_rt else sibling_candidates
 
@@ -63,7 +84,7 @@ def _fill_siblings(
     sibling_file = pool[0].get("file")
     pool = [f for f in pool if f.get("file") == sibling_file]
 
-    taken = pool[:available]
+    taken = pool[:MAX_SIBLING_FINDINGS]
     taken_ids = {f["id"] for f in taken}
     new_queue = [f for f in queue if f.get("id") not in taken_ids]
     return batch + taken, new_queue
@@ -73,7 +94,7 @@ def compute_batches(findings: list[dict[str, Any]]) -> list[list[dict[str, Any]]
     """Group pre-sorted findings into triage batches.
 
     Input must be scoped to a single tool+repo (asserted, not enforced).
-    Findings are expected pre-sorted: severity DESC, file, risk_type, line_start ASC.
+    Findings are expected pre-sorted: severity DESC, file, line_start ASC.
     Returns a list of batches; each batch is a list of finding dicts, unchanged.
     """
     if not findings:
@@ -83,38 +104,25 @@ def compute_batches(findings: list[dict[str, Any]]) -> list[list[dict[str, Any]]
     batches: list[list[dict[str, Any]]] = []
 
     while queue:
-        anchor = queue[0]
-        anchor_file = anchor.get("file")
-        anchor_rt = anchor.get("risk_type")
-        anchor_sev = anchor.get("severity")
+        anchor_file = queue[0].get("file")
 
-        # Extract consecutive cluster from front of queue (same file+risk_type)
-        cluster: list[dict[str, Any]] = []
-        rest: list[dict[str, Any]] = []
-        consuming = True
-        for f in queue:
-            if (
-                consuming
-                and f.get("file") == anchor_file
-                and f.get("risk_type") == anchor_rt
-            ):
-                cluster.append(f)
-            else:
-                consuming = False
-                rest.append(f)
-        queue = rest
+        # 1. Extract consecutive same-file cluster (file only, not file+rt)
+        cluster, queue = _split_consecutive_by_file(queue, anchor_file)
 
-        if len(cluster) > MAX_FINDINGS_PER_BATCH:
-            # Oversized cluster: split into chunks of MAX_FINDINGS_PER_BATCH
-            for i in range(0, len(cluster), MAX_FINDINGS_PER_BATCH):
-                batches.append(cluster[i : i + MAX_FINDINGS_PER_BATCH])
-            continue
+        # 2. Split cluster into severity tiers
+        no_fill = [f for f in cluster if f.get("severity") in _NO_FILL_SEVERITIES]
+        fill = [f for f in cluster if f.get("severity") not in _NO_FILL_SEVERITIES]
 
-        batch = list(cluster)
+        # 3. No-fill tier: 1 finding per batch, no sibling fill
+        for f in no_fill:
+            batches.append([f])
 
-        if _severity_allows_fill(anchor_sev) and len(batch) < MAX_FINDINGS_PER_BATCH:
-            batch, queue = _fill_siblings(batch, queue, anchor_file, anchor_rt)
-
-        batches.append(batch)
+        # 4. Fill tier: chunk by MAX_SAME_FILE_FINDINGS
+        for i in range(0, len(fill), MAX_SAME_FILE_FINDINGS):
+            chunk = fill[i : i + MAX_SAME_FILE_FINDINGS]
+            if len(chunk) == 1:
+                primary_rt = chunk[0].get("risk_type")
+                chunk, queue = _fill_siblings(chunk, queue, anchor_file, primary_rt)
+            batches.append(chunk)
 
     return batches

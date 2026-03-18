@@ -536,7 +536,6 @@ class SQLiteStore:
                 ORDER BY
                     severity DESC,
                     file,
-                    json_extract(meta, '$.risk_type'),
                     CAST(json_extract(meta, '$.line_start') AS INTEGER)
             """
         else:
