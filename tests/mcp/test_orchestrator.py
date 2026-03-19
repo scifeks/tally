@@ -15,10 +15,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-import tally_mcp.triage as triage_mod  # noqa: E402
+import application.triage.runner as triage_mod  # noqa: E402
+from application.triage.orchestrator import run_triage  # noqa: E402
+from application.triage.runner import TriageRunner  # noqa: E402
 from core.store.connection import ConnectionFactory  # noqa: E402
-from tally_mcp.orchestrator import run_triage  # noqa: E402
-from tally_mcp.triage import TriageRunner  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -236,9 +236,9 @@ def test_missing_db_raises(tmp_path: Path) -> None:
 
 
 def test_standalone_import() -> None:
-    import tally_mcp.orchestrator  # noqa: F401
+    import application.triage.orchestrator  # noqa: F401
 
-    assert callable(tally_mcp.orchestrator.run_triage)
+    assert callable(application.triage.orchestrator.run_triage)
 
 
 # ---------------------------------------------------------------------------

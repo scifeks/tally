@@ -12,9 +12,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.config.manager import ConfigManager as _ConfigManager
 from core.tools.registry import tool_registry
 
-from .config import SESSION_TIMEOUT_SECONDS
+try:
+    _cfg = _ConfigManager(str(Path(__file__).parent.parent.parent)).global_config
+    SESSION_TIMEOUT_SECONDS: int = _cfg.mcp_session_timeout_seconds
+except FileNotFoundError:
+    SESSION_TIMEOUT_SECONDS = 300
 
 if TYPE_CHECKING:
     from core.store.repositories.audit import AuditRepository
@@ -23,7 +28,7 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-_APP_ROOT = Path(__file__).parent.parent
+_APP_ROOT = Path(__file__).parent.parent.parent
 
 _AUDIT_WRITE_TOOLS = ("update_finding", "update_findings_batch")
 
@@ -177,7 +182,9 @@ class TriageRunner:
                 continue
 
             segment = tool_obj.scan_segment
-            module = importlib.import_module(f"tally_mcp.prompts.{segment}_trace")
+            module = importlib.import_module(
+                f"application.triage.prompts.{segment}_trace"
+            )
             render_fn: Callable[..., str] = module.render
 
             sessions_run += 1

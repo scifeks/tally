@@ -1,11 +1,8 @@
-"""MCP triage orchestrator — entry points delegating to TriageRunner."""
+"""Triage application service — entry points delegating to TriageRunner."""
 
 import dataclasses
-from pathlib import Path
 
-from .triage import TriageRunner
-
-_APP_ROOT = Path(__file__).parent.parent
+from .runner import TriageRunner
 
 
 def run_triage(project: str) -> dict[str, int]:

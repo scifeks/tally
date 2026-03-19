@@ -17,12 +17,12 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
 from core.store import make_store  # noqa: E402
 from core.store.connection import ConnectionFactory  # noqa: E402
 from core.store.repositories.findings import FindingRepository  # noqa: E402
 from core.store.repositories.runs import RunRepository  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
-from tally_mcp.triage import TriageResult, TriageRunner  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -301,7 +301,7 @@ def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
     _seed(run_repo, finding_repo)
 
     mock_semgrep = _make_mock_semgrep()
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         runner.batch()
@@ -320,7 +320,7 @@ def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -340,7 +340,7 @@ def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -364,7 +364,7 @@ def test_pipeline_audit_log_written(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -384,7 +384,7 @@ def test_pipeline_result_counts_match(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -415,7 +415,7 @@ def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id2, _ = runner.batch()
@@ -454,7 +454,7 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
 
     runner._triage_repo.claim_batch = spy_claim  # type: ignore[method-assign]
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id2, total_batches = runner.batch()
@@ -479,7 +479,7 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id2, _ = runner.batch()
