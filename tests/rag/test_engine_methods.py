@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -17,31 +18,18 @@ if str(_TALLY_ROOT) not in sys.path:
 from core.project import ProjectManager  # noqa: E402
 from core.rag import RAGEngine  # noqa: E402
 
-_OLLAMA_URL = "http://localhost:11434"
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _write_global_config(base_path: Path) -> None:
+    real_config = _TALLY_ROOT / "config" / "global.json"
+    if not real_config.exists():
+        pytest.skip("config/global.json not found")
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "global.json").write_text(
-        json.dumps(
-            {
-                "chat_llm_provider": "ollama",
-                "enrichment_llm_provider": "ollama",
-                "report_llm_provider": "ollama",
-                "embedding_provider": "ollama_embedding",
-                "ollama": {
-                    "base_url": _OLLAMA_URL,
-                    "model": "qwen3:14b",
-                },
-                "ollama_embedding": {"model": "nomic-embed-text:latest"},
-            }
-        )
-    )
+    shutil.copy(real_config, config_dir / "global.json")
 
 
 def _write_commands_config(base_path: Path) -> None:

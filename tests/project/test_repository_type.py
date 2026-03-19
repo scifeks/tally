@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-import json
+import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -23,23 +23,13 @@ from core.project.manager import (  # noqa: E402
 
 
 def _write_global_config(base_path: Path) -> None:
-    """Write a minimal global.json so ConfigManager initialises without error."""
+    """Copy real global.json into the test tmp_path; skip if absent."""
+    real_config = _TALLY_ROOT / "config" / "global.json"
+    if not real_config.exists():
+        pytest.skip("config/global.json not found")
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "global.json").write_text(
-        json.dumps(
-            {
-                "ollama": {
-                    "base_url": "http://localhost:11434",
-                    "model": "test",
-                },
-                "ollama_embedding": {
-                    "base_url": "http://localhost:11434",
-                    "model": "nomic-embed-text:latest",
-                },
-            }
-        )
-    )
+    shutil.copy(real_config, config_dir / "global.json")
 
 
 def _make_pm(base_path: Path) -> ProjectManager:

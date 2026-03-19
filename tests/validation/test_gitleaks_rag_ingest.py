@@ -39,15 +39,24 @@ from core.tools.registry import discover_tools, tool_registry  # noqa: E402
 # Skip markers
 # ---------------------------------------------------------------------------
 
-_OLLAMA_URL = "http://localhost:11434"
+
+def _get_ollama_url() -> str | None:
+    try:
+        cfg = ConfigManager(base_path=str(_TALLY_ROOT))._load_global_config()
+        return cfg.ollama.base_url if cfg.ollama else None
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+_OLLAMA_URL = _get_ollama_url()
 
 requires_gitleaks = pytest.mark.skipif(
     shutil.which("gitleaks") is None,
     reason="gitleaks not installed",
 )
 requires_ollama = pytest.mark.skipif(
-    not verify_ollama_available(_OLLAMA_URL),
-    reason="Ollama not running at http://localhost:11434",
+    _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),
+    reason="Ollama not configured or not running",
 )
 slow = pytest.mark.slow
 
@@ -75,23 +84,12 @@ def project_env(tmp_path: Path) -> dict:
 
 
 def _write_global_config(base_path: Path) -> None:
+    real_config = _TALLY_ROOT / "config" / "global.json"
+    if not real_config.exists():
+        pytest.skip("config/global.json not found")
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "global.json").write_text(
-        json.dumps(
-            {
-                "chat_llm_provider": "ollama",
-                "enrichment_llm_provider": "ollama",
-                "report_llm_provider": "ollama",
-                "embedding_provider": "ollama_embedding",
-                "ollama": {
-                    "base_url": "http://localhost:11434",
-                    "model": "qwen3:14b",
-                },
-                "ollama_embedding": {"model": "nomic-embed-text:latest"},
-            }
-        )
-    )
+    shutil.copy(real_config, config_dir / "global.json")
 
 
 def _write_commands_config(base_path: Path) -> None:

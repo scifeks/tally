@@ -24,6 +24,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]  # tests/ingest/ â†’ tests/ â†
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from core.config import ConfigManager  # noqa: E402
 from core.project import ProjectManager  # noqa: E402
 from core.rag import FindingIngestor, RAGEngine  # noqa: E402
 from core.rag.engine import verify_ollama_available  # noqa: E402
@@ -34,12 +35,22 @@ from core.tools.parsers.gitleaks_parser import (  # noqa: E402
     parse_gitleaks_json,
 )
 
-_OLLAMA_URL = "http://localhost:11434"
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ingest"
 
+
+def _get_ollama_url() -> str | None:
+    try:
+        cfg = ConfigManager(base_path=str(_TALLY_ROOT))._load_global_config()
+        return cfg.ollama.base_url if cfg.ollama else None
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+_OLLAMA_URL = _get_ollama_url()
+
 requires_ollama = pytest.mark.skipif(
-    not verify_ollama_available(_OLLAMA_URL),
-    reason="Ollama not running at http://localhost:11434",
+    _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),
+    reason="Ollama not configured or not running",
 )
 requires_gitleaks = pytest.mark.skipif(
     shutil.which("gitleaks") is None,
@@ -72,23 +83,12 @@ def _make_gitleaks_result(
 
 
 def _write_global_config(base_path: Path) -> None:
+    real_config = _TALLY_ROOT / "config" / "global.json"
+    if not real_config.exists():
+        pytest.skip("config/global.json not found")
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "global.json").write_text(
-        json.dumps(
-            {
-                "chat_llm_provider": "ollama",
-                "enrichment_llm_provider": "ollama",
-                "report_llm_provider": "ollama",
-                "embedding_provider": "ollama_embedding",
-                "ollama": {
-                    "base_url": _OLLAMA_URL,
-                    "model": "qwen3:14b",
-                },
-                "ollama_embedding": {"model": "nomic-embed-text:latest"},
-            }
-        )
-    )
+    shutil.copy(real_config, config_dir / "global.json")
 
 
 def _write_commands_config(base_path: Path) -> None:
