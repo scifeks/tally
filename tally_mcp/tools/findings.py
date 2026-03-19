@@ -5,18 +5,19 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-if TYPE_CHECKING:
-    from core.store.repositories.audit import AuditRepository
-    from core.store.repositories.findings import FindingRepository
-    from core.store.repositories.triage import TriageBatchRepository
+from tally_mcp.context import FindingsContext
 
 # Injected at startup by server.py
-_finding_repo: FindingRepository | None = None
-_audit_repo: AuditRepository | None = None
-_triage_repo: TriageBatchRepository | None = None
-_project_name: str | None = None
+_ctx: FindingsContext | None = None
+
+
+def init(ctx: FindingsContext) -> None:
+    """Inject repository dependencies. Called once at server startup."""
+    global _ctx
+    _ctx = ctx
+
 
 from core.tools.constants import (  # noqa: E402
     CONFIDENCE_LEVELS,
@@ -50,8 +51,8 @@ def _write_audit(
     duration_ms: int,
 ) -> None:
     """Write an audit row (used by timeout catch block)."""
-    assert _audit_repo is not None
-    _audit_repo.log_event(tool_name, arguments, success, error, duration_ms)
+    assert _ctx is not None
+    _ctx.audit_repo.log_event(tool_name, arguments, success, error, duration_ms)
 
 
 def _reconstruct_abs_path(
@@ -88,15 +89,15 @@ async def get_finding(finding_id: int) -> dict:
     Raises:
         ValueError: If no finding with the given ID exists.
     """
-    assert _finding_repo is not None
-    row = await asyncio.to_thread(_finding_repo.get_finding, finding_id)
+    assert _ctx is not None
+    row = await asyncio.to_thread(_ctx.finding_repo.get_finding, finding_id)
     if row is None:
         raise ValueError(f"Finding {finding_id} not found")
     row = _parse_row(row)
     repos: list[dict] = []
-    if _project_name:
+    if _ctx.project_name:
         try:
-            cfg = await get_project_config(_project_name)
+            cfg = await get_project_config(_ctx.project_name)
             repos = cfg.get("repositories", [])
         except FileNotFoundError:
             pass
@@ -118,8 +119,8 @@ async def complete_triage_batch(
     batch_id: int, status: Literal["success", "failed"]
 ) -> None:
     """Sets status and completed_at on the given batch."""
-    assert _triage_repo is not None
-    await asyncio.to_thread(_triage_repo.complete_batch, batch_id, status)
+    assert _ctx is not None
+    await asyncio.to_thread(_ctx.triage_repo.complete_batch, batch_id, status)
 
 
 async def update_finding(
@@ -134,8 +135,7 @@ async def update_finding(
     strategy: str = "",
 ) -> bool:
     """Update enrichment fields on a single finding."""
-    assert _finding_repo is not None
-    assert _audit_repo is not None
+    assert _ctx is not None
     start = datetime.now(UTC)
     call_args: dict = {
         "finding_id": finding_id,
@@ -192,7 +192,7 @@ async def update_finding(
 
     try:
         result = await asyncio.to_thread(
-            _finding_repo.update_finding,
+            _ctx.finding_repo.update_finding,
             finding_id,
             confidence,
             finding_type,

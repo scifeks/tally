@@ -18,6 +18,7 @@ from core.store.repositories.audit import AuditRepository  # noqa: E402
 from core.store.repositories.findings import FindingRepository  # noqa: E402
 from core.store.repositories.runs import RunRepository  # noqa: E402
 from core.store.repositories.triage import TriageBatchRepository  # noqa: E402
+from tally_mcp.context import FindingsContext  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -75,23 +76,17 @@ def run_repo(factory: ConnectionFactory) -> RunRepository:
 
 @pytest.fixture()
 def finding_repo(factory: ConnectionFactory) -> FindingRepository:
-    repo = FindingRepository(factory)
-    findings._finding_repo = repo
-    return repo
+    return FindingRepository(factory)
 
 
 @pytest.fixture()
 def audit_repo(factory: ConnectionFactory) -> AuditRepository:
-    repo = AuditRepository(factory)
-    findings._audit_repo = repo
-    return repo
+    return AuditRepository(factory)
 
 
 @pytest.fixture()
 def triage_repo(factory: ConnectionFactory) -> TriageBatchRepository:
-    repo = TriageBatchRepository(factory)
-    findings._triage_repo = repo
-    return repo
+    return TriageBatchRepository(factory)
 
 
 # Convenience fixture that sets up all injections
@@ -103,6 +98,14 @@ def store(
     triage_repo: TriageBatchRepository,
 ) -> ConnectionFactory:
     """Return factory with all repos injected into findings module."""
+    findings.init(
+        FindingsContext(
+            finding_repo=finding_repo,
+            audit_repo=audit_repo,
+            triage_repo=triage_repo,
+            project_name="",
+        )
+    )
     return factory
 
 
@@ -276,8 +279,7 @@ async def test_false_positive_confidence_accepted(
 
 
 async def test_nonexistent_finding_id_raises(
-    finding_repo: FindingRepository,
-    audit_repo: AuditRepository,
+    store: ConnectionFactory,
 ) -> None:
     with pytest.raises(ValueError, match="not found"):
         await findings.update_finding(999_999, **_VALID_UPDATE)

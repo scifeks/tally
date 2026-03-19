@@ -15,6 +15,7 @@ from mcp.server.fastmcp import FastMCP
 from core.config.manager import ConfigManager
 from core.store import make_store
 
+from .context import FindingsContext
 from .tools import findings
 
 # ---------------------------------------------------------------------------
@@ -39,10 +40,14 @@ _cfg = ConfigManager(str(_app_root)).global_config  # noqa: F841 — reserved fo
 _run_repo, _finding_repo, _triage_repo, _audit_repo = make_store(
     _app_root, _project_name
 )
-findings._finding_repo = _finding_repo
-findings._triage_repo = _triage_repo
-findings._audit_repo = _audit_repo
-findings._project_name = _project_name
+findings.init(
+    FindingsContext(
+        finding_repo=_finding_repo,
+        audit_repo=_audit_repo,
+        triage_repo=_triage_repo,
+        project_name=_project_name,
+    )
+)
 
 logger.info("Tally MCP server starting — project=%s", _project_name)
 

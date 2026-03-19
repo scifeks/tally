@@ -108,10 +108,16 @@ def _make_runner_real(
         tmp_path / "projects" / project / "sqlite" / "findings.db"
     )
 
-    findings._finding_repo = finding_repo
-    findings._audit_repo = audit_repo
-    findings._triage_repo = triage_repo
-    findings._project_name = None
+    from tally_mcp.context import FindingsContext
+
+    findings.init(
+        FindingsContext(
+            finding_repo=finding_repo,
+            audit_repo=audit_repo,
+            triage_repo=triage_repo,
+            project_name="",
+        )
+    )
 
     runner = TriageRunner(project, run_repo, triage_repo, audit_repo, tmp_path)
     return runner, factory, run_repo, finding_repo
