@@ -54,8 +54,8 @@ class KnowledgeCommands:
         )
         from core.tools.registry import tool_registry
 
-        sqlite_store = self._get_sqlite_store()
-        if sqlite_store is None:
+        finding_repo = self._get_finding_repo()
+        if finding_repo is None:
             return
 
         known_tools: frozenset[str] = frozenset(tool_registry.list_tool_names())
@@ -68,7 +68,7 @@ class KnowledgeCommands:
 
         try:
             with self.repl.console.status("Searching knowledge base..."):
-                results = sqlite_store.search(filters)
+                results = finding_repo.search(filters)
         except Exception as exc:
             self.repl.console.print(f"[red]Search error:[/red] {exc}")
             return
@@ -232,11 +232,11 @@ class KnowledgeCommands:
             )
             return
 
-        sqlite_store = self._get_sqlite_store()
-        if sqlite_store is None:
+        finding_repo = self._get_finding_repo()
+        if finding_repo is None:
             return
 
-        result = _findings_table_factory.discover_tool_fields(sqlite_store, tool_name)
+        result = _findings_table_factory.discover_tool_fields(finding_repo, tool_name)
         if result is None:
             self.repl.console.print(
                 f"[yellow]No findings found for tool '{tool_name}'. "
@@ -249,14 +249,16 @@ class KnowledgeCommands:
         if meta_fields:
             self.repl.console.print(f"Meta fields:   {', '.join(meta_fields)}")
 
-    def _get_sqlite_store(self):  # type: ignore[return]
-        """Return a SQLiteStore for the active project, or None on error."""
-        from core.store.sqlite_store import SQLiteStore
+    def _get_finding_repo(self):  # type: ignore[return]
+        """Return a FindingRepository for the active project, or None on error."""
+        from core.store import make_store
 
         assert self.repl.active_project is not None
         try:
-            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
-            return store
+            _, finding_repo, _, _ = make_store(
+                self.repl.base_path, self.repl.active_project
+            )
+            return finding_repo
         except Exception as exc:
             self.repl.console.print(f"[red]SQLite error:[/red] {exc}")
             return None

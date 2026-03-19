@@ -10,11 +10,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from core.store.sqlite_store import SQLiteStore
 from core.tools.registry import tool_registry
 
 from .config import SESSION_TIMEOUT_SECONDS
+
+if TYPE_CHECKING:
+    from core.store.repositories.audit import AuditRepository
+    from core.store.repositories.runs import RunRepository
+    from core.store.repositories.triage import TriageBatchRepository
 
 _log = logging.getLogger(__name__)
 
@@ -32,9 +37,18 @@ class TriageResult:
 
 
 class TriageRunner:
-    def __init__(self, project: str, store: SQLiteStore, app_root: Path) -> None:
+    def __init__(
+        self,
+        project: str,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        audit_repo: AuditRepository,
+        app_root: Path,
+    ) -> None:
         self._project = project
-        self._store = store
+        self._run_repo = run_repo
+        self._triage_repo = triage_repo
+        self._audit_repo = audit_repo
         self._app_root = app_root
 
     @classmethod
@@ -43,8 +57,10 @@ class TriageRunner:
         db = root / "projects" / project / "sqlite" / "findings.db"
         if not db.exists():
             raise FileNotFoundError(f"Project database not found: {db}")
-        store = SQLiteStore(root, project)
-        return cls(project, store, root)
+        from core.store import make_store
+
+        run_repo, _, triage_repo, audit_repo = make_store(root, project)
+        return cls(project, run_repo, triage_repo, audit_repo, root)
 
     # ------------------------------------------------------------------
     # Public API
@@ -55,9 +71,9 @@ class TriageRunner:
 
         Returns (run_id, total_batches_created).
         """
-        run_id = self._store.create_run({})
+        run_id = self._run_repo.create_run({})
 
-        reset_count = self._store.reset_stale_triage_batches(run_id)
+        reset_count = self._triage_repo.reset_stale_batches(run_id)
         if reset_count:
             _log.info(
                 "Reset %d stale in_progress batches for run_id=%d",
@@ -68,12 +84,12 @@ class TriageRunner:
         skip_tools = frozenset(
             t.name for t in tool_registry.get_all_tools() if getattr(t, "skip", False)
         )
-        combos = self._store.get_active_finding_combos(skip_tools)
+        combos = self._triage_repo.get_active_finding_combos(skip_tools)
 
         total = 0
         for tool, repo, segment in combos:
             try:
-                count = self._store.create_triage_batches(run_id, tool, repo, segment)
+                count = self._triage_repo.create_batches(run_id, tool, repo, segment)
                 _log.info(
                     "Created %d batches: tool=%s repo=%s segment=%s",
                     count,
@@ -145,7 +161,7 @@ class TriageRunner:
         """
         sessions_run = success = failed = incomplete = 0
         while True:
-            batch = self._store.claim_triage_batch(run_id)
+            batch = self._triage_repo.claim_batch(run_id)
             if batch is None:
                 break
 
@@ -157,7 +173,7 @@ class TriageRunner:
             tool_obj = tool_registry.get_tool(tool_name or "") if tool_name else None
 
             if tool_obj is None or tool_obj.skip:
-                self._store.complete_triage_batch(batch_id, "success")
+                self._triage_repo.complete_batch(batch_id, "success")
                 continue
 
             segment = tool_obj.scan_segment
@@ -166,7 +182,7 @@ class TriageRunner:
 
             sessions_run += 1
             outcome = handler(batch_id, render_fn, finding_ids)
-            self._store.complete_triage_batch(batch_id, outcome)
+            self._triage_repo.complete_batch(batch_id, outcome)
 
             if outcome == "success":
                 success += 1
@@ -222,7 +238,7 @@ class TriageRunner:
             )
             return "failed"
 
-        updated_count = self._store.count_audit_events_since(
+        updated_count = self._audit_repo.count_events_since(
             _AUDIT_WRITE_TOOLS, session_start
         )
         if updated_count > 0:

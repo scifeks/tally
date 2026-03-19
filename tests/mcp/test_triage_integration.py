@@ -1,6 +1,6 @@
 """Integration tests for the triage pipeline (no Claude invocation).
 
-These tests exercise the full pipeline end-to-end — real SQLiteStore, real
+These tests exercise the full pipeline end-to-end — real repositories, real
 batch creation, real claiming, real finding updates — with only Claude's
 subprocess call replaced by a synthetic handler.
 """
@@ -17,7 +17,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.sqlite_store import SQLiteStore  # noqa: E402
+from core.store import make_store  # noqa: E402
+from core.store.connection import ConnectionFactory  # noqa: E402
+from core.store.repositories.findings import FindingRepository  # noqa: E402
+from core.store.repositories.runs import RunRepository  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 from tally_mcp.triage import TriageResult, TriageRunner  # noqa: E402
 
@@ -47,18 +50,23 @@ _VALID_UPDATE = {
 }
 
 
-def _seed(store: SQLiteStore, n: int = 1, overrides: dict | None = None) -> int:
-    run_id = store.create_run({})
+def _seed(
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    n: int = 1,
+    overrides: dict | None = None,
+) -> int:
+    run_id = run_repo.create_run({})
     batch = [
         {**_BASE_FINDING, "file_path": f"src/file{i}.py", **(overrides or {})}
         for i in range(n)
     ]
-    store.upsert_findings(run_id, batch)
+    finding_repo.upsert_findings(run_id, batch)
     return run_id
 
 
-def _all_finding_ids(store: SQLiteStore) -> list[int]:
-    with store._connect() as conn:  # noqa: SLF001
+def _all_finding_ids(factory: ConnectionFactory) -> list[int]:
+    with factory.connect() as conn:
         rows = conn.execute("SELECT id FROM findings ORDER BY id").fetchall()
     return [r["id"] for r in rows]
 
@@ -71,9 +79,7 @@ def _make_mock_semgrep() -> MagicMock:
     return t
 
 
-def _make_synthetic_handler(
-    store: SQLiteStore,
-) -> Callable[[int, Callable[..., str], list[int]], str]:
+def _make_synthetic_handler() -> Callable[[int, Callable[..., str], list[int]], str]:
     """Handler that updates every finding in the batch via real MCP tools."""
 
     def handler(
@@ -91,17 +97,24 @@ def _make_synthetic_handler(
 
 def _make_runner_real(
     tmp_path: Path, project: str = "testproject"
-) -> tuple[TriageRunner, SQLiteStore]:
-    """Return a TriageRunner backed by a real SQLiteStore."""
+) -> tuple[TriageRunner, ConnectionFactory, RunRepository, FindingRepository]:
+    """Return a TriageRunner backed by real repositories."""
     venv_python = tmp_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True, exist_ok=True)
     venv_python.touch()
 
-    store = SQLiteStore(tmp_path, project)
-    findings._store = store
+    run_repo, finding_repo, triage_repo, audit_repo = make_store(tmp_path, project)
+    factory = ConnectionFactory(
+        tmp_path / "projects" / project / "sqlite" / "findings.db"
+    )
+
+    findings._finding_repo = finding_repo
+    findings._audit_repo = audit_repo
+    findings._triage_repo = triage_repo
     findings._project_name = None
-    runner = TriageRunner(project, store, tmp_path)
-    return runner, store
+
+    runner = TriageRunner(project, run_repo, triage_repo, audit_repo, tmp_path)
+    return runner, factory, run_repo, finding_repo
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +123,8 @@ def _make_runner_real(
 
 
 def test_mcp_json_server_type_is_stdio(tmp_path: Path) -> None:
-    runner, _ = _make_runner_real(tmp_path)
-    _seed(runner._store)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _seed(run_repo, finding_repo)
     mcp_path = runner._write_mcp_config()
     import json
 
@@ -120,7 +133,7 @@ def test_mcp_json_server_type_is_stdio(tmp_path: Path) -> None:
 
 
 def test_mcp_json_command_is_venv_python(tmp_path: Path) -> None:
-    runner, _ = _make_runner_real(tmp_path)
+    runner, _, _, _ = _make_runner_real(tmp_path)
     mcp_path = runner._write_mcp_config()
     import json
 
@@ -130,7 +143,7 @@ def test_mcp_json_command_is_venv_python(tmp_path: Path) -> None:
 
 
 def test_mcp_json_args_contain_project(tmp_path: Path) -> None:
-    runner, _ = _make_runner_real(tmp_path, project="myproject")
+    runner, _, _, _ = _make_runner_real(tmp_path, project="myproject")
     mcp_path = runner._write_mcp_config()
     import json
 
@@ -141,7 +154,7 @@ def test_mcp_json_args_contain_project(tmp_path: Path) -> None:
 
 
 def test_mcp_json_only_triage_tools_allowed(tmp_path: Path) -> None:
-    runner, _ = _make_runner_real(tmp_path)
+    runner, _, _, _ = _make_runner_real(tmp_path)
     mcp_path = runner._write_mcp_config()
     import json
 
@@ -151,7 +164,7 @@ def test_mcp_json_only_triage_tools_allowed(tmp_path: Path) -> None:
 
 
 def test_mcp_json_deny_star(tmp_path: Path) -> None:
-    runner, _ = _make_runner_real(tmp_path)
+    runner, _, _, _ = _make_runner_real(tmp_path)
     mcp_path = runner._write_mcp_config()
     import json
 
@@ -168,17 +181,17 @@ def test_mcp_json_deny_star(tmp_path: Path) -> None:
 def _make_runner_mock(
     tmp_path: Path, project: str = "proj"
 ) -> tuple[TriageRunner, MagicMock]:
-    """Return a TriageRunner with a mock SQLiteStore."""
+    """Return a TriageRunner with a mock store (all 3 repos unified)."""
     venv_python = tmp_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True, exist_ok=True)
     venv_python.touch()
 
     store = MagicMock()
     store.create_run.return_value = 1
-    store.reset_stale_triage_batches.return_value = 0
+    store.reset_stale_batches.return_value = 0
     store.get_active_finding_combos.return_value = []
-    store.count_audit_events_since.return_value = 0
-    runner = TriageRunner(project, store, tmp_path)
+    store.count_events_since.return_value = 0
+    runner = TriageRunner(project, store, store, store, tmp_path)
     return runner, store
 
 
@@ -188,7 +201,7 @@ def _render_stub(finding_ids: list[int], project: str) -> str:
 
 def test_run_session_invokes_claude_binary(tmp_path: Path) -> None:
     runner, store = _make_runner_mock(tmp_path)
-    store.count_audit_events_since.return_value = 1
+    store.count_events_since.return_value = 1
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -204,7 +217,7 @@ def test_run_session_invokes_claude_binary(tmp_path: Path) -> None:
 
 def test_run_session_print_flag_present(tmp_path: Path) -> None:
     runner, store = _make_runner_mock(tmp_path)
-    store.count_audit_events_since.return_value = 1
+    store.count_events_since.return_value = 1
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -219,7 +232,7 @@ def test_run_session_print_flag_present(tmp_path: Path) -> None:
 
 def test_run_session_skip_permissions_flag(tmp_path: Path) -> None:
     runner, store = _make_runner_mock(tmp_path)
-    store.count_audit_events_since.return_value = 1
+    store.count_events_since.return_value = 1
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -234,7 +247,7 @@ def test_run_session_skip_permissions_flag(tmp_path: Path) -> None:
 
 def test_run_session_disallowed_tools_value(tmp_path: Path) -> None:
     runner, store = _make_runner_mock(tmp_path)
-    store.count_audit_events_since.return_value = 1
+    store.count_events_since.return_value = 1
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -250,7 +263,7 @@ def test_run_session_disallowed_tools_value(tmp_path: Path) -> None:
 
 def test_run_session_cwd_is_app_root(tmp_path: Path) -> None:
     runner, store = _make_runner_mock(tmp_path)
-    store.count_audit_events_since.return_value = 1
+    store.count_events_since.return_value = 1
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -265,7 +278,7 @@ def test_run_session_cwd_is_app_root(tmp_path: Path) -> None:
 
 def test_run_session_stdin_contains_finding_id(tmp_path: Path) -> None:
     runner, store = _make_runner_mock(tmp_path)
-    store.count_audit_events_since.return_value = 1
+    store.count_events_since.return_value = 1
 
     mock_result = MagicMock()
     mock_result.returncode = 0
@@ -284,8 +297,8 @@ def test_run_session_stdin_contains_finding_id(tmp_path: Path) -> None:
 
 
 def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
-    _seed(store)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _seed(run_repo, finding_repo)
 
     mock_semgrep = _make_mock_semgrep()
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
@@ -293,7 +306,7 @@ def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
         mock_reg.get_tool.return_value = mock_semgrep
         runner.batch()
 
-    with store._connect() as conn:  # noqa: SLF001
+    with factory.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM triage_batches WHERE status = 'pending'"
         ).fetchall()
@@ -301,11 +314,11 @@ def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
 
 
 def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
-    _seed(store)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _seed(run_repo, finding_repo)
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -313,7 +326,7 @@ def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
         run_id, _ = runner.batch()
         runner._run_batch_loop(run_id, handler)
 
-    with store._connect() as conn:  # noqa: SLF001
+    with factory.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM triage_batches WHERE status IN ('pending', 'in_progress')"
         ).fetchall()
@@ -321,11 +334,11 @@ def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
 
 
 def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
-    _seed(store)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _seed(run_repo, finding_repo)
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -333,8 +346,8 @@ def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
         run_id, _ = runner.batch()
         runner._run_batch_loop(run_id, handler)
 
-    fid = _all_finding_ids(store)[0]
-    with store._connect() as conn:  # noqa: SLF001
+    fid = _all_finding_ids(factory)[0]
+    with factory.connect() as conn:
         row = conn.execute(
             "SELECT enriched, triaged_at, triaged_by FROM findings WHERE id = ?",
             (fid,),
@@ -345,11 +358,11 @@ def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
 
 
 def test_pipeline_audit_log_written(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
-    _seed(store)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _seed(run_repo, finding_repo)
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -357,7 +370,7 @@ def test_pipeline_audit_log_written(tmp_path: Path) -> None:
         run_id, _ = runner.batch()
         runner._run_batch_loop(run_id, handler)
 
-    with store._connect() as conn:  # noqa: SLF001
+    with factory.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM tool_audit_log WHERE tool_name = 'update_finding'"
         ).fetchall()
@@ -365,11 +378,11 @@ def test_pipeline_audit_log_written(tmp_path: Path) -> None:
 
 
 def test_pipeline_result_counts_match(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
-    _seed(store)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _seed(run_repo, finding_repo)
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -388,11 +401,11 @@ def test_pipeline_result_counts_match(tmp_path: Path) -> None:
 
 
 def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     # Seed 2 findings in different files so batching produces 2+ batches
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
+    seed_run_id = run_repo.create_run({})
+    finding_repo.upsert_findings(
+        seed_run_id,
         [
             {**_BASE_FINDING, "file_path": "src/alpha.py"},
             {**_BASE_FINDING, "file_path": "src/beta.py", "rule_id": "python.xss"},
@@ -400,7 +413,7 @@ def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
     )
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -408,7 +421,7 @@ def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
         run_id2, _ = runner.batch()
         runner._run_batch_loop(run_id2, handler)
 
-    with store._connect() as conn:  # noqa: SLF001
+    with factory.connect() as conn:
         stuck = conn.execute(
             "SELECT * FROM triage_batches WHERE status IN ('pending', 'in_progress')"
         ).fetchall()
@@ -416,12 +429,12 @@ def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
 
 
 def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
-    """claim_triage_batch is called exactly N+1 times (N batches + None sentinel)."""
-    runner, store = _make_runner_real(tmp_path)
+    """claim_batch is called exactly N+1 times (N batches + None sentinel)."""
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     # Two findings → should produce at least 1 batch
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
+    seed_run_id = run_repo.create_run({})
+    finding_repo.upsert_findings(
+        seed_run_id,
         [
             {**_BASE_FINDING, "file_path": "src/a.py"},
             {**_BASE_FINDING, "file_path": "src/b.py", "rule_id": "python.xss"},
@@ -429,9 +442,9 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
     )
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
-    original_claim = store.claim_triage_batch
+    original_claim = runner._triage_repo.claim_batch
     claim_calls: list[object] = []
 
     def spy_claim(run_id: int) -> dict | None:
@@ -439,7 +452,7 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
         claim_calls.append(result)
         return result
 
-    store.claim_triage_batch = spy_claim
+    runner._triage_repo.claim_batch = spy_claim  # type: ignore[method-assign]
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -453,10 +466,10 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
 
 
 def test_both_findings_enriched(tmp_path: Path) -> None:
-    runner, store = _make_runner_real(tmp_path)
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
+    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    seed_run_id = run_repo.create_run({})
+    finding_repo.upsert_findings(
+        seed_run_id,
         [
             {**_BASE_FINDING, "file_path": "src/a.py"},
             {**_BASE_FINDING, "file_path": "src/b.py", "rule_id": "python.xss"},
@@ -464,7 +477,7 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
     )
 
     mock_semgrep = _make_mock_semgrep()
-    handler = _make_synthetic_handler(store)
+    handler = _make_synthetic_handler()
 
     with patch("tally_mcp.triage.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
@@ -472,7 +485,7 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
         run_id2, _ = runner.batch()
         runner._run_batch_loop(run_id2, handler)
 
-    with store._connect() as conn:  # noqa: SLF001
+    with factory.connect() as conn:
         rows = conn.execute("SELECT enriched, triaged_by FROM findings").fetchall()
     assert all(r["enriched"] == 1 for r in rows)
     assert all(r["triaged_by"] == "claude-code" for r in rows)

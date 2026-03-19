@@ -13,7 +13,11 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.sqlite_store import SQLiteStore  # noqa: E402
+from core.store.connection import ConnectionFactory  # noqa: E402
+from core.store.repositories.audit import AuditRepository  # noqa: E402
+from core.store.repositories.findings import FindingRepository  # noqa: E402
+from core.store.repositories.runs import RunRepository  # noqa: E402
+from core.store.repositories.triage import TriageBatchRepository  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -33,14 +37,18 @@ _BASE_FINDING = {
 }
 
 
-def _seed(store: SQLiteStore, overrides: dict | None = None) -> None:
+def _seed(
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    overrides: dict | None = None,
+) -> None:
     finding = {**_BASE_FINDING, **(overrides or {})}
-    run_id = store.create_run({})
-    store.upsert_findings(run_id, [finding])
+    run_id = run_repo.create_run({})
+    finding_repo.upsert_findings(run_id, [finding])
 
 
-def _first_id(store: SQLiteStore) -> int:
-    with store._connect() as conn:  # noqa: SLF001
+def _first_id(factory: ConnectionFactory) -> int:
+    with factory.connect() as conn:
         row = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()
     assert row is not None
     return row["id"]
@@ -52,10 +60,50 @@ def _first_id(store: SQLiteStore) -> int:
 
 
 @pytest.fixture()
-def store(tmp_path: Path) -> SQLiteStore:
-    s = SQLiteStore(tmp_path, "testproject")
-    findings._store = s
-    return s
+def factory(tmp_path: Path) -> ConnectionFactory:
+    f = ConnectionFactory(
+        tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
+    )
+    f.init_schema()
+    return f
+
+
+@pytest.fixture()
+def run_repo(factory: ConnectionFactory) -> RunRepository:
+    return RunRepository(factory)
+
+
+@pytest.fixture()
+def finding_repo(factory: ConnectionFactory) -> FindingRepository:
+    repo = FindingRepository(factory)
+    findings._finding_repo = repo
+    return repo
+
+
+@pytest.fixture()
+def audit_repo(factory: ConnectionFactory) -> AuditRepository:
+    repo = AuditRepository(factory)
+    findings._audit_repo = repo
+    return repo
+
+
+@pytest.fixture()
+def triage_repo(factory: ConnectionFactory) -> TriageBatchRepository:
+    repo = TriageBatchRepository(factory)
+    findings._triage_repo = repo
+    return repo
+
+
+# Convenience fixture that sets up all injections
+@pytest.fixture()
+def store(
+    factory: ConnectionFactory,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+    triage_repo: TriageBatchRepository,
+) -> ConnectionFactory:
+    """Return factory with all repos injected into findings module."""
+    return factory
 
 
 # ---------------------------------------------------------------------------
@@ -63,8 +111,12 @@ def store(tmp_path: Path) -> SQLiteStore:
 # ---------------------------------------------------------------------------
 
 
-async def test_get_finding_returns_parsed_dict(store: SQLiteStore) -> None:
-    _seed(store)
+async def test_get_finding_returns_parsed_dict(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+) -> None:
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     row = await findings.get_finding(fid)
     assert isinstance(row, dict)
@@ -73,16 +125,19 @@ async def test_get_finding_returns_parsed_dict(store: SQLiteStore) -> None:
 
 
 async def test_get_finding_unknown_id_raises_value_error(
-    store: SQLiteStore,
+    store: ConnectionFactory,
+    finding_repo: FindingRepository,
 ) -> None:
     with pytest.raises(ValueError, match="not found"):
         await findings.get_finding(999_999)
 
 
 async def test_null_severity_confidence_returned_as_none(
-    store: SQLiteStore,
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
 ) -> None:
-    _seed(store, {"severity": None, "confidence": None})
+    _seed(run_repo, finding_repo, {"severity": None, "confidence": None})
     fid = _first_id(store)
     row = await findings.get_finding(fid)
     assert row["severity"] is None
@@ -110,8 +165,13 @@ _VALID_UPDATE = {
 # ---------------------------------------------------------------------------
 
 
-async def test_invalid_confidence_raises(store: SQLiteStore) -> None:
-    _seed(store)
+async def test_invalid_confidence_raises(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+) -> None:
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     with pytest.raises(ValueError, match="Invalid confidence"):
         await findings.update_finding(
@@ -122,8 +182,13 @@ async def test_invalid_confidence_raises(store: SQLiteStore) -> None:
     assert row["confidence"] == _BASE_FINDING["confidence"]
 
 
-async def test_invalid_severity_raises(store: SQLiteStore) -> None:
-    _seed(store)
+async def test_invalid_severity_raises(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+) -> None:
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     with pytest.raises(ValueError, match="Invalid severity"):
         await findings.update_finding(fid, **{**_VALID_UPDATE, "severity": "extreme"})
@@ -131,12 +196,16 @@ async def test_invalid_severity_raises(store: SQLiteStore) -> None:
     assert row["severity"] == _BASE_FINDING["severity"]
 
 
-async def test_invalid_finding_type_raises(store: SQLiteStore) -> None:
-    _seed(store)
+async def test_invalid_finding_type_raises(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+) -> None:
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     with pytest.raises(ValueError, match="Invalid finding_type"):
         await findings.update_finding(fid, **{**_VALID_UPDATE, "finding_type": "ghost"})
-    # DB row unchanged (finding still exists and was not updated)
     db_row = await findings.get_finding(fid)
     assert db_row["finding_type"] == [_BASE_FINDING["finding_type"]]
 
@@ -147,14 +216,17 @@ async def test_invalid_finding_type_raises(store: SQLiteStore) -> None:
 
 
 async def test_valid_update_returns_true_and_persists(
-    store: SQLiteStore,
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
 ) -> None:
-    _seed(store)
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     result = await findings.update_finding(fid, **_VALID_UPDATE)
     assert result is True
 
-    with store._connect() as conn:  # noqa: SLF001
+    with store.connect() as conn:
         db_row = conn.execute("SELECT * FROM findings WHERE id = ?", (fid,)).fetchone()
 
     assert db_row["confidence"] == "probable"
@@ -183,9 +255,12 @@ async def test_valid_update_returns_true_and_persists(
 
 
 async def test_false_positive_confidence_accepted(
-    store: SQLiteStore,
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
 ) -> None:
-    _seed(store)
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     result = await findings.update_finding(
         fid, **{**_VALID_UPDATE, "confidence": "false_positive"}
@@ -200,7 +275,10 @@ async def test_false_positive_confidence_accepted(
 # ---------------------------------------------------------------------------
 
 
-async def test_nonexistent_finding_id_raises(store: SQLiteStore) -> None:
+async def test_nonexistent_finding_id_raises(
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+) -> None:
     with pytest.raises(ValueError, match="not found"):
         await findings.update_finding(999_999, **_VALID_UPDATE)
 
@@ -210,16 +288,21 @@ async def test_nonexistent_finding_id_raises(store: SQLiteStore) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_update_findings_batch_mixed(store: SQLiteStore) -> None:
-    run_id = store.create_run({})
-    store.upsert_findings(
+async def test_update_findings_batch_mixed(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+) -> None:
+    run_id = run_repo.create_run({})
+    finding_repo.upsert_findings(
         run_id,
         [
             {**_BASE_FINDING, "rule_id": "rule-a", "file_path": "src/a.py"},
             {**_BASE_FINDING, "rule_id": "rule-b", "file_path": "src/b.py"},
         ],
     )
-    with store._connect() as conn:  # noqa: SLF001
+    with store.connect() as conn:
         ids = [
             r["id"]
             for r in conn.execute("SELECT id FROM findings ORDER BY id").fetchall()
@@ -235,7 +318,6 @@ async def test_update_findings_batch_mixed(store: SQLiteStore) -> None:
     assert result[str(fid_valid)]["status"] == "updated"
     assert result[str(fid_bad)]["status"] == "error"
 
-    # Valid one was actually updated
     row = await findings.get_finding(fid_valid)
     assert row["confidence"] == "probable"
 
@@ -245,12 +327,17 @@ async def test_update_findings_batch_mixed(store: SQLiteStore) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_audit_written_on_success(store: SQLiteStore) -> None:
-    _seed(store)
+async def test_audit_written_on_success(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
+) -> None:
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     await findings.update_finding(fid, **_VALID_UPDATE)
 
-    with store._connect() as conn:  # noqa: SLF001
+    with store.connect() as conn:
         row = conn.execute(
             "SELECT tool_name, success, duration_ms FROM tool_audit_log"
             " WHERE tool_name = 'update_finding'"
@@ -262,14 +349,17 @@ async def test_audit_written_on_success(store: SQLiteStore) -> None:
 
 
 async def test_audit_written_on_validation_failure(
-    store: SQLiteStore,
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
 ) -> None:
-    _seed(store)
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     with pytest.raises(ValueError):
         await findings.update_finding(fid, **{**_VALID_UPDATE, "severity": "unknown"})
 
-    with store._connect() as conn:  # noqa: SLF001
+    with store.connect() as conn:
         row = conn.execute(
             "SELECT success FROM tool_audit_log"
             " WHERE tool_name = 'update_finding'"
@@ -285,9 +375,12 @@ async def test_audit_written_on_validation_failure(
 
 
 async def test_previous_confidence_tracked_across_updates(
-    store: SQLiteStore,
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+    audit_repo: AuditRepository,
 ) -> None:
-    _seed(store)  # initial confidence = "medium"
+    _seed(run_repo, finding_repo)  # initial confidence = "medium"
     fid = _first_id(store)
 
     # First update: medium → probable
@@ -295,7 +388,7 @@ async def test_previous_confidence_tracked_across_updates(
     # Second update: probable → confirmed
     await findings.update_finding(fid, **{**_VALID_UPDATE, "confidence": "confirmed"})
 
-    with store._connect() as conn:  # noqa: SLF001
+    with store.connect() as conn:
         db_row = conn.execute(
             "SELECT meta FROM findings WHERE id = ?", (fid,)
         ).fetchone()
@@ -344,8 +437,12 @@ def test_reconstruct_abs_path_trailing_slash_stripped() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_get_finding_includes_abs_path(store: SQLiteStore) -> None:
-    _seed(store)
+async def test_get_finding_includes_abs_path(
+    store: ConnectionFactory,
+    run_repo: RunRepository,
+    finding_repo: FindingRepository,
+) -> None:
+    _seed(run_repo, finding_repo)
     fid = _first_id(store)
     row = await findings.get_finding(fid)
     assert "abs_path" in row
@@ -357,12 +454,13 @@ async def test_get_finding_includes_abs_path(store: SQLiteStore) -> None:
 
 
 def _seed_batch(
-    store: SQLiteStore,
-    run_id: int,
+    factory: ConnectionFactory,
+    run_repo: RunRepository,
     status: str = "pending",
     attempts: int = 0,
-) -> None:
-    with store._connect() as conn:  # noqa: SLF001
+) -> int:
+    run_id = run_repo.create_run({})
+    with factory.connect() as conn:
         conn.execute(
             "INSERT INTO triage_batches"
             " (run_id, finding_ids, batch_data, status, run_attempts)"
@@ -375,30 +473,38 @@ def _seed_batch(
                 attempts,
             ),
         )
+    return run_id
 
 
 class TestAtomicBatchClaim:
     def test_claim_sets_in_progress_increments_attempts_sets_started_at(
-        self, store: SQLiteStore
+        self,
+        factory: ConnectionFactory,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
     ) -> None:
-        run_id = store.create_run({})
-        _seed_batch(store, run_id)
-
-        result = store.claim_triage_batch(run_id)
-
+        run_id = _seed_batch(factory, run_repo)
+        result = triage_repo.claim_batch(run_id)
         assert result is not None
         assert result["status"] == "in_progress"
         assert result["run_attempts"] == 1
         assert result["started_at"] is not None
 
-    def test_two_concurrent_claims_no_duplication(self, store: SQLiteStore) -> None:
-        run_id = store.create_run({})
-        _seed_batch(store, run_id)
-
+    def test_two_concurrent_claims_no_duplication(
+        self,
+        factory: ConnectionFactory,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
+    ) -> None:
+        run_id = _seed_batch(factory, run_repo)
         results: list[dict | None] = [None, None]
 
         def _claim(idx: int) -> None:
-            results[idx] = store.claim_triage_batch(run_id)
+            results[idx] = triage_repo.claim_batch(run_id)
 
         t1 = threading.Thread(target=_claim, args=(0,))
         t2 = threading.Thread(target=_claim, args=(1,))
@@ -410,29 +516,44 @@ class TestAtomicBatchClaim:
         claimed = [r for r in results if r is not None]
         assert len(claimed) == 1, "exactly one thread should have claimed the batch"
 
-    def test_no_pending_batches_returns_none(self, store: SQLiteStore) -> None:
-        run_id = store.create_run({})
-        result = store.claim_triage_batch(run_id)
+    def test_no_pending_batches_returns_none(
+        self,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
+    ) -> None:
+        run_id = run_repo.create_run({})
+        result = triage_repo.claim_batch(run_id)
         assert result is None
 
-    def test_exhausted_attempts_never_claimed(self, store: SQLiteStore) -> None:
-        run_id = store.create_run({})
-        _seed_batch(store, run_id, status="pending", attempts=3)
-
-        result = store.claim_triage_batch(run_id)
+    def test_exhausted_attempts_never_claimed(
+        self,
+        factory: ConnectionFactory,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
+    ) -> None:
+        run_id = _seed_batch(factory, run_repo, status="pending", attempts=3)
+        result = triage_repo.claim_batch(run_id)
         assert result is None
 
     def test_complete_success_sets_status_and_completed_at(
-        self, store: SQLiteStore
+        self,
+        factory: ConnectionFactory,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
     ) -> None:
-        run_id = store.create_run({})
-        _seed_batch(store, run_id)
-        batch = store.claim_triage_batch(run_id)
+        run_id = _seed_batch(factory, run_repo)
+        batch = triage_repo.claim_batch(run_id)
         assert batch is not None
 
-        store.complete_triage_batch(batch["id"], "success")
+        triage_repo.complete_batch(batch["id"], "success")
 
-        with store._connect() as conn:  # noqa: SLF001
+        with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
                 (batch["id"],),
@@ -441,16 +562,20 @@ class TestAtomicBatchClaim:
         assert row["completed_at"] is not None
 
     def test_complete_failed_sets_status_and_completed_at(
-        self, store: SQLiteStore
+        self,
+        factory: ConnectionFactory,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
     ) -> None:
-        run_id = store.create_run({})
-        _seed_batch(store, run_id)
-        batch = store.claim_triage_batch(run_id)
+        run_id = _seed_batch(factory, run_repo)
+        batch = triage_repo.claim_batch(run_id)
         assert batch is not None
 
-        store.complete_triage_batch(batch["id"], "failed")
+        triage_repo.complete_batch(batch["id"], "failed")
 
-        with store._connect() as conn:  # noqa: SLF001
+        with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
                 (batch["id"],),
@@ -458,14 +583,20 @@ class TestAtomicBatchClaim:
         assert row["status"] == "failed"
         assert row["completed_at"] is not None
 
-    def test_claim_scoped_to_correct_run_id(self, store: SQLiteStore) -> None:
-        run_a = store.create_run({})
-        run_b = store.create_run({})
-        _seed_batch(store, run_b)
+    def test_claim_scoped_to_correct_run_id(
+        self,
+        factory: ConnectionFactory,
+        run_repo: RunRepository,
+        triage_repo: TriageBatchRepository,
+        finding_repo: FindingRepository,
+        audit_repo: AuditRepository,
+    ) -> None:
+        run_a = run_repo.create_run({})
+        run_b = _seed_batch(factory, run_repo)
 
-        result = store.claim_triage_batch(run_a)
+        result = triage_repo.claim_batch(run_a)
         assert result is None
 
-        result_b = store.claim_triage_batch(run_b)
+        result_b = triage_repo.claim_batch(run_b)
         assert result_b is not None
         assert result_b["run_id"] == run_b

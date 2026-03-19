@@ -179,17 +179,26 @@ class PurgeCommand:
         """Delete SQLite findings for the given tools, or full wipe if None."""
         assert self.repl.active_project is not None
         try:
-            from core.store.sqlite_store import SQLiteStore
+            from pathlib import Path
 
-            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
+            from core.store.connection import ConnectionFactory
+            from core.store.repositories.findings import FindingRepository
+
+            db_path = (
+                Path(self.repl.base_path)
+                / "projects"
+                / self.repl.active_project
+                / "sqlite"
+                / "findings.db"
+            )
+            factory = ConnectionFactory(db_path)
             if tools is None:
                 # Full wipe: delete and recreate the database file
-                db_path = store._db_path
-                if db_path.exists():
-                    db_path.unlink()
-                store._init_schema()
+                if factory.db_path.exists():
+                    factory.db_path.unlink()
+                factory.init_schema()
             else:
-                store.delete_findings(tools=tools)
+                FindingRepository(factory).delete_findings(tools=tools)
         except Exception as exc:
             self.repl.console.print(f"[yellow]SQLite purge warning:[/yellow] {exc}")
 

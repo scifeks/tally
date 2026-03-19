@@ -1,16 +1,17 @@
-"""SQLite structured findings store for tally security findings."""
+"""FindingRepository — CRUD and search for the findings table."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
-import sqlite3
 from collections.abc import Callable
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.tools.constants import FINDING_TYPES
+
+if TYPE_CHECKING:
+    from core.store.connection import ConnectionFactory
 
 logger = logging.getLogger(__name__)
 
@@ -141,159 +142,15 @@ def _normalise_cwe(val: Any) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# SQLiteStore
+# FindingRepository
 # ---------------------------------------------------------------------------
 
 
-class SQLiteStore:
-    """Structured findings store backed by SQLite.
+class FindingRepository:
+    """CRUD and search operations for the findings table."""
 
-    Database path::
-
-        <base_path>/projects/<project_name>/sqlite/findings.db
-    """
-
-    def __init__(self, base_path: str | Path, project_name: str) -> None:
-        self._db_path = (
-            Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
-        )
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_schema()
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
-        conn.execute("PRAGMA foreign_keys=ON")
-        return conn
-
-    def _init_schema(self) -> None:
-        """Create tables and indexes if they do not exist."""
-        with self._connect() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS runs (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    args       TEXT,
-                    created_at TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS run_tools (
-                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id         INTEGER,
-                    tool           TEXT,
-                    findings_count INTEGER DEFAULT 0
-                );
-
-                CREATE TABLE IF NOT EXISTS run_repos (
-                    id     INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id INTEGER,
-                    repo   TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS findings (
-                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                    fingerprint      TEXT UNIQUE,
-                    run_id           INTEGER,
-                    tool             TEXT,
-                    domain           TEXT,
-                    segment          TEXT,
-                    repo             TEXT,
-                    finding_type     TEXT,
-                    severity         TEXT,
-                    confidence       TEXT,
-                    file             TEXT,
-                    rule_id          TEXT,
-                    url              TEXT,
-                    host             TEXT,
-                    port             TEXT,
-                    vulnerability_id TEXT,
-                    package_name     TEXT,
-                    ecosystem        TEXT,
-                    description      TEXT,
-                    package_version  TEXT,
-                    cwe              TEXT,
-                    enriched         INTEGER DEFAULT 0,
-                    meta             TEXT DEFAULT '{}',
-                    first_seen       TEXT,
-                    last_seen        TEXT,
-                    seen_count       INTEGER,
-                    status           TEXT,
-                    triaged_at       TEXT,
-                    triaged_by       TEXT
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_findings_tool
-                    ON findings (tool);
-                CREATE INDEX IF NOT EXISTS idx_findings_severity
-                    ON findings (severity);
-                CREATE INDEX IF NOT EXISTS idx_findings_fingerprint
-                    ON findings (fingerprint);
-                CREATE INDEX IF NOT EXISTS idx_findings_segment
-                    ON findings (segment);
-                CREATE INDEX IF NOT EXISTS idx_findings_repo
-                    ON findings (repo);
-
-                CREATE TABLE IF NOT EXISTS tool_audit_log (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tool_name   TEXT    NOT NULL,
-                    arguments   TEXT,
-                    success     INTEGER NOT NULL DEFAULT 1,
-                    error       TEXT,
-                    duration_ms INTEGER,
-                    called_at   TEXT    NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS triage_batches (
-                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id       INTEGER,
-                    finding_ids  JSON NOT NULL,
-                    batch_data   JSON NOT NULL,
-                    status       TEXT NOT NULL DEFAULT 'pending',
-                    run_attempts INTEGER NOT NULL DEFAULT 0,
-                    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-                    started_at   TEXT,
-                    completed_at TEXT
-                );
-            """)
-
-    # ------------------------------------------------------------------
-    # Run management
-    # ------------------------------------------------------------------
-
-    def create_run(self, args: dict) -> int:
-        """Insert a new run record. Returns the run_id (int)."""
-        from datetime import UTC, datetime
-
-        created_at = datetime.now(UTC).isoformat()
-        with self._connect() as conn:
-            cur = conn.execute(
-                "INSERT INTO runs (args, created_at) VALUES (?, ?)",
-                (json.dumps(args), created_at),
-            )
-            return cur.lastrowid  # type: ignore[return-value]
-
-    def add_run_tools(self, run_id: int, tools: list[dict]) -> None:
-        """Insert one row per tool for a run."""
-        with self._connect() as conn:
-            conn.executemany(
-                "INSERT INTO run_tools (run_id, tool, findings_count) VALUES (?, ?, ?)",
-                [
-                    (run_id, t.get("tool", ""), t.get("findings_count", 0))
-                    for t in tools
-                ],
-            )
-
-    def add_run_repos(self, run_id: int, repos: list[str]) -> None:
-        """Insert one row per repo for a run."""
-        with self._connect() as conn:
-            conn.executemany(
-                "INSERT INTO run_repos (run_id, repo) VALUES (?, ?)",
-                [(run_id, repo) for repo in repos],
-            )
-
-    # ------------------------------------------------------------------
-    # Findings management
-    # ------------------------------------------------------------------
+    def __init__(self, factory: ConnectionFactory) -> None:
+        self._factory = factory
 
     def upsert_findings(self, run_id: int, findings: list[dict]) -> None:
         """Insert or update findings rows.
@@ -404,7 +261,7 @@ class SQLiteStore:
                 last_seen       = excluded.last_seen,
                 seen_count      = COALESCE(seen_count, 0) + 1
         """
-        with self._connect() as conn:
+        with self._factory.connect() as conn:
             conn.executemany(sql, rows_with_ts)
 
     def delete_findings(self, tools: list[str] | None = None) -> None:
@@ -415,7 +272,7 @@ class SQLiteStore:
         ``tools=[...]``  — DELETE FROM findings WHERE tool IN (...).
                            Does NOT delete run / run_tools / run_repos rows.
         """
-        with self._connect() as conn:
+        with self._factory.connect() as conn:
             if tools is None:
                 conn.execute("DELETE FROM findings")
                 conn.execute("DELETE FROM run_tools")
@@ -432,7 +289,7 @@ class SQLiteStore:
         self, tool_name: str, sample: int = 200
     ) -> tuple[int, set[str]]:
         """Return (total_row_count, union_of_meta_keys) for tool_name."""
-        with self._connect() as conn:
+        with self._factory.connect() as conn:
             count = conn.execute(
                 "SELECT COUNT(*) FROM findings WHERE tool = ?", (tool_name,)
             ).fetchone()[0]
@@ -452,7 +309,7 @@ class SQLiteStore:
 
     def get_finding(self, finding_id: int) -> dict | None:
         """Return a single finding row by primary key, or None if not found."""
-        with self._connect() as conn:
+        with self._factory.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM findings WHERE id = ?", (finding_id,)
             ).fetchone()
@@ -493,170 +350,71 @@ class SQLiteStore:
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         params.append(limit)
         sql = f"SELECT * FROM findings {where} LIMIT ?"
-        with self._connect() as conn:
+        with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
-    def create_triage_batches(
-        self, run_id: int, tool: str, repo: str, segment: str
-    ) -> int:
-        """Fetch active findings, compute batches, and persist to triage_batches.
+    def update_finding(
+        self,
+        finding_id: int,
+        confidence: str,
+        finding_type: str,
+        severity: str,
+        reasoning: str,
+        remediation: str,
+        attack_vector: str | None,
+        call_stack: str | None,
+        strategy: str,
+    ) -> bool:
+        """Update enrichment fields on a finding row.
 
-        Returns the number of batches written.
+        Returns True on success.  Raises ValueError if the finding is not found.
         """
-        from tally_mcp.batching import compute_batches
+        from datetime import UTC, datetime
 
-        params = (segment, tool, repo)
-        if segment == "api":
-            sql = """
-                SELECT
-                    id, repo, url, tool, severity, confidence, description,
-                    json_extract(meta, '$.remediation') AS remediation,
-                    json_extract(meta, '$.method') AS method,
-                    json_extract(meta, '$.param') AS param,
-                    json_extract(meta, '$.evidence') AS evidence,
-                    json_extract(meta, '$.risk_type') AS risk_type,
-                    json_extract(meta, '$.cwe_id') AS cwe_id,
-                    json_extract(meta, '$.alert_name') AS alert_name
-                FROM findings
-                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
-                ORDER BY severity DESC, url, json_extract(meta, '$.risk_type')
-            """
-        elif segment == "sast":
-            sql = """
-                SELECT
-                    id, repo, file, tool, rule_id, severity, confidence,
-                    description, cwe,
-                    json_extract(meta, '$.line_start') AS line_start,
-                    json_extract(meta, '$.code_snippet') AS code_snippet,
-                    json_extract(meta, '$.risk_type') AS risk_type,
-                    json_extract(meta, '$.owasp') AS owasp
-                FROM findings
-                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
-                ORDER BY
-                    severity DESC,
-                    file,
-                    CAST(json_extract(meta, '$.line_start') AS INTEGER)
-            """
-        else:
-            return 0
-
-        with self._connect() as conn:
-            rows = conn.execute(sql, params).fetchall()
-        findings = [dict(row) for row in rows]
-
-        batches = compute_batches(findings)
-        if not batches:
-            return 0
-
-        insert_rows = [
-            (
-                run_id,
-                json.dumps([f["id"] for f in batch]),
-                json.dumps(batch),
-                "pending",
-                0,
-            )
-            for batch in batches
-        ]
-        with self._connect() as conn:
-            conn.executemany(
-                "INSERT INTO triage_batches"
-                " (run_id, finding_ids, batch_data, status, run_attempts)"
-                " VALUES (?, ?, ?, ?, ?)",
-                insert_rows,
-            )
-        return len(batches)
-
-    def claim_triage_batch(self, run_id: int) -> dict | None:
-        """Atomically claims the next pending batch for *run_id*.
-
-        Returns the batch row as a dict (with JSON columns parsed) or None
-        if no claimable batch exists.
-        """
-        with self._connect() as conn:
-            row = conn.execute(
-                """
-                UPDATE triage_batches
-                SET
-                    status       = 'in_progress',
-                    started_at   = datetime('now'),
-                    run_attempts = run_attempts + 1
-                WHERE id = (
-                    SELECT id FROM triage_batches
-                    WHERE  status       = 'pending'
-                      AND  run_attempts < 3
-                      AND  run_id       = ?
-                    ORDER BY id ASC
-                    LIMIT 1
-                )
-                RETURNING *
-                """,
-                (run_id,),
-            ).fetchone()
+        row = self.get_finding(finding_id)
         if row is None:
-            return None
-        result = dict(row)
-        result["batch_data"] = json.loads(result["batch_data"])
-        result["finding_ids"] = json.loads(result["finding_ids"])
-        return result
-
-    def complete_triage_batch(self, batch_id: int, status: str) -> None:
-        """Sets status and completed_at on the given batch."""
-        with self._connect() as conn:
+            raise ValueError(f"Finding {finding_id} not found")
+        previous_confidence = row["confidence"]
+        existing_meta = json.loads(row["meta"] or "{}")
+        now_iso = datetime.now(UTC).isoformat()
+        existing_meta["triage"] = {
+            "confidence": confidence,
+            "previous_confidence": previous_confidence,
+            "reasoning": reasoning,
+            "remediation": remediation,
+            "attack_vector": attack_vector,
+            "call_stack": call_stack,
+            "triaged_by": "claude-code",
+            "triaged_at": now_iso,
+            "strategy": strategy,
+        }
+        updated_meta = json.dumps(existing_meta)
+        finding_type_db = json.dumps([finding_type])
+        with self._factory.connect() as conn:
             conn.execute(
-                """
-                UPDATE triage_batches
-                SET status = ?, completed_at = datetime('now')
-                WHERE id = ?
-                """,
-                (status, batch_id),
+                "UPDATE findings "
+                "SET confidence = ?, "
+                "    finding_type = ?, "
+                "    severity = ?, "
+                "    enriched = 1, "
+                "    last_seen = ?, "
+                "    triaged_at = ?, "
+                "    triaged_by = 'claude-code', "
+                "    meta = ? "
+                "WHERE id = ?",
+                (
+                    confidence,
+                    finding_type_db,
+                    severity,
+                    now_iso,
+                    now_iso,
+                    updated_meta,
+                    finding_id,
+                ),
             )
+        return True
 
-    def reset_stale_triage_batches(self, run_id: int) -> int:
-        """Reset in_progress batches for run_id back to pending.
-
-        Returns the number of batches reset.
-        """
-        with self._connect() as conn:
-            cur = conn.execute(
-                "UPDATE triage_batches"
-                " SET status = 'pending', started_at = NULL"
-                " WHERE status = 'in_progress' AND run_id = ?",
-                (run_id,),
-            )
-            return cur.rowcount
-
-    def get_active_finding_combos(
-        self, skip_tools: frozenset[str]
-    ) -> list[tuple[str, str, str]]:
-        """Return distinct (tool, repo, segment) tuples for active, segmented findings.
-
-        Excludes any tool in skip_tools.
-        """
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT DISTINCT tool, repo, segment FROM findings"
-                " WHERE status = 'active' AND segment IS NOT NULL",
-            ).fetchall()
-        return [
-            (r["tool"], r["repo"], r["segment"])
-            for r in rows
-            if r["tool"] not in skip_tools
-        ]
-
-    def count_audit_events_since(self, tool_names: tuple[str, ...], since: str) -> int:
-        """Count audit log entries for tool_names recorded at or after since."""
-        placeholders = ",".join("?" * len(tool_names))
-        with self._connect() as conn:
-            row = conn.execute(
-                f"SELECT COUNT(*) FROM tool_audit_log"
-                f" WHERE tool_name IN ({placeholders}) AND called_at >= ?",
-                (*tool_names, since),
-            ).fetchone()
-        return row[0] if row else 0
-
-    # todo: The size of this method is out of control. break it on down
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 
@@ -701,7 +459,6 @@ class SQLiteStore:
                         )
                         params.extend(values)
                 elif op == "~=":
-                    # OR semantics: row matches if any element contains any substring.
                     like_clauses = " OR ".join("json_each.value LIKE ?" for _ in values)
                     where_parts.append(
                         f"EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
@@ -735,7 +492,7 @@ class SQLiteStore:
         sql += " LIMIT ? OFFSET ?"
         params.extend([page_size, offset])
 
-        with self._connect() as conn:
+        with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
 
         results: list[dict] = []
