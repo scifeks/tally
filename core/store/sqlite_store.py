@@ -645,14 +645,6 @@ class SQLiteStore:
             if r["tool"] not in skip_tools
         ]
 
-    def get_untriaged_findings(self) -> list[tuple[int, str]]:
-        """Return (id, tool) for all findings where triaged_at IS NULL."""
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT id, tool FROM findings WHERE triaged_at IS NULL"
-            ).fetchall()
-        return [(r["id"], r["tool"]) for r in rows]
-
     def count_audit_events_since(self, tool_names: tuple[str, ...], since: str) -> int:
         """Count audit log entries for tool_names recorded at or after since."""
         placeholders = ",".join("?" * len(tool_names))

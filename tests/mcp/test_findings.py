@@ -232,8 +232,8 @@ async def test_update_findings_batch_mixed(store: SQLiteStore) -> None:
     ]
     result = await findings.update_findings_batch(updates)
 
-    assert result[fid_valid] is True
-    assert result[fid_bad] is False
+    assert result[str(fid_valid)]["status"] == "updated"
+    assert result[str(fid_bad)]["status"] == "error"
 
     # Valid one was actually updated
     row = await findings.get_finding(fid_valid)

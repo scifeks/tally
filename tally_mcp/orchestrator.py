@@ -21,6 +21,12 @@ def run_triage_batch_only(project: str) -> int:
     return total
 
 
+def run_triage_dry_run(project: str) -> int:
+    """Batch phase + render prompts to DEBUG log. No MCP server, no Claude."""
+    runner = TriageRunner.for_project(project)
+    return runner.run_dry_run()
+
+
 if __name__ == "__main__":
     import argparse
 

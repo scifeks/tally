@@ -32,6 +32,10 @@ class BaseGitleaksTool(ToolInterface):
         return "secrets"
 
     @property
+    def skip(self) -> bool:
+        return True
+
+    @property
     def findings_exit_ok(self) -> bool:
         return True
 

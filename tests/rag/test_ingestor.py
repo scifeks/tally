@@ -12,8 +12,11 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from core.config.schemas import Repository  # noqa: E402
+
+# todo: fix this architecture
 from core.rag.ingestor import (  # noqa: E402
     FindingIngestor,
+    _is_test_path,
     _normalize_path,
 )
 from core.tools.base import ToolResult  # noqa: E402
@@ -23,7 +26,7 @@ from core.tools.base import ToolResult  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-def _repo(name: str, path: str) -> Repository:
+def _repo(name: str, path: str, test_dirs: list[str] | None = None) -> Repository:
     return Repository.model_construct(
         name=name,
         path=path,
@@ -32,6 +35,7 @@ def _repo(name: str, path: str) -> Repository:
         container_name="",
         languages=["python"],
         base_urls=[],
+        test_dirs=test_dirs if test_dirs is not None else [],
     )
 
 
@@ -177,3 +181,125 @@ class TestBuildChunks:
         assert len(result) == 1
         assert result[0][1]["file_path"] == "/other/path/file.py"
         assert result[0][1].get("repo") is None
+
+
+# ---------------------------------------------------------------------------
+# _is_test_path unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestIsTestPath:
+    def test_file_inside_test_dir_returns_true(self) -> None:
+        assert _is_test_path("/tests/foo.py", ["tests"]) is True
+
+    def test_file_outside_test_dir_returns_false(self) -> None:
+        assert _is_test_path("/src/foo.py", ["tests"]) is False
+
+    def test_exact_test_dir_path_returns_true(self) -> None:
+        assert _is_test_path("/tests", ["tests"]) is True
+
+    def test_empty_test_dirs_returns_false(self) -> None:
+        assert _is_test_path("/tests/foo.py", []) is False
+
+    def test_multiple_test_dirs_matches_any(self) -> None:
+        assert _is_test_path("/spec/auth_spec.py", ["tests", "spec"]) is True
+
+    def test_partial_name_not_matched(self) -> None:
+        # /integration_tests/ should not match test dir "tests"
+        assert _is_test_path("/integration_tests/foo.py", ["tests"]) is False
+
+
+# ---------------------------------------------------------------------------
+# TestTestDirFiltering — integration via _build_chunks
+# ---------------------------------------------------------------------------
+
+
+class _NetworkStubBuilder:
+    """Stub for a non-code-domain tool (e.g. nmap)."""
+
+    tool_name = "nmap"
+    domain = "network"
+    segment = "network"
+    non_enriched_fields: frozenset[str] = frozenset()
+    type_flags: dict[str, set[str]] = {}
+    should_enrich = False
+
+    def __init__(
+        self, chunks: list[tuple[str, dict[str, Any], str]] | None = None
+    ) -> None:
+        self._chunks = chunks or []
+
+    def build(
+        self, result: ToolResult, profile: str
+    ) -> list[tuple[str, dict[str, Any], str]]:
+        return list(self._chunks)
+
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return str(finding)
+
+
+class TestTestDirFiltering:
+    def _make_ingestor(
+        self,
+        chunks: list[tuple[str, dict[str, Any], str]],
+        repos: list[Repository],
+        tool_name: str = "semgrep",
+        network: bool = False,
+    ) -> FindingIngestor:
+        if network:
+            builder: _StubBuilder | _NetworkStubBuilder = _NetworkStubBuilder(chunks)
+        else:
+            builder = _StubBuilder(chunks)
+        rag_engine = MagicMock()
+        return FindingIngestor(
+            rag_engine=rag_engine,
+            project_name="test",
+            builders={tool_name: builder},  # type: ignore[dict-item]
+            repositories=repos,
+        )
+
+    def test_excludes_file_in_test_dir(self) -> None:
+        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
+        chunks = [("text", {"file_path": "/repos/app/tests/x.py"}, "id1")]
+        ingestor = self._make_ingestor(chunks, repos)
+        result = ingestor._build_chunks(_tool_result(), "default")
+        assert result == []
+
+    def test_includes_src_file(self) -> None:
+        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
+        chunks = [("text", {"file_path": "/repos/app/src/x.py"}, "id1")]
+        ingestor = self._make_ingestor(chunks, repos)
+        result = ingestor._build_chunks(_tool_result(), "default")
+        assert len(result) == 1
+        assert result[0][1]["file_path"] == "/src/x.py"
+
+    def test_excludes_exact_test_dir_path(self) -> None:
+        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
+        # rel_path would be "/tests" (no trailing file)
+        chunks = [("text", {"file_path": "/repos/app/tests"}, "id1")]
+        ingestor = self._make_ingestor(chunks, repos)
+        result = ingestor._build_chunks(_tool_result(), "default")
+        assert result == []
+
+    def test_no_filter_when_test_dirs_empty(self) -> None:
+        repos = [_repo("myapp", "/repos/app", test_dirs=[])]
+        chunks = [("text", {"file_path": "/repos/app/tests/x.py"}, "id1")]
+        ingestor = self._make_ingestor(chunks, repos)
+        result = ingestor._build_chunks(_tool_result(), "default")
+        assert len(result) == 1
+
+    def test_no_filter_when_repo_not_matched(self) -> None:
+        # file path doesn't start with any known repo prefix → repo_name is None
+        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
+        chunks = [("text", {"file_path": "/other/tests/x.py"}, "id1")]
+        ingestor = self._make_ingestor(chunks, repos)
+        result = ingestor._build_chunks(_tool_result(), "default")
+        assert len(result) == 1
+
+    def test_no_filter_for_non_code_domain(self) -> None:
+        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
+        chunks = [("text", {"file_path": "/repos/app/tests/x.py"}, "id1")]
+        ingestor = self._make_ingestor(chunks, repos, tool_name="nmap", network=True)
+        result = ingestor._build_chunks(_tool_result("nmap"), "default")
+        # network domain — no path filtering applied
+        assert len(result) == 1

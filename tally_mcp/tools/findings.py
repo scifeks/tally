@@ -76,6 +76,16 @@ def _reconstruct_abs_path(
     return None
 
 
+def _resolve_repo_path(repo_name: str | None, repos: list[dict]) -> str | None:
+    """Return the base directory path for *repo_name*, or None."""
+    if not repo_name:
+        return None
+    for r in repos:
+        if r["name"] == repo_name:
+            return r["path"]
+    return None
+
+
 async def get_finding(finding_id: int) -> dict:
     """Retrieve a single finding by its primary-key ID.
 
@@ -101,17 +111,17 @@ async def get_finding(finding_id: int) -> dict:
         except FileNotFoundError:
             pass
     row["abs_path"] = _reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
+    row["repo_path"] = _resolve_repo_path(row.get("repo"), repos)
     return row
 
 
-async def get_findings_batch(run_id: int) -> dict | None:
-    """Atomically claims and returns the next pending batch for *run_id*.
-
-    Returns the batch dict (including batch_data and finding_ids) or None
-    if no pending batches remain.
-    """
-    assert _store is not None
-    return await asyncio.to_thread(_store.claim_triage_batch, run_id)
+async def get_findings_batch(finding_ids: list[int]) -> list[dict]:
+    """Return enriched finding data for the given IDs."""
+    return [
+        finding
+        for fid in finding_ids
+        if (finding := await get_finding(fid)) is not None
+    ]
 
 
 async def complete_triage_batch(
@@ -249,11 +259,16 @@ async def update_finding(
 async def update_findings_batch(updates: list[dict]) -> dict:
     """Apply updates to multiple findings in a single call."""
     results: dict = {}
-    for payload in updates:
-        finding_id = payload["finding_id"]
+    for i, payload in enumerate(updates):
         try:
+            finding_id = payload["finding_id"]
             await update_finding(**payload)
-            results[finding_id] = True
-        except Exception:
-            results[finding_id] = False
+            results[str(finding_id)] = {"finding_id": finding_id, "status": "updated"}
+        except Exception as exc:
+            key = payload.get("finding_id", i)
+            results[str(key)] = {
+                "finding_id": key,
+                "status": "error",
+                "error": str(exc),
+            }
     return results

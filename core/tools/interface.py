@@ -106,6 +106,12 @@ class ToolInterface(ABC):
         ...
 
     @property
+    @abstractmethod
+    def skip(self) -> bool:
+        """True if this tool produces no triage-able findings (e.g. nmap)."""
+        ...
+
+    @property
     def display_fields(self) -> list[str]:
         """Optional ordered list of field names to show in result tables."""
         return []

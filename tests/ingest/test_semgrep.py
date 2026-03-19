@@ -18,9 +18,12 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from core.config.schemas import Repository  # noqa: E402
 from core.project import ProjectManager  # noqa: E402
 from core.rag import FindingIngestor, RAGEngine  # noqa: E402
 from core.tools.base import ToolResult  # noqa: E402
+from core.tools.interface import ExecutionContext  # noqa: E402
+from core.tools.wrappers.local.semgrep import SemgrepLocalTool  # noqa: E402
 
 _OLLAMA_URL = "http://localhost:11434"
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ingest"
@@ -271,3 +274,71 @@ class TestSemgrepIngestor:
         assert isinstance(doc_ids, list)
         assert len(doc_ids) == 2
         assert all(isinstance(i, str) for i in doc_ids)
+
+
+# ---------------------------------------------------------------------------
+# build_execution_passes tests
+# ---------------------------------------------------------------------------
+
+
+def _make_repo(path: str, test_dirs: list[str]) -> Repository:
+    return Repository.model_construct(
+        name="test-repo",
+        type=["api"],
+        path=path,
+        docker_path="",
+        container_name="",
+        languages=["python"],
+        base_urls=[],
+        test_dirs=test_dirs,
+    )
+
+
+def _make_context(repo: Repository) -> ExecutionContext:
+    from unittest.mock import MagicMock
+
+    registry = MagicMock()
+    registry.get_repo_path.return_value = repo.path or "/repo"
+    config_manager = MagicMock()
+    return ExecutionContext(
+        project_name="test",
+        base_path="/tmp",
+        repo=repo,
+        config_manager=config_manager,
+        registry=registry,
+        is_docker=False,
+    )
+
+
+class TestSemgrepBuildExecutionPasses:
+    def test_passes_exclude_from_test_dirs(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        repo = _make_repo(str(repo_dir), ["tests", "spec"])
+        ctx = _make_context(repo)
+        tool = SemgrepLocalTool(config=None)
+        passes = tool.build_execution_passes(ctx)
+        assert len(passes) == 1
+        assert passes[0].kwargs["exclude"] == ["tests", "spec"]
+
+    def test_no_exclude_when_empty_and_no_auto_detect(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        # no test subdirs in repo_dir
+        repo = _make_repo(str(repo_dir), [])
+        ctx = _make_context(repo)
+        tool = SemgrepLocalTool(config=None)
+        passes = tool.build_execution_passes(ctx)
+        assert len(passes) == 1
+        assert "exclude" not in passes[0].kwargs
+
+    def test_auto_detects_exclude_when_test_dirs_empty(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        (repo_dir / "tests").mkdir()
+        repo = _make_repo(str(repo_dir), [])
+        ctx = _make_context(repo)
+        tool = SemgrepLocalTool(config=None)
+        passes = tool.build_execution_passes(ctx)
+        assert len(passes) == 1
+        assert passes[0].kwargs["exclude"] == ["tests"]

@@ -33,6 +33,10 @@ class BaseOSVScannerTool(ToolInterface):
         return "sca"
 
     @property
+    def skip(self) -> bool:
+        return False
+
+    @property
     def findings_exit_ok(self) -> bool:
         return True
 

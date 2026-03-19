@@ -90,6 +90,19 @@ def get_tool_domain(tool_name: str) -> str | None:
     return builder.domain if builder is not None else None
 
 
+def _is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
+    """Return True if rel_path falls inside one of the given test dirs.
+
+    rel_path must start with '/': e.g. '/tests/foo.py'.
+    test_dirs are bare names or relative sub-paths: e.g. ['tests', 'spec'].
+    """
+    for td in test_dirs:
+        prefix = f"/{td}/"
+        if rel_path.startswith(prefix) or rel_path == f"/{td}":
+            return True
+    return False
+
+
 def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, str | None]:
     """Return (relative_path, repo_name) for file_path.
 
@@ -136,6 +149,9 @@ class FindingIngestor:
             builders if builders is not None else _default_builders()
         )
         self._repositories = repositories
+        self._repo_test_dirs: dict[str, list[str]] = {
+            r.name: r.test_dirs for r in (repositories or []) if r.test_dirs
+        }
 
     def ingest_tool_output(
         self,
@@ -217,6 +233,16 @@ class FindingIngestor:
                     meta.get("rule_id", ""),
                 )
                 continue
+
+            if builder.domain == "code" and repo_name is not None and rel_path:
+                _tdirs = self._repo_test_dirs.get(repo_name, [])
+                if _tdirs and _is_test_path(rel_path, _tdirs):
+                    logger.debug(
+                        "Excluding test-dir chunk: tool=%s path=%s",
+                        tool,
+                        rel_path,
+                    )
+                    continue
 
             chunks.append((text, meta, doc_id))
 

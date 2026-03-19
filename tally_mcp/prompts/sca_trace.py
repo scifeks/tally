@@ -29,11 +29,10 @@ context and provide actionable remediation.
    - finding_ids: [{ids_repr}]
    - project: "{project}"
 
-2. Call `get_project_config` to get repository paths.
-
-3. For each finding:
-   a. Use ripgrep to check whether the vulnerable package is actively imported
-      or used in the project source (not just listed in a manifest).
+2. For each finding:
+   a. Use the Grep tool to search within `finding["repo_path"]` to check
+      whether the vulnerable package is actively imported or used in the
+      project source (not just listed in a manifest).
    b. If the CVSS vector is present in the finding data, confirm or adjust
       the severity score in context — a network-exploitable vuln in a
       package used only for CLI tooling may warrant a lower effective
@@ -42,8 +41,11 @@ context and provide actionable remediation.
    d. Determine specific remediation: preferred upgrade target version, or a
       replacement package if no safe version exists.
 
-4. Call `update_findings_batch` with your assessment for ALL findings before
+3. Call `update_findings_batch` with your assessment for ALL findings before
    exiting. You MUST call this tool — do not exit without writing results.
+   Use ONLY `update_findings_batch` to write results. Do NOT call
+   `update_finding` directly. Once `update_findings_batch` returns a result,
+   immediately exit. Do NOT call any tools after this point.
 
 ## Epistemic Conservatism
 
@@ -56,10 +58,11 @@ context and provide actionable remediation.
 ## Output Fields (per finding)
 
 Each update must include:
-- id            : the finding ID (required — never omit)
+- finding_id    : the finding ID (required — never omit)
 - confidence    : one of confirmed | probable | potential | false_positive
-- finding_type  : short label, e.g. "vulnerable_dependency", "outdated_package"
-- severity      : critical | high | medium | low | info
+- finding_type  : one of vulnerability | weakness | misconfiguration |
+                  exposure | dependency | informational | secret
+- severity      : critical | high | medium | low | informational
 - reasoning     : whether the package is actively used, CVSS context, PoC
                   availability, and your overall risk assessment
 - remediation   : specific fix — "upgrade X to >= Y.Z" or "replace X with W"

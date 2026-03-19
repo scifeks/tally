@@ -48,6 +48,18 @@ _LANG_INDICATORS = [
 ]
 
 
+_TEST_DIR_NAMES: frozenset[str] = frozenset(
+    {"test", "tests", "spec", "__tests__", "e2e"}
+)
+
+
+def _detect_test_dirs(repo_path: Path) -> list[str]:
+    """Return sorted top-level subdir names that match known test dir names."""
+    return sorted(
+        e.name for e in repo_path.iterdir() if e.is_dir() and e.name in _TEST_DIR_NAMES
+    )
+
+
 def _detect_languages(repo_path: Path) -> list[str]:
     """Scan repo_path and return detected language names."""
     detected: list[str] = []
@@ -298,6 +310,19 @@ class ProjectManager:
         url_input = _prompt("  Base URLs (comma-separated, optional)")
         base_urls = [u.strip() for u in url_input.split(",") if u.strip()]
 
+        # Test dirs
+        detect_path = Path(local_path_str) if local_path_str else None
+        auto_test_dirs = _detect_test_dirs(detect_path) if detect_path else []
+        if auto_test_dirs:
+            auto_label = ", ".join(auto_test_dirs)
+            test_dirs_prompt = f"  Test dirs (detected {auto_label})"
+            test_dirs_default = auto_label
+        else:
+            test_dirs_prompt = "  Test dirs (comma-separated, optional)"
+            test_dirs_default = ""
+        test_dirs_input = _prompt(test_dirs_prompt, default=test_dirs_default)
+        test_dirs = [d.strip() for d in test_dirs_input.split(",") if d.strip()]
+
         return Repository(
             name=name,
             type=types,
@@ -306,6 +331,7 @@ class ProjectManager:
             container_name=container_name,
             languages=langs,
             base_urls=base_urls,
+            test_dirs=test_dirs,
         )
 
     def edit_repository(self, project_name: str, repo_name: str) -> Repository | None:
@@ -420,6 +446,22 @@ class ProjectManager:
             )
             base_urls = [u.strip() for u in url_input.split(",") if u.strip()]
 
+            # Test dirs
+            detect_path = Path(local_path_str) if local_path_str else None
+            auto_test_dirs = _detect_test_dirs(detect_path) if detect_path else []
+            if auto_test_dirs:
+                auto_label = ", ".join(auto_test_dirs)
+                test_dirs_prompt = f"  Test dirs (detected {auto_label})"
+                test_dirs_default = auto_label
+            else:
+                current_test = (
+                    ", ".join(existing.test_dirs) if existing.test_dirs else ""
+                )
+                test_dirs_prompt = "  Test dirs (comma-separated, optional)"
+                test_dirs_default = current_test
+            test_dirs_input = _prompt(test_dirs_prompt, default=test_dirs_default)
+            test_dirs = [d.strip() for d in test_dirs_input.split(",") if d.strip()]
+
             updated = Repository(
                 name=name,
                 type=types,
@@ -428,6 +470,7 @@ class ProjectManager:
                 container_name=container_name,
                 languages=langs,
                 base_urls=base_urls,
+                test_dirs=test_dirs,
             )
             repos[idx] = updated
             self.config.save_repositories(project_name, repos)
