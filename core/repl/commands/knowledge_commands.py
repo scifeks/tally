@@ -113,8 +113,12 @@ class KnowledgeCommands:
         if query_engine is None:
             return
 
-        with self.repl.console.status("Thinking..."):
-            response = query_engine.chat(message)
+        try:
+            with self.repl.console.status("Thinking..."):
+                response = query_engine.chat(message)
+        except Exception as exc:
+            self.repl.console.print(f"[red]Chat error:[/red] {exc}")
+            return
 
         self.repl.console.print(
             Panel(

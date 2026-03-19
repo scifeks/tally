@@ -99,11 +99,7 @@ class QueryEngine:
             }
             if query.where_filter:
                 kwargs["where"] = query.where_filter
-            try:
-                raw = self._engine.query_collection(**kwargs)
-            except Exception as exc:
-                logger.warning("search query failed: %s", exc)
-                return []
+            raw = self._engine.query_collection(**kwargs)
             docs = (raw.get("documents") or [[]])[0]
             metas = (raw.get("metadatas") or [[]])[0]
             dists = (raw.get("distances") or [[]])[0]
@@ -122,11 +118,7 @@ class QueryEngine:
             }
             if query.where_filter:
                 kwargs_get["where"] = query.where_filter
-            try:
-                raw_get = self._engine.get_documents(**kwargs_get)
-            except Exception as exc:
-                logger.warning("metadata search failed: %s", exc)
-                return []
+            raw_get = self._engine.get_documents(**kwargs_get)
             docs_g = raw_get.get("documents") or []
             metas_g = raw_get.get("metadatas") or []
             return [
@@ -143,7 +135,7 @@ class QueryEngine:
                        tool filter is detected, all docs for that tool are used.
 
         Returns:
-            LLM response string, or a user-facing error message string.
+            LLM response string.
         """
         if not message.strip():
             return "Please provide a message."
@@ -166,12 +158,8 @@ class QueryEngine:
 
         system_prompt = _SYSTEM_PROMPT.format(context=context)
 
-        try:
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message},
-            ]
-            return self._provider.chat(messages, temperature=0.7, num_predict=2000)
-        except Exception as exc:
-            logger.error("LLM chat failed: %s", exc)
-            return f"LLM error: {exc}"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message},
+        ]
+        return self._provider.chat(messages, temperature=0.7, num_predict=2000)
