@@ -16,11 +16,50 @@ from core.repl.search_command_parser import (  # noqa: E402
     SearchValidationError,
     parse_sqlite_search_command,
 )
-from core.store.sqlite_store import (  # noqa: E402
-    SQLiteStore,
+from core.store.connection import ConnectionFactory  # noqa: E402
+from core.store.repositories.findings import (  # noqa: E402
+    FindingRepository,
     _normalise_cwe,
     _normalise_finding_type,
 )
+from core.store.repositories.runs import RunRepository  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_store(
+    tmp_path: Path,
+) -> tuple[ConnectionFactory, RunRepository, FindingRepository]:
+    factory = ConnectionFactory(
+        tmp_path / "projects" / "proj" / "sqlite" / "findings.db"
+    )
+    factory.init_schema()
+    return factory, RunRepository(factory), FindingRepository(factory)
+
+
+def _seed_two_tools(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
+    run_id = run_repo.create_run({})
+    finding_repo.upsert_findings(
+        run_id,
+        [
+            {
+                "tool": "semgrep",
+                "severity": "high",
+                "file_path": "foo.py",
+                "rule_id": "r1",
+            },
+            {
+                "tool": "gitleaks",
+                "severity": "critical",
+                "file_path": "bar.py",
+                "rule_id": "g1",
+                "line_number": 1,
+            },
+        ],
+    )
+
 
 # ---------------------------------------------------------------------------
 # Validated flags — rejection / acceptance
@@ -61,7 +100,6 @@ class TestValidatedFlags:
             parse_sqlite_search_command(["--domain=space"], self._known)
 
     def test_contains_bypasses_validation(self) -> None:
-        """~= on a validated flag should not raise for out-of-vocabulary values."""
         result = parse_sqlite_search_command(["--severity~=crit"], self._known)
         assert result["conditions"][0][1] == "~="
 
@@ -113,38 +151,38 @@ class TestValidatedFlags:
 
 class TestRunManagement:
     def test_create_run_returns_int(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        run_id = store.create_run({"tool": "gitleaks"})
+        _, run_repo, _ = _make_store(tmp_path)
+        run_id = run_repo.create_run({"tool": "gitleaks"})
         assert isinstance(run_id, int)
         assert run_id >= 1
 
     def test_add_run_tools_inserts_row_per_tool(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        run_id = store.create_run({})
-        store.add_run_tools(
+        factory, run_repo, _ = _make_store(tmp_path)
+        run_id = run_repo.create_run({})
+        run_repo.add_run_tools(
             run_id,
             [
                 {"tool": "gitleaks", "findings_count": 3},
                 {"tool": "semgrep", "findings_count": 1},
             ],
         )
-        conn = store._connect()
-        rows = conn.execute(
-            "SELECT tool FROM run_tools WHERE run_id=?", (run_id,)
-        ).fetchall()
+        with factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT tool FROM run_tools WHERE run_id=?", (run_id,)
+            ).fetchall()
         tools = [r[0] for r in rows]
         assert "gitleaks" in tools
         assert "semgrep" in tools
         assert len(tools) == 2
 
     def test_add_run_repos_inserts_row_per_repo(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        run_id = store.create_run({})
-        store.add_run_repos(run_id, ["repo-a", "repo-b", "repo-c"])
-        conn = store._connect()
-        rows = conn.execute(
-            "SELECT repo FROM run_repos WHERE run_id=?", (run_id,)
-        ).fetchall()
+        factory, run_repo, _ = _make_store(tmp_path)
+        run_id = run_repo.create_run({})
+        run_repo.add_run_repos(run_id, ["repo-a", "repo-b", "repo-c"])
+        with factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT repo FROM run_repos WHERE run_id=?", (run_id,)
+            ).fetchall()
         assert len(rows) == 3
 
 
@@ -153,62 +191,39 @@ class TestRunManagement:
 # ---------------------------------------------------------------------------
 
 
-def _seed_two_tools(store: SQLiteStore) -> None:
-    run_id = store.create_run({})
-    store.upsert_findings(
-        run_id,
-        [
-            {
-                "tool": "semgrep",
-                "severity": "high",
-                "file_path": "foo.py",
-                "rule_id": "r1",
-            },
-            {
-                "tool": "gitleaks",
-                "severity": "critical",
-                "file_path": "bar.py",
-                "rule_id": "g1",
-                "line_number": 1,
-            },
-        ],
-    )
-
-
 class TestDeleteFindings:
     def test_delete_none_clears_all_tables(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        _seed_two_tools(store)
+        factory, run_repo, finding_repo = _make_store(tmp_path)
+        _seed_two_tools(run_repo, finding_repo)
 
-        store.delete_findings(tools=None)
+        finding_repo.delete_findings(tools=None)
 
-        conn = store._connect()
-        assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM run_tools").fetchone()[0] == 0
-        assert conn.execute("SELECT COUNT(*) FROM run_repos").fetchone()[0] == 0
+        with factory.connect() as conn:
+            assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
+            assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
+            assert conn.execute("SELECT COUNT(*) FROM run_tools").fetchone()[0] == 0
+            assert conn.execute("SELECT COUNT(*) FROM run_repos").fetchone()[0] == 0
 
     def test_delete_by_tool_removes_only_that_tool(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        _seed_two_tools(store)
+        factory, run_repo, finding_repo = _make_store(tmp_path)
+        _seed_two_tools(run_repo, finding_repo)
 
-        store.delete_findings(tools=["semgrep"])
+        finding_repo.delete_findings(tools=["semgrep"])
 
-        conn = store._connect()
-        rows = conn.execute("SELECT tool FROM findings").fetchall()
+        with factory.connect() as conn:
+            rows = conn.execute("SELECT tool FROM findings").fetchall()
         tools = [r[0] for r in rows]
         assert "semgrep" not in tools
         assert "gitleaks" in tools
 
     def test_delete_by_tool_keeps_runs(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        _seed_two_tools(store)
+        factory, run_repo, finding_repo = _make_store(tmp_path)
+        _seed_two_tools(run_repo, finding_repo)
 
-        store.delete_findings(tools=["semgrep"])
+        finding_repo.delete_findings(tools=["semgrep"])
 
-        conn = store._connect()
-        # run rows must remain (not deleted for tool-specific purge)
-        assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] >= 1
+        with factory.connect() as conn:
+            assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -227,10 +242,10 @@ class TestIngestHook:
             "document": "test finding text",
             "metadata": {"tool": "gitleaks", "severity": "high"},
         }
-        mock_store = MagicMock()
+        mock_repo = MagicMock()
         pipeline = EnrichmentPipeline(
             mock_engine,
-            sqlite_store=mock_store,
+            finding_repo=mock_repo,
             run_id=42,
             llm_provider=MagicMock(),
         )
@@ -239,7 +254,7 @@ class TestIngestHook:
 
         pipeline.enrich(["doc1"])
 
-        mock_store.upsert_findings.assert_called_once_with(
+        mock_repo.upsert_findings.assert_called_once_with(
             42, [{"tool": "gitleaks", "severity": "high"}]
         )
 
@@ -252,10 +267,10 @@ class TestIngestHook:
             "document": "text",
             "metadata": {"tool": "semgrep", "rule_id": doc_id},
         }
-        mock_store = MagicMock()
+        mock_repo = MagicMock()
         pipeline = EnrichmentPipeline(
             mock_engine,
-            sqlite_store=mock_store,
+            finding_repo=mock_repo,
             run_id=7,
             llm_provider=MagicMock(),
         )
@@ -263,12 +278,12 @@ class TestIngestHook:
 
         pipeline.enrich(["d1", "d2", "d3"])
 
-        call_args = mock_store.upsert_findings.call_args
+        call_args = mock_repo.upsert_findings.call_args
         assert call_args[0][0] == 7  # run_id
         findings = call_args[0][1]
         assert len(findings) == 3
 
-    def test_hook_not_called_when_no_store(self) -> None:
+    def test_hook_not_called_when_no_repo(self) -> None:
         from core.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
@@ -279,7 +294,7 @@ class TestIngestHook:
         }
         pipeline = EnrichmentPipeline(mock_engine)
 
-        # Should not raise even without store; nmap provides all fields so no LLM call
+        # Should not raise even without repo; nmap provides all fields so no LLM call
         pipeline.enrich(["doc1"])
 
     def test_hook_failure_does_not_raise(self) -> None:
@@ -292,11 +307,11 @@ class TestIngestHook:
             "document": "text",
             "metadata": {"tool": "gitleaks"},
         }
-        mock_store = MagicMock()
-        mock_store.upsert_findings.side_effect = RuntimeError("DB locked")
+        mock_repo = MagicMock()
+        mock_repo.upsert_findings.side_effect = RuntimeError("DB locked")
         pipeline = EnrichmentPipeline(
             mock_engine,
-            sqlite_store=mock_store,
+            finding_repo=mock_repo,
             run_id=1,
             llm_provider=MagicMock(),
         )
@@ -380,20 +395,13 @@ class TestCweNormalisationUnit:
 
 
 class TestFindingTypeJsonEach:
-    def _make_store(self, tmp_path: Path) -> SQLiteStore:
-        store = SQLiteStore(tmp_path, "proj")
-        return store
-
-    def _seed(self, store: SQLiteStore, findings: list[dict]) -> None:
-        run_id = store.create_run({})
-        store.upsert_findings(run_id, findings)
-
     def test_exact_match_secret_does_not_return_vulnerability(
         self, tmp_path: Path
     ) -> None:
-        store = self._make_store(tmp_path)
-        self._seed(
-            store,
+        _, run_repo, finding_repo = _make_store(tmp_path)
+        run_id = run_repo.create_run({})
+        finding_repo.upsert_findings(
+            run_id,
             [
                 {
                     "tool": "gitleaks",
@@ -411,7 +419,7 @@ class TestFindingTypeJsonEach:
                 },
             ],
         )
-        results = store.search(
+        results = finding_repo.search(
             {
                 "conditions": [("finding_type", "=", ["secret"])],
                 "page": 1,
@@ -422,9 +430,10 @@ class TestFindingTypeJsonEach:
         assert not any(r["metadata"].get("tool") == "semgrep" for r in results)
 
     def test_exact_match_multi_value_returns_both_types(self, tmp_path: Path) -> None:
-        store = self._make_store(tmp_path)
-        self._seed(
-            store,
+        _, run_repo, finding_repo = _make_store(tmp_path)
+        run_id = run_repo.create_run({})
+        finding_repo.upsert_findings(
+            run_id,
             [
                 {
                     "tool": "gitleaks",
@@ -447,7 +456,7 @@ class TestFindingTypeJsonEach:
                 },
             ],
         )
-        results = store.search(
+        results = finding_repo.search(
             {
                 "conditions": [("finding_type", "=", ["secret", "vulnerability"])],
                 "page": 1,
@@ -460,9 +469,10 @@ class TestFindingTypeJsonEach:
         assert "nmap" not in tools
 
     def test_partial_match_vuln_matches_vulnerability(self, tmp_path: Path) -> None:
-        store = self._make_store(tmp_path)
-        self._seed(
-            store,
+        _, run_repo, finding_repo = _make_store(tmp_path)
+        run_id = run_repo.create_run({})
+        finding_repo.upsert_findings(
+            run_id,
             [
                 {
                     "tool": "semgrep",
@@ -480,7 +490,7 @@ class TestFindingTypeJsonEach:
                 },
             ],
         )
-        results = store.search(
+        results = finding_repo.search(
             {
                 "conditions": [("finding_type", "~=", ["vuln"])],
                 "page": 1,
@@ -491,9 +501,10 @@ class TestFindingTypeJsonEach:
         assert all(r["metadata"]["tool"] == "semgrep" for r in results)
 
     def test_exact_match_does_not_return_unrelated_type(self, tmp_path: Path) -> None:
-        store = self._make_store(tmp_path)
-        self._seed(
-            store,
+        _, run_repo, finding_repo = _make_store(tmp_path)
+        run_id = run_repo.create_run({})
+        finding_repo.upsert_findings(
+            run_id,
             [
                 {
                     "tool": "nmap",
@@ -502,7 +513,7 @@ class TestFindingTypeJsonEach:
                 },
             ],
         )
-        results = store.search(
+        results = finding_repo.search(
             {
                 "conditions": [("finding_type", "=", ["secret"])],
                 "page": 1,
@@ -519,19 +530,19 @@ class TestFindingTypeJsonEach:
 
 class TestTriageBatchesSchema:
     def test_table_exists(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        conn = store._connect()
-        sql = (
-            "SELECT name FROM sqlite_master"
-            " WHERE type='table' AND name='triage_batches'"
-        )
-        row = conn.execute(sql).fetchone()
+        factory, _, _ = _make_store(tmp_path)
+        with factory.connect() as conn:
+            sql = (
+                "SELECT name FROM sqlite_master"
+                " WHERE type='table' AND name='triage_batches'"
+            )
+            row = conn.execute(sql).fetchone()
         assert row is not None
 
     def test_all_columns_exist(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        conn = store._connect()
-        rows = conn.execute("PRAGMA table_info(triage_batches)").fetchall()
+        factory, _, _ = _make_store(tmp_path)
+        with factory.connect() as conn:
+            rows = conn.execute("PRAGMA table_info(triage_batches)").fetchall()
         col_names = {r[1] for r in rows}
         expected = {
             "id",
@@ -546,49 +557,48 @@ class TestTriageBatchesSchema:
         }
         assert expected == col_names
 
-    def _insert_minimal(self, store: SQLiteStore) -> int:
-        conn = store._connect()
-        cur = conn.execute(
-            "INSERT INTO triage_batches (finding_ids, batch_data) VALUES (?, ?)",
-            ("[1,2]", "[]"),
-        )
-        conn.commit()
-        return cur.lastrowid  # type: ignore[return-value]
+    def _insert_minimal(self, factory: ConnectionFactory) -> int:
+        with factory.connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO triage_batches (finding_ids, batch_data) VALUES (?, ?)",
+                ("[1,2]", "[]"),
+            )
+            return cur.lastrowid  # type: ignore[return-value]
 
     def test_status_defaults_to_pending(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        row_id = self._insert_minimal(store)
-        conn = store._connect()
-        row = conn.execute(
-            "SELECT status FROM triage_batches WHERE id=?", (row_id,)
-        ).fetchone()
+        factory, _, _ = _make_store(tmp_path)
+        row_id = self._insert_minimal(factory)
+        with factory.connect() as conn:
+            row = conn.execute(
+                "SELECT status FROM triage_batches WHERE id=?", (row_id,)
+            ).fetchone()
         assert row[0] == "pending"
 
     def test_run_attempts_defaults_to_zero(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        row_id = self._insert_minimal(store)
-        conn = store._connect()
-        row = conn.execute(
-            "SELECT run_attempts FROM triage_batches WHERE id=?", (row_id,)
-        ).fetchone()
+        factory, _, _ = _make_store(tmp_path)
+        row_id = self._insert_minimal(factory)
+        with factory.connect() as conn:
+            row = conn.execute(
+                "SELECT run_attempts FROM triage_batches WHERE id=?", (row_id,)
+            ).fetchone()
         assert row[0] == 0
 
     def test_created_at_auto_populated(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        row_id = self._insert_minimal(store)
-        conn = store._connect()
-        row = conn.execute(
-            "SELECT created_at FROM triage_batches WHERE id=?", (row_id,)
-        ).fetchone()
+        factory, _, _ = _make_store(tmp_path)
+        row_id = self._insert_minimal(factory)
+        with factory.connect() as conn:
+            row = conn.execute(
+                "SELECT created_at FROM triage_batches WHERE id=?", (row_id,)
+            ).fetchone()
         assert row[0] is not None
 
     def test_started_at_and_completed_at_nullable(self, tmp_path: Path) -> None:
-        store = SQLiteStore(tmp_path, "proj")
-        row_id = self._insert_minimal(store)
-        conn = store._connect()
-        row = conn.execute(
-            "SELECT started_at, completed_at FROM triage_batches WHERE id=?",
-            (row_id,),
-        ).fetchone()
+        factory, _, _ = _make_store(tmp_path)
+        row_id = self._insert_minimal(factory)
+        with factory.connect() as conn:
+            row = conn.execute(
+                "SELECT started_at, completed_at FROM triage_batches WHERE id=?",
+                (row_id,),
+            ).fetchone()
         assert row[0] is None
         assert row[1] is None

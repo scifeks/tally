@@ -14,7 +14,7 @@ from core.pipeline.events import (
 )
 from core.rag.enrichment import EnrichmentPipeline
 from core.rag.ingestor import FindingIngestor
-from core.store.sqlite_store import SQLiteStore
+from core.store import make_store
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -183,13 +183,13 @@ class PersistenceHandler(BaseHandler):
             return
 
         try:
-            sqlite_store = SQLiteStore(event.base_path, event.project_name)
+            _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
             findings_metadata: list[dict] = []
             for doc_id in event.doc_ids:
                 doc = engine.get_document_by_id(doc_id)
                 if doc is not None:
                     findings_metadata.append(doc["metadata"])
             if findings_metadata:
-                sqlite_store.upsert_findings(event.run_id, findings_metadata)
+                finding_repo.upsert_findings(event.run_id, findings_metadata)
         except Exception as exc:
             logger.error("PersistenceHandler: persistence error: %s", exc)

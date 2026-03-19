@@ -22,7 +22,9 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from core.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
-from core.store.sqlite_store import SQLiteStore  # noqa: E402
+from core.store import make_store  # noqa: E402
+from core.store.repositories.findings import FindingRepository  # noqa: E402
+from core.store.repositories.runs import RunRepository  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,17 +33,21 @@ from core.store.sqlite_store import SQLiteStore  # noqa: E402
 _PROJECT_NAME = "test-proj"
 
 
-def _make_store(tmp_path: Path) -> SQLiteStore:
-    store = SQLiteStore(tmp_path, _PROJECT_NAME)
-    return store
+def _make_store(
+    tmp_path: Path,
+) -> tuple[RunRepository, FindingRepository]:
+    run_repo, finding_repo, _, _ = make_store(tmp_path, _PROJECT_NAME)
+    return run_repo, finding_repo
 
 
-def _make_kc(store: SQLiteStore) -> tuple[MagicMock, KnowledgeCommands]:
+def _make_kc(
+    finding_repo: FindingRepository,
+) -> tuple[MagicMock, KnowledgeCommands]:
     repl = MagicMock()
     repl.active_project = _PROJECT_NAME
     repl.console = MagicMock()
     kc = KnowledgeCommands(repl)
-    kc._get_sqlite_store = MagicMock(return_value=store)
+    kc._get_finding_repo = MagicMock(return_value=finding_repo)
     return repl, kc
 
 
@@ -85,9 +91,9 @@ _NMAP_WITH_META = [
 ]
 
 
-def _seed_nmap(store: SQLiteStore) -> None:
-    run_id = store.create_run({"args": []})
-    store.upsert_findings(run_id, _NMAP_WITH_META)
+def _seed_nmap(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
+    run_id = run_repo.create_run({"args": []})
+    finding_repo.upsert_findings(run_id, _NMAP_WITH_META)
 
 
 # ---------------------------------------------------------------------------
@@ -97,9 +103,9 @@ def _seed_nmap(store: SQLiteStore) -> None:
 
 def test_show_fields_with_tool_and_findings(tmp_path: Path) -> None:
     """--show-fields --tool=nmap returns two labeled sections."""
-    store = _make_store(tmp_path)
-    _seed_nmap(store)
-    repl, kc = _make_kc(store)
+    run_repo, finding_repo = _make_store(tmp_path)
+    _seed_nmap(run_repo, finding_repo)
+    repl, kc = _make_kc(finding_repo)
 
     kc._cmd_show_fields(["--show-fields", "--tool=nmap"])
 
@@ -117,8 +123,8 @@ def test_show_fields_with_tool_and_findings(tmp_path: Path) -> None:
 
 def test_show_fields_no_tool_prints_error(tmp_path: Path) -> None:
     """--show-fields without --tool prints an error."""
-    store = _make_store(tmp_path)
-    repl, kc = _make_kc(store)
+    _, finding_repo = _make_store(tmp_path)
+    repl, kc = _make_kc(finding_repo)
 
     kc._cmd_show_fields(["--show-fields"])
 
@@ -128,8 +134,8 @@ def test_show_fields_no_tool_prints_error(tmp_path: Path) -> None:
 
 def test_show_fields_extra_flag_prints_error(tmp_path: Path) -> None:
     """--show-fields with extra flags prints an error."""
-    store = _make_store(tmp_path)
-    repl, kc = _make_kc(store)
+    _, finding_repo = _make_store(tmp_path)
+    repl, kc = _make_kc(finding_repo)
 
     kc._cmd_show_fields(["--show-fields", "--tool=nmap", "--severity=high"])
 
@@ -139,8 +145,8 @@ def test_show_fields_extra_flag_prints_error(tmp_path: Path) -> None:
 
 def test_show_fields_tool_with_no_findings(tmp_path: Path) -> None:
     """--show-fields for a tool with no findings prints appropriate message."""
-    store = _make_store(tmp_path)
-    repl, kc = _make_kc(store)
+    _, finding_repo = _make_store(tmp_path)
+    repl, kc = _make_kc(finding_repo)
 
     kc._cmd_show_fields(["--show-fields", "--tool=zap"])
 
@@ -163,9 +169,9 @@ def _get_table(repl: MagicMock) -> Table | None:
 
 def test_fields_basic_projection(tmp_path: Path) -> None:
     """--fields=severity,ip_address,service renders those columns."""
-    store = _make_store(tmp_path)
-    _seed_nmap(store)
-    repl, kc = _make_kc(store)
+    run_repo, finding_repo = _make_store(tmp_path)
+    _seed_nmap(run_repo, finding_repo)
+    repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--tool=nmap", "--fields=severity,ip_address,service"])
 
@@ -182,9 +188,9 @@ def test_fields_basic_projection(tmp_path: Path) -> None:
 
 def test_fields_na_for_missing_key(tmp_path: Path) -> None:
     """--fields renders N/A for a field absent from a row."""
-    store = _make_store(tmp_path)
-    _seed_nmap(store)
-    repl, kc = _make_kc(store)
+    run_repo, finding_repo = _make_store(tmp_path)
+    _seed_nmap(run_repo, finding_repo)
+    repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--tool=nmap", "--fields=severity,service"])
 
@@ -196,9 +202,9 @@ def test_fields_na_for_missing_key(tmp_path: Path) -> None:
 
 def test_fields_empty_value_prints_error(tmp_path: Path) -> None:
     """--fields= (empty value) prints a search error."""
-    store = _make_store(tmp_path)
-    _seed_nmap(store)
-    repl, kc = _make_kc(store)
+    run_repo, finding_repo = _make_store(tmp_path)
+    _seed_nmap(run_repo, finding_repo)
+    repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--fields="])
 
@@ -208,9 +214,9 @@ def test_fields_empty_value_prints_error(tmp_path: Path) -> None:
 
 def test_fields_fingerprint_shows_sha256(tmp_path: Path) -> None:
     """--fields=fingerprint shows the computed SHA256, not N/A."""
-    store = _make_store(tmp_path)
-    _seed_nmap(store)
-    repl, kc = _make_kc(store)
+    run_repo, finding_repo = _make_store(tmp_path)
+    _seed_nmap(run_repo, finding_repo)
+    repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--tool=nmap", "--fields=fingerprint"])
 
@@ -223,9 +229,9 @@ def test_fields_fingerprint_shows_sha256(tmp_path: Path) -> None:
 
 def test_fields_no_tool_with_severity_filter(tmp_path: Path) -> None:
     """--severity=high --fields=severity,tool works without --tool."""
-    store = _make_store(tmp_path)
-    _seed_nmap(store)
-    repl, kc = _make_kc(store)
+    run_repo, finding_repo = _make_store(tmp_path)
+    _seed_nmap(run_repo, finding_repo)
+    repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--severity=high", "--fields=severity,tool"])
 

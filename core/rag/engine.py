@@ -133,9 +133,9 @@ class RAGEngine:
     def _init_sqlite(self) -> None:
         """Initialise SQLite schema for this project (creates tables if absent)."""
         try:
-            from core.store import SQLiteStore
+            from core.store import make_store
 
-            SQLiteStore(self.base_path, self.project_name)
+            make_store(self.base_path, self.project_name)
         except Exception as exc:
             logger.warning("SQLite schema init failed: %s", exc)
 

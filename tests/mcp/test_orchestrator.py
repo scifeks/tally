@@ -16,7 +16,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 import tally_mcp.triage as triage_mod  # noqa: E402
-from core.store.sqlite_store import SQLiteStore  # noqa: E402
+from core.store.connection import ConnectionFactory  # noqa: E402
 from tally_mcp.orchestrator import run_triage  # noqa: E402
 from tally_mcp.triage import TriageRunner  # noqa: E402
 
@@ -26,15 +26,9 @@ from tally_mcp.triage import TriageRunner  # noqa: E402
 
 
 def _init_store(db_path: Path) -> None:
-    """Initialise the real schema via SQLiteStore (no schema drift)."""
-    # db_path = <tmp_root>/projects/<project>/sqlite/findings.db
-    #   parents[0] = .../sqlite
-    #   parents[1] = .../<project>
-    #   parents[2] = .../projects
-    #   parents[3] = <tmp_root>
-    tmp_root = db_path.parents[3]
-    project = db_path.parents[1].name
-    SQLiteStore(tmp_root, project)  # __init__ calls _init_schema
+    """Initialise the real schema via ConnectionFactory (no schema drift)."""
+    factory = ConnectionFactory(db_path)
+    factory.init_schema()
 
 
 def _make_db(db_path: Path, rows: list[tuple[str]]) -> None:
@@ -254,16 +248,17 @@ def test_standalone_import() -> None:
 
 def test_stale_batches_for_current_run_are_reset(project_db) -> None:
     """in_progress batches for the current run_id are reset and then processed."""
-    from core.store.sqlite_store import SQLiteStore
+    from core.store import make_store
 
     project, tmp_root, db = project_db
     _make_db(db, [])
 
-    store = SQLiteStore(tmp_root, project)
-    run_id = store.create_run({})
+    run_repo, _, _, _ = make_store(tmp_root, project)
+    factory = ConnectionFactory(db)
+    run_id = run_repo.create_run({})
 
     # Insert a stale in_progress batch for this run
-    with store._connect() as conn:
+    with factory.connect() as conn:
         conn.execute(
             "INSERT INTO triage_batches"
             " (run_id, finding_ids, batch_data, status, run_attempts)"
@@ -277,12 +272,15 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
 
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id),
+        patch(
+            "core.store.repositories.runs.RunRepository.create_run",
+            return_value=run_id,
+        ),
         patch("subprocess.run", return_value=mock_result),
     ):
         run_triage(project)
 
-    with store._connect() as conn:
+    with factory.connect() as conn:
         row = conn.execute(
             "SELECT status FROM triage_batches WHERE run_id = ?", (run_id,)
         ).fetchone()
@@ -292,17 +290,18 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
 
 def test_stale_batches_other_run_not_touched(project_db) -> None:
     """in_progress batches from a different run_id are not reset."""
-    from core.store.sqlite_store import SQLiteStore
+    from core.store import make_store
 
     project, tmp_root, db = project_db
     _make_db(db, [])
 
-    store = SQLiteStore(tmp_root, project)
-    run_id_a = store.create_run({})
-    run_id_b = store.create_run({})
+    run_repo, _, _, _ = make_store(tmp_root, project)
+    factory = ConnectionFactory(db)
+    run_id_a = run_repo.create_run({})
+    run_id_b = run_repo.create_run({})
 
     for rid in (run_id_a, run_id_b):
-        with store._connect() as conn:
+        with factory.connect() as conn:
             conn.execute(
                 "INSERT INTO triage_batches"
                 " (run_id, finding_ids, batch_data, status, run_attempts)"
@@ -316,12 +315,15 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
 
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=run_id_a),
+        patch(
+            "core.store.repositories.runs.RunRepository.create_run",
+            return_value=run_id_a,
+        ),
         patch("subprocess.run", return_value=mock_result),
     ):
         run_triage(project)
 
-    with store._connect() as conn:
+    with factory.connect() as conn:
         rows = conn.execute(
             "SELECT run_id, status FROM triage_batches ORDER BY run_id"
         ).fetchall()
@@ -350,12 +352,12 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.sqlite_store.SQLiteStore.create_triage_batches",
+            "core.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=1,
         ) as mock_create,
-        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=1),
+        patch("core.store.repositories.runs.RunRepository.create_run", return_value=1),
         patch(
-            "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
+            "core.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch("subprocess.run", return_value=mock_run),
@@ -376,12 +378,12 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.sqlite_store.SQLiteStore.create_triage_batches",
+            "core.store.repositories.triage.TriageBatchRepository.create_batches",
             side_effect=RuntimeError("db locked"),
         ),
-        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=1),
+        patch("core.store.repositories.runs.RunRepository.create_run", return_value=1),
         patch(
-            "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
+            "core.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch.object(TriageRunner, "_write_mcp_config") as mock_write,
@@ -404,12 +406,12 @@ def test_batch_count_reported(project_db, capsys) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.sqlite_store.SQLiteStore.create_triage_batches",
+            "core.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=3,
         ),
-        patch("core.store.sqlite_store.SQLiteStore.create_run", return_value=1),
+        patch("core.store.repositories.runs.RunRepository.create_run", return_value=1),
         patch(
-            "core.store.sqlite_store.SQLiteStore.reset_stale_triage_batches",
+            "core.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch("subprocess.run", return_value=mock_run),

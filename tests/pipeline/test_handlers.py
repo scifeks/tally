@@ -1,6 +1,6 @@
 """Unit tests for core.pipeline EventBus and handlers.
 
-All tests use stub EventBus interactions and mocked RAGEngine/SQLiteStore —
+All tests use stub EventBus interactions and mocked RAGEngine/FindingRepository —
 no real ChromaDB or SQLite connections.
 
 Run::
@@ -306,7 +306,7 @@ class TestPersistenceHandler:
     def test_noop_when_run_id_is_none(self) -> None:
         bus = EventBus()
         mock_engine = MagicMock()
-        mock_store = MagicMock()
+        mock_finding_repo = MagicMock()
 
         handler = PersistenceHandler(bus)
         with (
@@ -314,11 +314,14 @@ class TestPersistenceHandler:
                 "core.pipeline.handlers.PersistenceHandler._get_engine",
                 return_value=mock_engine,
             ),
-            patch("core.pipeline.handlers.SQLiteStore", return_value=mock_store),
+            patch(
+                "core.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_finding_repo, MagicMock(), MagicMock()),
+            ),
         ):
             handler.handle(_enrich_completed(run_id=None))
 
-        mock_store.upsert_findings.assert_not_called()
+        mock_finding_repo.upsert_findings.assert_not_called()
 
     def test_calls_upsert_findings_with_fetched_metadata(self) -> None:
         bus = EventBus()
@@ -329,7 +332,7 @@ class TestPersistenceHandler:
             "document": "text",
             "metadata": {"tool": "semgrep", "doc_id": doc_id},
         }
-        mock_store = MagicMock()
+        mock_finding_repo = MagicMock()
 
         handler = PersistenceHandler(bus)
         with (
@@ -337,11 +340,14 @@ class TestPersistenceHandler:
                 "core.pipeline.handlers.PersistenceHandler._get_engine",
                 return_value=mock_engine,
             ),
-            patch("core.pipeline.handlers.SQLiteStore", return_value=mock_store),
+            patch(
+                "core.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_finding_repo, MagicMock(), MagicMock()),
+            ),
         ):
             handler.handle(_enrich_completed(doc_ids=["doc1", "doc2"], run_id=42))
 
-        mock_store.upsert_findings.assert_called_once_with(
+        mock_finding_repo.upsert_findings.assert_called_once_with(
             42,
             [
                 {"tool": "semgrep", "doc_id": "doc1"},

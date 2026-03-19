@@ -56,7 +56,7 @@ def _make_results(n=3, tool="nmap", distance=None):
 def test_search_help_flag_prints_table():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--help"])
 
@@ -80,7 +80,7 @@ def test_search_help_no_project_still_works():
 def test_search_no_args_runs_ok():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", [])
 
@@ -90,7 +90,7 @@ def test_search_no_args_runs_ok():
 def test_search_tool_filter():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=semgrep"])
 
@@ -102,7 +102,7 @@ def test_search_tool_filter():
 def test_search_multi_tool():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=nmap,semgrep"])
 
@@ -114,7 +114,7 @@ def test_search_multi_tool():
 def test_search_severity_filter():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--severity=high"])
 
@@ -124,7 +124,7 @@ def test_search_severity_filter():
 def test_search_multi_severity():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--severity=high,critical"])
 
@@ -139,7 +139,7 @@ def test_search_multi_severity():
 def test_search_type_filter_invalid():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--type=code"])
 
@@ -156,7 +156,7 @@ def test_search_type_filter_invalid():
 def test_search_invalid_tool_prints_error():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=badtool"])
 
@@ -167,7 +167,7 @@ def test_search_invalid_tool_prints_error():
 def test_search_invalid_severity_prints_error():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--severity=invalid"])
 
@@ -178,7 +178,7 @@ def test_search_invalid_severity_prints_error():
 def test_search_invalid_type_prints_error():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--type=invalid"])
 
@@ -189,7 +189,7 @@ def test_search_invalid_type_prints_error():
 def test_search_old_bare_word_rejected():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["sql", "injection"])
 
@@ -201,7 +201,7 @@ def test_search_old_bare_word_rejected():
 def test_search_old_key_equals_rejected():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["tool=semgrep"])
 
@@ -218,7 +218,7 @@ def test_search_old_key_equals_rejected():
 def test_search_file_partial_match():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--file~=src/main"])
 
@@ -231,7 +231,7 @@ def test_search_description_unknown_flag_rejected():
     """--description is not a supported SQLite filter flag."""
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--description=sql injection"])
 
@@ -243,7 +243,7 @@ def test_search_description_unknown_flag_rejected():
 def test_search_url_partial():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--url~=/api/"])
 
@@ -258,7 +258,7 @@ def test_search_url_partial():
 def test_search_no_results_prints_message():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store([])
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=nmap"])
 
@@ -276,7 +276,7 @@ def test_search_page_hint_shown():
     # Return page_size (200) results to trigger the "next page" hint
     results = _make_results(n=200, tool="nmap")
     mock_store = _make_mock_store(results)
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
 
     kc.cmd_search("search", ["--tool=nmap"])
 
@@ -337,7 +337,7 @@ def test_show_fields_no_rows_prints_message():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
     mock_store.get_tool_meta_keys.return_value = (0, set())
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--show-fields", "--tool=gitleaks"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("No findings" in p for p in printed)
@@ -348,7 +348,7 @@ def test_show_fields_returns_sorted_fields():
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
     mock_store.get_tool_meta_keys.return_value = (5, {"risk_type", "line_number"})
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--show-fields", "--tool=gitleaks"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     # Must include gitleaks normalized fields AND meta keys, sorted
@@ -368,7 +368,7 @@ def test_fields_valid_calls_store():
     """--fields with valid names calls store and prints no error."""
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store(_make_results(n=2))
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--fields=severity,tool"])
     mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
@@ -379,7 +379,7 @@ def test_fields_empty_value_prints_error():
     """--fields= (empty) prints a Search error and does not call store."""
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store()
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--fields="])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Search error" in p for p in printed)
@@ -390,7 +390,7 @@ def test_fields_without_tool_filter_works():
     """--fields works without --tool (absent keys render as N/A)."""
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store(_make_results(n=1))
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--fields=severity,file_path"])
     mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
@@ -401,7 +401,7 @@ def test_fields_combined_with_filter():
     """--fields combined with --severity filter passes both to store."""
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store(_make_results(n=1))
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--severity=high", "--fields=severity,tool"])
     mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
@@ -414,7 +414,7 @@ def test_fields_column_order_preserved():
 
     repl, kc = _make_repl_and_kc()
     mock_store = _make_mock_store(_make_results(n=1, tool="nmap"))
-    kc._get_sqlite_store = MagicMock(return_value=mock_store)
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--fields=severity,tool,confidence"])
     tables = [
         c.args[0]

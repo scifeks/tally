@@ -8,10 +8,14 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from core.store.sqlite_store import SQLiteStore
+    from core.store.repositories.audit import AuditRepository
+    from core.store.repositories.findings import FindingRepository
+    from core.store.repositories.triage import TriageBatchRepository
 
 # Injected at startup by server.py
-_store: SQLiteStore | None = None
+_finding_repo: FindingRepository | None = None
+_audit_repo: AuditRepository | None = None
+_triage_repo: TriageBatchRepository | None = None
 _project_name: str | None = None
 
 from core.tools.constants import (  # noqa: E402
@@ -45,23 +49,9 @@ def _write_audit(
     error: str | None,
     duration_ms: int,
 ) -> None:
-    """Write an audit row directly (used by timeout catch block)."""
-    assert _store is not None
-    called_at = datetime.now(UTC).isoformat()
-    with _store._connect() as conn:  # noqa: SLF001
-        conn.execute(
-            "INSERT INTO tool_audit_log "
-            "(tool_name, arguments, success, error, duration_ms, called_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                tool_name,
-                json.dumps(arguments),
-                1 if success else 0,
-                error,
-                duration_ms,
-                called_at,
-            ),
-        )
+    """Write an audit row (used by timeout catch block)."""
+    assert _audit_repo is not None
+    _audit_repo.log_event(tool_name, arguments, success, error, duration_ms)
 
 
 def _reconstruct_abs_path(
@@ -98,8 +88,8 @@ async def get_finding(finding_id: int) -> dict:
     Raises:
         ValueError: If no finding with the given ID exists.
     """
-    assert _store is not None
-    row = await asyncio.to_thread(_store.get_finding, finding_id)
+    assert _finding_repo is not None
+    row = await asyncio.to_thread(_finding_repo.get_finding, finding_id)
     if row is None:
         raise ValueError(f"Finding {finding_id} not found")
     row = _parse_row(row)
@@ -128,8 +118,8 @@ async def complete_triage_batch(
     batch_id: int, status: Literal["success", "failed"]
 ) -> None:
     """Sets status and completed_at on the given batch."""
-    assert _store is not None
-    await asyncio.to_thread(_store.complete_triage_batch, batch_id, status)
+    assert _triage_repo is not None
+    await asyncio.to_thread(_triage_repo.complete_batch, batch_id, status)
 
 
 async def update_finding(
@@ -144,7 +134,8 @@ async def update_finding(
     strategy: str = "",
 ) -> bool:
     """Update enrichment fields on a single finding."""
-    assert _store is not None
+    assert _finding_repo is not None
+    assert _audit_repo is not None
     start = datetime.now(UTC)
     call_args: dict = {
         "finding_id": finding_id,
@@ -199,53 +190,19 @@ async def update_finding(
         _fail(err)
         raise ValueError(err)
 
-    def _do_update() -> bool:
-        assert _store is not None
-        row = _store.get_finding(finding_id)
-        if row is None:
-            raise ValueError(f"Finding {finding_id} not found")
-        previous_confidence = row["confidence"]
-        existing_meta = json.loads(row["meta"] or "{}")
-        now_iso = datetime.now(UTC).isoformat()
-        existing_meta["triage"] = {
-            "confidence": confidence,
-            "previous_confidence": previous_confidence,
-            "reasoning": reasoning,
-            "remediation": remediation,
-            "attack_vector": attack_vector,
-            "call_stack": call_stack,
-            "triaged_by": "claude-code",
-            "triaged_at": now_iso,
-            "strategy": strategy,
-        }
-        updated_meta = json.dumps(existing_meta)
-        finding_type_db = json.dumps([finding_type])
-        with _store._connect() as conn:  # noqa: SLF001
-            conn.execute(
-                "UPDATE findings "
-                "SET confidence = ?, "
-                "    finding_type = ?, "
-                "    severity = ?, "
-                "    enriched = 1, "
-                "    last_seen = ?, "
-                "    triaged_at = ?, "
-                "    triaged_by = 'claude-code', "
-                "    meta = ? "
-                "WHERE id = ?",
-                (
-                    confidence,
-                    finding_type_db,
-                    severity,
-                    now_iso,
-                    now_iso,
-                    updated_meta,
-                    finding_id,
-                ),
-            )
-        return True
-
     try:
-        result = await asyncio.to_thread(_do_update)
+        result = await asyncio.to_thread(
+            _finding_repo.update_finding,
+            finding_id,
+            confidence,
+            finding_type,
+            severity,
+            reasoning,
+            remediation,
+            attack_vector,
+            call_stack,
+            strategy,
+        )
     except Exception as exc:
         duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
         _write_audit("update_finding", call_args, False, str(exc), duration_ms)

@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 def _enrich_results(
     repl: REPL,
     doc_ids: list[str],
-    sqlite_store: object = None,
+    finding_repo: object = None,
     run_id: int | None = None,
 ) -> None:
     """Run enrichment pipeline on freshly ingested document IDs."""
@@ -34,7 +34,7 @@ def _enrich_results(
         pipeline = EnrichmentPipeline(
             rag_engine,
             console=repl.console,
-            sqlite_store=sqlite_store,  # type: ignore[arg-type]
+            finding_repo=finding_repo,  # type: ignore[arg-type]
             run_id=run_id,
         )
         pipeline.enrich(doc_ids)
@@ -173,7 +173,7 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        _sqlite_store, run_id = self._create_sqlite_run(args)
+        _finding_repo, run_id = self._create_sqlite_run(args)
         orchestrator = self._make_orchestrator(run_id=run_id)
         if orchestrator is None:
             return
@@ -289,9 +289,9 @@ class ScanCommands:
                 self.repl.console.print(
                     f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
                 )
-                sqlite_store, run_id = self._create_sqlite_run(orig_args)
+                finding_repo, run_id = self._create_sqlite_run(orig_args)
                 _enrich_results(
-                    self.repl, doc_ids, sqlite_store=sqlite_store, run_id=run_id
+                    self.repl, doc_ids, finding_repo=finding_repo, run_id=run_id
                 )
             else:
                 self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
@@ -384,17 +384,19 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def _create_sqlite_run(self, args: list[str]) -> tuple[object, int | None]:
-        """Instantiate SQLiteStore and create a run record.
+        """Instantiate repositories and create a run record.
 
-        Returns (sqlite_store, run_id).  On failure returns (None, None).
+        Returns (finding_repo, run_id).  On failure returns (None, None).
         """
         assert self.repl.active_project is not None
         try:
-            from core.store.sqlite_store import SQLiteStore
+            from core.store import make_store
 
-            store = SQLiteStore(self.repl.base_path, self.repl.active_project)
-            run_id = store.create_run({"args": args})
-            return store, run_id
+            run_repo, finding_repo, _, _ = make_store(
+                self.repl.base_path, self.repl.active_project
+            )
+            run_id = run_repo.create_run({"args": args})
+            return finding_repo, run_id
         except Exception as exc:
             self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
             return None, None

@@ -6,7 +6,6 @@ Run as:
 
 import argparse
 import asyncio
-import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,7 +13,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from core.config.manager import ConfigManager
-from core.store.sqlite_store import SQLiteStore
+from core.store import make_store
 
 from .tools import findings
 
@@ -37,8 +36,12 @@ _args = _parser.parse_args()
 _app_root = Path(__file__).parent.parent
 _project_name: str = _args.project
 _cfg = ConfigManager(str(_app_root)).global_config  # noqa: F841 — reserved for Phase 2
-_store = SQLiteStore(_app_root, _project_name)
-findings._store = _store
+_run_repo, _finding_repo, _triage_repo, _audit_repo = make_store(
+    _app_root, _project_name
+)
+findings._finding_repo = _finding_repo
+findings._triage_repo = _triage_repo
+findings._audit_repo = _audit_repo
 findings._project_name = _project_name
 
 logger.info("Tally MCP server starting — project=%s", _project_name)
@@ -62,23 +65,7 @@ def _audit(
     duration_ms: int,
 ) -> None:
     """Insert one row into tool_audit_log (synchronous)."""
-    called_at = datetime.now(UTC).isoformat()
-    with _store._connect() as conn:  # noqa: SLF001
-        conn.execute(
-            """
-            INSERT INTO tool_audit_log
-                (tool_name, arguments, success, error, duration_ms, called_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                tool_name,
-                json.dumps(arguments),
-                1 if success else 0,
-                error,
-                duration_ms,
-                called_at,
-            ),
-        )
+    _audit_repo.log_event(tool_name, arguments, success, error, duration_ms)
 
 
 async def _run_with_audit(tool_name: str, arguments: dict, fn, *args, **kwargs):

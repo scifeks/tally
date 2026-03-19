@@ -18,7 +18,49 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.sqlite_store import SQLiteStore  # noqa: E402
+import sqlite3  # noqa: E402
+
+from core.store import make_store  # noqa: E402
+from core.store.connection import ConnectionFactory  # noqa: E402
+
+
+class _TestStore:
+    """Thin wrapper that exposes a SQLiteStore-compatible surface for tests."""
+
+    def __init__(
+        self, factory: ConnectionFactory, run_repo: object, finding_repo: object
+    ) -> None:
+        self._factory = factory
+        self._run_repo = run_repo
+        self._finding_repo = finding_repo
+        self._db_path = factory.db_path
+
+    def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def get_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.get_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def delete_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.delete_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def get_tool_meta_keys(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.get_tool_meta_keys(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self._db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_schema(self) -> None:
+        self._factory.init_schema()
+
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers
@@ -27,9 +69,12 @@ from core.store.sqlite_store import SQLiteStore  # noqa: E402
 _PROJECT_NAME = "test-proj"
 
 
-def _make_store(tmp_path: Path) -> SQLiteStore:
-    store = SQLiteStore(tmp_path, _PROJECT_NAME)
-    return store
+def _make_store(tmp_path: Path) -> _TestStore:
+    run_repo, finding_repo, _, _ = make_store(tmp_path, _PROJECT_NAME)
+    factory = ConnectionFactory(
+        tmp_path / "projects" / _PROJECT_NAME / "sqlite" / "findings.db"
+    )
+    return _TestStore(factory, run_repo, finding_repo)
 
 
 # Reusable seed datasets
@@ -128,7 +173,7 @@ _ZAP_FINDINGS = [
 ]
 
 
-def _seed_all(store: SQLiteStore) -> int:
+def _seed_all(store: _TestStore) -> int:
     run_id = store.create_run({"args": []})
     all_findings = (
         _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS
@@ -951,7 +996,7 @@ _MULTI_TYPE_FINDING = {
 }
 
 
-def _seed_d2(store: SQLiteStore) -> None:
+def _seed_d2(store: _TestStore) -> None:
     run_id = store.create_run({})
     store.upsert_findings(
         run_id,
@@ -1168,7 +1213,7 @@ _NO_FILE_FINDING = {
 }
 
 
-def _seed_gf(store: SQLiteStore) -> None:
+def _seed_gf(store: _TestStore) -> None:
     run_id = store.create_run({})
     store.upsert_findings(
         run_id,

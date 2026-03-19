@@ -21,7 +21,7 @@ from .engine import RAGEngine
 from .ingestor import ChunkBuilderFactory
 
 if TYPE_CHECKING:
-    from core.store.sqlite_store import SQLiteStore
+    from core.store.repositories.findings import FindingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -83,14 +83,14 @@ class EnrichmentPipeline:
         self,
         rag_engine: RAGEngine,
         console: Console | None = None,
-        sqlite_store: SQLiteStore | None = None,
+        finding_repo: FindingRepository | None = None,
         run_id: int | None = None,
         llm_provider: LLMProvider | None = None,
         max_workers: int = 4,
     ) -> None:
         self._engine = rag_engine
         self._console = console
-        self._sqlite_store = sqlite_store
+        self._finding_repo = finding_repo
         self._run_id = run_id
         self._llm_provider = llm_provider  # resolved lazily on first _call_llm
         self._max_workers = max_workers
@@ -193,7 +193,7 @@ class EnrichmentPipeline:
 
         Failures are logged and never propagate to the caller.
         """
-        if self._sqlite_store is None or self._run_id is None:
+        if self._finding_repo is None or self._run_id is None:
             return
         try:
             findings: list[dict[str, Any]] = []
@@ -202,7 +202,7 @@ class EnrichmentPipeline:
                 if doc is not None:
                     findings.append(doc["metadata"])
             if findings:
-                self._sqlite_store.upsert_findings(self._run_id, findings)
+                self._finding_repo.upsert_findings(self._run_id, findings)
         except Exception as exc:
             logger.error("SQLite upsert failed after enrichment: %s", exc)
 
