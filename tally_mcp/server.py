@@ -113,13 +113,13 @@ async def _run_with_audit(tool_name: str, arguments: dict, fn, *args, **kwargs):
 
 
 @mcp.tool()
-async def get_findings_batch(run_id: int) -> dict | None:
-    """Atomically claims and returns the next pending batch for the given run."""
+async def get_findings_batch(finding_ids: list[int]) -> list[dict]:
+    """Return enriched data for the specified finding IDs."""
     return await _run_with_audit(
         "get_findings_batch",
-        {"run_id": run_id},
+        {"finding_ids": finding_ids},
         findings.get_findings_batch,
-        run_id,
+        finding_ids,
     )
 
 

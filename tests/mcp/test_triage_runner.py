@@ -38,6 +38,29 @@ def _make_runner(
     return runner, store
 
 
+def _render_stub(finding_ids: list[int], project: str) -> str:
+    return "stub prompt text"
+
+
+def _make_mock_tool(name: str, *, skip: bool, scan_segment: str = "sast") -> MagicMock:
+    t = MagicMock()
+    t.name = name
+    t.skip = skip
+    t.scan_segment = scan_segment
+    return t
+
+
+def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> dict:
+    return {
+        "id": batch_id,
+        "finding_ids": finding_ids,
+        "batch_data": [
+            {"id": fid, "tool": "semgrep", "file": f"src/file{fid}.py"}
+            for fid in finding_ids
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # batch()
 # ---------------------------------------------------------------------------
@@ -73,8 +96,11 @@ def test_batch_passes_skip_tools_to_store(tmp_path: Path) -> None:
     """get_active_finding_combos receives a frozenset containing skip tools."""
     runner, store = _make_runner(tmp_path)
     store.get_active_finding_combos.return_value = []
+    mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
-    runner.batch()
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = [mock_nmap]
+        runner.batch()
 
     skip_tools = store.get_active_finding_combos.call_args[0][0]
     assert "nmap" in skip_tools
@@ -119,7 +145,7 @@ def test_run_session_success(tmp_path: Path) -> None:
     mock_result.stderr = ""
 
     with patch("subprocess.run", return_value=mock_result):
-        outcome = runner._run_session("code_trace", [1, 2])
+        outcome = runner._run_session(_render_stub, [1, 2])
 
     assert outcome == "success"
 
@@ -133,7 +159,7 @@ def test_run_session_incomplete_when_no_audit_rows(tmp_path: Path) -> None:
     mock_result.stderr = ""
 
     with patch("subprocess.run", return_value=mock_result):
-        outcome = runner._run_session("code_trace", [1])
+        outcome = runner._run_session(_render_stub, [1])
 
     assert outcome == "incomplete"
 
@@ -146,7 +172,7 @@ def test_run_session_failed_nonzero_exit(tmp_path: Path) -> None:
     mock_result.stderr = "some error"
 
     with patch("subprocess.run", return_value=mock_result):
-        outcome = runner._run_session("code_trace", [1])
+        outcome = runner._run_session(_render_stub, [1])
 
     assert outcome == "failed"
     store.count_audit_events_since.assert_not_called()
@@ -159,7 +185,7 @@ def test_run_session_failed_on_timeout(tmp_path: Path) -> None:
         "subprocess.run",
         side_effect=TimeoutExpired(cmd="claude", timeout=300),
     ):
-        outcome = runner._run_session("code_trace", [1])
+        outcome = runner._run_session(_render_stub, [1])
 
     assert outcome == "failed"
 
@@ -168,7 +194,7 @@ def test_run_session_failed_on_subprocess_exception(tmp_path: Path) -> None:
     runner, store = _make_runner(tmp_path)
 
     with patch("subprocess.run", side_effect=OSError("command not found")):
-        outcome = runner._run_session("code_trace", [1])
+        outcome = runner._run_session(_render_stub, [1])
 
     assert outcome == "failed"
 
@@ -187,8 +213,13 @@ def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
     mock_result.returncode = 0
     mock_result.stderr = ""
 
-    with patch("subprocess.run", return_value=mock_result):
-        result = runner.run()
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        with patch("subprocess.run", return_value=mock_result):
+            result = runner.run()
 
     store.create_run.assert_called_once()  # from batch()
     assert isinstance(result, TriageResult)
@@ -209,8 +240,12 @@ def test_run_skips_skip_strategy_tools(tmp_path: Path) -> None:
         ],
     }
     store.claim_triage_batch.side_effect = [nmap_batch, None]
+    mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
-    result = runner.run()
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_nmap
+        result = runner.run()
 
     assert result.sessions_run == 0
     store.complete_triage_batch.assert_called_once_with(1, "success")
@@ -229,10 +264,14 @@ def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
     """finally block cleans up .mcp.json even when a session raises."""
     runner, store = _make_runner(tmp_path)
     store.claim_triage_batch.side_effect = [_make_semgrep_batch(1, [1]), None]
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
-    with patch.object(runner, "_run_session", side_effect=RuntimeError("crash")):
-        with pytest.raises(RuntimeError, match="crash"):
-            runner.run()
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        with patch.object(runner, "_run_session", side_effect=RuntimeError("crash")):
+            with pytest.raises(RuntimeError, match="crash"):
+                runner.run()
 
     assert not (tmp_path / ".mcp.json").exists()
 
@@ -240,17 +279,6 @@ def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # run_dry_run()
 # ---------------------------------------------------------------------------
-
-
-def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> dict:
-    return {
-        "id": batch_id,
-        "finding_ids": finding_ids,
-        "batch_data": [
-            {"id": fid, "tool": "semgrep", "file": f"src/file{fid}.py"}
-            for fid in finding_ids
-        ],
-    }
 
 
 def test_run_dry_run_calls_batch(tmp_path: Path) -> None:
@@ -267,7 +295,13 @@ def test_run_dry_run_marks_all_batches_success(tmp_path: Path) -> None:
         _make_semgrep_batch(11, [3]),
         None,
     ]
-    runner.run_dry_run()
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        runner.run_dry_run()
+
     assert store.complete_triage_batch.call_count == 2
     store.complete_triage_batch.assert_any_call(10, "success")
     store.complete_triage_batch.assert_any_call(11, "success")
@@ -281,7 +315,13 @@ def test_run_dry_run_no_pending_remain(tmp_path: Path) -> None:
         _make_semgrep_batch(6, [2]),
         None,
     ]
-    runner.run_dry_run()
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        runner.run_dry_run()
+
     calls = [c.args for c in store.complete_triage_batch.call_args_list]
     assert all(status == "success" for _, status in calls)
 
@@ -296,8 +336,14 @@ def test_run_dry_run_prompt_logged(
         _make_semgrep_batch(7, [42]),
         None,
     ]
-    with caplog.at_level(logging.DEBUG, logger="tally_mcp.triage"):
-        runner.run_dry_run()
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        with caplog.at_level(logging.DEBUG, logger="tally_mcp.triage"):
+            runner.run_dry_run()
+
     log_text = " ".join(r.message for r in caplog.records)
     assert "42" in log_text  # finding ID from batch_data appears
     assert "BATCH 7" in log_text  # delimiter present
@@ -328,9 +374,12 @@ def test_run_batch_loop_skip_completes_without_handler(tmp_path: Path) -> None:
     """skip-strategy batches are auto-completed; handler is never called."""
     runner, store = _make_runner(tmp_path)
     store.claim_triage_batch.side_effect = [_make_nmap_batch(1, [10, 11]), None]
+    mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
     handler = MagicMock(return_value="success")
-    result = runner._run_batch_loop(1, handler)
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_tool.return_value = mock_nmap
+        result = runner._run_batch_loop(1, handler)
 
     handler.assert_not_called()
     store.complete_triage_batch.assert_called_once_with(1, "success")
@@ -347,10 +396,13 @@ def test_run_batch_loop_returns_correct_counts(tmp_path: Path) -> None:
         _make_semgrep_batch(3, [3]),
         None,
     ]
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
     outcomes = ["success", "failed", "incomplete"]
     handler = MagicMock(side_effect=outcomes)
-    result = runner._run_batch_loop(99, handler)
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_tool.return_value = mock_semgrep
+        result = runner._run_batch_loop(99, handler)
 
     assert result.sessions_run == 3
     assert result.success == 1
@@ -367,9 +419,12 @@ def test_run_batch_loop_exhausts_all_batches(tmp_path: Path) -> None:
         _make_semgrep_batch(3, [3]),
         None,
     ]
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
     handler = MagicMock(return_value="success")
-    runner._run_batch_loop(99, handler)
+    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+        mock_reg.get_tool.return_value = mock_semgrep
+        runner._run_batch_loop(99, handler)
 
     assert store.claim_triage_batch.call_count == 4  # 3 batches + None sentinel
     assert handler.call_count == 3

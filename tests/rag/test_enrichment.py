@@ -252,12 +252,9 @@ class TestEnrichmentPipeline:
             ids=["cont-002"],
         )
         p = EnrichmentPipeline(engine, console=None)
-        call_count = 0
 
-        def side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+        def side_effect(doc_text, metadata, fields):
+            if doc_text == "Finding A":
                 raise json.JSONDecodeError("bad", "", 0)
             return _make_llm_response(["risk_type", "remediation", "description"])
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import subprocess
@@ -11,40 +12,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from core.store.sqlite_store import SQLiteStore
+from core.tools.registry import tool_registry
 
 from .config import SESSION_TIMEOUT_SECONDS
-from .prompts import api_trace as _api_trace
-from .prompts import code_trace as _code_trace
-from .prompts import dependency as _dependency
-from .prompts import enrich_only as _enrich_only
 
 _log = logging.getLogger(__name__)
 
 _APP_ROOT = Path(__file__).parent.parent
-
-# todo: This is bad. We're back do defining every tool in multiple files now.
-# todo: We can just infer what strategy to use based on the tool segment
-# todo: Review how the segments are assigned by looking at
-#  how they are resolved from the tool registry.
-# todo: Then, construct `TOOL_STRATEGY` dynamically without having
-#  to define a single tool in here.
-TOOL_STRATEGY: dict[str, str] = {
-    "semgrep": "code_trace",
-    "zap": "api_trace",
-    "osv-scanner": "dependency",
-    "pip-audit": "dependency",
-    "npm-audit": "dependency",
-    "composer-audit": "dependency",
-    "gitleaks": "enrich_only",
-    "nmap": "skip",
-}
-
-STRATEGY_PROMPT: dict[str, object] = {
-    "code_trace": _code_trace.render,
-    "api_trace": _api_trace.render,
-    "dependency": _dependency.render,
-    "enrich_only": _enrich_only.render,
-}
 
 _AUDIT_WRITE_TOOLS = ("update_finding", "update_findings_batch")
 
@@ -91,7 +65,9 @@ class TriageRunner:
                 run_id,
             )
 
-        skip_tools = frozenset(t for t, s in TOOL_STRATEGY.items() if s == "skip")
+        skip_tools = frozenset(
+            t.name for t in tool_registry.get_all_tools() if getattr(t, "skip", False)
+        )
         combos = self._store.get_active_finding_combos(skip_tools)
 
         total = 0
@@ -120,8 +96,8 @@ class TriageRunner:
         try:
             return self._run_batch_loop(
                 run_id,
-                lambda batch_id, strategy, finding_ids: self._run_session(
-                    strategy, finding_ids
+                lambda batch_id, render_fn, finding_ids: self._run_session(
+                    render_fn, finding_ids
                 ),
             )
         finally:
@@ -134,11 +110,12 @@ class TriageRunner:
         """
         run_id, _total = self.batch()
 
-        def _handler(batch_id: int, strategy: str, finding_ids: list[int]) -> str:
-            render_fn = STRATEGY_PROMPT[strategy]
-            prompt_text = render_fn(  # type: ignore[operator]
-                finding_ids, self._project
-            )
+        def _handler(
+            batch_id: int,
+            render_fn: Callable[..., str],
+            finding_ids: list[int],
+        ) -> str:
+            prompt_text = render_fn(finding_ids, self._project)
             _log.debug(
                 "========== BATCH %d (%d findings) ==========\n%s\n"
                 "========== END BATCH %d ==========",
@@ -159,12 +136,12 @@ class TriageRunner:
     def _run_batch_loop(
         self,
         run_id: int,
-        handler: Callable[[int, str, list[int]], str],
+        handler: Callable[[int, Callable[..., str], list[int]], str],
     ) -> TriageResult:
         """Claim and process every pending batch for run_id.
 
-        handler(batch_id, strategy, finding_ids) -> outcome string.
-        Skip-strategy batches are auto-completed without calling handler.
+        handler(batch_id, render_fn, finding_ids) -> outcome string.
+        Skip-flagged tools are auto-completed without calling handler.
         """
         sessions_run = success = failed = incomplete = 0
         while True:
@@ -176,15 +153,19 @@ class TriageRunner:
             finding_ids: list[int] = batch["finding_ids"]
             batch_data: list[dict] = batch["batch_data"]
 
-            tool = batch_data[0]["tool"] if batch_data else None
-            strategy = TOOL_STRATEGY.get(tool or "", "enrich_only")
+            tool_name = batch_data[0]["tool"] if batch_data else None
+            tool_obj = tool_registry.get_tool(tool_name or "") if tool_name else None
 
-            if strategy == "skip":
+            if tool_obj is None or tool_obj.skip:
                 self._store.complete_triage_batch(batch_id, "success")
                 continue
 
+            segment = tool_obj.scan_segment
+            module = importlib.import_module(f"tally_mcp.prompts.{segment}_trace")
+            render_fn: Callable[..., str] = module.render
+
             sessions_run += 1
-            outcome = handler(batch_id, strategy, finding_ids)
+            outcome = handler(batch_id, render_fn, finding_ids)
             self._store.complete_triage_batch(batch_id, outcome)
 
             if outcome == "success":
@@ -201,10 +182,11 @@ class TriageRunner:
             incomplete=incomplete,
         )
 
-    def _run_session(self, strategy: str, finding_ids: list[int]) -> str:
+    def _run_session(
+        self, render_fn: Callable[..., str], finding_ids: list[int]
+    ) -> str:
         """Run one Claude session. Returns 'success', 'failed', or 'incomplete'."""
-        render_fn = STRATEGY_PROMPT[strategy]
-        prompt_text = render_fn(finding_ids, self._project)  # type: ignore[operator]
+        prompt_text = render_fn(finding_ids, self._project)
         session_start = datetime.now(UTC).isoformat()
 
         try:
@@ -224,23 +206,17 @@ class TriageRunner:
             )
         except subprocess.TimeoutExpired:
             _log.error(
-                "Triage session timed out after %ds (strategy=%s)",
+                "Triage session timed out after %ds",
                 SESSION_TIMEOUT_SECONDS,
-                strategy,
             )
             return "failed"
         except Exception as exc:
-            _log.error(
-                "Subprocess error during triage (strategy=%s): %s",
-                strategy,
-                exc,
-            )
+            _log.error("Subprocess error during triage: %s", exc)
             return "failed"
 
         if result.returncode != 0:
             _log.error(
-                "Triage session failed (strategy=%s, rc=%d): %s",
-                strategy,
+                "Triage session failed (rc=%d): %s",
                 result.returncode,
                 result.stderr,
             )
@@ -251,16 +227,14 @@ class TriageRunner:
         )
         if updated_count > 0:
             _log.info(
-                "Triage session success (strategy=%s, updates=%d)",
-                strategy,
+                "Triage session success (updates=%d)",
                 updated_count,
             )
             return "success"
 
         _log.warning(
             "Session completed but no findings updated — "
-            "possible prompt failure or empty batch (strategy=%s)",
-            strategy,
+            "possible prompt failure or empty batch"
         )
         return "incomplete"
 

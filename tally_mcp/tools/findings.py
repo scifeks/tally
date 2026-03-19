@@ -115,18 +115,13 @@ async def get_finding(finding_id: int) -> dict:
     return row
 
 
-async def get_findings_batch(run_id: int) -> dict | None:
-    """Atomically claims and returns the next pending batch for *run_id*.
-
-    Returns the batch dict with batch_data enriched via get_finding (includes
-    abs_path and repo_path), or None if no pending batches remain.
-    """
-    assert _store is not None
-    batch = await asyncio.to_thread(_store.claim_triage_batch, run_id)
-    if batch is None:
-        return None
-    batch["batch_data"] = [await get_finding(fid) for fid in batch["finding_ids"]]
-    return batch
+async def get_findings_batch(finding_ids: list[int]) -> list[dict]:
+    """Return enriched finding data for the given IDs."""
+    return [
+        finding
+        for fid in finding_ids
+        if (finding := await get_finding(fid)) is not None
+    ]
 
 
 async def complete_triage_batch(
