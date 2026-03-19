@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from core.exceptions import SearchValidationError
+from core.rag.search_parser import SearchQuery, _combine_clauses, _handle_search_flag
 from core.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
 
 _DEFAULT_PAGE_SIZE = 200
-
-
-class SearchValidationError(Exception):
-    """User-facing validation error for search query parsing."""
 
 
 # ---------------------------------------------------------------------------
@@ -168,8 +166,6 @@ class _ChromaDBStrategy:
         contains: bool,
         known_tools: frozenset[str],
     ) -> None:
-        from core.rag.search_parser import _handle_search_flag  # lazy: avoids cycle
-
         _handle_search_flag(
             flag,
             val,
@@ -179,11 +175,6 @@ class _ChromaDBStrategy:
         )
 
     def build_result(self, page: int, page_size: int) -> Any:
-        from core.rag.search_parser import (  # lazy: avoids cycle
-            SearchQuery,
-            _combine_clauses,
-        )
-
         where_filter = _combine_clauses(self._filter_clauses)
         return SearchQuery(
             semantic_text=None,

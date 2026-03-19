@@ -12,6 +12,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from core.exceptions import SearchValidationError  # noqa: E402
 from core.rag.search_parser import (  # noqa: E402
     SearchQuery,
     _resolve_type_filter,
@@ -21,10 +22,7 @@ from core.repl.commands.findings_table import (  # noqa: E402
     _color_severity,
     _extract_types,
 )
-from core.repl.search_command_parser import (  # noqa: E402
-    SearchValidationError,
-    parse_chromadb_search_command,
-)
+from core.repl.search_command_parser import parse_chromadb_search_command  # noqa: E402
 
 _KNOWN_TOOLS = frozenset({"nmap", "gitleaks", "semgrep", "zap", "pip-audit"})
 

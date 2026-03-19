@@ -48,10 +48,8 @@ class KnowledgeCommands:
             )
             return
 
-        from core.repl.search_command_parser import (
-            SearchValidationError,
-            parse_sqlite_search_command,
-        )
+        from core.exceptions import SearchValidationError
+        from core.repl.search_command_parser import parse_sqlite_search_command
         from core.tools.registry import tool_registry
 
         finding_repo = self._get_finding_repo()

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.exceptions import SearchValidationError
 from core.rag.ingestor import get_tool_domain
-from core.repl.search_command_parser import SearchValidationError
 from core.tools.constants import (
     CONFIDENCE_LEVELS,
     DOMAINS,

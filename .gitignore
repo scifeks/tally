@@ -55,3 +55,9 @@ docker/docker-compose.yaml
 
 #mocks
 MagicMock
+
+#Roadmap and arch decisions
+/docs/roadmap/
+
+#Claude MCP stuff
+.claude/
