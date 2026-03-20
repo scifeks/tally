@@ -12,18 +12,16 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from application.pipeline.handlers import (
+    EnrichmentHandler,
+    IngestHandler,
+    PersistenceHandler,
+)
 from application.project import InteractiveProjectWizard
+from application.rag.ingestor import get_tool_domain
 from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
-from core.pipeline.events import (
-    EnrichmentCompleted,
-    EventBus,
-    IngestCompleted,
-    ToolCompleted,
-)
-from core.pipeline.handlers import EnrichmentHandler, IngestHandler, PersistenceHandler
 from core.project import ProjectManager
-from core.rag.ingestor import get_tool_domain
 from core.repl.commands import (
     KnowledgeCommands,
     ProjectCommands,
@@ -35,6 +33,12 @@ from core.repl.commands import (
 )
 from core.repl.help_renderer import HELP_BOX, HelpRenderer
 from core.startup.checker import print_installed_system_tools
+from domain.pipeline.events import (
+    EnrichmentCompleted,
+    EventBus,
+    IngestCompleted,
+    ToolCompleted,
+)
 
 _log = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ from rich.markup import escape
 from application.tools.registry import tool_registry
 
 if TYPE_CHECKING:
-    from core.rag.engine import RAGEngine
+    from application.rag.engine import RAGEngine
     from core.repl.interface import REPL
 
 # Help text exposed as a class attribute so smoke tests can find it.
@@ -204,7 +204,7 @@ class PurgeCommand:
 
     def _get_rag_engine(self) -> RAGEngine | None:
         """Create and return a RAGEngine for the active project, or None on error."""
-        from core.rag import RAGEngine
+        from application.rag import RAGEngine
 
         assert self.repl.active_project is not None
         try:

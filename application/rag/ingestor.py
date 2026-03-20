@@ -3,7 +3,6 @@
 import importlib
 import inspect
 import logging
-from collections.abc import Callable
 from typing import Any, Protocol
 
 from core.config.schemas import Repository
@@ -45,7 +44,7 @@ class ChunkBuilderFactory:
         """Load and instantiate the chunk builder for tool_name, or None."""
         stem = tool_name.replace("-", "_")
         try:
-            module = importlib.import_module(f"core.rag.chunks.{stem}")
+            module = importlib.import_module(f"application.rag.chunks.{stem}")
         except ImportError:
             logger.debug("No chunk builder module for tool %r", tool_name)
             return None
@@ -78,10 +77,6 @@ def _default_builders() -> dict[str, ChunkBuilder]:
         if builder is not None:
             result[builder.tool_name] = builder
     return result
-
-
-def get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
-    return {name: b.fingerprint_key for name, b in _default_builders().items()}
 
 
 def get_tool_domain(tool_name: str) -> str | None:

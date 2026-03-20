@@ -232,7 +232,7 @@ class TestDeleteFindings:
 class TestIngestHook:
     def test_hook_fires_after_enrich(self) -> None:
         """upsert_findings is called after enrich() completes."""
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.return_value = {
@@ -257,7 +257,7 @@ class TestIngestHook:
         )
 
     def test_hook_fires_with_multiple_docs(self) -> None:
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.side_effect = lambda doc_id: {
@@ -282,7 +282,7 @@ class TestIngestHook:
         assert len(findings) == 3
 
     def test_hook_not_called_when_no_repo(self) -> None:
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.return_value = {
@@ -297,7 +297,7 @@ class TestIngestHook:
 
     def test_hook_failure_does_not_raise(self) -> None:
         """SQLite failure in the hook must not interrupt the scan."""
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.return_value = {

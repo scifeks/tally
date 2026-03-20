@@ -7,13 +7,14 @@ from time import perf_counter
 from typing import Any, cast
 
 from application.tools.scan_types._helpers import (
+    _dispatch_and_count_ingested,
     _execute_tool_passes,
     _make_context,
     _normalize_success,
     _ordered_repo_tools,
 )
 from application.tools.scan_types.resources import ExecutionResources
-from core.pipeline.events import ToolCompleted
+from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
@@ -57,7 +58,7 @@ class RepoScan(ScanType):
 
         start = perf_counter()
         results: list[ToolResult] = []
-        total_run = total_skipped = total_failed = 0
+        total_run = total_skipped = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
         for tool_name in ordered_tools:
@@ -139,14 +140,15 @@ class RepoScan(ScanType):
 
         duration = round(perf_counter() - start, 1)
         for r in results:
-            config.event_bus.dispatch(
+            total_ingested += _dispatch_and_count_ingested(
+                config.event_bus,
                 ToolCompleted(
                     r,
                     repo.name,
                     config.run_id,
                     config.project_name,
                     config.base_path,
-                )
+                ),
             )
 
         rows = [
@@ -166,7 +168,7 @@ class RepoScan(ScanType):
             total_tools_failed=total_failed,
             results=results,
             duration_seconds=duration,
-            findings_ingested=0,
+            findings_ingested=total_ingested,
             findings_by_tool=findings_by_tool,
         )
         config.display.print_final_line(

@@ -8,8 +8,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from core.rag.engine import RAGEngine
-    from core.rag.query import QueryEngine
+    from application.rag.engine import RAGEngine
+    from application.rag.query import QueryEngine
     from core.repl.interface import REPL
 
 from core.repl.commands.findings_table import FindingsTableFactory
@@ -173,7 +173,7 @@ class KnowledgeCommands:
 
     def _get_rag_engine(self) -> RAGEngine | None:
         """Create and return a RAGEngine for the active project, or None on error."""
-        from core.rag import RAGEngine
+        from application.rag import RAGEngine
 
         assert self.repl.active_project is not None
         try:
@@ -190,7 +190,7 @@ class KnowledgeCommands:
 
     def _get_query_engine(self) -> QueryEngine | None:
         """Create and return a QueryEngine for the active project, or None on error."""
-        from core.rag.query import QueryEngine
+        from application.rag.query import QueryEngine
 
         rag_engine = self._get_rag_engine()
         if rag_engine is None:

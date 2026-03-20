@@ -6,9 +6,13 @@ import logging
 from time import perf_counter
 from typing import Any
 
-from application.tools.scan_types._helpers import _execute_tool_passes, _make_context
+from application.tools.scan_types._helpers import (
+    _dispatch_and_count_ingested,
+    _execute_tool_passes,
+    _make_context,
+)
 from application.tools.scan_types.resources import ExecutionResources
-from core.pipeline.events import ToolCompleted
+from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
@@ -120,14 +124,15 @@ class NetworkSegmentScan(ScanType):
                         "nmap", True, False, findings, result.duration_seconds
                     )
                 )
-                config.event_bus.dispatch(
+                total_ingested += _dispatch_and_count_ingested(
+                    config.event_bus,
                     ToolCompleted(
                         result,
                         config.project_name,
                         config.run_id,
                         config.project_name,
                         config.base_path,
-                    )
+                    ),
                 )
             else:
                 total_failed += 1

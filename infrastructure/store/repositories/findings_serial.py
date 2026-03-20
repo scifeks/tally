@@ -10,13 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from domain.tools.constants import FINDING_TYPES
-
-if TYPE_CHECKING:
-    pass
+from infrastructure.tools.fingerprints import FINGERPRINT_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +77,6 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
 # Fingerprint
 # ---------------------------------------------------------------------------
 
-_FINGERPRINT_REGISTRY: dict[str, Callable[[dict[str, Any]], str]] | None = None
-
 
 def _generic_fingerprint_key(finding: dict[str, Any]) -> str:
     safe = {
@@ -90,19 +85,10 @@ def _generic_fingerprint_key(finding: dict[str, Any]) -> str:
     return json.dumps(safe, sort_keys=True)
 
 
-def _get_fingerprint_registry() -> dict[str, Callable[[dict[str, Any]], str]]:
-    global _FINGERPRINT_REGISTRY
-    if _FINGERPRINT_REGISTRY is None:
-        from core.rag.ingestor import get_fingerprint_registry
-
-        _FINGERPRINT_REGISTRY = get_fingerprint_registry()
-    return _FINGERPRINT_REGISTRY
-
-
 def compute_fingerprint(finding: dict[str, Any]) -> str:
     """Compute a stable sha256 fingerprint from per-tool key fields."""
     tool = finding.get("tool", "")
-    key_fn = _get_fingerprint_registry().get(tool, _generic_fingerprint_key)
+    key_fn = FINGERPRINT_REGISTRY.get(tool, _generic_fingerprint_key)
     key = key_fn(finding)
     return hashlib.sha256(key.encode()).hexdigest()
 

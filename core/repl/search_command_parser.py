@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from application.rag.search_parser import (
+    SearchQuery,
+    combine_clauses,
+    handle_search_flag,
+)
 from core.exceptions import SearchValidationError
-from core.rag.search_parser import SearchQuery, combine_clauses, handle_search_flag
 from domain.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
 
 _DEFAULT_PAGE_SIZE = 200

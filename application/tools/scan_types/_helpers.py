@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from application.tools.executor import ToolExecutor
 from application.tools.registry import ToolRegistry
+from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
@@ -75,6 +76,24 @@ def _tools_for_segment(segment: str, registry: ToolRegistry) -> list[str]:
     """Return tool names registered under the given scan segment."""
     tools: list[Any] = registry.get_all_tools()
     return [t.name for t in tools if t.scan_segment == segment]
+
+
+def _dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
+    """Dispatch a ToolCompleted event and return the number of findings ingested.
+
+    Subscribes a one-shot counter to IngestCompleted before dispatching, then
+    unsubscribes immediately after. Safe because EventBus is synchronous.
+    """
+    count = 0
+
+    def _counter(e: IngestCompleted) -> None:
+        nonlocal count
+        count += len(e.doc_ids)
+
+    bus.subscribe(IngestCompleted, _counter)
+    bus.dispatch(event)
+    bus.unsubscribe(IngestCompleted, _counter)
+    return count
 
 
 def _ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:

@@ -24,14 +24,14 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.engine import verify_ollama_available  # noqa: E402
+from application.rag.query import QueryEngine  # noqa: E402
 from application.tools.executor import ToolExecutor  # noqa: E402
 from application.tools.registry import tool_registry  # noqa: E402
 from core.config import ConfigManager  # noqa: E402
 from core.config.schemas import NmapProfile  # noqa: E402
 from core.project import ProjectManager  # noqa: E402
-from core.rag import FindingIngestor, RAGEngine  # noqa: E402
-from core.rag.engine import verify_ollama_available  # noqa: E402
-from core.rag.query import QueryEngine  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 
 # ---------------------------------------------------------------------------

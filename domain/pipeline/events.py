@@ -51,6 +51,14 @@ class EventBus:
         """Register *handler* to be called whenever *event_type* is dispatched."""
         self._handlers[event_type].append(handler)
 
+    def unsubscribe(self, event_type: type, handler: Callable[[Any], None]) -> None:
+        """Remove a previously registered handler."""
+        handlers = self._handlers.get(event_type, [])
+        try:
+            handlers.remove(handler)
+        except ValueError:
+            pass
+
     def dispatch(self, event: object) -> None:
         """Call all handlers registered for ``type(event)``."""
         for handler in self._handlers[type(event)]:

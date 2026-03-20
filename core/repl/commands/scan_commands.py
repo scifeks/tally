@@ -23,7 +23,7 @@ def _enrich_results(
     run_id: int | None = None,
 ) -> None:
     """Run enrichment pipeline on freshly ingested document IDs."""
-    from core.rag import EnrichmentPipeline, RAGEngine
+    from application.rag import EnrichmentPipeline, RAGEngine
 
     assert repl.active_project is not None
     try:
@@ -46,7 +46,7 @@ def _ingest_result(
     repl: REPL, result: ToolResult, profile: str | None = None
 ) -> list[str]:
     """Ingest a ToolResult into the project's RAG store. Returns list of doc IDs."""
-    from core.rag import FindingIngestor, RAGEngine
+    from application.rag import FindingIngestor, RAGEngine
 
     assert repl.active_project is not None
     try:
@@ -90,7 +90,7 @@ class ScanCommands:
 
     def _cmd_scan_inner(self, args: list[str]) -> None:
         """Inner scan logic — runs after registry is refreshed."""
-        from core.rag.ingestor import get_tool_domain
+        from application.rag.ingestor import get_tool_domain
         from domain.tools.constants import DOMAINS
 
         auto_approve = "--yes" in args

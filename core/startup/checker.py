@@ -136,13 +136,19 @@ class DependencyChecker:
         from domain.tools.interface import ToolInterface
 
         results: list[DepCheck] = []
-        local_dir = Path(__file__).parent.parent / "tools" / "wrappers" / "local"
+        local_dir = (
+            Path(__file__).parent.parent.parent
+            / "infrastructure"
+            / "tools"
+            / "wrappers"
+            / "local"
+        )
 
         for py_file in sorted(local_dir.glob("*.py")):
             if py_file.name.startswith("_"):
                 continue
 
-            module_name = f"core.tools.wrappers.local.{py_file.stem}"
+            module_name = f"infrastructure.tools.wrappers.local.{py_file.stem}"
             try:
                 module = importlib.import_module(module_name)
             except ImportError:

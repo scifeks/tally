@@ -16,7 +16,7 @@ from application.tools.scan_types import (
     ToolOnAllReposScan,
     ToolOnRepoScan,
 )
-from core.pipeline.events import EventBus
+from domain.pipeline.events import EventBus
 from domain.tools.display import OrchestratorDisplay
 from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
 

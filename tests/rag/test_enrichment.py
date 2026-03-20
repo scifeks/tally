@@ -15,8 +15,8 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.rag import EnrichmentPipeline, RAGEngine  # noqa: E402
 from core.project import ProjectManager  # noqa: E402
-from core.rag import EnrichmentPipeline, RAGEngine  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -468,7 +468,7 @@ class TestNmapIngestorMetadata:
         )
 
     def _get_chunks(self):
-        from core.rag.ingestor import FindingIngestor
+        from application.rag.ingestor import FindingIngestor
 
         ingestor = FindingIngestor(MagicMock(), "test-proj")
         return ingestor._build_chunks(self._make_nmap_result(), "default")
@@ -550,7 +550,7 @@ class TestGitleaksIngestorMetadata:
         )
 
     def _get_chunks(self, rule_id: str):
-        from core.rag.ingestor import FindingIngestor
+        from application.rag.ingestor import FindingIngestor
 
         ingestor = FindingIngestor(MagicMock(), "test-proj")
         return ingestor._build_chunks(self._make_gitleaks_result(rule_id), "default")

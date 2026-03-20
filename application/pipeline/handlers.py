@@ -5,21 +5,21 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from application.rag.enrichment import EnrichmentPipeline
+from application.rag.ingestor import FindingIngestor
 from core.config.manager import ConfigManager
-from core.pipeline.events import (
+from domain.pipeline.events import (
     EnrichmentCompleted,
     EventBus,
     IngestCompleted,
     ToolCompleted,
 )
-from core.rag.enrichment import EnrichmentPipeline
-from core.rag.ingestor import FindingIngestor
 from infrastructure.store import make_store
 
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from core.rag.engine import RAGEngine
+    from application.rag.engine import RAGEngine
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class BaseHandler:
     def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
         key = f"{project_name}:{base_path}"
         if key not in self._engines:
-            from core.rag.engine import RAGEngine
+            from application.rag.engine import RAGEngine
 
             self._engines[key] = RAGEngine(
                 project_name=project_name,

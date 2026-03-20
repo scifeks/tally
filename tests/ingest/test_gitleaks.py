@@ -24,10 +24,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]  # tests/ingest/ â†’ tests/ â†
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.engine import verify_ollama_available  # noqa: E402
 from core.config import ConfigManager  # noqa: E402
 from core.project import ProjectManager  # noqa: E402
-from core.rag import FindingIngestor, RAGEngine  # noqa: E402
-from core.rag.engine import verify_ollama_available  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
     _parse_secret,
@@ -571,7 +571,7 @@ class TestGitleaksRetrieval:
         self, project_env: dict, dir_parsed_data: dict
     ) -> None:
         """Searching for a rule_id value returns the expected document in top-5."""
-        from core.rag.query import QueryEngine
+        from application.rag.query import QueryEngine
 
         result = _make_gitleaks_result(dir_parsed_data)
         engine = RAGEngine(
@@ -595,7 +595,7 @@ class TestGitleaksRetrieval:
         self, project_env: dict, dir_parsed_data: dict
     ) -> None:
         """Querying 'what did gitleaks find?' applies tool filter in ChromaDB."""
-        from core.rag.query import QueryEngine
+        from application.rag.query import QueryEngine
 
         result = _make_gitleaks_result(dir_parsed_data)
         engine = RAGEngine(

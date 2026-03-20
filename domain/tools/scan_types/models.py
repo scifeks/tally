@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from core.pipeline.events import EventBus
+from domain.pipeline.events import EventBus
 from domain.tools.base import ToolResult
 from domain.tools.display import OrchestratorDisplay
 

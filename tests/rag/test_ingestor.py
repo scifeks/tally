@@ -11,14 +11,13 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.config.schemas import Repository  # noqa: E402
-
 # todo: fix this architecture
-from core.rag.ingestor import (  # noqa: E402
+from application.rag.ingestor import (  # noqa: E402
     FindingIngestor,
     _is_test_path,
     _normalize_path,
 )
+from core.config.schemas import Repository  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 
 # ---------------------------------------------------------------------------

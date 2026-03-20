@@ -12,12 +12,12 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.exceptions import SearchValidationError  # noqa: E402
-from core.rag.search_parser import (  # noqa: E402
+from application.rag.search_parser import (  # noqa: E402
     SearchQuery,
     _resolve_type_filter,
     parse_search_query,
 )
+from core.exceptions import SearchValidationError  # noqa: E402
 from core.repl.commands.findings_table import (  # noqa: E402
     _extract_types,
     color_severity,
