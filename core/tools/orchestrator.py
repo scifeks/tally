@@ -78,6 +78,7 @@ class ScanOrchestrator:
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
         console: Console | None = None,
+        auto_approve: bool = False,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -85,7 +86,7 @@ class ScanOrchestrator:
         self._event_bus = event_bus
         self._run_id = run_id
         self.display = OrchestratorDisplay(console=console)
-        self._auto_approve: bool = False
+        self._auto_approve: bool = auto_approve
         self._factory = factory or ToolWrapperFactory()
 
         from core.config.manager import ConfigManager

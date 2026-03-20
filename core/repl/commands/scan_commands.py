@@ -174,12 +174,9 @@ class ScanCommands:
             effective_tools = candidates
 
         _finding_repo, run_id = self._create_sqlite_run(args)
-        orchestrator = self._make_orchestrator(run_id=run_id)
+        orchestrator = self._make_orchestrator(run_id=run_id, auto_approve=auto_approve)
         if orchestrator is None:
             return
-
-        if auto_approve:
-            orchestrator._auto_approve = True
 
         try:
             if repo_name is not None:
@@ -401,7 +398,7 @@ class ScanCommands:
             self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
             return None, None
 
-    def _make_orchestrator(self, run_id: int | None = None):
+    def _make_orchestrator(self, run_id: int | None = None, auto_approve: bool = False):
         """Create a ScanOrchestrator for the active project."""
         from core.tools.executor import ToolExecutor
         from core.tools.orchestrator import ScanOrchestrator
@@ -419,6 +416,7 @@ class ScanCommands:
             run_id=run_id,
             factory=ToolWrapperFactory(),
             console=self.repl.console,
+            auto_approve=auto_approve,
         )
 
     def _export_summary(self, summary, export_path: str) -> None:
