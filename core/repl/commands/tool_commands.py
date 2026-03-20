@@ -93,7 +93,7 @@ class ToolCommands:
         self.repl.console.print(build_tool_table(tools, tool_registry))
 
     def _cmd_tool_add(self) -> None:
-        from core.setup.commands_setup import interview_tool
+        from application.setup.commands_setup import interview_tool
 
         local_tools, docker_tools = self._get_wrapper_availability()
         all_available = sorted(local_tools | docker_tools)
@@ -156,12 +156,12 @@ class ToolCommands:
                     "Use 'project add' or 'project switch <name>'[/yellow]"
                 )
             else:
-                from core.setup.nmap_setup import interview_nmap_config
+                from application.setup.nmap_setup import interview_nmap_config
 
                 interview_nmap_config(self.repl.active_project, self.repl.base_path)
 
     def _cmd_tool_edit(self, tool_name: str) -> None:
-        from core.setup.commands_setup import interview_tool
+        from application.setup.commands_setup import interview_tool
 
         commands = self._load_commands_json()
         if tool_name not in commands:
@@ -194,8 +194,8 @@ class ToolCommands:
                     "Use 'project add' or 'project switch <name>'[/yellow]"
                 )
             else:
+                from application.setup.nmap_setup import interview_nmap_config
                 from core.config.manager import ConfigManager
-                from core.setup.nmap_setup import interview_nmap_config
 
                 existing = ConfigManager(self.repl.base_path).load_nmap_hosts(
                     self.repl.active_project
@@ -358,7 +358,7 @@ class ToolCommands:
         self.repl.console.print(table)
 
     def _cmd_tool_add_project(self, project_name: str) -> None:
-        from core.setup.commands_setup import interview_tool
+        from application.setup.commands_setup import interview_tool
 
         local_tools, docker_tools = self._get_wrapper_availability()
         all_available = sorted(local_tools | docker_tools)
@@ -424,12 +424,12 @@ class ToolCommands:
         self.repl.console.print(f"[green]Tool added:[/green] {tool_name}")
 
         if tool_name == "nmap":
-            from core.setup.nmap_setup import interview_nmap_config
+            from application.setup.nmap_setup import interview_nmap_config
 
             interview_nmap_config(project_name, self.repl.base_path)
 
     def _cmd_tool_edit_project(self, tool_name: str, project_name: str) -> None:
-        from core.setup.commands_setup import interview_tool
+        from application.setup.commands_setup import interview_tool
 
         project_commands = self._load_project_commands_json(project_name)
         if tool_name not in project_commands:

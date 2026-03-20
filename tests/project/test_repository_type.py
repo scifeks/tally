@@ -14,13 +14,13 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.project import ProjectManager  # noqa: E402
 from application.project.wizard import (  # noqa: E402
     InteractiveProjectWizard,
     _parse_repo_types,
     _validate_repo_types,
 )
 from core.config.schemas import ProjectConfig, Repository  # noqa: E402
-from core.project import ProjectManager  # noqa: E402
 
 
 def _write_global_config(base_path: Path) -> None:

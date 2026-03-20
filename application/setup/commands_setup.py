@@ -18,7 +18,9 @@ def _get_wrapper_meta(tool_name: str, location: str = "local") -> dict:
 
     stem = tool_name.replace("-", "_")
     try:
-        module = importlib.import_module(f"core.tools.wrappers.{location}.{stem}")
+        module = importlib.import_module(
+            f"infrastructure.tools.wrappers.{location}.{stem}"
+        )
     except ImportError:
         return {"candidate_commands": [tool_name], "tool_type": "repo"}
     for _, obj in inspect.getmembers(module, inspect.isclass):
@@ -227,7 +229,9 @@ def run_commands_setup(base_path: str) -> None:
     Args:
         base_path: Application root directory (where config/ lives).
     """
-    wrappers_dir = Path(__file__).parent.parent / "tools" / "wrappers"
+    wrappers_dir = (
+        Path(__file__).parent.parent.parent / "infrastructure" / "tools" / "wrappers"
+    )
     local_dir = wrappers_dir / "local"
     docker_dir = wrappers_dir / "docker"
 

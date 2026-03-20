@@ -18,10 +18,11 @@ from application.pipeline.handlers import (
     PersistenceHandler,
 )
 from application.project import InteractiveProjectWizard
+from application.project.manager import ProjectManager
 from application.rag.ingestor import get_tool_domain
+from application.startup.checker import print_installed_system_tools
 from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
-from core.project import ProjectManager
 from core.repl.commands import (
     KnowledgeCommands,
     ProjectCommands,
@@ -32,7 +33,6 @@ from core.repl.commands import (
     TriageCommands,
 )
 from core.repl.help_renderer import HELP_BOX, HelpRenderer
-from core.startup.checker import print_installed_system_tools
 from domain.pipeline.events import (
     EnrichmentCompleted,
     EventBus,

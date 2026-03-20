@@ -151,7 +151,7 @@ def test_tool_add_project_warns_global_duplicate(tmp_path: Path) -> None:
     with (
         patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
         patch("builtins.input", return_value="nmap"),
-        patch("core.setup.commands_setup.interview_tool", return_value=None),
+        patch("application.setup.commands_setup.interview_tool", return_value=None),
     ):
         tc._cmd_tool_add_project("myproject")
 
@@ -174,7 +174,9 @@ def test_tool_add_project_saves_entry(tmp_path: Path) -> None:
     with (
         patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
         patch("builtins.input", return_value="nmap"),
-        patch("core.setup.commands_setup.interview_tool", return_value=fake_entry),
+        patch(
+            "application.setup.commands_setup.interview_tool", return_value=fake_entry
+        ),
     ):
         tc._cmd_tool_add_project("myproject")
 
@@ -213,7 +215,7 @@ def test_tool_edit_project_saves_entry(tmp_path: Path) -> None:
 
     with (
         patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
-        patch("core.setup.commands_setup.interview_tool", return_value=updated),
+        patch("application.setup.commands_setup.interview_tool", return_value=updated),
     ):
         tc._cmd_tool_edit_project("nmap", "myproject")
 

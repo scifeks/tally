@@ -19,8 +19,8 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.project import ProjectManager  # noqa: E402
 from application.rag import FindingIngestor, RAGEngine  # noqa: E402
-from core.project import ProjectManager  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.tools.parsers.nmap_parser import (  # noqa: E402
     parse_nmap_xml,

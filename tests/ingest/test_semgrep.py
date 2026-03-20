@@ -19,9 +19,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.project import ProjectManager  # noqa: E402
 from application.rag import FindingIngestor, RAGEngine  # noqa: E402
 from core.config.schemas import Repository  # noqa: E402
-from core.project import ProjectManager  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from domain.tools.interface import ExecutionContext  # noqa: E402
 from infrastructure.tools.wrappers.local.semgrep import SemgrepLocalTool  # noqa: E402

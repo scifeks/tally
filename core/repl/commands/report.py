@@ -57,7 +57,7 @@ class ReportCommand:
             reports_dir.mkdir(parents=True, exist_ok=True)
             output_path = str(reports_dir / f"report_{ts}.{ext}")
 
-        from core.reporting.generator import ReportGenerator
+        from application.reporting.generator import ReportGenerator
 
         generator = ReportGenerator(rag_engine, self.repl.active_project)
 

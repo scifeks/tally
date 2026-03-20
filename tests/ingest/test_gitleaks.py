@@ -24,10 +24,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]  # tests/ingest/ â†’ tests/ â†
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.project import ProjectManager  # noqa: E402
 from application.rag import FindingIngestor, RAGEngine  # noqa: E402
 from application.rag.engine import verify_ollama_available  # noqa: E402
 from core.config import ConfigManager  # noqa: E402
-from core.project import ProjectManager  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
     _parse_secret,

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from core.config import Repository
 
 if TYPE_CHECKING:
-    from core.project import ProjectManager
+    from application.project.manager import ProjectManager
 
 _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\s\-]*$")
 
@@ -108,7 +108,7 @@ class InteractiveProjectWizard:
             self._manager.switch_project(name)
 
             try:
-                from core.setup.nmap_setup import interview_nmap_config
+                from application.setup.nmap_setup import interview_nmap_config
 
                 interview_nmap_config(name, str(self._manager.base_path))
             except KeyboardInterrupt:

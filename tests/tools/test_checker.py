@@ -1,6 +1,6 @@
 """Tests for core/startup/checker.py — no external binaries required."""
 
-from core.startup.checker import DependencyChecker
+from application.startup.checker import DependencyChecker
 
 _EXPECTED_TOOLS = {
     "composer-audit",
@@ -31,7 +31,7 @@ def test_check_system_tools_discovers_all_tools() -> None:
 
 def test_check_system_tools_returns_dep_checks() -> None:
     """Each entry must be a DepCheck with the expected fields populated."""
-    from core.startup.checker import DepCheck
+    from application.startup.checker import DepCheck
 
     checker = DependencyChecker()
     tool_checks = checker.check_system_tools()
