@@ -13,6 +13,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.findings.updater import reconstruct_abs_path  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.audit import AuditRepository  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
@@ -409,28 +410,28 @@ _REPOS = [{"name": "myapp", "path": "/repos/myapp"}]
 
 
 def test_reconstruct_abs_path_known_repo() -> None:
-    result = findings._reconstruct_abs_path("/src/app.py", "myapp", _REPOS)
+    result = reconstruct_abs_path("/src/app.py", "myapp", _REPOS)
     assert result == "/repos/myapp/src/app.py"
 
 
 def test_reconstruct_abs_path_unknown_repo() -> None:
-    result = findings._reconstruct_abs_path("/src/app.py", "unknown", _REPOS)
+    result = reconstruct_abs_path("/src/app.py", "unknown", _REPOS)
     assert result is None
 
 
 def test_reconstruct_abs_path_none_file() -> None:
-    result = findings._reconstruct_abs_path(None, "myapp", _REPOS)
+    result = reconstruct_abs_path(None, "myapp", _REPOS)
     assert result is None
 
 
 def test_reconstruct_abs_path_none_repo_name() -> None:
-    result = findings._reconstruct_abs_path("/src/app.py", None, _REPOS)
+    result = reconstruct_abs_path("/src/app.py", None, _REPOS)
     assert result is None
 
 
 def test_reconstruct_abs_path_trailing_slash_stripped() -> None:
     repos = [{"name": "myapp", "path": "/repos/myapp/"}]
-    result = findings._reconstruct_abs_path("/src/app.py", "myapp", repos)
+    result = reconstruct_abs_path("/src/app.py", "myapp", repos)
     assert result == "/repos/myapp/src/app.py"
 
 
