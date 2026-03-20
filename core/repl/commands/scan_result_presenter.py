@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 
 if TYPE_CHECKING:
     from rich.console import Console

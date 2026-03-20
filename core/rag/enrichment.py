@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console
 
 from core.llm import LLMProvider, get_llm_provider
-from core.tools.constants import (
+from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
     SEVERITY_LEVELS,

@@ -19,7 +19,7 @@ def init(ctx: FindingsContext) -> None:
     _ctx = ctx
 
 
-from core.tools.constants import (  # noqa: E402
+from domain.tools.constants import (  # noqa: E402
     CONFIDENCE_LEVELS,
     FINDING_TYPES,
     SEVERITY_LEVELS,

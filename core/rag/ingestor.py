@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 from core.config.schemas import Repository
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 
 from .engine import RAGEngine
 

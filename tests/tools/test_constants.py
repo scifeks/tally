@@ -1,6 +1,6 @@
 """Tests for core/tools/constants.py — no external dependencies required."""
 
-from core.tools.constants import (
+from domain.tools.constants import (
     BOOLEAN_TYPE_FIELDS,
     CONFIDENCE_CONFIRMED,
     CONFIDENCE_LEVELS,

@@ -13,7 +13,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from core.tools.constants import FINDING_TYPES
+from domain.tools.constants import FINDING_TYPES
 
 if TYPE_CHECKING:
     pass

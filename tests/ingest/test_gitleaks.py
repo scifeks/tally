@@ -28,8 +28,8 @@ from core.config import ConfigManager  # noqa: E402
 from core.project import ProjectManager  # noqa: E402
 from core.rag import FindingIngestor, RAGEngine  # noqa: E402
 from core.rag.engine import verify_ollama_available  # noqa: E402
-from core.tools.base import ToolResult  # noqa: E402
-from core.tools.parsers.gitleaks_parser import (  # noqa: E402
+from domain.tools.base import ToolResult  # noqa: E402
+from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
     _parse_secret,
     combine_gitleaks_results,
     parse_gitleaks_json,

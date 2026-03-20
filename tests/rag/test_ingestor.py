@@ -19,7 +19,7 @@ from core.rag.ingestor import (  # noqa: E402
     _is_test_path,
     _normalize_path,
 )
-from core.tools.base import ToolResult  # noqa: E402
+from domain.tools.base import ToolResult  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Repository stub factory (bypasses path-existence validator)

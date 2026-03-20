@@ -48,9 +48,9 @@ class KnowledgeCommands:
             )
             return
 
+        from application.tools.registry import tool_registry
         from core.exceptions import SearchValidationError
         from core.repl.search_command_parser import parse_sqlite_search_command
-        from core.tools.registry import tool_registry
 
         finding_repo = self._get_finding_repo()
         if finding_repo is None:

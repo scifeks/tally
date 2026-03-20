@@ -133,7 +133,7 @@ class DependencyChecker:
         return results
 
     def check_system_tools(self) -> list[DepCheck]:
-        from core.tools.interface import ToolInterface
+        from domain.tools.interface import ToolInterface
 
         results: list[DepCheck] = []
         local_dir = Path(__file__).parent.parent / "tools" / "wrappers" / "local"

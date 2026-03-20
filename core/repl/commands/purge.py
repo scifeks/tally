@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from rich.markup import escape
 
-from core.tools.registry import tool_registry
+from application.tools.registry import tool_registry
 
 if TYPE_CHECKING:
     from core.rag.engine import RAGEngine

@@ -14,7 +14,7 @@ def _get_wrapper_meta(tool_name: str, location: str = "local") -> dict:
     on each base wrapper class.  Falls back to sane defaults when the module cannot
     be imported or the class does not define those attrs.
     """
-    from core.tools.interface import ToolInterface
+    from domain.tools.interface import ToolInterface
 
     stem = tool_name.replace("-", "_")
     try:

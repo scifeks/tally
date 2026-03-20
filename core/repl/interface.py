@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from application.project import InteractiveProjectWizard
+from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
 from core.pipeline.events import (
     EnrichmentCompleted,
@@ -34,7 +35,6 @@ from core.repl.commands import (
 )
 from core.repl.help_renderer import HELP_BOX, HelpRenderer
 from core.startup.checker import print_installed_system_tools
-from core.tools.registry import print_discovery_summary
 
 _log = logging.getLogger(__name__)
 

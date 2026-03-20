@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 
 from .sca import _build_sca_chunks, _sca_fingerprint_key
 

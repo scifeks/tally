@@ -277,7 +277,7 @@ def test_tool_remove_project_confirmed(tmp_path: Path) -> None:
 
 
 def test_discover_tools_project_override(tmp_path: Path) -> None:
-    from core.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import discover_tools, tool_registry
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -317,7 +317,7 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
 
 
 def test_discover_tools_no_project(tmp_path: Path) -> None:
-    from core.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import discover_tools, tool_registry
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()

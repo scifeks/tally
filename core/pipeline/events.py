@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 
 
 @dataclass

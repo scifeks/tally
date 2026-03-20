@@ -21,8 +21,8 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from core.project import ProjectManager  # noqa: E402
 from core.rag import FindingIngestor, RAGEngine  # noqa: E402
-from core.tools.base import ToolResult  # noqa: E402
-from core.tools.parsers.pip_audit_parser import (  # noqa: E402
+from domain.tools.base import ToolResult  # noqa: E402
+from infrastructure.tools.parsers.pip_audit_parser import (  # noqa: E402
     parse_pip_audit_json,
     parse_pip_audit_json_string,
 )

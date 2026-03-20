@@ -7,9 +7,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from application.tools.registry import discover_tools
 from core.repl import REPL
 from core.startup.checker import DependencyChecker
-from core.tools.registry import discover_tools
 
 _BASE_PATH = "."
 

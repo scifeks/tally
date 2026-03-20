@@ -17,7 +17,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from core.project import ProjectManager  # noqa: E402
 from core.rag import EnrichmentPipeline, RAGEngine  # noqa: E402
-from core.tools.base import ToolResult  # noqa: E402
+from domain.tools.base import ToolResult  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.tools.registry import tool_registry
 from core.config.manager import ConfigManager as _ConfigManager
-from core.tools.registry import tool_registry
 
 try:
     _cfg = _ConfigManager(str(Path(__file__).parent.parent.parent)).global_config

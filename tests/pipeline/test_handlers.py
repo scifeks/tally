@@ -19,7 +19,7 @@ from core.pipeline.events import (
     ToolCompleted,
 )
 from core.pipeline.handlers import EnrichmentHandler, IngestHandler, PersistenceHandler
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 
 # ---------------------------------------------------------------------------
 # Helpers

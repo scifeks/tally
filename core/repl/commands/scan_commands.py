@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
+from application.tools.factory import ToolWrapperFactory
+from application.tools.registry import tool_registry
 from core.repl.commands.scan_result_presenter import ScanResultPresenter
-from core.tools.base import ToolResult
-from core.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
-from core.tools.factory import ToolWrapperFactory
-from core.tools.registry import tool_registry
+from domain.tools.base import ToolResult
 
 if TYPE_CHECKING:
     from core.repl.interface import REPL
@@ -80,7 +80,7 @@ class ScanCommands:
             )
             return
 
-        from core.tools.registry import discover_tools
+        from application.tools.registry import discover_tools
 
         discover_tools(self.repl.base_path, project_name=self.repl.active_project)
         try:
@@ -91,7 +91,7 @@ class ScanCommands:
     def _cmd_scan_inner(self, args: list[str]) -> None:
         """Inner scan logic — runs after registry is refreshed."""
         from core.rag.ingestor import get_tool_domain
-        from core.tools.constants import DOMAINS
+        from domain.tools.constants import DOMAINS
 
         auto_approve = "--yes" in args
         args = [a for a in args if a != "--yes"]
@@ -233,7 +233,7 @@ class ScanCommands:
             )
             return
 
-        from core.tools.registry import discover_tools
+        from application.tools.registry import discover_tools
 
         discover_tools(self.repl.base_path, project_name=self.repl.active_project)
         try:
@@ -400,8 +400,8 @@ class ScanCommands:
 
     def _make_orchestrator(self, run_id: int | None = None, auto_approve: bool = False):
         """Create a ScanOrchestrator for the active project."""
-        from core.tools.executor import ToolExecutor
-        from core.tools.orchestrator import ScanOrchestrator
+        from application.tools.executor import ToolExecutor
+        from application.tools.orchestrator import ScanOrchestrator
 
         assert self.repl.active_project is not None
         executor = ToolExecutor(

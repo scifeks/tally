@@ -81,7 +81,7 @@ class ToolCommands:
     # ------------------------------------------------------------------
 
     def _cmd_tool_list(self) -> None:
-        from core.tools.registry import build_tool_table, tool_registry
+        from application.tools.registry import build_tool_table, tool_registry
 
         tools = tool_registry.get_all_tools()
         if not tools:
@@ -247,7 +247,7 @@ class ToolCommands:
             json.dump(commands, f, indent=2)
 
     def _reload_registry(self) -> None:
-        from core.tools.registry import discover_tools
+        from application.tools.registry import discover_tools
 
         discover_tools(self.repl.base_path)
 

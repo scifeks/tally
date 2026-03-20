@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from rich.table import Table
 
-from core.tools.constants import BOOLEAN_TYPE_FIELDS
+from domain.tools.constants import BOOLEAN_TYPE_FIELDS
 
 if TYPE_CHECKING:
     pass
@@ -191,7 +191,7 @@ class FindingsTableFactory:
         self._load_renderers()
 
     def _load_renderers(self) -> None:
-        from core.tools.registry import tool_registry
+        from application.tools.registry import tool_registry
 
         for tool_name in tool_registry.list_tool_names():
             file_stem = tool_name.replace("-", "_")

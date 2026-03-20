@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from core.exceptions import SearchValidationError
 from core.rag.ingestor import get_tool_domain
-from core.tools.constants import (
+from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     DOMAINS,
     FINDING_TYPES,
