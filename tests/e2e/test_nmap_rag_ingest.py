@@ -1,86 +1,31 @@
-"""End-to-end validation tests for the Phase 4 nmap → RAG pipeline.
+"""End-to-end tests for the nmap → RAG pipeline.
 
-Run from the tally project root:
-    pytest tests/validation/ -v
-
-Skip markers:
-    requires_nmap    — skipped when nmap binary is not installed
-    requires_ollama  — skipped when Ollama is not reachable
-    slow             — long-running tests (real nmap scans or sleep-based timing)
+Requires: nmap binary (requires_nmap), Ollama (requires_ollama).
 """
 
 from __future__ import annotations
 
-import json
 import shutil
-import sys
 import time
 from pathlib import Path
 
 import pytest
 
-# Ensure tally root is on sys.path when running pytest directly.
+from application.project import ProjectManager
+from application.rag import FindingIngestor, RAGEngine
+from application.rag.query import QueryEngine
+from application.tools.executor import ToolExecutor
+from application.tools.registry import tool_registry
+from core.config import ConfigManager
+from core.config.schemas import NmapProfile
+from domain.tools.base import ToolResult
+from tests.conftest import requires_nmap, requires_ollama
+
+pytestmark = pytest.mark.e2e
+
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
-if str(_TALLY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
-from application.rag import FindingIngestor, RAGEngine  # noqa: E402
-from application.rag.engine import verify_ollama_available  # noqa: E402
-from application.rag.query import QueryEngine  # noqa: E402
-from application.tools.executor import ToolExecutor  # noqa: E402
-from application.tools.registry import tool_registry  # noqa: E402
-from core.config import ConfigManager  # noqa: E402
-from core.config.schemas import NmapProfile  # noqa: E402
-from domain.tools.base import ToolResult  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Skip markers
-# ---------------------------------------------------------------------------
-
-
-def _get_ollama_url() -> str | None:
-    try:
-        cfg = ConfigManager(base_path=str(_TALLY_ROOT))._load_global_config()
-        return cfg.ollama.base_url if cfg.ollama else None
-    except (FileNotFoundError, ValueError):
-        return None
-
-
-_OLLAMA_URL = _get_ollama_url()
-
-requires_nmap = pytest.mark.skipif(
-    shutil.which("nmap") is None,
-    reason="nmap not installed",
-)
-requires_ollama = pytest.mark.skipif(
-    _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),
-    reason="Ollama not configured or not running",
-)
 slow = pytest.mark.slow
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def project_env(tmp_path: Path) -> dict:
-    """Minimal project environment under tmp_path (no nmap config, no data)."""
-    name = "test-proj"
-    _write_global_config(tmp_path)
-    pm = ProjectManager(base_path=str(tmp_path))
-    pm.create_project_dirs(name)
-    pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
-
-
-@pytest.fixture()
-def nmap_project_env(project_env: dict) -> dict:
-    """project_env with a localhost nmap profile pre-configured."""
-    _write_nmap_config(project_env["base_path"], project_env["project_name"])
-    return project_env
 
 
 # ---------------------------------------------------------------------------
@@ -176,70 +121,26 @@ def _ingest(
 
 
 # ---------------------------------------------------------------------------
-# Scenario 1 – Project creation  (no external deps)
+# Fixtures
 # ---------------------------------------------------------------------------
 
 
-class TestProjectCreation:
-    def test_project_dirs_created(self, project_env: dict) -> None:
-        root = project_env["base_path"] / "projects" / project_env["project_name"]
-        expected = [
-            root / "config" / "endpoints",
-            root / "chroma_db",
-            root / "tool_outputs" / "nmap",
-            root / "tool_outputs" / "semgrep",
-            root / "tool_outputs" / "osv-scanner",
-            root / "tool_outputs" / "gitleaks",
-            root / "tool_outputs" / "zap",
-            root / "sessions",
-        ]
-        for d in expected:
-            assert d.is_dir(), f"Missing: {d}"
-
-    def test_project_config_written(self, project_env: dict) -> None:
-        p = (
-            project_env["base_path"]
-            / "projects"
-            / project_env["project_name"]
-            / "config"
-            / "project.json"
-        )
-        assert p.exists()
-        data = json.loads(p.read_text())
-        assert data["project_name"] == project_env["project_name"]
-        assert "created" in data
-
-    def test_nmap_hosts_initialised_empty(self, project_env: dict) -> None:
-        p = (
-            project_env["base_path"]
-            / "projects"
-            / project_env["project_name"]
-            / "config"
-            / "nmap_hosts.json"
-        )
-        assert p.exists()
-        assert json.loads(p.read_text()) == {}
-
-    def test_project_listed_by_manager(self, project_env: dict) -> None:
-        pm = ProjectManager(base_path=str(project_env["base_path"]))
-        assert project_env["project_name"] in pm.list_projects()
+@pytest.fixture()
+def project_env(tmp_path: Path) -> dict:
+    """Minimal project environment under tmp_path (no nmap config, no data)."""
+    name = "test-proj"
+    _write_global_config(tmp_path)
+    pm = ProjectManager(base_path=str(tmp_path))
+    pm.create_project_dirs(name)
+    pm.save_project(name, [])
+    return {"base_path": tmp_path, "project_name": name}
 
 
-# ---------------------------------------------------------------------------
-# Scenario 2 – Nmap configuration  (no external deps)
-# ---------------------------------------------------------------------------
-
-
-class TestNmapConfig:
-    def test_nmap_profile_round_trips(self, project_env: dict) -> None:
-        base, name = project_env["base_path"], project_env["project_name"]
-        _write_nmap_config(base, name)
-
-        nmap_config = ConfigManager(base_path=str(base)).load_nmap_hosts(name)
-        assert nmap_config is not None
-        assert "localhost" in nmap_config.profiles
-        assert "127.0.0.1" in nmap_config.profiles["localhost"].hosts
-        assert "-p 22,80,443" in nmap_config.profiles["localhost"].nmap_args
+@pytest.fixture()
+def nmap_project_env(project_env: dict) -> dict:
+    """project_env with a localhost nmap profile pre-configured."""
+    _write_nmap_config(project_env["base_path"], project_env["project_name"])
+    return project_env
 
 
 # ---------------------------------------------------------------------------

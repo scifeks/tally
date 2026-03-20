@@ -1,30 +1,24 @@
 """Integration tests for search --show-fields and --fields flags.
 
-Run from the tally project root::
-
-    pytest tests/validation/test_search_integration.py -v
-
 No external dependencies (no Ollama, no ChromaDB).
 """
 
 from __future__ import annotations
 
-import sys
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from rich.console import Console
 from rich.table import Table
 
-_TALLY_ROOT = Path(__file__).resolve().parents[2]
-if str(_TALLY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TALLY_ROOT))
+from application.repl.commands.knowledge_commands import KnowledgeCommands
+from infrastructure.store import make_store
+from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.runs import RunRepository
 
-from application.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
-from infrastructure.store import make_store  # noqa: E402
-from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
-from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+pytestmark = pytest.mark.integration
 
 # ---------------------------------------------------------------------------
 # Helpers

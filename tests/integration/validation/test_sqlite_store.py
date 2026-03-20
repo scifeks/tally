@@ -1,27 +1,20 @@
 """Integration tests for the SQLite structured findings store.
 
-Run from the tally project root::
-
-    pytest tests/validation/test_sqlite_store.py -v
-    pytest tests/store/ -v
-
 No external dependencies (no Ollama, no ChromaDB).
 """
 
 from __future__ import annotations
 
 import json
-import sys
+import sqlite3
 from pathlib import Path
 
-_TALLY_ROOT = Path(__file__).resolve().parents[2]
-if str(_TALLY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TALLY_ROOT))
+import pytest
 
-import sqlite3  # noqa: E402
+from infrastructure.store import make_store
+from infrastructure.store.connection import ConnectionFactory
 
-from infrastructure.store import make_store  # noqa: E402
-from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+pytestmark = pytest.mark.integration
 
 
 class _TestStore:

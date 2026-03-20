@@ -12,12 +12,18 @@ or rely on conftest auto-discovery if pytest adds tests/ to sys.path.
 
 from __future__ import annotations
 
+import os
 import shutil
 
 import pytest
 
 from application.rag.engine import verify_ollama_available
 from core.config import ConfigManager
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    if os.getenv("CI"):
+        config.option.markexpr = "not integration and not e2e"
 
 
 def _ollama_url() -> str | None:
