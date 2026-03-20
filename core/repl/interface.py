@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from application.project import InteractiveProjectWizard
 from core.config import ConfigManager
 from core.pipeline.events import (
     EnrichmentCompleted,
@@ -233,6 +234,7 @@ class REPL:
         self.console = Console()
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
+        self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
         self.event_bus = EventBus()
         _ingest = IngestHandler(self.event_bus, console=self.console)

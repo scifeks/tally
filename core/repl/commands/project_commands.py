@@ -114,7 +114,7 @@ class ProjectCommands:
 
     def cmd_new_project(self, _cmd: str, _args: list[str]) -> None:
         """Create a new project interactively."""
-        name = self.repl.projects.create_project()
+        name = self.repl.wizard.create_project()
         if name:
             self.repl.active_project = name
 
@@ -159,7 +159,7 @@ class ProjectCommands:
                 "Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
-        self.repl.projects.add_repository(self.repl.active_project)
+        self.repl.wizard.add_repository(self.repl.active_project)
 
     def cmd_repos(self, _cmd: str, _args: list[str]) -> None:
         """List configured repositories for the active project."""
@@ -204,7 +204,7 @@ class ProjectCommands:
 
         repo_name = args[0]
         try:
-            self.repl.projects.edit_repository(self.repl.active_project, repo_name)
+            self.repl.wizard.edit_repository(self.repl.active_project, repo_name)
         except ValueError as exc:
             self.repl.console.print(f"[red]{exc}[/red]")
 

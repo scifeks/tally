@@ -73,8 +73,8 @@ def project_env(tmp_path: Path) -> dict:
     _write_global_config(tmp_path)
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
-    pm._create_project_dirs(name)
-    pm._save_project(name, [])
+    pm.create_project_dirs(name)
+    pm.save_project(name, [])
     return {"base_path": tmp_path, "project_name": name}
 
 
@@ -632,8 +632,8 @@ class TestProjectIsolation:
         _write_commands_config(tmp_path)
         pm = ProjectManager(base_path=str(tmp_path))
         for n in ("proj-a", "proj-b"):
-            pm._create_project_dirs(n)
-            pm._save_project(n, [])
+            pm.create_project_dirs(n)
+            pm.save_project(n, [])
 
     def test_new_project_starts_empty(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)

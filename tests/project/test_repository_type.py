@@ -14,12 +14,13 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.config.schemas import ProjectConfig, Repository  # noqa: E402
-from core.project.manager import (  # noqa: E402
-    ProjectManager,
+from application.project.wizard import (  # noqa: E402
+    InteractiveProjectWizard,
     _parse_repo_types,
     _validate_repo_types,
 )
+from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.project import ProjectManager  # noqa: E402
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -204,9 +205,10 @@ class TestInterviewSingleRepo:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.path == str(repo_dir)
         assert repo.docker_path == ""
@@ -216,6 +218,7 @@ class TestInterviewSingleRepo:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         inputs = [
             "my-repo",
             "api",
@@ -228,7 +231,7 @@ class TestInterviewSingleRepo:
             "",
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.docker_path == "/mnt/repo"
         assert repo.container_name == "my-container"
@@ -238,9 +241,10 @@ class TestInterviewSingleRepo:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         inputs = ["my-repo", "api", "nope", "local", str(repo_dir), "python", "", ""]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.docker_path == ""
 
@@ -248,6 +252,7 @@ class TestInterviewSingleRepo:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         inputs = [
             "my-repo",
             "api",
@@ -259,7 +264,7 @@ class TestInterviewSingleRepo:
             "",
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.path == str(repo_dir)
 
@@ -268,10 +273,11 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         (repo_dir / "tests").mkdir()
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         # last "" accepts the auto-detected "tests" default
         inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.test_dirs == ["tests"]
 
@@ -280,10 +286,11 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         (repo_dir / "tests").mkdir()
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         # user overrides detected "tests" with "spec, e2e"
         inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "spec, e2e"]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.test_dirs == ["spec", "e2e"]
 
@@ -292,9 +299,10 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         # no test subdirs present; user presses Enter → empty list
         pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
         inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
         with patch("builtins.input", side_effect=inputs):
-            repo = pm._interview_single_repo(1)
+            repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.test_dirs == []
 
@@ -307,7 +315,7 @@ class TestInterviewSingleRepo:
 class TestEditRepository:
     def _setup_project(self, base_path: Path, repo: Repository) -> ProjectManager:
         pm = _make_pm(base_path)
-        pm._create_project_dirs("test-project")
+        pm.create_project_dirs("test-project")
         pc = ProjectConfig(
             project_name="test-project",
             created=datetime.datetime.now().isoformat(),
@@ -329,7 +337,9 @@ class TestEditRepository:
         # Switch from docker to local; keep all other defaults
         inputs = ["", "", "local", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
-            updated = pm.edit_repository("test-project", "my-repo")
+            updated = InteractiveProjectWizard(pm).edit_repository(
+                "test-project", "my-repo"
+            )
         assert updated is not None
         assert updated.docker_path == ""
         assert updated.container_name == ""
@@ -343,7 +353,9 @@ class TestEditRepository:
         # Press Enter for everything — keep existing values
         inputs = ["", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
-            updated = pm.edit_repository("test-project", "my-repo")
+            updated = InteractiveProjectWizard(pm).edit_repository(
+                "test-project", "my-repo"
+            )
         assert updated is not None
         assert updated.path == str(repo_dir)
         assert updated.docker_path == ""

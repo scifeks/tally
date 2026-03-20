@@ -117,8 +117,8 @@ def project_env(tmp_path: Path) -> dict:
     _write_global_config(tmp_path)
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
-    pm._create_project_dirs(name)
-    pm._save_project(name, [])
+    pm.create_project_dirs(name)
+    pm.save_project(name, [])
     return {"base_path": tmp_path, "project_name": name}
 
 
