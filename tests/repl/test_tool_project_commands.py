@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from core.repl.commands.tool_commands import ToolCommands
+from application.repl.commands.tool_commands import ToolCommands
 
 
 def _make_tc(

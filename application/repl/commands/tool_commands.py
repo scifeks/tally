@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.repl.help_renderer import HelpRenderer
-    from core.repl.interface import REPL
+    from application.repl.help_renderer import HelpRenderer
+    from application.repl.interface import REPL
 
 
 class ToolCommands:

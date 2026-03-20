@@ -8,8 +8,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from core.repl.help_renderer import HelpRenderer
-    from core.repl.interface import REPL
+    from application.repl.help_renderer import HelpRenderer
+    from application.repl.interface import REPL
 
 
 class ProjectCommands:

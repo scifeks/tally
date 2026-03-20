@@ -197,7 +197,7 @@ class FindingsTableFactory:
             file_stem = tool_name.replace("-", "_")
             try:
                 mod = importlib.import_module(
-                    f"core.repl.commands.renderers.{file_stem}"
+                    f"application.repl.commands.renderers.{file_stem}"
                 )
                 r = getattr(mod, "renderer", None)
                 if isinstance(r, TableRenderer):

@@ -6,14 +6,14 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import tool_registry
-from core.repl.commands.scan_result_presenter import ScanResultPresenter
 from domain.tools.base import ToolResult
 
 if TYPE_CHECKING:
-    from core.repl.interface import REPL
+    from application.repl.interface import REPL
 
 
 def _enrich_results(

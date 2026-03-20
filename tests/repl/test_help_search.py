@@ -14,7 +14,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.interface import _build_search_help_table  # noqa: E402
+from application.repl.interface import _build_search_help_table  # noqa: E402
 
 
 def _render(table: Table) -> str:
@@ -101,7 +101,7 @@ def test_help_search_zap_hides_network_keys():
 
 
 def test_cmd_help_search_unknown_tool_prints_error():
-    from core.repl.interface import REPL
+    from application.repl.interface import REPL
 
     repl = MagicMock(spec=REPL)
     repl.config = MagicMock()

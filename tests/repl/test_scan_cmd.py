@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, call, patch
 
-from core.repl.commands.scan_commands import ScanCommands
+from application.repl.commands.scan_commands import ScanCommands
 
 MOCK_TOOLS = ["gitleaks", "semgrep", "nmap", "zap", "pip-audit"]
 
@@ -29,7 +29,7 @@ def _run(
 
     sc = ScanCommands(repl)
     with (
-        patch("core.repl.commands.scan_commands.tool_registry") as mock_reg,
+        patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
         patch.object(sc, "_make_orchestrator", return_value=mock_orchestrator),
     ):
         mock_reg.list_tool_names.return_value = tools

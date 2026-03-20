@@ -12,7 +12,7 @@ from application.tools.registry import tool_registry
 
 if TYPE_CHECKING:
     from application.rag.engine import RAGEngine
-    from core.repl.interface import REPL
+    from application.repl.interface import REPL
 
 # Help text exposed as a class attribute so smoke tests can find it.
 _HELP_TEXT = (

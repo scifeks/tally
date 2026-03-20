@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.table import Table
 
-from core.repl.commands.findings_table import color_severity
+from application.repl.commands.findings_table import color_severity
 
 
 def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:

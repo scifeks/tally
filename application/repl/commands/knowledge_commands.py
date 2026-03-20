@@ -10,9 +10,9 @@ from rich.table import Table
 if TYPE_CHECKING:
     from application.rag.engine import RAGEngine
     from application.rag.query import QueryEngine
-    from core.repl.interface import REPL
+    from application.repl.interface import REPL
 
-from core.repl.commands.findings_table import FindingsTableFactory
+from application.repl.commands.findings_table import FindingsTableFactory
 
 _findings_table_factory = FindingsTableFactory()
 
@@ -31,7 +31,7 @@ class KnowledgeCommands:
         """search [--flags...]  — search over ingested findings."""
         # --help is allowed without an active project
         if "--help" in args:
-            from core.repl.interface import _build_search_help_table
+            from application.repl.interface import _build_search_help_table
 
             self.repl.console.print(_build_search_help_table())
             return
@@ -48,9 +48,9 @@ class KnowledgeCommands:
             )
             return
 
+        from application.repl.search_command_parser import parse_sqlite_search_command
         from application.tools.registry import tool_registry
         from core.exceptions import SearchValidationError
-        from core.repl.search_command_parser import parse_sqlite_search_command
 
         finding_repo = self._get_finding_repo()
         if finding_repo is None:

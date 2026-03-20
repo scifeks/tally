@@ -13,7 +13,11 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.help_renderer import _HELP_REGISTRY, _NOTE, HelpRenderer  # noqa: E402
+from application.repl.help_renderer import (  # noqa: E402
+    _HELP_REGISTRY,
+    _NOTE,
+    HelpRenderer,
+)
 
 
 def _render(table: Table) -> str:

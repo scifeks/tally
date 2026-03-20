@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from application.rag.engine import RAGEngine
-    from core.repl.interface import REPL
+    from application.repl.interface import REPL
 
 
 class ReportCommand:

@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.table import Table
 
-from core.repl.commands.findings_table import color_severity, render_finding_type
+from application.repl.commands.findings_table import color_severity, render_finding_type
 
 
 def _build_gitleaks_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:

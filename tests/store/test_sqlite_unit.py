@@ -12,8 +12,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.repl.search_command_parser import (  # noqa: E402
+    parse_sqlite_search_command,
+)
 from core.exceptions import SearchValidationError  # noqa: E402
-from core.repl.search_command_parser import parse_sqlite_search_command  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.findings_serial import (  # noqa: E402

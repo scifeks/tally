@@ -10,7 +10,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.commands.purge import PurgeCommand  # noqa: E402
+from application.repl.commands.purge import PurgeCommand  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -54,7 +54,7 @@ def _run_purge(
     cmd = PurgeCommand(repl)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value=answer) as mock_input,
     ):
         mock_reg.list_tool_names.return_value = tools
@@ -70,7 +70,7 @@ def _run_purge(
 def test_bare_positional_arg_rejected(tmp_path: Path) -> None:
     repl = _make_repl(tmp_path)
     cmd = PurgeCommand(repl)
-    with patch("core.repl.commands.purge.tool_registry"):
+    with patch("application.repl.commands.purge.tool_registry"):
         cmd.cmd_purge("purge", ["gitleaks"])
     printed = " ".join(str(c) for c in repl.console.print.call_args_list)
     assert "Unrecognized" in printed
@@ -79,7 +79,7 @@ def test_bare_positional_arg_rejected(tmp_path: Path) -> None:
 def test_multiple_positional_args_rejected(tmp_path: Path) -> None:
     repl = _make_repl(tmp_path)
     cmd = PurgeCommand(repl)
-    with patch("core.repl.commands.purge.tool_registry"):
+    with patch("application.repl.commands.purge.tool_registry"):
         cmd.cmd_purge("purge", ["foo", "bar"])
     printed = " ".join(str(c) for c in repl.console.print.call_args_list)
     assert "Unrecognized" in printed
@@ -91,7 +91,7 @@ def test_positional_arg_does_not_delete_anything(tmp_path: Path) -> None:
     cmd = PurgeCommand(repl)
     with (
         patch.object(cmd, "_get_rag_engine") as mock_engine,
-        patch("core.repl.commands.purge.tool_registry"),
+        patch("application.repl.commands.purge.tool_registry"),
     ):
         cmd.cmd_purge("purge", ["nmap"])
     mock_engine.assert_not_called()
@@ -122,7 +122,7 @@ def test_abort_on_no_answer(tmp_path: Path) -> None:
     engine = _make_rag_engine(3)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="n"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -143,7 +143,7 @@ def test_prompt_contains_yn(tmp_path: Path) -> None:
     engine = _make_rag_engine(3)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="n"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -172,7 +172,7 @@ def test_purge_all_deletes_tool_output_files(tmp_path: Path) -> None:
     engine = _make_rag_engine(5)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -199,7 +199,7 @@ def test_purge_tool_deletes_only_that_tools_files(tmp_path: Path) -> None:
     engine = _make_rag_engine(3)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -221,7 +221,7 @@ def test_purge_tool_missing_dir_does_not_raise(tmp_path: Path) -> None:
     engine = _make_rag_engine(2)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -240,7 +240,7 @@ def test_purge_all_calls_delete_findings_no_tool(tmp_path: Path) -> None:
     engine = _make_rag_engine(5)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -254,7 +254,7 @@ def test_purge_tool_calls_delete_findings_with_tool(tmp_path: Path) -> None:
     engine = _make_rag_engine(3)
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
@@ -274,7 +274,7 @@ def test_zero_docs_skips_prompt(tmp_path: Path) -> None:
     engine.count_documents.return_value = 0
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
-        patch("core.repl.commands.purge.tool_registry") as mock_reg,
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y") as mock_input,
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS

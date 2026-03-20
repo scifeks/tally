@@ -17,12 +17,14 @@ from application.rag.search_parser import (  # noqa: E402
     _resolve_type_filter,
     parse_search_query,
 )
-from core.exceptions import SearchValidationError  # noqa: E402
-from core.repl.commands.findings_table import (  # noqa: E402
+from application.repl.commands.findings_table import (  # noqa: E402
     _extract_types,
     color_severity,
 )
-from core.repl.search_command_parser import parse_chromadb_search_command  # noqa: E402
+from application.repl.search_command_parser import (  # noqa: E402
+    parse_chromadb_search_command,
+)
+from core.exceptions import SearchValidationError  # noqa: E402
 
 _KNOWN_TOOLS = frozenset({"nmap", "gitleaks", "semgrep", "zap", "pip-audit"})
 
@@ -352,7 +354,7 @@ def test_unknown_key_error_with_tool_after_bad_key_uses_tool_context():
 
 def test_no_results_message():
     """When search returns [], cmd_search prints the 'No findings' message."""
-    from core.repl.commands.knowledge_commands import KnowledgeCommands
+    from application.repl.commands.knowledge_commands import KnowledgeCommands
 
     repl = MagicMock()
     repl.active_project = "test_project"

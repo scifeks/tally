@@ -11,7 +11,7 @@ from application.triage.orchestrator import (
 )
 
 if TYPE_CHECKING:
-    from core.repl.interface import REPL
+    from application.repl.interface import REPL
 
 
 class TriageCommands:

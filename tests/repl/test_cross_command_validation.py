@@ -10,9 +10,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
-from core.repl.commands.purge import PurgeCommand  # noqa: E402
-from core.repl.commands.scan_commands import ScanCommands  # noqa: E402
+from application.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
+from application.repl.commands.purge import PurgeCommand  # noqa: E402
+from application.repl.commands.scan_commands import ScanCommands  # noqa: E402
 
 _VALID_TOOLS = ["nmap", "semgrep", "gitleaks"]
 _INVALID_TOOL = "nonexistent-tool"
@@ -24,7 +24,7 @@ _VALID_TOOL = "nmap"
 # ---------------------------------------------------------------------------
 
 
-@patch("core.repl.commands.scan_commands.tool_registry")
+@patch("application.repl.commands.scan_commands.tool_registry")
 def test_invalid_tool_rejected_by_scan(mock_reg):
     mock_reg.list_tool_names.return_value = _VALID_TOOLS
     repl = MagicMock()
@@ -34,7 +34,7 @@ def test_invalid_tool_rejected_by_scan(mock_reg):
     assert any("Unknown tool" in p for p in printed)
 
 
-@patch("core.repl.commands.purge.tool_registry")
+@patch("application.repl.commands.purge.tool_registry")
 def test_invalid_tool_rejected_by_purge(mock_reg):
     mock_reg.list_tool_names.return_value = _VALID_TOOLS
     repl = MagicMock()
@@ -61,7 +61,7 @@ def test_invalid_tool_rejected_by_search():
 # ---------------------------------------------------------------------------
 
 
-@patch("core.repl.commands.scan_commands.tool_registry")
+@patch("application.repl.commands.scan_commands.tool_registry")
 def test_valid_tool_accepted_by_scan(mock_reg):
     mock_reg.list_tool_names.return_value = _VALID_TOOLS
     repl = MagicMock()
@@ -74,7 +74,7 @@ def test_valid_tool_accepted_by_scan(mock_reg):
     assert not any("Unknown tool" in p for p in printed)
 
 
-@patch("core.repl.commands.purge.tool_registry")
+@patch("application.repl.commands.purge.tool_registry")
 def test_valid_tool_accepted_by_purge(mock_reg):
     mock_reg.list_tool_names.return_value = _VALID_TOOLS
     repl = MagicMock()
