@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.table import Table
 
-from core.repl.commands.findings_table import _render_finding_type
+from core.repl.commands.findings_table import render_finding_type
 
 
 def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
@@ -37,7 +37,7 @@ def _build_semgrep_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
         row: list[str] = [
             meta.get("rule_id", ""),
             location,
-            _render_finding_type(meta),
+            render_finding_type(meta),
             meta.get("confidence", ""),
             cwe_owasp,
         ]

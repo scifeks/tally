@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.table import Table
 
-from core.repl.commands.findings_table import _color_severity, _render_finding_type
+from core.repl.commands.findings_table import color_severity, render_finding_type
 
 
 def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
@@ -37,8 +37,8 @@ def _build_osv_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
         row: list[str] = [
             meta.get("source_type", ""),
             meta.get("file_path") or meta.get("source_file", ""),
-            _render_finding_type(meta),
-            _color_severity(sev),
+            render_finding_type(meta),
+            color_severity(sev),
             "probable",
             ids,
         ]

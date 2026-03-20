@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from core.exceptions import SearchValidationError
-from core.rag.search_parser import SearchQuery, _combine_clauses, _handle_search_flag
+from core.rag.search_parser import SearchQuery, combine_clauses, handle_search_flag
 from core.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
 
 _DEFAULT_PAGE_SIZE = 200
@@ -166,7 +166,7 @@ class _ChromaDBStrategy:
         contains: bool,
         known_tools: frozenset[str],
     ) -> None:
-        _handle_search_flag(
+        handle_search_flag(
             flag,
             val,
             contains=contains,
@@ -175,7 +175,7 @@ class _ChromaDBStrategy:
         )
 
     def build_result(self, page: int, page_size: int) -> Any:
-        where_filter = _combine_clauses(self._filter_clauses)
+        where_filter = combine_clauses(self._filter_clauses)
         return SearchQuery(
             semantic_text=None,
             where_filter=where_filter,

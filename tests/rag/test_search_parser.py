@@ -19,8 +19,8 @@ from core.rag.search_parser import (  # noqa: E402
     parse_search_query,
 )
 from core.repl.commands.findings_table import (  # noqa: E402
-    _color_severity,
     _extract_types,
+    color_severity,
 )
 from core.repl.search_command_parser import parse_chromadb_search_command  # noqa: E402
 
@@ -277,23 +277,23 @@ def test_extract_types_empty_meta():
     assert _extract_types({}) == ""
 
 
-def test_color_severity_critical():
-    result = _color_severity("critical")
+def testcolor_severity_critical():
+    result = color_severity("critical")
     assert "red" in result
 
 
-def test_color_severity_low():
-    result = _color_severity("low")
+def testcolor_severity_low():
+    result = color_severity("low")
     assert "blue" in result
 
 
-def test_color_severity_unknown():
-    result = _color_severity("unknown_value")
+def testcolor_severity_unknown():
+    result = color_severity("unknown_value")
     assert "white" in result
 
 
-def test_color_severity_empty():
-    assert _color_severity("") == ""
+def testcolor_severity_empty():
+    assert color_severity("") == ""
 
 
 # ---------------------------------------------------------------------------

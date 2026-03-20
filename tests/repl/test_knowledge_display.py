@@ -20,7 +20,7 @@ if str(_TALLY_ROOT) not in sys.path:
 from core.repl.commands.findings_table import (  # noqa: E402
     _all_from_tool,
     _build_generic_table,
-    _render_finding_type,
+    render_finding_type,
 )
 from core.repl.commands.renderers.gitleaks import _build_gitleaks_table  # noqa: E402
 from core.repl.commands.renderers.osv_scanner import _build_osv_table  # noqa: E402
@@ -236,28 +236,28 @@ class TestGitleaksTableSeverity:
         assert "high" in rendered
 
     def test_critical_severity_uses_red_markup(self) -> None:
-        from core.repl.commands.findings_table import _color_severity
+        from core.repl.commands.findings_table import color_severity
 
-        markup = _color_severity("critical")
+        markup = color_severity("critical")
         assert "[red]" in markup
         assert "critical" in markup
 
     def test_informational_severity_uses_white_markup(self) -> None:
-        from core.repl.commands.findings_table import _color_severity
+        from core.repl.commands.findings_table import color_severity
 
-        markup = _color_severity("informational")
+        markup = color_severity("informational")
         assert "[white]" in markup
 
     def test_medium_severity_uses_yellow_markup(self) -> None:
-        from core.repl.commands.findings_table import _color_severity
+        from core.repl.commands.findings_table import color_severity
 
-        markup = _color_severity("medium")
+        markup = color_severity("medium")
         assert "[yellow]" in markup
 
     def test_low_severity_uses_blue_markup(self) -> None:
-        from core.repl.commands.findings_table import _color_severity
+        from core.repl.commands.findings_table import color_severity
 
-        markup = _color_severity("low")
+        markup = color_severity("low")
         assert "[blue]" in markup
 
 
@@ -580,30 +580,30 @@ class TestAllFromToolSemgrep:
 
 
 # ---------------------------------------------------------------------------
-# _render_finding_type
+# render_finding_type
 # ---------------------------------------------------------------------------
 
 
 class TestRenderFindingType:
     def test_single_element_list_renders_plain(self) -> None:
-        assert _render_finding_type({"finding_type": ["informational"]}) == (
+        assert render_finding_type({"finding_type": ["informational"]}) == (
             "informational"
         )
 
     def test_two_element_list_renders_joined(self) -> None:
-        result = _render_finding_type({"finding_type": ["vulnerability", "dependency"]})
+        result = render_finding_type({"finding_type": ["vulnerability", "dependency"]})
         assert result == "vulnerability, dependency"
 
     def test_missing_finding_type_falls_back_to_extract_types(self) -> None:
         # No finding_type and no type_* booleans → empty string
-        assert _render_finding_type({}) == ""
+        assert render_finding_type({}) == ""
 
     def test_string_finding_type_passes_through(self) -> None:
-        assert _render_finding_type({"finding_type": "secret"}) == "secret"
+        assert render_finding_type({"finding_type": "secret"}) == "secret"
 
     def test_empty_string_finding_type_falls_back(self) -> None:
         # Empty string → falls back to _extract_types, no flags → ""
-        assert _render_finding_type({"finding_type": ""}) == ""
+        assert render_finding_type({"finding_type": ""}) == ""
 
 
 # ---------------------------------------------------------------------------

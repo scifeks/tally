@@ -32,7 +32,7 @@ from core.repl.commands import (
     ToolCommands,
     TriageCommands,
 )
-from core.repl.help_renderer import _HELP_BOX, HelpRenderer
+from core.repl.help_renderer import HELP_BOX, HelpRenderer
 from core.startup.checker import print_installed_system_tools
 from core.tools.registry import print_discovery_summary
 
@@ -135,7 +135,7 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
     table = Table(
         show_header=True,
         header_style="bold",
-        box=_HELP_BOX,
+        box=HELP_BOX,
         padding=(0, 1),
     )
     table.add_column("Search Syntax", min_width=40, no_wrap=True, style="cyan")

@@ -6,7 +6,7 @@ from typing import Any
 
 from rich.table import Table
 
-from core.repl.commands.findings_table import _color_severity
+from core.repl.commands.findings_table import color_severity
 
 
 def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
@@ -33,7 +33,7 @@ def _build_zap_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
             meta.get("method", ""),
             meta.get("url", ""),
             cwe_str,
-            _color_severity(sev),
+            color_severity(sev),
             meta.get("confidence", ""),
         ]
         if is_semantic:

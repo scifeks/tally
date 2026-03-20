@@ -35,7 +35,7 @@ def _extract_types(meta: dict) -> str:
     return ", ".join(active)
 
 
-def _render_finding_type(meta: dict) -> str:
+def render_finding_type(meta: dict) -> str:
     """Render finding_type for display: join list, fall back to type_* booleans."""
     ft = meta.get("finding_type")
     if isinstance(ft, list):
@@ -45,7 +45,7 @@ def _render_finding_type(meta: dict) -> str:
     return _extract_types(meta)
 
 
-def _color_severity(sev: str) -> str:
+def color_severity(sev: str) -> str:
     color = _SEVERITY_COLORS.get(sev, "white")
     return f"[{color}]{sev}[/{color}]" if sev else ""
 
@@ -138,7 +138,7 @@ def _build_fields_table(results: list[dict[str, Any]], fields: list[str]) -> Tab
             if val is None or val == "":
                 row.append("N/A")
             elif f == "severity":
-                row.append(_color_severity(str(val)))
+                row.append(color_severity(str(val)))
             elif isinstance(val, list):
                 row.append(", ".join(str(v) for v in val))
             else:
@@ -165,8 +165,8 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
         row: list[str] = [
             meta.get("tool", ""),
             meta.get("domain", ""),
-            _render_finding_type(meta),
-            _color_severity(sev),
+            render_finding_type(meta),
+            color_severity(sev),
             meta.get("confidence", ""),
             meta.get("risk_type", ""),
         ]

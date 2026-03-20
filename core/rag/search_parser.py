@@ -137,7 +137,7 @@ def _add_filter(
     filter_clauses.append({field: {op: value}})
 
 
-def _handle_search_flag(
+def handle_search_flag(
     key: str,
     value: str,
     contains: bool,
@@ -179,7 +179,7 @@ def _handle_search_flag(
         filter_clauses.append({key: {op: value}})
 
 
-def _combine_clauses(clauses: list[dict]) -> dict | None:
+def combine_clauses(clauses: list[dict]) -> dict | None:
     if not clauses:
         return None
     if len(clauses) == 1:
@@ -268,7 +268,7 @@ def parse_search_query(
                 semantic_parts.append(token)
 
     semantic_text = " ".join(semantic_parts).strip() or None
-    where_filter = _combine_clauses(filter_clauses)
+    where_filter = combine_clauses(filter_clauses)
     is_semantic = semantic_text is not None
 
     if page_size is None:

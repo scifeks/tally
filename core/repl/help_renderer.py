@@ -6,7 +6,7 @@ from rich.table import Table
 
 # Custom box: vertical edge/divider lines with a header separator only.
 # Each line = 4 chars: left-edge, fill, column-divider, right-edge.
-_HELP_BOX = box.Box(
+HELP_BOX = box.Box(
     "┌─┬┐\n"  # top border
     "│ ││\n"  # head row chars
     "├─┼┤\n"  # head/data separator
@@ -223,7 +223,7 @@ class HelpRenderer:
         table = Table(
             show_header=True,
             header_style="bold",
-            box=_HELP_BOX,
+            box=HELP_BOX,
             padding=(0, 1),
         )
         table.add_column("Command", style="cyan", no_wrap=True, min_width=20)
