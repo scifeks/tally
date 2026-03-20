@@ -6,7 +6,7 @@ import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.store.connection import ConnectionFactory
+    from infrastructure.store.connection import ConnectionFactory
 
 
 class RunRepository:

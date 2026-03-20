@@ -22,9 +22,9 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from core.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
-from core.store import make_store  # noqa: E402
-from core.store.repositories.findings import FindingRepository  # noqa: E402
-from core.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store import make_store  # noqa: E402
+from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

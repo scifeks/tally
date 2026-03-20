@@ -18,10 +18,10 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
-from core.store import make_store  # noqa: E402
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.findings import FindingRepository  # noqa: E402
-from core.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store import make_store  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 
 # ---------------------------------------------------------------------------

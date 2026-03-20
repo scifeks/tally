@@ -14,13 +14,13 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from core.exceptions import SearchValidationError  # noqa: E402
 from core.repl.search_command_parser import parse_sqlite_search_command  # noqa: E402
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.findings import FindingRepository  # noqa: E402
-from core.store.repositories.findings_serial import (  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
+from infrastructure.store.repositories.findings_serial import (  # noqa: E402
     normalise_cwe,
     normalise_finding_type,
 )
-from core.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers

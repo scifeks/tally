@@ -181,8 +181,8 @@ class PurgeCommand:
         try:
             from pathlib import Path
 
-            from core.store.connection import ConnectionFactory
-            from core.store.repositories.findings import FindingRepository
+            from infrastructure.store.connection import ConnectionFactory
+            from infrastructure.store.repositories.findings import FindingRepository
 
             db_path = (
                 Path(self.repl.base_path)

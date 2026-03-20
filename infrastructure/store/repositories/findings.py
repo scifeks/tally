@@ -6,8 +6,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from core.store.repositories.findings_query import FindingQueryBuilder
-from core.store.repositories.findings_serial import (
+from infrastructure.store.repositories.findings_query import FindingQueryBuilder
+from infrastructure.store.repositories.findings_serial import (
     _CHROMA_TO_SQLITE,
     _COMMA_LIST_FIELDS,
     compute_fingerprint,
@@ -17,7 +17,7 @@ from core.store.repositories.findings_serial import (
 )
 
 if TYPE_CHECKING:
-    from core.store.connection import ConnectionFactory
+    from infrastructure.store.connection import ConnectionFactory
 
 logger = logging.getLogger(__name__)
 

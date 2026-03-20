@@ -13,11 +13,11 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.audit import AuditRepository  # noqa: E402
-from core.store.repositories.findings import FindingRepository  # noqa: E402
-from core.store.repositories.runs import RunRepository  # noqa: E402
-from core.store.repositories.triage import TriageBatchRepository  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.audit import AuditRepository  # noqa: E402
+from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store.repositories.triage import TriageBatchRepository  # noqa: E402
 from tally_mcp.context import FindingsContext  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 

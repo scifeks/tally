@@ -20,8 +20,8 @@ if str(_TALLY_ROOT) not in sys.path:
 
 import sqlite3  # noqa: E402
 
-from core.store import make_store  # noqa: E402
-from core.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store import make_store  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 
 
 class _TestStore:

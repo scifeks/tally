@@ -133,7 +133,7 @@ class RAGEngine:
     def _init_sqlite(self) -> None:
         """Initialise SQLite schema for this project (creates tables if absent)."""
         try:
-            from core.store import make_store
+            from infrastructure.store import make_store
 
             make_store(self.base_path, self.project_name)
         except Exception as exc:

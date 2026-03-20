@@ -21,7 +21,7 @@ from .engine import RAGEngine
 from .ingestor import ChunkBuilderFactory
 
 if TYPE_CHECKING:
-    from core.store.repositories.findings import FindingRepository
+    from infrastructure.store.repositories.findings import FindingRepository
 
 logger = logging.getLogger(__name__)
 

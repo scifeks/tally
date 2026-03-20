@@ -18,7 +18,7 @@ if str(_TALLY_ROOT) not in sys.path:
 import application.triage.runner as triage_mod  # noqa: E402
 from application.triage.orchestrator import run_triage  # noqa: E402
 from application.triage.runner import TriageRunner  # noqa: E402
-from core.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -248,7 +248,7 @@ def test_standalone_import() -> None:
 
 def test_stale_batches_for_current_run_are_reset(project_db) -> None:
     """in_progress batches for the current run_id are reset and then processed."""
-    from core.store import make_store
+    from infrastructure.store import make_store
 
     project, tmp_root, db = project_db
     _make_db(db, [])
@@ -273,7 +273,7 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.repositories.runs.RunRepository.create_run",
+            "infrastructure.store.repositories.runs.RunRepository.create_run",
             return_value=run_id,
         ),
         patch("subprocess.run", return_value=mock_result),
@@ -290,7 +290,7 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
 
 def test_stale_batches_other_run_not_touched(project_db) -> None:
     """in_progress batches from a different run_id are not reset."""
-    from core.store import make_store
+    from infrastructure.store import make_store
 
     project, tmp_root, db = project_db
     _make_db(db, [])
@@ -316,7 +316,7 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.repositories.runs.RunRepository.create_run",
+            "infrastructure.store.repositories.runs.RunRepository.create_run",
             return_value=run_id_a,
         ),
         patch("subprocess.run", return_value=mock_result),
@@ -352,12 +352,15 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.repositories.triage.TriageBatchRepository.create_batches",
+            "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=1,
         ) as mock_create,
-        patch("core.store.repositories.runs.RunRepository.create_run", return_value=1),
         patch(
-            "core.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
+            "infrastructure.store.repositories.runs.RunRepository.create_run",
+            return_value=1,
+        ),
+        patch(
+            "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch("subprocess.run", return_value=mock_run),
@@ -378,12 +381,15 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.repositories.triage.TriageBatchRepository.create_batches",
+            "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             side_effect=RuntimeError("db locked"),
         ),
-        patch("core.store.repositories.runs.RunRepository.create_run", return_value=1),
         patch(
-            "core.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
+            "infrastructure.store.repositories.runs.RunRepository.create_run",
+            return_value=1,
+        ),
+        patch(
+            "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch.object(TriageRunner, "_write_mcp_config") as mock_write,
@@ -406,12 +412,15 @@ def test_batch_count_reported(project_db, capsys) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "core.store.repositories.triage.TriageBatchRepository.create_batches",
+            "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=3,
         ),
-        patch("core.store.repositories.runs.RunRepository.create_run", return_value=1),
         patch(
-            "core.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
+            "infrastructure.store.repositories.runs.RunRepository.create_run",
+            return_value=1,
+        ),
+        patch(
+            "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch("subprocess.run", return_value=mock_run),

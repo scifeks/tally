@@ -22,9 +22,9 @@ except FileNotFoundError:
     SESSION_TIMEOUT_SECONDS = 300
 
 if TYPE_CHECKING:
-    from core.store.repositories.audit import AuditRepository
-    from core.store.repositories.runs import RunRepository
-    from core.store.repositories.triage import TriageBatchRepository
+    from infrastructure.store.repositories.audit import AuditRepository
+    from infrastructure.store.repositories.runs import RunRepository
+    from infrastructure.store.repositories.triage import TriageBatchRepository
 
 _log = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class TriageRunner:
         db = root / "projects" / project / "sqlite" / "findings.db"
         if not db.exists():
             raise FileNotFoundError(f"Project database not found: {db}")
-        from core.store import make_store
+        from infrastructure.store import make_store
 
         run_repo, _, triage_repo, audit_repo = make_store(root, project)
         return cls(project, run_repo, triage_repo, audit_repo, root)

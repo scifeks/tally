@@ -14,7 +14,7 @@ from core.pipeline.events import (
 )
 from core.rag.enrichment import EnrichmentPipeline
 from core.rag.ingestor import FindingIngestor
-from core.store import make_store
+from infrastructure.store import make_store
 
 if TYPE_CHECKING:
     from rich.console import Console

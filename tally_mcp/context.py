@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.store.repositories.audit import AuditRepository
-    from core.store.repositories.findings import FindingRepository
-    from core.store.repositories.triage import TriageBatchRepository
+    from infrastructure.store.repositories.audit import AuditRepository
+    from infrastructure.store.repositories.findings import FindingRepository
+    from infrastructure.store.repositories.triage import TriageBatchRepository
 
 
 @dataclass(frozen=True)

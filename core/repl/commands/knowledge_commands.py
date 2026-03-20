@@ -253,7 +253,7 @@ class KnowledgeCommands:
 
     def _get_finding_repo(self):  # type: ignore[return]
         """Return a FindingRepository for the active project, or None on error."""
-        from core.store import make_store
+        from infrastructure.store import make_store
 
         assert self.repl.active_project is not None
         try:

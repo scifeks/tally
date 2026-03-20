@@ -10,7 +10,7 @@ class ConnectionFactory:
     """Creates SQLite connections and manages schema initialisation.
 
     Database path is fixed at construction time.  All repositories in
-    ``core.store.repositories`` receive a ``ConnectionFactory`` in their
+    ``infrastructure.store.repositories`` receive a ``ConnectionFactory`` in their
     ``__init__`` and call ``self._factory.connect()`` internally.
     """
 

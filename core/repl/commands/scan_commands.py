@@ -387,7 +387,7 @@ class ScanCommands:
         """
         assert self.repl.active_project is not None
         try:
-            from core.store import make_store
+            from infrastructure.store import make_store
 
             run_repo, finding_repo, _, _ = make_store(
                 self.repl.base_path, self.repl.active_project

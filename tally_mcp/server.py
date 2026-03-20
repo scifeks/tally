@@ -13,7 +13,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from core.config.manager import ConfigManager
-from core.store import make_store
+from infrastructure.store import make_store
 
 from .context import FindingsContext
 from .tools import findings
