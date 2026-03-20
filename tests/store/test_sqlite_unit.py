@@ -15,10 +15,10 @@ if str(_TALLY_ROOT) not in sys.path:
 from core.exceptions import SearchValidationError  # noqa: E402
 from core.repl.search_command_parser import parse_sqlite_search_command  # noqa: E402
 from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.findings import (  # noqa: E402
-    FindingRepository,
-    _normalise_cwe,
-    _normalise_finding_type,
+from core.store.repositories.findings import FindingRepository  # noqa: E402
+from core.store.repositories.findings_serial import (  # noqa: E402
+    normalise_cwe,
+    normalise_finding_type,
 )
 from core.store.repositories.runs import RunRepository  # noqa: E402
 
@@ -326,19 +326,19 @@ class TestIngestHook:
 
 class TestFindingTypeNormalisation:
     def test_plain_string_secret(self) -> None:
-        assert _normalise_finding_type("secret") == '["secret"]'
+        assert normalise_finding_type("secret") == '["secret"]'
 
     def test_already_array_is_idempotent(self) -> None:
-        assert _normalise_finding_type('["secret"]') == '["secret"]'
+        assert normalise_finding_type('["secret"]') == '["secret"]'
 
     def test_invalid_value_returns_none(self) -> None:
-        result = _normalise_finding_type("bogus")
+        result = normalise_finding_type("bogus")
         assert result is None
 
     def test_mixed_valid_and_invalid(self) -> None:
         import json
 
-        result = _normalise_finding_type('["secret", "bogus"]')
+        result = normalise_finding_type('["secret", "bogus"]')
         assert result is not None
         items = json.loads(result)
         assert items == ["secret"]
@@ -352,26 +352,26 @@ class TestFindingTypeNormalisation:
 
 class TestCweNormalisationUnit:
     def test_none_returns_none(self) -> None:
-        assert _normalise_cwe(None) is None
+        assert normalise_cwe(None) is None
 
     def test_int_produces_cwe_prefix(self) -> None:
         import json
 
-        result = _normalise_cwe(89)
+        result = normalise_cwe(89)
         assert result is not None
         assert json.loads(result) == ["CWE-89"]
 
     def test_plain_string(self) -> None:
         import json
 
-        result = _normalise_cwe("CWE-89")
+        result = normalise_cwe("CWE-89")
         assert result is not None
         assert json.loads(result) == ["CWE-89"]
 
     def test_list_input(self) -> None:
         import json
 
-        result = _normalise_cwe(["CWE-89", "CWE-20"])
+        result = normalise_cwe(["CWE-89", "CWE-20"])
         assert result is not None
         items = json.loads(result)
         assert "CWE-89" in items
@@ -380,7 +380,7 @@ class TestCweNormalisationUnit:
     def test_comma_joined_string(self) -> None:
         import json
 
-        result = _normalise_cwe("CWE-89, CWE-20")
+        result = normalise_cwe("CWE-89, CWE-20")
         assert result is not None
         items = json.loads(result)
         assert "CWE-89" in items
