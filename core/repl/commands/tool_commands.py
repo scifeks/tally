@@ -7,14 +7,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from core.repl.help_renderer import HelpRenderer
     from core.repl.interface import REPL
 
 
 class ToolCommands:
     """Handlers for tool configuration management commands."""
 
-    def __init__(self, repl: REPL) -> None:
+    def __init__(self, repl: REPL, help_renderer: HelpRenderer) -> None:
         self.repl = repl
+        self.help_renderer = help_renderer
 
     # ------------------------------------------------------------------
     # Top-level dispatcher
@@ -23,7 +25,7 @@ class ToolCommands:
     def cmd_tool(self, _cmd: str, args: list) -> None:
         """tool [add|edit <name>|remove <name>|list] — manage tool configuration."""
         if not args:
-            self.repl._cmd_help_scoped("tool")
+            self.help_renderer.render("tool")
             return
 
         project_name, args = self._parse_project_flag(args)
@@ -53,7 +55,7 @@ class ToolCommands:
                 self._cmd_tool_remove_project(args[1], project_name)
             else:
                 self.repl.console.print(f"[red]Unknown subcommand:[/red] {sub}")
-                self.repl._cmd_help_scoped("tool")
+                self.help_renderer.render("tool")
             return
 
         if sub == "list":
@@ -72,7 +74,7 @@ class ToolCommands:
             self._cmd_tool_remove(args[1])
         else:
             self.repl.console.print(f"[red]Unknown subcommand:[/red] {sub}")
-            self.repl._cmd_help_scoped("tool")
+            self.help_renderer.render("tool")
 
     # ------------------------------------------------------------------
     # Subcommands

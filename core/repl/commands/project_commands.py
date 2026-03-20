@@ -8,14 +8,16 @@ from rich.panel import Panel
 from rich.table import Table
 
 if TYPE_CHECKING:
+    from core.repl.help_renderer import HelpRenderer
     from core.repl.interface import REPL
 
 
 class ProjectCommands:
     """Handlers for project management commands."""
 
-    def __init__(self, repl: REPL) -> None:
+    def __init__(self, repl: REPL, help_renderer: HelpRenderer) -> None:
         self.repl = repl
+        self.help_renderer = help_renderer
 
     # ------------------------------------------------------------------
     # Grouped command entrypoints (scoped help or subcommand dispatch)
@@ -24,7 +26,7 @@ class ProjectCommands:
     def cmd_project(self, _cmd: str, args: list[str]) -> None:
         """project [add|switch|list|info] — project management."""
         if not args:
-            self.repl._cmd_help_scoped("project")
+            self.help_renderer.render("project")
             return
         sub = args[0].lower()
         if sub == "add":
@@ -46,7 +48,7 @@ class ProjectCommands:
     def cmd_repo(self, _cmd: str, args: list[str]) -> None:
         """repo [add|delete|edit|list] — repository management."""
         if not args:
-            self.repl._cmd_help_scoped("repo")
+            self.help_renderer.render("repo")
             return
         sub = args[0].lower()
         if sub == "add":

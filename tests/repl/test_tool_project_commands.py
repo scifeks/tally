@@ -16,7 +16,7 @@ def _make_tc(
     repl = MagicMock()
     repl.active_project = active_project
     repl.base_path = base_path or "/tmp/tally-test"
-    return ToolCommands(repl), repl
+    return ToolCommands(repl, MagicMock()), repl
 
 
 # ---------------------------------------------------------------------------
