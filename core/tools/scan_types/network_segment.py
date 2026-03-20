@@ -9,7 +9,8 @@ from typing import Any
 from core.pipeline.events import ToolCompleted
 from core.tools.base import ToolResult
 from core.tools.display import ToolDisplayRow
-from core.tools.scan_types.base import ScanType, _execute_tool_passes, _make_context
+from core.tools.scan_types._helpers import _execute_tool_passes, _make_context
+from core.tools.scan_types.base import ExecutionResources, ScanType
 from core.tools.scan_types.models import ScanSummary, ScanTypeConfig
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,9 @@ logger = logging.getLogger(__name__)
 class NetworkSegmentScan(ScanType):
     """Run nmap for all configured profiles as a single merged result."""
 
-    def execute(self, config: ScanTypeConfig) -> ScanSummary:
+    def execute(
+        self, config: ScanTypeConfig, resources: ExecutionResources
+    ) -> ScanSummary:
         start = perf_counter()
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
@@ -42,7 +45,7 @@ class NetworkSegmentScan(ScanType):
                 findings_by_tool=findings_by_tool,
             )
 
-        tool_config = config.registry.get_tool_config("nmap")
+        tool_config = resources.registry.get_tool_config("nmap")
         if tool_config is None:
             config.display.print_tool_line(
                 ToolDisplayRow("nmap", False, True, 0, 0.0, "not registered")
@@ -59,7 +62,7 @@ class NetworkSegmentScan(ScanType):
             )
 
         try:
-            tool: Any = config.factory.create("nmap", tool_config)
+            tool: Any = resources.factory.create("nmap", tool_config)
         except Exception as exc:
             logger.warning("Factory failed for 'nmap': %s", exc)
             config.display.print_tool_line(
@@ -96,11 +99,11 @@ class NetworkSegmentScan(ScanType):
             config.config_manager,
             config.project_name,
             config.base_path,
-            config.registry,
+            resources.registry,
             None,
             tool_config,
         )
-        result = _execute_tool_passes(tool, context, config)
+        result = _execute_tool_passes(tool, context, config, resources.executor)
 
         if result is None:
             config.display.print_tool_line(ToolDisplayRow("nmap", False, True, 0, 0.0))

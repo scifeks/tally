@@ -12,6 +12,7 @@ from core.tools.factory import ToolWrapperFactory
 from core.tools.registry import ToolRegistry
 from core.tools.scan_types import (
     SEGMENT_ORDER,
+    ExecutionResources,
     FullScan,
     RepoScan,
     ScanSummary,
@@ -85,13 +86,18 @@ class ScanOrchestrator:
         return ScanTypeConfig(
             project_name=self.project_name,
             base_path=str(self.executor.base_path),
-            executor=self.executor,
-            registry=self.registry,
             config_manager=self._config,
             event_bus=self._event_bus,
             display=self.display,
             run_id=self._run_id,
             auto_approve=auto_approve or self._auto_approve,
+        )
+
+    def _make_resources(self) -> ExecutionResources:
+        """Build an ExecutionResources from current orchestrator state."""
+        return ExecutionResources(
+            executor=self.executor,
+            registry=self.registry,
             factory=self._factory,
         )
 
@@ -104,14 +110,18 @@ class ScanOrchestrator:
         auto_approve: bool = False,
         exclude_segments: list[str] | None = None,
     ) -> ScanSummary:
-        return FullScan(exclude_segments or []).execute(self._make_config(auto_approve))
+        return FullScan(exclude_segments or []).execute(
+            self._make_config(auto_approve), self._make_resources()
+        )
 
     def run_segment(
         self,
         segment_name: str,
         auto_approve: bool = False,
     ) -> ScanSummary:
-        return SegmentScan(segment_name).execute(self._make_config(auto_approve))
+        return SegmentScan(segment_name).execute(
+            self._make_config(auto_approve), self._make_resources()
+        )
 
     def run_repo_scan(
         self,
@@ -120,14 +130,18 @@ class ScanOrchestrator:
         exclude_dirs: list[str] | None = None,
         severity_filter: str | None = None,
     ) -> ScanSummary:
-        return RepoScan(repo_name).execute(self._make_config(auto_approve))
+        return RepoScan(repo_name).execute(
+            self._make_config(auto_approve), self._make_resources()
+        )
 
     def run_tool_on_all_repos(
         self,
         tool_name: str,
         auto_approve: bool = False,
     ) -> ScanSummary:
-        return ToolOnAllReposScan(tool_name).execute(self._make_config(auto_approve))
+        return ToolOnAllReposScan(tool_name).execute(
+            self._make_config(auto_approve), self._make_resources()
+        )
 
     def run_tool_on_repo(
         self,
@@ -136,5 +150,5 @@ class ScanOrchestrator:
         auto_approve: bool = False,
     ) -> ScanSummary:
         return ToolOnRepoScan(tool_name, repo_name).execute(
-            self._make_config(auto_approve)
+            self._make_config(auto_approve), self._make_resources()
         )

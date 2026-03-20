@@ -9,12 +9,12 @@ from typing import Any
 from core.pipeline.events import ToolCompleted
 from core.tools.base import ToolResult
 from core.tools.display import ToolDisplayRow
-from core.tools.scan_types.base import (
-    ScanType,
+from core.tools.scan_types._helpers import (
     _execute_tool_passes,
     _make_context,
     _normalize_success,
 )
+from core.tools.scan_types.base import ExecutionResources, ScanType
 from core.tools.scan_types.models import ScanSummary, ScanTypeConfig
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,9 @@ class ToolOnRepoScan(ScanType):
         self.tool_name = tool_name
         self.repo_name = repo_name
 
-    def execute(self, config: ScanTypeConfig) -> ScanSummary:
+    def execute(
+        self, config: ScanTypeConfig, resources: ExecutionResources
+    ) -> ScanSummary:
         repos = config.config_manager.load_repositories(config.project_name)
         repo = next(
             (r for r in repos if r.name.lower() == self.repo_name.lower()), None
@@ -38,12 +40,12 @@ class ToolOnRepoScan(ScanType):
                 f" project '{config.project_name}'"
             )
 
-        tool_config = config.registry.get_tool_config(self.tool_name)
+        tool_config = resources.registry.get_tool_config(self.tool_name)
         if tool_config is None:
             raise ValueError(f"Tool '{self.tool_name}' is not registered.")
 
         try:
-            tool: Any = config.factory.create(self.tool_name, tool_config)
+            tool: Any = resources.factory.create(self.tool_name, tool_config)
         except Exception as exc:
             raise ValueError(f"Tool '{self.tool_name}' factory error: {exc}") from exc
 
@@ -59,11 +61,11 @@ class ToolOnRepoScan(ScanType):
             config.config_manager,
             config.project_name,
             config.base_path,
-            config.registry,
+            resources.registry,
             repo,
             tool_config,
         )
-        result = _execute_tool_passes(tool, context, config)
+        result = _execute_tool_passes(tool, context, config, resources.executor)
 
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = 0

@@ -1,6 +1,6 @@
 """scan_types package — re-exports all public names for backwards compatibility."""
 
-from core.tools.scan_types.base import ScanType
+from core.tools.scan_types.base import ExecutionResources, ScanType
 from core.tools.scan_types.full import FullScan
 from core.tools.scan_types.models import (
     SEGMENT_ORDER,
@@ -20,6 +20,7 @@ __all__ = [
     "ScanSummary",
     "ScanTypeConfig",
     "ToolRun",
+    "ExecutionResources",
     "ScanType",
     "NetworkSegmentScan",
     "SegmentScan",

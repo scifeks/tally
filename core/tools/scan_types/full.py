@@ -6,7 +6,8 @@ from time import perf_counter
 
 from core.tools.base import ToolResult
 from core.tools.display import ToolDisplayRow
-from core.tools.scan_types.base import ScanType, _tools_for_segment
+from core.tools.scan_types._helpers import _tools_for_segment
+from core.tools.scan_types.base import ExecutionResources, ScanType
 from core.tools.scan_types.models import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
 from core.tools.scan_types.network_segment import NetworkSegmentScan
 from core.tools.scan_types.repo_segment import RepoSegmentScan
@@ -18,7 +19,9 @@ class FullScan(ScanType):
     def __init__(self, exclude_segments: list[str] | None = None) -> None:
         self.exclude_segments = exclude_segments or []
 
-    def execute(self, config: ScanTypeConfig) -> ScanSummary:
+    def execute(
+        self, config: ScanTypeConfig, resources: ExecutionResources
+    ) -> ScanSummary:
         start = perf_counter()
 
         all_results: list[ToolResult] = []
@@ -35,11 +38,11 @@ class FullScan(ScanType):
             config.display.print_segment_header(segment)
 
             if segment == "network":
-                seg_summary = NetworkSegmentScan().execute(config)
+                seg_summary = NetworkSegmentScan().execute(config, resources)
             else:
                 seg_summary = RepoSegmentScan(
-                    _tools_for_segment(segment, config.registry)
-                ).execute(config)
+                    _tools_for_segment(segment, resources.registry)
+                ).execute(config, resources)
 
             all_results.extend(seg_summary.results)
             total_run += seg_summary.total_tools_run

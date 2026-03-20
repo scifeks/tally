@@ -5,7 +5,7 @@ from __future__ import annotations
 from time import perf_counter
 
 from core.tools.display import ToolDisplayRow
-from core.tools.scan_types.base import ScanType
+from core.tools.scan_types.base import ExecutionResources, ScanType
 from core.tools.scan_types.models import ScanSummary, ScanTypeConfig
 from core.tools.scan_types.repo_segment import RepoSegmentScan
 
@@ -16,14 +16,16 @@ class ToolOnAllReposScan(ScanType):
     def __init__(self, tool_name: str) -> None:
         self.tool_name = tool_name
 
-    def execute(self, config: ScanTypeConfig) -> ScanSummary:
+    def execute(
+        self, config: ScanTypeConfig, resources: ExecutionResources
+    ) -> ScanSummary:
         start = perf_counter()
 
         config.display.print_scan_header(
             f"Repo Tool Scan: {config.project_name} — {self.tool_name}"
         )
 
-        seg_summary = RepoSegmentScan([self.tool_name]).execute(config)
+        seg_summary = RepoSegmentScan([self.tool_name]).execute(config, resources)
 
         duration = round(perf_counter() - start, 1)
         rows = [

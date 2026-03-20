@@ -8,9 +8,6 @@ from typing import TYPE_CHECKING
 from core.pipeline.events import EventBus
 from core.tools.base import ToolResult
 from core.tools.display import OrchestratorDisplay
-from core.tools.executor import ToolExecutor
-from core.tools.factory import ToolWrapperFactory
-from core.tools.registry import ToolRegistry
 
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
@@ -33,14 +30,11 @@ class ScanSummary:
 class ScanTypeConfig:
     project_name: str
     base_path: str
-    executor: ToolExecutor
-    registry: ToolRegistry
     config_manager: ConfigManager
     event_bus: EventBus
     display: OrchestratorDisplay
     run_id: int | None
     auto_approve: bool = False
-    factory: ToolWrapperFactory = field(default_factory=ToolWrapperFactory)
 
 
 @dataclass
