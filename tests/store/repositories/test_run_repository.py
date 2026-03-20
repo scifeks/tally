@@ -11,8 +11,8 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 
 
 @pytest.fixture()

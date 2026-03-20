@@ -13,11 +13,13 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.audit import AuditRepository  # noqa: E402
-from core.store.repositories.findings import FindingRepository  # noqa: E402
-from core.store.repositories.runs import RunRepository  # noqa: E402
-from core.store.repositories.triage import TriageBatchRepository  # noqa: E402
+from application.findings.updater import reconstruct_abs_path  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.audit import AuditRepository  # noqa: E402
+from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store.repositories.triage import TriageBatchRepository  # noqa: E402
+from tally_mcp.context import FindingsContext  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -75,23 +77,17 @@ def run_repo(factory: ConnectionFactory) -> RunRepository:
 
 @pytest.fixture()
 def finding_repo(factory: ConnectionFactory) -> FindingRepository:
-    repo = FindingRepository(factory)
-    findings._finding_repo = repo
-    return repo
+    return FindingRepository(factory)
 
 
 @pytest.fixture()
 def audit_repo(factory: ConnectionFactory) -> AuditRepository:
-    repo = AuditRepository(factory)
-    findings._audit_repo = repo
-    return repo
+    return AuditRepository(factory)
 
 
 @pytest.fixture()
 def triage_repo(factory: ConnectionFactory) -> TriageBatchRepository:
-    repo = TriageBatchRepository(factory)
-    findings._triage_repo = repo
-    return repo
+    return TriageBatchRepository(factory)
 
 
 # Convenience fixture that sets up all injections
@@ -103,6 +99,14 @@ def store(
     triage_repo: TriageBatchRepository,
 ) -> ConnectionFactory:
     """Return factory with all repos injected into findings module."""
+    findings.init(
+        FindingsContext(
+            finding_repo=finding_repo,
+            audit_repo=audit_repo,
+            triage_repo=triage_repo,
+            project_name="",
+        )
+    )
     return factory
 
 
@@ -276,8 +280,7 @@ async def test_false_positive_confidence_accepted(
 
 
 async def test_nonexistent_finding_id_raises(
-    finding_repo: FindingRepository,
-    audit_repo: AuditRepository,
+    store: ConnectionFactory,
 ) -> None:
     with pytest.raises(ValueError, match="not found"):
         await findings.update_finding(999_999, **_VALID_UPDATE)
@@ -407,28 +410,28 @@ _REPOS = [{"name": "myapp", "path": "/repos/myapp"}]
 
 
 def test_reconstruct_abs_path_known_repo() -> None:
-    result = findings._reconstruct_abs_path("/src/app.py", "myapp", _REPOS)
+    result = reconstruct_abs_path("/src/app.py", "myapp", _REPOS)
     assert result == "/repos/myapp/src/app.py"
 
 
 def test_reconstruct_abs_path_unknown_repo() -> None:
-    result = findings._reconstruct_abs_path("/src/app.py", "unknown", _REPOS)
+    result = reconstruct_abs_path("/src/app.py", "unknown", _REPOS)
     assert result is None
 
 
 def test_reconstruct_abs_path_none_file() -> None:
-    result = findings._reconstruct_abs_path(None, "myapp", _REPOS)
+    result = reconstruct_abs_path(None, "myapp", _REPOS)
     assert result is None
 
 
 def test_reconstruct_abs_path_none_repo_name() -> None:
-    result = findings._reconstruct_abs_path("/src/app.py", None, _REPOS)
+    result = reconstruct_abs_path("/src/app.py", None, _REPOS)
     assert result is None
 
 
 def test_reconstruct_abs_path_trailing_slash_stripped() -> None:
     repos = [{"name": "myapp", "path": "/repos/myapp/"}]
-    result = findings._reconstruct_abs_path("/src/app.py", "myapp", repos)
+    result = reconstruct_abs_path("/src/app.py", "myapp", repos)
     assert result == "/repos/myapp/src/app.py"
 
 

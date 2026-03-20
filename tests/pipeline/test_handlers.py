@@ -12,14 +12,19 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from core.pipeline.events import (
+from application.pipeline.handlers import (
+    EnrichmentHandler,
+    IngestHandler,
+    PersistenceHandler,
+)
+from application.tools.scan_types._helpers import _dispatch_and_count_ingested
+from domain.pipeline.events import (
     EnrichmentCompleted,
     EventBus,
     IngestCompleted,
     ToolCompleted,
 )
-from core.pipeline.handlers import EnrichmentHandler, IngestHandler, PersistenceHandler
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -136,6 +141,107 @@ class TestEventBus:
         assert tool_calls == [tc]
         assert ingest_calls == [ic]
 
+    def test_unsubscribe_removes_handler(self) -> None:
+        bus = EventBus()
+        calls: list[object] = []
+        handler = calls.append
+        bus.subscribe(ToolCompleted, handler)
+        bus.unsubscribe(ToolCompleted, handler)
+
+        bus.dispatch(_tool_completed())
+
+        assert calls == []
+
+    def test_unsubscribe_only_removes_target_handler(self) -> None:
+        bus = EventBus()
+        calls_a: list[object] = []
+        calls_b: list[object] = []
+        handler_a = calls_a.append
+        handler_b = calls_b.append
+        bus.subscribe(ToolCompleted, handler_a)
+        bus.subscribe(ToolCompleted, handler_b)
+        bus.unsubscribe(ToolCompleted, handler_a)
+
+        bus.dispatch(_tool_completed())
+
+        assert calls_a == []  # handler_a was removed
+        assert len(calls_b) == 1  # handler_b is unaffected
+
+    def test_unsubscribe_is_idempotent(self) -> None:
+        bus = EventBus()
+        calls: list[object] = []
+        handler = calls.append
+        bus.subscribe(ToolCompleted, handler)
+        bus.unsubscribe(ToolCompleted, handler)
+        bus.unsubscribe(ToolCompleted, handler)  # second call must not raise
+
+        bus.dispatch(_tool_completed())
+
+        assert calls == []
+
+    def test_unsubscribe_unknown_handler_does_not_raise(self) -> None:
+        bus = EventBus()
+        bus.unsubscribe(ToolCompleted, lambda e: None)  # never subscribed
+
+
+# ---------------------------------------------------------------------------
+# _dispatch_and_count_ingested tests
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchAndCountIngested:
+    """_dispatch_and_count_ingested returns the total doc_ids emitted via
+    IngestCompleted and cleans up its internal counter handler afterward."""
+
+    def _make_ingest_subscriber(self, bus: EventBus, doc_ids: list[str]) -> None:
+        """Register a ToolCompleted handler that immediately emits IngestCompleted."""
+
+        def _emit(event: ToolCompleted) -> None:
+            bus.dispatch(
+                IngestCompleted(
+                    doc_ids=doc_ids,
+                    failed_tools=[],
+                    run_id=event.run_id,
+                    project_name=event.project_name,
+                    base_path=event.base_path,
+                )
+            )
+
+        bus.subscribe(ToolCompleted, _emit)
+
+    def test_returns_zero_when_no_ingest_completed_emitted(self) -> None:
+        bus = EventBus()
+        # No subscriber emits IngestCompleted, so count must be 0.
+        count = _dispatch_and_count_ingested(bus, _tool_completed())
+        assert count == 0
+
+    def test_returns_doc_id_count_on_successful_ingest(self) -> None:
+        bus = EventBus()
+        self._make_ingest_subscriber(bus, ["id1", "id2", "id3"])
+
+        count = _dispatch_and_count_ingested(bus, _tool_completed())
+
+        assert count == 3
+
+    def test_counter_is_removed_after_dispatch(self) -> None:
+        """The one-shot counter must not accumulate across multiple calls."""
+        bus = EventBus()
+        self._make_ingest_subscriber(bus, ["id1", "id2"])
+
+        first = _dispatch_and_count_ingested(bus, _tool_completed())
+        second = _dispatch_and_count_ingested(bus, _tool_completed())
+
+        assert first == 2
+        assert second == 2  # not 4
+
+    def test_returns_zero_for_empty_doc_ids(self) -> None:
+        bus = EventBus()
+        self._make_ingest_subscriber(bus, [])
+
+        count = _dispatch_and_count_ingested(bus, _tool_completed())
+
+        assert count == 0
+
 
 # ---------------------------------------------------------------------------
 # IngestHandler tests
@@ -150,7 +256,7 @@ class TestIngestHandler:
 
         handler = IngestHandler(bus)
         with patch(
-            "core.pipeline.handlers.IngestHandler._get_engine",
+            "application.pipeline.handlers.IngestHandler._get_engine",
             side_effect=RuntimeError("chroma unavailable"),
         ):
             handler.handle(_tool_completed())
@@ -171,11 +277,11 @@ class TestIngestHandler:
         handler = IngestHandler(bus)
         with (
             patch(
-                "core.pipeline.handlers.IngestHandler._get_engine",
+                "application.pipeline.handlers.IngestHandler._get_engine",
                 return_value=mock_engine,
             ),
             patch(
-                "core.pipeline.handlers.FindingIngestor",
+                "application.pipeline.handlers.FindingIngestor",
                 return_value=mock_ingestor,
             ),
         ):
@@ -195,7 +301,7 @@ class TestIngestHandler:
 
         mock_engine = MagicMock()
         with patch(
-            "core.pipeline.handlers.IngestHandler._get_engine",
+            "application.pipeline.handlers.IngestHandler._get_engine",
             return_value=mock_engine,
         ):
             handler.handle(event)
@@ -216,11 +322,11 @@ class TestIngestHandler:
         handler = IngestHandler(bus)
         with (
             patch(
-                "core.pipeline.handlers.IngestHandler._get_engine",
+                "application.pipeline.handlers.IngestHandler._get_engine",
                 return_value=mock_engine,
             ),
             patch(
-                "core.pipeline.handlers.FindingIngestor",
+                "application.pipeline.handlers.FindingIngestor",
                 return_value=mock_ingestor,
             ),
         ):
@@ -259,11 +365,11 @@ class TestEnrichmentHandler:
         handler = EnrichmentHandler(bus)
         with (
             patch(
-                "core.pipeline.handlers.EnrichmentHandler._get_engine",
+                "application.pipeline.handlers.EnrichmentHandler._get_engine",
                 return_value=mock_engine,
             ),
             patch(
-                "core.pipeline.handlers.EnrichmentPipeline",
+                "application.pipeline.handlers.EnrichmentPipeline",
                 return_value=mock_pipeline,
             ),
         ):
@@ -283,11 +389,11 @@ class TestEnrichmentHandler:
         handler = EnrichmentHandler(bus)
         with (
             patch(
-                "core.pipeline.handlers.EnrichmentHandler._get_engine",
+                "application.pipeline.handlers.EnrichmentHandler._get_engine",
                 return_value=mock_engine,
             ),
             patch(
-                "core.pipeline.handlers.EnrichmentPipeline",
+                "application.pipeline.handlers.EnrichmentPipeline",
                 return_value=mock_pipeline,
             ),
         ):
@@ -311,11 +417,11 @@ class TestPersistenceHandler:
         handler = PersistenceHandler(bus)
         with (
             patch(
-                "core.pipeline.handlers.PersistenceHandler._get_engine",
+                "application.pipeline.handlers.PersistenceHandler._get_engine",
                 return_value=mock_engine,
             ),
             patch(
-                "core.pipeline.handlers.make_store",
+                "application.pipeline.handlers.make_store",
                 return_value=(MagicMock(), mock_finding_repo, MagicMock(), MagicMock()),
             ),
         ):
@@ -337,11 +443,11 @@ class TestPersistenceHandler:
         handler = PersistenceHandler(bus)
         with (
             patch(
-                "core.pipeline.handlers.PersistenceHandler._get_engine",
+                "application.pipeline.handlers.PersistenceHandler._get_engine",
                 return_value=mock_engine,
             ),
             patch(
-                "core.pipeline.handlers.make_store",
+                "application.pipeline.handlers.make_store",
                 return_value=(MagicMock(), mock_finding_repo, MagicMock(), MagicMock()),
             ),
         ):

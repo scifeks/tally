@@ -7,9 +7,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from core.repl import REPL
-from core.startup.checker import DependencyChecker
-from core.tools.registry import discover_tools
+from application.repl import REPL
+from application.startup.checker import DependencyChecker
+from application.tools.registry import discover_tools
 
 _BASE_PATH = "."
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     # First-run setup: generate commands.json if absent.
     # Runs before --check and --skip-checks so the registry is always current.
     if not (Path(_BASE_PATH) / "config" / "commands.json").exists():
-        from core.setup.commands_setup import run_commands_setup
+        from application.setup.commands_setup import run_commands_setup
 
         run_commands_setup(_BASE_PATH)
 

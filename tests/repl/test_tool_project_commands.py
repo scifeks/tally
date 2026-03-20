@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from core.repl.commands.tool_commands import ToolCommands
+from application.repl.commands.tool_commands import ToolCommands
 
 
 def _make_tc(
@@ -16,7 +16,7 @@ def _make_tc(
     repl = MagicMock()
     repl.active_project = active_project
     repl.base_path = base_path or "/tmp/tally-test"
-    return ToolCommands(repl), repl
+    return ToolCommands(repl, MagicMock()), repl
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ def test_tool_add_project_warns_global_duplicate(tmp_path: Path) -> None:
     with (
         patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
         patch("builtins.input", return_value="nmap"),
-        patch("core.setup.commands_setup.interview_tool", return_value=None),
+        patch("application.setup.commands_setup.interview_tool", return_value=None),
     ):
         tc._cmd_tool_add_project("myproject")
 
@@ -174,7 +174,9 @@ def test_tool_add_project_saves_entry(tmp_path: Path) -> None:
     with (
         patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
         patch("builtins.input", return_value="nmap"),
-        patch("core.setup.commands_setup.interview_tool", return_value=fake_entry),
+        patch(
+            "application.setup.commands_setup.interview_tool", return_value=fake_entry
+        ),
     ):
         tc._cmd_tool_add_project("myproject")
 
@@ -213,7 +215,7 @@ def test_tool_edit_project_saves_entry(tmp_path: Path) -> None:
 
     with (
         patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
-        patch("core.setup.commands_setup.interview_tool", return_value=updated),
+        patch("application.setup.commands_setup.interview_tool", return_value=updated),
     ):
         tc._cmd_tool_edit_project("nmap", "myproject")
 
@@ -277,7 +279,7 @@ def test_tool_remove_project_confirmed(tmp_path: Path) -> None:
 
 
 def test_discover_tools_project_override(tmp_path: Path) -> None:
-    from core.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import discover_tools, tool_registry
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -317,7 +319,7 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
 
 
 def test_discover_tools_no_project(tmp_path: Path) -> None:
-    from core.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import discover_tools, tool_registry
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()

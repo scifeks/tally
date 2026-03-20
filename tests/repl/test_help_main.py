@@ -13,7 +13,11 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.interface import _HELP_REGISTRY, _NOTE, REPL  # noqa: E402
+from application.repl.help_renderer import (  # noqa: E402
+    _HELP_REGISTRY,
+    _NOTE,
+    HelpRenderer,
+)
 
 
 def _render(table: Table) -> str:
@@ -24,11 +28,10 @@ def _render(table: Table) -> str:
 
 
 def _build_help_table(group: str | None = None) -> Table:
-    """Call REPL._build_help_table without a live REPL instance."""
-    from unittest.mock import MagicMock
-
-    repl = MagicMock(spec=REPL)
-    return REPL._build_help_table(repl, group=group)
+    """Call HelpRenderer._build_table without a live REPL instance."""
+    buf = StringIO()
+    renderer = HelpRenderer(Console(file=buf, width=200))
+    return renderer._build_table(group=group)
 
 
 # ---------------------------------------------------------------------------

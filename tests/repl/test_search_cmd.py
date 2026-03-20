@@ -10,7 +10,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
+from application.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
 
 _KNOWN_TOOLS = frozenset({"nmap", "semgrep", "gitleaks", "zap"})
 

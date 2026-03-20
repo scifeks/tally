@@ -12,17 +12,17 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from core.repl.search_command_parser import (  # noqa: E402
-    SearchValidationError,
+from application.repl.search_command_parser import (  # noqa: E402
     parse_sqlite_search_command,
 )
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.findings import (  # noqa: E402
-    FindingRepository,
-    _normalise_cwe,
-    _normalise_finding_type,
+from core.exceptions import SearchValidationError  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
+from infrastructure.store.repositories.findings_serial import (  # noqa: E402
+    normalise_cwe,
+    normalise_finding_type,
 )
-from core.store.repositories.runs import RunRepository  # noqa: E402
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -234,7 +234,7 @@ class TestDeleteFindings:
 class TestIngestHook:
     def test_hook_fires_after_enrich(self) -> None:
         """upsert_findings is called after enrich() completes."""
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.return_value = {
@@ -259,7 +259,7 @@ class TestIngestHook:
         )
 
     def test_hook_fires_with_multiple_docs(self) -> None:
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.side_effect = lambda doc_id: {
@@ -284,7 +284,7 @@ class TestIngestHook:
         assert len(findings) == 3
 
     def test_hook_not_called_when_no_repo(self) -> None:
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.return_value = {
@@ -299,7 +299,7 @@ class TestIngestHook:
 
     def test_hook_failure_does_not_raise(self) -> None:
         """SQLite failure in the hook must not interrupt the scan."""
-        from core.rag.enrichment import EnrichmentPipeline
+        from application.rag.enrichment import EnrichmentPipeline
 
         mock_engine = MagicMock()
         mock_engine.get_document_by_id.return_value = {
@@ -328,19 +328,19 @@ class TestIngestHook:
 
 class TestFindingTypeNormalisation:
     def test_plain_string_secret(self) -> None:
-        assert _normalise_finding_type("secret") == '["secret"]'
+        assert normalise_finding_type("secret") == '["secret"]'
 
     def test_already_array_is_idempotent(self) -> None:
-        assert _normalise_finding_type('["secret"]') == '["secret"]'
+        assert normalise_finding_type('["secret"]') == '["secret"]'
 
     def test_invalid_value_returns_none(self) -> None:
-        result = _normalise_finding_type("bogus")
+        result = normalise_finding_type("bogus")
         assert result is None
 
     def test_mixed_valid_and_invalid(self) -> None:
         import json
 
-        result = _normalise_finding_type('["secret", "bogus"]')
+        result = normalise_finding_type('["secret", "bogus"]')
         assert result is not None
         items = json.loads(result)
         assert items == ["secret"]
@@ -354,26 +354,26 @@ class TestFindingTypeNormalisation:
 
 class TestCweNormalisationUnit:
     def test_none_returns_none(self) -> None:
-        assert _normalise_cwe(None) is None
+        assert normalise_cwe(None) is None
 
     def test_int_produces_cwe_prefix(self) -> None:
         import json
 
-        result = _normalise_cwe(89)
+        result = normalise_cwe(89)
         assert result is not None
         assert json.loads(result) == ["CWE-89"]
 
     def test_plain_string(self) -> None:
         import json
 
-        result = _normalise_cwe("CWE-89")
+        result = normalise_cwe("CWE-89")
         assert result is not None
         assert json.loads(result) == ["CWE-89"]
 
     def test_list_input(self) -> None:
         import json
 
-        result = _normalise_cwe(["CWE-89", "CWE-20"])
+        result = normalise_cwe(["CWE-89", "CWE-20"])
         assert result is not None
         items = json.loads(result)
         assert "CWE-89" in items
@@ -382,7 +382,7 @@ class TestCweNormalisationUnit:
     def test_comma_joined_string(self) -> None:
         import json
 
-        result = _normalise_cwe("CWE-89, CWE-20")
+        result = normalise_cwe("CWE-89, CWE-20")
         assert result is not None
         items = json.loads(result)
         assert "CWE-89" in items

@@ -11,8 +11,8 @@ if str(_TALLY_ROOT) not in sys.path:
 
 import pytest  # noqa: E402
 
-from core.store.connection import ConnectionFactory  # noqa: E402
-from core.store.repositories.audit import AuditRepository  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.repositories.audit import AuditRepository  # noqa: E402
 
 
 @pytest.fixture()

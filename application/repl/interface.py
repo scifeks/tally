@@ -1,0 +1,405 @@
+"""Interactive REPL shell for tally web app security auditing."""
+
+import logging
+import shlex
+from pathlib import Path
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.formatted_text import FormattedText
+from prompt_toolkit.history import FileHistory
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from application.pipeline.handlers import (
+    EnrichmentHandler,
+    IngestHandler,
+    PersistenceHandler,
+)
+from application.project import InteractiveProjectWizard
+from application.project.manager import ProjectManager
+from application.rag.ingestor import get_tool_domain
+from application.repl.commands import (
+    KnowledgeCommands,
+    ProjectCommands,
+    PurgeCommand,
+    ReportCommand,
+    ScanCommands,
+    ToolCommands,
+    TriageCommands,
+)
+from application.repl.help_renderer import HELP_BOX, HelpRenderer
+from application.startup.checker import print_installed_system_tools
+from application.tools.registry import print_discovery_summary
+from core.config import ConfigManager
+from domain.pipeline.events import (
+    EnrichmentCompleted,
+    EventBus,
+    IngestCompleted,
+    ToolCompleted,
+)
+
+_log = logging.getLogger(__name__)
+
+_VERSION = "1.0"
+
+_COMPLETIONS = [
+    "help",
+    "exit",
+    "quit",
+    "clear",
+    "project",
+    "repo",
+    "scan",
+    "run",
+    "tool",
+    "search",
+    "chat",
+    "stats",
+    "purge",
+    "report",
+    "triage",
+]
+# First tokens only for WordCompleter
+_TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
+
+
+_DOMAIN_KEYS_DISPLAY: dict[str, list[tuple[str, str]]] = {
+    "code": [
+        ("--file~=<path>", "File path (partial match)"),
+        ("--rule=<id>", "Rule ID (exact match)"),
+    ],
+    "web": [
+        ("--url~=<url>", "URL (partial match)"),
+        ("--method=<method>", "HTTP method (GET, POST, ...)"),
+        ("--param~=<name>", "Parameter name (partial match)"),
+        ("--alert~=<name>", "Alert name (partial match)"),
+    ],
+    "network": [
+        ("--host=<ip>", "IP address (exact match)"),
+        ("--host~=<pattern>", "IP address (partial match)"),
+        ("--port=<number>", "Port number"),
+        ("--service~=<name>", "Service name (partial match)"),
+        ("--transport=<proto>", "Transport protocol (tcp, udp)"),
+    ],
+}
+
+_TOOL_EXAMPLES: dict[str, list[tuple[str, str]]] = {
+    "nmap": [
+        ("search --tool=nmap", "All nmap findings"),
+        ("search --host=10.0.0.1", "Exact host match"),
+        ("search --port=443", "Findings on port 443"),
+        ("search --service~=ssh", "Services containing 'ssh'"),
+        ("search --tool=nmap --severity=high", "High-severity nmap findings"),
+        ("search --transport=tcp --severity=high", "High-severity TCP findings"),
+    ],
+    "gitleaks": [
+        ("search --tool=gitleaks", "All gitleaks findings"),
+        ("search --file~=config", "Secrets in paths containing 'config'"),
+        ("search --rule=generic-api-key", "Findings matching a specific rule"),
+        ("search --severity=high", "High-severity secrets"),
+        ("search --tool=gitleaks --severity=high", "High-severity gitleaks findings"),
+    ],
+    "zap": [
+        ("search --tool=zap", "All ZAP findings"),
+        ("search --url~=/api/", "Findings on API endpoints"),
+        ("search --method=POST", "POST request findings"),
+        ("search --param~=id", "Findings with 'id' in parameter name"),
+        ("search --alert~=injection", "Injection-related alerts"),
+        ("search --tool=zap --severity=high", "High-severity ZAP findings"),
+    ],
+    "semgrep": [
+        ("search --tool=semgrep", "All semgrep findings"),
+        ("search --file~=src/auth", "Findings in auth source files"),
+        ("search --rule=python.lang.security.audit.exec", "Findings by rule ID"),
+        ("search --severity=high", "High-severity findings"),
+        ("search --tool=semgrep --severity=high", "High-severity semgrep findings"),
+    ],
+}
+
+_GENERIC_EXAMPLES: list[tuple[str, str]] = [
+    ("search --tool=gitleaks", "All gitleaks findings"),
+    ("search --severity=high", "High-severity findings"),
+    ("search --type=secret", "Findings of type 'secret'"),
+    ("search --tool=nmap --port=443", "nmap findings on port 443"),
+    ("search --tool=zap --url~=/api/", "ZAP findings on /api/ endpoints"),
+    ("search --file~=config", "Secrets in paths containing 'config'"),
+    ("search --tool=gitleaks --severity=high --page-size=50", "Paginated results"),
+]
+
+
+def _build_search_help_table(tool_name: str | None = None) -> Table:
+    """Build a search reference table, optionally narrowed to a tool's domain."""
+    domain = get_tool_domain(tool_name) if tool_name else None
+    show_code = domain in (None, "code")
+    show_web = domain in (None, "web")
+    show_network = domain in (None, "network")
+
+    table = Table(
+        show_header=True,
+        header_style="bold",
+        box=HELP_BOX,
+        padding=(0, 1),
+    )
+    table.add_column("Search Syntax", min_width=40, no_wrap=True, style="cyan")
+    table.add_column("Description", style="white")
+
+    # Syntax hint
+    table.add_row("[bold yellow]Search Syntax[/bold yellow]", "")
+    table.add_row(
+        "--flag=value exact  --flag~=value partial  flags combine with AND", ""
+    )
+    table.add_row(
+        "Bare words and key=value (without --) are rejected as old syntax.", ""
+    )
+
+    # Usage examples
+    table.add_row("[bold yellow]Usage[/bold yellow]", "")
+    table.add_row("search --tool=<name>", "Filter by configured tool name")
+    table.add_row(
+        "search --type=<type>",
+        "Filter by finding type: secret, vulnerability, ...",
+    )
+    table.add_row("search --domain=<domain>", "Filter by domain: code, web, network")
+    table.add_row("search --<field>=<value>", "Exact match filter on metadata key")
+    table.add_row("search --<field>~=<value>", "Partial match filter on metadata key")
+    table.add_row("search --tool=<n> --type=<t> --severity=<s>", "Chain filters (AND)")
+    table.add_row("search --help", "Show this reference inline")
+
+    # Global filter keys
+    table.add_row("[bold yellow]Global Filter Keys[/bold yellow]", "")
+    table.add_row("--tool=<name,...>", "Configured tool name(s). Comma-separated.")
+    table.add_row("--domain=<domain>", "code, web, network")
+    table.add_row(
+        "--type=<type,...>",
+        "secret, vulnerability, weakness, misconfiguration, ...",
+    )
+    table.add_row(
+        "--severity=<level,...>", "critical, high, medium, low, informational"
+    )
+    table.add_row("--confidence=<level>", "confirmed, probable, potential")
+    table.add_row("--risk_type=<value>", "Risk type label (tool-specific)")
+    table.add_row("--profile=<value>", "Scan profile label")
+
+    # Domain-specific keys
+    if show_code:
+        table.add_row("[bold yellow]Code Domain Keys[/bold yellow]", "")
+        for syntax, desc in _DOMAIN_KEYS_DISPLAY["code"]:
+            table.add_row(syntax, desc)
+
+    if show_web:
+        table.add_row("[bold yellow]Web Domain Keys[/bold yellow]", "")
+        for syntax, desc in _DOMAIN_KEYS_DISPLAY["web"]:
+            table.add_row(syntax, desc)
+
+    if show_network:
+        table.add_row("[bold yellow]Network Domain Keys[/bold yellow]", "")
+        for syntax, desc in _DOMAIN_KEYS_DISPLAY["network"]:
+            table.add_row(syntax, desc)
+
+    # Pagination
+    table.add_row("[bold yellow]Pagination[/bold yellow]", "")
+    table.add_row(
+        "--page-size=<n>", "Results per page (default: 20 semantic / 200 filter-only)"
+    )
+    table.add_row("--page=<n>", "Show page N of results (default: 1)")
+
+    # Field selection
+    table.add_row("[bold yellow]Field Selection[/bold yellow]", "")
+    table.add_row(
+        "--show-fields",
+        "Show all available filter/display fields for the specified tool. "
+        "Must be used with --tool=<name> only.",
+    )
+    table.add_row(
+        "--fields=<f1,f2,...>",
+        "Comma-separated list of columns to display in results. "
+        "Supports both schema columns and tool-specific meta fields. "
+        "Missing values render as N/A.",
+    )
+
+    # Examples
+    table.add_row("[bold yellow]Examples[/bold yellow]", "")
+    examples = _TOOL_EXAMPLES.get(tool_name) if tool_name else None  # type: ignore[arg-type]
+    if examples is None:
+        examples = _GENERIC_EXAMPLES
+    for syntax, desc in examples:
+        table.add_row(syntax, desc)
+
+    return table
+
+
+class REPL:
+    """Interactive REPL shell with Rich UI and prompt_toolkit input."""
+
+    def __init__(self, base_path: str = "."):
+        self.base_path = base_path
+        self.console = Console()
+        self.config = ConfigManager(base_path)
+        self.projects = ProjectManager(base_path)
+        self.wizard = InteractiveProjectWizard(self.projects)
+        self.active_project: str | None = None
+        self.event_bus = EventBus()
+        _ingest = IngestHandler(self.event_bus, console=self.console)
+        _enrich = EnrichmentHandler(self.event_bus, console=self.console)
+        _persist = PersistenceHandler(self.event_bus)
+        self.event_bus.subscribe(ToolCompleted, _ingest.handle)
+        self.event_bus.subscribe(IngestCompleted, _enrich.handle)
+        self.event_bus.subscribe(EnrichmentCompleted, _persist.handle)
+        self.help_renderer = HelpRenderer(self.console)
+        self.project_commands = ProjectCommands(self, self.help_renderer)
+        self.scan_commands = ScanCommands(self)
+        self.knowledge_commands = KnowledgeCommands(self)
+        self.purge_commands = PurgeCommand(self)
+        self.report_commands = ReportCommand(self)
+        self.tool_commands = ToolCommands(self, self.help_renderer)
+        self.triage_commands = TriageCommands(self)
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def run(self) -> None:
+        """Start the REPL loop."""
+        self.console.print(
+            "[dim]Run 'tally --check' to see full dependency status at any time.[/dim]"
+        )
+        self._print_banner()
+        print_installed_system_tools(self.console)
+        print_discovery_summary(self.console)
+
+        history_path = Path.home() / ".tally-repl-history"
+        session: PromptSession = PromptSession(
+            history=FileHistory(str(history_path)),
+            completer=WordCompleter(_TOP_TOKENS, ignore_case=True),
+        )
+
+        while True:
+            try:
+                raw = session.prompt(self._get_prompt())
+            except KeyboardInterrupt:
+                # Ctrl+C — stay in loop
+                continue
+            except EOFError:
+                # Ctrl+D — exit
+                break
+
+            raw = raw.strip()
+            if not raw:
+                continue
+
+            try:
+                tokens = shlex.split(raw)
+            except ValueError as exc:
+                self.console.print(f"[red]Parse error:[/red] {exc}")
+                continue
+
+            cmd, args = tokens[0].lower(), tokens[1:]
+            try:
+                self._dispatch(cmd, args)
+            except EOFError:
+                break
+
+        self.console.print("Goodbye!")
+
+    # ------------------------------------------------------------------
+    # Command dispatch
+    # ------------------------------------------------------------------
+
+    def _dispatch(self, cmd: str, args: list) -> None:
+        pc = self.project_commands
+        sc = self.scan_commands
+        kc = self.knowledge_commands
+        tc = self.tool_commands
+        handlers = {
+            "help": self._cmd_help,
+            "clear": self._cmd_clear,
+            "exit": self._cmd_exit,
+            "quit": self._cmd_exit,
+            "project": pc.cmd_project,
+            "repo": pc.cmd_repo,
+            "scan": sc.cmd_scan,
+            "run": sc.cmd_run,
+            "tool": tc.cmd_tool,
+            "search": kc.cmd_search,
+            "chat": kc.cmd_chat,
+            "stats": kc.cmd_stats,
+            "purge": self.purge_commands.cmd_purge,
+            "report": self.report_commands.execute,
+            "triage": self.triage_commands.cmd_triage,
+        }
+        handler = handlers.get(cmd)
+        if handler is None:
+            self.console.print(
+                f"[red]Unknown command:[/red] {cmd}\n"
+                "Type [bold]help[/bold] for available commands"
+            )
+            return
+        try:
+            handler(cmd, args)
+        except EOFError:
+            raise
+        except Exception as exc:
+            _log.exception("Command %r raised an unhandled exception", cmd)
+            self.console.print(f"[red]Error:[/red] {exc}")
+
+    # ------------------------------------------------------------------
+    # Implemented commands
+    # ------------------------------------------------------------------
+
+    def _cmd_help(self, _cmd: str, args: list) -> None:
+        if args and args[0] == "search":
+            self._cmd_help_search(args[1:])
+            return
+        self.help_renderer.render_all()
+
+    def _cmd_help_search(self, args: list[str]) -> None:
+        tool_name: str | None = args[0] if args else None
+        if tool_name is not None:
+            commands = self.config.load_commands_config() or {}
+            if tool_name not in commands:
+                self.console.print(
+                    f"[red]Unknown tool {tool_name!r}.[/red] "
+                    "Run 'tool list' to see configured tools."
+                )
+                return
+        self.console.print(_build_search_help_table(tool_name))
+
+    def _cmd_clear(self, _cmd: str, _args: list) -> None:
+        self.console.clear()
+
+    def _cmd_exit(self, _cmd: str, _args: list) -> None:
+        raise EOFError  # re-use EOF path to trigger "Goodbye!"
+
+    # ------------------------------------------------------------------
+    # UI helpers
+    # ------------------------------------------------------------------
+
+    def _print_banner(self) -> None:
+        if self.active_project:
+            project_line = f"Active Project: [green]{self.active_project}[/green]"
+        else:
+            project_line = "Active Project: [dim]No active project[/dim]"
+
+        content = (
+            f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
+            "LlamaIndex + Chroma + Ollama\n"
+            f"{project_line}"
+        )
+        self.console.print(Panel(content, title="[cyan]Welcome[/cyan]", expand=False))
+
+    def _get_prompt(self) -> FormattedText:
+        if self.active_project:
+            return FormattedText(
+                [
+                    ("ansigreen", f"[{self.active_project}]"),
+                    ("", "> "),
+                ]
+            )
+        return FormattedText(
+            [
+                ("ansigray", "[no-project]"),
+                ("", "> "),
+            ]
+        )

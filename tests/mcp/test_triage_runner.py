@@ -13,7 +13,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from tally_mcp.triage import TriageResult, TriageRunner  # noqa: E402
+from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -98,7 +98,7 @@ def test_batch_passes_skip_tools_to_store(tmp_path: Path) -> None:
     store.get_active_finding_combos.return_value = []
     mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = [mock_nmap]
         runner.batch()
 
@@ -215,7 +215,7 @@ def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
 
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         with patch("subprocess.run", return_value=mock_result):
@@ -242,7 +242,7 @@ def test_run_skips_skip_strategy_tools(tmp_path: Path) -> None:
     store.claim_batch.side_effect = [nmap_batch, None]
     mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_nmap
         result = runner.run()
@@ -266,7 +266,7 @@ def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
     store.claim_batch.side_effect = [_make_semgrep_batch(1, [1]), None]
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         with patch.object(runner, "_run_session", side_effect=RuntimeError("crash")):
@@ -297,7 +297,7 @@ def test_run_dry_run_marks_all_batches_success(tmp_path: Path) -> None:
     ]
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         runner.run_dry_run()
@@ -317,7 +317,7 @@ def test_run_dry_run_no_pending_remain(tmp_path: Path) -> None:
     ]
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         runner.run_dry_run()
@@ -338,10 +338,10 @@ def test_run_dry_run_prompt_logged(
     ]
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
-        with caplog.at_level(logging.DEBUG, logger="tally_mcp.triage"):
+        with caplog.at_level(logging.DEBUG, logger="application.triage.runner"):
             runner.run_dry_run()
 
     log_text = " ".join(r.message for r in caplog.records)
@@ -377,7 +377,7 @@ def test_run_batch_loop_skip_completes_without_handler(tmp_path: Path) -> None:
     mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
     handler = MagicMock(return_value="success")
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_tool.return_value = mock_nmap
         result = runner._run_batch_loop(1, handler)
 
@@ -400,7 +400,7 @@ def test_run_batch_loop_returns_correct_counts(tmp_path: Path) -> None:
 
     outcomes = ["success", "failed", "incomplete"]
     handler = MagicMock(side_effect=outcomes)
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_tool.return_value = mock_semgrep
         result = runner._run_batch_loop(99, handler)
 
@@ -422,7 +422,7 @@ def test_run_batch_loop_exhausts_all_batches(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
     handler = MagicMock(return_value="success")
-    with patch("tally_mcp.triage.tool_registry") as mock_reg:
+    with patch("application.triage.runner.tool_registry") as mock_reg:
         mock_reg.get_tool.return_value = mock_semgrep
         runner._run_batch_loop(99, handler)
 

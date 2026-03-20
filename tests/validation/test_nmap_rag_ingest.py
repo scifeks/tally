@@ -24,29 +24,38 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.project import ProjectManager  # noqa: E402
+from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.engine import verify_ollama_available  # noqa: E402
+from application.rag.query import QueryEngine  # noqa: E402
+from application.tools.executor import ToolExecutor  # noqa: E402
+from application.tools.registry import tool_registry  # noqa: E402
 from core.config import ConfigManager  # noqa: E402
 from core.config.schemas import NmapProfile  # noqa: E402
-from core.project import ProjectManager  # noqa: E402
-from core.rag import FindingIngestor, RAGEngine  # noqa: E402
-from core.rag.engine import verify_ollama_available  # noqa: E402
-from core.rag.query import QueryEngine  # noqa: E402
-from core.tools.base import ToolResult  # noqa: E402
-from core.tools.executor import ToolExecutor  # noqa: E402
-from core.tools.registry import tool_registry  # noqa: E402
+from domain.tools.base import ToolResult  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Skip markers
 # ---------------------------------------------------------------------------
 
-_OLLAMA_URL = "http://localhost:11434"
+
+def _get_ollama_url() -> str | None:
+    try:
+        cfg = ConfigManager(base_path=str(_TALLY_ROOT))._load_global_config()
+        return cfg.ollama.base_url if cfg.ollama else None
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+_OLLAMA_URL = _get_ollama_url()
 
 requires_nmap = pytest.mark.skipif(
     shutil.which("nmap") is None,
     reason="nmap not installed",
 )
 requires_ollama = pytest.mark.skipif(
-    not verify_ollama_available(_OLLAMA_URL),
-    reason="Ollama not running at http://localhost:11434",
+    _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),
+    reason="Ollama not configured or not running",
 )
 slow = pytest.mark.slow
 
@@ -62,8 +71,8 @@ def project_env(tmp_path: Path) -> dict:
     name = "test-proj"
     _write_global_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
-    pm._create_project_dirs(name)
-    pm._save_project(name, [])
+    pm.create_project_dirs(name)
+    pm.save_project(name, [])
     return {"base_path": tmp_path, "project_name": name}
 
 
@@ -80,23 +89,12 @@ def nmap_project_env(project_env: dict) -> dict:
 
 
 def _write_global_config(base_path: Path) -> None:
+    real_config = _TALLY_ROOT / "config" / "global.json"
+    if not real_config.exists():
+        pytest.skip("config/global.json not found")
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "global.json").write_text(
-        json.dumps(
-            {
-                "chat_llm_provider": "ollama",
-                "enrichment_llm_provider": "ollama",
-                "report_llm_provider": "ollama",
-                "embedding_provider": "ollama_embedding",
-                "ollama": {
-                    "base_url": "http://localhost:11434",
-                    "model": "qwen3:14b",
-                },
-                "ollama_embedding": {"model": "nomic-embed-text:latest"},
-            }
-        )
-    )
+    shutil.copy(real_config, config_dir / "global.json")
 
 
 def _write_nmap_config(base_path: Path, project_name: str) -> None:
@@ -553,8 +551,8 @@ class TestProjectIsolation:
         _write_global_config(tmp_path)
         pm = ProjectManager(base_path=str(tmp_path))
         for n in ("proj-a", "proj-b"):
-            pm._create_project_dirs(n)
-            pm._save_project(n, [])
+            pm.create_project_dirs(n)
+            pm.save_project(n, [])
 
     def test_new_project_starts_empty(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
