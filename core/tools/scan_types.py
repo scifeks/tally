@@ -36,7 +36,7 @@ SEGMENT_ORDER: list[str] = ["network", "sast", "sca", "secrets", "api"]
 
 
 # ---------------------------------------------------------------------------
-# ScanSummary (re-exported here; also re-exported from orchestrator.py)
+# ScanSummary — canonical definition; re-exported by orchestrator.py
 # ---------------------------------------------------------------------------
 
 
