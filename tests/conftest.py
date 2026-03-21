@@ -35,7 +35,7 @@ def _ollama_url() -> str | None:
 
 
 _OLLAMA_URL = _ollama_url()
-
+# todo: write remaining tool test checkers
 requires_gitleaks = pytest.mark.skipif(
     shutil.which("gitleaks") is None,
     reason="gitleaks binary not installed",
