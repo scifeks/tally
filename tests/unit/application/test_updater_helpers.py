@@ -1,0 +1,53 @@
+"""Unit tests for reconstruct_abs_path and resolve_repo_path."""
+
+from __future__ import annotations
+
+from application.findings.updater import reconstruct_abs_path, resolve_repo_path
+
+
+class TestUpdaterHelpers:
+    def test_reconstruct_matching_repo(self) -> None:
+        repos = [{"name": "myrepo", "path": "/home/user/myrepo/"}]
+        result = reconstruct_abs_path("/src/main.py", "myrepo", repos)
+        assert result == "/home/user/myrepo/src/main.py"
+
+    def test_reconstruct_no_matching_repo(self) -> None:
+        result = reconstruct_abs_path(
+            "/src/main.py",
+            "other",
+            [{"name": "myrepo", "path": "/home/user/myrepo/"}],
+        )
+        assert result is None
+
+    def test_reconstruct_file_is_none(self) -> None:
+        result = reconstruct_abs_path(
+            None, "myrepo", [{"name": "myrepo", "path": "/tmp/x/"}]
+        )
+        assert result is None
+
+    def test_reconstruct_repo_name_is_none(self) -> None:
+        result = reconstruct_abs_path(
+            "/src/main.py", None, [{"name": "myrepo", "path": "/tmp/x/"}]
+        )
+        assert result is None
+
+    def test_reconstruct_empty_repos(self) -> None:
+        result = reconstruct_abs_path("/src/main.py", "myrepo", [])
+        assert result is None
+
+    def test_resolve_found(self) -> None:
+        repos = [{"name": "myrepo", "path": "/home/x/"}]
+        result = resolve_repo_path("myrepo", repos)
+        assert result == "/home/x/"
+
+    def test_resolve_not_found(self) -> None:
+        result = resolve_repo_path("missing", [{"name": "myrepo", "path": "/home/x/"}])
+        assert result is None
+
+    def test_resolve_repo_name_is_none(self) -> None:
+        result = resolve_repo_path(None, [{"name": "myrepo", "path": "/home/x/"}])
+        assert result is None
+
+    def test_resolve_empty_repos(self) -> None:
+        result = resolve_repo_path("myrepo", [])
+        assert result is None

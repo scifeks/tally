@@ -49,7 +49,10 @@ extraPaths = []
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
-    "slow: marks tests as slow-running (nmap scans)",
-    "requires_nmap: marks tests that need nmap installed",
-    "requires_ollama: marks tests that need Ollama running",
+  "slow: marks tests as slow-running (nmap scans)",
+  "requires_nmap: marks tests that need nmap installed",
+  "requires_ollama: marks tests that need Ollama running",
+  "requires_gitleaks: marks tests that need gitleaks installed",
+  "integration: marks tests that require real SQLite / filesystem / ChromaDB",
+  "e2e: marks tests that require external services such as Ollama or real binaries",
 ]

@@ -1,0 +1,179 @@
+"""Integration tests for SQLite store get_findings method."""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from infrastructure.store import make_store
+from infrastructure.store.connection import ConnectionFactory
+
+pytestmark = pytest.mark.integration
+
+_PROJECT_NAME = "test-proj"
+
+
+class _TestStore:
+    """Thin wrapper that exposes a SQLiteStore-compatible surface for tests."""
+
+    def __init__(
+        self, factory: ConnectionFactory, run_repo: object, finding_repo: object
+    ) -> None:
+        self._factory = factory
+        self._run_repo = run_repo
+        self._finding_repo = finding_repo
+        self._db_path = factory.db_path
+
+    def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def get_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.get_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def delete_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.delete_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def get_tool_meta_keys(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.get_tool_meta_keys(*args, **kwargs)  # type: ignore[attr-defined]
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self._db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_schema(self) -> None:
+        self._factory.init_schema()
+
+
+def _make_store(tmp_path: Path) -> _TestStore:
+    run_repo, finding_repo, _, _ = make_store(tmp_path, _PROJECT_NAME)
+    factory = ConnectionFactory(
+        tmp_path / "projects" / _PROJECT_NAME / "sqlite" / "findings.db"
+    )
+    return _TestStore(factory, run_repo, finding_repo)
+
+
+_SAST_FINDING = {
+    "tool": "semgrep",
+    "domain": "code",
+    "segment": "sast",
+    "finding_type": "vulnerability",
+    "severity": "high",
+    "file_path": "src/app.py",
+    "rule_id": "python.sqli",
+}
+
+_SECRETS_FINDING = {
+    "tool": "gitleaks",
+    "domain": "code",
+    "segment": "secrets",
+    "finding_type": "secret",
+    "severity": "critical",
+    "file_path": "config.py",
+    "rule_id": "generic-api-key",
+}
+
+_SCA_FINDING_GF = {
+    "tool": "pip-audit",
+    "domain": "sca",
+    "segment": "sca",
+    "finding_type": "dependency",
+    "severity": "high",
+    "package_name": "requests",
+    "vulnerability_id": "GHSA-abc",
+    "ecosystem": "PyPI",
+    "lockfile": "requirements.txt",
+}
+
+_NO_FILE_FINDING = {
+    "tool": "semgrep",
+    "domain": "code",
+    "segment": "sast",
+    "finding_type": "vulnerability",
+    "severity": "medium",
+    "rule_id": "python.xss",
+}
+
+
+def _seed_gf(store: _TestStore) -> None:
+    run_id = store.create_run({})
+    store.upsert_findings(
+        run_id,
+        [_SAST_FINDING, _SECRETS_FINDING, _SCA_FINDING_GF, _NO_FILE_FINDING],
+    )
+
+
+class TestGetFindings:
+    def test_get_findings_segment_filter(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(segments=["sast"], limit=100)
+        assert all(r["segment"] == "sast" for r in rows)
+        assert len(rows) >= 1
+
+    def test_get_findings_no_segment_filter_returns_all(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(segments=None, limit=100)
+        segments = {r["segment"] for r in rows}
+        assert "sast" in segments
+        assert "secrets" in segments
+
+    def test_get_findings_require_file_excludes_nulls(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(require_file=True, limit=100)
+        assert all(r["file"] for r in rows)
+
+    def test_get_findings_require_file_false_includes_nulls(
+        self, tmp_path: Path
+    ) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(require_file=False, limit=100)
+        null_file_rows = [r for r in rows if not r["file"]]
+        assert len(null_file_rows) >= 1
+
+    def test_get_findings_repo_equality(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {**_SAST_FINDING, "repo": "myrepo"},
+                {**_SAST_FINDING, "repo": "otherrepo", "rule_id": "r2"},
+            ],
+        )
+        rows = store.get_findings(repo="myrepo", limit=100)
+        assert all(r["repo"] == "myrepo" for r in rows)
+        assert len(rows) == 1
+
+    def test_get_findings_combined_filters(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {**_SAST_FINDING},
+                {**_SECRETS_FINDING},
+                {**_SCA_FINDING_GF},
+                {**_NO_FILE_FINDING},
+            ],
+        )
+        rows = store.get_findings(
+            tools=["semgrep"],
+            segments=["sast", "sca", "api"],
+            require_file=True,
+            limit=100,
+        )
+        assert all(r["tool"] == "semgrep" for r in rows)
+        assert all(r["segment"] in ("sast", "sca", "api") for r in rows)
+        assert all(r["file"] for r in rows)
