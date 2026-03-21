@@ -277,13 +277,13 @@ Use flags to scope a scan. All flags accept comma-separated lists.
 [acme-security-audit]> scan --tool=semgrep,gitleaks
 ```
 
-**Run all tools of a given type:**
+**Run all tools of a given domain:**
 
-Valid types: `network`, `sast`, `sca`, `secrets`, `api`
+Valid domains: `code`, `web`, `network`
 
 ```
-[acme-security-audit]> scan --type=sast
-[acme-security-audit]> scan --type=sast,sca
+[acme-security-audit]> scan --domain=code
+[acme-security-audit]> scan --domain=code,web
 ```
 
 **Scope to a single repository:**
@@ -298,7 +298,7 @@ If you have only one repository, `scan` (no flags) already targets it.
 
 ```
 [acme-security-audit]> scan --repo=api-server --tool=semgrep
-[acme-security-audit]> scan --tool=semgrep --type=sast
+[acme-security-audit]> scan --tool=semgrep --domain=code
 ```
 
 Network tools (`nmap`) cannot be scoped to a repository.
@@ -344,7 +344,80 @@ Structured search over all ingested findings using flags:
 [acme-security-audit]> search --page=2 --page-size=20
 ```
 
-Run `search --help` for the full list of filter options.
+Run `search --help` for the full list of filter options inline.
+
+### Search flags
+
+#### Core filters
+
+| Flag | Description | Example |
+|---|---|---|
+| `--tool=<name,...>` | Filter by configured tool name. Comma-separated. | `--tool=semgrep` |
+| `--domain=<domain,...>` | Filter by domain. Comma-separated. | `--domain=code` |
+| `--type=<type,...>` | Filter by finding type. Comma-separated. | `--type=secret` |
+| `--severity=<level,...>` | Filter by severity level. Comma-separated. | `--severity=high` |
+| `--confidence=<level>` | Filter by confidence level. | `--confidence=confirmed` |
+
+Valid values — `--domain`: `code`, `web`, `network`. `--type`: `secret`, `vulnerability`, `weakness`, `misconfiguration`, `exposure`, `dependency`, `informational`. `--severity`: `critical`, `high`, `medium`, `low`, `informational`. `--confidence`: `confirmed`, `probable`, `potential`.
+
+#### Code domain filters
+
+| Flag | Description | Example |
+|---|---|---|
+| `--file~=<path>` | File path (partial match) | `--file~=src/auth` |
+| `--rule=<id>` | Rule ID (exact match) | `--rule=python.lang.security.audit.exec` |
+
+#### Web domain filters
+
+| Flag | Description | Example |
+|---|---|---|
+| `--url~=<url>` | URL (partial match) | `--url~=/api/` |
+| `--method=<method>` | HTTP method (exact match) | `--method=POST` |
+| `--param~=<name>` | Parameter name (partial match) | `--param~=id` |
+| `--alert~=<name>` | Alert name (partial match) | `--alert~=injection` |
+
+#### Network domain filters
+
+| Flag | Description | Example |
+|---|---|---|
+| `--host=<ip>` | IP address (exact match) | `--host=10.0.0.1` |
+| `--host~=<pattern>` | IP address (partial match) | `--host~=10.0.0` |
+| `--port=<number>` | Port number (exact match) | `--port=443` |
+| `--service~=<name>` | Service name (partial match) | `--service~=ssh` |
+| `--transport=<proto>` | Transport protocol (exact match) | `--transport=tcp` |
+
+#### SCA filters
+
+| Flag | Description | Example |
+|---|---|---|
+| `--vulnerability_id=<id>` | Vulnerability identifier (exact match) | `--vulnerability_id=CVE-2023-1234` |
+| `--package_name=<name>` | Package name (exact match) | `--package_name=requests` |
+| `--ecosystem=<name>` | Package ecosystem (exact match) | `--ecosystem=PyPI` |
+
+#### Display and pagination
+
+| Flag | Description | Example |
+|---|---|---|
+| `--fields=<f1,f2,...>` | Columns to display in results | `--fields=severity,file` |
+| `--show-fields` | List available fields for a tool. Requires `--tool=<name>`. | `--show-fields` |
+| `--page=<n>` | Show page N of results (default: 1) | `--page=2` |
+| `--page-size=<n>` | Results per page (default: 200 for filter-only, 20 for semantic) | `--page-size=50` |
+
+#### Match operators
+
+Two operators are available for string filters:
+
+- `--flag=<value>` — exact match. The stored value must equal `<value>` exactly.
+- `--flag~=<value>` — contains match (SQL `LIKE`). The stored value must contain `<value>` as a substring.
+
+Examples:
+
+```
+[acme-security-audit]> search --rule=generic-api-key
+[acme-security-audit]> search --file~=config
+```
+
+The first matches only findings where the rule ID is exactly `generic-api-key`. The second matches any finding where the file path contains the string `config`.
 
 Output:
 
@@ -482,3 +555,28 @@ The Markdown report contains:
 ```
 
 Each project has completely isolated findings, chat history, and reports. Switching projects does not affect the other project's data.
+
+---
+
+## Deleting a Project
+
+Delete a project and all of its data permanently:
+
+```
+[acme-security-audit]> project delete <name>
+```
+
+Tally prompts for confirmation before proceeding:
+
+```
+Delete project 'acme-security-audit' and ALL its data? [y/N]: y
+Project 'acme-security-audit' deleted.
+```
+
+Deletion removes the entire `projects/<name>/` directory, including the findings database, ChromaDB store, tool outputs, and reports. This action cannot be undone.
+
+If the deleted project was the active project, the active project is cleared. Tally prints a message prompting you to create or switch to another project:
+
+```
+Active project cleared. Use 'project add' or 'project switch' to set a new one.
+```

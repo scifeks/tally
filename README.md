@@ -59,6 +59,7 @@ report
 | `project list` | List all projects |
 | `project switch <name>` | Switch active project |
 | `project info` | Show active project details |
+| `project delete <name>` | Delete a project and all its data |
 
 ### Repository Management
 
@@ -85,7 +86,7 @@ report
 | `scan` | Full scan: all configured tools across all repos |
 | `scan --tool=<tool,...>` | Run one or more specific tools (comma-separated) |
 | `scan --repo=<repo>` | Run all repo-appropriate tools on one repository |
-| `scan --type=<type,...>` | Run all tools of one or more types |
+| `scan --domain=<domain,...>` | Run all tools in one or more domains: `code`, `web`, `network` |
 | `scan --repo=<repo> --tool=<tool,...>` | Run specific tools on one repository |
 | `run <tool> [args...]` | Execute a tool with raw arguments |
 
@@ -97,6 +98,14 @@ report
 | `chat <message>` | RAG-augmented chat with the LLM                                        |
 | `stats` | Show knowledge base statistics                                         |
 | `purge --tool=<tool,...>` | Delete findings from one or more tools (comma-separated)               |
+
+### Triage
+
+| Command | Description |
+|---|---|
+| `triage` | Run AI triage on untriaged findings for the active project |
+| `triage --batch` | Run batching phase only — no Claude sessions |
+| `triage --dry-run` | Batch + render prompts to DEBUG log — no MCP server, no Claude |
 
 ### Reporting
 
@@ -162,8 +171,8 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
 - [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers
-- [docs/docker.md](docs/docker.md) — Usage instructions for optional Docker containers
-- [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
+- [docs/docker.md](docs/docker.md) — Security Audit Containers
+- [docs/restrictions.md](docs/restrictions.md) — Legal restrictions
 
 ## Legal Notice (California and Colorado)
 

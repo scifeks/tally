@@ -8,9 +8,6 @@ you will have a tool that:
 - Appears in `tool list` and `tool add` setup
 - Requires **zero edits to any existing file**
 
-> **Note:** `docs/adding-tools.md` is an older document that predates the current
-> architecture. This document supersedes it.
-
 ---
 
 ## Architecture overview
@@ -18,14 +15,14 @@ you will have a tool that:
 Each tool integration consists of up to five files:
 
 ```
-core/tools/wrappers/
+infrastructure/tools/wrappers/
   base/<tool_name>.py          # Abstract base: behaviour shared by local + docker
   local/<tool_name>.py         # Concrete local wrapper (runs binary on host)
   docker/<tool_name>.py        # Concrete docker wrapper (runs binary inside container)
 
-core/rag/chunks/<tool_name>.py # Chunk builder: converts findings to ChromaDB documents
+application/rag/chunks/<tool_name>.py # Chunk builder: converts findings to ChromaDB documents
 
-core/tools/parsers/<tool_name>_parser.py  # (optional) parses raw tool output
+infrastructure/tools/parsers/<tool_name>_parser.py  # (optional) parses raw tool output
 ```
 
 File stems use **underscores** for multi-word names (e.g. `pip_audit.py` for `pip-audit`).
@@ -35,11 +32,11 @@ The auto-discovery system converts underscores back to hyphens for the tool name
 ### How discovery works
 
 On startup `discover_tools()` reads `config/commands.json`. For each configured tool it
-imports `core.tools.wrappers.<location>.<stem>` and instantiates the wrapper class found
+imports `infrastructure.tools.wrappers.<location>.<stem>` and instantiates the wrapper class found
 there, then registers it in the global `tool_registry`. No manual imports or registration
 calls are needed anywhere.
 
-`FindingIngestor._default_builders()` independently scans `core/rag/chunks/` by glob and
+`FindingIngestor._default_builders()` independently scans `application/rag/chunks/` by glob and
 loads a `ChunkBuilderFactory` instance for every `.py` file it finds (excluding `_`-prefixed
 helpers like `_shared.py` and `sca.py`). So a new chunk file is auto-wired to ingestion
 the moment it exists.
@@ -48,7 +45,7 @@ the moment it exists.
 
 ## Step 1 — Base class
 
-`core/tools/wrappers/base/<tool_name>.py` defines all the tool-level behaviour that is
+`infrastructure/tools/wrappers/base/<tool_name>.py` defines all the tool-level behaviour that is
 identical whether the binary runs locally or inside Docker. Both the local and Docker
 concrete classes will inherit from it.
 
@@ -57,8 +54,8 @@ concrete classes will inherit from it.
 
 from typing import Any
 
-from ...base import ToolResult
-from ...interface import ExecutionContext, ExecutionPass, ToolInterface
+from domain.tools.base import ToolResult
+from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
 
 
 class Base<ToolName>Tool(ToolInterface):
@@ -240,7 +237,7 @@ security tools that should never be skipped, `False` for language-specific audit
 
 ## Step 2 — Local wrapper
 
-`core/tools/wrappers/local/<tool_name>.py` inherits from the base class and adds the
+`infrastructure/tools/wrappers/local/<tool_name>.py` inherits from the base class and adds the
 host-side execution details: where the binary lives and how to invoke it.
 
 ```python
@@ -249,8 +246,8 @@ host-side execution details: where the binary lives and how to invoke it.
 import shutil
 from pathlib import Path
 
-from ...base import get_tool_version
-from ..base.<tool_name> import Base<ToolName>Tool
+from domain.tools.base import get_tool_version
+from infrastructure.tools.wrappers.base.<tool_name> import Base<ToolName>Tool
 
 
 class <ToolName>LocalTool(Base<ToolName>Tool):
@@ -296,14 +293,14 @@ a local binary tally passes a `CommandEntry` as `config`. In fallback/dev mode (
 
 ## Step 3 — Docker wrapper
 
-`core/tools/wrappers/docker/<tool_name>.py` is structured identically to the local wrapper
+`infrastructure/tools/wrappers/docker/<tool_name>.py` is structured identically to the local wrapper
 but uses `build_docker_exec` to prefix the tool's args with `docker exec`.
 
 ```python
 """<tool-name> docker wrapper."""
 
-from ..base.<tool_name> import Base<ToolName>Tool
-from ._docker_exec import build_docker_exec
+from infrastructure.tools.wrappers.base.<tool_name> import Base<ToolName>Tool
+from infrastructure.tools.wrappers.docker._docker_exec import build_docker_exec
 
 
 class <ToolName>DockerTool(Base<ToolName>Tool):
@@ -336,7 +333,7 @@ class <ToolName>DockerTool(Base<ToolName>Tool):
 ```
 
 `build_docker_exec(container, tool_path, tool_args, workdir=None)` from
-`core.tools.wrappers.docker._docker_exec` produces:
+`infrastructure.tools.wrappers.docker._docker_exec` produces:
 
 ```
 docker exec [<-w workdir>] <container> <tool_path> <tool_args…>
@@ -349,7 +346,7 @@ container (some tools read relative paths from cwd).
 
 ## Step 4 — Parser
 
-If the tool produces JSON, write `core/tools/parsers/<tool_name>_parser.py`. Look at
+If the tool produces JSON, write `infrastructure/tools/parsers/<tool_name>_parser.py`. Look at
 `semgrep_parser.py` (JSON) or `nmap_parser.py` (XML) as reference implementations.
 
 The parser module should expose two public functions:
@@ -407,7 +404,7 @@ Call the parser from `parse_output()` on both the local and docker wrappers:
 
 ```python
 def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-    from core.tools.parsers.<tool_name>_parser import (
+    from infrastructure.tools.parsers.<tool_name>_parser import (
         parse_<tool_name>_json,
         parse_<tool_name>_json_string,
     )
@@ -421,7 +418,7 @@ def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
 
 ## Step 5 — Chunk builder
 
-`core/rag/chunks/<tool_name>.py` converts `ToolResult` objects into ChromaDB documents.
+`application/rag/chunks/<tool_name>.py` converts `ToolResult` objects into ChromaDB documents.
 The class is found automatically by `ChunkBuilderFactory`: it scans the module for a class
 whose `tool_name` attribute matches the tool name being ingested.
 
@@ -429,7 +426,7 @@ whose `tool_name` attribute matches the tool name being ingested.
 
 ```python
 from typing import Any
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 from ._shared import _first_output_file, _shared_meta
 
 
@@ -504,7 +501,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from core.tools.base import ToolResult
+from domain.tools.base import ToolResult
 from ._shared import _first_output_file, _shared_meta
 
 
@@ -649,7 +646,7 @@ tools that scan HTTP targets, not filesystem paths).
 
 ```bash
 .venv/bin/python -c "
-from core.rag.ingestor import _default_builders
+from application.rag.ingestor import _default_builders
 builders = _default_builders()
 print(sorted(builders.keys()))
 assert '<tool-name>' in builders
@@ -661,7 +658,7 @@ print('chunk builder OK:', builders['<tool-name>'].domain)
 
 ```bash
 .venv/bin/python -c "
-from core.tools.registry import tool_registry, discover_tools
+from application.tools.registry import tool_registry, discover_tools
 discover_tools('.')
 t = tool_registry.get_tool('<tool-name>')
 print('registered:', t)
@@ -676,7 +673,7 @@ print('candidate_commands:', t._candidate_commands)
 
 ```bash
 .venv/bin/python -c "
-from core.tools.parsers.<tool_name>_parser import parse_<tool_name>_json_string
+from infrastructure.tools.parsers.<tool_name>_parser import parse_<tool_name>_json_string
 result = parse_<tool_name>_json_string('<sample json output here>')
 assert 'error' not in result, result
 print(result.keys())
@@ -687,14 +684,14 @@ print(result.keys())
 
 ```bash
 .venv/bin/ruff check \
-  core/tools/wrappers/base/<tool_name>.py \
-  core/tools/wrappers/local/<tool_name>.py \
-  core/rag/chunks/<tool_name>.py
+  infrastructure/tools/wrappers/base/<tool_name>.py \
+  infrastructure/tools/wrappers/local/<tool_name>.py \
+  application/rag/chunks/<tool_name>.py
 
 .venv/bin/pyright \
-  core/tools/wrappers/base/<tool_name>.py \
-  core/tools/wrappers/local/<tool_name>.py \
-  core/rag/chunks/<tool_name>.py
+  infrastructure/tools/wrappers/base/<tool_name>.py \
+  infrastructure/tools/wrappers/local/<tool_name>.py \
+  application/rag/chunks/<tool_name>.py
 ```
 
 ### Test suite
@@ -738,7 +735,7 @@ return _build_sca_chunks(self, result, profile)
 
 **`tool_name` mismatch between wrapper and chunk builder**
 
-`ChunkBuilderFactory.load("npm-audit")` imports `core.rag.chunks.npm_audit` and then
+`ChunkBuilderFactory.load("npm-audit")` imports `application.rag.chunks.npm_audit` and then
 looks for a class with `tool_name == "npm-audit"`. If your chunk builder's `tool_name`
 attribute is `"npm_audit"` (underscores) the factory returns `None` and findings are
 silently not ingested.

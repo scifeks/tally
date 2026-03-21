@@ -1,6 +1,6 @@
 # MCP Triage System
 
-## 1. Overview
+## Overview
 
 Tally's MCP triage system uses Claude Code as an automated security analyst. After
 you run scans and ingest findings into a project's SQLite database, the `triage`
@@ -22,7 +22,7 @@ to the `tool_audit_log` table in the findings database.
 
 ---
 
-## 2. Prerequisites
+## Prerequisites
 
 ### Claude Code
 
@@ -70,7 +70,7 @@ scan --tool=semgrep
 
 ---
 
-## 3. Claude Code Setup
+## Claude Code Setup
 
 ### `.mcp.json`
 
@@ -178,11 +178,10 @@ pipeline unless you understand the implications.
 
 ---
 
-## 4. Configuration
+## Configuration
 
-All three MCP config values live under the top-level keys of `config/global.json` and
-are validated by `GlobalConfig` in `core/config/schemas.py`. If the config file is not
-found, `tally_mcp/config.py` falls back to the defaults shown below.
+All three MCP config values are set as top-level fields in `config/global.json`.
+If a field is absent, the default shown below is used.
 
 ### `mcp_batch_size`
 
@@ -206,7 +205,7 @@ runtime); smaller batches mean more sessions and more Claude API overhead.
 
 The number of seconds `get_findings_batch` will wait for the SQLite query to return
 before giving up. On timeout the tool writes a failed audit row and returns an empty
-list. This is expected and intentional — see [Troubleshooting](#8-troubleshooting).
+list. This is expected and intentional — see [Troubleshooting](#troubleshooting).
 
 Increase this only if your findings database is very large and queries are legitimately
 taking longer than 30 seconds.
@@ -223,7 +222,7 @@ it if you want faster failure detection when something goes wrong.
 
 ---
 
-## 5. Running Triage
+## Running Triage
 
 ### Command
 
@@ -233,7 +232,12 @@ From inside the Tally REPL with an active project:
 triage
 ```
 
-The command takes no flags. It uses the active project set with `project switch <name>`.
+It uses the active project set with `project switch <name>`. Two optional flags are available:
+
+| Flag | Description |
+|---|---|
+| `--batch` | Run the batching phase only — no Claude sessions launched. Useful for inspecting how findings will be grouped before committing to a full triage run. |
+| `--dry-run` | Batch + render prompts to the DEBUG log — no MCP server or Claude invoked. Useful for previewing prompts without incurring API cost. |
 
 ### What happens step by step
 
@@ -300,7 +304,7 @@ sqlite3 projects/<name>/sqlite/findings.db \
 
 ---
 
-## 6. Understanding Triage Output
+## Understanding Triage Output
 
 When Claude calls `update_finding`, the tool writes a `triage` key into the finding's
 `meta` JSON column. The structure is:
@@ -372,7 +376,7 @@ or `enrich_only`).
 
 ---
 
-## 7. Querying Triage Results
+## Querying Triage Results
 
 All queries below run against `projects/<name>/sqlite/findings.db`. Open the database
 with:
@@ -438,7 +442,7 @@ ORDER BY id;
 
 ---
 
-## 8. Troubleshooting
+## Troubleshooting
 
 ### Claude starts but makes no MCP tool calls
 
