@@ -31,11 +31,14 @@ class FullScan(ScanType):
 
         config.display.print_scan_header(f"Full Scan: {config.project_name}")
 
+        active_segments = [s for s in SEGMENT_ORDER if s not in self.exclude_segments]
+        seg_idx = 0
         for segment in SEGMENT_ORDER:
             if segment in self.exclude_segments:
                 config.display.print_status(f"[dim]Skipping segment: {segment}[/dim]")
                 continue
-
+            config.remaining_peers = len(active_segments) - seg_idx - 1
+            seg_idx += 1
             config.display.print_segment_header(segment)
 
             if segment == "network":

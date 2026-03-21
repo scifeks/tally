@@ -192,8 +192,12 @@ class ScanCommands:
                             "Omit --repo to run network tools."
                         )
                         return
-                    for tool_name in effective_tools:
-                        orchestrator.run_tool_on_repo(tool_name, repo_name)
+                    for _i, tool_name in enumerate(effective_tools):
+                        orchestrator.run_tool_on_repo(
+                            tool_name,
+                            repo_name,
+                            remaining_peers=len(effective_tools) - _i - 1,
+                        )
                 else:
                     orchestrator.run_repo_scan(repo_name=repo_name)
             else:
@@ -205,9 +209,14 @@ class ScanCommands:
                         t for t in effective_tools if get_tool_domain(t) != "network"
                     ]
                     if net:
-                        orchestrator.run_segment("network")
-                    for tool_name in repo_tools:
-                        orchestrator.run_tool_on_all_repos(tool_name)
+                        orchestrator.run_segment(
+                            "network", remaining_peers=len(repo_tools)
+                        )
+                    for _i, tool_name in enumerate(repo_tools):
+                        orchestrator.run_tool_on_all_repos(
+                            tool_name,
+                            remaining_peers=len(repo_tools) - _i - 1,
+                        )
                 else:
                     orchestrator.run_full_scan()
         except ValueError as exc:

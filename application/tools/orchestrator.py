@@ -79,7 +79,13 @@ class ScanOrchestrator:
     # Internal helper
     # ------------------------------------------------------------------
 
-    def _make_config(self, auto_approve: bool = False) -> ScanTypeConfig:
+    def _on_auto_approve_set(self) -> None:
+        """Callback invoked when the user approves all remaining tools."""
+        self._auto_approve = True
+
+    def _make_config(
+        self, auto_approve: bool = False, remaining_peers: int = 0
+    ) -> ScanTypeConfig:
         """Build a ScanTypeConfig from current orchestrator state."""
         return ScanTypeConfig(
             project_name=self.project_name,
@@ -89,6 +95,8 @@ class ScanOrchestrator:
             display=self.display,
             run_id=self._run_id,
             auto_approve=auto_approve or self._auto_approve,
+            on_auto_approve=self._on_auto_approve_set,
+            remaining_peers=remaining_peers,
         )
 
     def _make_resources(self) -> ExecutionResources:
@@ -116,9 +124,11 @@ class ScanOrchestrator:
         self,
         segment_name: str,
         auto_approve: bool = False,
+        remaining_peers: int = 0,
     ) -> ScanSummary:
         return SegmentScan(segment_name).execute(
-            self._make_config(auto_approve), self._make_resources()
+            self._make_config(auto_approve, remaining_peers=remaining_peers),
+            self._make_resources(),
         )
 
     def run_repo_scan(
@@ -136,9 +146,11 @@ class ScanOrchestrator:
         self,
         tool_name: str,
         auto_approve: bool = False,
+        remaining_peers: int = 0,
     ) -> ScanSummary:
         return ToolOnAllReposScan(tool_name).execute(
-            self._make_config(auto_approve), self._make_resources()
+            self._make_config(auto_approve, remaining_peers=remaining_peers),
+            self._make_resources(),
         )
 
     def run_tool_on_repo(
@@ -146,7 +158,9 @@ class ScanOrchestrator:
         tool_name: str,
         repo_name: str,
         auto_approve: bool = False,
+        remaining_peers: int = 0,
     ) -> ScanSummary:
         return ToolOnRepoScan(tool_name, repo_name).execute(
-            self._make_config(auto_approve), self._make_resources()
+            self._make_config(auto_approve, remaining_peers=remaining_peers),
+            self._make_resources(),
         )

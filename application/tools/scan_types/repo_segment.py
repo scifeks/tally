@@ -56,11 +56,15 @@ class RepoSegmentScan(ScanType):
             t.name for t in _reg_tools if t.name in self.tool_names and t.language_gates
         }
 
+        _total_invocations = len(repos) * len(self.tool_names)
+        _invocation = 0
+
         for repo in repos:
             config.display.print_status(f"  [bold]Repository:[/bold] {repo.name}")
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:
+                _invocation += 1
                 if tool_name in _lang_specific:
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}
                     tool_inst: Any = resources.registry.get_tool(tool_name)
@@ -124,7 +128,14 @@ class RepoSegmentScan(ScanType):
                     repo,
                     tool_config,
                 )
-                result = _execute_tool_passes(tool, context, config, resources.executor)
+                _remaining = (_total_invocations - _invocation) + config.remaining_peers
+                result = _execute_tool_passes(
+                    tool,
+                    context,
+                    config,
+                    resources.executor,
+                    remaining_tools=_remaining,
+                )
 
                 if result is None:
                     config.display.print_tool_line(
