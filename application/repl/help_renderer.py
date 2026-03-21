@@ -112,6 +112,7 @@ _HELP_REGISTRY = [
     ("knowledge", None, None, "Knowledge Base"),
     ("knowledge", "chat", "<message>", "RAG-augmented chat with the LLM"),
     ("knowledge", "stats", None, "Show knowledge base statistics"),
+    ("knowledge", "report", None, "Generate findings report"),
     ("knowledge", "purge", None, "Delete findings from the knowledge base"),
     (
         "knowledge",
@@ -119,7 +120,6 @@ _HELP_REGISTRY = [
         "--tool=<tool,...>",
         "Limit deletion to the specified tool(s). Comma-separated.",
     ),
-    ("knowledge", "report", None, "Generate findings report"),
     # Search
     ("search", None, None, "Search"),
     ("search", "search", None, "Search findings. Run 'search --help' for full docs."),
