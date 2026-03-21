@@ -37,3 +37,20 @@ class TestScanTypeConfig:
     def test_run_id_can_be_none(self) -> None:
         cfg = self._make(run_id=None)
         assert cfg.run_id is None
+
+    def test_on_auto_approve_defaults_to_none(self) -> None:
+        cfg = self._make()
+        assert cfg.on_auto_approve is None
+
+    def test_on_auto_approve_can_be_set(self) -> None:
+        callback = lambda: None  # noqa: E731
+        cfg = self._make(on_auto_approve=callback)
+        assert cfg.on_auto_approve is callback
+
+    def test_remaining_peers_defaults_to_zero(self) -> None:
+        cfg = self._make()
+        assert cfg.remaining_peers == 0
+
+    def test_remaining_peers_can_be_set(self) -> None:
+        cfg = self._make(remaining_peers=5)
+        assert cfg.remaining_peers == 5

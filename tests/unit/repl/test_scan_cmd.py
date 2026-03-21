@@ -50,7 +50,9 @@ def test_scan_repo_calls_run_repo_scan() -> None:
 
 def test_scan_tool_single_calls_run_tool_on_all_repos() -> None:
     _repl, orchestrator = _run(["--tool=semgrep"])
-    assert orchestrator.run_tool_on_all_repos.call_args == call("semgrep")
+    assert orchestrator.run_tool_on_all_repos.call_args == call(
+        "semgrep", remaining_peers=0
+    )
 
 
 def test_scan_tool_comma_list_calls_for_each_tool() -> None:

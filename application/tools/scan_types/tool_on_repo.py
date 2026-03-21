@@ -67,7 +67,13 @@ class ToolOnRepoScan(ScanType):
             repo,
             tool_config,
         )
-        result = _execute_tool_passes(tool, context, config, resources.executor)
+        result = _execute_tool_passes(
+            tool,
+            context,
+            config,
+            resources.executor,
+            remaining_tools=config.remaining_peers,
+        )
 
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0

@@ -39,6 +39,7 @@ def _execute_tool_passes(
     context: ExecutionContext,
     config: ScanTypeConfig,
     executor: ToolExecutor,
+    remaining_tools: int = 0,
 ) -> ToolResult | None:
     """Prompt approval once, run all ExecutionPasses, return merged result."""
     if not config.auto_approve:
@@ -49,13 +50,16 @@ def _execute_tool_passes(
             return None
         if answer not in ("y", "yes"):
             return None
-        try:
-            all_ans = input("Approve all remaining? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-        else:
-            if all_ans in ("y", "yes"):
-                config.auto_approve = True
+        if remaining_tools > 0:
+            try:
+                all_ans = input("Approve all remaining? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+            else:
+                if all_ans in ("y", "yes"):
+                    config.auto_approve = True
+                    if config.on_auto_approve:
+                        config.on_auto_approve()
 
     passes = tool.build_execution_passes(context)
     pass_results = [executor.run(p, tool) for p in passes]

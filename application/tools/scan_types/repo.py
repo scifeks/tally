@@ -61,7 +61,7 @@ class RepoScan(ScanType):
         total_run = total_skipped = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
-        for tool_name in ordered_tools:
+        for _tool_idx, tool_name in enumerate(ordered_tools):
             tool_config = resources.registry.get_tool_config(tool_name)
             if tool_config is None:
                 config.display.print_tool_line(
@@ -105,7 +105,14 @@ class RepoScan(ScanType):
                 repo,
                 tool_config,
             )
-            result = _execute_tool_passes(tool, context, config, resources.executor)
+            _remaining = (len(ordered_tools) - _tool_idx - 1) + config.remaining_peers
+            result = _execute_tool_passes(
+                tool,
+                context,
+                config,
+                resources.executor,
+                remaining_tools=_remaining,
+            )
 
             if result is None:
                 config.display.print_tool_line(

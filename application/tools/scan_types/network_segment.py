@@ -108,7 +108,13 @@ class NetworkSegmentScan(ScanType):
             None,
             tool_config,
         )
-        result = _execute_tool_passes(tool, context, config, resources.executor)
+        result = _execute_tool_passes(
+            tool,
+            context,
+            config,
+            resources.executor,
+            remaining_tools=config.remaining_peers,
+        )
 
         if result is None:
             config.display.print_tool_line(ToolDisplayRow("nmap", False, True, 0, 0.0))

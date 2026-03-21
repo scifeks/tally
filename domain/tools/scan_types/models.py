@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -35,6 +36,8 @@ class ScanTypeConfig:
     display: OrchestratorDisplay
     run_id: int | None
     auto_approve: bool = False
+    on_auto_approve: Callable[[], None] | None = field(default=None, repr=False)
+    remaining_peers: int = 0
 
 
 @dataclass
