@@ -114,6 +114,24 @@ def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, str |
     return (file_path, None)
 
 
+def _relativize_path(
+    file_path: str, repo_name: str, repos: list[Repository] | None
+) -> str:
+    """Strip repo's path prefix from file_path when it matches.
+
+    Used when repo identity is already known from execution context.
+    Returns file_path unchanged when repos is None, the named repo has no
+    path, the path doesn't match (e.g. gitleaks relative paths), or
+    file_path is empty.
+    """
+    if not file_path or repos is None:
+        return file_path
+    for repo in repos:
+        if repo.name == repo_name and repo.path and file_path.startswith(repo.path):
+            return "/" + file_path[len(repo.path) :].lstrip("/")
+    return file_path
+
+
 # ------------------------------------------------------------------
 # FindingIngestor
 # ------------------------------------------------------------------
@@ -137,6 +155,7 @@ class FindingIngestor:
         project_name: str,
         builders: dict[str, ChunkBuilder] | None = None,
         repositories: list[Repository] | None = None,
+        repo_name: str | None = None,
     ) -> None:
         self._engine = rag_engine
         self.project_name = project_name
@@ -144,6 +163,7 @@ class FindingIngestor:
             builders if builders is not None else _default_builders()
         )
         self._repositories = repositories
+        self._repo_name = repo_name
         self._repo_test_dirs: dict[str, list[str]] = {
             r.name: r.test_dirs for r in (repositories or []) if r.test_dirs
         }
@@ -222,7 +242,13 @@ class FindingIngestor:
         chunks: list[tuple[str, dict[str, Any], str]] = []
         for text, meta, doc_id in raw_chunks:
             file_path: str = meta.get("file_path", "") or ""
-            rel_path, repo_name = _normalize_path(file_path, self._repositories)
+            if self._repo_name is not None:
+                repo_name: str | None = self._repo_name
+                rel_path = _relativize_path(
+                    file_path, self._repo_name, self._repositories
+                )
+            else:
+                rel_path, repo_name = _normalize_path(file_path, self._repositories)
             meta["file_path"] = rel_path
             if repo_name is not None:
                 meta["repo"] = repo_name

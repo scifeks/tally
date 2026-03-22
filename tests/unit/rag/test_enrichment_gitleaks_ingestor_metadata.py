@@ -69,12 +69,16 @@ class TestGitleaksIngestorMetadata:
             test_dirs=[],
         )
         result = self._make_gitleaks_result("aws-access-token")
+        # Relative path — exactly what gitleaks outputs in production
         assert result.parsed_data is not None
-        result.parsed_data["secrets"][0]["file_path"] = "/repos/myapp/config.py"
-        ingestor = FindingIngestor(MagicMock(), "test-proj", repositories=[repo])
+        result.parsed_data["secrets"][0]["file_path"] = "config.py"
+        ingestor = FindingIngestor(
+            MagicMock(), "test-proj", repositories=[repo], repo_name="myapp"
+        )
         chunks = ingestor._build_chunks(result, "default")
         assert len(chunks) == 1
         assert chunks[0][1]["title"] == "Secret of type aws-access-token found in myapp"
+        assert chunks[0][1]["repo"] == "myapp"
 
     def test_title_set_without_repo(self) -> None:
         chunks = self._get_chunks("aws-access-token")
