@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from domain.tools.base import ToolResult
+from domain.tools.constants import OWASP_CODE_TO_NAME
 
 from ._shared import _first_output_file, _shared_meta
 
@@ -80,6 +81,15 @@ class SemgrepChunkBuilder:
                 meta["cwe"] = cwe
             if owasp:
                 meta["owasp"] = owasp
+                raw_list: list = owasp if isinstance(owasp, list) else [owasp]
+                names: list[str] = []
+                for entry in raw_list:
+                    code = str(entry).split(" ")[0].strip()
+                    name = OWASP_CODE_TO_NAME.get(code)
+                    if name:
+                        names.append(name)
+                if names:
+                    meta["owasp_name"] = json.dumps(list(dict.fromkeys(names)))
             if confidence:
                 meta["confidence"] = confidence
             if fix:

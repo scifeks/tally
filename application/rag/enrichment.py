@@ -14,6 +14,7 @@ from core.llm import LLMProvider, get_llm_provider
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
+    OWASP_NAMES,
     SEVERITY_LEVELS,
 )
 
@@ -69,6 +70,56 @@ _USER_PROMPT_TEMPLATE = (
 )
 
 _SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+_OWASP_FIELD_DEFINITION = (
+    "- owasp_name: The OWASP Top 10 category Name that best describes this finding.\n"
+    '  Return ONLY a value from the "Name" column of the tables below'
+    " — copied exactly.\n"
+    "  Return null if you cannot confidently map this finding to any category.\n"
+    "  Do not guess. Do not invent values.\n"
+    "\n"
+    "  OWASP Top 10:2025\n"
+    "  | Code       | Name                                    |\n"
+    "  |------------|-----------------------------------------|\n"
+    "  | A01:2025   | Broken Access Control                   |\n"
+    "  | A02:2025   | Security Misconfiguration               |\n"
+    "  | A03:2025   | Software Supply Chain Failures          |\n"
+    "  | A04:2025   | Cryptographic Failures                  |\n"
+    "  | A05:2025   | Injection                               |\n"
+    "  | A06:2025   | Insecure Design                         |\n"
+    "  | A07:2025   | Authentication Failures                 |\n"
+    "  | A08:2025   | Software or Data Integrity Failures     |\n"
+    "  | A09:2025   | Security Logging and Alerting Failures  |\n"
+    "  | A10:2025   | Mishandling of Exceptional Conditions   |\n"
+    "\n"
+    "  OWASP Top 10:2021\n"
+    "  | Code       | Name                                        |\n"
+    "  |------------|---------------------------------------------|\n"
+    "  | A01:2021   | Broken Access Control                       |\n"
+    "  | A02:2021   | Cryptographic Failures                      |\n"
+    "  | A03:2021   | Injection                                   |\n"
+    "  | A04:2021   | Insecure Design                             |\n"
+    "  | A05:2021   | Security Misconfiguration                   |\n"
+    "  | A06:2021   | Vulnerable and Outdated Components          |\n"
+    "  | A07:2021   | Identification and Authentication Failures  |\n"
+    "  | A08:2021   | Software and Data Integrity Failures        |\n"
+    "  | A09:2021   | Security Logging and Monitoring Failures    |\n"
+    "  | A10:2021   | Server-Side Request Forgery (SSRF)          |\n"
+    "\n"
+    "  OWASP Top 10:2017\n"
+    "  | Code      | Name                                          |\n"
+    "  |-----------|-----------------------------------------------|\n"
+    "  | A1:2017   | Injection                                     |\n"
+    "  | A2:2017   | Broken Authentication                         |\n"
+    "  | A3:2017   | Sensitive Data Exposure                       |\n"
+    "  | A4:2017   | XML External Entities (XXE)                   |\n"
+    "  | A5:2017   | Broken Access Control                         |\n"
+    "  | A6:2017   | Security Misconfiguration                     |\n"
+    "  | A7:2017   | Cross-Site Scripting (XSS)                    |\n"
+    "  | A8:2017   | Insecure Deserialization                      |\n"
+    "  | A9:2017   | Using Components with Known Vulnerabilities   |\n"
+    "  | A10:2017  | Insufficient Logging and Monitoring           |\n"
+)
 
 
 class EnrichmentPipeline:
@@ -235,7 +286,10 @@ class EnrichmentPipeline:
         self, doc_text: str, metadata: dict[str, Any], fields: list[str]
     ) -> dict[str, Any]:
         """Call LLM provider and return the parsed JSON dict. Raises on failure."""
-        prompt = _USER_PROMPT_TEMPLATE.format(
+        template = _USER_PROMPT_TEMPLATE
+        if "owasp_name" in fields:
+            template = template + "\n" + _OWASP_FIELD_DEFINITION
+        prompt = template.format(
             document_text=doc_text,
             fields_to_enrich=", ".join(fields),
         )
@@ -269,6 +323,9 @@ class EnrichmentPipeline:
                 continue
             if key == "risk_type" and not _SNAKE_CASE_RE.match(val):
                 logger.warning("Enrichment: risk_type %r not snake_case; omitting", val)
+                continue
+            if key == "owasp_name" and val not in OWASP_NAMES:
+                logger.warning("Enrichment: invalid owasp_name %r; omitting", val)
                 continue
             valid[key] = val
 

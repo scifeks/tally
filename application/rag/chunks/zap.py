@@ -87,7 +87,7 @@ class ZapChunkBuilder:
             }
             if param:
                 meta["param"] = param
-            if cwe_id is not None:
+            if cwe_id is not None and cwe_id > 0:
                 meta["cwe_id"] = cwe_id
             meta.update(_shared_meta(self, "vulnerability"))
 

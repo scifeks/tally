@@ -122,6 +122,8 @@ def normalise_cwe(val: Any) -> str | None:
     if val is None:
         return None
     if isinstance(val, int):
+        if val <= 0:
+            return None
         return json.dumps([f"CWE-{val}"])
     if isinstance(val, list):
         return json.dumps([str(v) for v in val if v])

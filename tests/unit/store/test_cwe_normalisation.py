@@ -34,3 +34,9 @@ class TestCweNormalisationUnit:
         items = json.loads(result)
         assert "CWE-89" in items
         assert "CWE-20" in items
+
+    def test_negative_int_returns_none(self) -> None:
+        assert normalise_cwe(-1) is None
+
+    def test_zero_returns_none(self) -> None:
+        assert normalise_cwe(0) is None
