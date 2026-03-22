@@ -47,10 +47,24 @@ class TestZapParser:
         result = parse_zap_json_string(json.dumps(data))
         assert result["alerts"][0]["risk"] == "medium"
 
-    def test_unknown_risk_code_maps_to_informational(self) -> None:
+    def test_informational_riskcode_zero_dropped(self) -> None:
+        data = _site([_one_alert("0", _INSTANCE)])
+        result = parse_zap_json_string(json.dumps(data))
+        assert result["alerts"] == []
+        assert result["summary"]["total_alerts"] == 0
+
+    def test_unknown_risk_code_dropped(self) -> None:
+        """Unknown risk codes map to informational and are dropped."""
         data = _site([_one_alert("99", _INSTANCE)])
         result = parse_zap_json_string(json.dumps(data))
-        assert result["alerts"][0]["risk"] == "informational"
+        assert result["alerts"] == []
+        assert result["summary"]["total_alerts"] == 0
+
+    def test_cwe_negative_one_produces_none_cwe_id(self) -> None:
+        alert: dict = {"name": "XSS", "riskcode": "3", "cweid": "-1"}
+        data = _site([{**alert, "instances": _INSTANCE}])
+        result = parse_zap_json_string(json.dumps(data))
+        assert result["alerts"][0]["cwe_id"] is None
 
     def test_alert_without_instances_produces_one_record(self) -> None:
         data = _site([_one_alert("3")])

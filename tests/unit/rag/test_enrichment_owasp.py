@@ -92,6 +92,15 @@ class TestSemgrepNativeMapping:
         meta = _chunks(_make_semgrep_result(["UNKNOWN1", "UNKNOWN2"]))[0]
         assert "owasp_name" not in meta
 
+    def test_duplicate_codes_deduplicated(self) -> None:
+        meta = _chunks(_make_semgrep_result(["A03:2021", "A03:2021"]))[0]
+        assert json.loads(meta["owasp_name"]) == ["Injection"]
+
+    def test_cross_edition_same_name_deduplicated(self) -> None:
+        # A01:2021 and A5:2017 both map to "Broken Access Control"
+        meta = _chunks(_make_semgrep_result(["A01:2021", "A5:2017"]))[0]
+        assert json.loads(meta["owasp_name"]) == ["Broken Access Control"]
+
 
 # ---------------------------------------------------------------------------
 # Enrichment pipeline: owasp_name in fields_to_enrich

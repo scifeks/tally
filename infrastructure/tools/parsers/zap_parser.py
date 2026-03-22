@@ -73,6 +73,9 @@ def _parse_zap_data(data: Any) -> dict[str, Any]:
         if not isinstance(site, dict):
             continue
         for raw_alert in site.get("alerts", []):
+            risk_raw = str(raw_alert.get("riskcode", raw_alert.get("riskdesc", "0")))
+            if _normalize_risk(risk_raw) == "informational":
+                continue
             expanded = _parse_alert(raw_alert)
             alerts.extend(expanded)
             for a in expanded:
@@ -105,6 +108,8 @@ def _parse_alert(alert: dict[str, Any]) -> list[dict[str, Any]]:
     description = _strip_html(alert.get("desc", ""))
     solution = _extract_solution(alert)
     cwe_id = _to_int(alert.get("cweid"))
+    if cwe_id is not None and cwe_id <= 0:
+        cwe_id = None
     wasc_id = _to_int(alert.get("wascid"))
 
     instances: list[dict[str, Any]] = alert.get("instances", [])
@@ -192,6 +197,8 @@ def _parse_zap_xml_root(root: ET.Element) -> dict[str, Any]:
             _xml_text(alertitem, "riskcode") or _xml_text(alertitem, "riskdesc") or "0"
         )
         risk = _normalize_risk(risk_raw)
+        if risk == "informational":
+            continue
         confidence = (_xml_text(alertitem, "confidencedesc") or "low").lower()
         alert_name = _xml_text(alertitem, "alert") or _xml_text(alertitem, "name")
         description = _strip_html(_xml_text(alertitem, "desc"))
@@ -200,6 +207,8 @@ def _parse_zap_xml_root(root: ET.Element) -> dict[str, Any]:
             or "See OWASP ZAP documentation."
         )
         cwe_id = _to_int(_xml_text(alertitem, "cweid"))
+        if cwe_id is not None and cwe_id <= 0:
+            cwe_id = None
         wasc_id = _to_int(_xml_text(alertitem, "wascid"))
 
         instances_el = alertitem.find("instances")

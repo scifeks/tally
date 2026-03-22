@@ -89,7 +89,7 @@ class SemgrepChunkBuilder:
                     if name:
                         names.append(name)
                 if names:
-                    meta["owasp_name"] = json.dumps(names)
+                    meta["owasp_name"] = json.dumps(list(dict.fromkeys(names)))
             if confidence:
                 meta["confidence"] = confidence
             if fix:
