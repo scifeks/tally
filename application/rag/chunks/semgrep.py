@@ -6,6 +6,7 @@ from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.constants import OWASP_CODE_TO_NAME
+from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from ._shared import _first_output_file, _shared_meta
 
@@ -18,6 +19,31 @@ class SemgrepChunkBuilder:
     type_flags: dict[str, set[str]] = {
         "vulnerability": {"type_vulnerability", "type_weakness"}
     }
+    # Per-field enrichment spec: each entry declares which metadata keys to send
+    # to the LLM and which prompt strategy to use. description is omitted because
+    # semgrep always sets it from the rule message; no LLM call is needed.
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] = (
+        FieldEnrichmentSpec(
+            "risk_type",
+            ("rule_id", "cwe", "owasp", "description", "category"),
+            PromptStrategy.GENERIC,
+        ),
+        FieldEnrichmentSpec(
+            "remediation",
+            ("description", "rule_id", "cwe", "category", "fix"),
+            PromptStrategy.GENERIC,
+        ),
+        FieldEnrichmentSpec(
+            "confidence",
+            ("confidence", "subcategory", "likelihood", "rule_id"),
+            PromptStrategy.GENERIC,
+        ),
+        FieldEnrichmentSpec(
+            "owasp_name",
+            ("owasp", "cwe", "rule_id", "description", "category"),
+            PromptStrategy.DEDICATED,
+        ),
+    )
 
     def build(
         self, result: ToolResult, profile: str

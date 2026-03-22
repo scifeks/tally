@@ -6,6 +6,7 @@ from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.constants import CONFIDENCE_CONFIRMED
+from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from ._shared import _first_output_file, _shared_meta
 
@@ -18,6 +19,15 @@ class ZapChunkBuilder:
         {"severity", "confidence", "remediation", "description"}
     )
     type_flags: dict[str, set[str]] = {"vulnerability": {"type_vulnerability"}}
+    # risk_type is already in metadata as alert_name so the metadata check filters
+    # it out before any LLM call. Only owasp_name needs dedicated enrichment.
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] = (
+        FieldEnrichmentSpec(
+            "owasp_name",
+            ("alert_name", "description", "cwe_id", "param", "evidence"),
+            PromptStrategy.DEDICATED,
+        ),
+    )
 
     def build(
         self, result: ToolResult, profile: str

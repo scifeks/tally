@@ -17,9 +17,11 @@ from domain.tools.constants import (
     OWASP_NAMES,
     SEVERITY_LEVELS,
 )
+from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from .engine import RAGEngine
 from .ingestor import ChunkBuilderFactory
+from .prompts import get_dedicated_prompt
 
 if TYPE_CHECKING:
     from infrastructure.store.repositories.findings import FindingRepository
@@ -31,6 +33,11 @@ _SYSTEM_PROMPT = (
     "You output only valid JSON. "
     "No prose, no explanation, no markdown. Only a JSON object."
 )
+
+# ---------------------------------------------------------------------------
+# Legacy batch-path prompt (used when builder has no enrichment_fields).
+# Sends full document text and requests all missing fields at once.
+# ---------------------------------------------------------------------------
 
 _USER_PROMPT_TEMPLATE = (
     "Classify this security finding. Return only a JSON object with the fields"
@@ -71,6 +78,7 @@ _USER_PROMPT_TEMPLATE = (
 
 _SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
+# Retained for legacy batch path (SCA tools that have no enrichment_fields).
 _OWASP_FIELD_DEFINITION = (
     "- owasp_name: The OWASP Top 10 category Name that best describes this finding.\n"
     '  Return ONLY a value from the "Name" column of the tables below'
@@ -121,9 +129,69 @@ _OWASP_FIELD_DEFINITION = (
     "  | A10:2017  | Insufficient Logging and Monitoring           |\n"
 )
 
+# ---------------------------------------------------------------------------
+# Per-field path prompt (used when builder declares enrichment_fields).
+# Sends only the declared source_fields as context for a single field.
+# ---------------------------------------------------------------------------
+
+_FIELD_DEFINITIONS: dict[str, str] = {
+    "risk_type": (
+        "The specific vulnerability or condition using OWASP Top 10 2021 or CWE"
+        " naming in snake_case. Priority order:\n"
+        "  1. If a CWE ID is present, derive from CWE name"
+        " (e.g. CWE-79 -> cross_site_scripting)\n"
+        "  2. If no CWE, use OWASP Top 10 2021 category in snake_case\n"
+        "  3. If neither applies, use a concise snake_case label a security"
+        " professional would recognize"
+    ),
+    "remediation": (
+        "One to two sentences maximum."
+        " Specific and actionable. No padding, no generic advice."
+    ),
+    "severity": (
+        "How bad is the impact if exploited. Must be exactly one of:"
+        " critical, high, medium, low, informational\n"
+        "  - critical: system compromise, data breach, full authentication bypass\n"
+        "  - high: significant data exposure, privilege escalation,"
+        " remote code execution\n"
+        "  - medium: limited data exposure, requires user interaction\n"
+        "  - low: minimal impact, difficult to exploit\n"
+        "  - informational: fact about attack surface, no direct exploitability"
+    ),
+    "confidence": (
+        "How certain are we this is exploitable. Must be exactly one of:"
+        " confirmed, probable, potential\n"
+        "  - confirmed: exploitable as found, no conditions required\n"
+        "  - probable: very likely exploitable with minimal conditions\n"
+        "  - potential: condition exists but requires specific circumstances"
+    ),
+    "description": "One sentence describing what was found. No padding.",
+}
+
+_FIELD_PROMPT_TEMPLATE = (
+    "Classify this security finding. Return only a JSON object with a single"
+    ' field: "{field_name}". Do not include any other fields.'
+    " No prose, no explanation, no markdown.\n"
+    "\n"
+    "Finding context:\n"
+    "{context}\n"
+    "\n"
+    "Field to populate: {field_name}\n"
+    "Field definition:\n"
+    "{field_definition}\n"
+    "\n"
+    'Return: {{"{field_name}": "<value>"}}'
+)
+
 
 class EnrichmentPipeline:
     """Enriches ChromaDB findings with LLM-generated semantic fields.
+
+    When a chunk builder declares ``enrichment_fields`` (a tuple of
+    ``FieldEnrichmentSpec``), the pipeline makes one focused LLM call per
+    spec using only the declared source metadata keys. When no such attribute
+    is present, the existing batch path fires: all missing fields are requested
+    in a single call over the full chunk text.
 
     LLM calls run concurrently via ThreadPoolExecutor (Phase 2).
     ChromaDB writes are serialized after all LLM calls complete (Phase 3).
@@ -178,7 +246,19 @@ class EnrichmentPipeline:
         max_workers = self._resolve_max_workers()
 
         # Phase 1: Fetch and classify (sequential — ChromaDB reads)
-        work_items: list[tuple[str, str, dict[str, Any], list[str]]] = []
+        # Each work item: (doc_id, text, meta, legacy_fields, specs)
+        #   legacy_fields is set (list[str]) when using the batch path.
+        #   specs is set (list[FieldEnrichmentSpec]) when using the per-field path.
+        #   Exactly one of the two is non-None per item.
+        work_items: list[
+            tuple[
+                str,
+                str,
+                dict[str, Any],
+                list[str] | None,
+                list[FieldEnrichmentSpec] | None,
+            ]
+        ] = []
         auto_enriched = 0
         for doc_id in ids:
             doc = self._engine.get_document_by_id(doc_id)
@@ -188,12 +268,14 @@ class EnrichmentPipeline:
             if doc["metadata"].get("enriched"):
                 auto_enriched += 1
                 continue
-            fields = self._get_fields_to_enrich(doc["metadata"])
-            if not fields:
+            legacy_fields, specs = self._get_enrichment_plan(doc["metadata"])
+            if not legacy_fields and not specs:
                 self._engine.update_metadata(doc_id, {"enriched": True})
                 auto_enriched += 1
                 continue
-            work_items.append((doc_id, doc["document"], doc["metadata"], fields))
+            work_items.append(
+                (doc_id, doc["document"], doc["metadata"], legacy_fields, specs)
+            )
 
         # Phase 2: LLM calls (concurrent)
         updates: list[tuple[str, dict[str, Any]]] = []
@@ -206,8 +288,10 @@ class EnrichmentPipeline:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_id = {
-                executor.submit(self._call_llm_worker, text, meta, fields): doc_id
-                for doc_id, text, meta, fields in work_items
+                executor.submit(
+                    self._call_llm_worker, text, meta, legacy_fields, specs
+                ): doc_id
+                for doc_id, text, meta, legacy_fields, specs in work_items
             }
             for future in as_completed(future_to_id):
                 doc_id = future_to_id[future]
@@ -258,29 +342,151 @@ class EnrichmentPipeline:
             logger.error("SQLite upsert failed after enrichment: %s", exc)
 
     def _call_llm_worker(
-        self, doc_text: str, metadata: dict[str, Any], fields: list[str]
+        self,
+        doc_text: str,
+        metadata: dict[str, Any],
+        legacy_fields: list[str] | None,
+        specs: list[FieldEnrichmentSpec] | None,
     ) -> dict[str, Any]:
-        """Thread-safe worker: call LLM and validate. Raises on failure."""
-        raw = self._call_llm(doc_text, metadata, fields)
-        return self._validate_response(raw, fields)
+        """Thread-safe worker: dispatch to per-field or legacy batch path."""
+        if specs is not None:
+            return self._call_per_field(metadata, specs)
+        # Legacy batch path
+        assert legacy_fields is not None
+        raw = self._call_llm(doc_text, metadata, legacy_fields)
+        return self._validate_response(raw, legacy_fields)
+
+    # ------------------------------------------------------------------
+    # Per-field enrichment path
+    # ------------------------------------------------------------------
+
+    def _get_enrichment_plan(
+        self,
+        metadata: dict[str, Any],
+    ) -> tuple[list[str] | None, list[FieldEnrichmentSpec] | None]:
+        """Determine the enrichment plan for a document.
+
+        Returns:
+            ``(legacy_fields, None)`` — batch path: a list of field names to
+                enrich together in one LLM call over the full chunk text.
+            ``(None, specs)`` — per-field path: a list of FieldEnrichmentSpec
+                to call individually.
+            ``([], None)`` — nothing to enrich (skip entirely).
+        """
+        tool = metadata.get("tool", "")
+        builder = ChunkBuilderFactory.load(tool)
+        if builder is None or not getattr(builder, "should_enrich", True):
+            return ([], None)
+
+        declared_specs: tuple[FieldEnrichmentSpec, ...] | None = getattr(
+            builder, "enrichment_fields", None
+        )
+
+        if declared_specs is None:
+            # Legacy batch path: existing filtering logic
+            tool_provided = builder.non_enriched_fields
+            fields = [
+                f
+                for f in ENRICHMENT_FIELDS
+                if f not in tool_provided and not metadata.get(f)
+            ]
+            return (fields, None)
+
+        # Per-field path: filter to specs whose field is not already in metadata
+        active = [s for s in declared_specs if not metadata.get(s.field_name)]
+        return (None, active)
+
+    def _call_per_field(
+        self,
+        metadata: dict[str, Any],
+        specs: list[FieldEnrichmentSpec],
+    ) -> dict[str, Any]:
+        """Make one LLM call per spec and merge the validated results.
+
+        Individual field failures are logged and skipped; other fields are
+        unaffected. A partial result is better than no enrichment.
+        """
+        merged: dict[str, Any] = {}
+        for spec in specs:
+            source_values = {
+                k: metadata[k] for k in spec.source_fields if metadata.get(k)
+            }
+            try:
+                if spec.strategy is PromptStrategy.DEDICATED:
+                    val = self._call_dedicated_field(spec, source_values)
+                else:
+                    val = self._call_generic_field(spec, source_values)
+                if val is not None:
+                    merged[spec.field_name] = val
+            except Exception as exc:
+                logger.error(
+                    "Per-field enrichment failed for field %r: %s",
+                    spec.field_name,
+                    exc,
+                )
+        return merged
+
+    def _call_generic_field(
+        self,
+        spec: FieldEnrichmentSpec,
+        source_values: dict[str, Any],
+    ) -> str | None:
+        """Call LLM for a single field using the generic per-field template.
+
+        Returns the validated field value, or None if the response is invalid.
+        """
+        field_def = _FIELD_DEFINITIONS.get(spec.field_name, "")
+        context = "\n".join(f"{k}: {v}" for k, v in source_values.items())
+        prompt = _FIELD_PROMPT_TEMPLATE.format(
+            field_name=spec.field_name,
+            field_definition=field_def,
+            context=context,
+        )
+        messages = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        content = self._provider.chat(messages, temperature=0.1, num_predict=500)
+        raw = json.loads(content or "")
+        validated = self._validate_response(raw, [spec.field_name])
+        return validated.get(spec.field_name)
+
+    def _call_dedicated_field(
+        self,
+        spec: FieldEnrichmentSpec,
+        source_values: dict[str, Any],
+    ) -> str | None:
+        """Call LLM for a single field using its dedicated prompt module.
+
+        Returns the validated field value, or None if the response is invalid.
+        """
+        prompt = get_dedicated_prompt(spec.field_name, source_values)
+        messages = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        content = self._provider.chat(messages, temperature=0.1, num_predict=500)
+        raw = json.loads(content or "")
+        validated = self._validate_response(raw, [spec.field_name])
+        return validated.get(spec.field_name)
 
     def _get_fields_to_enrich(self, metadata: dict[str, Any]) -> list[str]:
-        """Return list of ENRICHMENT_FIELDS keys that still need values."""
-        tool = metadata.get("tool", "")
-        _builder = ChunkBuilderFactory.load(tool)
-        if not getattr(_builder, "should_enrich", True):
-            return []
-        tool_provided = (
-            _builder.non_enriched_fields if _builder is not None else frozenset()
-        )
-        fields = []
-        for field in ENRICHMENT_FIELDS:
-            if field in tool_provided:
-                continue
-            if metadata.get(field):
-                continue
-            fields.append(field)
-        return fields
+        """Return enrichment field names that still need values.
+
+        Compatibility shim over ``_get_enrichment_plan``: for tools using the
+        per-field path returns the field names from each active spec; for tools
+        using the legacy batch path returns the field list directly.
+        Used by tests and external callers; production enrichment uses
+        ``_get_enrichment_plan`` directly.
+        """
+        legacy_fields, specs = self._get_enrichment_plan(metadata)
+        if specs is not None:
+            return [s.field_name for s in specs]
+        return legacy_fields or []
+
+    # ------------------------------------------------------------------
+    # Legacy batch path (unchanged — SCA tools use this)
+    # ------------------------------------------------------------------
 
     def _call_llm(
         self, doc_text: str, metadata: dict[str, Any], fields: list[str]

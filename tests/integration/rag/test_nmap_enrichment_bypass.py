@@ -128,6 +128,8 @@ class TestNmapEnrichmentBypass:
         assert doc["metadata"].get("enriched") is True
 
     def test_semgrep_still_calls_llm(self, project_env: dict) -> None:
+        # semgrep uses the per-field path; verify enrichment runs (not skipped
+        # like nmap) by checking _call_per_field is called.
         engine = _make_rag_engine(project_env)
         engine.add_documents(
             texts=["SQL injection in login.py line 42"],
@@ -141,14 +143,15 @@ class TestNmapEnrichmentBypass:
             ids=["semgrep-regression-001"],
         )
         p = EnrichmentPipeline(engine, console=None)
-        fields = ["risk_type", "remediation", "description"]
         with patch.object(
-            p, "_call_llm", return_value=_make_llm_response(fields)
-        ) as mock_llm:
+            p, "_call_per_field", return_value={"risk_type": "sql_injection"}
+        ) as mock_pf:
             p.enrich(["semgrep-regression-001"])
-            mock_llm.assert_called_once()
+            mock_pf.assert_called_once()
 
     def test_zap_still_calls_llm(self, project_env: dict) -> None:
+        # zap uses the per-field path; verify enrichment runs (not skipped
+        # like nmap) by checking _call_per_field is called.
         engine = _make_rag_engine(project_env)
         engine.add_documents(
             texts=["Reflected XSS in search param"],
@@ -165,7 +168,7 @@ class TestNmapEnrichmentBypass:
         )
         p = EnrichmentPipeline(engine, console=None)
         with patch.object(
-            p, "_call_llm", return_value=_make_llm_response(["risk_type"])
-        ) as mock_llm:
+            p, "_call_per_field", return_value={"owasp_name": "Injection"}
+        ) as mock_pf:
             p.enrich(["zap-regression-001"])
-            mock_llm.assert_called_once()
+            mock_pf.assert_called_once()
