@@ -44,6 +44,7 @@ ENRICHMENT_FIELDS: dict[str, str] = {
     "confidence": FieldSource.ENRICHMENT,
     "description": FieldSource.ENRICHMENT,
     "owasp_name": FieldSource.ENRICHMENT,
+    "title": FieldSource.ENRICHMENT,
 }
 
 OWASP_CODE_TO_NAME: dict[str, str] = {

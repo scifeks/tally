@@ -36,6 +36,11 @@ class ZapChunkBuilder:
             ("alert_name", "description", "cwe_id", "param", "evidence"),
             PromptStrategy.DEDICATED,
         ),
+        FieldEnrichmentSpec(
+            "title",
+            ("alert_name", "url", "description", "param"),
+            PromptStrategy.GENERIC,
+        ),
     )
 
     def build(

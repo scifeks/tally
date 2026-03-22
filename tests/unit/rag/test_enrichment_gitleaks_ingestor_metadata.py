@@ -54,3 +54,34 @@ class TestGitleaksIngestorMetadata:
     def test_jwt_rule_id_sets_risk_type(self) -> None:
         chunks = self._get_chunks("jwt")
         assert chunks[0][1]["risk_type"] == "jwt"
+
+    def test_title_set_with_repo(self) -> None:
+        from core.config.schemas import Repository
+
+        repo = Repository.model_construct(
+            name="myapp",
+            path="/repos/myapp",
+            type=["library"],
+            docker_path="",
+            container_name="",
+            languages=["python"],
+            base_urls=[],
+            test_dirs=[],
+        )
+        result = self._make_gitleaks_result("aws-access-token")
+        assert result.parsed_data is not None
+        result.parsed_data["secrets"][0]["file_path"] = "/repos/myapp/config.py"
+        ingestor = FindingIngestor(MagicMock(), "test-proj", repositories=[repo])
+        chunks = ingestor._build_chunks(result, "default")
+        assert len(chunks) == 1
+        assert chunks[0][1]["title"] == "Secret of type aws-access-token found in myapp"
+
+    def test_title_set_without_repo(self) -> None:
+        chunks = self._get_chunks("aws-access-token")
+        assert len(chunks) == 1
+        assert chunks[0][1]["title"] == "Secret of type aws-access-token found"
+
+    def test_title_absent_when_no_rule_id(self) -> None:
+        chunks = self._get_chunks("")
+        assert len(chunks) == 1
+        assert "title" not in chunks[0][1]

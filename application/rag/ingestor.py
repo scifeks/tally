@@ -211,6 +211,12 @@ class FindingIngestor:
         raw_chunks = builder.build(tool_result, profile)
 
         if self._repositories is None:
+            _gen = getattr(builder, "generate_title", None)
+            if _gen is not None:
+                for _, meta, _ in raw_chunks:
+                    _t = _gen(meta)
+                    if _t is not None:
+                        meta["title"] = _t
             return raw_chunks
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
@@ -238,6 +244,12 @@ class FindingIngestor:
                         rel_path,
                     )
                     continue
+
+            _gen = getattr(builder, "generate_title", None)
+            if _gen is not None:
+                _t = _gen(meta)
+                if _t is not None:
+                    meta["title"] = _t
 
             chunks.append((text, meta, doc_id))
 
