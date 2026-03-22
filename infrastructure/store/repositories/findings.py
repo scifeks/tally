@@ -308,6 +308,18 @@ class FindingRepository:
             rows = conn.execute(sql).fetchall()
         return [dict(r) for r in rows]
 
+    def get_all_nmap_findings(self) -> list[dict]:
+        """Return all nmap findings with no triage filter.
+
+        Nmap findings are always informational reconnaissance data and are
+        never subject to triage filtering — they are queried in full for the
+        Network Surface section of the report.
+        """
+        sql = "SELECT * FROM findings WHERE tool = 'nmap'"
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 

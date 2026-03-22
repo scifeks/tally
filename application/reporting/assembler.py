@@ -8,10 +8,14 @@ from pathlib import Path
 
 import jinja2
 
+from application.reporting.attack_surface import AttackSurfaceBuilder
+from application.reporting.charts import get_chart_renderer
+from application.reporting.draft_query import DraftQueryService
 from application.reporting.pdf import get_pdf_renderer
 from application.reporting.resolver import DraftResolver
 from core.config.manager import ConfigManager
 from domain.reporting.context import ReportContext
+from infrastructure.store import make_store
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +148,18 @@ class ReportAssembler:
         # -- Table of contents --------------------------------------------
         toc_html = _generate_toc()
 
+        # -- Segment 4: vulnerability distribution chart ------------------
+        _, finding_repo, _, _ = make_store(self._base_path, self._project)
+        query_svc = DraftQueryService(finding_repo)
+        filtered = query_svc.get_filtered_findings()
+        sev_counts = query_svc.severity_distribution(filtered)
+        chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
+        # Bundle chart + severity definitions blurb as one unit per prompt spec.
+        vuln_distribution_chart_html = chart_html + severity_definitions_html
+
+        # -- Segment 4: attack surface overview ---------------------------
+        attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
+
         return ReportContext(
             project_name=project_name,
             company_name=self._company_name,
@@ -154,6 +170,8 @@ class ReportAssembler:
             confidentiality_html=confidentiality_html,
             severity_definitions_html=severity_definitions_html,
             glossary_html=glossary_html,
+            vuln_distribution_chart_html=vuln_distribution_chart_html,
+            attack_surface_html=attack_surface_html,
             **draft_html,
         )
 

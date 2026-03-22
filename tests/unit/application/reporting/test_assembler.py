@@ -144,7 +144,10 @@ class TestBuildContext:
         assert ctx.engagement_date == "2026-03-22"
         assert ctx.testing_type == "white_box"
 
-    def test_context_placeholder_fields_are_empty_strings(self, tmp_path: Path) -> None:
+    def test_segment4_fields_populated_and_segment5_fields_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """Segment 4 fields are populated by build_context; Segment 5 remain empty."""
         mock_resolver = self._patch_resolver()
         with (
             patch("application.reporting.assembler.ConfigManager") as mock_cfg,
@@ -159,8 +162,10 @@ class TestBuildContext:
             assembler = _make_assembler(tmp_path)
             ctx = assembler.build_context()
 
-        assert ctx.attack_surface_html == ""
-        assert ctx.vuln_distribution_chart_html == ""
+        # Segment 4 — populated with HTML (graceful degradation if no data).
+        assert ctx.attack_surface_html != ""
+        assert ctx.vuln_distribution_chart_html != ""
+        # Segment 5 — still empty until Segment 5 is implemented.
         assert ctx.findings_table_html == ""
         assert ctx.false_positive_log_html == ""
 
