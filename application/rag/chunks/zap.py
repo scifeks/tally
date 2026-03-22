@@ -1,6 +1,7 @@
 """ZapChunkBuilder — converts ZAP ToolResult into ChromaDB document chunks."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -9,6 +10,14 @@ from domain.tools.constants import CONFIDENCE_CONFIRMED
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from ._shared import _first_output_file, _shared_meta
+
+logger = logging.getLogger(__name__)
+
+# Alerts whose description starts with this prefix are ZAP self-diagnostics, not
+# application findings. Suppress them before they enter the ingest pipeline.
+_ZAP_VERSION_ALERT_PREFIX = (
+    "The version of ZAP you are using to test your app is out of date"
+)
 
 
 class ZapChunkBuilder:
@@ -42,10 +51,14 @@ class ZapChunkBuilder:
         chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for ai, alert in enumerate(alerts):
+            description = alert.get("description", "")
+            if description.startswith(_ZAP_VERSION_ALERT_PREFIX):
+                logger.debug("Skipping ZAP self-diagnostic alert: %s", description[:80])
+                continue
+
             alert_name = alert.get("alert_name", "")
             risk = alert.get("risk", "informational")
             raw_confidence = alert.get("confidence", "low")
-            description = alert.get("description", "")
             url = alert.get("url", "")
             method = alert.get("method", "")
             param = alert.get("param") or ""
