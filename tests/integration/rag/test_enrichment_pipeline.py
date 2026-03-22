@@ -153,6 +153,7 @@ class TestEnrichmentPipeline:
                     "confidence": "probable",
                     "remediation": "Use parameterized queries.",
                     "description": "SQL injection found in login form.",
+                    "owasp_name": "Injection",
                 }
             ],
             ids=["zap-full-001"],
@@ -249,7 +250,7 @@ class TestEnrichmentPipeline:
     ) -> None:
         metadata = {"tool": "zap"}
         fields = pipeline._get_fields_to_enrich(metadata)
-        assert fields == ["risk_type"]
+        assert fields == ["risk_type", "owasp_name"]
 
     def test_gitleaks_skips_severity_and_risk_type(
         self, pipeline: EnrichmentPipeline
