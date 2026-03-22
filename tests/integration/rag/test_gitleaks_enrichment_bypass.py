@@ -143,19 +143,21 @@ class TestGitleaksEnrichmentBypass:
             ids=["semgrep-bypass-001"],
         )
         p = EnrichmentPipeline(engine, console=None)
-        captured_fields: list[list[str]] = []
-
-        def capture_call(doc_text, metadata, fields):
-            captured_fields.append(list(fields))
-            return _make_llm_response(fields)
-
-        with patch.object(p, "_call_llm", side_effect=capture_call):
+        # semgrep uses the per-field path; verify _call_per_field fires and
+        # the specs passed to it include risk_type.
+        with patch.object(
+            p, "_call_per_field", return_value={"risk_type": "sql_injection"}
+        ) as mock_pf:
             p.enrich(["semgrep-bypass-001"])
 
-        assert captured_fields, "LLM should be called for semgrep"
-        assert "risk_type" in captured_fields[0]
+        mock_pf.assert_called_once()
+        call_specs = mock_pf.call_args[0][1]
+        spec_names = [s.field_name for s in call_specs]
+        assert "risk_type" in spec_names, "risk_type must be in semgrep specs"
 
-    def test_zap_still_receives_risk_type_from_llm(self, project_env: dict) -> None:
+    def test_zap_still_enriches_owasp_name(self, project_env: dict) -> None:
+        # ZAP no longer enriches risk_type (always set from alert_name in metadata);
+        # it enriches owasp_name via the DEDICATED per-field strategy.
         engine = _make_rag_engine(project_env)
         engine.add_documents(
             texts=["Reflected XSS in search param"],
@@ -171,14 +173,12 @@ class TestGitleaksEnrichmentBypass:
             ids=["zap-bypass-001"],
         )
         p = EnrichmentPipeline(engine, console=None)
-        captured_fields: list[list[str]] = []
-
-        def capture_call(doc_text, metadata, fields):
-            captured_fields.append(list(fields))
-            return _make_llm_response(fields)
-
-        with patch.object(p, "_call_llm", side_effect=capture_call):
+        with patch.object(
+            p, "_call_per_field", return_value={"owasp_name": "Injection"}
+        ) as mock_pf:
             p.enrich(["zap-bypass-001"])
 
-        assert captured_fields, "LLM should be called for zap"
-        assert "risk_type" in captured_fields[0]
+        mock_pf.assert_called_once()
+        call_specs = mock_pf.call_args[0][1]
+        spec_names = [s.field_name for s in call_specs]
+        assert "owasp_name" in spec_names, "owasp_name must be in zap enrichment specs"

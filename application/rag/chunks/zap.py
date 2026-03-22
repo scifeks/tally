@@ -1,13 +1,23 @@
 """ZapChunkBuilder — converts ZAP ToolResult into ChromaDB document chunks."""
 
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.constants import CONFIDENCE_CONFIRMED
+from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from ._shared import _first_output_file, _shared_meta
+
+logger = logging.getLogger(__name__)
+
+# Alerts whose description starts with this prefix are ZAP self-diagnostics, not
+# application findings. Suppress them before they enter the ingest pipeline.
+_ZAP_VERSION_ALERT_PREFIX = (
+    "The version of ZAP you are using to test your app is out of date"
+)
 
 
 class ZapChunkBuilder:
@@ -18,6 +28,15 @@ class ZapChunkBuilder:
         {"severity", "confidence", "remediation", "description"}
     )
     type_flags: dict[str, set[str]] = {"vulnerability": {"type_vulnerability"}}
+    # risk_type is already in metadata as alert_name so the metadata check filters
+    # it out before any LLM call. Only owasp_name needs dedicated enrichment.
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] = (
+        FieldEnrichmentSpec(
+            "owasp_name",
+            ("alert_name", "description", "cwe_id", "param", "evidence"),
+            PromptStrategy.DEDICATED,
+        ),
+    )
 
     def build(
         self, result: ToolResult, profile: str
@@ -32,10 +51,14 @@ class ZapChunkBuilder:
         chunks: list[tuple[str, dict[str, Any], str]] = []
 
         for ai, alert in enumerate(alerts):
+            description = alert.get("description", "")
+            if description.startswith(_ZAP_VERSION_ALERT_PREFIX):
+                logger.debug("Skipping ZAP self-diagnostic alert: %s", description[:80])
+                continue
+
             alert_name = alert.get("alert_name", "")
             risk = alert.get("risk", "informational")
             raw_confidence = alert.get("confidence", "low")
-            description = alert.get("description", "")
             url = alert.get("url", "")
             method = alert.get("method", "")
             param = alert.get("param") or ""

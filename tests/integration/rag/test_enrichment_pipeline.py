@@ -164,13 +164,14 @@ class TestEnrichmentPipeline:
             mock_llm.assert_not_called()
 
     def test_missing_fields_calls_llm_once(self, pipeline: EnrichmentPipeline) -> None:
+        # zap-001 uses the per-field path (enrichment_fields on ZapChunkBuilder)
         with patch.object(
             pipeline,
-            "_call_llm",
-            return_value=_make_llm_response(["risk_type"]),
-        ) as mock_llm:
+            "_call_per_field",
+            return_value={"owasp_name": "Injection"},
+        ) as mock_pf:
             pipeline.enrich(["zap-001"])
-            mock_llm.assert_called_once()
+            mock_pf.assert_called_once()
 
     def test_enriched_true_after_success(
         self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
@@ -187,22 +188,25 @@ class TestEnrichmentPipeline:
     def test_enriched_fields_written_to_metadata(
         self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
     ) -> None:
-        fields = ["risk_type"]
-        llm_response = _make_llm_response(fields)
-        with patch.object(pipeline, "_call_llm", return_value=llm_response):
+        # zap-001 uses the per-field path; ZAP enriches owasp_name
+        with patch.object(
+            pipeline, "_call_per_field", return_value={"owasp_name": "Injection"}
+        ):
             pipeline.enrich(["zap-001"])
         doc = seeded_engine.get_document_by_id("zap-001")
         assert doc is not None
-        for field in fields:
-            assert field in doc["metadata"]
-            assert doc["metadata"][field] == llm_response[field]
+        assert "owasp_name" in doc["metadata"]
+        assert doc["metadata"]["owasp_name"] == "Injection"
 
     def test_invalid_json_leaves_enriched_false(
         self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
     ) -> None:
+        # Patch _call_per_field to raise so the outer future fails and enriched
+        # stays False (per-field internal failures are swallowed, but a total
+        # failure of _call_per_field itself propagates through the thread pool).
         with patch.object(
             pipeline,
-            "_call_llm",
+            "_call_per_field",
             side_effect=json.JSONDecodeError("err", "", 0),
         ):
             pipeline.enrich(["zap-001"])
@@ -237,20 +241,22 @@ class TestEnrichmentPipeline:
         assert doc2["metadata"].get("enriched") is True
 
     def test_idempotent_second_run_skips(self, pipeline: EnrichmentPipeline) -> None:
-        fields = ["risk_type"]
+        # zap-001 uses the per-field path
         with patch.object(
-            pipeline, "_call_llm", return_value=_make_llm_response(fields)
-        ) as mock_llm:
+            pipeline, "_call_per_field", return_value={"owasp_name": "Injection"}
+        ) as mock_pf:
             pipeline.enrich(["zap-001"])
             pipeline.enrich(["zap-001"])
-            assert mock_llm.call_count == 1
+            assert mock_pf.call_count == 1
 
     def test_zap_skips_remediation_severity_description(
         self, pipeline: EnrichmentPipeline
     ) -> None:
+        # ZAP declares enrichment_fields with only owasp_name; risk_type is
+        # always set from alert_name in metadata and thus never re-enriched.
         metadata = {"tool": "zap"}
         fields = pipeline._get_fields_to_enrich(metadata)
-        assert fields == ["risk_type", "owasp_name"]
+        assert fields == ["owasp_name"]
 
     def test_gitleaks_skips_severity_and_risk_type(
         self, pipeline: EnrichmentPipeline
