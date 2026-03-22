@@ -295,6 +295,19 @@ class FindingRepository:
             )
         return True
 
+    def get_reportable_findings(self) -> list[dict]:
+        """Return findings where triaged_by IS NOT NULL and should_report = 1.
+
+        These are the findings that have been confirmed by triage and are
+        marked for inclusion in the report.
+        """
+        sql = (
+            "SELECT * FROM findings WHERE triaged_by IS NOT NULL AND should_report = 1"
+        )
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 

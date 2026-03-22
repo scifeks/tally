@@ -22,7 +22,18 @@ class ReportCommand:
     # ------------------------------------------------------------------
 
     def execute(self, _cmd: str, args: list[str]) -> None:
-        """report [--format markdown|html|json] [--output <path>]"""
+        """report [draft <section>] [--format markdown|html|json] [--output <path>]"""
+        if args and args[0] == "draft":
+            self._cmd_draft(args[1:])
+            return
+        self._cmd_full_report(args)
+
+    # ------------------------------------------------------------------
+    # Subcommands
+    # ------------------------------------------------------------------
+
+    def _cmd_full_report(self, args: list[str]) -> None:
+        """Generate a full structured report (markdown / html / json)."""
         fmt, args = self._parse_value_flag(args, "--format")
         output_path, args = self._parse_value_flag(args, "--output")
 
@@ -65,6 +76,53 @@ class ReportCommand:
             generator.generate(output_format=fmt, output_path=output_path)
 
         self.repl.console.print(f"[green]✓ Report saved:[/green] {output_path}")
+
+    def _cmd_draft(self, args: list[str]) -> None:
+        """report draft <section> [--force]
+
+        Generates an LLM-drafted markdown file for the given report section.
+        Draft files are written to projects/<project>/report/draft/<section>.md.
+
+        Valid sections:
+          executive-summary       2-3 paragraph non-technical summary
+          risk-level              Single paragraph on the overall risk rating
+          critical-issues         Top 3-5 findings described in plain English
+          improvement-points      Recurring vulnerability themes
+          scope-and-methodology   What was tested and how
+          general-recommendations Actionable recommendations grouped by theme
+        """
+        from application.reporting.draft_runner import (
+            generate_draft,
+            get_all_sections,
+        )
+
+        force = "--force" in args
+        args = [a for a in args if a != "--force"]
+
+        if not args:
+            sections = "\n  ".join(get_all_sections())
+            self.repl.console.print(
+                "[yellow]Usage:[/yellow] report draft <section> [--force]\n\n"
+                f"Valid sections:\n  {sections}"
+            )
+            return
+
+        section = args[0]
+
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. "
+                "Use 'project add' or 'project switch <name>' first.[/yellow]"
+            )
+            return
+
+        generate_draft(
+            section=section,
+            project=self.repl.active_project,
+            base_path=self.repl.base_path,
+            console=self.repl.console,
+            force=force,
+        )
 
     # ------------------------------------------------------------------
     # Private helpers

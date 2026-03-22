@@ -112,7 +112,31 @@ _HELP_REGISTRY = [
     ("knowledge", None, None, "Knowledge Base"),
     ("knowledge", "chat", "<message>", "RAG-augmented chat with the LLM"),
     ("knowledge", "stats", None, "Show knowledge base statistics"),
-    ("knowledge", "report", None, "Generate findings report"),
+    ("knowledge", "report", None, "Generate full findings report"),
+    (
+        "knowledge",
+        "report",
+        "--format=<fmt>",
+        "Output format: markdown (default), html, json",
+    ),
+    (
+        "knowledge",
+        "report",
+        "--output=<path>",
+        "Write report to a specific file path",
+    ),
+    (
+        "knowledge",
+        "report draft",
+        "<section>",
+        "Generate an LLM-drafted section for the report",
+    ),
+    (
+        "knowledge",
+        "report draft",
+        "<section> --force",
+        "Overwrite an existing draft without prompting",
+    ),
     ("knowledge", "purge", None, "Delete findings from the knowledge base"),
     (
         "knowledge",
