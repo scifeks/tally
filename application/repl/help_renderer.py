@@ -137,6 +137,12 @@ _HELP_REGISTRY = [
         "<section> --force",
         "Overwrite an existing draft without prompting",
     ),
+    (
+        "knowledge",
+        "report shell",
+        "[--company <name>] [--output <path>]",
+        "Generate a shell PDF for visual layout inspection",
+    ),
     ("knowledge", "purge", None, "Delete findings from the knowledge base"),
     (
         "knowledge",

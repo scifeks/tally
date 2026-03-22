@@ -22,9 +22,12 @@ class ReportCommand:
     # ------------------------------------------------------------------
 
     def execute(self, _cmd: str, args: list[str]) -> None:
-        """report [draft <section>] [--format markdown|html|json] [--output <path>]"""
+        """Dispatch report subcommands: draft, shell, or full report."""
         if args and args[0] == "draft":
             self._cmd_draft(args[1:])
+            return
+        if args and args[0] == "shell":
+            self._cmd_shell(args[1:])
             return
         self._cmd_full_report(args)
 
@@ -123,6 +126,68 @@ class ReportCommand:
             console=self.repl.console,
             force=force,
         )
+
+    def _cmd_shell(self, args: list[str]) -> None:
+        """report shell [--company <name>] [--testing-type <type>]
+                        [--engagement-date <YYYY-MM-DD>] [--output <path>]
+
+        Generates a shell PDF with all section placeholders in place.
+        LLM-drafted sections are resolved from the project's draft/reviewed
+        directories; Segment 4/5 placeholders are left empty.
+
+        Useful for visually inspecting layout, typography, and CSS before
+        Segment 4/5 content is wired in.
+
+        Testing types: white_box, grey_box, black_box (default: white_box).
+        Output defaults to /tmp/tally_shell_report.pdf.
+        """
+        from pathlib import Path
+
+        from application.reporting.assembler import ReportAssembler
+        from application.reporting.pdf import PDFRenderError
+        from application.reporting.resolver import SectionMissingError
+
+        company, args = self._parse_value_flag(args, "--company")
+        testing_type, args = self._parse_value_flag(args, "--testing-type")
+        engagement_date, args = self._parse_value_flag(args, "--engagement-date")
+        output_path, args = self._parse_value_flag(args, "--output")
+
+        company = company or "[Company Name]"
+        testing_type = testing_type or "white_box"
+        output_path = output_path or "/tmp/tally_shell_report.pdf"
+
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. "
+                "Use 'project add' or 'project switch <name>' first.[/yellow]"
+            )
+            return
+
+        assembler = ReportAssembler(
+            project=self.repl.active_project,
+            base_path=self.repl.base_path,
+            company_name=company,
+            testing_type=testing_type,
+            engagement_date=engagement_date,
+        )
+
+        # build_context() calls input() for any section that has no reviewed
+        # copy — those prompts must be visible, so run it outside the spinner.
+        try:
+            context = assembler.build_context()
+        except SectionMissingError as exc:
+            self.repl.console.print(f"[red]Section missing:[/red] {exc}")
+            return
+
+        try:
+            with self.repl.console.status("Rendering PDF..."):
+                pdf_bytes = assembler.render_pdf(context)
+        except PDFRenderError as exc:
+            self.repl.console.print(f"[red]PDF render error:[/red] {exc}")
+            return
+
+        Path(output_path).write_bytes(pdf_bytes)
+        self.repl.console.print(f"[green]Shell report saved:[/green] {output_path}")
 
     # ------------------------------------------------------------------
     # Private helpers

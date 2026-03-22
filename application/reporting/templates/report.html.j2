@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ ctx.project_name }} &#x2014; Security Assessment Report</title>
+</head>
+<body>
+
+{# Hidden element that feeds the project name into the WeasyPrint running string
+   used by the @bottom-left margin box in the print stylesheet. height:0 /
+   overflow:hidden keeps it invisible while still being laid out, which is
+   required for string-set to capture the content. #}
+<div id="report-project-name">{{ ctx.project_name }}</div>
+
+{# ========================================================================
+   1. Table of Contents
+   ======================================================================== #}
+<section id="toc">
+  <h1>Table of Contents</h1>
+  {{ ctx.toc_html | safe }}
+</section>
+
+{# ========================================================================
+   2. Executive Summary
+   ======================================================================== #}
+<section id="exec-summary">
+  <h1>Executive Summary</h1>
+
+  <div class="blurb confidentiality">
+    {{ ctx.confidentiality_html | safe }}
+  </div>
+
+  <div class="section-body">
+    <h2>Report Overview</h2>
+    {{ ctx.executive_summary_html | safe }}
+  </div>
+
+  <div class="section-body">
+    <h2>Risk Level</h2>
+    {{ ctx.risk_level_html | safe }}
+  </div>
+
+  <div class="section-body">
+    <h2>Top Critical Issues</h2>
+    {{ ctx.critical_issues_html | safe }}
+  </div>
+
+  <div class="section-body">
+    <h2>Identified Improvement Points</h2>
+    {{ ctx.improvement_points_html | safe }}
+  </div>
+</section>
+
+{# ========================================================================
+   3. Scope & Methodology
+   ======================================================================== #}
+<section id="scope-methodology">
+  <h1>Scope &amp; Methodology</h1>
+
+  <div class="section-body">
+    {{ ctx.scope_methodology_html | safe }}
+  </div>
+</section>
+
+{# ========================================================================
+   4. Attack Surface Overview
+   SEGMENT 4: inject attack_surface_html here
+   ======================================================================== #}
+<section id="attack-surface">
+  <h1>Attack Surface Overview</h1>
+
+  {% if ctx.attack_surface_html %}
+    {{ ctx.attack_surface_html | safe }}
+  {% else %}
+    <!-- SEGMENT 4: attack_surface_html -->
+    <p class="placeholder">Attack surface overview will appear here (Segment 4).</p>
+  {% endif %}
+</section>
+
+{# ========================================================================
+   5. Findings
+   ======================================================================== #}
+<section id="findings">
+  <h1>Findings</h1>
+
+  {# --- Vulnerability distribution chart (Segment 4) --- #}
+  {% if ctx.vuln_distribution_chart_html %}
+    {{ ctx.vuln_distribution_chart_html | safe }}
+  {% else %}
+    <!-- SEGMENT 4: vuln_distribution_chart_html -->
+    <p class="placeholder">Vulnerability distribution chart will appear here (Segment 4).</p>
+  {% endif %}
+
+  {# --- Severity definitions blurb --- #}
+  <div class="blurb severity-defs">
+    {{ ctx.severity_definitions_html | safe }}
+  </div>
+
+  {# --- Master findings table (Segment 5) --- #}
+  {% if ctx.findings_table_html %}
+    {{ ctx.findings_table_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: findings_table_html -->
+    <p class="placeholder">Master findings table will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Secrets & credential exposure (Segment 5) --- #}
+  {% if ctx.secrets_exposure_html %}
+    <h2>Secrets &amp; Credential Exposure</h2>
+    {{ ctx.secrets_exposure_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: secrets_exposure_html -->
+    <p class="placeholder">Secrets and credential exposure will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Detailed findings (Segment 5) --- #}
+  {% if ctx.detailed_findings_html %}
+    <h2>Detailed Findings</h2>
+    {{ ctx.detailed_findings_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: detailed_findings_html -->
+    <p class="placeholder">Detailed findings will appear here (Segment 5).</p>
+  {% endif %}
+</section>
+
+{# ========================================================================
+   6. General Recommendations
+   ======================================================================== #}
+<section id="recommendations">
+  <h1>General Recommendations</h1>
+
+  <div class="section-body">
+    {{ ctx.general_recommendations_html | safe }}
+  </div>
+</section>
+
+{# ========================================================================
+   7. Appendix
+   ======================================================================== #}
+<section id="appendix">
+  <h1>Appendix</h1>
+
+  {# --- False positive log (Segment 5) --- #}
+  {% if ctx.false_positive_log_html %}
+    <h2>False Positive Log</h2>
+    {{ ctx.false_positive_log_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: false_positive_log_html -->
+    <p class="placeholder">False positive log will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Raw SAST findings (Segment 5) --- #}
+  {% if ctx.raw_sast_html %}
+    <h2>Raw SAST Findings</h2>
+    {{ ctx.raw_sast_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: raw_sast_html -->
+    <p class="placeholder">Raw SAST findings will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Raw DAST findings (Segment 5) --- #}
+  {% if ctx.raw_dast_html %}
+    <h2>Raw DAST Findings</h2>
+    {{ ctx.raw_dast_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: raw_dast_html -->
+    <p class="placeholder">Raw DAST findings will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Dependency audit results (Segment 5) --- #}
+  {% if ctx.sca_results_html %}
+    <h2>Dependency Audit Results</h2>
+    {{ ctx.sca_results_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: sca_results_html -->
+    <p class="placeholder">Dependency audit results will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Nmap hosts & services (Segment 5) --- #}
+  {% if ctx.nmap_results_html %}
+    <h2>Nmap Hosts &amp; Services</h2>
+    {{ ctx.nmap_results_html | safe }}
+  {% else %}
+    <!-- SEGMENT 5: nmap_results_html -->
+    <p class="placeholder">Nmap hosts and services will appear here (Segment 5).</p>
+  {% endif %}
+
+  {# --- Glossary blurb --- #}
+  <div class="blurb glossary">
+    <h2>Glossary</h2>
+    {{ ctx.glossary_html | safe }}
+  </div>
+
+</section>
+
+</body>
+</html>

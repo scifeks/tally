@@ -1,0 +1,350 @@
+/* ==========================================================================
+   Tally Security Report — Print Stylesheet
+   Loaded by ReportAssembler and passed as a string to WeasyPrintRenderer.
+   Never inline this into the HTML template.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   CSS custom properties — all colour values are defined here only.
+   No hardcoded colour values appear elsewhere in this file.
+   -------------------------------------------------------------------------- */
+:root {
+    /* Surface */
+    --color-background: #ffffff;
+    --color-surface:    #f8f9fa;
+
+    /* Text */
+    --color-text-primary:   #1a1a2e;
+    --color-text-secondary: #4a4a6a;
+
+    /* Brand / accent */
+    --color-accent: #2c3e7a;
+    --color-border: #dee2e6;
+
+    /* Severity */
+    --color-critical:      #c0392b;
+    --color-high:          #e67e22;
+    --color-medium:        #f1c40f;
+    --color-low:           #27ae60;
+    --color-informational: #7f8c8d;
+
+    /* Confidence text treatment */
+    --color-confidence-confirmed: #1a1a2e;
+    --color-confidence-probable:  #4a4a6a;
+    --color-confidence-potential: #888888;
+
+    /* Typography */
+    --font-body:    Georgia, "Times New Roman", serif;
+    --font-heading: "Helvetica Neue", Arial, sans-serif;
+    --font-mono:    "Courier New", monospace;
+    --font-size-base: 11pt;
+    --line-height-base: 1.6;
+}
+
+/* --------------------------------------------------------------------------
+   Page setup — US Letter, with footer showing project name and page numbers.
+   WeasyPrint resolves margin-box content at render time.
+   -------------------------------------------------------------------------- */
+@page {
+    size: letter;
+    margin: 1in 1in 1.25in 1in;
+
+    @bottom-left {
+        content: string(project-name);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 8pt;
+        color: #4a4a6a;
+    }
+
+    @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 8pt;
+        color: #4a4a6a;
+    }
+
+    @bottom-center {
+        content: "CONFIDENTIAL";
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        font-size: 8pt;
+        font-weight: bold;
+        color: #4a4a6a;
+        letter-spacing: 0.05em;
+    }
+}
+
+/* First page has no footer project-name (the TOC page) */
+@page :first {
+    @bottom-left { content: ""; }
+}
+
+/* --------------------------------------------------------------------------
+   Hidden element used to feed the project name into the running string.
+   height: 0 / overflow: hidden keeps it invisible while still being laid
+   out, which is required for string-set to capture the content.
+   -------------------------------------------------------------------------- */
+#report-project-name {
+    height: 0;
+    overflow: hidden;
+    string-set: project-name content();
+    font-size: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Page-break rules
+   -------------------------------------------------------------------------- */
+section {
+    break-before: auto;
+}
+
+section#exec-summary,
+section#scope-methodology,
+section#attack-surface,
+section#findings,
+section#recommendations,
+section#appendix {
+    break-before: page;
+}
+
+/* Finding cards (Segment 5) must not split across pages */
+.finding-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+/* Keep h2 headings with the content that follows */
+h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+}
+
+/* --------------------------------------------------------------------------
+   Base typography
+   -------------------------------------------------------------------------- */
+body {
+    font-family: var(--font-body);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    color: var(--color-text-primary);
+    background: var(--color-background);
+    margin: 0;
+    padding: 0;
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--font-heading);
+    color: var(--color-accent);
+    margin-top: 1.4em;
+    margin-bottom: 0.4em;
+}
+
+h1 {
+    font-size: 20pt;
+    border-bottom: 2px solid var(--color-accent);
+    padding-bottom: 0.3em;
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 14pt;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.2em;
+}
+
+h3 { font-size: 12pt; }
+h4 { font-size: 11pt; }
+
+p {
+    margin-top: 0.5em;
+    margin-bottom: 0.8em;
+}
+
+code, pre {
+    font-family: var(--font-mono);
+    font-size: 9pt;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+}
+
+code {
+    padding: 1px 4px;
+}
+
+pre {
+    padding: 8px 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+a {
+    color: var(--color-accent);
+    text-decoration: none;
+}
+
+ul, ol {
+    margin-top: 0.3em;
+    margin-bottom: 0.8em;
+    padding-left: 1.5em;
+}
+
+li {
+    margin-bottom: 0.3em;
+}
+
+/* --------------------------------------------------------------------------
+   Table of Contents
+   -------------------------------------------------------------------------- */
+nav#toc {
+    margin-top: 1em;
+}
+
+nav#toc ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+nav#toc li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4em;
+    padding: 4px 0;
+    border-bottom: 1px dotted var(--color-border);
+    font-family: var(--font-heading);
+    font-size: 11pt;
+}
+
+nav#toc li a {
+    color: var(--color-text-primary);
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+nav#toc li .toc-dots {
+    flex: 1;
+    border-bottom: 1px dotted var(--color-border);
+    height: 0.7em;
+    margin: 0 4px;
+}
+
+nav#toc li .toc-pagenum {
+    font-size: 10pt;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+nav#toc li .toc-pagenum::after {
+    content: target-counter(attr(href, url), page);
+}
+
+/* --------------------------------------------------------------------------
+   Blurb containers
+   -------------------------------------------------------------------------- */
+.blurb {
+    background: var(--color-surface);
+    border-left: 4px solid var(--color-accent);
+    padding: 12px 16px;
+    margin: 1em 0 1.5em;
+    border-radius: 0 3px 3px 0;
+}
+
+.blurb p:last-child {
+    margin-bottom: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Tables
+   -------------------------------------------------------------------------- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin: 1em 0;
+}
+
+th {
+    background: var(--color-surface);
+    border-bottom: 2px solid var(--color-border);
+    border-top: 1px solid var(--color-border);
+    text-align: left;
+    padding: 6px 10px;
+    font-family: var(--font-heading);
+    font-weight: bold;
+    color: var(--color-text-primary);
+}
+
+td {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+    word-break: break-word;
+}
+
+tr:nth-child(even) td {
+    background: var(--color-surface);
+}
+
+/* --------------------------------------------------------------------------
+   Severity badges
+   -------------------------------------------------------------------------- */
+.severity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 8pt;
+    font-weight: bold;
+    font-family: var(--font-heading);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+
+.severity-badge.critical      { background: var(--color-critical); }
+.severity-badge.high          { background: var(--color-high); }
+.severity-badge.medium        { background: var(--color-medium); color: #333333; }
+.severity-badge.low           { background: var(--color-low); }
+.severity-badge.informational { background: var(--color-informational); }
+
+/* --------------------------------------------------------------------------
+   Confidence text treatments
+   -------------------------------------------------------------------------- */
+.confidence-confirmed {
+    color: var(--color-confidence-confirmed);
+    font-weight: bold;
+}
+
+.confidence-probable {
+    color: var(--color-confidence-probable);
+}
+
+.confidence-potential {
+    color: var(--color-confidence-potential);
+    font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   Placeholder blocks (Segments 4 and 5 not yet rendered)
+   -------------------------------------------------------------------------- */
+.placeholder {
+    color: var(--color-text-secondary);
+    font-style: italic;
+    font-family: var(--font-heading);
+    font-size: 10pt;
+    border: 1px dashed var(--color-border);
+    padding: 12px 16px;
+    margin: 1em 0;
+    border-radius: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   Section-level spacing
+   -------------------------------------------------------------------------- */
+section {
+    margin-bottom: 2em;
+}
+
+.section-body {
+    margin-bottom: 1.5em;
+}

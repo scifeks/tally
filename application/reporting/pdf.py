@@ -41,10 +41,10 @@ class WeasyPrintRenderer(PDFRenderer):
             import weasyprint  # type: ignore[import-untyped]
 
             stylesheet = weasyprint.CSS(string=css)
-            result: bytes = weasyprint.HTML(string=html).write_pdf(
-                stylesheets=[stylesheet]
-            )
-            return result
+            pdf = weasyprint.HTML(string=html).write_pdf(stylesheets=[stylesheet])
+            if pdf is None:
+                raise PDFRenderError("write_pdf returned None")
+            return pdf
         except PDFRenderError:
             raise
         except Exception as exc:
