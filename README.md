@@ -10,7 +10,7 @@ Tally is a CLI REPL for orchestrating web application penetration testing. It wr
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup — skips tools that are not installed
 - RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
-- Three report formats: Markdown, HTML, JSON
+- Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
 - Human-in-the-loop approval before each tool execution
 - Dependency checker validates required packages on every startup
 - Docker execution support for all tools
@@ -112,9 +112,21 @@ report
 | Command | Description |
 |---|---|
 | `report` | Generate Markdown report (saved to projects/[name]/reports/) |
-| `report --format html` | Generate HTML report |
-| `report --format json` | Generate JSON report |
-| `report --output <path>` | Write report to a specific path |
+| `report --format=html` | Generate HTML report |
+| `report --format=json` | Generate JSON report |
+| `report --format=pdf` | Assemble and generate full PDF report |
+| `report --output=<path>` | Write report to a specific file path |
+| `report draft` | Generate LLM drafts for all six report sections |
+| `report draft <section>` | Generate a draft for one section only |
+| `report draft <section> --force` | Overwrite an existing draft without prompting |
+| `report assemble` | Assemble full PDF with LLM drafts and all findings |
+| `report assemble --company <name>` | Set the client company name on the report |
+| `report assemble --testing-type <type>` | Engagement type: `white_box`, `grey_box`, `black_box` |
+| `report assemble --output <path>` | Write PDF to a specific file path |
+| `report shell` | Render a shell PDF for visual layout inspection |
+| `report shell --output <path>` | Write shell PDF to a specific file path |
+
+See [docs/report.md](docs/report.md) for the full PDF assembly workflow and argument reference.
 
 ### Utility
 
@@ -167,6 +179,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 ## Documentation
 
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
+- [docs/report.md](docs/report.md) — Report generation guide: quick reports, PDF assembly, and shell preview
 - [docs/mcp.md](docs/mcp.md) — MCP triage system setup and usage guide
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup

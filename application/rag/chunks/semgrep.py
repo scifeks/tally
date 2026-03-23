@@ -43,6 +43,11 @@ class SemgrepChunkBuilder:
             ("owasp", "cwe", "rule_id", "description", "category"),
             PromptStrategy.DEDICATED,
         ),
+        FieldEnrichmentSpec(
+            "title",
+            ("rule_id", "description", "file_path", "cwe", "category"),
+            PromptStrategy.GENERIC,
+        ),
     )
 
     def build(

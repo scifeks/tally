@@ -92,3 +92,21 @@ class TestBuildChunks:
         assert len(result) == 1
         assert result[0][1]["file_path"] == "/other/path/file.py"
         assert result[0][1].get("repo") is None
+
+    def test_build_chunks_repo_name_injected_sets_repo_for_relative_path(self) -> None:
+        """repo_name injection sets meta['repo'] even when file_path is relative."""
+        chunks = [("text", {"file_path": "config/aws.js"}, "id1")]
+        repos = [_repo("myapp", "/repos/app")]
+        builder = _StubBuilder(chunks)
+        ingestor = FindingIngestor(
+            rag_engine=MagicMock(),
+            project_name="test",
+            builders={"semgrep": builder},  # type: ignore[dict-item]
+            repositories=repos,
+            repo_name="myapp",
+        )
+        result = ingestor._build_chunks(_tool_result(), "default")
+        assert len(result) == 1
+        assert result[0][1]["repo"] == "myapp"
+        # Relative path has no prefix to strip — returned as-is
+        assert result[0][1]["file_path"] == "config/aws.js"

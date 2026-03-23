@@ -92,7 +92,12 @@ class IngestHandler(BaseHandler):
                 )
             except Exception:
                 repos = None
-            ingestor = FindingIngestor(engine, event.project_name, repositories=repos)
+            ingestor = FindingIngestor(
+                engine,
+                event.project_name,
+                repositories=repos,
+                repo_name=event.repo,
+            )
             doc_ids = ingestor.ingest_tool_output(result, profile=event.profile)
         except Exception as exc:
             logger.error(

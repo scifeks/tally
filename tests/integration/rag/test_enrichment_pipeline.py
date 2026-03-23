@@ -252,11 +252,11 @@ class TestEnrichmentPipeline:
     def test_zap_skips_remediation_severity_description(
         self, pipeline: EnrichmentPipeline
     ) -> None:
-        # ZAP declares enrichment_fields with only owasp_name; risk_type is
+        # ZAP declares enrichment_fields with owasp_name and title; risk_type is
         # always set from alert_name in metadata and thus never re-enriched.
         metadata = {"tool": "zap"}
         fields = pipeline._get_fields_to_enrich(metadata)
-        assert fields == ["owasp_name"]
+        assert fields == ["owasp_name", "title"]
 
     def test_gitleaks_skips_severity_and_risk_type(
         self, pipeline: EnrichmentPipeline

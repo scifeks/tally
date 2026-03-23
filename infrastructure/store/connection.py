@@ -83,7 +83,10 @@ class ConnectionFactory:
                     seen_count       INTEGER,
                     status           TEXT,
                     triaged_at       TEXT,
-                    triaged_by       TEXT
+                    triaged_by       TEXT,
+                    should_report    INTEGER NOT NULL DEFAULT 1,
+                    business_impact  TEXT,
+                    tal_id           TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_findings_tool

@@ -295,6 +295,48 @@ class FindingRepository:
             )
         return True
 
+    def get_reportable_findings(self) -> list[dict]:
+        """Return findings where triaged_by IS NOT NULL and should_report = 1.
+
+        These are the findings that have been confirmed by triage and are
+        marked for inclusion in the report.
+        """
+        sql = (
+            "SELECT * FROM findings WHERE triaged_by IS NOT NULL AND should_report = 1"
+        )
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_all_nmap_findings(self) -> list[dict]:
+        """Return all nmap findings with no triage filter.
+
+        Nmap findings are always informational reconnaissance data and are
+        never subject to triage filtering — they are queried in full for the
+        Network Surface section of the report.
+        """
+        sql = "SELECT * FROM findings WHERE tool = 'nmap'"
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
+    def reset_tal_ids(self) -> None:
+        """Set tal_id = NULL for every row in findings."""
+        with self._factory.connect() as conn:
+            conn.execute("UPDATE findings SET tal_id = NULL")
+
+    def bulk_update_tal_ids(self, pairs: list[tuple[str, int]]) -> None:
+        """Persist TAL-IDs for a set of findings.
+
+        Args:
+            pairs: List of (tal_id, finding_id) tuples.
+        """
+        if not pairs:
+            return
+        sql = "UPDATE findings SET tal_id = ? WHERE id = ?"
+        with self._factory.connect() as conn:
+            conn.executemany(sql, pairs)
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 

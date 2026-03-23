@@ -118,6 +118,7 @@ class ToolOnRepoScan(ScanType):
                     config.run_id,
                     config.project_name,
                     config.base_path,
+                    repo=repo.name,
                 ),
             )
         rows = [

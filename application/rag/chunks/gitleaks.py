@@ -105,6 +105,16 @@ class GitleaksChunkBuilder:
 
         return chunks
 
+    def generate_title(self, meta: dict[str, Any]) -> str | None:
+        """Return an app-generated title using rule_id and repo from final metadata."""
+        rule_id = meta.get("rule_id") or ""
+        repo = meta.get("repo") or ""
+        if not rule_id:
+            return None
+        if repo:
+            return f"Secret of type {rule_id} found in {repo}"
+        return f"Secret of type {rule_id} found"
+
     def fingerprint_key(self, finding: dict[str, Any]) -> str:
         return "|".join(
             [

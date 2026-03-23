@@ -72,6 +72,10 @@ _USER_PROMPT_TEMPLATE = (
     "  - probable: very likely exploitable with minimal conditions\n"
     "  - potential: condition exists but requires specific circumstances\n"
     "- description: One sentence describing what was found. No padding.\n"
+    "- title: A concise, human-readable label for the finding. 8-12 words maximum."
+    " Specific enough to distinguish one finding from another in a table."
+    " Example: 'SQL Injection in user login endpoint' or"
+    " 'Outdated lodash with known RCE'.\n"
     "\n"
     "Only include fields from this list: {fields_to_enrich}"
 )
@@ -166,6 +170,12 @@ _FIELD_DEFINITIONS: dict[str, str] = {
         "  - potential: condition exists but requires specific circumstances"
     ),
     "description": "One sentence describing what was found. No padding.",
+    "title": (
+        "A concise, human-readable label for the finding. 8-12 words maximum."
+        " Specific enough to distinguish one finding from another in a table."
+        " Example: 'SQL Injection in user login endpoint' or"
+        " 'Outdated lodash with known RCE'."
+    ),
 }
 
 _FIELD_PROMPT_TEMPLATE = (
