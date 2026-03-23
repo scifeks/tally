@@ -151,7 +151,7 @@
 
   {# --- Raw SAST findings (Segment 5) --- #}
   {% if ctx.raw_sast_html %}
-    <h2>Raw SAST Findings</h2>
+    <h2>Comprehensive Code Findings</h2>
     {{ ctx.raw_sast_html | safe }}
   {% else %}
     <!-- SEGMENT 5: raw_sast_html -->
@@ -178,7 +178,7 @@
 
   {# --- Nmap hosts & services (Segment 5) --- #}
   {% if ctx.nmap_results_html %}
-    <h2>Nmap Hosts &amp; Services</h2>
+    <h2>Comprehensive Network Findings</h2>
     {{ ctx.nmap_results_html | safe }}
   {% else %}
     <!-- SEGMENT 5: nmap_results_html -->

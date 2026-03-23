@@ -10,9 +10,11 @@ import jinja2
 
 from application.reporting.attack_surface import AttackSurfaceBuilder
 from application.reporting.charts import get_chart_renderer
-from application.reporting.draft_query import DraftQueryService
+from application.reporting.draft_query import DraftQueryService, _parse_meta
+from application.reporting.findings_builder import _SEVERITY_ORDER, FindingsBuilder
 from application.reporting.pdf import get_pdf_renderer
 from application.reporting.resolver import DraftResolver
+from application.reporting.tal_id import assign_tal_ids
 from core.config.manager import ConfigManager
 from domain.reporting.context import ReportContext
 from infrastructure.store import make_store
@@ -108,8 +110,8 @@ class ReportAssembler:
         declines), :exc:`SectionMissingError` propagates to the caller.
 
         Returns:
-            Fully populated :class:`ReportContext` with Segment 4/5 fields
-            left as empty strings.
+            Fully populated :class:`ReportContext` with all Segment 4 and
+            Segment 5 fields filled in.
 
         Raises:
             SectionMissingError: A required section cannot be resolved.
@@ -160,6 +162,33 @@ class ReportAssembler:
         # -- Segment 4: attack surface overview ---------------------------
         attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
 
+        # -- Segment 5: TAL-ID assignment ---------------------------------
+        nmap_findings = finding_repo.get_all_nmap_findings()
+        # Use segment column — no tool-name checks in reporting code.
+        code_findings_raw = [f for f in filtered if f.get("segment") != "network"]
+        code_sorted = sorted(
+            code_findings_raw,
+            key=lambda f: (
+                _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 99),
+                (_parse_meta(f).get("title") or f.get("rule_id") or "").lower(),
+            ),
+        )
+        code_with_ids = assign_tal_ids(code_sorted)
+        finding_repo.reset_tal_ids()
+        finding_repo.bulk_update_tal_ids(
+            [(f["tal_id"], f["id"]) for f in code_with_ids]
+        )
+        logger.info("Assigned %d TAL-IDs to code findings.", len(code_with_ids))
+
+        # -- Segment 5: HTML sections -------------------------------------
+        secrets = [f for f in code_with_ids if f.get("segment") == "secrets"]
+        builder = FindingsBuilder()
+        findings_table_html = builder.build_master_table(code_with_ids, nmap_findings)
+        secrets_exposure_html = builder.build_secrets_cards(secrets)
+        detailed_findings_html = builder.build_code_cards(code_with_ids)
+        raw_sast_html = builder.build_comprehensive_code_table(code_with_ids)
+        nmap_results_html = builder.build_comprehensive_network_table(nmap_findings)
+
         return ReportContext(
             project_name=project_name,
             company_name=self._company_name,
@@ -172,6 +201,11 @@ class ReportAssembler:
             glossary_html=glossary_html,
             vuln_distribution_chart_html=vuln_distribution_chart_html,
             attack_surface_html=attack_surface_html,
+            findings_table_html=findings_table_html,
+            secrets_exposure_html=secrets_exposure_html,
+            detailed_findings_html=detailed_findings_html,
+            raw_sast_html=raw_sast_html,
+            nmap_results_html=nmap_results_html,
             **draft_html,
         )
 

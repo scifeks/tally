@@ -320,6 +320,23 @@ class FindingRepository:
             rows = conn.execute(sql).fetchall()
         return [dict(r) for r in rows]
 
+    def reset_tal_ids(self) -> None:
+        """Set tal_id = NULL for every row in findings."""
+        with self._factory.connect() as conn:
+            conn.execute("UPDATE findings SET tal_id = NULL")
+
+    def bulk_update_tal_ids(self, pairs: list[tuple[str, int]]) -> None:
+        """Persist TAL-IDs for a set of findings.
+
+        Args:
+            pairs: List of (tal_id, finding_id) tuples.
+        """
+        if not pairs:
+            return
+        sql = "UPDATE findings SET tal_id = ? WHERE id = ?"
+        with self._factory.connect() as conn:
+            conn.executemany(sql, pairs)
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 
