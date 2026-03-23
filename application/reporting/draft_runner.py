@@ -48,7 +48,7 @@ def generate_draft(
         )
         return
 
-    draft_dir = Path(base_path) / "projects" / project / "report" / "draft"
+    draft_dir = Path(base_path) / "projects" / project / "reports" / "draft"
     draft_dir.mkdir(parents=True, exist_ok=True)
 
     llm = get_llm_provider("report", base_path)

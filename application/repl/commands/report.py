@@ -76,7 +76,7 @@ class ReportCommand:
                 Path(self.repl.base_path)
                 / "projects"
                 / self.repl.active_project
-                / "report"
+                / "reports"
             )
             report_dir.mkdir(parents=True, exist_ok=True)
             output_path = str(report_dir / f"{self.repl.active_project}-report.pdf")
@@ -119,15 +119,22 @@ class ReportCommand:
         self.repl.console.print(f"[green]Report saved:[/green] {output_path}")
 
     def _cmd_full_report(self, args: list[str]) -> None:
-        """Generate a full structured report (markdown / html / json)."""
+        """Generate a full structured report (markdown / html / json / pdf)."""
         fmt, args = self._parse_value_flag(args, "--format")
         output_path, args = self._parse_value_flag(args, "--output")
 
         fmt = fmt or "markdown"
 
+        if fmt == "pdf":
+            assemble_args = []
+            if output_path:
+                assemble_args += ["--output", output_path]
+            self._cmd_assemble(assemble_args)
+            return
+
         if fmt not in ("markdown", "html", "json"):
             self.repl.console.print(
-                f"[red]Unknown format:[/red] {fmt!r}. Use markdown, html, or json."
+                f"[red]Unknown format:[/red] {fmt!r}. Use markdown, html, json, or pdf."
             )
             return
 
@@ -164,10 +171,13 @@ class ReportCommand:
         self.repl.console.print(f"[green]✓ Report saved:[/green] {output_path}")
 
     def _cmd_draft(self, args: list[str]) -> None:
-        """report draft <section> [--force]
+        """report draft [<section>] [--force]
 
-        Generates an LLM-drafted markdown file for the given report section.
-        Draft files are written to projects/<project>/report/draft/<section>.md.
+        Generates LLM-drafted markdown file(s) for report section(s).
+        Draft files are written to projects/<project>/reports/draft/<section>.md.
+
+        With no <section> argument, drafts every section in order.
+        With a <section> argument, drafts only that section.
 
         Valid sections:
           executive-summary       2-3 paragraph non-technical summary
@@ -185,16 +195,6 @@ class ReportCommand:
         force = "--force" in args
         args = [a for a in args if a != "--force"]
 
-        if not args:
-            sections = "\n  ".join(get_all_sections())
-            self.repl.console.print(
-                "[yellow]Usage:[/yellow] report draft <section> [--force]\n\n"
-                f"Valid sections:\n  {sections}"
-            )
-            return
-
-        section = args[0]
-
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. "
@@ -202,13 +202,16 @@ class ReportCommand:
             )
             return
 
-        generate_draft(
-            section=section,
-            project=self.repl.active_project,
-            base_path=self.repl.base_path,
-            console=self.repl.console,
-            force=force,
-        )
+        sections = [args[0]] if args else get_all_sections()
+
+        for section in sections:
+            generate_draft(
+                section=section,
+                project=self.repl.active_project,
+                base_path=self.repl.base_path,
+                console=self.repl.console,
+                force=force,
+            )
 
     def _cmd_shell(self, args: list[str]) -> None:
         """report shell [--company <name>] [--testing-type <type>]
@@ -295,13 +298,18 @@ class ReportCommand:
 
     @staticmethod
     def _parse_value_flag(args: list[str], *flags: str) -> tuple[str | None, list[str]]:
-        """Extract a value flag (e.g. --format markdown).
+        """Extract a value flag (e.g. --format markdown or --format=markdown).
 
         Returns (value_or_None, remaining_args).
         """
         for i, token in enumerate(args):
+            # Space-separated form: --flag value
             if token in flags and i + 1 < len(args):
                 value = args[i + 1]
-                remaining = args[:i] + args[i + 2 :]
-                return value, remaining
+                return value, args[:i] + args[i + 2 :]
+            # Equals form: --flag=value
+            for flag in flags:
+                if token.startswith(f"{flag}="):
+                    value = token[len(flag) + 1 :]
+                    return value, args[:i] + args[i + 1 :]
         return None, args

@@ -24,7 +24,7 @@ class TestDraftResolverResolve:
     ) -> None:
         """Reviewed file takes priority; no input() prompt is issued."""
         project = "acme"
-        reviewed_dir = tmp_path / "projects" / project / "report" / "reviewed"
+        reviewed_dir = tmp_path / "projects" / project / "reports" / "reviewed"
         reviewed_dir.mkdir(parents=True)
         (reviewed_dir / "executive-summary.md").write_text(
             "# Overview\n\nAll good.", encoding="utf-8"
@@ -45,7 +45,7 @@ class TestDraftResolverResolve:
     ) -> None:
         """Draft file is used when the user answers 'y'."""
         project = "acme"
-        draft_dir = tmp_path / "projects" / project / "report" / "draft"
+        draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "risk-level.md").write_text("**High**", encoding="utf-8")
 
@@ -61,7 +61,7 @@ class TestDraftResolverResolve:
     ) -> None:
         """Full word 'yes' is also accepted."""
         project = "acme"
-        draft_dir = tmp_path / "projects" / project / "report" / "draft"
+        draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "scope-and-methodology.md").write_text("Scope.", encoding="utf-8")
 
@@ -77,7 +77,7 @@ class TestDraftResolverResolve:
     ) -> None:
         """User answering 'n' raises SectionMissingError."""
         project = "acme"
-        draft_dir = tmp_path / "projects" / project / "report" / "draft"
+        draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "critical-issues.md").write_text("Issues here.", encoding="utf-8")
 
@@ -92,7 +92,7 @@ class TestDraftResolverResolve:
     ) -> None:
         """Pressing Enter (empty string) is treated as 'N'."""
         project = "acme"
-        draft_dir = tmp_path / "projects" / project / "report" / "draft"
+        draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "general-recommendations.md").write_text("Recs.", encoding="utf-8")
 
@@ -115,7 +115,7 @@ class TestDraftResolverResolve:
     def test_reviewed_takes_priority_over_draft(self, tmp_path: Path) -> None:
         """Reviewed content wins even when a draft also exists."""
         project = "acme"
-        report_root = tmp_path / "projects" / project / "report"
+        report_root = tmp_path / "projects" / project / "reports"
         draft_dir = report_root / "draft"
         reviewed_dir = report_root / "reviewed"
         draft_dir.mkdir(parents=True)

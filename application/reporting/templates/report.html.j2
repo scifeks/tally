@@ -32,22 +32,42 @@
 
   <div class="section-body">
     <h2>Report Overview</h2>
-    {{ ctx.executive_summary_html | safe }}
+    {% if ctx.executive_summary_html %}
+      {{ ctx.executive_summary_html | safe }}
+    {% else %}
+      <p class="placeholder">Executive summary not yet drafted.
+        Run 'report draft executive-summary'.</p>
+    {% endif %}
   </div>
 
   <div class="section-body">
     <h2>Risk Level</h2>
-    {{ ctx.risk_level_html | safe }}
+    {% if ctx.risk_level_html %}
+      {{ ctx.risk_level_html | safe }}
+    {% else %}
+      <p class="placeholder">Risk level not yet drafted.
+        Run 'report draft risk-level'.</p>
+    {% endif %}
   </div>
 
   <div class="section-body">
     <h2>Top Critical Issues</h2>
-    {{ ctx.critical_issues_html | safe }}
+    {% if ctx.critical_issues_html %}
+      {{ ctx.critical_issues_html | safe }}
+    {% else %}
+      <p class="placeholder">Critical issues not yet drafted.
+        Run 'report draft critical-issues'.</p>
+    {% endif %}
   </div>
 
   <div class="section-body">
     <h2>Identified Improvement Points</h2>
-    {{ ctx.improvement_points_html | safe }}
+    {% if ctx.improvement_points_html %}
+      {{ ctx.improvement_points_html | safe }}
+    {% else %}
+      <p class="placeholder">Improvement points not yet drafted.
+        Run 'report draft improvement-points'.</p>
+    {% endif %}
   </div>
 </section>
 

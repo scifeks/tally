@@ -434,4 +434,6 @@ section {
 
 .section-body {
     margin-bottom: 1.5em;
+    padding: 0.4em 0 0.4em 14px;
+    border-left: 3px solid var(--color-border);
 }

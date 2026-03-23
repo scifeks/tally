@@ -24,7 +24,7 @@ class DraftResolver:
     """
 
     def __init__(self, project: str, base_path: str | Path) -> None:
-        root = Path(base_path) / "projects" / project / "report"
+        root = Path(base_path) / "projects" / project / "reports"
         self._draft_dir = root / "draft"
         self._reviewed_dir = root / "reviewed"
 
