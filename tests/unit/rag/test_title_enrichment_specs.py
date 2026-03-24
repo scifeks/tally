@@ -30,11 +30,12 @@ def test_zap_title_in_enrichment_fields() -> None:
     "tool_name",
     ["pip-audit", "npm-audit", "osv-scanner", "composer-audit"],
 )
-def test_sca_title_in_legacy_batch_fields(tool_name: str) -> None:
+def test_sca_title_in_enrichment_fields(tool_name: str) -> None:
     pipeline = EnrichmentPipeline(MagicMock(spec=RAGEngine))
     legacy_fields, specs = pipeline._get_enrichment_plan(
         {"tool": tool_name, "enriched": False}
     )
-    assert specs is None
-    assert legacy_fields is not None
-    assert "title" in legacy_fields
+    assert legacy_fields is None
+    assert specs is not None
+    assert any(s.field_name == "title" for s in specs)
+    assert any(s.field_name == "owasp_name" for s in specs)

@@ -8,8 +8,77 @@ from datetime import UTC, datetime
 from typing import Any
 
 from domain.tools.base import ToolResult
+from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from ._shared import _first_output_file, _shared_meta
+
+# ---------------------------------------------------------------------------
+# Per-field enrichment specs
+# ---------------------------------------------------------------------------
+
+# pip-audit, npm-audit, composer-audit: limited metadata available.
+_SCA_COMMON_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
+    FieldEnrichmentSpec(
+        "owasp_name",
+        ("vulnerability_id", "description", "package_name"),
+        PromptStrategy.DEDICATED,
+    ),
+    FieldEnrichmentSpec(
+        "risk_type",
+        ("vulnerability_id", "description"),
+        PromptStrategy.GENERIC,
+    ),
+    FieldEnrichmentSpec(
+        "remediation",
+        ("vulnerability_id", "description", "package_name", "fixed_version"),
+        PromptStrategy.GENERIC,
+    ),
+    FieldEnrichmentSpec(
+        "confidence",
+        ("description", "severity"),
+        PromptStrategy.GENERIC,
+    ),
+    FieldEnrichmentSpec(
+        "title",
+        ("vulnerability_id", "package_name", "package_version", "description"),
+        PromptStrategy.GENERIC,
+    ),
+)
+
+# osv-scanner: richer metadata including cwe_ids, aliases, details, cvss fields.
+_SCA_OSV_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
+    FieldEnrichmentSpec(
+        "owasp_name",
+        ("vulnerability_id", "description", "cwe_ids", "aliases", "details"),
+        PromptStrategy.DEDICATED,
+    ),
+    FieldEnrichmentSpec(
+        "risk_type",
+        ("vulnerability_id", "description", "cwe_ids", "aliases"),
+        PromptStrategy.GENERIC,
+    ),
+    FieldEnrichmentSpec(
+        "remediation",
+        ("vulnerability_id", "description", "package_name", "fixed_version", "details"),
+        PromptStrategy.GENERIC,
+    ),
+    FieldEnrichmentSpec(
+        "confidence",
+        ("description", "severity", "cvss_score", "cvss_vector"),
+        PromptStrategy.GENERIC,
+    ),
+    FieldEnrichmentSpec(
+        "title",
+        (
+            "vulnerability_id",
+            "package_name",
+            "package_version",
+            "description",
+            "aliases",
+        ),
+        PromptStrategy.GENERIC,
+    ),
+)
 
 
 def _build_sca_chunks(
