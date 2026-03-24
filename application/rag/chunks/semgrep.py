@@ -71,7 +71,6 @@ class SemgrepChunkBuilder:
             col_start = finding.get("col_start")
             line_end = finding.get("line_end", 0)
             col_end = finding.get("col_end")
-            code_snippet = finding.get("code_snippet", "")
             fix = finding.get("fix")
             fingerprint = finding.get("fingerprint")
             cwe = finding.get("cwe") or ""
@@ -87,8 +86,7 @@ class SemgrepChunkBuilder:
             text = (
                 f"[semgrep] [{severity.upper()}] {rule_id} "
                 f"in {file_path}:{line_start}\n"
-                f"Message: {message}\n"
-                f"Code: {code_snippet}"
+                f"Message: {message}"
             )
 
             meta: dict[str, Any] = {

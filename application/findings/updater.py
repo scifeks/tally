@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -16,12 +17,19 @@ if TYPE_CHECKING:
 def reconstruct_abs_path(
     file: str | None, repo_name: str | None, repos: list[dict]
 ) -> str | None:
-    """Reconstruct absolute path from relative file + repo name."""
+    """Reconstruct absolute path from relative file + repo name.
+
+    Returns None if the resolved path would escape the repo root.
+    """
     if not file or not repo_name:
         return None
     for r in repos:
         if r["name"] == repo_name:
-            return r["path"].rstrip("/") + file
+            repo_root = r["path"].rstrip("/")
+            candidate = os.path.normpath(repo_root + file)
+            if not candidate.startswith(repo_root + os.sep):
+                return None  # Path traversal attempt blocked
+            return candidate
     return None
 
 
