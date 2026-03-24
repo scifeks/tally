@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 from collections import defaultdict
@@ -130,7 +131,7 @@ class AttackSurfaceBuilder:
 
         parts: list[str] = []
         for host, rows in by_host.items():
-            parts.append(f"<p><strong>{host}</strong></p>")
+            parts.append(f"<p><strong>{html.escape(str(host))}</strong></p>")
             parts.append(
                 "<table>"
                 "<thead><tr>"
@@ -146,10 +147,10 @@ class AttackSurfaceBuilder:
                 version = meta.get("service_version") or ""
                 parts.append(
                     f"<tr>"
-                    f"<td>{port}</td>"
-                    f"<td>{transport}</td>"
-                    f"<td>{service}</td>"
-                    f"<td>{version}</td>"
+                    f"<td>{html.escape(str(port))}</td>"
+                    f"<td>{html.escape(str(transport))}</td>"
+                    f"<td>{html.escape(str(service))}</td>"
+                    f"<td>{html.escape(str(version))}</td>"
                     f"</tr>"
                 )
             parts.append("</tbody></table>")
@@ -196,7 +197,7 @@ class AttackSurfaceBuilder:
                 )
                 for col in col_keys
             )
-            rows_html.append(f"<tr><td>{repo}</td>{cells}</tr>")
+            rows_html.append(f"<tr><td>{html.escape(repo)}</td>{cells}</tr>")
 
         return (
             "<table>"
@@ -241,7 +242,8 @@ class AttackSurfaceBuilder:
 
         pairs.sort()
         rows_html = "".join(
-            f"<tr><td>{repo}</td><td>{ecosystem}</td></tr>" for repo, ecosystem in pairs
+            f"<tr><td>{html.escape(repo)}</td><td>{html.escape(ecosystem)}</td></tr>"
+            for repo, ecosystem in pairs
         )
         return (
             "<table>"

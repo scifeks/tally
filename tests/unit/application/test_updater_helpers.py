@@ -35,6 +35,18 @@ class TestUpdaterHelpers:
         result = reconstruct_abs_path("/src/main.py", "myrepo", [])
         assert result is None
 
+    def test_reconstruct_path_traversal_blocked(self) -> None:
+        repos = [{"name": "myrepo", "path": "/home/user/myrepo/"}]
+        result = reconstruct_abs_path("/../../../etc/passwd", "myrepo", repos)
+        assert result is None
+
+    def test_reconstruct_dotdot_sibling_blocked(self) -> None:
+        repos = [{"name": "myrepo", "path": "/home/user/myrepo/"}]
+        result = reconstruct_abs_path(
+            "/src/../../other_repo/secret.key", "myrepo", repos
+        )
+        assert result is None
+
     def test_resolve_found(self) -> None:
         repos = [{"name": "myrepo", "path": "/home/x/"}]
         result = resolve_repo_path("myrepo", repos)

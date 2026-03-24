@@ -90,15 +90,10 @@ class DraftResolver:
 
     @staticmethod
     def _md_to_html(md_text: str) -> str:
-        """Convert *md_text* (CommonMark markdown) to an HTML fragment.
-
-        Uses markdown-it-py with ``html=True`` so that any raw HTML in the
-        source passes through unescaped.  This is safe here because blurb
-        files and LLM draft files are entirely internal, trusted content.
-        """
+        """Convert *md_text* (CommonMark markdown) to an HTML fragment."""
         from markdown_it import MarkdownIt  # already installed via rich
 
-        md = MarkdownIt(options_update={"html": True})
+        md = MarkdownIt()
         return md.render(md_text)
 
 
