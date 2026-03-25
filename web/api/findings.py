@@ -1,4 +1,4 @@
-"""GET /api/findings and GET /api/findings/{id} endpoints."""
+"""GET and PATCH /api/findings endpoints."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from infrastructure.store import FindingRepository
+from web.api.schemas import FindingPatchRequest
 
 router = APIRouter()
 
@@ -89,6 +90,60 @@ def get_finding(request: Request, finding_id: int) -> dict:
     """Return a single finding by integer primary key."""
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
+    row = repo.get_finding(finding_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return _serialise_finding(row)
+
+
+# Maps FindingPatchRequest field names for meta keys to their blob keys.
+_META_FIELD_MAP: dict[str, str] = {
+    "meta_remediation": "remediation",
+    "meta_risk_type": "risk_type",
+    "meta_owasp_name": "owasp_name",
+    "meta_title": "title",
+    "meta_tags": "tags",
+}
+
+
+@router.patch("/{finding_id}")
+def patch_finding(
+    request: Request,
+    finding_id: int,
+    body: FindingPatchRequest,
+) -> dict:
+    """Apply analyst corrections to a finding's editable fields.
+
+    Only fields explicitly included in the request body are written.
+    Locked fields sent by the client are silently ignored.
+    Sets ``triaged_by = 'analyst_web'`` and ``triaged_at = now()`` on
+    every successful write.
+
+    Returns the updated finding on success, or 404 if not found.
+    Chroma sync is NOT performed in this step (deferred to Prompt 03).
+    """
+    factory = request.app.state.connection_factory
+    repo = FindingRepository(factory)
+
+    raw = body.model_dump(exclude_none=True)
+
+    fields: dict[str, Any] = {}
+    for k, v in raw.items():
+        if k in _META_FIELD_MAP:
+            fields[_META_FIELD_MAP[k]] = v
+        elif k == "finding_type":
+            fields["finding_type"] = json.dumps(v)
+        elif k == "cwe":
+            fields["cwe"] = json.dumps(v)
+        elif k == "should_report":
+            fields["should_report"] = 1 if v else 0
+        else:
+            fields[k] = v
+
+    updated = repo.update_analyst_fields(finding_id, fields)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
     row = repo.get_finding(finding_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Finding not found")
