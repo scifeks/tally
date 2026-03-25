@@ -10,7 +10,7 @@ from application.reporting.blurbs import load_blurb
 from application.reporting.draft_query import DraftQueryService
 from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.risk_level import compute_risk_level
-from application.reporting.tal_id import resolve_prefix
+from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from core.llm.factory import get_llm_provider
 from infrastructure.store import make_store
@@ -99,6 +99,11 @@ def generate_draft(
         project_cfg.abbreviation if project_cfg else "",
         config.global_config.report_finding_prefix,
     )
+
+    # Assign provisional finding IDs in memory so draft sections (e.g.
+    # critical-issues) can reference them.  Assembly will re-assign and
+    # persist the final IDs when the PDF is built.
+    findings = assign_tal_ids(findings, prefix=prefix)
 
     context = _build_context(
         section=section,
