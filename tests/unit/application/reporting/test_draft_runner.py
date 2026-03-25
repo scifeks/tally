@@ -160,3 +160,94 @@ class TestGenerateDraftPrompt:
         )
         printed = " ".join(str(c) for c in console.print.call_args_list)
         assert "Unknown section" in printed
+
+    def test_skip_triage_passes_flag_to_query_service(self, tmp_path: Path) -> None:
+        """skip_triage=True calls get_filtered_findings(skip_triage=True)."""
+        project = "acme"
+        section = "executive-summary"
+
+        with (
+            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
+            patch("application.reporting.draft_runner.make_store") as mock_store,
+            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
+            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
+            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+        ):
+            mock_llm.return_value.is_available.return_value = True
+            mock_generator = MagicMock()
+            draft_path = (
+                tmp_path / "projects" / project / "reports" / "draft" / f"{section}.md"
+            )
+            mock_generator.draft_path = draft_path
+            mock_generator.generate.return_value = "content"
+            mock_reg.__contains__ = MagicMock(return_value=True)
+            mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
+            mock_store.return_value = (
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            )
+            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.severity_distribution.return_value = {}
+            mock_qs.return_value.confidence_distribution.return_value = {}
+            mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
+            mock_cfg.return_value.load_project_config.return_value = None
+
+            generate_draft(
+                section=section,
+                project=project,
+                base_path=tmp_path,
+                console=_make_console(),
+                force=True,
+                skip_triage=True,
+            )
+
+        mock_qs.return_value.get_filtered_findings.assert_called_once_with(
+            skip_triage=True
+        )
+
+    def test_skip_triage_empty_findings_shows_scan_message(
+        self, tmp_path: Path
+    ) -> None:
+        """When skip_triage=True and no findings, message says 'Run a scan first'."""
+        project = "acme"
+        section = "executive-summary"
+
+        with (
+            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
+            patch("application.reporting.draft_runner.make_store") as mock_store,
+            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
+            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
+            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+        ):
+            mock_llm.return_value.is_available.return_value = True
+            mock_generator = MagicMock()
+            draft_path = (
+                tmp_path / "projects" / project / "reports" / "draft" / f"{section}.md"
+            )
+            mock_generator.draft_path = draft_path
+            mock_reg.__contains__ = MagicMock(return_value=True)
+            mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
+            mock_store.return_value = (
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+                MagicMock(),
+            )
+            mock_qs.return_value.get_filtered_findings.return_value = []
+            mock_cfg.return_value.load_project_config.return_value = None
+
+            console = _make_console()
+            generate_draft(
+                section=section,
+                project=project,
+                base_path=tmp_path,
+                console=console,
+                force=True,
+                skip_triage=True,
+            )
+
+        printed = " ".join(str(c) for c in console.print.call_args_list)
+        assert "scan" in printed.lower()
+        assert "triage" not in printed.lower()

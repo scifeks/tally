@@ -122,36 +122,30 @@ _HELP_REGISTRY = [
     ),
     # Report
     ("report", None, None, "Report"),
-    ("report", "report", None, "Generate a findings report (markdown by default)"),
+    ("report", "report", None, "Assemble the full PDF report (default)"),
     (
         "report",
         "report",
         "--format=<fmt>",
-        "Output format: markdown (default), html, json, pdf",
+        "Output format: pdf (default), markdown, html, json",
+    ),
+    (
+        "report",
+        "report",
+        "--testing-type <type>",
+        "white_box (default), grey_box, or black_box",
+    ),
+    (
+        "report",
+        "report",
+        "--engagement-date <date>",
+        "Engagement date shown in the report (YYYY-MM-DD)",
     ),
     (
         "report",
         "report",
         "--output=<path>",
         "Write report to a specific file path",
-    ),
-    (
-        "report",
-        "report assemble",
-        None,
-        "Assemble full PDF with LLM drafts and all findings",
-    ),
-    (
-        "report",
-        "report assemble",
-        "--testing-type <type>",
-        "white_box (default), grey_box, or black_box",
-    ),
-    (
-        "report",
-        "report assemble",
-        "--output <path>",
-        "Write PDF to a specific file path",
     ),
     (
         "report",
@@ -170,6 +164,12 @@ _HELP_REGISTRY = [
         "report draft",
         "<section> --force",
         "Overwrite an existing draft without prompting",
+    ),
+    (
+        "report",
+        "report draft",
+        "--skip-triage",
+        "Include all findings regardless of triage status",
     ),
     (
         "report",

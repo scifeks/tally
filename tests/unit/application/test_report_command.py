@@ -55,7 +55,7 @@ class TestReportCommand:
 
         mock_repl.console.print.assert_called()
 
-    def test_valid_call_invokes_generator_generate(
+    def test_format_markdown_invokes_generator(
         self,
         cmd: ReportCommand,
         mock_repl: MagicMock,
@@ -67,11 +67,32 @@ class TestReportCommand:
             patch.object(ReportCommand, "_get_rag_engine", return_value=mock_rag),
             patch("application.reporting.generator.ReportGenerator") as mock_gen_cls,
         ):
-            cmd.execute("report", [])
+            cmd.execute("report", ["--format=markdown"])
 
         mock_gen_cls.return_value.generate.assert_called_once()
         _, kwargs = mock_gen_cls.return_value.generate.call_args
         assert kwargs["output_format"] == "markdown"
+
+    def test_default_format_is_pdf(
+        self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
+    ) -> None:
+        """report with no --format argument defaults to PDF assembly."""
+        mock_repl.base_path = str(tmp_path)
+        # Seed all draft sections so _check_drafts_present passes
+        draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
+        draft_dir.mkdir(parents=True)
+        from application.reporting.draft_runner import get_all_sections
+
+        for section in get_all_sections():
+            (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
+
+        with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
+            mock_cls.return_value.build_context.return_value = MagicMock()
+            mock_cls.return_value.render_pdf.return_value = b"%PDF"
+            cmd.execute("report", [])
+
+        mock_cls.assert_called_once()
+        mock_cls.return_value.build_context.assert_called_once()
 
     # ------------------------------------------------------------------
     # _parse_value_flag — equals form (Bugs 5 & 6)
@@ -110,6 +131,14 @@ class TestReportCommand:
         self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
     ) -> None:
         mock_repl.base_path = str(tmp_path)
+        # Seed all draft sections so _check_drafts_present passes
+        draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
+        draft_dir.mkdir(parents=True)
+        from application.reporting.draft_runner import get_all_sections
+
+        for section in get_all_sections():
+            (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
+
         with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
             mock_cls.return_value.build_context.return_value = MagicMock()
             mock_cls.return_value.render_pdf.return_value = b"%PDF"
@@ -119,18 +148,45 @@ class TestReportCommand:
         mock_cls.return_value.render_pdf.assert_called_once()
 
     # ------------------------------------------------------------------
-    # Bug 2 — SectionMissingError is shown in assemble and shell
+    # report assemble — deprecated
     # ------------------------------------------------------------------
 
-    def test_assemble_shows_section_missing_error(
+    def test_assemble_subcommand_shows_deprecation(
+        self, cmd: ReportCommand, mock_repl: MagicMock
+    ) -> None:
+        cmd.execute("report", ["assemble"])
+        printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
+        assert "removed" in printed.lower()
+
+    def test_assemble_subcommand_does_not_assemble(
         self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
     ) -> None:
         mock_repl.base_path = str(tmp_path)
         with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
+            cmd.execute("report", ["assemble"])
+        mock_cls.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # SectionMissingError is shown for PDF assembly
+    # ------------------------------------------------------------------
+
+    def test_pdf_default_shows_section_missing_error(
+        self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_repl.base_path = str(tmp_path)
+        # Seed all draft sections so _check_drafts_present passes
+        draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
+        draft_dir.mkdir(parents=True)
+        from application.reporting.draft_runner import get_all_sections
+
+        for section in get_all_sections():
+            (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
+
+        with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
             mock_cls.return_value.build_context.side_effect = SectionMissingError(
                 "executive-summary"
             )
-            cmd.execute("report", ["assemble"])
+            cmd.execute("report", [])
         printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
         assert "Section missing" in printed
 
@@ -145,6 +201,59 @@ class TestReportCommand:
             cmd.execute("report", ["shell"])
         printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
         assert "Section missing" in printed
+
+    # ------------------------------------------------------------------
+    # _check_drafts_present
+    # ------------------------------------------------------------------
+
+    def test_check_drafts_present_returns_false_when_sections_missing(
+        self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_repl.base_path = str(tmp_path)
+        # No draft files created — all sections missing
+        result = cmd._check_drafts_present()
+        assert result is False
+        printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
+        assert "report draft" in printed
+
+    def test_check_drafts_present_returns_true_when_all_drafts_exist(
+        self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_repl.base_path = str(tmp_path)
+        draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
+        draft_dir.mkdir(parents=True)
+        from application.reporting.draft_runner import get_all_sections
+
+        for section in get_all_sections():
+            (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
+
+        result = cmd._check_drafts_present()
+        assert result is True
+
+    def test_check_drafts_present_accepts_reviewed_files(
+        self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_repl.base_path = str(tmp_path)
+        reviewed_dir = tmp_path / "projects" / "test-project" / "reports" / "reviewed"
+        reviewed_dir.mkdir(parents=True)
+        from application.reporting.draft_runner import get_all_sections
+
+        for section in get_all_sections():
+            (reviewed_dir / f"{section}.md").write_text("reviewed", encoding="utf-8")
+
+        result = cmd._check_drafts_present()
+        assert result is True
+
+    def test_pdf_shows_missing_draft_guidance_before_assembling(
+        self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
+    ) -> None:
+        mock_repl.base_path = str(tmp_path)
+        # No draft files — _check_drafts_present should block assembly
+        with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
+            cmd.execute("report", [])
+        mock_cls.assert_not_called()
+        printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
+        assert "report draft" in printed
 
     # ------------------------------------------------------------------
     # report draft — no-section generates all sections
@@ -181,3 +290,25 @@ class TestReportCommand:
 
         mock_gen.assert_not_called()
         mock_repl.console.print.assert_called()
+
+    def test_draft_skip_triage_passes_flag_to_generate_draft(
+        self, cmd: ReportCommand, mock_repl: MagicMock
+    ) -> None:
+        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+            cmd.execute("report", ["draft", "--skip-triage"])
+
+        from application.reporting.draft_runner import get_all_sections
+
+        assert mock_gen.call_count == len(get_all_sections())
+        for call in mock_gen.call_args_list:
+            assert call.kwargs["skip_triage"] is True
+
+    def test_draft_force_and_skip_triage_together(
+        self, cmd: ReportCommand, mock_repl: MagicMock
+    ) -> None:
+        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+            cmd.execute("report", ["draft", "risk-level", "--force", "--skip-triage"])
+
+        assert mock_gen.call_count == 1
+        assert mock_gen.call_args.kwargs["force"] is True
+        assert mock_gen.call_args.kwargs["skip_triage"] is True

@@ -25,9 +25,12 @@ class ReportCommand:
     # ------------------------------------------------------------------
 
     def execute(self, _cmd: str, args: list[str]) -> None:
-        """Dispatch report subcommands: assemble, draft, shell, or full report."""
+        """Dispatch report subcommands: draft, shell, or full report (PDF default)."""
         if args and args[0] == "assemble":
-            self._cmd_assemble(args[1:])
+            self.repl.console.print(
+                "[yellow]'report assemble' has been removed.[/yellow] "
+                "Use [cyan]report[/cyan] instead — PDF is now the default format."
+            )
             return
         if args and args[0] == "draft":
             self._cmd_draft(args[1:])
@@ -117,22 +120,37 @@ class ReportCommand:
         self.repl.console.print(f"[green]Report saved:[/green] {output_path}")
 
     def _cmd_full_report(self, args: list[str]) -> None:
-        """Generate a full structured report (markdown / html / json / pdf)."""
+        """Generate a full structured report (pdf / markdown / html / json)."""
         fmt, args = self._parse_value_flag(args, "--format")
         output_path, args = self._parse_value_flag(args, "--output")
+        testing_type, args = self._parse_value_flag(args, "--testing-type")
+        engagement_date, args = self._parse_value_flag(args, "--engagement-date")
 
-        fmt = fmt or "markdown"
+        fmt = fmt or "pdf"
 
         if fmt == "pdf":
+            if not self.repl.active_project:
+                self.repl.console.print(
+                    "[yellow]No active project. "
+                    "Use 'project add' or 'project switch <name>' first.[/yellow]"
+                )
+                return
+            if not self._check_drafts_present():
+                return
             assemble_args = []
             if output_path:
                 assemble_args += ["--output", output_path]
+            if testing_type:
+                assemble_args += ["--testing-type", testing_type]
+            if engagement_date:
+                assemble_args += ["--engagement-date", engagement_date]
             self._cmd_assemble(assemble_args)
             return
 
         if fmt not in ("markdown", "html", "json"):
             self.repl.console.print(
-                f"[red]Unknown format:[/red] {fmt!r}. Use markdown, html, json, or pdf."
+                f"[red]Unknown format:[/red] {fmt!r}. "
+                "Use pdf (default), markdown, html, or json."
             )
             return
 
@@ -191,7 +209,8 @@ class ReportCommand:
         )
 
         force = "--force" in args
-        args = [a for a in args if a != "--force"]
+        skip_triage = "--skip-triage" in args
+        args = [a for a in args if a not in ("--force", "--skip-triage")]
 
         if not self.repl.active_project:
             self.repl.console.print(
@@ -209,6 +228,7 @@ class ReportCommand:
                 base_path=self.repl.base_path,
                 console=self.repl.console,
                 force=force,
+                skip_triage=skip_triage,
             )
 
     def _cmd_shell(self, args: list[str]) -> None:
@@ -274,6 +294,39 @@ class ReportCommand:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _check_drafts_present(self) -> bool:
+        """Return True if every draft section has at least a draft or reviewed file.
+
+        If any section is missing entirely, print guidance and return False.
+        """
+        from application.reporting.draft_runner import get_all_sections
+
+        assert self.repl.active_project is not None
+        base = (
+            Path(self.repl.base_path)
+            / "projects"
+            / self.repl.active_project
+            / "reports"
+        )
+        missing = [
+            section
+            for section in get_all_sections()
+            if not (base / "draft" / f"{section}.md").exists()
+            and not (base / "reviewed" / f"{section}.md").exists()
+        ]
+        if missing:
+            self.repl.console.print(
+                "[yellow]The following sections have not been drafted yet:[/yellow]"
+            )
+            for s in missing:
+                self.repl.console.print(f"  • {s}")
+            self.repl.console.print(
+                "\nRun [cyan]report draft[/cyan] to generate all sections, "
+                "then review them before generating the final report."
+            )
+            return False
+        return True
 
     def _get_rag_engine(self) -> RAGEngine | None:
         """Create and return a RAGEngine for the active project, or None on error."""

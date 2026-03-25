@@ -32,15 +32,17 @@ def generate_draft(
     base_path: str | Path,
     console: Console,
     force: bool = False,
+    skip_triage: bool = False,
 ) -> None:
     """Generate a draft file for the named section.
 
     Args:
-        section:   One of the registered section names.
-        project:   Active project name.
-        base_path: Application root path.
-        console:   Rich Console for user output.
-        force:     Skip overwrite confirmation if True.
+        section:      One of the registered section names.
+        project:      Active project name.
+        base_path:    Application root path.
+        console:      Rich Console for user output.
+        force:        Skip overwrite confirmation if True.
+        skip_triage:  If True, include all findings regardless of triage status.
     """
     if section not in SECTION_REGISTRY:
         valid = ", ".join(get_all_sections())
@@ -76,13 +78,18 @@ def generate_draft(
 
     _, finding_repo, _, _ = make_store(base_path, project)
     query = DraftQueryService(finding_repo)
-    findings = query.get_filtered_findings()
+    findings = query.get_filtered_findings(skip_triage=skip_triage)
 
     if not findings:
-        console.print(
-            "[yellow]No triaged findings with should_report=1 found.[/yellow]"
-            " Run triage before generating drafts."
-        )
+        if skip_triage:
+            console.print(
+                "[yellow]No findings in the database.[/yellow] Run a scan first."
+            )
+        else:
+            console.print(
+                "[yellow]No triaged findings with should_report=1 found.[/yellow]"
+                " Run triage before generating drafts."
+            )
         return
 
     sev_dist = query.severity_distribution(findings)

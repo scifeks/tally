@@ -112,17 +112,15 @@ report
 
 | Command | Description |
 |---|---|
-| `report` | Generate Markdown report (saved to projects/[name]/reports/) |
-| `report --format=html` | Generate HTML report |
-| `report --format=json` | Generate JSON report |
-| `report --format=pdf` | Assemble and generate full PDF report |
+| `report` | Assemble and generate full PDF report (default) |
+| `report --format=<fmt>` | Output format: `pdf` (default), `markdown`, `html`, `json` |
+| `report --testing-type <type>` | Engagement type: `white_box` (default), `grey_box`, `black_box` |
+| `report --engagement-date <YYYY-MM-DD>` | Engagement date shown in the report |
 | `report --output=<path>` | Write report to a specific file path |
 | `report draft` | Generate LLM drafts for all six report sections |
 | `report draft <section>` | Generate a draft for one section only |
 | `report draft <section> --force` | Overwrite an existing draft without prompting |
-| `report assemble` | Assemble full PDF with LLM drafts and all findings |
-| `report assemble --testing-type <type>` | Engagement type: `white_box`, `grey_box`, `black_box` |
-| `report assemble --output <path>` | Write PDF to a specific file path |
+| `report draft --skip-triage` | Include all findings regardless of triage status |
 | `report shell` | Render a shell PDF for visual layout inspection |
 | `report shell --output <path>` | Write shell PDF to a specific file path |
 
