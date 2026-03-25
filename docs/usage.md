@@ -66,9 +66,15 @@ Tally prompts you interactively:
 
 ```
 Project name: acme-security-audit
+  Company Name: Acme Corp
+  Department Name (optional):
+  Abbreviation (max 3 chars, used as finding prefix e.g. FOO-001, optional): ACM
 ✓ Project created: acme-security-audit
 [acme-security-audit]>
 ```
+
+**Company Name** is required and is shown in the report's confidentiality blurb.
+**Abbreviation** (optional, max 3 chars) is used as the finding ID prefix for reports generated for this project — for example, `ACM-001`. If left blank, the global `report_finding_prefix` from `config/global.json` is used instead (default: `TAL`).
 
 The new project becomes the active project immediately. The prompt changes to show `[acme-security-audit]>`.
 
@@ -580,3 +586,33 @@ If the deleted project was the active project, the active project is cleared. Ta
 ```
 Active project cleared. Use 'project add' or 'project switch' to set a new one.
 ```
+
+---
+
+## Editing Project Settings
+
+Use `project edit` to update a project's company name, department name, or finding ID abbreviation after creation:
+
+```
+[acme-security-audit]> project edit
+```
+
+If a project name is not given and a project is active, Tally edits the active project. Pass a name explicitly to edit any project:
+
+```
+[acme-security-audit]> project edit corp-audit
+```
+
+Tally pre-fills each field with its current value. Press Enter to keep it:
+
+```
+Editing project 'acme-security-audit' (press Enter to keep current value)...
+
+  Company Name [Acme Corp]:
+  Department Name (optional) [Engineering]:
+  Abbreviation [current: ACM, enter --clear to remove]:
+
+✓ Project 'acme-security-audit' updated
+```
+
+To clear the abbreviation (reverting to the global prefix), enter `--clear` at the abbreviation prompt.

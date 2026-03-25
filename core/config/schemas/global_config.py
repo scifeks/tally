@@ -25,3 +25,4 @@ class GlobalConfig(BaseModel):
     mcp_session_timeout_seconds: int = Field(
         default=300, description="Max seconds for a single Claude triage session"
     )
+    report_finding_prefix: str = Field(default="TAL")

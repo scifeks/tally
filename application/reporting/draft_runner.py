@@ -10,6 +10,7 @@ from application.reporting.blurbs import load_blurb
 from application.reporting.draft_query import DraftQueryService
 from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.risk_level import compute_risk_level
+from application.reporting.tal_id import resolve_prefix
 from core.config.manager import ConfigManager
 from core.llm.factory import get_llm_provider
 from infrastructure.store import make_store
@@ -94,6 +95,10 @@ def generate_draft(
     project_name = project_cfg.project_name if project_cfg else project
     engagement_date = project_cfg.created[:10] if project_cfg else ""
     repos = [r.name for r in project_cfg.repositories] if project_cfg else []
+    prefix = resolve_prefix(
+        project_cfg.abbreviation if project_cfg else "",
+        config.global_config.report_finding_prefix,
+    )
 
     context = _build_context(
         section=section,
@@ -107,6 +112,7 @@ def generate_draft(
         engagement_date=engagement_date,
         repos=repos,
         draft_dir=draft_dir,
+        prefix=prefix,
     )
 
     with console.status(f"Generating {section}..."):
@@ -128,6 +134,7 @@ def _build_context(
     engagement_date: str,
     repos: list[str],
     draft_dir: Path,
+    prefix: str = "",
 ) -> dict[str, Any]:
     """Assemble the context dict for the given section."""
     base: dict[str, Any] = {
@@ -140,6 +147,7 @@ def _build_context(
         "risk_counts": risk_counts,
         "risk_level": risk_level,
         "max_enumerate": 20,
+        "finding_id_prefix": prefix,
     }
 
     if section in ("executive-summary", "risk-level"):

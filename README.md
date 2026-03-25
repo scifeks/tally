@@ -56,6 +56,7 @@ report
 | Command | Description |
 |---|---|
 | `project add` | Create a new project (interactive) |
+| `project edit [<name>]` | Edit project-level settings (interactive) |
 | `project list` | List all projects |
 | `project switch <name>` | Switch active project |
 | `project info` | Show active project details |
@@ -120,7 +121,6 @@ report
 | `report draft <section>` | Generate a draft for one section only |
 | `report draft <section> --force` | Overwrite an existing draft without prompting |
 | `report assemble` | Assemble full PDF with LLM drafts and all findings |
-| `report assemble --company <name>` | Set the client company name on the report |
 | `report assemble --testing-type <type>` | Engagement type: `white_box`, `grey_box`, `black_box` |
 | `report assemble --output <path>` | Write PDF to a specific file path |
 | `report shell` | Render a shell PDF for visual layout inspection |

@@ -168,18 +168,27 @@ def _affected_location(finding: dict[str, Any], meta: dict[str, Any]) -> str:
 class FindingsBuilder:
     """Builds HTML fragments for all Segment 5 report sections.
 
-    All methods are stateless — they accept pre-loaded finding lists and return
-    self-contained HTML strings.  User-sourced values are always HTML-escaped.
-    CSS classes reference the palette defined in ``static/report.css``; no
-    colours are hardcoded here.
+    Args:
+        prefix: Resolved finding ID prefix (e.g. ``"TAL"``, ``"FOO"``).
+                When empty, findings use a numeric-only format (e.g. ``001``).
+
+    User-sourced values are always HTML-escaped.  CSS classes reference the
+    palette defined in ``static/report.css``; no colours are hardcoded here.
     """
+
+    def __init__(self, prefix: str = "") -> None:
+        self._prefix = prefix
+
+    def _id_header(self) -> str:
+        """Return the column header label for the finding ID column."""
+        return f"{self._prefix}-ID" if self._prefix else "ID"
 
     # ------------------------------------------------------------------ #
     # 6.2 — Master Findings Table
     # ------------------------------------------------------------------ #
 
-    @staticmethod
     def build_master_table(
+        self,
         code_findings: list[dict[str, Any]],
         nmap_findings: list[dict[str, Any]],
     ) -> str:
@@ -189,7 +198,7 @@ class FindingsBuilder:
         HTML (the template does not provide headings for this slot).
 
         Args:
-            code_findings: Pre-sorted, TAL-ID-assigned non-network findings.
+            code_findings: Pre-sorted, finding-ID-assigned non-network findings.
             nmap_findings: All nmap findings (no triage filter).
 
         Returns:
@@ -205,7 +214,7 @@ class FindingsBuilder:
             parts.append("<table>")
             parts.append(
                 "<thead><tr>"
-                "<th>TAL-ID</th><th>Title</th>"
+                f"<th>{self._id_header()}</th><th>Title</th>"
                 "<th>Severity</th><th>Status</th><th>Confidence</th>"
                 "</tr></thead><tbody>"
             )
@@ -244,7 +253,7 @@ class FindingsBuilder:
         """Return HTML for per-finding detail cards grouped by repo.
 
         Args:
-            code_findings: Pre-sorted, TAL-ID-assigned non-network findings.
+            code_findings: Pre-sorted, finding-ID-assigned non-network findings.
 
         Returns:
             HTML string of grouped finding cards.
@@ -362,15 +371,16 @@ class FindingsBuilder:
     # Appendix — Comprehensive Code Findings
     # ------------------------------------------------------------------ #
 
-    @staticmethod
-    def build_comprehensive_code_table(code_findings: list[dict[str, Any]]) -> str:
+    def build_comprehensive_code_table(
+        self, code_findings: list[dict[str, Any]]
+    ) -> str:
         """Return HTML for the comprehensive code findings appendix table.
 
-        Columns: TAL-ID | OWASP Name | Severity | Confidence | Repo | File Path
+        Columns: Finding ID | OWASP Name | Severity | Confidence | Repo | File Path
         | Line Number.
 
         Args:
-            code_findings: Pre-sorted, TAL-ID-assigned non-network findings.
+            code_findings: Pre-sorted, finding-ID-assigned non-network findings.
 
         Returns:
             HTML string of the detail table.
@@ -390,7 +400,7 @@ class FindingsBuilder:
         parts: list[str] = [
             "<table>",
             "<thead><tr>"
-            "<th>TAL-ID</th><th>OWASP Name</th><th>Severity</th>"
+            f"<th>{self._id_header()}</th><th>OWASP Name</th><th>Severity</th>"
             "<th>Confidence</th><th>Repo</th><th>File Path</th><th>Line</th>"
             "</tr></thead><tbody>",
         ]
@@ -446,10 +456,10 @@ class FindingsBuilder:
 
     @staticmethod
     def _build_network_table(nmap_findings: list[dict[str, Any]]) -> str:
-        """Build a host-grouped network findings table with in-memory TAL-IDs.
+        """Build a host-grouped network findings table with in-memory NW-IDs.
 
         One row per host; ports and services are aggregated across all findings
-        for that host.  TAL-IDs (``NW-001``, ``NW-002``, …) are assigned here
+        for that host.  NW-IDs (``NW-001``, ``NW-002``, …) are assigned here
         and are not persisted to the database.
         """
         if not nmap_findings:
@@ -464,7 +474,7 @@ class FindingsBuilder:
         parts: list[str] = [
             "<table>",
             "<thead><tr>"
-            "<th>TAL-ID</th><th>Host (IP)</th><th>Open Ports</th><th>Services</th>"
+            "<th>NW-ID</th><th>Host (IP)</th><th>Open Ports</th><th>Services</th>"
             "</tr></thead><tbody>",
         ]
         for i, host in enumerate(sorted(host_groups), start=1):

@@ -29,6 +29,7 @@ _HELP_REGISTRY = [
     # Project Management
     ("project", None, None, "Project Management"),
     ("project", "project add", None, "Create a new project (interactive)"),
+    ("project", "project edit", "[<name>]", "Edit project settings (interactive)"),
     (
         "project",
         "project switch",
@@ -139,12 +140,6 @@ _HELP_REGISTRY = [
         "report assemble",
         None,
         "Assemble full PDF with LLM drafts and all findings",
-    ),
-    (
-        "report",
-        "report assemble",
-        "--company <name>",
-        "Set the client company name on the report",
     ),
     (
         "report",

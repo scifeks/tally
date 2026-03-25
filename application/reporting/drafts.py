@@ -193,7 +193,7 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
 
         entries: list[str] = []
         for f in findings:
-            tal_id = f.get("tal_id") or "(no TAL-ID)"
+            tal_id = f.get("tal_id") or "(no finding ID)"
             severity = (f.get("severity") or "").capitalize()
             confidence = (f.get("confidence") or "").capitalize()
             description = f.get("description") or "(no description)"
@@ -201,7 +201,7 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
             tool = f.get("tool") or ""
 
             lines = [
-                f"TAL-ID: {tal_id}",
+                f"Finding ID: {tal_id}",
                 f"Severity: {severity} | Confidence: {confidence}",
             ]
             if tool:
@@ -213,6 +213,8 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
 
         findings_block = "\n\n".join(entries)
 
+        prefix = ctx.get("finding_id_prefix", "")
+        example_id = f"{prefix}-001" if prefix else "001"
         return (
             "You are writing the critical issues section of a professional"
             " security assessment report.\n\n"
@@ -220,7 +222,7 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
             " by severity then confidence:\n\n"
             f"{findings_block}\n\n"
             "Write a brief narrative describing each finding. For each:\n"
-            "- Begin with a reference to its TAL-ID (e.g. TAL-001).\n"
+            f"- Begin with a reference to its finding ID (e.g. {example_id}).\n"
             "- Describe what the issue is and why it matters to the business"
             " in 1-2 sentences.\n"
             "- Do not include technical detail, remediation steps, or"
@@ -266,7 +268,7 @@ class ImprovementPointsGenerator(SectionDraftGenerator):
             "- Each theme must be 2-3 sentences.\n"
             "- Themes must be specific to the patterns listed above, not"
             " generic security advice.\n"
-            "- Do not reference specific tool names, rule IDs, or TAL-IDs.\n\n"
+            "- Do not reference specific tool names, rule IDs, or finding IDs.\n\n"
             "Format: a brief heading for each theme followed by 2-3 sentences"
             " of description.\n\n"
             "Write only the improvement themes."

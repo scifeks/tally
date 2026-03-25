@@ -42,13 +42,14 @@ class ReportCommand:
     # ------------------------------------------------------------------
 
     def _cmd_assemble(self, args: list[str]) -> None:
-        """report assemble [--company <name>] [--testing-type <type>]
+        """report assemble [--testing-type <type>]
                            [--engagement-date <YYYY-MM-DD>] [--output <path>]
 
         Assembles the full PDF report with all findings content populated.
-        TAL-IDs are reset and reassigned at the start of every run.
+        Finding IDs are reset and reassigned at the start of every run.
         Draft/reviewed sections are resolved as in 'report shell'.
 
+        Company name is read from the active project's configuration.
         Testing types: white_box, grey_box, black_box (default: white_box).
         Default output: projects/<project>/report/<project>-report.pdf.
         """
@@ -56,12 +57,10 @@ class ReportCommand:
         from application.reporting.pdf import PDFRenderError
         from application.reporting.resolver import SectionMissingError
 
-        company, args = self._parse_value_flag(args, "--company")
         testing_type, args = self._parse_value_flag(args, "--testing-type")
         engagement_date, args = self._parse_value_flag(args, "--engagement-date")
         output_path, args = self._parse_value_flag(args, "--output")
 
-        company = company or "[Company Name]"
         testing_type = testing_type or "white_box"
 
         if not self.repl.active_project:
@@ -92,7 +91,6 @@ class ReportCommand:
         assembler = ReportAssembler(
             project=self.repl.active_project,
             base_path=self.repl.base_path,
-            company_name=company,
             testing_type=testing_type,
             engagement_date=engagement_date,
         )
@@ -214,13 +212,14 @@ class ReportCommand:
             )
 
     def _cmd_shell(self, args: list[str]) -> None:
-        """report shell [--company <name>] [--testing-type <type>]
+        """report shell [--testing-type <type>]
                         [--engagement-date <YYYY-MM-DD>] [--output <path>]
 
         Generates a shell PDF with all section placeholders in place.
         LLM-drafted sections are resolved from the project's draft/reviewed
         directories; Segment 4/5 placeholders are left empty.
 
+        Company name is read from the active project's configuration.
         Useful for visually inspecting layout, typography, and CSS before
         Segment 4/5 content is wired in.
 
@@ -233,12 +232,10 @@ class ReportCommand:
         from application.reporting.pdf import PDFRenderError
         from application.reporting.resolver import SectionMissingError
 
-        company, args = self._parse_value_flag(args, "--company")
         testing_type, args = self._parse_value_flag(args, "--testing-type")
         engagement_date, args = self._parse_value_flag(args, "--engagement-date")
         output_path, args = self._parse_value_flag(args, "--output")
 
-        company = company or "[Company Name]"
         testing_type = testing_type or "white_box"
         output_path = output_path or "/tmp/tally_shell_report.pdf"
 
@@ -252,7 +249,6 @@ class ReportCommand:
         assembler = ReportAssembler(
             project=self.repl.active_project,
             base_path=self.repl.base_path,
-            company_name=company,
             testing_type=testing_type,
             engagement_date=engagement_date,
         )

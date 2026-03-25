@@ -99,8 +99,15 @@ class InteractiveProjectWizard:
 
             repositories = self._interview_repositories()
 
+            print("\nProject details:\n")
+            company_name = self._interview_company_name()
+            department_name = self._interview_department_name()
+            abbreviation = self._interview_abbreviation()
+
             self._manager.create_project_dirs(name)
-            self._manager.save_project(name, repositories)
+            self._manager.save_project(
+                name, repositories, company_name, department_name, abbreviation
+            )
 
             count = len(repositories)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
@@ -290,6 +297,32 @@ class InteractiveProjectWizard:
             print("\n\n[Cancelled]")
             return None
 
+    def _interview_company_name(self) -> str:
+        """Prompt for a required company name."""
+        while True:
+            val = _prompt("  Company Name")
+            if val:
+                return val
+            print("  Company Name is required.")
+
+    def _interview_department_name(self) -> str:
+        """Prompt for an optional department name."""
+        return _prompt("  Department Name (optional)")
+
+    def _interview_abbreviation(self) -> str:
+        """Prompt for an optional project abbreviation (max 3 chars)."""
+        while True:
+            val = _prompt(
+                "  Abbreviation"
+                " (max 3 chars, used as finding prefix e.g. FOO-001, optional)"
+            )
+            if not val:
+                return ""
+            if len(val) > 3:
+                print("  Abbreviation must be 3 characters or fewer.")
+                continue
+            return val
+
     def _interview_project_name(self) -> str | None:
         while True:
             name = _prompt("Project name")
@@ -305,6 +338,78 @@ class InteractiveProjectWizard:
             if name in self._manager.list_projects():
                 raise ValueError(f"Project '{name}' already exists.")
             return name
+
+    def edit_project(self, project_name: str) -> bool:
+        """Interactively edit project-level fields for *project_name*.
+
+        Covers: company_name (required), department_name (optional),
+        abbreviation (optional, max 3 chars).  Repositories are managed
+        separately via ``repo add / edit / delete``.
+
+        Returns:
+            True on success, False if the user cancelled.
+
+        Raises:
+            ValueError: if the project does not exist.
+        """
+        config = self._manager.config.load_project_config(project_name)
+        if config is None:
+            raise ValueError(f"Project '{project_name}' not found.")
+
+        print(
+            f"\nEditing project '{project_name}'"
+            " (press Enter to keep current value)...\n"
+        )
+        try:
+            # Company Name — required
+            while True:
+                val = _prompt("  Company Name", default=config.company_name)
+                if val:
+                    company_name = val
+                    break
+                print("  Company Name is required.")
+
+            # Department Name — optional
+            department_name = _prompt(
+                "  Department Name (optional)", default=config.department_name
+            )
+
+            # Abbreviation — keep / replace / clear
+            current_abbrev = config.abbreviation
+            if current_abbrev:
+                hint = (
+                    f"  Abbreviation [current: {current_abbrev},"
+                    " enter --clear to remove]"
+                )
+            else:
+                hint = (
+                    "  Abbreviation"
+                    " (max 3 chars, used as finding prefix e.g. FOO-001, optional)"
+                )
+            while True:
+                val = _prompt(hint)
+                if val == "--clear":
+                    abbreviation = ""
+                    break
+                if not val:
+                    abbreviation = current_abbrev  # keep existing
+                    break
+                if len(val) > 3:
+                    print("  Abbreviation must be 3 characters or fewer.")
+                    continue
+                abbreviation = val
+                break
+
+            config.company_name = company_name
+            config.department_name = department_name
+            config.abbreviation = abbreviation
+            self._manager.config.save_project_config(project_name, config)
+            print(f"\n✓ Project '{project_name}' updated")
+            return True
+
+        except KeyboardInterrupt:
+            print("\n\n[Cancelled]")
+            return False
 
     def _interview_repositories(self) -> list[Repository]:
         repositories: list[Repository] = []

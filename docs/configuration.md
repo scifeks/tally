@@ -38,6 +38,7 @@ that references it.
 | `ollama_embedding` | object | — | Ollama embedding settings. Required when `embedding_provider` is `"ollama_embedding"`. |
 | `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"`. |
 | `projects_dir` | string | `"./projects"` | Directory where project workspaces are stored. |
+| `report_finding_prefix` | string | `"TAL"` | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. |
 | `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
 | `enrichment_max_concurrency` | int | `4` | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). |
 
@@ -85,6 +86,7 @@ that references it.
     "timeout_seconds": 60
   },
   "projects_dir": "./projects",
+  "report_finding_prefix": "TAL",
   "location_attestation_confirmed": false
 }
 ```
@@ -118,6 +120,7 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
     "timeout_seconds": 60
   },
   "projects_dir": "./projects",
+  "report_finding_prefix": "TAL",
   "location_attestation_confirmed": false
 }
 ```
@@ -172,6 +175,7 @@ Ollama instance runs on a different host or port:
     "timeout_seconds": 60
   },
   "projects_dir": "./projects",
+  "report_finding_prefix": "TAL",
   "location_attestation_confirmed": false
 }
 ```
@@ -195,6 +199,9 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 |---|---|---|---|
 | `project_name` | string | yes | The project name as entered on creation. |
 | `created` | string | yes | ISO 8601 timestamp of when the project was created. |
+| `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. |
+| `department_name` | string | no | Optional department or team name, stored for reference. |
+| `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` → `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
 | `repositories` | array | no | List of repository objects (mirrors repositories.json). |
 
 #### Example
@@ -203,6 +210,9 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 {
   "project_name": "acme-security-audit",
   "created": "2024-01-14T10:23:45.123456+00:00",
+  "company_name": "Acme Corp",
+  "department_name": "Engineering",
+  "abbreviation": "ACM",
   "repositories": []
 }
 ```

@@ -110,21 +110,22 @@ By default the PDF is written to `projects/<project>/reports/<project>-report.pd
 
 | Argument | Description |
 |---|---|
-| `--company <name>` | Client company name shown in the confidentiality blurb (default: `[Company Name]`) |
 | `--testing-type <type>` | Engagement type: `white_box` (default), `grey_box`, or `black_box` |
 | `--engagement-date <YYYY-MM-DD>` | Engagement date shown in the report (defaults to the project creation date) |
 | `--output <path>` | Write the PDF to a specific file path |
 
+The company name shown in the report is read from the project's `company_name` field. Set it with `project add` (during creation) or `project edit` (afterwards).
+
 #### Examples
 
 ```
-[acme-audit]> report assemble --company "Acme Corp"
+[acme-audit]> report assemble
 
-[acme-audit]> report assemble --company "Acme Corp" --testing-type grey_box
+[acme-audit]> report assemble --testing-type grey_box
 
-[acme-audit]> report assemble --company "Acme Corp" --engagement-date 2025-03-01
+[acme-audit]> report assemble --engagement-date 2025-03-01
 
-[acme-audit]> report assemble --company "Acme Corp" --output /tmp/acme-final.pdf
+[acme-audit]> report assemble --output /tmp/acme-final.pdf
 ```
 
 You can also trigger assembly through `report --format=pdf`:
@@ -147,7 +148,6 @@ This command is intended for developers customizing the report's visual appearan
 
 | Argument | Description |
 |---|---|
-| `--company <name>` | Client company name (default: `[Company Name]`) |
 | `--testing-type <type>` | Engagement type: `white_box` (default), `grey_box`, `black_box` |
 | `--engagement-date <YYYY-MM-DD>` | Engagement date (defaults to the project creation date) |
 | `--output <path>` | Write the shell PDF to a specific path (default: `/tmp/tally_shell_report.pdf`) |
@@ -159,7 +159,7 @@ This command is intended for developers customizing the report's visual appearan
 
 [acme-audit]> report shell --output /tmp/layout-check.pdf
 
-[acme-audit]> report shell --company "Acme Corp" --testing-type black_box
+[acme-audit]> report shell --testing-type black_box
 ```
 
 ---
