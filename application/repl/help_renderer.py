@@ -113,12 +113,23 @@ _HELP_REGISTRY = [
     ("knowledge", None, None, "Knowledge Base"),
     ("knowledge", "chat", "<message>", "RAG-augmented chat with the LLM"),
     ("knowledge", "stats", None, "Show knowledge base statistics"),
-    ("knowledge", "purge", None, "Delete findings from the knowledge base"),
+    (
+        "knowledge",
+        "purge",
+        None,
+        "Delete ALL findings, tool outputs, and reports",
+    ),
     (
         "knowledge",
         "purge",
         "--tool=<tool,...>",
-        "Limit deletion to the specified tool(s). Comma-separated.",
+        "Limit deletion to that tool only (reports unaffected). Comma-separated.",
+    ),
+    (
+        "knowledge",
+        "purge",
+        "--keep-reports",
+        "Skip deleting generated reports (full purge only).",
     ),
     # Report
     ("report", None, None, "Report"),

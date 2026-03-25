@@ -155,9 +155,9 @@ def test_scan_command_rows_exact():
 
 
 def test_purge_command_rows_exact():
-    """purge command rows: no-arg + --tool= (in order)."""
+    """purge command rows: no-arg + --tool= + --keep-reports (in order)."""
     purge_args = [arg for _, cmd, arg, _ in _HELP_REGISTRY if cmd == "purge"]
-    assert purge_args == [None, "--tool=<tool,...>"]
+    assert purge_args == [None, "--tool=<tool,...>", "--keep-reports"]
 
 
 # ---------------------------------------------------------------------------
