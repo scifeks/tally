@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
+from application.rag.engine import RAGEngine
 from infrastructure.store.connection import ConnectionFactory
 from web.api.findings import router as findings_router
 from web.api.projects import router as projects_router
@@ -59,10 +60,18 @@ def create_app(base_path: str, project_name: str, token: str) -> FastAPI:
     db_path = Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
     factory = ConnectionFactory(db_path)
 
+    rag_engine: RAGEngine | None
+    try:
+        rag_engine = RAGEngine(project_name=project_name, base_path=base_path)
+    except Exception as exc:
+        logger.warning("RAGEngine init failed — Chroma sync will be disabled: %s", exc)
+        rag_engine = None
+
     app.state.base_path = base_path
     app.state.project_name = project_name
     app.state.token = token
     app.state.connection_factory = factory
+    app.state.rag_engine = rag_engine
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists():

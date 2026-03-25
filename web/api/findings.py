@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from infrastructure.store import FindingRepository
+from web.api.chroma_sync import sync_finding_to_chroma
 from web.api.schemas import FindingPatchRequest
 
 router = APIRouter()
@@ -107,7 +108,7 @@ _META_FIELD_MAP: dict[str, str] = {
 
 
 @router.patch("/{finding_id}")
-def patch_finding(
+async def patch_finding(
     request: Request,
     finding_id: int,
     body: FindingPatchRequest,
@@ -120,12 +121,14 @@ def patch_finding(
     every successful write.
 
     Returns the updated finding on success, or 404 if not found.
-    Chroma sync is NOT performed in this step (deferred to Prompt 03).
+    After the SQLite write, performs a best-effort ChromaDB metadata
+    sync — the response is 200 regardless of sync outcome.
     """
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
 
     raw = body.model_dump(exclude_none=True)
+    changed_fields: set[str] = set(raw.keys())
 
     fields: dict[str, Any] = {}
     for k, v in raw.items():
@@ -147,4 +150,9 @@ def patch_finding(
     row = repo.get_finding(finding_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Finding not found")
-    return _serialise_finding(row)
+
+    serialised = _serialise_finding(row)
+    await sync_finding_to_chroma(
+        serialised, changed_fields, request.app.state.rag_engine
+    )
+    return serialised
