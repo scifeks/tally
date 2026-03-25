@@ -158,8 +158,7 @@ class ReportAssembler:
         filtered = query_svc.get_filtered_findings()
         sev_counts = query_svc.severity_distribution(filtered)
         chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
-        # Bundle chart + severity definitions blurb as one unit per prompt spec.
-        vuln_distribution_chart_html = chart_html + severity_definitions_html
+        vuln_distribution_chart_html = chart_html
 
         # -- Segment 4: attack surface overview ---------------------------
         attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
