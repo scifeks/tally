@@ -37,5 +37,33 @@ echo "  Installing dependencies from requirements.txt..."
 echo "  v Dependencies installed"
 
 echo ""
+echo "Building frontend..."
+
+# Check for Node and npm
+if ! command -v node >/dev/null 2>&1; then
+    echo "ERROR: 'node' is not installed. Node.js is required to build the web UI."
+    echo "Install Node.js from https://nodejs.org/ and re-run install.sh."
+    exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+    echo "ERROR: 'npm' is not installed. npm is required to build the web UI."
+    echo "Install Node.js (which includes npm) and re-run install.sh."
+    exit 1
+fi
+
+# Save current directory and switch to ui/
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/ui"
+
+npm install
+npm run build
+
+# Return to original directory
+cd "$SCRIPT_DIR"
+
+echo "Frontend build complete. Static files written to web/static/."
+
+echo ""
 echo "Setup complete."
 echo "Run tally with: .venv/bin/python3 tally.py"
