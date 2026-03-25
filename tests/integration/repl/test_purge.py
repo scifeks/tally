@@ -326,3 +326,176 @@ def test_purge_old_syntax_rejected(tmp_path: Path) -> None:
     assert mock_input.call_count == 0
     printed = " ".join(str(c) for c in repl.console.print.call_args_list)
     assert "--tool=" in printed or "equals sign" in printed
+
+
+# ---------------------------------------------------------------------------
+# Report deletion
+# ---------------------------------------------------------------------------
+
+
+def _make_reports_dir(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Create a reports/ dir with a draft subdir and a PDF file. Return paths."""
+    proj_dir = tmp_path / "projects" / "testproj"
+    reports_dir = proj_dir / "reports"
+    draft_dir = reports_dir / "draft"
+    draft_dir.mkdir(parents=True)
+    pdf_file = reports_dir / "report.pdf"
+    pdf_file.write_text("pdf content")
+    md_file = draft_dir / "executive-summary.md"
+    md_file.write_text("draft content")
+    return reports_dir, pdf_file, md_file
+
+
+def test_full_purge_deletes_reports(tmp_path: Path) -> None:
+    reports_dir, pdf_file, md_file = _make_reports_dir(tmp_path)
+
+    _run_purge([], tmp_path=tmp_path)
+
+    assert not pdf_file.exists()
+    assert not md_file.exists()
+    assert not (reports_dir / "draft").exists()
+    assert reports_dir.exists()
+
+
+def test_keep_reports_skips_report_deletion(tmp_path: Path) -> None:
+    reports_dir, pdf_file, md_file = _make_reports_dir(tmp_path)
+
+    _run_purge(["--keep-reports"], tmp_path=tmp_path)
+
+    assert pdf_file.exists()
+    assert md_file.exists()
+
+
+def test_tool_purge_does_not_delete_reports(tmp_path: Path) -> None:
+    reports_dir, pdf_file, md_file = _make_reports_dir(tmp_path)
+    # Also create a tool_outputs/nmap dir so the purge has something to clean
+    nmap_dir = tmp_path / "projects" / "testproj" / "tool_outputs" / "nmap"
+    nmap_dir.mkdir(parents=True)
+    (nmap_dir / "scan.stdout").write_text("data")
+
+    _run_purge(["--tool=nmap"], tmp_path=tmp_path)
+
+    assert pdf_file.exists()
+    assert md_file.exists()
+
+
+def test_full_purge_missing_reports_dir_does_not_raise(tmp_path: Path) -> None:
+    proj_dir = tmp_path / "projects" / "testproj"
+    proj_dir.mkdir(parents=True)
+    # No reports/ dir created — should not crash
+    _run_purge([], tmp_path=tmp_path)
+
+
+def test_full_purge_confirmation_mentions_reports(tmp_path: Path) -> None:
+    repl = MagicMock()
+    repl.active_project = "testproj"
+    repl.base_path = str(tmp_path)
+    repl.console = MagicMock()
+    engine = _make_rag_engine(3)
+    cmd = PurgeCommand(repl)
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", return_value="n"),
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", [])
+    prompt_calls = [str(c) for c in repl.console.print.call_args_list]
+    assert any("reports" in c.lower() for c in prompt_calls)
+
+
+def test_keep_reports_confirmation_omits_reports(tmp_path: Path) -> None:
+    repl = MagicMock()
+    repl.active_project = "testproj"
+    repl.base_path = str(tmp_path)
+    repl.console = MagicMock()
+    engine = _make_rag_engine(3)
+    cmd = PurgeCommand(repl)
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", return_value="n"),
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", ["--keep-reports"])
+    prompt_calls = [str(c) for c in repl.console.print.call_args_list]
+    assert not any("reports" in c.lower() for c in prompt_calls)
+
+
+# ---------------------------------------------------------------------------
+# Multi-source empty check (bug: purge after --keep-reports was used)
+# ---------------------------------------------------------------------------
+
+
+def test_purge_proceeds_when_only_reports_exist(tmp_path: Path) -> None:
+    """purge must proceed when ChromaDB is empty but report files exist."""
+    proj_dir = tmp_path / "projects" / "testproj"
+    reports_dir = proj_dir / "reports"
+    reports_dir.mkdir(parents=True)
+    pdf = reports_dir / "report.pdf"
+    pdf.write_text("pdf")
+
+    repl = _make_repl(tmp_path)
+    cmd = PurgeCommand(repl)
+    engine = _make_rag_engine(0)
+    engine.count_documents.return_value = 0
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", return_value="y") as mock_input,
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", [])
+
+    mock_input.assert_called_once()
+    assert not pdf.exists()
+    printed = " ".join(str(c) for c in repl.console.print.call_args_list)
+    assert "Nothing to purge" not in printed
+
+
+def test_purge_nothing_to_purge_when_all_sources_empty(tmp_path: Path) -> None:
+    """No prompt and 'Nothing to purge.' message when all sources are empty."""
+    proj_dir = tmp_path / "projects" / "testproj"
+    proj_dir.mkdir(parents=True)
+
+    repl = _make_repl(tmp_path)
+    cmd = PurgeCommand(repl)
+    engine = _make_rag_engine(0)
+    engine.count_documents.return_value = 0
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", return_value="y") as mock_input,
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", [])
+
+    mock_input.assert_not_called()
+    engine.delete_findings.assert_not_called()
+    printed = " ".join(str(c) for c in repl.console.print.call_args_list)
+    assert "Nothing to purge" in printed
+
+
+def test_purge_proceeds_when_only_tool_outputs_exist(tmp_path: Path) -> None:
+    """purge must proceed when ChromaDB is empty but tool output files exist."""
+    nmap_dir = tmp_path / "projects" / "testproj" / "tool_outputs" / "nmap"
+    nmap_dir.mkdir(parents=True)
+    scan_file = nmap_dir / "scan.stdout"
+    scan_file.write_text("data")
+
+    repl = _make_repl(tmp_path)
+    cmd = PurgeCommand(repl)
+    engine = _make_rag_engine(0)
+    engine.count_documents.return_value = 0
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", return_value="y") as mock_input,
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", [])
+
+    mock_input.assert_called_once()
+    assert not scan_file.exists()
+    printed = " ".join(str(c) for c in repl.console.print.call_args_list)
+    assert "Nothing to purge" not in printed

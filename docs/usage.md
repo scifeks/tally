@@ -481,14 +481,17 @@ View a summary of what has been ingested:
 Remove findings from the knowledge base when you want to re-scan cleanly.
 
 ```
-# Delete all findings from a specific tool
+# Delete findings from a specific tool (reports and other tools unaffected)
 [acme-security-audit]> purge --tool=semgrep
 
 # Delete findings from multiple tools (comma-separated)
 [acme-security-audit]> purge --tool=semgrep,gitleaks
 
-# With no flags, deletes ALL findings and clears all tool output files
+# Full purge: deletes ALL findings, tool output files, and generated reports
 [acme-security-audit]> purge
+
+# Full purge but keep generated reports
+[acme-security-audit]> purge --keep-reports
 ```
 
 Tally shows a count and prompts for confirmation before deleting:
@@ -497,6 +500,10 @@ Tally shows a count and prompts for confirmation before deleting:
 Found 18 document(s). Delete all semgrep findings? [y/N] y
 Deleted 18 document(s).
 ```
+
+A full `purge` also clears the project `reports/` directory (including any LLM
+drafts). Use `--keep-reports` to preserve those files. Reports can be
+regenerated at any time with `report draft` and `report`.
 
 ---
 

@@ -98,7 +98,9 @@ report
 | `search [--flags...]` | Structured search over ingested findings (`search --help` for options) |
 | `chat <message>` | RAG-augmented chat with the LLM                                        |
 | `stats` | Show knowledge base statistics                                         |
-| `purge --tool=<tool,...>` | Delete findings from one or more tools (comma-separated)               |
+| `purge` | Delete ALL findings, tool outputs, and reports |
+| `purge --tool=<tool,...>` | Delete findings for specific tool(s) only — reports unaffected |
+| `purge --keep-reports` | Delete all findings and tool outputs but keep generated reports |
 
 ### Triage
 
