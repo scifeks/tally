@@ -166,6 +166,7 @@ class KnowledgeCommands:
 
         last_updated = stats.get("last_updated")
         if last_updated:
+            table.add_section()
             table.add_row("Last Updated", last_updated[:19].replace("T", " "))
 
         self.repl.console.print(table)
