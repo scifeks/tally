@@ -17,6 +17,8 @@ dependencies = [
     "mcp>=1.0",
     "weasyprint",
     "jinja2>=3.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.29",
 ]
 
 [project.optional-dependencies]

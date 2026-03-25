@@ -61,3 +61,5 @@ MagicMock
 
 #Claude MCP stuff
 .claude/
+
+tmp/
