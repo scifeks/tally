@@ -39,6 +39,8 @@ class ProjectCommands:
             self.cmd_project_info(_cmd, args[1:])
         elif sub == "delete":
             self.cmd_delete_project(_cmd, args[1:])
+        elif sub == "edit":
+            self.cmd_edit_project(_cmd, args[1:])
         else:
             self.repl.console.print(
                 f"[red]Unknown subcommand:[/red] project {sub}\n"
@@ -150,6 +152,26 @@ class ProjectCommands:
                 "[yellow]Active project cleared. Use 'project add' or "
                 "'project switch' to set a new one.[/yellow]"
             )
+
+    def cmd_edit_project(self, _cmd: str, args: list[str]) -> None:
+        """project edit [<name>] — edit project-level settings interactively.
+
+        If <name> is omitted and there is an active project, edits that project.
+        """
+        if args:
+            project_name = args[0]
+        elif self.repl.active_project:
+            project_name = self.repl.active_project
+        else:
+            self.repl.console.print(
+                "[yellow]No active project. "
+                "Use 'project edit <name>' or switch to a project first.[/yellow]"
+            )
+            return
+        try:
+            self.repl.wizard.edit_project(project_name)
+        except ValueError as exc:
+            self.repl.console.print(f"[red]{exc}[/red]")
 
     def cmd_add_repo(self, _cmd: str, _args: list[str]) -> None:
         """Add a repository to the current project."""

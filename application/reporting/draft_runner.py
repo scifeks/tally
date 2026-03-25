@@ -10,6 +10,7 @@ from application.reporting.blurbs import load_blurb
 from application.reporting.draft_query import DraftQueryService
 from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.risk_level import compute_risk_level
+from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from core.llm.factory import get_llm_provider
 from infrastructure.store import make_store
@@ -31,15 +32,17 @@ def generate_draft(
     base_path: str | Path,
     console: Console,
     force: bool = False,
+    skip_triage: bool = False,
 ) -> None:
     """Generate a draft file for the named section.
 
     Args:
-        section:   One of the registered section names.
-        project:   Active project name.
-        base_path: Application root path.
-        console:   Rich Console for user output.
-        force:     Skip overwrite confirmation if True.
+        section:      One of the registered section names.
+        project:      Active project name.
+        base_path:    Application root path.
+        console:      Rich Console for user output.
+        force:        Skip overwrite confirmation if True.
+        skip_triage:  If True, include all findings regardless of triage status.
     """
     if section not in SECTION_REGISTRY:
         valid = ", ".join(get_all_sections())
@@ -75,13 +78,18 @@ def generate_draft(
 
     _, finding_repo, _, _ = make_store(base_path, project)
     query = DraftQueryService(finding_repo)
-    findings = query.get_filtered_findings()
+    findings = query.get_filtered_findings(skip_triage=skip_triage)
 
     if not findings:
-        console.print(
-            "[yellow]No triaged findings with should_report=1 found.[/yellow]"
-            " Run triage before generating drafts."
-        )
+        if skip_triage:
+            console.print(
+                "[yellow]No findings in the database.[/yellow] Run a scan first."
+            )
+        else:
+            console.print(
+                "[yellow]No triaged findings with should_report=1 found.[/yellow]"
+                " Run triage before generating drafts."
+            )
         return
 
     sev_dist = query.severity_distribution(findings)
@@ -94,6 +102,15 @@ def generate_draft(
     project_name = project_cfg.project_name if project_cfg else project
     engagement_date = project_cfg.created[:10] if project_cfg else ""
     repos = [r.name for r in project_cfg.repositories] if project_cfg else []
+    prefix = resolve_prefix(
+        project_cfg.abbreviation if project_cfg else "",
+        config.global_config.report_finding_prefix,
+    )
+
+    # Assign provisional finding IDs in memory so draft sections (e.g.
+    # critical-issues) can reference them.  Assembly will re-assign and
+    # persist the final IDs when the PDF is built.
+    findings = assign_tal_ids(findings, prefix=prefix)
 
     context = _build_context(
         section=section,
@@ -107,6 +124,7 @@ def generate_draft(
         engagement_date=engagement_date,
         repos=repos,
         draft_dir=draft_dir,
+        prefix=prefix,
     )
 
     with console.status(f"Generating {section}..."):
@@ -128,6 +146,7 @@ def _build_context(
     engagement_date: str,
     repos: list[str],
     draft_dir: Path,
+    prefix: str = "",
 ) -> dict[str, Any]:
     """Assemble the context dict for the given section."""
     base: dict[str, Any] = {
@@ -140,6 +159,7 @@ def _build_context(
         "risk_counts": risk_counts,
         "risk_level": risk_level,
         "max_enumerate": 20,
+        "finding_id_prefix": prefix,
     }
 
     if section in ("executive-summary", "risk-level"):

@@ -14,7 +14,7 @@ from application.reporting.draft_query import DraftQueryService, _parse_meta
 from application.reporting.findings_builder import _SEVERITY_ORDER, FindingsBuilder
 from application.reporting.pdf import get_pdf_renderer
 from application.reporting.resolver import DraftResolver
-from application.reporting.tal_id import assign_tal_ids
+from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from domain.reporting.context import ReportContext
 from infrastructure.store import make_store
@@ -77,7 +77,6 @@ class ReportAssembler:
     Args:
         project:         Active project name.
         base_path:       Application root (the directory containing ``projects/``).
-        company_name:    Client company name for the confidentiality blurb.
         testing_type:    One of ``"white_box"``, ``"grey_box"``, ``"black_box"``.
         engagement_date: ISO date string (``YYYY-MM-DD``).  If *None*, falls back
                          to the project creation date from ``ProjectConfig``.
@@ -87,13 +86,11 @@ class ReportAssembler:
         self,
         project: str,
         base_path: str | Path,
-        company_name: str,
         testing_type: str = "white_box",
         engagement_date: str | None = None,
     ) -> None:
         self._project = project
         self._base_path = Path(base_path)
-        self._company_name = company_name
         self._testing_type = testing_type
         self._engagement_date = engagement_date
 
@@ -117,7 +114,8 @@ class ReportAssembler:
             SectionMissingError: A required section cannot be resolved.
             ValueError: The project does not exist.
         """
-        config = ConfigManager(str(self._base_path)).load_project_config(self._project)
+        manager = ConfigManager(str(self._base_path))
+        config = manager.load_project_config(self._project)
         if config is None:
             raise ValueError(f"Project {self._project!r} not found.")
 
@@ -125,6 +123,10 @@ class ReportAssembler:
         date_str = self._engagement_date or config.created[:10]
         engagement_type = _TESTING_TYPE_LABELS.get(
             self._testing_type, self._testing_type
+        )
+        company_name = config.company_name or "[Company Name]"
+        prefix = resolve_prefix(
+            config.abbreviation, manager.global_config.report_finding_prefix
         )
 
         resolver = DraftResolver(self._project, self._base_path)
@@ -139,7 +141,7 @@ class ReportAssembler:
         confidentiality_html = resolver.resolve_blurb(
             "confidentiality",
             {
-                "company_name": self._company_name,
+                "company_name": company_name,
                 "engagement_type": engagement_type,
                 "engagement_date": date_str,
             },
@@ -156,13 +158,12 @@ class ReportAssembler:
         filtered = query_svc.get_filtered_findings()
         sev_counts = query_svc.severity_distribution(filtered)
         chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
-        # Bundle chart + severity definitions blurb as one unit per prompt spec.
-        vuln_distribution_chart_html = chart_html + severity_definitions_html
+        vuln_distribution_chart_html = chart_html
 
         # -- Segment 4: attack surface overview ---------------------------
         attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
 
-        # -- Segment 5: TAL-ID assignment ---------------------------------
+        # -- Segment 5: Finding ID assignment ---------------------------------
         nmap_findings = finding_repo.get_all_nmap_findings()
         # Use segment column — no tool-name checks in reporting code.
         code_findings_raw = [f for f in filtered if f.get("segment") != "network"]
@@ -173,16 +174,16 @@ class ReportAssembler:
                 (_parse_meta(f).get("title") or f.get("rule_id") or "").lower(),
             ),
         )
-        code_with_ids = assign_tal_ids(code_sorted)
+        code_with_ids = assign_tal_ids(code_sorted, prefix=prefix)
         finding_repo.reset_tal_ids()
         finding_repo.bulk_update_tal_ids(
             [(f["tal_id"], f["id"]) for f in code_with_ids]
         )
-        logger.info("Assigned %d TAL-IDs to code findings.", len(code_with_ids))
+        logger.info("Assigned %d finding IDs to code findings.", len(code_with_ids))
 
         # -- Segment 5: HTML sections -------------------------------------
         secrets = [f for f in code_with_ids if f.get("segment") == "secrets"]
-        builder = FindingsBuilder()
+        builder = FindingsBuilder(prefix=prefix)
         findings_table_html = builder.build_master_table(code_with_ids, nmap_findings)
         secrets_exposure_html = builder.build_secrets_cards(secrets)
         detailed_findings_html = builder.build_code_cards(code_with_ids)
@@ -191,7 +192,7 @@ class ReportAssembler:
 
         return ReportContext(
             project_name=project_name,
-            company_name=self._company_name,
+            company_name=company_name,
             engagement_date=date_str,
             testing_type=self._testing_type,
             generated_at=datetime.now(UTC).isoformat(),

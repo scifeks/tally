@@ -34,6 +34,8 @@ def _fake_project_config(name: str = "acme") -> Any:
     class FakeConfig:
         project_name: str = name
         created: str = "2026-03-22T12:00:00"
+        company_name: str = "ACME Corp"
+        abbreviation: str = ""
 
     return FakeConfig()
 
@@ -42,7 +44,6 @@ def _make_assembler(tmp_path: Path) -> ReportAssembler:
     return ReportAssembler(
         project="acme",
         base_path=tmp_path,
-        company_name="ACME Corp",
         testing_type="white_box",
         engagement_date="2026-03-22",
     )
@@ -102,6 +103,7 @@ class TestBuildContext:
             mock_cfg.return_value.load_project_config.return_value = (
                 _fake_project_config()
             )
+            mock_cfg.return_value.global_config.report_finding_prefix = "TAL"
             assembler = _make_assembler(tmp_path)
             assembler.build_context()
 
@@ -119,6 +121,7 @@ class TestBuildContext:
             mock_cfg.return_value.load_project_config.return_value = (
                 _fake_project_config()
             )
+            mock_cfg.return_value.global_config.report_finding_prefix = "TAL"
             assembler = _make_assembler(tmp_path)
             assembler.build_context()
 
@@ -157,6 +160,7 @@ class TestBuildContext:
             mock_cfg.return_value.load_project_config.return_value = (
                 _fake_project_config()
             )
+            mock_cfg.return_value.global_config.report_finding_prefix = "TAL"
             assembler = _make_assembler(tmp_path)
             ctx = assembler.build_context()
 
@@ -185,6 +189,7 @@ class TestBuildContext:
             mock_cfg.return_value.load_project_config.return_value = (
                 _fake_project_config()
             )
+            mock_cfg.return_value.global_config.report_finding_prefix = "TAL"
             assembler = _make_assembler(tmp_path)
             with pytest.raises(SectionMissingError):
                 assembler.build_context()
@@ -209,10 +214,10 @@ class TestBuildContext:
             mock_cfg.return_value.load_project_config.return_value = (
                 _fake_project_config()
             )
+            mock_cfg.return_value.global_config.report_finding_prefix = "TAL"
             assembler = ReportAssembler(
                 project="acme",
                 base_path=tmp_path,
-                company_name="ACME Corp",
                 # engagement_date deliberately omitted
             )
             ctx = assembler.build_context()

@@ -2,33 +2,26 @@
 
 Tally's report pipeline generates professional penetration testing reports in two modes: **quick text reports** (Markdown, HTML, or JSON) built directly from the findings database, and a **full PDF report** assembled from LLM-drafted narrative sections and structured findings data.
 
+The `report` command defaults to PDF assembly — the full client-deliverable report.
+
 ---
 
-## Quick Reports
+## Quick Text Reports
 
-Run `report` to generate a structured text report for all findings currently in the knowledge base. The default format is Markdown.
+To generate a structured text report instead of a PDF, pass `--format`:
+
+```
+[acme-audit]> report --format=markdown
+[acme-audit]> report --format=html
+[acme-audit]> report --format=json --output=/tmp/acme-findings.json
+```
 
 ### Arguments
 
-| Argument | Description                                               |
-|---|-----------------------------------------------------------|
-| `--format=<fmt>` | Output format: `markdown` (default), `html`, `json`, `pdf` |
-| `--output=<path>` | Write the report to a specific file path                  |
-
-Both arguments accept either the equals form (`--format=html`) or the space form (`--format html`).
-
-### Examples
-
-```
-[acme-audit]> report
-✓ Report saved: projects/acme-audit/reports/report_2025-03-21_142301.md
-
-[acme-audit]> report --format=html
-✓ Report saved: projects/acme-audit/reports/report_2025-03-21_142312.html
-
-[acme-audit]> report --format=json --output=/tmp/acme-findings.json
-✓ Report saved: /tmp/acme-findings.json
-```
+| Argument | Description |
+|---|---|
+| `--format=<fmt>` | Output format: `pdf` (default), `markdown`, `html`, `json` |
+| `--output=<path>` | Write the report to a specific file path |
 
 When no `--output` path is provided, the file is written to `projects/<project>/reports/` with a timestamp in the filename.
 
@@ -50,6 +43,9 @@ LLM draft generation reads only findings that have been triaged and marked for i
 
 See [docs/mcp.md](mcp.md) for the full triage guide.
 
+If you want to generate drafts before triage is complete (e.g. for development or preview),
+pass `--skip-triage` to `report draft` — see [Step 2](#step-2--generate-llm-drafts) below.
+
 ### Step 2 — Generate LLM drafts
 
 Run `report draft` with no arguments to generate all six report sections in sequence:
@@ -69,6 +65,21 @@ If a draft file already exists, Tally asks before overwriting. Pass `--force` to
 ```
 [acme-audit]> report draft risk-level --force
 ```
+
+To generate drafts without requiring triage (all findings are included regardless of triage
+status):
+
+```
+[acme-audit]> report draft --skip-triage
+```
+
+### `report draft` Arguments
+
+| Argument | Description |
+|---|---|
+| `<section>` | Generate only the named section (omit to generate all six) |
+| `--force` | Overwrite an existing draft without prompting |
+| `--skip-triage` | Include all findings regardless of triage status |
 
 The six sections, in generation order:
 
@@ -98,11 +109,13 @@ During assembly, Tally checks `reviewed/` first. If a reviewed file exists it is
 
 ### Step 4 — Assemble the PDF
 
-Run `report assemble` to produce the final PDF:
+Run `report` to produce the final PDF:
 
 ```
-[acme-audit]> report assemble
+[acme-audit]> report
 ```
+
+If any of the six sections have not been drafted yet, Tally lists the missing sections and instructs you to run `report draft` first.
 
 By default the PDF is written to `projects/<project>/reports/<project>-report.pdf`. If the file already exists, Tally asks before overwriting.
 
@@ -110,36 +123,35 @@ By default the PDF is written to `projects/<project>/reports/<project>-report.pd
 
 | Argument | Description |
 |---|---|
-| `--company <name>` | Client company name shown in the confidentiality blurb (default: `[Company Name]`) |
 | `--testing-type <type>` | Engagement type: `white_box` (default), `grey_box`, or `black_box` |
 | `--engagement-date <YYYY-MM-DD>` | Engagement date shown in the report (defaults to the project creation date) |
 | `--output <path>` | Write the PDF to a specific file path |
 
+The company name shown in the report is read from the project's `company_name` field. Set it with `project add` (during creation) or `project edit` (afterwards).
+
 #### Examples
 
 ```
-[acme-audit]> report assemble --company "Acme Corp"
+[acme-audit]> report
 
-[acme-audit]> report assemble --company "Acme Corp" --testing-type grey_box
+[acme-audit]> report --testing-type grey_box
 
-[acme-audit]> report assemble --company "Acme Corp" --engagement-date 2025-03-01
+[acme-audit]> report --engagement-date 2025-03-01
 
-[acme-audit]> report assemble --company "Acme Corp" --output /tmp/acme-final.pdf
+[acme-audit]> report --output /tmp/acme-final.pdf
 ```
 
-You can also trigger assembly through `report --format=pdf`:
+You can also pass `--format=pdf` explicitly, which is equivalent to the default:
 
 ```
 [acme-audit]> report --format=pdf
 ```
 
-This is equivalent to `report assemble` with no additional arguments.
-
 ---
 
 ## Shell PDF
 
-`report shell` renders a PDF with the same layout and narrative sections as `report assemble` but without any findings content. The attack surface overview, findings tables, and severity charts are replaced with placeholder blocks.
+`report shell` renders a PDF with the same layout and narrative sections as `report` but without any findings content. The attack surface overview, findings tables, and severity charts are replaced with placeholder blocks.
 
 This command is intended for developers customizing the report's visual appearance. Use it when adjusting CSS styles, page layout, typography, or template markup. Because the shell skips database queries for findings content, it renders faster than a full assembly — making it practical to iterate quickly on the visual design.
 
@@ -147,7 +159,6 @@ This command is intended for developers customizing the report's visual appearan
 
 | Argument | Description |
 |---|---|
-| `--company <name>` | Client company name (default: `[Company Name]`) |
 | `--testing-type <type>` | Engagement type: `white_box` (default), `grey_box`, `black_box` |
 | `--engagement-date <YYYY-MM-DD>` | Engagement date (defaults to the project creation date) |
 | `--output <path>` | Write the shell PDF to a specific path (default: `/tmp/tally_shell_report.pdf`) |
@@ -159,7 +170,7 @@ This command is intended for developers customizing the report's visual appearan
 
 [acme-audit]> report shell --output /tmp/layout-check.pdf
 
-[acme-audit]> report shell --company "Acme Corp" --testing-type black_box
+[acme-audit]> report shell --testing-type black_box
 ```
 
 ---

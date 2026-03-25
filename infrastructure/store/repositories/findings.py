@@ -308,6 +308,12 @@ class FindingRepository:
             rows = conn.execute(sql).fetchall()
         return [dict(r) for r in rows]
 
+    def get_all_findings(self) -> list[dict]:
+        """Return all findings with no triage filter."""
+        with self._factory.connect() as conn:
+            rows = conn.execute("SELECT * FROM findings").fetchall()
+        return [dict(r) for r in rows]
+
     def get_all_nmap_findings(self) -> list[dict]:
         """Return all nmap findings with no triage filter.
 

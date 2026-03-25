@@ -70,32 +70,32 @@ def _nmap_finding(**kwargs: Any) -> dict[str, Any]:
 
 class TestBuildMasterTable:
     def test_empty_code_findings_renders_placeholder(self) -> None:
-        html = FindingsBuilder.build_master_table([], [])
+        html = FindingsBuilder().build_master_table([], [])
         assert "placeholder" in html
         assert "No code findings" in html
 
     def test_empty_nmap_findings_renders_placeholder(self) -> None:
-        html = FindingsBuilder.build_master_table([], [])
+        html = FindingsBuilder().build_master_table([], [])
         assert "No network findings" in html
 
     def test_code_finding_tal_id_appears(self) -> None:
-        html = FindingsBuilder.build_master_table([_finding()], [])
+        html = FindingsBuilder().build_master_table([_finding()], [])
         assert "TAL-001" in html
 
     def test_missing_tal_id_renders_dash(self) -> None:
-        html = FindingsBuilder.build_master_table([_finding(tal_id=None)], [])
+        html = FindingsBuilder().build_master_table([_finding(tal_id=None)], [])
         assert "—" in html
 
     def test_recurring_row_gets_css_class(self) -> None:
-        html = FindingsBuilder.build_master_table([_finding(seen_count=3)], [])
+        html = FindingsBuilder().build_master_table([_finding(seen_count=3)], [])
         assert "recurring-row" in html
 
     def test_non_recurring_row_lacks_css_class(self) -> None:
-        html = FindingsBuilder.build_master_table([_finding(seen_count=1)], [])
+        html = FindingsBuilder().build_master_table([_finding(seen_count=1)], [])
         assert "recurring-row" not in html
 
     def test_severity_badge_present(self) -> None:
-        html = FindingsBuilder.build_master_table([_finding(severity="high")], [])
+        html = FindingsBuilder().build_master_table([_finding(severity="high")], [])
         assert "severity-badge" in html
         assert "high" in html
 
@@ -105,9 +105,10 @@ class TestBuildMasterTable:
             _nmap_finding(host="10.0.0.1", port="443"),
             _nmap_finding(host="10.0.0.2", port="22"),
         ]
-        html = FindingsBuilder.build_master_table([], findings)
-        # Two distinct hosts → two rows, each with an NW- TAL-ID.
-        assert html.count("NW-") == 2
+        html = FindingsBuilder().build_master_table([], findings)
+        # Two distinct hosts → two NW-0xx row IDs.
+        assert "NW-001" in html
+        assert "NW-002" in html
         assert "10.0.0.1" in html
         assert "10.0.0.2" in html
 
@@ -116,11 +117,11 @@ class TestBuildMasterTable:
             _nmap_finding(host="10.0.0.1", port="80"),
             _nmap_finding(host="10.0.0.1", port="443"),
         ]
-        html = FindingsBuilder.build_master_table([], findings)
+        html = FindingsBuilder().build_master_table([], findings)
         assert "80, 443" in html or "443, 80" in html
 
     def test_code_and_network_headings_present(self) -> None:
-        html = FindingsBuilder.build_master_table([_finding()], [_nmap_finding()])
+        html = FindingsBuilder().build_master_table([_finding()], [_nmap_finding()])
         assert "Code Findings" in html
         assert "Network Findings" in html
 
@@ -283,34 +284,34 @@ class TestBuildSecretsCards:
 
 class TestBuildComprehensiveCodeTable:
     def test_empty_returns_placeholder(self) -> None:
-        html = FindingsBuilder.build_comprehensive_code_table([])
+        html = FindingsBuilder().build_comprehensive_code_table([])
         assert "placeholder" in html
 
     def test_tal_id_in_table(self) -> None:
-        html = FindingsBuilder.build_comprehensive_code_table([_finding()])
+        html = FindingsBuilder().build_comprehensive_code_table([_finding()])
         assert "TAL-001" in html
 
     def test_owasp_name_from_meta(self) -> None:
         import json
 
         meta = json.dumps({"owasp_name": "Injection"})
-        html = FindingsBuilder.build_comprehensive_code_table([_finding(meta=meta)])
+        html = FindingsBuilder().build_comprehensive_code_table([_finding(meta=meta)])
         assert "Injection" in html
 
     def test_owasp_falls_back_to_cwe(self) -> None:
-        html = FindingsBuilder.build_comprehensive_code_table(
+        html = FindingsBuilder().build_comprehensive_code_table(
             [_finding(cwe='["CWE-89"]')]
         )
         assert "CWE-89" in html
 
     def test_owasp_falls_back_to_rule_id(self) -> None:
-        html = FindingsBuilder.build_comprehensive_code_table(
+        html = FindingsBuilder().build_comprehensive_code_table(
             [_finding(cwe=None, rule_id="custom-rule")]
         )
         assert "custom-rule" in html
 
     def test_owasp_falls_back_to_unclassified(self) -> None:
-        html = FindingsBuilder.build_comprehensive_code_table(
+        html = FindingsBuilder().build_comprehensive_code_table(
             [_finding(cwe=None, rule_id=None, meta="{}")]
         )
         assert "Unclassified" in html
@@ -320,11 +321,11 @@ class TestBuildComprehensiveCodeTable:
             _finding(id=1, tal_id="TAL-001", severity="low", repo="a"),
             _finding(id=2, tal_id="TAL-002", severity="critical", repo="a"),
         ]
-        html = FindingsBuilder.build_comprehensive_code_table(findings)
+        html = FindingsBuilder().build_comprehensive_code_table(findings)
         assert html.index("TAL-002") < html.index("TAL-001")
 
     def test_null_repo_shows_unattributed(self) -> None:
-        html = FindingsBuilder.build_comprehensive_code_table([_finding(repo=None)])
+        html = FindingsBuilder().build_comprehensive_code_table([_finding(repo=None)])
         assert "Unattributed" in html
 
 
@@ -365,4 +366,5 @@ class TestBuildComprehensiveNetworkTable:
             _nmap_finding(host="10.0.0.2", port="22"),
         ]
         html = FindingsBuilder.build_comprehensive_network_table(findings)
-        assert html.count("NW-") == 2
+        assert "NW-001" in html
+        assert "NW-002" in html

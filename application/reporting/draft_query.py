@@ -35,16 +35,23 @@ class DraftQueryService:
     def __init__(self, finding_repo: FindingRepository) -> None:
         self._repo = finding_repo
 
-    def get_filtered_findings(self) -> list[dict[str, Any]]:
-        """Return findings where triaged_by IS NOT NULL and should_report = 1.
+    def get_filtered_findings(self, skip_triage: bool = False) -> list[dict[str, Any]]:
+        """Return findings eligible for report generation.
 
-        False positive filter: currently a passthrough placeholder.
+        When *skip_triage* is False (default), only findings that have been
+        triaged (``triaged_by IS NOT NULL``) and marked for inclusion
+        (``should_report = 1``) are returned.
+
+        When *skip_triage* is True, all findings are returned regardless of
+        triage status — useful for generating drafts before triage is run.
 
         FALSE POSITIVE FILTER WIRING POINT:
         When a mechanism for flagging false positives is defined, apply the
         filter here before returning. e.g.:
             findings = [f for f in findings if not _is_false_positive(f)]
         """
+        if skip_triage:
+            return self._repo.get_all_findings()
         return self._repo.get_reportable_findings()
 
     def severity_distribution(self, findings: list[dict[str, Any]]) -> dict[str, int]:

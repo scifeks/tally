@@ -21,5 +21,6 @@
   },
   "projects_dir": "./projects",
   "location_attestation_confirmed": false,
-  "enrichment_max_concurrency": 4
+  "enrichment_max_concurrency": 4,
+  "report_finding_prefix": "TAL"
 }

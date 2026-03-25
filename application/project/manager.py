@@ -116,10 +116,20 @@ class ProjectManager:
         if not nmap_hosts.exists():
             nmap_hosts.write_text("{}")
 
-    def save_project(self, name: str, repositories: list[Repository]) -> None:
+    def save_project(
+        self,
+        name: str,
+        repositories: list[Repository],
+        company_name: str = "",
+        department_name: str = "",
+        abbreviation: str = "",
+    ) -> None:
         project_cfg = ProjectConfig(
             project_name=name,
             created=datetime.datetime.now().isoformat(),
             repositories=repositories,
+            company_name=company_name,
+            department_name=department_name,
+            abbreviation=abbreviation,
         )
         self.config.save_project_config(name, project_cfg)
