@@ -63,3 +63,7 @@ MagicMock
 .claude/
 
 tmp/
+
+# Frontend
+ui/node_modules/
+web/static/
