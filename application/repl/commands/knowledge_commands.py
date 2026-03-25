@@ -158,8 +158,11 @@ class KnowledgeCommands:
         for tool, count in sorted(stats.get("by_tool", {}).items()):
             table.add_row(f"  {tool}", str(count))
 
-        for severity, count in sorted(stats.get("by_severity", {}).items()):
-            table.add_row(f"  Severity: {severity}", str(count))
+        by_severity = stats.get("by_severity", {})
+        if by_severity:
+            table.add_section()
+            for severity, count in sorted(by_severity.items()):
+                table.add_row(f"  Severity: {severity}", str(count))
 
         last_updated = stats.get("last_updated")
         if last_updated:
