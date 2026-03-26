@@ -406,6 +406,24 @@ class FindingRepository:
         with self._factory.connect() as conn:
             conn.executemany(sql, pairs)
 
+    def get_ids_by_fingerprints(self, fingerprints: list[str]) -> list[int]:
+        """Return SQLite findings.id values for the given fingerprints.
+
+        Returns ids in the same order as the input fingerprints list.
+        Missing fingerprints (not in DB) are silently omitted.
+        """
+        if not fingerprints:
+            return []
+        placeholders = ",".join("?" * len(fingerprints))
+        sql = (
+            f"SELECT id, fingerprint FROM findings"
+            f" WHERE fingerprint IN ({placeholders})"
+        )
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql, fingerprints).fetchall()
+        fp_to_id = {row["fingerprint"]: row["id"] for row in rows}
+        return [fp_to_id[fp] for fp in fingerprints if fp in fp_to_id]
+
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
 

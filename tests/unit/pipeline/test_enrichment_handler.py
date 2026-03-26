@@ -26,12 +26,12 @@ def _make_tool_result(
 
 
 def _ingest_completed(
-    doc_ids: list[str] | None = None,
+    ids: list[int] | None = None,
     failed_tools: list[str] | None = None,
     run_id: int | None = 1,
 ) -> IngestCompleted:
     return IngestCompleted(
-        doc_ids=["doc1", "doc2"] if doc_ids is None else doc_ids,
+        ids=[1, 2] if ids is None else ids,
         failed_tools=[] if failed_tools is None else failed_tools,
         run_id=run_id,
         project_name="test-proj",
@@ -40,13 +40,13 @@ def _ingest_completed(
 
 
 class TestEnrichmentHandler:
-    def test_noop_when_doc_ids_empty(self) -> None:
+    def test_noop_when_ids_empty(self) -> None:
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
         handler = EnrichmentHandler(bus)
-        handler.handle(_ingest_completed(doc_ids=[]))
+        handler.handle(_ingest_completed(ids=[]))
 
         assert received == []
 
@@ -70,7 +70,7 @@ class TestEnrichmentHandler:
                 return_value=mock_pipeline,
             ),
         ):
-            handler.handle(_ingest_completed(doc_ids=["doc1"]))
+            handler.handle(_ingest_completed(ids=[1]))
 
         assert len(received) == 1
         assert received[0].partial_success is False
@@ -94,7 +94,7 @@ class TestEnrichmentHandler:
                 return_value=mock_pipeline,
             ),
         ):
-            handler.handle(_ingest_completed(doc_ids=["doc1"]))
+            handler.handle(_ingest_completed(ids=[1]))
 
         assert len(received) == 1
         assert received[0].partial_success is True

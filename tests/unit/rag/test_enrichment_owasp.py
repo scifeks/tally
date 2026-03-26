@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from application.rag.chunks.semgrep import SemgrepChunkBuilder
 from application.rag.enrichment import EnrichmentPipeline
-from application.rag.ingestor import FindingIngestor
 from domain.tools.base import ToolResult
 
 # ---------------------------------------------------------------------------
@@ -40,8 +40,7 @@ def _make_semgrep_result(owasp: object = None) -> ToolResult:
 
 
 def _chunks(result: ToolResult) -> list[dict]:
-    ingestor = FindingIngestor(MagicMock(), "test-proj")
-    return [meta for _, meta, _ in ingestor._build_chunks(result, "default")]
+    return SemgrepChunkBuilder().normalize(result, "default")
 
 
 def _pipeline() -> EnrichmentPipeline:

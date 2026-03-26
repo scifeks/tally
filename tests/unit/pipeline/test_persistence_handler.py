@@ -9,12 +9,12 @@ from domain.pipeline.events import EnrichmentCompleted, EventBus
 
 
 def _enrich_completed(
-    doc_ids: list[str] | None = None,
+    ids: list[int] | None = None,
     partial_success: bool = True,
     run_id: int | None = 1,
 ) -> EnrichmentCompleted:
     return EnrichmentCompleted(
-        doc_ids=doc_ids or ["doc1"],
+        ids=ids if ids is not None else [1],
         partial_success=partial_success,
         run_id=run_id,
         project_name="test-proj",
@@ -65,12 +65,12 @@ class TestPersistenceHandler:
                 return_value=(MagicMock(), mock_finding_repo, MagicMock(), MagicMock()),
             ),
         ):
-            handler.handle(_enrich_completed(doc_ids=["doc1", "doc2"], run_id=42))
+            handler.handle(_enrich_completed(ids=[1, 2], run_id=42))
 
         mock_finding_repo.upsert_findings.assert_called_once_with(
             42,
             [
-                {"tool": "semgrep", "doc_id": "doc1"},
-                {"tool": "semgrep", "doc_id": "doc2"},
+                {"tool": "semgrep", "doc_id": "1"},
+                {"tool": "semgrep", "doc_id": "2"},
             ],
         )

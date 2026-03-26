@@ -41,35 +41,21 @@ def _tool_completed(
     )
 
 
-def _ingest_completed(
-    doc_ids: list[str] | None = None,
-    failed_tools: list[str] | None = None,
-    run_id: int | None = 1,
-) -> IngestCompleted:
-    return IngestCompleted(
-        doc_ids=["doc1", "doc2"] if doc_ids is None else doc_ids,
-        failed_tools=[] if failed_tools is None else failed_tools,
-        run_id=run_id,
-        project_name="test-proj",
-        base_path="/tmp",
-    )
-
-
 class TestIngestHandler:
-    def test_dispatches_ingest_completed_on_rag_init_failure(self) -> None:
+    def test_dispatches_ingest_completed_when_no_handler_found(self) -> None:
         bus = EventBus()
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
         handler = IngestHandler(bus)
         with patch(
-            "application.pipeline.handlers.IngestHandler._get_engine",
-            side_effect=RuntimeError("chroma unavailable"),
+            "application.pipeline.handlers.ToolHandlerFactory.load",
+            return_value=None,
         ):
             handler.handle(_tool_completed())
 
         assert len(received) == 1
-        assert received[0].doc_ids == []
+        assert received[0].ids == []
         assert received[0].failed_tools == []
 
     def test_dispatches_ingest_completed_with_failed_tool_on_exception(self) -> None:
@@ -77,20 +63,14 @@ class TestIngestHandler:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        mock_engine = MagicMock()
-        mock_ingestor = MagicMock()
-        mock_ingestor.ingest_tool_output.side_effect = RuntimeError("ingest boom")
+        mock_handler = MagicMock()
+        mock_handler.domain = "web"
+        mock_handler.normalize.side_effect = RuntimeError("normalize boom")
 
         handler = IngestHandler(bus)
-        with (
-            patch(
-                "application.pipeline.handlers.IngestHandler._get_engine",
-                return_value=mock_engine,
-            ),
-            patch(
-                "application.pipeline.handlers.FindingIngestor",
-                return_value=mock_ingestor,
-            ),
+        with patch(
+            "application.pipeline.handlers.ToolHandlerFactory.load",
+            return_value=mock_handler,
         ):
             handler.handle(_tool_completed(result=_make_tool_result("semgrep")))
 
@@ -105,40 +85,45 @@ class TestIngestHandler:
         handler = IngestHandler(bus)
         failed_result = _make_tool_result(success=False)
         event = _tool_completed(result=failed_result)
-
-        mock_engine = MagicMock()
-        with patch(
-            "application.pipeline.handlers.IngestHandler._get_engine",
-            return_value=mock_engine,
-        ):
-            handler.handle(event)
+        handler.handle(event)
 
         assert len(received) == 1
-        assert received[0].doc_ids == []
+        assert received[0].ids == []
         assert received[0].failed_tools == []
 
-    def test_successful_ingest_dispatches_doc_ids(self) -> None:
+    def test_successful_ingest_dispatches_sqlite_ids(self) -> None:
         bus = EventBus()
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        mock_engine = MagicMock()
-        mock_ingestor = MagicMock()
-        mock_ingestor.ingest_tool_output.return_value = ["id1", "id2"]
+        mock_handler = MagicMock()
+        mock_handler.domain = "web"
+        mock_handler.normalize.return_value = [
+            {"tool": "semgrep", "rule_id": "r1"},
+            {"tool": "semgrep", "rule_id": "r2"},
+        ]
+
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_ids_by_fingerprints.return_value = [1, 2]
 
         handler = IngestHandler(bus)
         with (
             patch(
-                "application.pipeline.handlers.IngestHandler._get_engine",
-                return_value=mock_engine,
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_handler,
             ),
             patch(
-                "application.pipeline.handlers.FindingIngestor",
-                return_value=mock_ingestor,
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
             ),
         ):
             handler.handle(_tool_completed())
 
         assert len(received) == 1
-        assert received[0].doc_ids == ["id1", "id2"]
+        assert received[0].ids == [1, 2]
         assert received[0].failed_tools == []

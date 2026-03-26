@@ -92,7 +92,7 @@ def _dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
 
     def _counter(e: IngestCompleted) -> None:
         nonlocal count
-        count += len(e.doc_ids)
+        count += len(e.ids)
 
     bus.subscribe(IngestCompleted, _counter)
     bus.dispatch(event)
