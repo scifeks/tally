@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 from application.rag.enrichment import EnrichmentPipeline
 from application.rag.ingestor import (
     ToolHandlerFactory,
-    _is_test_path,
-    _normalize_file_path,
+    is_test_path,
+    normalize_file_path,
 )
 from core.config.manager import ConfigManager
 from domain.pipeline.events import (
@@ -106,7 +106,7 @@ class IngestHandler(BaseHandler):
                     filtered: list[dict] = []
                     for row in rows:
                         file_path: str = row.get("file_path", "") or ""
-                        result_path = _normalize_file_path(
+                        result_path = normalize_file_path(
                             file_path, repos, repo_name=event.repo
                         )
                         if result_path is None:
@@ -123,7 +123,7 @@ class IngestHandler(BaseHandler):
                             row["repo"] = repo_name
                         if repo_name is not None and rel:
                             _tdirs = repo_test_dirs.get(repo_name, [])
-                            if _tdirs and _is_test_path(rel, _tdirs):
+                            if _tdirs and is_test_path(rel, _tdirs):
                                 logger.debug(
                                     "Excluding test-dir row: tool=%s path=%s",
                                     result.tool_name,

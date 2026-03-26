@@ -6,7 +6,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec
 from .sca import _SCA_COMMON_ENRICHMENT_FIELDS, _build_sca_normalize, _sca_render
 
 
-class ComposerAuditChunkBuilder:
+class ComposerAuditHandler:
     tool_name = "composer-audit"
     domain = "code"
     segment = "sca"

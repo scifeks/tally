@@ -260,7 +260,7 @@ class TestNmapIngestor:
                 assert key not in row
 
     def test_host_chunk_shared_metadata(self, basic_parsed_data: dict) -> None:
-        """Port rows have correct domain/enriched/type_exposure fields."""
+        """Port rows have correct domain/enriched/type_* fields."""
         handler = ToolHandlerFactory.load("nmap")
         assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
@@ -270,6 +270,7 @@ class TestNmapIngestor:
             assert row["domain"] == "network"
             assert row["enriched"] is False
             assert row["type_exposure"] is True
+            assert row["type_informational"] is False
             assert row["type_secret"] is False
             assert row["type_vulnerability"] is False
             assert row["type_weakness"] is False
@@ -287,6 +288,7 @@ class TestNmapIngestor:
             assert row["domain"] == "network"
             assert row["enriched"] is False
             assert row["type_exposure"] is True
+            assert row["type_informational"] is False
             assert row["type_secret"] is False
             assert row["type_vulnerability"] is False
             assert row["type_weakness"] is False

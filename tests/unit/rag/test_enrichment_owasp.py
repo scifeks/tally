@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from application.rag.chunks.semgrep import SemgrepChunkBuilder
+from application.rag.chunks.semgrep import SemgrepHandler
 from application.rag.enrichment import EnrichmentPipeline
 from domain.tools.base import ToolResult
 
@@ -40,7 +40,7 @@ def _make_semgrep_result(owasp: object = None) -> ToolResult:
 
 
 def _chunks(result: ToolResult) -> list[dict]:
-    return SemgrepChunkBuilder().normalize(result, "default")
+    return SemgrepHandler().normalize(result, "default")
 
 
 def _pipeline() -> EnrichmentPipeline:

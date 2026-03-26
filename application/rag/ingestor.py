@@ -67,7 +67,7 @@ def get_tool_domain(tool_name: str) -> str | None:
     return handler.domain if handler is not None else None
 
 
-def _is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
+def is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
     """Return True if rel_path falls inside one of the given test dirs.
 
     rel_path must start with '/': e.g. '/tests/foo.py'.
@@ -114,7 +114,7 @@ def _relativize_path(
     return file_path
 
 
-def _normalize_file_path(
+def normalize_file_path(
     file_path: str,
     repositories: list[Repository],
     repo_name: str | None = None,

@@ -1,8 +1,8 @@
-"""Unit tests for _is_test_path test-directory filtering."""
+"""Unit tests for is_test_path test-directory filtering."""
 
 from __future__ import annotations
 
-from application.rag.ingestor import _is_test_path, _normalize_path
+from application.rag.ingestor import _normalize_path, is_test_path
 from core.config.schemas import Repository
 
 
@@ -21,22 +21,22 @@ def _repo(name: str, path: str, test_dirs: list[str] | None = None) -> Repositor
 
 class TestIsTestPath:
     def test_returns_true_for_file_in_test_dir(self) -> None:
-        assert _is_test_path("/tests/x.py", ["tests"]) is True
+        assert is_test_path("/tests/x.py", ["tests"]) is True
 
     def test_returns_false_for_src_file(self) -> None:
-        assert _is_test_path("/src/x.py", ["tests"]) is False
+        assert is_test_path("/src/x.py", ["tests"]) is False
 
     def test_returns_true_for_exact_test_dir_path(self) -> None:
-        assert _is_test_path("/tests", ["tests"]) is True
+        assert is_test_path("/tests", ["tests"]) is True
 
     def test_returns_false_when_test_dirs_empty(self) -> None:
-        assert _is_test_path("/tests/x.py", []) is False
+        assert is_test_path("/tests/x.py", []) is False
 
     def test_does_not_match_partial_dir_name(self) -> None:
-        assert _is_test_path("/testsfoo/x.py", ["tests"]) is False
+        assert is_test_path("/testsfoo/x.py", ["tests"]) is False
 
     def test_matches_nested_test_dir(self) -> None:
-        assert _is_test_path("/a/tests/x.py", ["a/tests"]) is True
+        assert is_test_path("/a/tests/x.py", ["a/tests"]) is True
 
     def test_unmatched_repo_gives_none_repo_name(self) -> None:
         repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
@@ -47,4 +47,4 @@ class TestIsTestPath:
         repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
         rel, repo_name = _normalize_path("/repos/app/tests/x.py", repos)
         assert repo_name == "myapp"
-        assert _is_test_path(rel, ["tests"]) is True
+        assert is_test_path(rel, ["tests"]) is True

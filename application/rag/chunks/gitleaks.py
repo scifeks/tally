@@ -9,7 +9,7 @@ from domain.tools.constants import CONFIDENCE_CONFIRMED, SEVERITY_HIGH
 from ._shared import _first_output_file, _shared_meta
 
 
-class GitleaksChunkBuilder:
+class GitleaksHandler:
     tool_name = "gitleaks"
     domain = "code"
     segment = "secrets"

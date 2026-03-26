@@ -19,7 +19,7 @@ _ZAP_VERSION_ALERT_PREFIX = (
 )
 
 
-class ZapChunkBuilder:
+class ZapHandler:
     tool_name = "zap"
     domain = "web"
     segment = "api"

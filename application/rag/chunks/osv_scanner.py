@@ -6,7 +6,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec
 from .sca import _SCA_OSV_ENRICHMENT_FIELDS, _build_sca_normalize, _sca_render
 
 
-class OsvScannerChunkBuilder:
+class OsvScannerHandler:
     tool_name = "osv-scanner"
     domain = "code"
     segment = "sca"

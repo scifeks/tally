@@ -1,8 +1,8 @@
-"""Unit tests for NmapChunkBuilder.normalize() metadata."""
+"""Unit tests for NmapHandler.normalize() metadata."""
 
 from __future__ import annotations
 
-from application.rag.chunks.nmap import NmapChunkBuilder
+from application.rag.chunks.nmap import NmapHandler
 from domain.tools.base import ToolResult
 
 
@@ -36,7 +36,7 @@ class TestNmapIngestorMetadata:
         )
 
     def _get_rows(self) -> list[dict]:
-        return NmapChunkBuilder().normalize(self._make_nmap_result(), "default")
+        return NmapHandler().normalize(self._make_nmap_result(), "default")
 
     def test_no_host_level_rows(self) -> None:
         rows = self._get_rows()

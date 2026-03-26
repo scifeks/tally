@@ -1,8 +1,8 @@
-"""Unit tests for GitleaksChunkBuilder.normalize() metadata."""
+"""Unit tests for GitleaksHandler.normalize() metadata."""
 
 from __future__ import annotations
 
-from application.rag.chunks.gitleaks import GitleaksChunkBuilder
+from application.rag.chunks.gitleaks import GitleaksHandler
 from domain.tools.base import ToolResult
 
 
@@ -32,7 +32,7 @@ class TestGitleaksIngestorMetadata:
         )
 
     def _get_rows(self, rule_id: str) -> list[dict]:
-        return GitleaksChunkBuilder().normalize(
+        return GitleaksHandler().normalize(
             self._make_gitleaks_result(rule_id), "default"
         )
 

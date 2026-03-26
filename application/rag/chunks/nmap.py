@@ -9,14 +9,17 @@ from domain.tools.constants import CONFIDENCE_CONFIRMED, SEVERITY_INFORMATIONAL
 from ._shared import _first_output_file, _shared_meta
 
 
-class NmapChunkBuilder:
+class NmapHandler:
     tool_name = "nmap"
     domain = "network"
     segment = "network"
     non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "risk_type", "remediation", "description"}
     )
-    type_flags: dict[str, set[str]] = {"exposure": {"type_exposure"}}
+    type_flags: dict[str, set[str]] = {
+        "exposure": {"type_exposure"},
+        "informational": set(),
+    }
     should_enrich = False
     enrichment_fields = None
 
@@ -46,7 +49,7 @@ class NmapChunkBuilder:
                 row: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
-                    "finding_type": json.dumps(["exposure"]),
+                    "finding_type": json.dumps(["informational"]),
                     "confidence": CONFIDENCE_CONFIRMED,
                     "severity": SEVERITY_INFORMATIONAL,
                     "ip_address": ip,
@@ -59,7 +62,7 @@ class NmapChunkBuilder:
                     row["nmap_args"] = nmap_args
                 if scan_start_time:
                     row["scan_start_time"] = scan_start_time
-                row.update(_shared_meta(self, "exposure"))
+                row.update(_shared_meta(self, "informational"))
                 rows.append(row)
                 continue
 

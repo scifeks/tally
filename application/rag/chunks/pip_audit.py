@@ -6,7 +6,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec
 from .sca import _SCA_COMMON_ENRICHMENT_FIELDS, _build_sca_normalize, _sca_render
 
 
-class PipAuditChunkBuilder:
+class PipAuditHandler:
     tool_name = "pip-audit"
     domain = "code"
     segment = "sca"

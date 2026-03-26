@@ -10,7 +10,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 from ._shared import _first_output_file, _shared_meta
 
 
-class SemgrepChunkBuilder:
+class SemgrepHandler:
     tool_name = "semgrep"
     domain = "code"
     segment = "sast"
