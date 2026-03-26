@@ -109,7 +109,7 @@ class FindingRepository:
                     named.get("description"),
                     named.get("package_version"),
                     named.get("cwe"),
-                    1,  # enriched
+                    0,  # enriched — set to 1 by EnrichmentPipeline after LLM processing
                     json.dumps(meta),
                 )
             )
@@ -423,6 +423,72 @@ class FindingRepository:
             rows = conn.execute(sql, fingerprints).fetchall()
         fp_to_id = {row["fingerprint"]: row["id"] for row in rows}
         return [fp_to_id[fp] for fp in fingerprints if fp in fp_to_id]
+
+    def get_by_ids(self, ids: list[int]) -> list[dict]:
+        """Return deserialized row dicts for the given SQLite primary keys.
+
+        Each dict is the output of deserialise_row() with an added 'id' key.
+        Rows are returned in arbitrary order. Missing IDs are silently omitted.
+        """
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        sql = f"SELECT * FROM findings WHERE id IN ({placeholders})"
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql, ids).fetchall()
+        result: list[dict] = []
+        for row in rows:
+            d = deserialise_row(row)
+            d["id"] = row["id"]
+            result.append(d)
+        return result
+
+    def update_enrichment_fields(self, finding_id: int, fields: dict) -> None:
+        """Write LLM-enriched fields back to the SQLite row.
+
+        Named columns updated directly: severity, confidence, description.
+        Meta-blob fields: risk_type, remediation, owasp_name, title, tags.
+        Sets enriched = 1 and updates last_seen = now().
+        """
+        from datetime import UTC, datetime
+
+        row = self.get_finding(finding_id)
+        if row is None:
+            return
+
+        try:
+            existing_meta: dict[str, Any] = json.loads(row["meta"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            existing_meta = {}
+
+        _META_FIELDS: frozenset[str] = frozenset(
+            {"risk_type", "remediation", "owasp_name", "title", "tags"}
+        )
+        _COLUMN_FIELDS: frozenset[str] = frozenset(
+            {"severity", "confidence", "description"}
+        )
+
+        column_updates: dict[str, Any] = {}
+        for key, val in fields.items():
+            if key in _META_FIELDS:
+                existing_meta[key] = val
+            elif key in _COLUMN_FIELDS:
+                column_updates[key] = val
+
+        updated_meta = json.dumps(existing_meta)
+        now_iso = datetime.now(UTC).isoformat()
+
+        set_parts: list[str] = ["enriched = 1", "last_seen = ?", "meta = ?"]
+        params: list[Any] = [now_iso, updated_meta]
+
+        for col, val in column_updates.items():
+            set_parts.append(f"{col} = ?")
+            params.append(val)
+
+        params.append(finding_id)
+        sql_upd = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
+        with self._factory.connect() as conn:
+            conn.execute(sql_upd, params)
 
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

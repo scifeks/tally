@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from core.config import ConfigManager
 from core.config.schemas import NmapProfile
 from domain.tools.base import ToolResult
@@ -17,6 +18,7 @@ from tests.conftest import requires_ollama
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +75,7 @@ def _make_nmap_result() -> ToolResult:
             ]
         },
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
 
@@ -83,15 +85,29 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
 
 
 def _ingest(
-    base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
-) -> list[str]:
+    base_path: Path,
+    project_name: str,
+    result: ToolResult,
+    profile: str = "localhost",
+) -> list[dict]:
+    """Normalize rows and embed rendered text into ChromaDB via Ollama."""
+    if not result.success or not result.parsed_data:
+        return []
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None:
+        return []
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return []
     engine = _make_rag_engine(base_path, project_name)
     try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
+        texts = [handler.render(row) for row in rows]
+        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        ids = [f"{row['profile']}-{row['ip_address']}:{row['port']}" for row in rows]
+        engine.add_documents(texts, metadatas, ids)
     finally:
         engine.close()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +126,8 @@ class TestProjectIsolation:
 
     def test_new_project_starts_empty(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
-        engine_a = RAGEngine(project_name="proj-a", base_path=str(tmp_path))
-        engine_b = RAGEngine(project_name="proj-b", base_path=str(tmp_path))
+        engine_a = _make_rag_engine(tmp_path, "proj-a")
+        engine_b = _make_rag_engine(tmp_path, "proj-b")
         try:
             assert engine_a.collection_name != engine_b.collection_name
             assert engine_b.count_documents() == 0
@@ -121,9 +137,9 @@ class TestProjectIsolation:
 
     def test_ingest_does_not_leak_to_other_project(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
-        count = _ingest(tmp_path, "proj-a", _make_nmap_result())
-        assert len(count) >= 1
-        engine_b = RAGEngine(project_name="proj-b", base_path=str(tmp_path))
+        rows = _ingest(tmp_path, "proj-a", _make_nmap_result())
+        assert len(rows) >= 1
+        engine_b = _make_rag_engine(tmp_path, "proj-b")
         try:
             assert engine_b.count_documents() == 0
         finally:

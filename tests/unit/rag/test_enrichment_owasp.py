@@ -44,7 +44,7 @@ def _chunks(result: ToolResult) -> list[dict]:
 
 
 def _pipeline() -> EnrichmentPipeline:
-    return EnrichmentPipeline(rag_engine=MagicMock())
+    return EnrichmentPipeline(finding_repo=MagicMock())
 
 
 # ---------------------------------------------------------------------------

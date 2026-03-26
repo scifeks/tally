@@ -167,41 +167,18 @@ class EnrichmentHandler(BaseHandler):
         if not event.ids:
             return
 
-        try:
-            engine = self._get_engine(event.project_name, event.base_path)
-        except Exception as exc:
-            logger.warning("EnrichmentHandler: RAGEngine init failed: %s", exc)
-            self._bus.dispatch(
-                EnrichmentCompleted(
-                    ids=event.ids,
-                    partial_success=False,
-                    run_id=event.run_id,
-                    project_name=event.project_name,
-                    base_path=event.base_path,
-                )
-            )
-            return
-
-        try:
-            pipeline = EnrichmentPipeline(engine, console=self._console)
-            pipeline.enrich([str(i) for i in event.ids])
-        except Exception as exc:
-            logger.error("EnrichmentHandler: enrichment error: %s", exc)
-            self._bus.dispatch(
-                EnrichmentCompleted(
-                    ids=event.ids,
-                    partial_success=False,
-                    run_id=event.run_id,
-                    project_name=event.project_name,
-                    base_path=event.base_path,
-                )
-            )
-            return
-
+        _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
+        pipeline = EnrichmentPipeline(
+            finding_repo=finding_repo,
+            console=self._console,
+            base_path=event.base_path,
+            run_id=event.run_id,
+        )
+        pipeline.enrich(event.ids)
         self._bus.dispatch(
             EnrichmentCompleted(
                 ids=event.ids,
-                partial_success=True,
+                partial_success=pipeline.had_errors,
                 run_id=event.run_id,
                 project_name=event.project_name,
                 base_path=event.base_path,

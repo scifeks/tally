@@ -168,7 +168,7 @@ class FindingIngestor:
         self,
         tool_result: ToolResult,
         profile: str | None = None,
-    ) -> list[str]:
+    ) -> list[int]:
         """Deprecated stub — returns [].  Use IngestHandler instead."""
         logger.warning(
             "FindingIngestor.ingest_tool_output called for %s/%s — "

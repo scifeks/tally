@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from application.rag import EnrichmentPipeline, RAGEngine
+from application.rag import EnrichmentPipeline
 from application.rag.chunks.semgrep import SemgrepChunkBuilder
 from application.rag.chunks.zap import ZapChunkBuilder
 from domain.tools.enrichment import PromptStrategy
@@ -31,7 +31,7 @@ def test_zap_title_in_enrichment_fields() -> None:
     ["pip-audit", "npm-audit", "osv-scanner", "composer-audit"],
 )
 def test_sca_title_in_enrichment_fields(tool_name: str) -> None:
-    pipeline = EnrichmentPipeline(MagicMock(spec=RAGEngine))
+    pipeline = EnrichmentPipeline(MagicMock())
     legacy_fields, specs = pipeline._get_enrichment_plan(
         {"tool": tool_name, "enriched": False}
     )

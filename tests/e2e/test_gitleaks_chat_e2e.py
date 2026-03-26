@@ -116,7 +116,7 @@ def _ingest(
     project_name: str,
     result: ToolResult,
     profile: str = "my-test-repo",
-) -> list[str]:
+) -> list[int]:
     engine = _make_rag_engine(base_path, project_name)
     try:
         return FindingIngestor(engine, project_name).ingest_tool_output(

@@ -1,4 +1,4 @@
-"""Integration tests for EnrichmentPipeline (real ChromaDB)."""
+"""Integration tests for EnrichmentPipeline (real SQLite)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
@@ -16,7 +15,11 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.project import ProjectManager  # noqa: E402
-from application.rag import EnrichmentPipeline, RAGEngine  # noqa: E402
+from application.rag import EnrichmentPipeline  # noqa: E402
+from infrastructure.store import make_store  # noqa: E402
+from infrastructure.store.repositories.findings_serial import (  # noqa: E402
+    compute_fingerprint,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -56,15 +59,6 @@ def _write_commands_config(base_path: Path) -> None:
     )
 
 
-def _make_rag_engine(project_env: dict) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
-
-
 def _make_llm_response(fields: list[str]) -> dict:
     values = {
         "risk_type": "exposed_service",
@@ -77,6 +71,13 @@ def _make_llm_response(fields: list[str]) -> dict:
     return {f: values[f] for f in fields if f in values}
 
 
+def _seed(finding_repo: object, run_id: int, rows: list[dict]) -> list[int]:
+    """Insert findings and return their SQLite ids."""
+    finding_repo.upsert_findings(run_id, rows)  # type: ignore[union-attr]
+    fps = [compute_fingerprint(r) for r in rows]
+    return finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]
+
+
 @pytest.fixture()
 def project_env(tmp_path: Path) -> dict:
     name = "test-proj"
@@ -85,48 +86,67 @@ def project_env(tmp_path: Path) -> dict:
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
     pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
+    run_repo, finding_repo, _, _ = make_store(str(tmp_path), name)
+    run_id = run_repo.create_run({})
+    return {
+        "base_path": tmp_path,
+        "project_name": name,
+        "run_repo": run_repo,
+        "finding_repo": finding_repo,
+        "run_id": run_id,
+    }
+
+
+_GL_ROW = {
+    "tool": "gitleaks",
+    "profile": "default",
+    "finding_type": json.dumps(["secret"]),
+    "severity": "high",
+    "confidence": "confirmed",
+    "description": "Leaked AWS access key found in config.py",
+}
+_ZAP_ROW = {
+    "tool": "zap",
+    "profile": "default",
+    "finding_type": json.dumps(["vulnerability"]),
+    "severity": "high",
+    "description": "XSS via search param.",
+    "remediation": "Encode output.",
+    "alert_name": "Reflected XSS",
+}
+_NMAP_ROW = {
+    "tool": "nmap",
+    "profile": "default",
+    "finding_type": json.dumps(["reconnaissance"]),
+    "severity": "informational",
+    "risk_type": "exposed_service",
+}
 
 
 @pytest.fixture()
-def seeded_engine(project_env: dict) -> RAGEngine:
-    engine = _make_rag_engine(project_env)
-    engine.add_documents(
-        texts=["Leaked AWS access key found in config.py"],
-        metadatas=[
-            {
-                "tool": "gitleaks",
-                "enriched": False,
-                "severity": "high",
-                "confidence": "confirmed",
-            }
-        ],
-        ids=["gl-001"],
-    )
-    engine.add_documents(
-        texts=["Reflected XSS found in search parameter"],
-        metadatas=[
-            {
-                "tool": "zap",
-                "enriched": False,
-                "severity": "high",
-                "remediation": "Encode output.",
-                "description": "XSS via search param.",
-            }
-        ],
-        ids=["zap-001"],
-    )
-    engine.add_documents(
-        texts=["Port 22 SSH open on 10.0.0.1"],
-        metadatas={"tool": "nmap", "enriched": True, "risk_type": "exposed_service"},  # type: ignore[arg-type]
-        ids=["nm-001"],
-    )
-    return engine
+def seeded_env(project_env: dict) -> dict:
+    finding_repo = project_env["finding_repo"]
+    run_id = project_env["run_id"]
+    gl_ids = _seed(finding_repo, run_id, [_GL_ROW])
+    zap_ids = _seed(finding_repo, run_id, [_ZAP_ROW])
+    nmap_ids = _seed(finding_repo, run_id, [_NMAP_ROW])
+    # Mark nmap as already enriched
+    with finding_repo._factory.connect() as conn:
+        conn.execute("UPDATE findings SET enriched = 1 WHERE id = ?", (nmap_ids[0],))
+    return {
+        **project_env,
+        "gl_id": gl_ids[0],
+        "zap_id": zap_ids[0],
+        "nmap_id": nmap_ids[0],
+    }
 
 
 @pytest.fixture()
-def pipeline(seeded_engine: RAGEngine) -> EnrichmentPipeline:
-    return EnrichmentPipeline(seeded_engine, console=None)
+def pipeline(seeded_env: dict) -> EnrichmentPipeline:
+    return EnrichmentPipeline(
+        finding_repo=seeded_env["finding_repo"],
+        base_path=str(seeded_env["base_path"]),
+    )
 
 
 class TestEnrichmentPipeline:
@@ -135,125 +155,146 @@ class TestEnrichmentPipeline:
             pipeline.enrich([])
             mock_llm.assert_not_called()
 
-    def test_already_enriched_skipped(self, pipeline: EnrichmentPipeline) -> None:
+    def test_already_enriched_skipped(
+        self, pipeline: EnrichmentPipeline, seeded_env: dict
+    ) -> None:
         with patch.object(pipeline, "_call_llm") as mock_llm:
-            pipeline.enrich(["nm-001"])
+            pipeline.enrich([seeded_env["nmap_id"]])
             mock_llm.assert_not_called()
 
     def test_all_tool_provided_no_llm_call(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env)
-        engine.add_documents(
-            texts=["SQL injection in login form"],
-            metadatas=[
-                {
-                    "tool": "zap",
-                    "enriched": False,
-                    "risk_type": "sql_injection",
-                    "severity": "high",
-                    "confidence": "probable",
-                    "remediation": "Use parameterized queries.",
-                    "description": "SQL injection found in login form.",
-                    "owasp_name": "Injection",
-                }
-            ],
-            ids=["zap-full-001"],
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        row = {
+            "tool": "zap",
+            "profile": "default",
+            "finding_type": json.dumps(["vulnerability"]),
+            "severity": "high",
+            "confidence": "probable",
+            "remediation": "Use parameterized queries.",
+            "description": "SQL injection found in login form.",
+            "alert_name": "SQL Injection",
+            "owasp_name": "Injection",
+            "title": "SQL Injection in login form",
+        }
+        ids = _seed(finding_repo, run_id, [row])
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
-        p = EnrichmentPipeline(engine, console=None)
         with patch.object(p, "_call_llm") as mock_llm:
-            p.enrich(["zap-full-001"])
+            p.enrich(ids)
             mock_llm.assert_not_called()
 
-    def test_missing_fields_calls_llm_once(self, pipeline: EnrichmentPipeline) -> None:
-        # zap-001 uses the per-field path (enrichment_fields on ZapChunkBuilder)
+    def test_missing_fields_calls_per_field(
+        self, pipeline: EnrichmentPipeline, seeded_env: dict
+    ) -> None:
+        # zap-row uses the per-field path (ZapChunkBuilder has enrichment_fields)
         with patch.object(
             pipeline,
             "_call_per_field",
             return_value={"owasp_name": "Injection"},
         ) as mock_pf:
-            pipeline.enrich(["zap-001"])
+            pipeline.enrich([seeded_env["zap_id"]])
             mock_pf.assert_called_once()
 
     def test_enriched_true_after_success(
-        self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
+        self, pipeline: EnrichmentPipeline, seeded_env: dict
     ) -> None:
-        fields = ["risk_type", "remediation", "description"]
-        with patch.object(
-            pipeline, "_call_llm", return_value=_make_llm_response(fields)
-        ):
-            pipeline.enrich(["gl-001"])
-        doc = seeded_engine.get_document_by_id("gl-001")
-        assert doc is not None
-        assert doc["metadata"]["enriched"] is True
-
-    def test_enriched_fields_written_to_metadata(
-        self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
-    ) -> None:
-        # zap-001 uses the per-field path; ZAP enriches owasp_name
         with patch.object(
             pipeline, "_call_per_field", return_value={"owasp_name": "Injection"}
         ):
-            pipeline.enrich(["zap-001"])
-        doc = seeded_engine.get_document_by_id("zap-001")
-        assert doc is not None
-        assert "owasp_name" in doc["metadata"]
-        assert doc["metadata"]["owasp_name"] == "Injection"
+            pipeline.enrich([seeded_env["zap_id"]])
+        row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
+        assert row is not None
+        assert row["enriched"] == 1
+
+    def test_enriched_fields_written_to_metadata(
+        self, pipeline: EnrichmentPipeline, seeded_env: dict
+    ) -> None:
+        # zap uses the per-field path; ZAP enriches owasp_name
+        with patch.object(
+            pipeline, "_call_per_field", return_value={"owasp_name": "Injection"}
+        ):
+            pipeline.enrich([seeded_env["zap_id"]])
+        row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
+        assert row is not None
+        meta = json.loads(row["meta"] or "{}")
+        assert meta.get("owasp_name") == "Injection"
 
     def test_invalid_json_leaves_enriched_false(
-        self, pipeline: EnrichmentPipeline, seeded_engine: RAGEngine
+        self, pipeline: EnrichmentPipeline, seeded_env: dict
     ) -> None:
-        # Patch _call_per_field to raise so the outer future fails and enriched
-        # stays False (per-field internal failures are swallowed, but a total
-        # failure of _call_per_field itself propagates through the thread pool).
         with patch.object(
             pipeline,
             "_call_per_field",
             side_effect=json.JSONDecodeError("err", "", 0),
         ):
-            pipeline.enrich(["zap-001"])
-        doc = seeded_engine.get_document_by_id("zap-001")
-        assert doc is not None
-        assert not doc["metadata"].get("enriched")
+            pipeline.enrich([seeded_env["zap_id"]])
+        row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
+        assert row is not None
+        assert row["enriched"] == 0
 
     def test_pipeline_continues_after_one_failure(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env)
-        engine.add_documents(
-            texts=["Finding A"],
-            metadatas=[{"tool": "semgrep", "enriched": False, "severity": "medium"}],
-            ids=["cont-001"],
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        rows = [
+            {
+                "tool": "semgrep",
+                "profile": "default",
+                "finding_type": json.dumps(["vulnerability"]),
+                "severity": "medium",
+                "description": "Finding A",
+                "rule_id": "rule-A",
+                "file_path": "a.py",
+            },
+            {
+                "tool": "semgrep",
+                "profile": "default",
+                "finding_type": json.dumps(["vulnerability"]),
+                "severity": "medium",
+                "description": "Finding B",
+                "rule_id": "rule-B",
+                "file_path": "b.py",
+            },
+        ]
+        ids = _seed(finding_repo, run_id, rows)
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
-        engine.add_documents(
-            texts=["Finding B"],
-            metadatas=[{"tool": "semgrep", "enriched": False, "severity": "medium"}],
-            ids=["cont-002"],
-        )
-        p = EnrichmentPipeline(engine, console=None)
 
-        def side_effect(doc_text, metadata, fields):
-            if doc_text == "Finding A":
+        call_count = [0]
+
+        def side_effect(meta: dict, specs: list) -> dict:
+            call_count[0] += 1
+            if call_count[0] == 1:
                 raise json.JSONDecodeError("bad", "", 0)
-            return _make_llm_response(["risk_type", "remediation", "description"])
+            return {"risk_type": "injection"}
 
-        with patch.object(p, "_call_llm", side_effect=side_effect):
-            p.enrich(["cont-001", "cont-002"])
+        with patch.object(p, "_call_per_field", side_effect=side_effect):
+            p.enrich(ids)
 
-        doc2 = engine.get_document_by_id("cont-002")
-        assert doc2 is not None
-        assert doc2["metadata"].get("enriched") is True
+        # At least one succeeded (the non-failing one has enriched=1)
+        enriched = [
+            r
+            for fid in ids
+            if (r := finding_repo.get_finding(fid)) and r["enriched"] == 1
+        ]
+        assert len(enriched) >= 1
 
-    def test_idempotent_second_run_skips(self, pipeline: EnrichmentPipeline) -> None:
-        # zap-001 uses the per-field path
+    def test_idempotent_second_run_skips(
+        self, pipeline: EnrichmentPipeline, seeded_env: dict
+    ) -> None:
+        # zap uses the per-field path
         with patch.object(
             pipeline, "_call_per_field", return_value={"owasp_name": "Injection"}
         ) as mock_pf:
-            pipeline.enrich(["zap-001"])
-            pipeline.enrich(["zap-001"])
+            pipeline.enrich([seeded_env["zap_id"]])
+            pipeline.enrich([seeded_env["zap_id"]])
             assert mock_pf.call_count == 1
 
     def test_zap_skips_remediation_severity_description(
         self, pipeline: EnrichmentPipeline
     ) -> None:
-        # ZAP declares enrichment_fields with owasp_name and title; risk_type is
-        # always set from alert_name in metadata and thus never re-enriched.
         metadata = {"tool": "zap"}
         fields = pipeline._get_fields_to_enrich(metadata)
         assert fields == ["owasp_name", "title"]

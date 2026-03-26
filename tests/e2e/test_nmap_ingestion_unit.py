@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from core.config import ConfigManager
 from core.config.schemas import NmapProfile
 from domain.tools.base import ToolResult
@@ -17,6 +18,7 @@ from tests.conftest import requires_ollama
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +75,7 @@ def _make_nmap_result() -> ToolResult:
             ]
         },
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
 
@@ -83,15 +85,29 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
 
 
 def _ingest(
-    base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
-) -> list[str]:
+    base_path: Path,
+    project_name: str,
+    result: ToolResult,
+    profile: str = "localhost",
+) -> list[dict]:
+    """Normalize rows and embed rendered text into ChromaDB via Ollama."""
+    if not result.success or not result.parsed_data:
+        return []
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None:
+        return []
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return []
     engine = _make_rag_engine(base_path, project_name)
     try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
+        texts = [handler.render(row) for row in rows]
+        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        ids = [f"{row['profile']}-{row['ip_address']}:{row['port']}" for row in rows]
+        engine.add_documents(texts, metadatas, ids)
     finally:
         engine.close()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -125,18 +141,19 @@ def nmap_project_env(project_env: dict) -> dict:
 @requires_ollama
 class TestIngestionUnit:
     def test_ingestion_returns_positive_count(self, project_env: dict) -> None:
-        count = _ingest(
+        rows = _ingest(
             project_env["base_path"], project_env["project_name"], _make_nmap_result()
         )
-        assert len(count) >= 1
+        assert len(rows) >= 1
 
     def test_stats_shows_nmap_documents(self, project_env: dict) -> None:
-        _ingest(
-            project_env["base_path"], project_env["project_name"], _make_nmap_result()
-        )
-        stats = _make_rag_engine(
-            project_env["base_path"], project_env["project_name"]
-        ).get_stats()
+        base, name = project_env["base_path"], project_env["project_name"]
+        _ingest(base, name, _make_nmap_result())
+        engine = _make_rag_engine(base, name)
+        try:
+            stats = engine.get_stats()
+        finally:
+            engine.close()
         assert stats["total_documents"] > 0
         assert "nmap" in stats["by_tool"]
 
@@ -147,11 +164,11 @@ class TestIngestionUnit:
             output="denied",
             parsed_data=None,
             output_files={},
-            timestamp=RAGEngine.now_iso(),
+            timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
-        count = _ingest(project_env["base_path"], project_env["project_name"], failed)
-        assert count == []
+        rows = _ingest(project_env["base_path"], project_env["project_name"], failed)
+        assert rows == []
 
     def test_parse_error_result_not_ingested(self, project_env: dict) -> None:
         errored = ToolResult(
@@ -160,8 +177,8 @@ class TestIngestionUnit:
             output="",
             parsed_data={"error": "malformed XML"},
             output_files={},
-            timestamp=RAGEngine.now_iso(),
+            timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
-        count = _ingest(project_env["base_path"], project_env["project_name"], errored)
-        assert count == []
+        rows = _ingest(project_env["base_path"], project_env["project_name"], errored)
+        assert rows == []

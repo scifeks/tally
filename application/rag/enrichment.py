@@ -1,4 +1,4 @@
-"""LLM-based enrichment pipeline for ChromaDB security findings."""
+"""LLM-based enrichment pipeline for security findings stored in SQLite."""
 
 from __future__ import annotations
 
@@ -19,8 +19,7 @@ from domain.tools.constants import (
 )
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
-from .engine import RAGEngine
-from .ingestor import ChunkBuilderFactory
+from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt
 
 if TYPE_CHECKING:
@@ -210,40 +209,50 @@ _FIELD_PROMPT_TEMPLATE = (
 
 
 class EnrichmentPipeline:
-    """Enriches ChromaDB findings with LLM-generated semantic fields.
+    """Enriches SQLite findings with LLM-generated semantic fields.
 
-    When a chunk builder declares ``enrichment_fields`` (a tuple of
+    Reads un-enriched findings from SQLite by primary key, runs LLM calls
+    concurrently, and writes enriched fields back to the same SQLite rows.
+    ChromaDB is not touched during enrichment.
+
+    When a tool handler declares ``enrichment_fields`` (a tuple of
     ``FieldEnrichmentSpec``), the pipeline makes one focused LLM call per
     spec using only the declared source metadata keys. When no such attribute
     is present, the existing batch path fires: all missing fields are requested
     in a single call over the full chunk text.
 
     LLM calls run concurrently via ThreadPoolExecutor (Phase 2).
-    ChromaDB writes are serialized after all LLM calls complete (Phase 3).
-    Skips findings already marked ``enriched: True``.
+    SQLite writes are serialized after all LLM calls complete (Phase 3).
+    Skips findings already marked ``enriched = 1``.
     """
 
     def __init__(
         self,
-        rag_engine: RAGEngine,
+        finding_repo: FindingRepository,
         console: Console | None = None,
-        finding_repo: FindingRepository | None = None,
+        base_path: str = ".",
         run_id: int | None = None,
         llm_provider: LLMProvider | None = None,
         max_workers: int = 4,
     ) -> None:
-        self._engine = rag_engine
-        self._console = console
         self._finding_repo = finding_repo
+        self._console = console
+        self._base_path = base_path
         self._run_id = run_id
         self._llm_provider = llm_provider  # resolved lazily on first _call_llm
         self._max_workers = max_workers
+        self._had_errors: bool = False
+
+    @property
+    def had_errors(self) -> bool:
+        """True if any individual finding enrichment failed during enrich()."""
+        return self._had_errors
 
     @property
     def _provider(self) -> LLMProvider:
         """Return the LLM provider, resolving from config on first access."""
         if self._llm_provider is None:
-            self._llm_provider = get_llm_provider("enrichment", self._engine.base_path)
+            self._llm_provider = get_llm_provider("enrichment", self._base_path)
         return self._llm_provider
 
     def _resolve_max_workers(self) -> int:
@@ -251,17 +260,17 @@ class EnrichmentPipeline:
         try:
             from core.config.manager import ConfigManager
 
-            cfg = ConfigManager(str(self._engine.base_path)).global_config
+            cfg = ConfigManager(str(self._base_path)).global_config
             return cfg.enrichment_max_concurrency
         except Exception:
             return self._max_workers
 
-    def enrich(self, ids: list[str]) -> None:
-        """Enrich a list of document IDs in place.
+    def enrich(self, ids: list[int]) -> None:
+        """Enrich a list of SQLite finding IDs in place.
 
-        Phase 1 (sequential): Fetch docs from ChromaDB, build work list.
+        Phase 1 (sequential): Fetch rows from SQLite, build work list.
         Phase 2 (concurrent): Run LLM calls in a thread pool.
-        Phase 3 (sequential): Write validated metadata back to ChromaDB.
+        Phase 3 (sequential): Write validated fields back to SQLite.
         Failures on individual findings are logged but do not stop the pipeline.
         """
         if not ids:
@@ -270,14 +279,14 @@ class EnrichmentPipeline:
         total = len(ids)
         max_workers = self._resolve_max_workers()
 
-        # Phase 1: Fetch and classify (sequential — ChromaDB reads)
-        # Each work item: (doc_id, text, meta, legacy_fields, specs)
-        #   legacy_fields is set (list[str]) when using the batch path.
-        #   specs is set (list[FieldEnrichmentSpec]) when using the per-field path.
+        # Phase 1: Fetch rows from SQLite and build work list
+        # Each work item: (row, text, meta, legacy_fields, specs)
+        #   legacy_fields is set when using the batch path.
+        #   specs is set when using the per-field path.
         #   Exactly one of the two is non-None per item.
         work_items: list[
             tuple[
-                str,
+                dict[str, Any],
                 str,
                 dict[str, Any],
                 list[str] | None,
@@ -285,25 +294,23 @@ class EnrichmentPipeline:
             ]
         ] = []
         auto_enriched = 0
-        for doc_id in ids:
-            doc = self._engine.get_document_by_id(doc_id)
-            if doc is None:
-                logger.warning("Document %s not found; skipping enrichment", doc_id)
-                continue
-            if doc["metadata"].get("enriched"):
+
+        rows = self._finding_repo.get_by_ids(ids)
+        for row in rows:
+            if row.get("enriched") == 1:
                 auto_enriched += 1
                 continue
-            legacy_fields, specs = self._get_enrichment_plan(doc["metadata"])
+            legacy_fields, specs = self._get_enrichment_plan(row)
             if not legacy_fields and not specs:
-                self._engine.update_metadata(doc_id, {"enriched": True})
                 auto_enriched += 1
                 continue
-            work_items.append(
-                (doc_id, doc["document"], doc["metadata"], legacy_fields, specs)
-            )
+            # doc_text is empty: all current tools use the per-field path
+            # which reads only from meta. The legacy batch path is dead for
+            # current tools but left in place.
+            work_items.append((row, "", row, legacy_fields, specs))
 
         # Phase 2: LLM calls (concurrent)
-        updates: list[tuple[str, dict[str, Any]]] = []
+        updates: list[tuple[dict[str, Any], dict[str, Any]]] = []
         completed = 0
         n_work = len(work_items)
 
@@ -312,14 +319,14 @@ class EnrichmentPipeline:
             _ = self._provider
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_id = {
+            future_to_row = {
                 executor.submit(
                     self._call_llm_worker, text, meta, legacy_fields, specs
-                ): doc_id
-                for doc_id, text, meta, legacy_fields, specs in work_items
+                ): row
+                for row, text, meta, legacy_fields, specs in work_items
             }
-            for future in as_completed(future_to_id):
-                doc_id = future_to_id[future]
+            for future in as_completed(future_to_row):
+                row = future_to_row[future]
                 completed += 1
                 if self._console:
                     self._console.print(
@@ -328,14 +335,14 @@ class EnrichmentPipeline:
                     )
                 try:
                     validated = future.result()
-                    validated["enriched"] = True
-                    updates.append((doc_id, validated))
+                    updates.append((row, validated))
                 except Exception as exc:
-                    logger.error("Enrichment failed for %s: %s", doc_id, exc)
+                    logger.error("Enrichment failed for id %s: %s", row.get("id"), exc)
+                    self._had_errors = True
 
-        # Phase 3: ChromaDB writes (sequential — avoids write contention)
-        for doc_id, validated in updates:
-            self._engine.update_metadata(doc_id, validated)
+        # Phase 3: SQLite writes (sequential — avoids write contention)
+        for row, validated_fields in updates:
+            self._finding_repo.update_enrichment_fields(row["id"], validated_fields)
 
         enriched_count = len(updates) + auto_enriched
         if self._console:
@@ -345,26 +352,6 @@ class EnrichmentPipeline:
                 f" {enriched_count}/{total} findings enriched.[/dim]"
             )
             self._console.print(msg)
-
-        self._sqlite_upsert(ids)
-
-    def _sqlite_upsert(self, ids: list[str]) -> None:
-        """Write enriched findings to SQLite after enrich() completes.
-
-        Failures are logged and never propagate to the caller.
-        """
-        if self._finding_repo is None or self._run_id is None:
-            return
-        try:
-            findings: list[dict[str, Any]] = []
-            for doc_id in ids:
-                doc = self._engine.get_document_by_id(doc_id)
-                if doc is not None:
-                    findings.append(doc["metadata"])
-            if findings:
-                self._finding_repo.upsert_findings(self._run_id, findings)
-        except Exception as exc:
-            logger.error("SQLite upsert failed after enrichment: %s", exc)
 
     def _call_llm_worker(
         self,
@@ -399,17 +386,17 @@ class EnrichmentPipeline:
             ``([], None)`` — nothing to enrich (skip entirely).
         """
         tool = metadata.get("tool", "")
-        builder = ChunkBuilderFactory.load(tool)
-        if builder is None or not getattr(builder, "should_enrich", True):
+        handler = ToolHandlerFactory.load(tool)
+        if handler is None or not getattr(handler, "should_enrich", True):
             return ([], None)
 
         declared_specs: tuple[FieldEnrichmentSpec, ...] | None = getattr(
-            builder, "enrichment_fields", None
+            handler, "enrichment_fields", None
         )
 
         if declared_specs is None:
             # Legacy batch path: existing filtering logic
-            tool_provided = builder.non_enriched_fields
+            tool_provided = handler.non_enriched_fields
             fields = [
                 f
                 for f in ENRICHMENT_FIELDS
@@ -502,7 +489,7 @@ class EnrichmentPipeline:
         return legacy_fields or []
 
     # ------------------------------------------------------------------
-    # Legacy batch path (unchanged — SCA tools use this)
+    # Legacy batch path (unchanged — retained for tools without enrichment_fields)
     # ------------------------------------------------------------------
 
     def _call_llm(

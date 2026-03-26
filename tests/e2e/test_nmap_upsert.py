@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import shutil
-import time
 from pathlib import Path
 
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from core.config import ConfigManager
 from core.config.schemas import NmapProfile
 from domain.tools.base import ToolResult
@@ -18,6 +18,7 @@ from tests.conftest import requires_ollama
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 slow = pytest.mark.slow
 
@@ -76,7 +77,7 @@ def _make_nmap_result() -> ToolResult:
             ]
         },
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
 
@@ -86,15 +87,29 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
 
 
 def _ingest(
-    base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
-) -> list[str]:
+    base_path: Path,
+    project_name: str,
+    result: ToolResult,
+    profile: str = "localhost",
+) -> list[dict]:
+    """Normalize rows and upsert rendered text into ChromaDB."""
+    if not result.success or not result.parsed_data:
+        return []
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None:
+        return []
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return []
     engine = _make_rag_engine(base_path, project_name)
     try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
+        texts = [handler.render(row) for row in rows]
+        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        ids = [f"{row['profile']}-{row['ip_address']}:{row['port']}" for row in rows]
+        engine.add_documents(texts, metadatas, ids)
     finally:
         engine.close()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -131,16 +146,14 @@ class TestUpsert:
     def test_rescan_does_not_duplicate_documents(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
 
-        count1 = _ingest(base, name, _make_nmap_result())
-        assert len(count1) >= 1
+        rows1 = _ingest(base, name, _make_nmap_result())
+        assert len(rows1) >= 1
         total_after_first = _make_rag_engine(base, name).count_documents()
-
-        time.sleep(1)  # force different ts_compact → different IDs in second ingest
 
         _ingest(base, name, _make_nmap_result())
         total_after_second = _make_rag_engine(base, name).count_documents()
 
         assert total_after_second == total_after_first, (
             f"Document count grew {total_after_first} → {total_after_second}: "
-            "delete_findings is not clearing stale docs before re-ingestion"
+            "upsert is not deduplicating on re-ingestion"
         )

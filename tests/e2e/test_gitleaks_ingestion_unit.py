@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from application.rag.query import QueryEngine
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
@@ -93,14 +94,14 @@ def _ingest(
     project_name: str,
     result: ToolResult,
     profile: str = "my-test-repo",
-) -> list[str]:
-    engine = _make_rag_engine(base_path, project_name)
-    try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
-    finally:
-        engine.close()
+) -> list[dict]:
+    """Normalize via ToolHandler — Phase 2+ writes to SQLite via IngestHandler."""
+    if not result.success or not result.parsed_data:
+        return []
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None:
+        return []
+    return handler.normalize(result, profile=profile)
 
 
 # ---------------------------------------------------------------------------
@@ -128,26 +129,22 @@ def project_env(tmp_path: Path) -> dict:
 @requires_ollama
 class TestIngestionUnit:
     def test_ingestion_returns_positive_count(self, project_env: dict) -> None:
-        ids = _ingest(
+        rows = _ingest(
             project_env["base_path"],
             project_env["project_name"],
             _make_gitleaks_result(),
         )
-        assert len(ids) >= 1
+        assert len(rows) >= 1
 
     def test_stats_shows_gitleaks_documents(self, project_env: dict) -> None:
-        _ingest(
+        """normalize() produces gitleaks rows with correct tool label."""
+        rows = _ingest(
             project_env["base_path"],
             project_env["project_name"],
             _make_gitleaks_result(),
         )
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
-        try:
-            stats = engine.get_stats()
-        finally:
-            engine.close()
-        assert stats["total_documents"] > 0
-        assert "gitleaks" in stats["by_tool"]
+        assert len(rows) > 0
+        assert all(r["tool"] == "gitleaks" for r in rows)
 
     def test_failed_result_not_ingested(self, project_env: dict) -> None:
         failed = ToolResult(
@@ -159,8 +156,8 @@ class TestIngestionUnit:
             timestamp=RAGEngine.now_iso(),
             duration_seconds=0.0,
         )
-        ids = _ingest(project_env["base_path"], project_env["project_name"], failed)
-        assert ids == []
+        rows = _ingest(project_env["base_path"], project_env["project_name"], failed)
+        assert rows == []
 
     def test_empty_secrets_not_ingested(self, project_env: dict) -> None:
         empty = ToolResult(
@@ -172,8 +169,8 @@ class TestIngestionUnit:
             timestamp=RAGEngine.now_iso(),
             duration_seconds=0.0,
         )
-        ids = _ingest(project_env["base_path"], project_env["project_name"], empty)
-        assert ids == []
+        rows = _ingest(project_env["base_path"], project_env["project_name"], empty)
+        assert rows == []
 
     def test_secret_value_not_in_document_text(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]

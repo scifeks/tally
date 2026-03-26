@@ -50,20 +50,20 @@ class TestEnrichmentHandler:
 
         assert received == []
 
-    def test_dispatches_partial_success_false_on_exception(self) -> None:
+    def test_dispatches_event_on_success(self) -> None:
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
-        mock_engine = MagicMock()
+        mock_repo = MagicMock()
         mock_pipeline = MagicMock()
-        mock_pipeline.enrich.side_effect = RuntimeError("llm down")
+        mock_pipeline.had_errors = False
 
         handler = EnrichmentHandler(bus)
         with (
             patch(
-                "application.pipeline.handlers.EnrichmentHandler._get_engine",
-                return_value=mock_engine,
+                "application.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_repo, MagicMock(), MagicMock()),
             ),
             patch(
                 "application.pipeline.handlers.EnrichmentPipeline",
@@ -75,19 +75,20 @@ class TestEnrichmentHandler:
         assert len(received) == 1
         assert received[0].partial_success is False
 
-    def test_dispatches_partial_success_true_on_success(self) -> None:
+    def test_dispatches_had_errors_true_on_partial_failure(self) -> None:
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
-        mock_engine = MagicMock()
+        mock_repo = MagicMock()
         mock_pipeline = MagicMock()
+        mock_pipeline.had_errors = True
 
         handler = EnrichmentHandler(bus)
         with (
             patch(
-                "application.pipeline.handlers.EnrichmentHandler._get_engine",
-                return_value=mock_engine,
+                "application.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_repo, MagicMock(), MagicMock()),
             ),
             patch(
                 "application.pipeline.handlers.EnrichmentPipeline",
@@ -98,3 +99,26 @@ class TestEnrichmentHandler:
 
         assert len(received) == 1
         assert received[0].partial_success is True
+
+    def test_finding_repo_passed_to_pipeline(self) -> None:
+        bus = EventBus()
+        mock_repo = MagicMock()
+        mock_pipeline = MagicMock()
+        mock_pipeline.had_errors = False
+
+        handler = EnrichmentHandler(bus)
+        with (
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_repo, MagicMock(), MagicMock()),
+            ),
+            patch(
+                "application.pipeline.handlers.EnrichmentPipeline",
+                return_value=mock_pipeline,
+            ) as mock_cls,
+        ):
+            handler.handle(_ingest_completed(ids=[1]))
+
+        mock_cls.assert_called_once()
+        call_kwargs = mock_cls.call_args.kwargs
+        assert call_kwargs["finding_repo"] is mock_repo

@@ -106,7 +106,7 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
 
 def _ingest(
     base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
-) -> list[str]:
+) -> list[int]:
     engine = _make_rag_engine(base_path, project_name)
     try:
         return FindingIngestor(engine, project_name).ingest_tool_output(

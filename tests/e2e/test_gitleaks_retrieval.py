@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from domain.tools.base import ToolResult
 from infrastructure.tools.parsers.gitleaks_parser import parse_gitleaks_json
 from tests.conftest import requires_ollama
@@ -27,6 +28,9 @@ def _parse_fixture(filename: str) -> dict:
     return parse_gitleaks_json(_FIXTURES / filename)
 
 
+_TIMESTAMP = "2024-01-01T00:00:00"
+
+
 def _make_gitleaks_result(
     parsed_data: dict, output_files: dict | None = None
 ) -> ToolResult:
@@ -36,9 +40,23 @@ def _make_gitleaks_result(
         output="",
         parsed_data=parsed_data,
         output_files=output_files or {},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
+
+
+def _ingest_to_chroma(engine: RAGEngine, result: ToolResult, profile: str) -> None:
+    """Normalize rows and add rendered text to ChromaDB."""
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None or not result.parsed_data:
+        return
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return
+    texts = [handler.render(row) for row in rows]
+    metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+    ids = [row["fingerprint"] for row in rows]
+    engine.add_documents(texts, metadatas, ids)
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -101,9 +119,7 @@ class TestGitleaksRetrieval:
             base_path=str(project_env["base_path"]),
         )
         try:
-            FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-                result, profile="test-repo"
-            )
+            _ingest_to_chroma(engine, result, profile="test-repo")
             qe = QueryEngine(engine)
             results = qe.search("aws-access-token")
             assert results, "Expected at least one search result"
@@ -125,9 +141,7 @@ class TestGitleaksRetrieval:
             base_path=str(project_env["base_path"]),
         )
         try:
-            FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-                result, profile="test-repo"
-            )
+            _ingest_to_chroma(engine, result, profile="test-repo")
             qe = QueryEngine(engine)
             results = qe.search("what did gitleaks find?")
             assert results, "Expected results for tool-specific query"

@@ -1,22 +1,17 @@
-"""Integration tests for gitleaks combined-scan → ChromaDB ingestion."""
+"""Integration tests for gitleaks combined-scan via normalize()."""
 
 from __future__ import annotations
 
-import json
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
-from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
     combine_gitleaks_results,
@@ -26,6 +21,7 @@ from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
 pytestmark = pytest.mark.integration
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _parse_fixture(filename: str) -> dict:
@@ -41,69 +37,9 @@ def _make_gitleaks_result(
         output="",
         parsed_data=parsed_data,
         output_files=output_files or {},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
-
-
-def _write_global_config(base_path: Path) -> None:
-    real_config = _TALLY_ROOT / "config" / "global.json"
-    if not real_config.exists():
-        pytest.skip("config/global.json not found")
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(real_config, config_dir / "global.json")
-
-
-def _write_commands_config(base_path: Path) -> None:
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "commands.json").write_text(
-        json.dumps(
-            {
-                "gitleaks": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/local/bin/gitleaks",
-                },
-                "nmap": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/bin/nmap",
-                },
-            }
-        )
-    )
-
-
-def _make_rag_engine(project_env: dict) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
-
-
-def _get_all_docs(engine: RAGEngine) -> dict[str, list]:
-    assert engine._collection is not None
-    result = engine._collection.get(include=["documents", "metadatas"])
-    return {
-        "ids": result["ids"],
-        "documents": list(result["documents"] or []),
-        "metadatas": list(result["metadatas"] or []),
-    }
-
-
-@pytest.fixture()
-def project_env(tmp_path: Path) -> dict:
-    name = "test-proj"
-    _write_global_config(tmp_path)
-    _write_commands_config(tmp_path)
-    pm = ProjectManager(base_path=str(tmp_path))
-    pm.create_project_dirs(name)
-    pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
 
 
 @pytest.fixture()
@@ -122,47 +58,38 @@ def combined_parsed_data(dir_parsed_data: dict, git_parsed_data: dict) -> dict:
 
 
 class TestGitleaksCombinedScan:
-    def test_combined_count(
-        self, project_env: dict, combined_parsed_data: dict
-    ) -> None:
-        """Combined ingest count equals len(combined['secrets'])."""
+    def test_combined_count(self, combined_parsed_data: dict) -> None:
+        """Normalized row count equals len(combined['secrets'])."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         n = len(combined_parsed_data["secrets"])
         result = _make_gitleaks_result(combined_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="combined-repo")
-        assert len(ingested) == n
-        assert engine.count_documents() == n
+        rows = handler.normalize(result, profile="combined-repo")
+        assert len(rows) == n
 
-    def test_combined_metadata_fidelity(
-        self, project_env: dict, combined_parsed_data: dict
-    ) -> None:
-        """Every ingested doc matches a combined secret by rule+file+line."""
+    def test_combined_metadata_fidelity(self, combined_parsed_data: dict) -> None:
+        """Every normalized row matches a combined secret by rule+file+line."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(combined_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="combined-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        for meta in all_docs["metadatas"]:
+        rows = handler.normalize(result, profile="combined-repo")
+        for row in rows:
             matching_secret = next(
                 (
                     s
                     for s in combined_parsed_data["secrets"]
-                    if s["rule_id"] == meta["rule_id"]
-                    and s["file_path"] == meta["file_path"]
-                    and s["line_number"] == meta["line_number"]
+                    if s["rule_id"] == row["rule_id"]
+                    and s["file_path"] == row["file_path"]
+                    and s["line_number"] == row["line_number"]
                 ),
                 None,
             )
             assert matching_secret is not None, (
-                f"No matching secret found for metadata {meta}"
+                f"No matching secret found for row {row}"
             )
 
     def test_deduplication_within_combined(
         self,
-        project_env: dict,
         dir_parsed_data: dict,
         git_parsed_data: dict,
     ) -> None:
@@ -178,12 +105,10 @@ class TestGitleaksCombinedScan:
         assert len(shared_entries) == 1, (
             f"Expected 1 deduplicated entry, got {len(shared_entries)}"
         )
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(combined)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="combined-repo")
-        assert len(ingested) == len(combined["secrets"]), (
-            f"Ingested {len(ingested)} != combined count {len(combined['secrets'])}"
+        rows = handler.normalize(result, profile="combined-repo")
+        assert len(rows) == len(combined["secrets"]), (
+            f"Normalized {len(rows)} != combined count {len(combined['secrets'])}"
         )
-        assert engine.count_documents() == len(combined["secrets"])

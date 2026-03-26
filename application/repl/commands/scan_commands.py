@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def _enrich_results(
     repl: REPL,
-    doc_ids: list[str],
+    doc_ids: list[int],
     finding_repo: object = None,
     run_id: int | None = None,
 ) -> None:
@@ -44,8 +44,8 @@ def _enrich_results(
 
 def _ingest_result(
     repl: REPL, result: ToolResult, profile: str | None = None
-) -> list[str]:
-    """Ingest a ToolResult into the project's RAG store. Returns list of doc IDs."""
+) -> list[int]:
+    """Ingest a ToolResult into the project's RAG store. Returns list of SQLite IDs."""
     from application.rag import FindingIngestor, RAGEngine
 
     assert repl.active_project is not None

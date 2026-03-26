@@ -174,10 +174,11 @@ class TestBasicRoundTrip:
         assert "ip_address" in results[0]["metadata"]
         assert "host" in results[0]["metadata"]
 
-    def test_enriched_set_to_true(self, tmp_path: Path) -> None:
+    def test_enriched_set_to_false_on_ingest(self, tmp_path: Path) -> None:
+        # upsert_findings writes enriched=0; EnrichmentPipeline sets it to 1
         store = _make_store(tmp_path)
         run_id = store.create_run({})
         store.upsert_findings(run_id, _GITLEAKS_FINDINGS[:1])
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
-        assert results[0]["metadata"]["enriched"] is True
+        assert results[0]["metadata"]["enriched"] is False

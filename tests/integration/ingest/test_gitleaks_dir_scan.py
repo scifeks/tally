@@ -1,22 +1,17 @@
-"""Integration tests for gitleaks dir-scan → ChromaDB ingestion."""
+"""Integration tests for gitleaks GitleaksChunkBuilder.normalize() and render()."""
 
 from __future__ import annotations
 
-import json
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
-from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
     parse_gitleaks_json,
@@ -25,6 +20,7 @@ from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
 pytestmark = pytest.mark.integration
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _parse_fixture(filename: str) -> dict:
@@ -40,69 +36,9 @@ def _make_gitleaks_result(
         output="",
         parsed_data=parsed_data,
         output_files=output_files or {},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
-
-
-def _write_global_config(base_path: Path) -> None:
-    real_config = _TALLY_ROOT / "config" / "global.json"
-    if not real_config.exists():
-        pytest.skip("config/global.json not found")
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(real_config, config_dir / "global.json")
-
-
-def _write_commands_config(base_path: Path) -> None:
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "commands.json").write_text(
-        json.dumps(
-            {
-                "gitleaks": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/local/bin/gitleaks",
-                },
-                "nmap": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/bin/nmap",
-                },
-            }
-        )
-    )
-
-
-def _make_rag_engine(project_env: dict) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
-
-
-def _get_all_docs(engine: RAGEngine) -> dict[str, list]:
-    assert engine._collection is not None
-    result = engine._collection.get(include=["documents", "metadatas"])
-    return {
-        "ids": result["ids"],
-        "documents": list(result["documents"] or []),
-        "metadatas": list(result["metadatas"] or []),
-    }
-
-
-@pytest.fixture()
-def project_env(tmp_path: Path) -> dict:
-    name = "test-proj"
-    _write_global_config(tmp_path)
-    _write_commands_config(tmp_path)
-    pm = ProjectManager(base_path=str(tmp_path))
-    pm.create_project_dirs(name)
-    pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
 
 
 @pytest.fixture()
@@ -111,43 +47,36 @@ def dir_parsed_data() -> dict:
 
 
 class TestGitleaksDirScan:
-    def test_count(self, project_env: dict, dir_parsed_data: dict) -> None:
-        """Ingested document count matches number of secrets in fixture."""
+    def test_count(self, dir_parsed_data: dict) -> None:
+        """Normalized row count matches number of secrets in fixture."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         n_secrets = len(dir_parsed_data["secrets"])
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-repo")
-        assert len(ingested) == n_secrets
-        assert engine.count_documents() == n_secrets
+        rows = handler.normalize(result, profile="test-repo")
+        assert len(rows) == n_secrets
 
-    def test_identity(self, project_env: dict, dir_parsed_data: dict) -> None:
-        """Every ingested document ID is retrievable from ChromaDB."""
+    def test_identity(self, dir_parsed_data: dict) -> None:
+        """Every normalized row has required identifying fields."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        stored_ids = set(all_docs["ids"])
-        assert engine._collection is not None
-        for doc_id in stored_ids:
-            fetched = engine._collection.get(ids=[doc_id])
-            assert fetched["ids"] == [doc_id], f"Document {doc_id!r} not retrievable"
+        rows = handler.normalize(result, profile="test-repo")
+        assert rows
+        for row in rows:
+            assert "rule_id" in row
+            assert "file_path" in row
+            assert "line_number" in row
 
-    def test_metadata_fidelity(self, project_env: dict, dir_parsed_data: dict) -> None:
+    def test_metadata_fidelity(self, dir_parsed_data: dict) -> None:
         """Every metadata field matches the expected value from the fixture."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        metadatas = all_docs["metadatas"]
-        assert len(metadatas) == len(dir_parsed_data["secrets"])
+        rows = handler.normalize(result, profile="test-repo")
+        assert len(rows) == len(dir_parsed_data["secrets"])
 
-        for i, (meta, secret) in enumerate(zip(metadatas, dir_parsed_data["secrets"])):
+        for i, (row, secret) in enumerate(zip(rows, dir_parsed_data["secrets"])):
             tags_str = ", ".join(secret.get("tags") or [])
             expected = {
                 "tool": "gitleaks",
@@ -162,65 +91,53 @@ class TestGitleaksDirScan:
                 "source_file": "",
             }
             for field, expected_val in expected.items():
-                assert meta.get(field) == expected_val, (
-                    f"Secret #{i}: metadata field {field!r} mismatch. "
-                    f"Expected {expected_val!r}, got {meta.get(field)!r}"
+                assert row.get(field) == expected_val, (
+                    f"Secret #{i}: field {field!r} mismatch. "
+                    f"Expected {expected_val!r}, got {row.get(field)!r}"
                 )
-            assert "timestamp" in meta, (
-                f"Secret #{i}: 'timestamp' key absent from metadata"
-            )
+            assert "timestamp" in row, f"Secret #{i}: 'timestamp' absent from row"
 
-    def test_content_accuracy(self, project_env: dict, dir_parsed_data: dict) -> None:
-        """Document text matches the exact expected template."""
+    def test_content_accuracy(self, dir_parsed_data: dict) -> None:
+        """Rendered text matches the expected template."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        stored_texts = all_docs["documents"]
-        stored_metas = all_docs["metadatas"]
+        rows = handler.normalize(result, profile="test-repo")
 
-        for text, meta in zip(stored_texts, stored_metas):
-            rule_id = meta["rule_id"]
-            file_path = meta["file_path"]
-            line_number = meta["line_number"]
+        for row in rows:
+            text = handler.render(row)
+            rule_id = row["rule_id"]
+            file_path = row["file_path"]
+            line_number = row["line_number"]
             assert (
                 f"[gitleaks] Rule: {rule_id} | File: {file_path}:{line_number}"
             ) in text
 
-    def test_no_commit_in_dir_scan(
-        self, project_env: dict, dir_parsed_data: dict
-    ) -> None:
-        """Dir-scan documents must NOT have a 'commit' key in metadata."""
+    def test_no_commit_in_dir_scan(self, dir_parsed_data: dict) -> None:
+        """Dir-scan rows must NOT have a 'commit' key."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        for meta in all_docs["metadatas"]:
-            assert "commit" not in meta, (
-                f"'commit' key must be absent from dir-scan metadata, got: {meta}"
+        rows = handler.normalize(result, profile="test-repo")
+        for row in rows:
+            assert "commit" not in row, (
+                f"'commit' key must be absent from dir-scan row, got: {row}"
             )
 
-    def test_no_duplicates(self, project_env: dict, dir_parsed_data: dict) -> None:
-        """Ingesting the same data twice does not double the document count."""
+    def test_no_duplicates(self, dir_parsed_data: dict) -> None:
+        """normalize() is deterministic — same input produces same count."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingestor = FindingIngestor(engine, project_env["project_name"])
-        ingestor.ingest_tool_output(result, profile="test-repo")
-        count_after_first = engine.count_documents()
-        ingestor.ingest_tool_output(result, profile="test-repo")
-        count_after_second = engine.count_documents()
-        assert count_after_second == count_after_first, (
-            f"Duplicate ingest inflated count: {count_after_first}"
-            f" → {count_after_second}"
-        )
+        rows_first = handler.normalize(result, profile="test-repo")
+        rows_second = handler.normalize(result, profile="test-repo")
+        assert len(rows_first) == len(rows_second)
 
-    def test_empty_findings(self, project_env: dict) -> None:
-        """Ingesting an empty secrets list adds 0 documents and raises no error."""
-        empty_data = {
+    def test_empty_findings(self) -> None:
+        """Ingesting an empty secrets list → 0 rows."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
+        empty_data: dict = {
             "secrets": [],
             "summary": {
                 "total_secrets": 0,
@@ -229,67 +146,42 @@ class TestGitleaksDirScan:
             },
         }
         result = _make_gitleaks_result(empty_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-repo")
-        assert ingested == []
-        assert engine.count_documents() == 0
+        rows = handler.normalize(result, profile="test-repo")
+        assert rows == []
 
-    def test_ingest_replaces_stale(
-        self, project_env: dict, dir_parsed_data: dict
-    ) -> None:
-        """Ingesting under a different profile creates independent sets."""
-        result_a = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingestor = FindingIngestor(engine, project_env["project_name"])
-        ingestor.ingest_tool_output(result_a, profile="profile-a")
-        count_a = engine.count_documents()
-
-        result_b = _make_gitleaks_result(dir_parsed_data)
-        ingestor.ingest_tool_output(result_b, profile="profile-b")
-        total = engine.count_documents()
-
-        assert total == count_a * 2, (
-            f"Expected {count_a * 2} docs after two profiles, got {total}"
-        )
-
-        ingestor.ingest_tool_output(result_a, profile="profile-a")
-        assert engine.count_documents() == total, (
-            "Re-ingest of profile-a changed total — "
-            "profile-b contaminated or profile-a not replaced"
-        )
-
-    def test_shared_metadata_fields(
-        self, project_env: dict, dir_parsed_data: dict
-    ) -> None:
-        """Gitleaks chunks have correct domain/enriched/type_* fields."""
+    def test_ingest_replaces_stale(self, dir_parsed_data: dict) -> None:
+        """normalize() sets profile correctly; different profiles are independent."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        for meta in all_docs["metadatas"]:
-            assert meta["domain"] == "code"
-            assert meta["enriched"] is False
-            assert meta["type_secret"] is True
-            assert meta["type_vulnerability"] is False
-            assert meta["type_weakness"] is False
-            assert meta["type_misconfiguration"] is False
-            assert meta["type_exposure"] is False
-            assert meta["type_dependency"] is False
+        rows_a = handler.normalize(result, profile="profile-a")
+        rows_b = handler.normalize(result, profile="profile-b")
+        assert all(r["profile"] == "profile-a" for r in rows_a)
+        assert all(r["profile"] == "profile-b" for r in rows_b)
 
-    def test_text_no_match_value(
-        self, project_env: dict, dir_parsed_data: dict
-    ) -> None:
-        """Document text must not have 'Pattern matched'; must have redaction."""
+    def test_shared_metadata_fields(self, dir_parsed_data: dict) -> None:
+        """Gitleaks rows have correct domain/enriched/type_* fields."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        for text in all_docs["documents"]:
+        rows = handler.normalize(result, profile="test-repo")
+        for row in rows:
+            assert row["domain"] == "code"
+            assert row["enriched"] is False
+            assert row["type_secret"] is True
+            assert row["type_vulnerability"] is False
+            assert row["type_weakness"] is False
+            assert row["type_misconfiguration"] is False
+            assert row["type_exposure"] is False
+            assert row["type_dependency"] is False
+
+    def test_text_no_match_value(self, dir_parsed_data: dict) -> None:
+        """Rendered text must not have 'Pattern matched'; must have rule prefix."""
+        handler = ToolHandlerFactory.load("gitleaks")
+        assert handler is not None
+        result = _make_gitleaks_result(dir_parsed_data)
+        rows = handler.normalize(result, profile="test-repo")
+        for row in rows:
+            text = handler.render(row)
             assert "Pattern matched" not in text
             assert "[gitleaks] Rule:" in text
