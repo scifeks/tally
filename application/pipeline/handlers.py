@@ -1,8 +1,9 @@
-"""Pipeline handlers: IngestHandler, EnrichmentHandler, PersistenceHandler."""
+"""Pipeline handlers: IngestHandler, EnrichmentHandler, ChromaDBHandler."""
 
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from application.rag.enrichment import EnrichmentPipeline
@@ -186,31 +187,33 @@ class EnrichmentHandler(BaseHandler):
         )
 
 
-class PersistenceHandler(BaseHandler):
-    """Handles EnrichmentCompleted: persists enriched findings to SQLite."""
-
-    def __init__(self, bus: EventBus) -> None:
-        super().__init__()
-        self._bus = bus
+class ChromaDBHandler(BaseHandler):
+    """Handles EnrichmentCompleted: writes enriched findings to ChromaDB."""
 
     def handle(self, event: EnrichmentCompleted) -> None:
-        if event.run_id is None:
+        if not event.ids:
             return
 
         try:
             engine = self._get_engine(event.project_name, event.base_path)
         except Exception as exc:
-            logger.warning("PersistenceHandler: RAGEngine init failed: %s", exc)
+            logger.warning("ChromaDBHandler: RAGEngine init failed: %s", exc)
             return
 
         try:
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-            findings_metadata: list[dict] = []
-            for doc_id in event.ids:
-                doc = engine.get_document_by_id(str(doc_id))
-                if doc is not None:
-                    findings_metadata.append(doc["metadata"])
-            if findings_metadata:
-                finding_repo.upsert_findings(event.run_id, findings_metadata)
+            rows = finding_repo.get_by_ids(event.ids)
+            grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
+            for row in rows:
+                grouped[(row["tool"], row["profile"])].append(row)
+            for (tool, profile), group_rows in grouped.items():
+                engine.delete_findings(tool, profile)
+                handler = ToolHandlerFactory.load(tool)
+                if handler is None:
+                    continue
+                texts = [handler.render(row) for row in group_rows]
+                metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
+                ids = [str(row["id"]) for row in group_rows]
+                engine.add_documents(texts=texts, metadatas=metadatas, ids=ids)
         except Exception as exc:
-            logger.error("PersistenceHandler: persistence error: %s", exc)
+            logger.error("ChromaDBHandler: write error: %s", exc)

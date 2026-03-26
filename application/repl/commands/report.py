@@ -178,8 +178,12 @@ class ReportCommand:
             output_path = str(reports_dir / f"report_{ts}.{ext}")
 
         from application.reporting.generator import ReportGenerator
+        from infrastructure.store import make_store
 
-        generator = ReportGenerator(rag_engine, self.repl.active_project)
+        _, finding_repo, _, _ = make_store(
+            self.repl.base_path, self.repl.active_project
+        )
+        generator = ReportGenerator(rag_engine, self.repl.active_project, finding_repo)
 
         with self.repl.console.status(f"Generating {fmt} report..."):
             generator.generate(output_format=fmt, output_path=output_path)

@@ -161,8 +161,7 @@ class QueryEngine:
         for i, r in enumerate(results, 1):
             meta = r["metadata"]
             tool = meta.get("tool", "")
-            finding_type = meta.get("finding_type", "")
-            label = f"[{tool}/{finding_type}]" if tool else ""
+            label = f"[{tool}]" if tool else ""
             context_lines.append(f"{i}. {label} {r['document']}")
         context = "\n".join(context_lines)
 
