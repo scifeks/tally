@@ -11,6 +11,7 @@ Tally is a CLI REPL for orchestrating web application penetration testing. It wr
 - Automatic tool discovery on startup — skips tools that are not installed
 - RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
+- Browser-based findings reviewer with inline editing — launched on demand from the REPL
 - Human-in-the-loop approval before each tool execution
 - Dependency checker validates required packages on every startup
 - Docker execution support for all tools
@@ -102,6 +103,13 @@ report
 | `purge --tool=<tool,...>` | Delete findings for specific tool(s) only — reports unaffected |
 | `purge --keep-reports` | Delete all findings and tool outputs but keep generated reports |
 
+### Findings Visualizer
+
+| Command | Description |
+|---|---|
+| `findings visualize` | Start the local findings browser and open it in your default browser |
+| `findings visualize --stop` | Stop the running web server |
+
 ### Triage
 
 | Command | Description |
@@ -181,6 +189,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
 - [docs/report.md](docs/report.md) — Report generation guide: quick reports, PDF assembly, and shell preview
 - [docs/mcp.md](docs/mcp.md) — MCP triage system setup and usage guide
+- [docs/findings-visualize.md](docs/findings-visualize.md) — Findings visualizer: browser-based findings browser with inline editing
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
 - [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers

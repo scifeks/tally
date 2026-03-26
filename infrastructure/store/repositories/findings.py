@@ -326,6 +326,69 @@ class FindingRepository:
             rows = conn.execute(sql).fetchall()
         return [dict(r) for r in rows]
 
+    def update_analyst_fields(
+        self,
+        finding_id: int,
+        fields: dict[str, Any],
+    ) -> bool:
+        """Update analyst-writable fields on a finding row.
+
+        Writes only the editable named columns and/or meta keys present
+        in ``fields``.  Never touches locked fields or type_* flags.
+        Always sets ``triaged_by = 'analyst_web'`` and ``triaged_at``
+        to the current UTC timestamp.
+
+        Meta keys accepted in ``fields``: ``remediation``, ``risk_type``,
+        ``owasp_name``, ``title``, ``tags``.  All other keys are treated
+        as named-column updates.
+
+        Returns True if the row was updated, False if not found.
+        Does NOT call update_finding(), upsert_findings(), or any
+        ChromaDB / enrichment method.
+        """
+        from datetime import UTC, datetime
+
+        row = self.get_finding(finding_id)
+        if row is None:
+            return False
+
+        try:
+            existing_meta: dict[str, Any] = json.loads(row["meta"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            existing_meta = {}
+
+        _META_KEYS: frozenset[str] = frozenset(
+            {"remediation", "risk_type", "owasp_name", "title", "tags"}
+        )
+
+        column_updates: dict[str, Any] = {}
+        for key, val in fields.items():
+            if key in _META_KEYS:
+                # Merge into existing blob; type_* flags are untouched
+                # because they are not in _META_KEYS and are never set here.
+                existing_meta[key] = val
+            else:
+                column_updates[key] = val
+
+        updated_meta = json.dumps(existing_meta)
+        now_iso = datetime.now(UTC).isoformat()
+
+        set_parts: list[str] = []
+        params: list[Any] = []
+
+        for col, val in column_updates.items():
+            set_parts.append(f"{col} = ?")
+            params.append(val)
+
+        set_parts.extend(["meta = ?", "triaged_by = 'analyst_web'", "triaged_at = ?"])
+        params.extend([updated_meta, now_iso])
+        params.append(finding_id)
+
+        sql = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
+        with self._factory.connect() as conn:
+            cursor = conn.execute(sql, params)
+            return cursor.rowcount > 0
+
     def reset_tal_ids(self) -> None:
         """Set tal_id = NULL for every row in findings."""
         with self._factory.connect() as conn:

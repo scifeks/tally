@@ -61,3 +61,9 @@ MagicMock
 
 #Claude MCP stuff
 .claude/
+
+tmp/
+
+# Frontend
+ui/node_modules/
+web/static/

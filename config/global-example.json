@@ -22,5 +22,6 @@
   "projects_dir": "./projects",
   "location_attestation_confirmed": false,
   "enrichment_max_concurrency": 4,
-  "report_finding_prefix": "TAL"
+  "report_finding_prefix": "TAL",
+  "web_ui_port": 8080
 }
