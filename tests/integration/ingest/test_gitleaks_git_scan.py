@@ -155,7 +155,7 @@ class TestGitleaksGitScan:
             file_path = meta["file_path"]
             line_number = meta["line_number"]
             assert (
-                f"[gitleaks] Secret detected: {rule_id} in {file_path}:{line_number}"
+                f"[gitleaks] Rule: {rule_id} | File: {file_path}:{line_number}"
             ) in text
 
         import json as _json

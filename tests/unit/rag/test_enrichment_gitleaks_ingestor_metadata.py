@@ -1,4 +1,4 @@
-"""Unit tests for gitleaks chunk builder metadata (no ChromaDB)."""
+"""Unit tests for gitleaks handler metadata (no ChromaDB)."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class TestGitleaksIngestorMetadata:
         chunks = self._get_chunks("jwt")
         assert chunks[0][1]["risk_type"] == "jwt"
 
-    def test_title_set_with_repo(self) -> None:
+    def test_repo_name_set_when_injected(self) -> None:
         from core.config.schemas import Repository
 
         repo = Repository.model_construct(
@@ -69,7 +69,6 @@ class TestGitleaksIngestorMetadata:
             test_dirs=[],
         )
         result = self._make_gitleaks_result("aws-access-token")
-        # Relative path — exactly what gitleaks outputs in production
         assert result.parsed_data is not None
         result.parsed_data["secrets"][0]["file_path"] = "config.py"
         ingestor = FindingIngestor(
@@ -77,15 +76,14 @@ class TestGitleaksIngestorMetadata:
         )
         chunks = ingestor._build_chunks(result, "default")
         assert len(chunks) == 1
-        assert chunks[0][1]["title"] == "Secret of type aws-access-token found in myapp"
         assert chunks[0][1]["repo"] == "myapp"
 
-    def test_title_set_without_repo(self) -> None:
+    def test_no_title_without_repo(self) -> None:
         chunks = self._get_chunks("aws-access-token")
         assert len(chunks) == 1
-        assert chunks[0][1]["title"] == "Secret of type aws-access-token found"
+        assert "title" not in chunks[0][1]
 
-    def test_title_absent_when_no_rule_id(self) -> None:
+    def test_no_title_when_no_rule_id(self) -> None:
         chunks = self._get_chunks("")
         assert len(chunks) == 1
         assert "title" not in chunks[0][1]

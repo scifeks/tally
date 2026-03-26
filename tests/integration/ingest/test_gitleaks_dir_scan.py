@@ -186,9 +186,8 @@ class TestGitleaksDirScan:
             file_path = meta["file_path"]
             line_number = meta["line_number"]
             assert (
-                f"[gitleaks] Secret detected: {rule_id} in {file_path}:{line_number}"
+                f"[gitleaks] Rule: {rule_id} | File: {file_path}:{line_number}"
             ) in text
-            assert "Note: Secret value redacted" in text
 
     def test_no_commit_in_dir_scan(
         self, project_env: dict, dir_parsed_data: dict
@@ -293,4 +292,4 @@ class TestGitleaksDirScan:
         all_docs = _get_all_docs(engine)
         for text in all_docs["documents"]:
             assert "Pattern matched" not in text
-            assert "Note: Secret value redacted" in text
+            assert "[gitleaks] Rule:" in text

@@ -1,7 +1,6 @@
-"""NmapChunkBuilder — converts nmap ToolResult into ChromaDB document chunks."""
+"""NmapHandler — converts nmap ToolResult into normalized finding dicts."""
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 
 from domain.tools.base import ToolResult
@@ -17,86 +16,42 @@ class NmapChunkBuilder:
     non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "risk_type", "remediation", "description"}
     )
-    type_flags: dict[str, set[str]] = {"informational": set()}
+    type_flags: dict[str, set[str]] = {"exposure": {"type_exposure"}}
     should_enrich = False
+    enrichment_fields = None
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]:
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
         parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         hosts: list[dict[str, Any]] = parsed.get("hosts", [])
         scan_info: dict[str, Any] = parsed.get("scan_info", {})
 
         timestamp = result.timestamp
         source_file = _first_output_file(result.output_files)
-        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
         nmap_version = scan_info.get("version", "")
         nmap_args = scan_info.get("args", "")
         scan_start_time = scan_info.get("start_time", "")
 
-        chunks: list[tuple[str, dict[str, Any], str]] = []
+        rows: list[dict] = []
 
-        for host_idx, host in enumerate(hosts):
+        for host in hosts:
             ip = host.get("ip_address", "")
-            hostname = host.get("hostname", "")
-            state = host.get("state", "unknown")
             ports: list[dict[str, Any]] = host.get("ports", [])
             open_ports = [p for p in ports if p.get("state") == "open"]
 
-            # ---- host chunk ----
-            port_lines = (
-                "\n".join(
-                    (
-                        f"  {p['port']}/{p.get('transport', 'tcp')} "
-                        f"{p.get('service', '')} {p.get('service_version', '')}"
-                    ).rstrip()
-                    for p in open_ports
-                )
-                or "  (none)"
-            )
-
-            host_label = f"{ip} ({hostname})" if hostname else ip
-            host_text = (
-                f"[nmap] Host: {host_label}\nStatus: {state}\nPorts:\n{port_lines}"
-            )
-            # TODO: description not set — nmap parser does not emit a description field
-            host_meta: dict[str, Any] = {
-                "tool": "nmap",
-                "profile": profile,
-                "finding_type": json.dumps(["informational"]),
-                "confidence": CONFIDENCE_CONFIRMED,
-                "ip_address": ip,
-                "hostname": hostname,
-                "state": state,
-                "timestamp": timestamp,
-                "source_file": source_file,
-            }
-            if nmap_version:
-                host_meta["nmap_version"] = nmap_version
-            if nmap_args:
-                host_meta["nmap_args"] = nmap_args
-            if scan_start_time:
-                host_meta["scan_start_time"] = scan_start_time
-            host_meta.update(_shared_meta(self, "informational"))
-            host_meta["severity"] = SEVERITY_INFORMATIONAL
-            host_id = f"nmap_{profile}_host_{host_idx}_{ts_compact}"
-            chunks.append((host_text, host_meta, host_id))
-
-            # ---- per-port chunks ----
-            for port_idx, port in enumerate(open_ports):
+            for port in open_ports:
                 port_num = port.get("port", 0)
                 transport = port.get("transport", "tcp")
                 service = port.get("service", "")
                 service_version = port.get("service_version", "")
                 svc_str = f"{service} {service_version}".strip()
 
-                port_text = f"[nmap] Port {port_num}/{transport} on {ip}: {svc_str}"
-                port_meta: dict[str, Any] = {
+                row: dict[str, Any] = {
                     "tool": "nmap",
                     "profile": profile,
-                    "finding_type": json.dumps(["informational"]),
+                    "finding_type": json.dumps(["exposure"]),
                     "confidence": CONFIDENCE_CONFIRMED,
+                    "severity": SEVERITY_INFORMATIONAL,
                     "ip_address": ip,
                     "port": port_num,
                     "service": service,
@@ -106,14 +61,14 @@ class NmapChunkBuilder:
                     "timestamp": timestamp,
                     "source_file": source_file,
                 }
-                port_meta.update(_shared_meta(self, "informational"))
-                port_meta["severity"] = SEVERITY_INFORMATIONAL
+                if svc_str:
+                    row["description"] = f"{svc_str} service open on port {port_num}"
                 if nmap_version:
-                    port_meta["nmap_version"] = nmap_version
+                    row["nmap_version"] = nmap_version
                 if nmap_args:
-                    port_meta["nmap_args"] = nmap_args
+                    row["nmap_args"] = nmap_args
                 if scan_start_time:
-                    port_meta["scan_start_time"] = scan_start_time
+                    row["scan_start_time"] = scan_start_time
                 for key in (
                     "tls",
                     "tls_version",
@@ -123,18 +78,17 @@ class NmapChunkBuilder:
                 ):
                     val = port.get(key)
                     if val is not None:
-                        port_meta[key] = val
-                port_id = f"nmap_{profile}_port_{host_idx}_{port_idx}_{ts_compact}"
-                chunks.append((port_text, port_meta, port_id))
+                        row[key] = val
+                row.update(_shared_meta(self, "exposure"))
 
-        return chunks
+                rows.append(row)
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str:
-        return "|".join(
-            [
-                "nmap",
-                str(finding.get("ip_address", "")),
-                str(finding.get("port", "")),
-                str(finding.get("transport", "")),
-            ]
+        return rows
+
+    def render(self, row: dict) -> str:
+        ip = row.get("ip_address", "")
+        port = row.get("port", "")
+        service = row.get("service", "")
+        return (
+            f"[nmap] Host: {ip} | Port: {port}/tcp | Service: {service} | State: open"
         )

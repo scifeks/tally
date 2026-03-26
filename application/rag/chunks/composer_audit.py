@@ -1,11 +1,9 @@
-"""ComposerAuditChunkBuilder — converts composer-audit ToolResults into chunks."""
-
-from typing import Any
+"""ComposerAuditHandler — converts composer-audit ToolResults into finding dicts."""
 
 from domain.tools.base import ToolResult
 from domain.tools.enrichment import FieldEnrichmentSpec
 
-from .sca import _SCA_COMMON_ENRICHMENT_FIELDS, _build_sca_chunks, _sca_fingerprint_key
+from .sca import _SCA_COMMON_ENRICHMENT_FIELDS, _build_sca_normalize, _sca_render
 
 
 class ComposerAuditChunkBuilder:
@@ -18,10 +16,8 @@ class ComposerAuditChunkBuilder:
         "dependency": {"type_dependency", "type_vulnerability"}
     }
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]:
-        return _build_sca_chunks(self, result, profile)
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
+        return _build_sca_normalize(self, result, profile)
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str:
-        return _sca_fingerprint_key("composer-audit", finding)
+    def render(self, row: dict) -> str:
+        return _sca_render(row)

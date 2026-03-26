@@ -3,10 +3,12 @@
 import importlib
 import inspect
 import logging
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from core.config.schemas import Repository
 from domain.tools.base import ToolResult
+from domain.tools.enrichment import FieldEnrichmentSpec
 
 from .engine import RAGEngine
 
@@ -14,39 +16,38 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
-# ChunkBuilder Protocol
+# ToolHandler Protocol
 # ------------------------------------------------------------------
 
 
-class ChunkBuilder(Protocol):
+class ToolHandler(Protocol):
     tool_name: str
     domain: str
     segment: str
     non_enriched_fields: frozenset[str]
     type_flags: dict[str, set[str]]
     should_enrich: bool
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] | None
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]: ...
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]: ...
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str: ...
+    def render(self, row: dict) -> str: ...
 
 
 # ------------------------------------------------------------------
-# ChunkBuilderFactory
+# ToolHandlerFactory
 # ------------------------------------------------------------------
 
 
-class ChunkBuilderFactory:
+class ToolHandlerFactory:
     @staticmethod
-    def load(tool_name: str) -> ChunkBuilder | None:
-        """Load and instantiate the chunk builder for tool_name, or None."""
+    def load(tool_name: str) -> ToolHandler | None:
+        """Load and instantiate the tool handler for tool_name, or None."""
         stem = tool_name.replace("-", "_")
         try:
             module = importlib.import_module(f"application.rag.chunks.{stem}")
         except ImportError:
-            logger.debug("No chunk builder module for tool %r", tool_name)
+            logger.debug("No tool handler module for tool %r", tool_name)
             return None
         for _, obj in inspect.getmembers(module, inspect.isclass):
             if (
@@ -54,35 +55,39 @@ class ChunkBuilderFactory:
                 and getattr(obj, "tool_name", None) == tool_name
             ):
                 return obj()
-        logger.debug("No ChunkBuilder class found in module for tool %r", tool_name)
+        logger.debug("No ToolHandler class found in module for tool %r", tool_name)
         return None
 
 
+# Backward-compat alias — enrichment.py imports this name and must not be modified.
+ChunkBuilderFactory = ToolHandlerFactory
+
+
 # ------------------------------------------------------------------
-# Builder registry helpers
+# Handler registry helpers
 # ------------------------------------------------------------------
 
 
-def _default_builders() -> dict[str, ChunkBuilder]:
-    """Discover all chunk builders by scanning the chunks package directory."""
+def _default_builders() -> dict[str, ToolHandler]:
+    """Discover all tool handlers by scanning the chunks package directory."""
     from pathlib import Path
 
-    result: dict[str, ChunkBuilder] = {}
+    result: dict[str, ToolHandler] = {}
     chunks_dir = Path(__file__).parent / "chunks"
     for module_file in sorted(chunks_dir.glob("*.py")):
         if module_file.name.startswith("_") or module_file.stem == "sca":
             continue
         tool_name = module_file.stem.replace("_", "-")
-        builder = ChunkBuilderFactory.load(tool_name)
-        if builder is not None:
-            result[builder.tool_name] = builder
+        handler = ToolHandlerFactory.load(tool_name)
+        if handler is not None:
+            result[handler.tool_name] = handler
     return result
 
 
 def get_tool_domain(tool_name: str) -> str | None:
     """Return the domain ('code', 'web', 'network') for a tool, or None."""
-    builder = ChunkBuilderFactory.load(tool_name)
-    return builder.domain if builder is not None else None
+    handler = ToolHandlerFactory.load(tool_name)
+    return handler.domain if handler is not None else None
 
 
 def _is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
@@ -153,13 +158,13 @@ class FindingIngestor:
         self,
         rag_engine: RAGEngine,
         project_name: str,
-        builders: dict[str, ChunkBuilder] | None = None,
+        builders: dict[str, ToolHandler] | None = None,
         repositories: list[Repository] | None = None,
         repo_name: str | None = None,
     ) -> None:
         self._engine = rag_engine
         self.project_name = project_name
-        self._builders: dict[str, ChunkBuilder] = (
+        self._builders: dict[str, ToolHandler] = (
             builders if builders is not None else _default_builders()
         )
         self._repositories = repositories
@@ -219,28 +224,26 @@ class FindingIngestor:
         tool_result: ToolResult,
         profile: str,
     ) -> list[tuple[str, dict[str, Any], str]]:
-        """Dispatch to the registered ChunkBuilder for the tool."""
+        """Dispatch to the registered ToolHandler for the tool."""
         tool = tool_result.tool_name
-        builder = self._builders.get(tool)
-        if builder is None:
+        handler = self._builders.get(tool)
+        if handler is None:
             logger.debug(
-                "No chunk builder registered for tool '%s'; skipping ingestion", tool
+                "No tool handler registered for tool '%s'; skipping ingestion", tool
             )
             return []
 
-        raw_chunks = builder.build(tool_result, profile)
+        raw_rows: list[dict] = handler.normalize(tool_result, profile)
+        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
         if self._repositories is None:
-            _gen = getattr(builder, "generate_title", None)
-            if _gen is not None:
-                for _, meta, _ in raw_chunks:
-                    _t = _gen(meta)
-                    if _t is not None:
-                        meta["title"] = _t
-            return raw_chunks
+            return [
+                (handler.render(row), row, f"{tool}_{profile}_{i}_{ts_compact}")
+                for i, row in enumerate(raw_rows)
+            ]
 
         chunks: list[tuple[str, dict[str, Any], str]] = []
-        for text, meta, doc_id in raw_chunks:
+        for i, meta in enumerate(raw_rows):
             file_path: str = meta.get("file_path", "") or ""
             if self._repo_name is not None:
                 repo_name: str | None = self._repo_name
@@ -253,7 +256,7 @@ class FindingIngestor:
             if repo_name is not None:
                 meta["repo"] = repo_name
 
-            if builder.domain == "code" and not rel_path:
+            if handler.domain == "code" and not rel_path:
                 logger.error(
                     "Excluding chunk with missing file path: tool=%s rule_id=%s",
                     tool,
@@ -261,7 +264,7 @@ class FindingIngestor:
                 )
                 continue
 
-            if builder.domain == "code" and repo_name is not None and rel_path:
+            if handler.domain == "code" and repo_name is not None and rel_path:
                 _tdirs = self._repo_test_dirs.get(repo_name, [])
                 if _tdirs and _is_test_path(rel_path, _tdirs):
                     logger.debug(
@@ -271,13 +274,8 @@ class FindingIngestor:
                     )
                     continue
 
-            _gen = getattr(builder, "generate_title", None)
-            if _gen is not None:
-                _t = _gen(meta)
-                if _t is not None:
-                    meta["title"] = _t
-
-            chunks.append((text, meta, doc_id))
+            doc_id = f"{tool}_{profile}_{i}_{ts_compact}"
+            chunks.append((handler.render(meta), meta, doc_id))
 
         return chunks
 

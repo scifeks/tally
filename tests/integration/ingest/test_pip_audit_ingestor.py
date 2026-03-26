@@ -254,7 +254,7 @@ class TestPipAuditIngestor:
     def test_text_template_with_fixed_version(
         self, project_env: dict, vulns_parsed_data: dict
     ) -> None:
-        """Document text contains 'Fixed in: <version>' when fix is available."""
+        """Document text contains package name and vulnerability id."""
         result = _make_pip_audit_result(vulns_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -267,12 +267,13 @@ class TestPipAuditIngestor:
             if m["vulnerability_id"] == "PYSEC-2023-74"
         ]
         assert len(requests_docs) == 1
-        assert "Fixed in: 2.31.0" in requests_docs[0]
+        assert "requests" in requests_docs[0]
+        assert "PYSEC-2023-74" in requests_docs[0]
 
     def test_text_template_without_fixed_version(
         self, project_env: dict, vulns_parsed_data: dict
     ) -> None:
-        """Document text contains 'Fixed in: unknown' when no fix is available."""
+        """Document text contains package name and vulnerability id."""
         result = _make_pip_audit_result(vulns_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -285,7 +286,8 @@ class TestPipAuditIngestor:
             if m["vulnerability_id"] == "PYSEC-2023-175"
         ]
         assert len(pillow_docs) == 1
-        assert "Fixed in: unknown" in pillow_docs[0]
+        assert "pillow" in pillow_docs[0]
+        assert "PYSEC-2023-175" in pillow_docs[0]
 
     def test_tool_name_in_text_and_metadata(
         self, project_env: dict, vulns_parsed_data: dict

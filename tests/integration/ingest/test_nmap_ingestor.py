@@ -127,47 +127,45 @@ class TestNmapIngestor:
     def test_count_host_and_port_chunks(
         self, project_env: dict, basic_parsed_data: dict
     ) -> None:
-        """1 host + 2 open ports → 3 documents total."""
+        """2 open ports → 2 port documents (no host-level chunks)."""
         result = _make_nmap_result(basic_parsed_data)
         engine = _make_rag_engine(project_env)
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert len(ingested) == 3
-        assert engine.count_documents() == 3
+        assert len(ingested) == 2
+        assert engine.count_documents() == 2
 
     def test_count_no_open_ports(
         self, project_env: dict, no_ports_parsed_data: dict
     ) -> None:
-        """1 host with no open ports → 1 host document, 0 port documents."""
+        """1 host with no open ports → 0 documents (host-level chunks removed)."""
         result = _make_nmap_result(no_ports_parsed_data)
         engine = _make_rag_engine(project_env)
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert len(ingested) == 1
-        assert engine.count_documents() == 1
+        assert len(ingested) == 0
+        assert engine.count_documents() == 0
 
     def test_host_chunk_metadata(
         self, project_env: dict, basic_parsed_data: dict
     ) -> None:
-        """Host chunk metadata fields match expected values."""
+        """Port chunk metadata includes ip_address, profile, tool, and finding_type."""
         result = _make_nmap_result(basic_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
             result, profile="test-scan"
         )
         all_docs = _get_all_docs(engine)
-        host_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" not in m
+        port_metas = [
+            m for m in all_docs["metadatas"] if m["finding_type"] == '["exposure"]'
         ]
-        assert len(host_metas) == 1
-        meta = host_metas[0]
+        assert len(port_metas) == 2
+        meta = port_metas[0]
         assert meta["tool"] == "nmap"
         assert meta["profile"] == "test-scan"
-        assert meta["finding_type"] == '["informational"]'
+        assert meta["finding_type"] == '["exposure"]'
         assert meta["ip_address"] == "127.0.0.1"
         assert meta["source_file"] == ""
         assert "timestamp" in meta
@@ -185,7 +183,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
+            if m["finding_type"] == '["exposure"]' and "port" in m
         ]
         assert len(port_metas) == 2
         port_numbers = {m["port"] for m in port_metas}
@@ -193,7 +191,7 @@ class TestNmapIngestor:
         for meta in port_metas:
             assert meta["tool"] == "nmap"
             assert meta["profile"] == "test-scan"
-            assert meta["finding_type"] == '["informational"]'
+            assert meta["finding_type"] == '["exposure"]'
             assert meta["ip_address"] == "127.0.0.1"
             assert meta["service"] == "http"
             assert isinstance(meta["port"], int)
@@ -202,56 +200,7 @@ class TestNmapIngestor:
     def test_host_text_template_with_hostname(
         self, project_env: dict, basic_parsed_data: dict
     ) -> None:
-        """Host chunk text uses 'ip (hostname)' label and lists open ports."""
-        result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        host_docs = [
-            d
-            for d, m in zip(all_docs["documents"], all_docs["metadatas"])
-            if m["finding_type"] == '["informational"]' and "port" not in m
-        ]
-        assert len(host_docs) == 1
-        text = host_docs[0]
-        assert "[nmap] Host: 127.0.0.1 (localhost)" in text
-        assert "Status: up" in text
-        assert "80/tcp" in text
-        assert "443/tcp" in text
-
-    def test_host_text_template_no_hostname(
-        self, project_env: dict, no_ports_parsed_data: dict
-    ) -> None:
-        """Host chunk text uses bare IP when hostname is empty."""
-        result = _make_nmap_result(no_ports_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        text = all_docs["documents"][0]
-        assert "[nmap] Host: 192.168.1.1\n" in text
-        assert "()" not in text
-
-    def test_host_text_no_open_ports_shows_none(
-        self, project_env: dict, no_ports_parsed_data: dict
-    ) -> None:
-        """Host chunk shows '(none)' when there are no open ports."""
-        result = _make_nmap_result(no_ports_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        text = all_docs["documents"][0]
-        assert "(none)" in text
-
-    def test_port_text_template(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Open port chunk text matches expected format."""
+        """Port chunk text includes ip, port, and service."""
         result = _make_nmap_result(basic_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
@@ -261,10 +210,57 @@ class TestNmapIngestor:
         port_docs = [
             d
             for d, m in zip(all_docs["documents"], all_docs["metadatas"])
-            if m["finding_type"] == '["informational"]' and m.get("port") == 80
+            if m["finding_type"] == '["exposure"]'
+        ]
+        assert len(port_docs) == 2
+        for text in port_docs:
+            assert "[nmap] Host: 127.0.0.1" in text
+            assert "Port:" in text
+            assert "State: open" in text
+
+    def test_host_text_template_no_hostname(
+        self, project_env: dict, no_ports_parsed_data: dict
+    ) -> None:
+        """No open ports → no documents ingested."""
+        result = _make_nmap_result(no_ports_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        assert all_docs["documents"] == []
+
+    def test_host_text_no_open_ports_shows_none(
+        self, project_env: dict, no_ports_parsed_data: dict
+    ) -> None:
+        """No open ports → empty document set."""
+        result = _make_nmap_result(no_ports_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        assert engine.count_documents() == 0
+
+    def test_port_text_template(
+        self, project_env: dict, basic_parsed_data: dict
+    ) -> None:
+        """Port chunk text matches expected render format."""
+        result = _make_nmap_result(basic_parsed_data)
+        engine = _make_rag_engine(project_env)
+        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
+            result, profile="test-scan"
+        )
+        all_docs = _get_all_docs(engine)
+        port_docs = [
+            d
+            for d, m in zip(all_docs["documents"], all_docs["metadatas"])
+            if m.get("port") == 80
         ]
         assert len(port_docs) == 1
-        assert "[nmap] Port 80/tcp on 127.0.0.1: http nginx 1.29.5" in port_docs[0]
+        assert (
+            "[nmap] Host: 127.0.0.1 | Port: 80/tcp | Service: http | State: open"
+            in port_docs[0]
+        )
 
     def test_no_duplicates(self, project_env: dict, basic_parsed_data: dict) -> None:
         """Ingesting the same data twice does not double the document count."""
@@ -309,32 +305,31 @@ class TestNmapIngestor:
     def test_scripts_fixture_chunk_count(
         self, project_env: dict, scripts_parsed_data: dict
     ) -> None:
-        """1 host + 3 open ports = 4 documents."""
+        """3 open ports → 3 documents (no host-level chunk)."""
         result = _make_nmap_result(scripts_parsed_data)
         engine = _make_rag_engine(project_env)
         ingested = FindingIngestor(
             engine, project_env["project_name"]
         ).ingest_tool_output(result, profile="test-scan")
-        assert len(ingested) == 4
+        assert len(ingested) == 3
 
     def test_host_chunk_has_hostname_and_state(
         self, project_env: dict, scripts_parsed_data: dict
     ) -> None:
+        """Port chunk metadata includes ip_address and state."""
         result = _make_nmap_result(scripts_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
             result, profile="test-scan"
         )
         all_docs = _get_all_docs(engine)
-        host_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" not in m
+        port_metas = [
+            m for m in all_docs["metadatas"] if m["finding_type"] == '["exposure"]'
         ]
-        assert len(host_metas) == 1
-        meta = host_metas[0]
-        assert meta["hostname"] == "testserver.local"
-        assert meta["state"] == "up"
+        assert len(port_metas) == 3
+        for meta in port_metas:
+            assert meta["state"] == "open"
+            assert meta["ip_address"]
 
     def test_port_chunk_has_transport_and_service_version(
         self, project_env: dict, scripts_parsed_data: dict
@@ -348,7 +343,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
+            if m["finding_type"] == '["exposure"]' and "port" in m
         ]
         for meta in port_metas:
             assert "transport" in meta
@@ -409,7 +404,7 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
+            if m["finding_type"] == '["exposure"]' and "port" in m
         ]
         for meta in port_metas:
             for key in (
@@ -424,23 +419,21 @@ class TestNmapIngestor:
     def test_host_chunk_shared_metadata(
         self, project_env: dict, basic_parsed_data: dict
     ) -> None:
-        """Host chunks have correct domain/enriched/type_* fields."""
+        """Port chunks have correct domain/enriched/type_exposure fields."""
         result = _make_nmap_result(basic_parsed_data)
         engine = _make_rag_engine(project_env)
         FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
             result, profile="test-scan"
         )
         all_docs = _get_all_docs(engine)
-        host_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" not in m
+        port_metas = [
+            m for m in all_docs["metadatas"] if m["finding_type"] == '["exposure"]'
         ]
-        assert host_metas
-        for meta in host_metas:
+        assert port_metas
+        for meta in port_metas:
             assert meta["domain"] == "network"
             assert meta["enriched"] is False
-            assert meta["type_exposure"] is False
+            assert meta["type_exposure"] is True
             assert meta["type_secret"] is False
             assert meta["type_vulnerability"] is False
             assert meta["type_weakness"] is False
@@ -460,13 +453,13 @@ class TestNmapIngestor:
         port_metas = [
             m
             for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
+            if m["finding_type"] == '["exposure"]' and "port" in m
         ]
         assert port_metas
         for meta in port_metas:
             assert meta["domain"] == "network"
             assert meta["enriched"] is False
-            assert meta["type_exposure"] is False
+            assert meta["type_exposure"] is True
             assert meta["type_secret"] is False
             assert meta["type_vulnerability"] is False
             assert meta["type_weakness"] is False

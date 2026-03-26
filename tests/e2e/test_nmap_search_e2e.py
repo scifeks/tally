@@ -153,7 +153,11 @@ class TestSearchE2E:
     ) -> None:
         base, name = nmap_project_env["base_path"], nmap_project_env["project_name"]
         result = _run_scan(base, name)
-        _ingest(base, name, result)
+        ingested = _ingest(base, name, result)
+        if not ingested:
+            pytest.skip(
+                "nmap found no open ports on 127.0.0.1 — no documents to search"
+            )
         results = QueryEngine(_make_rag_engine(base, name)).search(
             "127.0.0.1", n_results=5
         )
