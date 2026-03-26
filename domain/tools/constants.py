@@ -33,6 +33,10 @@ SEVERITY_INFORMATIONAL = "informational"
 SEVERITY_HIGH = "high"
 CONFIDENCE_CONFIRMED = "confirmed"
 
+STATUS_LEVELS: frozenset[str] = frozenset(
+    {"active", "false_positive", "fixed", "wont_fix"}
+)
+
 DOMAINS: set[str] = {"code", "web", "network"}
 
 BOOLEAN_TYPE_FIELDS: set[str] = {f"type_{t}" for t in FINDING_TYPES}

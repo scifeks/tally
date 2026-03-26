@@ -96,3 +96,17 @@ export async function patchFinding(id: number, patch: FindingPatch): Promise<Fin
   const response = await http.patch<Finding>(`/api/findings/${id}`, patch)
   return response.data
 }
+
+export interface FieldSpec {
+  editor: 'select' | 'text' | 'boolean' | 'tags'
+  options?: string[]
+}
+
+export interface AppConfig {
+  editable_fields: Record<string, FieldSpec>
+}
+
+export async function getConfig(): Promise<AppConfig> {
+  const response = await http.get<AppConfig>('/api/config/')
+  return response.data
+}

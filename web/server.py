@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import uvicorn
@@ -13,6 +15,7 @@ from starlette.types import ASGIApp
 
 from application.rag.engine import RAGEngine
 from infrastructure.store.connection import ConnectionFactory
+from web.api.config import router as config_router
 from web.api.findings import router as findings_router
 from web.api.projects import router as projects_router
 
@@ -20,7 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 class _BearerTokenMiddleware(BaseHTTPMiddleware):
-    """Reject any request missing a valid Authorization: Bearer <token> header."""
+    """Require Authorization: Bearer <token> on /api/* routes only.
+
+    Non-API paths (the SPA root, static assets) pass through unauthenticated
+    so that the browser can load index.html and extract the token from the
+    ``?token=`` query parameter before making any API calls.
+    """
 
     def __init__(self, app: ASGIApp, token: str) -> None:
         super().__init__(app)
@@ -29,13 +37,14 @@ class _BearerTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        auth = request.headers.get("Authorization", "")
-        if auth != f"Bearer {self._token}":
-            return Response(
-                content='{"detail": "Unauthorized"}',
-                status_code=401,
-                media_type="application/json",
-            )
+        if request.url.path.startswith("/api/"):
+            auth = request.headers.get("Authorization", "")
+            if auth != f"Bearer {self._token}":
+                return Response(
+                    content='{"detail": "Unauthorized"}',
+                    status_code=401,
+                    media_type="application/json",
+                )
         return await call_next(request)
 
 
@@ -54,6 +63,7 @@ def create_app(base_path: str, project_name: str, token: str) -> FastAPI:
 
     app.add_middleware(_BearerTokenMiddleware, token=token)
 
+    app.include_router(config_router, prefix="/api/config")
     app.include_router(findings_router, prefix="/api/findings")
     app.include_router(projects_router, prefix="/api/projects")
 
@@ -89,17 +99,66 @@ def create_app(base_path: str, project_name: str, token: str) -> FastAPI:
     return app
 
 
-def start(base_path: str, project_name: str, port: int, token: str) -> None:
-    """Launch the web UI server (blocking).
+def _attach_file_logging(base_path: str) -> None:
+    """Attach a dated FileHandler to uvicorn loggers.
 
-    Intended to be called from a daemon thread by the REPL.  Binds to
-    localhost only and never returns until the server shuts down.
+    Writes to ``<base_path>/logs/mm-dd-yy-server.log``.  The directory is
+    created if it does not exist.
+    """
+    log_dir = Path(base_path) / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_filename = datetime.now().strftime("%m-%d-%y") + "-server.log"
+    log_path = log_dir / log_filename
+
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s — %(message)s")
+    )
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        log_instance = logging.getLogger(logger_name)
+        log_instance.addHandler(file_handler)
+        log_instance.propagate = False
+
+
+def create_server(
+    base_path: str, project_name: str, port: int, token: str
+) -> uvicorn.Server:
+    """Create a uvicorn Server ready to be served in a daemon thread.
+
+    Signal handling is disabled by replacing ``capture_signals`` with
+    ``contextlib.nullcontext``.  Python only allows signal handlers to be
+    installed on the main thread; without this the server would raise when
+    started from a daemon thread.
+
+    Call ``asyncio.run(server.serve())`` in the daemon thread to start it.
+    Set ``server.should_exit = True`` to stop it gracefully.
 
     Args:
         base_path: Tally base directory.
         project_name: Active project name.
-        port: TCP port to bind.
+        port: TCP port to bind (localhost only).
         token: Per-session bearer token for request authentication.
+
+    Returns:
+        A configured ``uvicorn.Server`` instance (not yet started).
     """
+    _attach_file_logging(base_path)
     app = create_app(base_path, project_name, token)
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    # Disable signal handler installation — only allowed on the main thread.
+    server.capture_signals = contextlib.nullcontext  # type: ignore[method-assign]
+    return server
+
+
+def start(base_path: str, project_name: str, port: int, token: str) -> None:
+    """Launch the web UI server (blocking).
+
+    Thin wrapper around ``create_server()`` + ``asyncio.run()``.  Intended for
+    use in a daemon thread.  Prefer ``create_server()`` when you need a handle
+    to the server for graceful shutdown via ``server.should_exit = True``.
+    """
+    import asyncio
+
+    server = create_server(base_path, project_name, port, token)
+    asyncio.run(server.serve())

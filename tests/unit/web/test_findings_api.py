@@ -9,6 +9,25 @@ from tests.unit.web.conftest import AUTH
 pytestmark = pytest.mark.integration
 
 
+class TestAuthMiddlewareScope:
+    async def test_non_api_path_does_not_require_bearer(self, app_client) -> None:
+        """Browser must load the SPA without an Authorization header.
+
+        The middleware must only enforce Bearer auth on /api/* routes.  A GET
+        to the SPA root without any auth header must not return 401 — the
+        browser needs index.html to load before it can extract the token and
+        attach it to API calls.
+        """
+        client, _, _, _ = app_client
+        response = await client.get("/")
+        assert response.status_code != 401
+
+    async def test_api_path_without_bearer_returns_401(self, app_client) -> None:
+        client, _, _, _ = app_client
+        response = await client.get("/api/findings/")
+        assert response.status_code == 401
+
+
 class TestGetFindings:
     async def test_type_flags_stripped_from_meta(self, app_client) -> None:
         client, _, _, _ = app_client
@@ -91,6 +110,28 @@ class TestPatchFinding:
         )
         assert response.status_code == 200
         assert rag_mock.update_metadata.called
+
+    async def test_chroma_sync_includes_triaged_by(self, app_client) -> None:
+        client, finding_id, rag_mock, _ = app_client
+        response = await client.patch(
+            f"/api/findings/{finding_id}",
+            json={"severity": "low"},
+            headers=AUTH,
+        )
+        assert response.status_code == 200
+        _, patch = rag_mock.update_metadata.call_args.args
+        assert patch.get("triaged_by") == "analyst_web"
+
+    async def test_chroma_sync_includes_should_report(self, app_client) -> None:
+        client, finding_id, rag_mock, _ = app_client
+        response = await client.patch(
+            f"/api/findings/{finding_id}",
+            json={"should_report": True},
+            headers=AUTH,
+        )
+        assert response.status_code == 200
+        _, patch = rag_mock.update_metadata.call_args.args
+        assert patch.get("should_report") == 1
 
     async def test_chroma_sync_failure_returns_200(self, app_client) -> None:
         client, finding_id, rag_mock, _ = app_client

@@ -129,6 +129,8 @@ async def patch_finding(
 
     raw = body.model_dump(exclude_none=True)
     changed_fields: set[str] = set(raw.keys())
+    # triaged_by is set automatically on every analyst write — always sync it.
+    changed_fields.add("triaged_by")
 
     fields: dict[str, Any] = {}
     for k, v in raw.items():

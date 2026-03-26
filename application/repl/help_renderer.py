@@ -268,6 +268,20 @@ _HELP_REGISTRY = [
         "--dry-run",
         "Batch + render prompts to DEBUG log — no MCP server, no Claude",
     ),
+    # Findings
+    ("findings", None, None, "Findings"),
+    (
+        "findings",
+        "findings visualize",
+        None,
+        "Launch the web UI for reviewing findings in a browser",
+    ),
+    (
+        "findings",
+        "findings visualize",
+        "--stop",
+        "Stop the running web UI server",
+    ),
     # Utility
     ("utility", None, None, "Utility"),
     ("utility", "help", None, "Show this help table"),

@@ -8,10 +8,7 @@ from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
-)
-
-_VALID_STATUSES: frozenset[str] = frozenset(
-    {"active", "false_positive", "fixed", "wont_fix"}
+    STATUS_LEVELS,
 )
 
 
@@ -73,8 +70,8 @@ class FindingPatchRequest(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_STATUSES:
-            raise ValueError(f"status must be one of {sorted(_VALID_STATUSES)}")
+        if v is not None and v not in STATUS_LEVELS:
+            raise ValueError(f"status must be one of {sorted(STATUS_LEVELS)}")
         return v
 
 

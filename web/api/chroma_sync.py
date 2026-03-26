@@ -12,9 +12,13 @@ logger = logging.getLogger(__name__)
 
 # Maps FindingPatchRequest field names → ChromaDB metadata key names.
 _PATCH_TO_CHROMA: dict[str, str] = {
+    "description": "description",
     "severity": "severity",
     "confidence": "confidence",
+    "status": "status",
     "finding_type": "finding_type",
+    "triaged_by": "triaged_by",
+    "should_report": "should_report",
     "meta_remediation": "remediation",
     "meta_risk_type": "risk_type",
     "meta_owasp_name": "owasp_name",
