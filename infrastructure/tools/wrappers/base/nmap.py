@@ -125,5 +125,13 @@ class BaseNmapTool(ToolInterface):
         )
 
     def count_findings(self, parsed_data: dict[str, Any]) -> int:
-        # TODO: revisit when normalized schema is introduced
-        return len(parsed_data.get("hosts", []))
+        hosts: list[Any] = parsed_data.get("hosts", [])
+        total = 0
+        for host in hosts:
+            if host.get("state") != "up":
+                continue
+            open_count = sum(
+                1 for p in host.get("ports", []) if p.get("state") == "open"
+            )
+            total += max(open_count, 1)
+        return total

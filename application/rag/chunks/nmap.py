@@ -35,9 +35,33 @@ class NmapChunkBuilder:
         rows: list[dict] = []
 
         for host in hosts:
+            if host.get("state") != "up":
+                continue
             ip = host.get("ip_address", "")
             ports: list[dict[str, Any]] = host.get("ports", [])
             open_ports = [p for p in ports if p.get("state") == "open"]
+
+            if not open_ports:
+                # Host is up but has no open ports — one host-only row
+                row: dict[str, Any] = {
+                    "tool": "nmap",
+                    "profile": profile,
+                    "finding_type": json.dumps(["exposure"]),
+                    "confidence": CONFIDENCE_CONFIRMED,
+                    "severity": SEVERITY_INFORMATIONAL,
+                    "ip_address": ip,
+                    "timestamp": timestamp,
+                    "source_file": source_file,
+                }
+                if nmap_version:
+                    row["nmap_version"] = nmap_version
+                if nmap_args:
+                    row["nmap_args"] = nmap_args
+                if scan_start_time:
+                    row["scan_start_time"] = scan_start_time
+                row.update(_shared_meta(self, "exposure"))
+                rows.append(row)
+                continue
 
             for port in open_ports:
                 port_num = port.get("port", 0)
@@ -46,7 +70,7 @@ class NmapChunkBuilder:
                 service_version = port.get("service_version", "")
                 svc_str = f"{service} {service_version}".strip()
 
-                row: dict[str, Any] = {
+                row = {
                     "tool": "nmap",
                     "profile": profile,
                     "finding_type": json.dumps(["exposure"]),
@@ -80,25 +104,25 @@ class NmapChunkBuilder:
                     if val is not None:
                         row[key] = val
                 row.update(_shared_meta(self, "exposure"))
-
                 rows.append(row)
 
         return rows
 
     def render(self, row: dict) -> str:
-        transport = row.get("transport", "tcp")
-        parts = [
-            f"Host: {row.get('ip_address', '')}",
-            f"Port: {row.get('port', '')}/{transport}",
-            f"Service: {row.get('service', '')}",
-            "State: open",
-        ]
-        if row.get("service_version"):
-            parts.append(f"Version: {row['service_version']}")
-        if row.get("description"):
-            parts.append(f"Description: {row['description']}")
-        if row.get("tls_version"):
-            parts.append(f"TLS version: {row['tls_version']}")
-        if row.get("cve_ids"):
-            parts.append(f"CVEs: {row['cve_ids']}")
+        parts = [f"Host: {row.get('ip_address', '')}"]
+        if row.get("port") is not None:
+            transport = row.get("transport", "tcp")
+            parts.append(f"Port: {row['port']}/{transport}")
+            parts.append(f"Service: {row.get('service', '')}")
+            parts.append("State: open")
+            if row.get("service_version"):
+                parts.append(f"Version: {row['service_version']}")
+            if row.get("description"):
+                parts.append(f"Description: {row['description']}")
+            if row.get("tls_version"):
+                parts.append(f"TLS version: {row['tls_version']}")
+            if row.get("cve_ids"):
+                parts.append(f"CVEs: {row['cve_ids']}")
+        else:
+            parts.append("State: up (no open ports)")
         return "[nmap] " + " | ".join(parts)

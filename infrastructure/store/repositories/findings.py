@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
-    _CHROMA_TO_SQLITE,
     _COMMA_LIST_FIELDS,
+    _DIRECT_COLUMNS,
     compute_fingerprint,
     deserialise_row,
     normalise_cwe,
@@ -73,14 +73,16 @@ class FindingRepository:
             for key, val in finding.items():
                 if key in _PRE_EXTRACTED:
                     continue
-                col = _CHROMA_TO_SQLITE.get(key)
-                if col is not None:
+                if key in _DIRECT_COLUMNS:
+                    named[key] = str(val) if val is not None else None
+                elif key == "file_path":
+                    named["file"] = str(val) if val is not None else None
+                elif key == "ip_address":
+                    named["host"] = str(val) if val is not None else None
+                elif key == "lockfile":
                     # file_path takes priority over lockfile for the file column.
-                    if col == "file" and key == "lockfile":
-                        if named.get("file") is None:
-                            named["file"] = str(val) if val is not None else None
-                    else:
-                        named[col] = str(val) if val is not None else None
+                    if named.get("file") is None:
+                        named["file"] = str(val) if val is not None else None
                 else:
                     if key in _COMMA_LIST_FIELDS and isinstance(val, str) and val:
                         meta[key] = [v.strip() for v in val.split(",") if v.strip()]

@@ -9,8 +9,6 @@ from core.config.schemas import Repository
 from domain.tools.base import ToolResult
 from domain.tools.enrichment import FieldEnrichmentSpec
 
-from .engine import RAGEngine
-
 logger = logging.getLogger(__name__)
 
 
@@ -56,10 +54,6 @@ class ToolHandlerFactory:
                 return obj()
         logger.debug("No ToolHandler class found in module for tool %r", tool_name)
         return None
-
-
-# Backward-compat alias — enrichment.py imports this name and must not be modified.
-ChunkBuilderFactory = ToolHandlerFactory
 
 
 # ------------------------------------------------------------------
@@ -137,43 +131,3 @@ def _normalize_file_path(
         rel = _relativize_path(file_path, repo_name, repositories)
         return (rel, repo_name)
     return _normalize_path(file_path, repositories)
-
-
-# ------------------------------------------------------------------
-# FindingIngestor
-# ------------------------------------------------------------------
-
-
-class FindingIngestor:
-    """Retained for import compatibility during the refactor transition.
-
-    ingest_tool_output() returns [] — ingestion now happens via
-    IngestHandler + ToolHandlerFactory (Phase 2+).
-    """
-
-    def __init__(
-        self,
-        rag_engine: RAGEngine,
-        project_name: str,
-        builders: dict[str, ToolHandler] | None = None,
-        repositories: list[Repository] | None = None,
-        repo_name: str | None = None,
-    ) -> None:
-        self._engine = rag_engine
-        self.project_name = project_name
-        self._repositories = repositories
-        self._repo_name = repo_name
-
-    def ingest_tool_output(
-        self,
-        tool_result: ToolResult,
-        profile: str | None = None,
-    ) -> list[int]:
-        """Deprecated stub — returns [].  Use IngestHandler instead."""
-        logger.warning(
-            "FindingIngestor.ingest_tool_output called for %s/%s — "
-            "this stub returns []; use IngestHandler",
-            tool_result.tool_name,
-            profile or "manual",
-        )
-        return []

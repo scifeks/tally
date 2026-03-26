@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
 from application.rag.query import QueryEngine
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
@@ -88,19 +88,45 @@ def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
     return RAGEngine(project_name=project_name, base_path=str(base_path))
 
 
-def _ingest(
+def _run_pipeline(
     base_path: Path,
     project_name: str,
     result: ToolResult,
-    profile: str = "my-test-repo",
+    profile: str,
+    repo: str | None = None,
 ) -> list[int]:
-    engine = _make_rag_engine(base_path, project_name)
-    try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
-    finally:
-        engine.close()
+    """Drive the full ingest pipeline; returns SQLite finding IDs."""
+    from application.pipeline.handlers import (
+        ChromaDBHandler,
+        EnrichmentHandler,
+        IngestHandler,
+    )
+    from domain.pipeline.events import (
+        EnrichmentCompleted,
+        EventBus,
+        IngestCompleted,
+        ToolCompleted,
+    )
+
+    bus = EventBus()
+    ingest = IngestHandler(bus)
+    enrich = EnrichmentHandler(bus)
+    chroma = ChromaDBHandler()
+
+    bus.subscribe(ToolCompleted, ingest.handle)
+    bus.subscribe(IngestCompleted, enrich.handle)
+    bus.subscribe(EnrichmentCompleted, chroma.handle)
+
+    ids: list[int] = []
+
+    def _capture(event: IngestCompleted) -> None:
+        ids.extend(event.ids)
+
+    bus.subscribe(IngestCompleted, _capture)
+    bus.dispatch(
+        ToolCompleted(result, profile, None, project_name, str(base_path), repo=repo)
+    )
+    return ids
 
 
 # ---------------------------------------------------------------------------
@@ -146,9 +172,14 @@ class TestChatUnit:
 
     def test_chat_with_data_returns_non_empty_string(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
-        _ingest(base, name, _make_gitleaks_result())
+        ids = _run_pipeline(base, name, _make_gitleaks_result(), profile="my-test-repo")
+        assert len(ids) > 0, "pipeline produced 0 SQLite rows for gitleaks"
         engine = _make_rag_engine(base, name)
         try:
+            assert engine.count_documents() == len(ids), (
+                f"ChromaDB doc count {engine.count_documents()} "
+                f"!= SQLite row count {len(ids)}"
+            )
             response = QueryEngine(engine).chat("what secrets were detected?")
         finally:
             engine.close()

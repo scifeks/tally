@@ -18,7 +18,8 @@ TOKEN = "test-token-abc123"
 AUTH: dict[str, str] = {"Authorization": f"Bearer {TOKEN}"}
 
 # Finding used to seed the test database before each test.
-# Keys not in _CHROMA_TO_SQLITE go to the meta JSON blob.
+# Named columns (tool, domain, severity, file_path→file, ip_address→host, etc.)
+# map to SQLite columns; all other keys go to the meta JSON blob.
 _BASE_FINDING: dict[str, Any] = {
     "tool": "semgrep",
     "domain": "code",
@@ -63,7 +64,6 @@ async def app_client(tmp_path: Path):
     rag_mock.get_documents = MagicMock(
         return_value={"ids": ["doc-1"], "metadatas": [{}]}
     )
-    rag_mock.update_metadata = MagicMock()
 
     app = create_app(str(tmp_path), "testproject", token=TOKEN)
     app.state.connection_factory = factory

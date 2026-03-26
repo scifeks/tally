@@ -64,12 +64,12 @@ class TestNmapIngestor:
         assert len(rows) == 2
 
     def test_count_no_open_ports(self, no_ports_parsed_data: dict) -> None:
-        """1 host with no open ports → 0 rows."""
+        """1 host up with no open ports → 1 host-only row."""
         handler = ToolHandlerFactory.load("nmap")
         assert handler is not None
         result = _make_nmap_result(no_ports_parsed_data)
         rows = handler.normalize(result, profile="test-scan")
-        assert len(rows) == 0
+        assert len(rows) == 1
 
     def test_host_chunk_metadata(self, basic_parsed_data: dict) -> None:
         """Port rows include ip_address, profile, tool, and finding_type."""
@@ -118,22 +118,26 @@ class TestNmapIngestor:
             assert "State: open" in text
 
     def test_host_text_template_no_hostname(self, no_ports_parsed_data: dict) -> None:
-        """No open ports → no rows."""
+        """Host up with no open ports → 1 row, render shows 'up (no open ports)'."""
         handler = ToolHandlerFactory.load("nmap")
         assert handler is not None
         result = _make_nmap_result(no_ports_parsed_data)
         rows = handler.normalize(result, profile="test-scan")
-        assert rows == []
+        assert len(rows) == 1
+        text = handler.render(rows[0])
+        assert "[nmap] Host:" in text
+        assert "up (no open ports)" in text
 
     def test_host_text_no_open_ports_shows_none(
         self, no_ports_parsed_data: dict
     ) -> None:
-        """No open ports → 0 rows."""
+        """Host up with no open ports → 1 host-only row, no port field."""
         handler = ToolHandlerFactory.load("nmap")
         assert handler is not None
         result = _make_nmap_result(no_ports_parsed_data)
         rows = handler.normalize(result, profile="test-scan")
-        assert len(rows) == 0
+        assert len(rows) == 1
+        assert "port" not in rows[0]
 
     def test_port_text_template(self, basic_parsed_data: dict) -> None:
         """Port row render matches expected format."""

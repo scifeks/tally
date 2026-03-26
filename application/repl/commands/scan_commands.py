@@ -10,56 +10,9 @@ from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import tool_registry
-from domain.tools.base import ToolResult
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
-
-
-def _enrich_results(
-    repl: REPL,
-    doc_ids: list[int],
-    finding_repo: object = None,
-    run_id: int | None = None,
-) -> None:
-    """Run enrichment pipeline on freshly ingested document IDs."""
-    from application.rag import EnrichmentPipeline, RAGEngine
-
-    assert repl.active_project is not None
-    try:
-        rag_engine = RAGEngine(
-            project_name=repl.active_project,
-            base_path=repl.base_path,
-        )
-        pipeline = EnrichmentPipeline(
-            rag_engine,
-            console=repl.console,
-            finding_repo=finding_repo,  # type: ignore[arg-type]
-            run_id=run_id,
-        )
-        pipeline.enrich(doc_ids)
-    except (RuntimeError, ValueError) as exc:
-        repl.console.print(f"[red]Enrichment error:[/red] {exc}")
-
-
-def _ingest_result(
-    repl: REPL, result: ToolResult, profile: str | None = None
-) -> list[int]:
-    """Ingest a ToolResult into the project's RAG store. Returns list of SQLite IDs."""
-    from application.rag import FindingIngestor, RAGEngine
-
-    assert repl.active_project is not None
-    try:
-        rag_engine = RAGEngine(
-            project_name=repl.active_project,
-            base_path=repl.base_path,
-        )
-        repos = repl.config.load_repositories(repl.active_project)
-        ingestor = FindingIngestor(rag_engine, repl.active_project, repositories=repos)
-        return ingestor.ingest_tool_output(result, profile=profile)
-    except (RuntimeError, ValueError) as exc:
-        repl.console.print(f"[red]Ingestion error:[/red] {exc}")
-        return []
 
 
 class ScanCommands:
@@ -246,7 +199,7 @@ class ScanCommands:
 
         discover_tools(self.repl.base_path, project_name=self.repl.active_project)
         try:
-            self._cmd_run_inner(tool_name, remaining, timeout, args)
+            self._cmd_run_inner(tool_name, remaining, timeout)
         finally:
             discover_tools(self.repl.base_path)
 
@@ -255,7 +208,6 @@ class ScanCommands:
         tool_name: str,
         remaining: list[str],
         timeout: int,
-        orig_args: list[str],
     ) -> None:
         """Inner run logic — runs after registry is refreshed with project overrides."""
         assert self.repl.active_project is not None
@@ -289,19 +241,6 @@ class ScanCommands:
             for path in result.output_files.values():
                 self.repl.console.print(f"Output saved to: {path}")
 
-        if self._ask_ingest():
-            doc_ids = _ingest_result(self.repl, result)
-            if doc_ids:
-                self.repl.console.print(
-                    f"[green]✓ Ingested {len(doc_ids)} findings[/green]"
-                )
-                finding_repo, run_id = self._create_sqlite_run(orig_args)
-                _enrich_results(
-                    self.repl, doc_ids, finding_repo=finding_repo, run_id=run_id
-                )
-            else:
-                self.repl.console.print("[yellow]No findings to ingest.[/yellow]")
-
     # ------------------------------------------------------------------
     # Private — shared SCA result helpers
     # ------------------------------------------------------------------
@@ -334,14 +273,6 @@ class ScanCommands:
     # ------------------------------------------------------------------
     # Private — UI helpers
     # ------------------------------------------------------------------
-
-    def _ask_ingest(self) -> bool:
-        try:
-            answer = input("Ingest findings? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return False
-        return answer in ("y", "yes")
 
     @staticmethod
     def _parse_timeout_arg(

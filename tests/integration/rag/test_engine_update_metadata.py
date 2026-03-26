@@ -1,4 +1,4 @@
-"""Tests for RAGEngine.update_metadata method."""
+"""Tests for RAGEngine.add_documents upsert semantics."""
 
 from __future__ import annotations
 
@@ -66,47 +66,53 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-class TestUpdateMetadata:
-    def test_updates_specified_fields(self, project_env: dict) -> None:
+class TestAddDocumentsUpsert:
+    def test_upsert_adds_new_document(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env)
         engine.add_documents(
             texts=["ssh open on 22"],
-            metadatas=[{"tool": "nmap"}],
+            metadatas=[{"tool": "nmap", "profile": "quick"}],
             ids=["upd-001"],
         )
-        engine.update_metadata("upd-001", {"enriched": True})
         doc = engine.get_document_by_id("upd-001")
         assert doc is not None
-        assert doc["metadata"]["enriched"] is True
+        assert doc["document"] == "ssh open on 22"
+        assert doc["metadata"]["tool"] == "nmap"
 
-    def test_preserves_unrelated_fields(self, project_env: dict) -> None:
+    def test_upsert_same_id_updates_text(self, project_env: dict) -> None:
         engine = _make_rag_engine(project_env)
         engine.add_documents(
             texts=["ssh open on 22"],
             metadatas=[{"tool": "nmap", "profile": "quick"}],
             ids=["upd-002"],
         )
-        engine.update_metadata("upd-002", {"enriched": True})
-        doc = engine.get_document_by_id("upd-002")
-        assert doc is not None
-        assert doc["metadata"]["profile"] == "quick"
-        assert doc["metadata"]["enriched"] is True
-
-    def test_raises_for_unknown_id(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env)
-        with pytest.raises(ValueError, match="not found"):
-            engine.update_metadata("nonexistent", {"enriched": True})
-
-    def test_merge_semantics(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env)
         engine.add_documents(
             texts=["rdp open on 3389"],
-            metadatas=[{"tool": "nmap", "severity": "potential"}],
+            metadatas=[{"tool": "nmap", "profile": "quick"}],
+            ids=["upd-002"],
+        )
+        doc = engine.get_document_by_id("upd-002")
+        assert doc is not None
+        assert doc["document"] == "rdp open on 3389"
+
+    def test_upsert_same_id_updates_metadata(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        engine.add_documents(
+            texts=["ssh open on 22"],
+            metadatas=[{"tool": "nmap", "profile": "quick"}],
             ids=["upd-003"],
         )
-        engine.update_metadata("upd-003", {"risk_type": "exposed_service"})
+        engine.add_documents(
+            texts=["ssh open on 22"],
+            metadatas=[{"tool": "nmap", "profile": "full", "severity": "low"}],
+            ids=["upd-003"],
+        )
         doc = engine.get_document_by_id("upd-003")
         assert doc is not None
-        assert doc["metadata"]["tool"] == "nmap"
-        assert doc["metadata"]["severity"] == "potential"
-        assert doc["metadata"]["risk_type"] == "exposed_service"
+        assert doc["metadata"]["profile"] == "full"
+        assert doc["metadata"]["severity"] == "low"
+
+    def test_unknown_id_returns_none(self, project_env: dict) -> None:
+        engine = _make_rag_engine(project_env)
+        doc = engine.get_document_by_id("nonexistent")
+        assert doc is None

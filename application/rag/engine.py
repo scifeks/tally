@@ -437,23 +437,6 @@ class RAGEngine:
         self._client = None
         self._collection = None
 
-    def update_metadata(self, doc_id: str, metadata_updates: dict) -> None:
-        """Merge metadata_updates into an existing document's metadata.
-
-        Does NOT re-embed or change the document text. Existing fields not present
-        in ``metadata_updates`` are preserved.
-
-        Raises:
-            ValueError: If ``doc_id`` is not found in the collection.
-        """
-        assert self._collection is not None
-        existing = self._collection.get(ids=[doc_id], include=["metadatas"])
-        if not existing["ids"]:
-            raise ValueError(f"Document {doc_id!r} not found in collection")
-        current_meta: dict = dict((existing["metadatas"] or [{}])[0])
-        merged = {**current_meta, **metadata_updates}
-        self._collection.update(ids=[doc_id], metadatas=[merged])
-
     @staticmethod
     def now_iso() -> str:
         """Return the current UTC time as an ISO-8601 string."""

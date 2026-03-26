@@ -160,3 +160,55 @@ class TestPhase4ChromaDBWrite:
         engine = phase4_env["engine"]
         assert engine.get_document_by_id(str(nmap_id)) is not None
         assert engine.get_document_by_id(str(gitleaks_id)) is None
+
+    def test_orphan_removal_on_rescan_with_fewer_findings(
+        self, phase4_env: dict
+    ) -> None:
+        """Second scan with fewer findings leaves no orphaned ChromaDB docs.
+
+        First scan produces 3 nmap findings → 3 docs in ChromaDB.
+        Second scan produces 1 nmap finding → exactly 1 doc remains.
+        The 2 docs from the first scan must be deleted, not left behind.
+        """
+        base_path = phase4_env["base_path"]
+        project_name = phase4_env["project_name"]
+        run_repo, finding_repo, _, _ = make_store(base_path, project_name)
+        run_id = phase4_env["run_id"]
+
+        # Seed 2 more nmap rows (different ports) to simulate a 3-finding scan
+        extra_rows = [
+            {
+                "tool": "nmap",
+                "profile": "default",
+                "ip_address": "10.0.0.1",
+                "port": port,
+                "severity": "informational",
+                "finding_type": json.dumps(["exposure"]),
+            }
+            for port in (443, 8080)
+        ]
+        extra_ids = [_seed_finding(finding_repo, run_id, r) for r in extra_rows]
+        first_scan_ids = [phase4_env["nmap_id"]] + extra_ids
+
+        # First scan: 3 nmap findings
+        _dispatch(phase4_env, ids=first_scan_ids)
+        assert phase4_env["engine"].count_documents() == 3, (
+            "expected 3 ChromaDB docs after first scan"
+        )
+
+        # Seed 1 new nmap finding (different port) to simulate rescan result
+        new_row = {
+            "tool": "nmap",
+            "profile": "default",
+            "ip_address": "10.0.0.2",
+            "port": 22,
+            "severity": "informational",
+            "finding_type": json.dumps(["exposure"]),
+        }
+        new_id = _seed_finding(finding_repo, run_id, new_row)
+
+        # Second scan: only 1 nmap finding
+        _dispatch(phase4_env, ids=[new_id])
+        assert phase4_env["engine"].count_documents() == 1, (
+            "orphaned docs from first scan were not deleted"
+        )
