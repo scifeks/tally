@@ -86,9 +86,19 @@ class NmapChunkBuilder:
         return rows
 
     def render(self, row: dict) -> str:
-        ip = row.get("ip_address", "")
-        port = row.get("port", "")
-        service = row.get("service", "")
-        return (
-            f"[nmap] Host: {ip} | Port: {port}/tcp | Service: {service} | State: open"
-        )
+        transport = row.get("transport", "tcp")
+        parts = [
+            f"Host: {row.get('ip_address', '')}",
+            f"Port: {row.get('port', '')}/{transport}",
+            f"Service: {row.get('service', '')}",
+            "State: open",
+        ]
+        if row.get("service_version"):
+            parts.append(f"Version: {row['service_version']}")
+        if row.get("description"):
+            parts.append(f"Description: {row['description']}")
+        if row.get("tls_version"):
+            parts.append(f"TLS version: {row['tls_version']}")
+        if row.get("cve_ids"):
+            parts.append(f"CVEs: {row['cve_ids']}")
+        return "[nmap] " + " | ".join(parts)

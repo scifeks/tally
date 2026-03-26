@@ -271,6 +271,7 @@ class TestSemgrepHandler:
                 "file_path": "src/auth.py",
                 "line_start": 42,
                 "line_end": 42,
+                "cwe": "CWE-798",
             }
         ]
     }
@@ -325,6 +326,18 @@ class TestSemgrepHandler:
         rows = handler.normalize(_make_result("semgrep", self._PARSED), _PROFILE)
         text = handler.render(rows[0])
         assert "src/auth.py" in text
+
+    def test_render_contains_description(self) -> None:
+        handler = SemgrepChunkBuilder()
+        rows = handler.normalize(_make_result("semgrep", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "Hardcoded password detected" in text
+
+    def test_render_contains_cwe(self) -> None:
+        handler = SemgrepChunkBuilder()
+        rows = handler.normalize(_make_result("semgrep", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "CWE-798" in text
 
 
 # ---------------------------------------------------------------------------
@@ -396,6 +409,18 @@ class TestZapHandler:
         rows = handler.normalize(_make_result("zap", self._PARSED), _PROFILE)
         text = handler.render(rows[0])
         assert "example.com" in text
+
+    def test_render_contains_description(self) -> None:
+        handler = ZapChunkBuilder()
+        rows = handler.normalize(_make_result("zap", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "SQL injection vulnerability detected" in text
+
+    def test_render_contains_severity(self) -> None:
+        handler = ZapChunkBuilder()
+        rows = handler.normalize(_make_result("zap", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "high" in text
 
 
 # ---------------------------------------------------------------------------
@@ -503,3 +528,37 @@ class TestScaHandlers:
         rows = handler.normalize(_make_result(tool_name, _SCA_PARSED), _PROFILE)
         text = handler.render(rows[0])
         assert "CVE-2023-32681" in text
+
+    def test_render_contains_description(
+        self, handler_cls: type, tool_name: str
+    ) -> None:
+        handler = handler_cls()
+        rows = handler.normalize(_make_result(tool_name, _SCA_PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "HTTP redirect handling issue" in text
+
+
+class TestOsvScannerRenderCwe:
+    """osv-scanner-specific render() test for cwe_ids field."""
+
+    _PARSED_WITH_CWE: dict = {
+        "vulnerabilities": [
+            {
+                "package_name": "pyyaml",
+                "package_version": "5.3.1",
+                "vulnerability_id": "CVE-2020-14343",
+                "severity": "critical",
+                "summary": "Arbitrary code execution via YAML deserialisation",
+                "affected_ecosystem": "PyPI",
+                "cwe_ids": ["CWE-502"],
+            }
+        ]
+    }
+
+    def test_render_contains_cwe_ids(self) -> None:
+        handler = OsvScannerChunkBuilder()
+        rows = handler.normalize(
+            _make_result("osv-scanner", self._PARSED_WITH_CWE), _PROFILE
+        )
+        text = handler.render(rows[0])
+        assert "CWE-502" in text

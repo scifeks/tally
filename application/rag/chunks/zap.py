@@ -110,11 +110,25 @@ class ZapChunkBuilder:
         return rows
 
     def render(self, row: dict) -> str:
-        alert_name = row.get("alert_name", "")
-        url = row.get("url", "")
-        method = row.get("method", "")
-        severity = row.get("severity", "")
-        return (
-            f"[zap] Alert: {alert_name} | URL: {url}"
-            f" | Method: {method} | Severity: {severity}"
-        )
+        parts = [
+            f"Alert: {row.get('alert_name', '')}",
+            f"URL: {row.get('url', '')}",
+            f"Method: {row.get('method', '')}",
+            f"Severity: {row.get('severity', '')}",
+            f"Confidence: {row.get('confidence', '')}",
+        ]
+        if row.get("description"):
+            parts.append(f"Description: {row['description']}")
+        if row.get("remediation"):
+            parts.append(f"Remediation: {row['remediation']}")
+        if row.get("cwe_id"):
+            parts.append(f"CWE: {row['cwe_id']}")
+        if row.get("param"):
+            parts.append(f"Parameter: {row['param']}")
+        if row.get("evidence"):
+            parts.append(f"Evidence: {row['evidence']}")
+        if row.get("title"):
+            parts.append(f"Title: {row['title']}")
+        if row.get("owasp_name"):
+            parts.append(f"OWASP category: {row['owasp_name']}")
+        return "[zap] " + " | ".join(parts)

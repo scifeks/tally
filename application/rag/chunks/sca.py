@@ -158,11 +158,29 @@ def _build_sca_normalize(builder: Any, result: ToolResult, profile: str) -> list
 
 def _sca_render(row: dict) -> str:
     tool = row.get("tool", "")
-    pkg_name = row.get("package_name", "")
-    pkg_version = row.get("package_version", "")
-    vuln_id = row.get("vulnerability_id", "")
-    severity = row.get("severity", "")
-    return (
-        f"[{tool}] Package: {pkg_name}@{pkg_version}"
-        f" | Vuln: {vuln_id} | Severity: {severity}"
-    )
+    parts = [
+        f"Package: {row.get('package_name', '')}@{row.get('package_version', '')}",
+        f"Vuln: {row.get('vulnerability_id', '')}",
+        f"Severity: {row.get('severity', '')}",
+    ]
+    if row.get("description"):
+        parts.append(f"Description: {row['description']}")
+    if row.get("aliases"):
+        parts.append(f"Aliases: {row['aliases']}")
+    if row.get("cwe_ids"):
+        parts.append(f"CWE: {row['cwe_ids']}")
+    if row.get("cvss_score") is not None:
+        parts.append(f"CVSS: {row['cvss_score']}")
+    if row.get("fixed_version"):
+        parts.append(f"Fixed in: {row['fixed_version']}")
+    if row.get("details"):
+        parts.append(f"Details: {row['details']}")
+    if row.get("risk_type"):
+        parts.append(f"Risk type: {row['risk_type']}")
+    if row.get("title"):
+        parts.append(f"Title: {row['title']}")
+    if row.get("remediation"):
+        parts.append(f"Remediation: {row['remediation']}")
+    if row.get("owasp_name"):
+        parts.append(f"OWASP category: {row['owasp_name']}")
+    return f"[{tool}] " + " | ".join(parts)

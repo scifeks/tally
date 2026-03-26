@@ -19,6 +19,7 @@ from tests.conftest import requires_ollama
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +81,7 @@ def _make_gitleaks_result() -> ToolResult:
             },
         },
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
 
@@ -95,13 +96,24 @@ def _ingest(
     result: ToolResult,
     profile: str = "my-test-repo",
 ) -> list[dict]:
-    """Normalize via ToolHandler — Phase 2+ writes to SQLite via IngestHandler."""
+    """Normalize rows and embed rendered text into ChromaDB via Ollama."""
     if not result.success or not result.parsed_data:
         return []
     handler = ToolHandlerFactory.load(result.tool_name)
     if handler is None:
         return []
-    return handler.normalize(result, profile=profile)
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return []
+    engine = _make_rag_engine(base_path, project_name)
+    try:
+        texts = [handler.render(row) for row in rows]
+        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        ids = [row["fingerprint"] for row in rows]
+        engine.add_documents(texts, metadatas, ids)
+    finally:
+        engine.close()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -137,14 +149,15 @@ class TestIngestionUnit:
         assert len(rows) >= 1
 
     def test_stats_shows_gitleaks_documents(self, project_env: dict) -> None:
-        """normalize() produces gitleaks rows with correct tool label."""
-        rows = _ingest(
-            project_env["base_path"],
-            project_env["project_name"],
-            _make_gitleaks_result(),
-        )
-        assert len(rows) > 0
-        assert all(r["tool"] == "gitleaks" for r in rows)
+        base, name = project_env["base_path"], project_env["project_name"]
+        _ingest(base, name, _make_gitleaks_result())
+        engine = _make_rag_engine(base, name)
+        try:
+            stats = engine.get_stats()
+        finally:
+            engine.close()
+        assert stats["total_documents"] > 0
+        assert "gitleaks" in stats["by_tool"]
 
     def test_failed_result_not_ingested(self, project_env: dict) -> None:
         failed = ToolResult(
@@ -153,7 +166,7 @@ class TestIngestionUnit:
             output="permission denied",
             parsed_data=None,
             output_files={},
-            timestamp=RAGEngine.now_iso(),
+            timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
         rows = _ingest(project_env["base_path"], project_env["project_name"], failed)
@@ -166,7 +179,7 @@ class TestIngestionUnit:
             output="",
             parsed_data={"secrets": [], "summary": {"total_secrets": 0}},
             output_files={},
-            timestamp=RAGEngine.now_iso(),
+            timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
         rows = _ingest(project_env["base_path"], project_env["project_name"], empty)

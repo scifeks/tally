@@ -134,11 +134,29 @@ class SemgrepChunkBuilder:
         return rows
 
     def render(self, row: dict) -> str:
-        rule_id = row.get("rule_id", "")
-        file_path = row.get("file_path", "")
-        line_start = row.get("line_start", "")
-        severity = row.get("severity", "")
-        return (
-            f"[semgrep] Rule: {rule_id} | File: {file_path}:{line_start}"
-            f" | Severity: {severity}"
-        )
+        parts = [
+            f"Rule: {row.get('rule_id', '')}",
+            f"File: {row.get('file_path', '')}:{row.get('line_start', '')}",
+            f"Severity: {row.get('severity', '')}",
+        ]
+        if row.get("description"):
+            parts.append(f"Description: {row['description']}")
+        if row.get("cwe"):
+            parts.append(f"CWE: {row['cwe']}")
+        if row.get("owasp"):
+            parts.append(f"OWASP: {row['owasp']}")
+        if row.get("confidence"):
+            parts.append(f"Confidence: {row['confidence']}")
+        if row.get("category"):
+            parts.append(f"Category: {row['category']}")
+        if row.get("risk_type"):
+            parts.append(f"Risk type: {row['risk_type']}")
+        if row.get("title"):
+            parts.append(f"Title: {row['title']}")
+        if row.get("remediation"):
+            parts.append(f"Remediation: {row['remediation']}")
+        if row.get("owasp_name"):
+            parts.append(f"OWASP category: {row['owasp_name']}")
+        if row.get("references"):
+            parts.append(f"References: {row['references']}")
+        return "[semgrep] " + " | ".join(parts)

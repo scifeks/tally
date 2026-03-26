@@ -117,7 +117,8 @@ class ExecutiveSummaryGenerator(SectionDraftGenerator):
             )
         risk_basis = "; ".join(basis_parts) if basis_parts else "low-severity findings"
 
-        return (
+        rag_context = ctx.get("rag_context", "")
+        prompt = (
             "You are writing the executive summary section of a professional"
             " security assessment report.\n\n"
             f"Project: {ctx['project_name']}\n"
@@ -128,8 +129,14 @@ class ExecutiveSummaryGenerator(SectionDraftGenerator):
             f"Severity distribution: {_fmt_sev(sev_dist)}\n"
             f"Confidence distribution: {_fmt_conf(conf_dist)}\n"
             f"Overall risk level: {risk_level.value}\n"
-            f"Risk level basis: {risk_basis}\n\n"
-            "Write a 2-3 paragraph executive summary in plain English for a"
+            f"Risk level basis: {risk_basis}\n"
+        )
+        if rag_context:
+            prompt += (
+                f"\nRelevant finding context from semantic search:\n{rag_context}\n"
+            )
+        prompt += (
+            "\nWrite a 2-3 paragraph executive summary in plain English for a"
             " non-technical audience (CEO, project manager, board level).\n\n"
             "Requirements:\n"
             "- Convey the overall risk level, what was tested, and the most"
@@ -139,6 +146,7 @@ class ExecutiveSummaryGenerator(SectionDraftGenerator):
             "- Begin directly with the first sentence of the summary.\n\n"
             "Write only the executive summary text."
         )
+        return prompt
 
 
 @_register
@@ -156,7 +164,8 @@ class RiskLevelSectionGenerator(SectionDraftGenerator):
         sev_dist = ctx["sev_dist"]
         conf_dist = ctx["conf_dist"]
 
-        return (
+        rag_context = ctx.get("rag_context", "")
+        prompt = (
             "You are writing the risk level section of a professional"
             " security assessment report.\n\n"
             f"Overall risk level: {risk_level.value}\n"
@@ -166,8 +175,14 @@ class RiskLevelSectionGenerator(SectionDraftGenerator):
             f"Confirmed high findings: {rc.confirmed_high}\n"
             "Probable or confirmed medium findings:"
             f" {rc.prob_confirmed_medium}\n"
-            f"Recurring findings (seen in multiple scans): {rc.recurring}\n\n"
-            f"Write a single focused paragraph explaining the"
+            f"Recurring findings (seen in multiple scans): {rc.recurring}\n"
+        )
+        if rag_context:
+            prompt += (
+                f"\nRelevant finding context from semantic search:\n{rag_context}\n"
+            )
+        prompt += (
+            f"\nWrite a single focused paragraph explaining the"
             f" {risk_level.value} overall risk level in business terms.\n\n"
             "Requirements:\n"
             f"- Explain what contributed to the {risk_level.value} rating"
@@ -177,6 +192,7 @@ class RiskLevelSectionGenerator(SectionDraftGenerator):
             "- Do not speculate beyond the data provided.\n\n"
             "Write only the paragraph text."
         )
+        return prompt
 
 
 @_register
@@ -215,13 +231,20 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
 
         prefix = ctx.get("finding_id_prefix", "")
         example_id = f"{prefix}-001" if prefix else "001"
-        return (
+        rag_context = ctx.get("rag_context", "")
+        prompt = (
             "You are writing the critical issues section of a professional"
             " security assessment report.\n\n"
             "The following are the top findings from this engagement, ordered"
             " by severity then confidence:\n\n"
-            f"{findings_block}\n\n"
-            "Write a brief narrative describing each finding. For each:\n"
+            f"{findings_block}\n"
+        )
+        if rag_context:
+            prompt += (
+                f"\nRelevant finding context from semantic search:\n{rag_context}\n"
+            )
+        prompt += (
+            "\nWrite a brief narrative describing each finding. For each:\n"
             f"- Begin with a reference to its finding ID (e.g. {example_id}).\n"
             "- Describe what the issue is and why it matters to the business"
             " in 1-2 sentences.\n"
@@ -230,6 +253,7 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
             "- Do not speculate beyond the information provided.\n\n"
             "Write only the narrative text, with one entry per finding."
         )
+        return prompt
 
 
 @_register
@@ -253,14 +277,21 @@ class ImprovementPointsGenerator(SectionDraftGenerator):
         else:
             groups_block = "(no risk type data available)"
 
-        return (
+        rag_context = ctx.get("rag_context", "")
+        prompt = (
             "You are writing the improvement points section of a professional"
             " security assessment report.\n\n"
             "The most frequently occurring vulnerability categories across"
             " all findings are:\n\n"
             f"{groups_block}\n\n"
-            f"Severity distribution for context: {_fmt_sev(sev_dist)}\n\n"
-            "Write 3-6 improvement themes describing recurring patterns"
+            f"Severity distribution for context: {_fmt_sev(sev_dist)}\n"
+        )
+        if rag_context:
+            prompt += (
+                f"\nRelevant finding context from semantic search:\n{rag_context}\n"
+            )
+        prompt += (
+            "\nWrite 3-6 improvement themes describing recurring patterns"
             " observed across the engagement.\n\n"
             "Requirements:\n"
             "- Each theme must describe a category of issues, not individual"
@@ -273,6 +304,7 @@ class ImprovementPointsGenerator(SectionDraftGenerator):
             " of description.\n\n"
             "Write only the improvement themes."
         )
+        return prompt
 
 
 @_register
@@ -382,7 +414,8 @@ class GeneralRecommendationsGenerator(SectionDraftGenerator):
                 f"---\n{improvement_draft}\n---\n"
             )
 
-        return (
+        rag_context = ctx.get("rag_context", "")
+        prompt = (
             "You are writing the general recommendations section of a"
             " professional security assessment report.\n\n"
             "The most frequently occurring vulnerability categories are:\n\n"
@@ -391,7 +424,13 @@ class GeneralRecommendationsGenerator(SectionDraftGenerator):
             f"{recurring_block}\n\n"
             f"Severity distribution for context: {_fmt_sev(sev_dist)}\n"
             f"{improvement_context}\n"
-            "Write a general recommendations section grouped by theme.\n\n"
+        )
+        if rag_context:
+            prompt += (
+                f"\nRelevant finding context from semantic search:\n{rag_context}\n"
+            )
+        prompt += (
+            "\nWrite a general recommendations section grouped by theme.\n\n"
             "Requirements:\n"
             "- Each recommendation group must be named and specific to"
             " patterns observed in this engagement, not generic advice.\n"
@@ -404,3 +443,4 @@ class GeneralRecommendationsGenerator(SectionDraftGenerator):
             " description and remediation direction.\n\n"
             "Write only the recommendations section text."
         )
+        return prompt

@@ -45,6 +45,8 @@ class TestGenerateDraftPrompt:
             patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
             patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
             patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch("application.reporting.draft_runner.RAGEngine"),
+            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
             patch("builtins.input") as mock_input,
         ):
             mock_llm.return_value.is_available.return_value = True
@@ -64,6 +66,7 @@ class TestGenerateDraftPrompt:
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
+            mock_qe.return_value.search.return_value = []
 
             generate_draft(
                 section=section,
@@ -88,6 +91,8 @@ class TestGenerateDraftPrompt:
             patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
             patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
             patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch("application.reporting.draft_runner.RAGEngine"),
+            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
             patch("builtins.input", return_value="y"),
         ):
             mock_llm.return_value.is_available.return_value = True
@@ -107,6 +112,7 @@ class TestGenerateDraftPrompt:
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
+            mock_qe.return_value.search.return_value = []
 
             generate_draft(
                 section=section,
@@ -172,6 +178,8 @@ class TestGenerateDraftPrompt:
             patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
             patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
             patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch("application.reporting.draft_runner.RAGEngine"),
+            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_generator = MagicMock()
@@ -193,6 +201,7 @@ class TestGenerateDraftPrompt:
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
+            mock_qe.return_value.search.return_value = []
 
             generate_draft(
                 section=section,

@@ -95,11 +95,19 @@ class GitleaksChunkBuilder:
         return rows
 
     def render(self, row: dict) -> str:
-        rule_id = row.get("rule_id", "")
-        file_path = row.get("file_path", "")
-        line_number = row.get("line_number", "")
-        description = row.get("description", "")
-        return (
-            f"[gitleaks] Rule: {rule_id} | File: {file_path}:{line_number}"
-            f" | Secret type: {description}"
-        )
+        parts = [
+            f"Rule: {row.get('rule_id', '')}",
+            f"File: {row.get('file_path', '')}:{row.get('line_number', '')}",
+            f"Secret type: {row.get('description', '')}",
+            f"Severity: {row.get('severity', '')}",
+            f"Confidence: {row.get('confidence', '')}",
+        ]
+        if row.get("tags"):
+            parts.append(f"Tags: {row['tags']}")
+        if row.get("author"):
+            parts.append(f"Author: {row['author']}")
+        if row.get("commit"):
+            parts.append(f"Commit: {row['commit']}")
+        if row.get("date"):
+            parts.append(f"Date: {row['date']}")
+        return "[gitleaks] " + " | ".join(parts)
