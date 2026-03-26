@@ -154,7 +154,9 @@ async def patch_finding(
         raise HTTPException(status_code=404, detail="Finding not found")
 
     serialised = _serialise_finding(row)
-    await sync_finding_to_chroma(
-        serialised, changed_fields, request.app.state.rag_engine
+    sync_finding_to_chroma(
+        finding_id=finding_id,
+        rag_engine=request.app.state.rag_engine,
+        finding_repo=repo,
     )
     return serialised

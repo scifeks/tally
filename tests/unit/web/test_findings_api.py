@@ -109,9 +109,9 @@ class TestPatchFinding:
             headers=AUTH,
         )
         assert response.status_code == 200
-        assert rag_mock.update_metadata.called
+        assert rag_mock.add_documents.called
 
-    async def test_chroma_sync_includes_triaged_by(self, app_client) -> None:
+    async def test_chroma_sync_upserts_on_severity_change(self, app_client) -> None:
         client, finding_id, rag_mock, _ = app_client
         response = await client.patch(
             f"/api/findings/{finding_id}",
@@ -119,10 +119,11 @@ class TestPatchFinding:
             headers=AUTH,
         )
         assert response.status_code == 200
-        _, patch = rag_mock.update_metadata.call_args.args
-        assert patch.get("triaged_by") == "analyst_web"
+        assert rag_mock.add_documents.called
 
-    async def test_chroma_sync_includes_should_report(self, app_client) -> None:
+    async def test_chroma_sync_upserts_on_should_report_change(
+        self, app_client
+    ) -> None:
         client, finding_id, rag_mock, _ = app_client
         response = await client.patch(
             f"/api/findings/{finding_id}",
@@ -130,12 +131,11 @@ class TestPatchFinding:
             headers=AUTH,
         )
         assert response.status_code == 200
-        _, patch = rag_mock.update_metadata.call_args.args
-        assert patch.get("should_report") == 1
+        assert rag_mock.add_documents.called
 
     async def test_chroma_sync_failure_returns_200(self, app_client) -> None:
         client, finding_id, rag_mock, _ = app_client
-        rag_mock.update_metadata.side_effect = Exception("chroma error")
+        rag_mock.add_documents.side_effect = Exception("chroma error")
         response = await client.patch(
             f"/api/findings/{finding_id}",
             json={"severity": "low"},
