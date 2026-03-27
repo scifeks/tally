@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING
 from application.rag.enrichment import EnrichmentPipeline
 from application.rag.ingestor import (
     ToolHandlerFactory,
-    is_test_path,
-    normalize_file_path,
+    filter_code_rows,
 )
 from core.config.manager import ConfigManager
 from domain.pipeline.events import (
@@ -99,39 +98,7 @@ class IngestHandler(BaseHandler):
                     )
                 except Exception:
                     repos = None
-                if repos:
-                    repo_test_dirs: dict[str, list[str]] = {
-                        r.name: r.test_dirs for r in repos if r.test_dirs
-                    }
-                    filtered: list[dict] = []
-                    for row in rows:
-                        file_path: str = row.get("file_path", "") or ""
-                        result_path = normalize_file_path(
-                            file_path, repos, repo_name=event.repo
-                        )
-                        if result_path is None:
-                            logger.error(
-                                "Excluding row with missing file path: "
-                                "tool=%s rule_id=%s",
-                                result.tool_name,
-                                row.get("rule_id", ""),
-                            )
-                            continue
-                        rel, repo_name = result_path
-                        row["file_path"] = rel
-                        if repo_name is not None:
-                            row["repo"] = repo_name
-                        if repo_name is not None and rel:
-                            _tdirs = repo_test_dirs.get(repo_name, [])
-                            if _tdirs and is_test_path(rel, _tdirs):
-                                logger.debug(
-                                    "Excluding test-dir row: tool=%s path=%s",
-                                    result.tool_name,
-                                    rel,
-                                )
-                                continue
-                        filtered.append(row)
-                    rows = filtered
+                rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
 
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
             finding_repo.upsert_findings(event.run_id or 0, rows)

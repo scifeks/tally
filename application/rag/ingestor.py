@@ -131,3 +131,47 @@ def normalize_file_path(
         rel = _relativize_path(file_path, repo_name, repositories)
         return (rel, repo_name)
     return _normalize_path(file_path, repositories)
+
+
+def filter_code_rows(
+    rows: list[dict],
+    repos: list[Repository] | None,
+    repo_name: str | None,
+    tool_name: str,
+) -> list[dict]:
+    """Apply path normalization and test-dir filtering to code-domain rows.
+
+    Returns the filtered list. Rows with unresolvable paths are dropped and
+    logged. Rows in test directories are dropped and logged.
+    """
+    if not repos:
+        return rows
+    repo_test_dirs: dict[str, list[str]] = {
+        r.name: r.test_dirs for r in repos if r.test_dirs
+    }
+    filtered: list[dict] = []
+    for row in rows:
+        file_path: str = row.get("file_path", "") or ""
+        result_path = normalize_file_path(file_path, repos, repo_name=repo_name)
+        if result_path is None:
+            logger.error(
+                "Excluding row with missing file path: tool=%s rule_id=%s",
+                tool_name,
+                row.get("rule_id", ""),
+            )
+            continue
+        rel, matched_repo = result_path
+        row["file_path"] = rel
+        if matched_repo is not None:
+            row["repo"] = matched_repo
+        if matched_repo is not None and rel:
+            _tdirs = repo_test_dirs.get(matched_repo, [])
+            if _tdirs and is_test_path(rel, _tdirs):
+                logger.debug(
+                    "Excluding test-dir row: tool=%s path=%s",
+                    tool_name,
+                    rel,
+                )
+                continue
+        filtered.append(row)
+    return filtered
