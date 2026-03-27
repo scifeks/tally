@@ -50,6 +50,8 @@ docstring-parser==0.17.0
     # via anthropic
 durationpy==0.10
     # via kubernetes
+fastapi==0.135.2
+    # via tally (pyproject.toml)
 filelock==3.25.2
     # via huggingface-hub
 flatbuffers==25.12.19
