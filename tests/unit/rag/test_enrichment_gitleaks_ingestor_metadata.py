@@ -63,3 +63,47 @@ class TestGitleaksIngestorMetadata:
         rows = self._get_rows("")
         assert len(rows) == 1
         assert "title" not in rows[0]
+
+    def _make_result_with_source(self, source: str) -> ToolResult:
+        return ToolResult(
+            tool_name="gitleaks",
+            success=True,
+            output="",
+            parsed_data={
+                "secrets": [
+                    {
+                        "rule_id": "aws-access-token",
+                        "description": "AWS Access Token",
+                        "file_path": "config.py",
+                        "line_number": 42,
+                        "tags": ["aws"],
+                        "commit": None,
+                        "fingerprint": "fp-001",
+                        "source": source,
+                    }
+                ],
+                "summary": {"total": 1},
+            },
+            output_files={},
+            timestamp="2024-01-01T00:00:00",
+            duration_seconds=0.1,
+        )
+
+    def test_source_dir_written_to_row(self) -> None:
+        rows = GitleaksHandler().normalize(
+            self._make_result_with_source("dir"), "default"
+        )
+        assert len(rows) == 1
+        assert rows[0]["source"] == "dir"
+
+    def test_source_git_written_to_row(self) -> None:
+        rows = GitleaksHandler().normalize(
+            self._make_result_with_source("git"), "default"
+        )
+        assert len(rows) == 1
+        assert rows[0]["source"] == "git"
+
+    def test_missing_source_omitted_from_row(self) -> None:
+        """Findings with no source key (e.g. legacy data) produce no source field."""
+        rows = self._get_rows("aws-access-token")
+        assert "source" not in rows[0]

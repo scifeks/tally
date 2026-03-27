@@ -46,6 +46,7 @@ class GitleaksHandler:
             symlink_file = secret.get("symlink_file")
             tags: list[str] = secret.get("tags") or []
             fingerprint = secret.get("fingerprint", "")
+            source = secret.get("source", "")
 
             tags_str = ", ".join(tags) if tags else ""
 
@@ -88,6 +89,8 @@ class GitleaksHandler:
                 row["symlink_file"] = symlink_file
             if fingerprint:
                 row["fingerprint"] = fingerprint
+            if source:
+                row["source"] = source
             row.update(_shared_meta(self, "secret"))
 
             rows.append(row)
@@ -108,6 +111,8 @@ class GitleaksHandler:
             parts.append(f"Author: {row['author']}")
         if row.get("commit"):
             parts.append(f"Commit: {row['commit']}")
+        if row.get("source"):
+            parts.append(f"Source: {row['source']}")
         if row.get("date"):
             parts.append(f"Date: {row['date']}")
         return "[gitleaks] " + " | ".join(parts)

@@ -93,6 +93,11 @@ def combine_gitleaks_results(dir_data: dict, git_data: dict) -> dict[str, Any]:
     dir_secrets: list[dict] = (dir_data or {}).get("secrets", [])
     git_secrets: list[dict] = (git_data or {}).get("secrets", [])
 
+    for s in dir_secrets:
+        s["source"] = "dir"
+    for s in git_secrets:
+        s.setdefault("source", "git")
+
     # Deduplicate by (rule_id, file_path, line_number).  commit is intentionally
     # excluded: the same secret found by both a dir scan (commit=None) and a git
     # scan (commit=hash) is the same logical finding and should appear only once.
