@@ -10,7 +10,7 @@ from .nmap_profile import NmapProfile
 from .ollama_config import OllamaConfig
 from .ollama_embedding_config import OllamaEmbeddingConfig
 from .project_config import ProjectConfig
-from .repository import _VALID_REPO_TYPES, Repository
+from .repository import _VALID_REPO_TYPES, Repository, build_excluded_dirs
 
 __all__ = [
     "ClaudeConfig",
@@ -25,4 +25,5 @@ __all__ = [
     "ProjectConfig",
     "Repository",
     "_VALID_REPO_TYPES",
+    "build_excluded_dirs",
 ]

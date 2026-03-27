@@ -262,21 +262,36 @@ class InteractiveProjectWizard:
             )
             base_urls = [u.strip() for u in url_input.split(",") if u.strip()]
 
-            # Test dirs
+            # Test dir names
             detect_path = Path(local_path_str) if local_path_str else None
             auto_test_dirs = _detect_test_dirs(detect_path) if detect_path else []
             if auto_test_dirs:
                 auto_label = ", ".join(auto_test_dirs)
-                test_dirs_prompt = f"  Test dirs (detected {auto_label})"
+                test_dirs_prompt = (
+                    f"  Test dir names (detected {auto_label}, any depth)"
+                )
                 test_dirs_default = auto_label
             else:
                 current_test = (
                     ", ".join(existing.test_dirs) if existing.test_dirs else ""
                 )
-                test_dirs_prompt = "  Test dirs (comma-separated, optional)"
+                test_dirs_prompt = (
+                    "  Test dir names (any depth, comma-separated, optional)"
+                )
                 test_dirs_default = current_test
             test_dirs_input = _prompt(test_dirs_prompt, default=test_dirs_default)
             test_dirs = [d.strip() for d in test_dirs_input.split(",") if d.strip()]
+
+            # Ignore dir names
+            current_ignore = (
+                ", ".join(existing.ignore_dirs) if existing.ignore_dirs else ""
+            )
+            ignore_dirs_input = _prompt(
+                "  Ignore dir names (e.g. vendor, node_modules, mocks"
+                " — comma-separated, optional)",
+                default=current_ignore,
+            )
+            ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
             updated = Repository(
                 name=name,
@@ -287,6 +302,7 @@ class InteractiveProjectWizard:
                 languages=langs,
                 base_urls=base_urls,
                 test_dirs=test_dirs,
+                ignore_dirs=ignore_dirs,
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
@@ -518,18 +534,25 @@ class InteractiveProjectWizard:
         url_input = _prompt("  Base URLs (comma-separated, optional)")
         base_urls = [u.strip() for u in url_input.split(",") if u.strip()]
 
-        # Test dirs
+        # Test dir names
         detect_path = Path(local_path_str) if local_path_str else None
         auto_test_dirs = _detect_test_dirs(detect_path) if detect_path else []
         if auto_test_dirs:
             auto_label = ", ".join(auto_test_dirs)
-            test_dirs_prompt = f"  Test dirs (detected {auto_label})"
+            test_dirs_prompt = f"  Test dir names (detected {auto_label}, any depth)"
             test_dirs_default = auto_label
         else:
-            test_dirs_prompt = "  Test dirs (comma-separated, optional)"
+            test_dirs_prompt = "  Test dir names (any depth, comma-separated, optional)"
             test_dirs_default = ""
         test_dirs_input = _prompt(test_dirs_prompt, default=test_dirs_default)
         test_dirs = [d.strip() for d in test_dirs_input.split(",") if d.strip()]
+
+        # Ignore dir names
+        ignore_dirs_input = _prompt(
+            "  Ignore dir names (e.g. vendor, node_modules, mocks"
+            " — comma-separated, optional)"
+        )
+        ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
         return Repository(
             name=name,
@@ -540,4 +563,5 @@ class InteractiveProjectWizard:
             languages=langs,
             base_urls=base_urls,
             test_dirs=test_dirs,
+            ignore_dirs=ignore_dirs,
         )

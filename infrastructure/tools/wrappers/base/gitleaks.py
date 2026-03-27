@@ -1,7 +1,10 @@
 """Shared base class for gitleaks local and docker wrappers."""
 
+import tempfile
+from pathlib import Path
 from typing import Any
 
+from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
 from infrastructure.tools.parsers.gitleaks_parser import combine_gitleaks_results
@@ -66,14 +69,32 @@ class BaseGitleaksTool(ToolInterface):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
+        exclude = build_excluded_dirs(context.repo)
+
+        shared_kwargs: dict[str, object] = {"repo_path": repo_path}
+        if exclude:
+            patterns = "\n".join(f"**/{d}" for d in exclude) + "\n"
+            if context.repo.docker_path and context.repo.path:
+                # Docker mode: write to local repo path (already mounted in container).
+                # The file is overwritten on each scan; it is not committed.
+                ignore_file = Path(context.repo.path) / ".tally_gitleaksignore"
+                ignore_file.write_text(patterns)
+                container_ignore = f"{context.repo.docker_path}/.tally_gitleaksignore"
+                shared_kwargs["gitleaks_ignore_path"] = container_ignore
+            else:
+                # Local mode: write to a temp file.
+                tmp = tempfile.mktemp(suffix=".gitleaksignore", prefix="tally_")
+                Path(tmp).write_text(patterns)
+                shared_kwargs["gitleaks_ignore_path"] = tmp
+
         return [
             ExecutionPass(
                 label_suffix=f"{context.repo.name}_dir",
-                kwargs={"repo_path": repo_path, "scan_type": "dir"},
+                kwargs={**shared_kwargs, "scan_type": "dir"},
             ),
             ExecutionPass(
                 label_suffix=f"{context.repo.name}_git",
-                kwargs={"repo_path": repo_path, "scan_type": "git"},
+                kwargs={**shared_kwargs, "scan_type": "git"},
             ),
         ]
 

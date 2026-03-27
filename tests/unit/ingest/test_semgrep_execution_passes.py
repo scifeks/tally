@@ -20,6 +20,7 @@ def _make_repo(path: str, test_dirs: list[str]) -> Repository:
         languages=["python"],
         base_urls=[],
         test_dirs=test_dirs,
+        ignore_dirs=[],
     )
 
 
@@ -58,7 +59,10 @@ class TestSemgrepBuildExecutionPasses:
         assert len(passes) == 1
         assert "exclude" not in passes[0].kwargs
 
-    def test_auto_detects_exclude_when_test_dirs_empty(self, tmp_path: Path) -> None:
+    def test_no_auto_detect_when_config_dirs_empty(self, tmp_path: Path) -> None:
+        # Auto-detection from filesystem was removed; exclusions come from repo
+        # config only. Even with a tests/ dir present, no exclude is applied
+        # when test_dirs=[] and ignore_dirs=[].
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         (repo_dir / "tests").mkdir()
@@ -67,4 +71,4 @@ class TestSemgrepBuildExecutionPasses:
         tool = SemgrepLocalTool(config=None)
         passes = tool.build_execution_passes(ctx)
         assert len(passes) == 1
-        assert passes[0].kwargs["exclude"] == ["tests"]
+        assert "exclude" not in passes[0].kwargs

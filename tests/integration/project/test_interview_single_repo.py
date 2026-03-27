@@ -40,7 +40,8 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
+        # inputs: name, type, mode, path, languages, base_urls, test_dirs, ignore_dirs
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
@@ -63,6 +64,7 @@ class TestInterviewSingleRepo:
             "python",
             "",
             "",
+            "",
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -76,7 +78,17 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        inputs = ["my-repo", "api", "nope", "local", str(repo_dir), "python", "", ""]
+        inputs = [
+            "my-repo",
+            "api",
+            "nope",
+            "local",
+            str(repo_dir),
+            "python",
+            "",
+            "",
+            "",
+        ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
@@ -96,6 +108,7 @@ class TestInterviewSingleRepo:
             "python",
             "",
             "",
+            "",
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -108,12 +121,13 @@ class TestInterviewSingleRepo:
         (repo_dir / "tests").mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        # last "" accepts the auto-detected "tests" default
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
+        # last two "" accept defaults for test_dirs and ignore_dirs
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.test_dirs == ["tests"]
+        assert repo.ignore_dirs == []
 
     def test_test_dirs_overridden_by_user(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -121,21 +135,73 @@ class TestInterviewSingleRepo:
         (repo_dir / "tests").mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        # user overrides detected "tests" with "spec, e2e"
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "spec, e2e"]
+        # user overrides detected "tests" with "spec, e2e"; ignore_dirs empty
+        inputs = [
+            "my-repo",
+            "api",
+            "local",
+            str(repo_dir),
+            "python",
+            "",
+            "spec, e2e",
+            "",
+        ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.test_dirs == ["spec", "e2e"]
+        assert repo.ignore_dirs == []
 
     def test_no_test_dirs_empty_input(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        # no test subdirs present; user presses Enter → empty list
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", ""]
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
         assert repo.test_dirs == []
+
+    def test_ignore_dirs_captured(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
+        # no test dirs; ignore_dirs = vendor, node_modules
+        inputs = [
+            "my-repo",
+            "api",
+            "local",
+            str(repo_dir),
+            "python",
+            "",
+            "",
+            "vendor, node_modules",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            repo = wizard._interview_single_repo(1)
+        assert repo is not None
+        assert repo.ignore_dirs == ["vendor", "node_modules"]
+
+    def test_both_test_and_ignore_dirs(self, tmp_path: Path) -> None:
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        (repo_dir / "tests").mkdir()
+        pm = _make_pm(tmp_path / "pm")
+        wizard = InteractiveProjectWizard(pm)
+        inputs = [
+            "my-repo",
+            "api",
+            "local",
+            str(repo_dir),
+            "python",
+            "",
+            "tests",
+            "vendor, mocks",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            repo = wizard._interview_single_repo(1)
+        assert repo is not None
+        assert repo.test_dirs == ["tests"]
+        assert repo.ignore_dirs == ["vendor", "mocks"]
