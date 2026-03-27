@@ -123,6 +123,14 @@ class TestChromaDBHandler:
         assert mock_engine.delete_findings.call_count == 2
         assert mock_engine.add_documents.call_count == 2
 
+        all_calls = mock_engine.add_documents.call_args_list
+        all_texts = [t for call in all_calls for t in call.kwargs["texts"]]
+        assert any("nmap" in t for t in all_texts)
+        assert any("gitleaks" in t for t in all_texts)
+        for call in all_calls:
+            for meta in call.kwargs["metadatas"]:
+                assert set(meta.keys()) == {"tool", "profile"}
+
     def test_skips_group_when_tool_handler_none(self) -> None:
         mock_engine = MagicMock()
         mock_finding_repo = MagicMock()

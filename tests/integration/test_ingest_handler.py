@@ -121,6 +121,34 @@ class TestIngestHandlerPhase2:
             )
         assert engine.count_documents() == 0
 
+    def test_sqlite_deduplicates_on_second_ingest(
+        self, project_env: dict, nmap_result: ToolResult
+    ) -> None:
+        """Dispatching the same ToolCompleted twice must not add new rows.
+
+        The ON CONFLICT (fingerprint) clause in upsert_findings() must
+        increment seen_count instead of inserting duplicates.
+        """
+        bus = EventBus()
+        handler = IngestHandler(bus)
+        event = ToolCompleted(
+            result=nmap_result,
+            profile="test-profile",
+            run_id=1,
+            project_name=project_env["project_name"],
+            base_path=str(project_env["base_path"]),
+        )
+        handler.handle(event)
+        handler.handle(event)
+
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        findings = finding_repo.get_all_findings()
+        assert len(findings) == 2  # still only 2 rows (port 80 and 443)
+        for finding in findings:
+            assert finding["seen_count"] == 2
+
     def test_ingest_completed_ids_are_sqlite_primary_keys(
         self, project_env: dict, nmap_result: ToolResult
     ) -> None:

@@ -76,13 +76,25 @@ class TestEnrichmentHandler:
         assert received[0].partial_success is False
 
     def test_dispatches_had_errors_true_on_partial_failure(self) -> None:
+        """had_errors must be computed by enrich(), not pre-set on a mock."""
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
         mock_repo = MagicMock()
-        mock_pipeline = MagicMock()
-        mock_pipeline.had_errors = True
+
+        class _FailingPipeline:
+            """Stub that sets _had_errors=True only after enrich() is called."""
+
+            def __init__(self, **kwargs: object) -> None:
+                self._had_errors = False
+
+            def enrich(self, ids: list[int]) -> None:
+                self._had_errors = True
+
+            @property
+            def had_errors(self) -> bool:
+                return self._had_errors
 
         handler = EnrichmentHandler(bus)
         with (
@@ -92,7 +104,7 @@ class TestEnrichmentHandler:
             ),
             patch(
                 "application.pipeline.handlers.EnrichmentPipeline",
-                return_value=mock_pipeline,
+                _FailingPipeline,
             ),
         ):
             handler.handle(_ingest_completed(ids=[1]))
