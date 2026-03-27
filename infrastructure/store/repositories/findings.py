@@ -126,7 +126,7 @@ class FindingRepository:
         from datetime import UTC, datetime
 
         now = datetime.now(UTC).isoformat()
-        rows_with_ts = [(*row, now, now, 1, "active") for row in rows]
+        rows_with_ts = [(*row, now, now, 1, "active", 0) for row in rows]
 
         sql = """
             INSERT INTO findings (
@@ -135,9 +135,9 @@ class FindingRepository:
                 confidence, file, rule_id, url, host, port,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
-                first_seen, last_seen, seen_count, status
+                first_seen, last_seen, seen_count, status, should_report
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?)
+                       ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
                 run_id          = excluded.run_id,
                 severity        = excluded.severity,
@@ -397,6 +397,40 @@ class FindingRepository:
         with self._factory.connect() as conn:
             cursor = conn.execute(sql, params)
             return cursor.rowcount > 0
+
+    def batch_update_analyst_fields(
+        self,
+        ids: list[int],
+        fields: dict[str, Any],
+    ) -> int:
+        """Update analyst-writable named columns on multiple findings in one tx.
+
+        Sets ``triaged_by = 'analyst_web'`` and ``triaged_at`` on every row.
+        Does not touch the meta JSON blob — meta keys are not supported for batch.
+        Returns the count of rows actually updated.
+        """
+        from datetime import UTC, datetime
+
+        if not ids or not fields:
+            return 0
+
+        now_iso = datetime.now(UTC).isoformat()
+
+        set_parts: list[str] = []
+        params: list[Any] = []
+        for col, val in fields.items():
+            set_parts.append(f"{col} = ?")
+            params.append(val)
+        set_parts.extend(["triaged_by = 'analyst_web'", "triaged_at = ?"])
+        params.append(now_iso)
+
+        placeholders = ",".join("?" * len(ids))
+        params.extend(ids)
+
+        sql = f"UPDATE findings SET {', '.join(set_parts)} WHERE id IN ({placeholders})"
+        with self._factory.connect() as conn:
+            cursor = conn.execute(sql, params)
+            return cursor.rowcount
 
     def reset_tal_ids(self) -> None:
         """Set tal_id = NULL for every row in findings."""

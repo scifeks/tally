@@ -84,7 +84,7 @@ class ConnectionFactory:
                     status           TEXT,
                     triaged_at       TEXT,
                     triaged_by       TEXT,
-                    should_report    INTEGER NOT NULL DEFAULT 1,
+                    should_report    INTEGER NOT NULL DEFAULT 0,
                     business_impact  TEXT,
                     tal_id           TEXT
                 );

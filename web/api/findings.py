@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from infrastructure.store import FindingRepository
 from web.api.chroma_sync import sync_finding_to_chroma
-from web.api.schemas import FindingPatchRequest
+from web.api.schemas import BatchFindingPatchRequest, FindingPatchRequest
 
 router = APIRouter()
 
@@ -105,6 +105,35 @@ _META_FIELD_MAP: dict[str, str] = {
     "meta_title": "title",
     "meta_tags": "tags",
 }
+
+
+@router.patch("/batch")
+async def batch_patch_findings(
+    request: Request,
+    body: BatchFindingPatchRequest,
+) -> dict:
+    """Apply analyst field updates to multiple findings in one transaction.
+
+    Accepts the same patchable fields as the single-finding PATCH.
+    Sets ``triaged_by = 'analyst_web'`` and ``triaged_at = now()`` for
+    every row in the batch.
+
+    Returns ``{"updated": N}`` where N is the count of rows actually updated.
+    Does not sync to ChromaDB — should_report is a UI annotation only.
+    """
+    factory = request.app.state.connection_factory
+    repo = FindingRepository(factory)
+
+    raw = body.model_dump(exclude={"ids"}, exclude_none=True)
+    fields: dict[str, Any] = {}
+    for k, v in raw.items():
+        if k == "should_report":
+            fields["should_report"] = 1 if v else 0
+        else:
+            fields[k] = v
+
+    updated = repo.batch_update_analyst_fields(body.ids, fields)
+    return {"updated": updated}
 
 
 @router.patch("/{finding_id}")

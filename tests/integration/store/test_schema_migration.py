@@ -51,11 +51,11 @@ class TestSchemaNewColumns:
         assert "business_impact" in cols
         assert "tal_id" in cols
 
-    def test_should_report_default_is_1(self, tmp_path: Path) -> None:
+    def test_should_report_default_is_0(self, tmp_path: Path) -> None:
         factory = ConnectionFactory(tmp_path / "findings.db")
         factory.init_schema()
         defaults = _insert_and_read(factory)
-        assert defaults["should_report"] == 1
+        assert defaults["should_report"] == 0
 
     def test_business_impact_default_is_null(self, tmp_path: Path) -> None:
         factory = ConnectionFactory(tmp_path / "findings.db")
