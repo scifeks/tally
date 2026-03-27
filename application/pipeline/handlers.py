@@ -1,12 +1,16 @@
-"""Pipeline handlers: IngestHandler, EnrichmentHandler, PersistenceHandler."""
+"""Pipeline handlers: IngestHandler, EnrichmentHandler, ChromaDBHandler."""
 
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from application.rag.enrichment import EnrichmentPipeline
-from application.rag.ingestor import FindingIngestor
+from application.rag.ingestor import (
+    ToolHandlerFactory,
+    filter_code_rows,
+)
 from core.config.manager import ConfigManager
 from domain.pipeline.events import (
     EnrichmentCompleted,
@@ -15,6 +19,7 @@ from domain.pipeline.events import (
     ToolCompleted,
 )
 from infrastructure.store import make_store
+from infrastructure.store.repositories.findings_serial import compute_fingerprint
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -43,7 +48,7 @@ class BaseHandler:
 
 
 class IngestHandler(BaseHandler):
-    """Handles ToolCompleted: ingests findings into ChromaDB, emits IngestCompleted."""
+    """Handles ToolCompleted: normalizes findings to SQLite, emits IngestCompleted."""
 
     def __init__(self, bus: EventBus, console: Console | None = None) -> None:
         super().__init__()
@@ -51,21 +56,6 @@ class IngestHandler(BaseHandler):
         self._console = console
 
     def handle(self, event: ToolCompleted) -> None:
-        try:
-            engine = self._get_engine(event.project_name, event.base_path)
-        except Exception as exc:
-            logger.warning("IngestHandler: RAGEngine init failed: %s", exc)
-            self._bus.dispatch(
-                IngestCompleted(
-                    doc_ids=[],
-                    failed_tools=[],
-                    run_id=event.run_id,
-                    project_name=event.project_name,
-                    base_path=event.base_path,
-                )
-            )
-            return
-
         result = event.result
         if (
             not result.success
@@ -74,7 +64,7 @@ class IngestHandler(BaseHandler):
         ):
             self._bus.dispatch(
                 IngestCompleted(
-                    doc_ids=[],
+                    ids=[],
                     failed_tools=[],
                     run_id=event.run_id,
                     project_name=event.project_name,
@@ -83,31 +73,48 @@ class IngestHandler(BaseHandler):
             )
             return
 
-        doc_ids: list[str] = []
+        sqlite_ids: list[int] = []
         failed_tools: list[str] = []
         try:
-            try:
-                repos = ConfigManager(event.base_path).load_repositories(
-                    event.project_name
+            handler = ToolHandlerFactory.load(result.tool_name)
+            if handler is None:
+                self._bus.dispatch(
+                    IngestCompleted(
+                        ids=[],
+                        failed_tools=[],
+                        run_id=event.run_id,
+                        project_name=event.project_name,
+                        base_path=event.base_path,
+                    )
                 )
-            except Exception:
-                repos = None
-            ingestor = FindingIngestor(
-                engine,
-                event.project_name,
-                repositories=repos,
-                repo_name=event.repo,
-            )
-            doc_ids = ingestor.ingest_tool_output(result, profile=event.profile)
+                return
+
+            rows: list[dict] = handler.normalize(result, event.profile)
+
+            if handler.domain == "code":
+                try:
+                    repos = ConfigManager(event.base_path).load_repositories(
+                        event.project_name
+                    )
+                except Exception:
+                    repos = None
+                rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
+
+            _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
+            finding_repo.upsert_findings(event.run_id or 0, rows)
+            fingerprints = [compute_fingerprint(row) for row in rows]
+            sqlite_ids = finding_repo.get_ids_by_fingerprints(fingerprints)
         except Exception as exc:
             logger.error(
-                "IngestHandler: ingestion failed for %s: %s", result.tool_name, exc
+                "IngestHandler: ingestion failed for %s: %s",
+                result.tool_name,
+                exc,
             )
             failed_tools.append(result.tool_name)
 
         self._bus.dispatch(
             IngestCompleted(
-                doc_ids=doc_ids,
+                ids=sqlite_ids,
                 failed_tools=failed_tools,
                 run_id=event.run_id,
                 project_name=event.project_name,
@@ -125,44 +132,21 @@ class EnrichmentHandler(BaseHandler):
         self._console = console
 
     def handle(self, event: IngestCompleted) -> None:
-        if not event.doc_ids:
+        if not event.ids:
             return
 
-        try:
-            engine = self._get_engine(event.project_name, event.base_path)
-        except Exception as exc:
-            logger.warning("EnrichmentHandler: RAGEngine init failed: %s", exc)
-            self._bus.dispatch(
-                EnrichmentCompleted(
-                    doc_ids=event.doc_ids,
-                    partial_success=False,
-                    run_id=event.run_id,
-                    project_name=event.project_name,
-                    base_path=event.base_path,
-                )
-            )
-            return
-
-        try:
-            pipeline = EnrichmentPipeline(engine, console=self._console)
-            pipeline.enrich(event.doc_ids)
-        except Exception as exc:
-            logger.error("EnrichmentHandler: enrichment error: %s", exc)
-            self._bus.dispatch(
-                EnrichmentCompleted(
-                    doc_ids=event.doc_ids,
-                    partial_success=False,
-                    run_id=event.run_id,
-                    project_name=event.project_name,
-                    base_path=event.base_path,
-                )
-            )
-            return
-
+        _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
+        pipeline = EnrichmentPipeline(
+            finding_repo=finding_repo,
+            console=self._console,
+            base_path=event.base_path,
+            run_id=event.run_id,
+        )
+        pipeline.enrich(event.ids)
         self._bus.dispatch(
             EnrichmentCompleted(
-                doc_ids=event.doc_ids,
-                partial_success=True,
+                ids=event.ids,
+                partial_success=pipeline.had_errors,
                 run_id=event.run_id,
                 project_name=event.project_name,
                 base_path=event.base_path,
@@ -170,31 +154,33 @@ class EnrichmentHandler(BaseHandler):
         )
 
 
-class PersistenceHandler(BaseHandler):
-    """Handles EnrichmentCompleted: persists enriched findings to SQLite."""
-
-    def __init__(self, bus: EventBus) -> None:
-        super().__init__()
-        self._bus = bus
+class ChromaDBHandler(BaseHandler):
+    """Handles EnrichmentCompleted: writes enriched findings to ChromaDB."""
 
     def handle(self, event: EnrichmentCompleted) -> None:
-        if event.run_id is None:
+        if not event.ids:
             return
 
         try:
             engine = self._get_engine(event.project_name, event.base_path)
         except Exception as exc:
-            logger.warning("PersistenceHandler: RAGEngine init failed: %s", exc)
+            logger.warning("ChromaDBHandler: RAGEngine init failed: %s", exc)
             return
 
         try:
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-            findings_metadata: list[dict] = []
-            for doc_id in event.doc_ids:
-                doc = engine.get_document_by_id(doc_id)
-                if doc is not None:
-                    findings_metadata.append(doc["metadata"])
-            if findings_metadata:
-                finding_repo.upsert_findings(event.run_id, findings_metadata)
+            rows = finding_repo.get_by_ids(event.ids)
+            grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
+            for row in rows:
+                grouped[(row["tool"], row["profile"])].append(row)
+            for (tool, profile), group_rows in grouped.items():
+                engine.delete_findings(tool, profile)
+                handler = ToolHandlerFactory.load(tool)
+                if handler is None:
+                    continue
+                texts = [handler.render(row) for row in group_rows]
+                metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
+                ids = [str(row["id"]) for row in group_rows]
+                engine.add_documents(texts=texts, metadatas=metadatas, ids=ids)
         except Exception as exc:
-            logger.error("PersistenceHandler: persistence error: %s", exc)
+            logger.error("ChromaDBHandler: write error: %s", exc)

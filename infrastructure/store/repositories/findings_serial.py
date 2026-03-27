@@ -21,29 +21,7 @@ logger = logging.getLogger(__name__)
 # Column mappings
 # ---------------------------------------------------------------------------
 
-# ChromaDB field name → SQLite named column name
-_CHROMA_TO_SQLITE: dict[str, str] = {
-    "tool": "tool",
-    "domain": "domain",
-    "segment": "segment",
-    "repo": "repo",
-    "finding_type": "finding_type",
-    "severity": "severity",
-    "confidence": "confidence",
-    "file_path": "file",
-    "rule_id": "rule_id",
-    "url": "url",
-    "ip_address": "host",
-    "port": "port",
-    "vulnerability_id": "vulnerability_id",
-    "package_name": "package_name",
-    "ecosystem": "ecosystem",
-    "description": "description",
-    "package_version": "package_version",
-    "lockfile": "file",  # SCA: lower priority than file_path
-}
-
-# Named column names that are identical in ChromaDB and SQLite
+# Named column names that map directly (field name == SQLite column name)
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",

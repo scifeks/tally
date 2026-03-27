@@ -1,8 +1,7 @@
-"""ZapChunkBuilder — converts ZAP ToolResult into ChromaDB document chunks."""
+"""ZapHandler — converts ZAP ToolResult into normalized finding dicts."""
 
 import json
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
 from domain.tools.base import ToolResult
@@ -20,7 +19,7 @@ _ZAP_VERSION_ALERT_PREFIX = (
 )
 
 
-class ZapChunkBuilder:
+class ZapHandler:
     tool_name = "zap"
     domain = "web"
     segment = "api"
@@ -43,19 +42,16 @@ class ZapChunkBuilder:
         ),
     )
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]:
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
         parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         alerts: list[dict[str, Any]] = parsed.get("alerts", [])
 
         timestamp = result.timestamp
         source_file = _first_output_file(result.output_files)
-        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
-        chunks: list[tuple[str, dict[str, Any], str]] = []
+        rows: list[dict] = []
 
-        for ai, alert in enumerate(alerts):
+        for alert in alerts:
             description = alert.get("description", "")
             if description.startswith(_ZAP_VERSION_ALERT_PREFIX):
                 logger.debug("Skipping ZAP self-diagnostic alert: %s", description[:80])
@@ -67,7 +63,6 @@ class ZapChunkBuilder:
             url = alert.get("url", "")
             method = alert.get("method", "")
             param = alert.get("param") or ""
-            evidence = alert.get("evidence") or ""
             solution = alert.get("solution", "")
             cwe_id = alert.get("cwe_id")
 
@@ -86,19 +81,7 @@ class ZapChunkBuilder:
             }
             confidence = _ZAP_CONFIDENCE.get(str(raw_confidence).lower(), "potential")
 
-            text_lines = [
-                f"[zap] [{risk.upper()}] API vulnerability: {alert_name}",
-                f"Endpoint: {method} {url}",
-            ]
-            if param:
-                text_lines.append(f"Parameter: {param}")
-            text_lines.append(f"Description: {description}")
-            if evidence:
-                text_lines.append(f"Evidence: {evidence}")
-            text_lines.append(f"Solution: {solution}")
-            text = "\n".join(text_lines)
-
-            meta: dict[str, Any] = {
+            row: dict[str, Any] = {
                 "tool": "zap",
                 "profile": profile,
                 "finding_type": json.dumps(["vulnerability"]),
@@ -113,23 +96,39 @@ class ZapChunkBuilder:
                 "timestamp": timestamp,
                 "source_file": source_file,
             }
+            evidence = alert.get("evidence") or ""
             if param:
-                meta["param"] = param
+                row["param"] = param
+            if evidence:
+                row["evidence"] = evidence
             if cwe_id is not None and cwe_id > 0:
-                meta["cwe_id"] = cwe_id
-            meta.update(_shared_meta(self, "vulnerability"))
+                row["cwe_id"] = cwe_id
+            row.update(_shared_meta(self, "vulnerability"))
 
-            doc_id = f"zap_{profile}_alert_{ai}_{ts_compact}"
-            chunks.append((text, meta, doc_id))
+            rows.append(row)
 
-        return chunks
+        return rows
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str:
-        return "|".join(
-            [
-                "zap",
-                str(finding.get("url", "")),
-                str(finding.get("method", "")),
-                str(finding.get("alert_name", "")),
-            ]
-        )
+    def render(self, row: dict) -> str:
+        parts = [
+            f"Alert: {row.get('alert_name', '')}",
+            f"URL: {row.get('url', '')}",
+            f"Method: {row.get('method', '')}",
+            f"Severity: {row.get('severity', '')}",
+            f"Confidence: {row.get('confidence', '')}",
+        ]
+        if row.get("description"):
+            parts.append(f"Description: {row['description']}")
+        if row.get("remediation"):
+            parts.append(f"Remediation: {row['remediation']}")
+        if row.get("cwe_id"):
+            parts.append(f"CWE: {row['cwe_id']}")
+        if row.get("param"):
+            parts.append(f"Parameter: {row['param']}")
+        if row.get("evidence"):
+            parts.append(f"Evidence: {row['evidence']}")
+        if row.get("title"):
+            parts.append(f"Title: {row['title']}")
+        if row.get("owasp_name"):
+            parts.append(f"OWASP category: {row['owasp_name']}")
+        return "[zap] " + " | ".join(parts)

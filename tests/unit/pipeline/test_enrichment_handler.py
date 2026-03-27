@@ -26,12 +26,12 @@ def _make_tool_result(
 
 
 def _ingest_completed(
-    doc_ids: list[str] | None = None,
+    ids: list[int] | None = None,
     failed_tools: list[str] | None = None,
     run_id: int | None = 1,
 ) -> IngestCompleted:
     return IngestCompleted(
-        doc_ids=["doc1", "doc2"] if doc_ids is None else doc_ids,
+        ids=[1, 2] if ids is None else ids,
         failed_tools=[] if failed_tools is None else failed_tools,
         run_id=run_id,
         project_name="test-proj",
@@ -40,61 +40,97 @@ def _ingest_completed(
 
 
 class TestEnrichmentHandler:
-    def test_noop_when_doc_ids_empty(self) -> None:
+    def test_noop_when_ids_empty(self) -> None:
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
         handler = EnrichmentHandler(bus)
-        handler.handle(_ingest_completed(doc_ids=[]))
+        handler.handle(_ingest_completed(ids=[]))
 
         assert received == []
 
-    def test_dispatches_partial_success_false_on_exception(self) -> None:
+    def test_dispatches_event_on_success(self) -> None:
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
-        mock_engine = MagicMock()
+        mock_repo = MagicMock()
         mock_pipeline = MagicMock()
-        mock_pipeline.enrich.side_effect = RuntimeError("llm down")
+        mock_pipeline.had_errors = False
 
         handler = EnrichmentHandler(bus)
         with (
             patch(
-                "application.pipeline.handlers.EnrichmentHandler._get_engine",
-                return_value=mock_engine,
+                "application.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_repo, MagicMock(), MagicMock()),
             ),
             patch(
                 "application.pipeline.handlers.EnrichmentPipeline",
                 return_value=mock_pipeline,
             ),
         ):
-            handler.handle(_ingest_completed(doc_ids=["doc1"]))
+            handler.handle(_ingest_completed(ids=[1]))
 
         assert len(received) == 1
         assert received[0].partial_success is False
 
-    def test_dispatches_partial_success_true_on_success(self) -> None:
+    def test_dispatches_had_errors_true_on_partial_failure(self) -> None:
+        """had_errors must be computed by enrich(), not pre-set on a mock."""
         bus = EventBus()
         received: list[EnrichmentCompleted] = []
         bus.subscribe(EnrichmentCompleted, received.append)
 
-        mock_engine = MagicMock()
-        mock_pipeline = MagicMock()
+        mock_repo = MagicMock()
+
+        class _FailingPipeline:
+            """Stub that sets _had_errors=True only after enrich() is called."""
+
+            def __init__(self, **kwargs: object) -> None:
+                self._had_errors = False
+
+            def enrich(self, ids: list[int]) -> None:
+                self._had_errors = True
+
+            @property
+            def had_errors(self) -> bool:
+                return self._had_errors
 
         handler = EnrichmentHandler(bus)
         with (
             patch(
-                "application.pipeline.handlers.EnrichmentHandler._get_engine",
-                return_value=mock_engine,
+                "application.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_repo, MagicMock(), MagicMock()),
+            ),
+            patch(
+                "application.pipeline.handlers.EnrichmentPipeline",
+                _FailingPipeline,
+            ),
+        ):
+            handler.handle(_ingest_completed(ids=[1]))
+
+        assert len(received) == 1
+        assert received[0].partial_success is True
+
+    def test_finding_repo_passed_to_pipeline(self) -> None:
+        bus = EventBus()
+        mock_repo = MagicMock()
+        mock_pipeline = MagicMock()
+        mock_pipeline.had_errors = False
+
+        handler = EnrichmentHandler(bus)
+        with (
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(MagicMock(), mock_repo, MagicMock(), MagicMock()),
             ),
             patch(
                 "application.pipeline.handlers.EnrichmentPipeline",
                 return_value=mock_pipeline,
-            ),
+            ) as mock_cls,
         ):
-            handler.handle(_ingest_completed(doc_ids=["doc1"]))
+            handler.handle(_ingest_completed(ids=[1]))
 
-        assert len(received) == 1
-        assert received[0].partial_success is True
+        mock_cls.assert_called_once()
+        call_kwargs = mock_cls.call_args.kwargs
+        assert call_kwargs["finding_repo"] is mock_repo

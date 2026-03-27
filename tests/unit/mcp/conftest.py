@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 _next_id = 0
 
 
@@ -26,3 +28,23 @@ def _f(
         "line_start": line_start,
         **kwargs,
     }
+
+
+@pytest.fixture(autouse=True)
+def _reset_id_counter():
+    """Reset global _next_id counter before each test to prevent bleed."""
+    global _next_id
+    _next_id = 0
+    yield
+
+
+@pytest.fixture()
+def next_id():
+    """Returns an incrementing callable, reset per test."""
+    counter = {"v": 0}
+
+    def _inc() -> int:
+        counter["v"] += 1
+        return counter["v"]
+
+    return _inc

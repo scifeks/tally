@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.findings_serial import deserialise_row
+
 logger = logging.getLogger(__name__)
 
 _SCA_TOOLS = ("osv-scanner", "pip-audit", "npm-audit", "composer-audit")
@@ -15,9 +18,12 @@ _SEVERITY_LEVELS = ["critical", "high", "medium", "low"]
 class ReportGenerator:
     """Generates security reports from findings stored in the RAG engine."""
 
-    def __init__(self, rag_engine, project: str) -> None:
+    def __init__(
+        self, rag_engine: object, project: str, finding_repo: FindingRepository
+    ) -> None:
         self._engine = rag_engine
         self.project = project
+        self._finding_repo = finding_repo
 
     def generate(
         self,
@@ -63,19 +69,17 @@ class ReportGenerator:
         findings_by_tool: dict[str, list[dict[str, Any]]] = {}
         by_severity = {level: 0 for level in _SEVERITY_LEVELS}
 
-        if self._engine.count_documents() > 0:
-            try:
-                metadatas: list[dict[str, Any]] = self._engine.get_all_metadatas()
-
-                for meta in metadatas:
-                    tool = meta.get("tool", "unknown")
-                    findings_by_tool.setdefault(tool, []).append(dict(meta))
-
-                    severity = (meta.get("severity") or "").lower()
-                    if severity in by_severity:
-                        by_severity[severity] += 1
-            except Exception as exc:
-                logger.warning("Failed to fetch findings for report: %s", exc)
+        try:
+            raw_rows = self._finding_repo.get_all_findings()
+            findings_list = [deserialise_row(row) for row in raw_rows]
+            for finding in findings_list:
+                tool = finding.get("tool", "unknown")
+                findings_by_tool.setdefault(tool, []).append(finding)
+                severity = (finding.get("severity") or "").lower()
+                if severity in by_severity:
+                    by_severity[severity] += 1
+        except Exception as exc:
+            logger.warning("Failed to fetch findings for report: %s", exc)
 
         total = sum(len(v) for v in findings_by_tool.values())
         by_tool = {tool: len(items) for tool, items in findings_by_tool.items()}

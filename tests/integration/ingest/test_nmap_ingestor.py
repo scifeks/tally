@@ -1,28 +1,24 @@
-"""Integration tests for the nmap → ChromaDB ingestion pipeline."""
+"""Integration tests for NmapHandler.normalize() and render()."""
 
 from __future__ import annotations
 
-import json
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
-from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.tools.parsers.nmap_parser import parse_nmap_xml  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _parse_fixture(filename: str) -> dict:
@@ -38,74 +34,9 @@ def _make_nmap_result(
         output="",
         parsed_data=parsed_data,
         output_files=output_files or {},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
-
-
-def _write_global_config(base_path: Path) -> None:
-    real_config = _TALLY_ROOT / "config" / "global.json"
-    if not real_config.exists():
-        pytest.skip("config/global.json not found")
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(real_config, config_dir / "global.json")
-
-
-def _write_commands_config(base_path: Path) -> None:
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "commands.json").write_text(
-        json.dumps(
-            {
-                "gitleaks": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/local/bin/gitleaks",
-                },
-                "nmap": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/bin/nmap",
-                },
-                "pip-audit": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/home/justin/.local/bin/pip-audit",
-                },
-            }
-        )
-    )
-
-
-def _make_rag_engine(project_env: dict) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
-
-
-def _get_all_docs(engine: RAGEngine) -> dict[str, list]:
-    assert engine._collection is not None
-    result = engine._collection.get(include=["documents", "metadatas"])
-    return {
-        "ids": result["ids"],
-        "documents": list(result["documents"] or []),
-        "metadatas": list(result["metadatas"] or []),
-    }
-
-
-@pytest.fixture()
-def project_env(tmp_path: Path) -> dict:
-    name = "test-proj"
-    _write_global_config(tmp_path)
-    _write_commands_config(tmp_path)
-    pm = ProjectManager(base_path=str(tmp_path))
-    pm.create_project_dirs(name)
-    pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
 
 
 @pytest.fixture()
@@ -124,294 +55,201 @@ def scripts_parsed_data() -> dict:
 
 
 class TestNmapIngestor:
-    def test_count_host_and_port_chunks(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """1 host + 2 open ports → 3 documents total."""
+    def test_count_host_and_port_chunks(self, basic_parsed_data: dict) -> None:
+        """2 open ports → 2 port rows (no host-level rows)."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-scan")
-        assert len(ingested) == 3
-        assert engine.count_documents() == 3
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 2
 
-    def test_count_no_open_ports(
-        self, project_env: dict, no_ports_parsed_data: dict
-    ) -> None:
-        """1 host with no open ports → 1 host document, 0 port documents."""
+    def test_count_no_open_ports(self, no_ports_parsed_data: dict) -> None:
+        """1 host up with no open ports → 1 host-only row."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(no_ports_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-scan")
-        assert len(ingested) == 1
-        assert engine.count_documents() == 1
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 1
 
-    def test_host_chunk_metadata(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Host chunk metadata fields match expected values."""
+    def test_host_chunk_metadata(self, basic_parsed_data: dict) -> None:
+        """Port rows include ip_address, profile, tool, and finding_type."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        host_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" not in m
-        ]
-        assert len(host_metas) == 1
-        meta = host_metas[0]
-        assert meta["tool"] == "nmap"
-        assert meta["profile"] == "test-scan"
-        assert meta["finding_type"] == '["informational"]'
-        assert meta["ip_address"] == "127.0.0.1"
-        assert meta["source_file"] == ""
-        assert "timestamp" in meta
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 2
+        for row in rows:
+            assert row["tool"] == "nmap"
+            assert row["profile"] == "test-scan"
+            assert row["finding_type"] == '["exposure"]'
+            assert row["ip_address"] == "127.0.0.1"
+            assert row["source_file"] == ""
+            assert "timestamp" in row
 
-    def test_port_chunk_metadata(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Open port chunk metadata fields, including port as int."""
+    def test_port_chunk_metadata(self, basic_parsed_data: dict) -> None:
+        """Open port rows include port number as int."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
-        ]
-        assert len(port_metas) == 2
-        port_numbers = {m["port"] for m in port_metas}
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 2
+        port_numbers = {row["port"] for row in rows}
         assert port_numbers == {80, 443}
-        for meta in port_metas:
-            assert meta["tool"] == "nmap"
-            assert meta["profile"] == "test-scan"
-            assert meta["finding_type"] == '["informational"]'
-            assert meta["ip_address"] == "127.0.0.1"
-            assert meta["service"] == "http"
-            assert isinstance(meta["port"], int)
-            assert "timestamp" in meta
+        for row in rows:
+            assert row["tool"] == "nmap"
+            assert row["profile"] == "test-scan"
+            assert row["finding_type"] == '["exposure"]'
+            assert row["ip_address"] == "127.0.0.1"
+            assert row["service"] == "http"
+            assert isinstance(row["port"], int)
+            assert "timestamp" in row
 
-    def test_host_text_template_with_hostname(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Host chunk text uses 'ip (hostname)' label and lists open ports."""
+    def test_host_text_template_with_hostname(self, basic_parsed_data: dict) -> None:
+        """Rendered text includes ip, port, and state."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        host_docs = [
-            d
-            for d, m in zip(all_docs["documents"], all_docs["metadatas"])
-            if m["finding_type"] == '["informational"]' and "port" not in m
-        ]
-        assert len(host_docs) == 1
-        text = host_docs[0]
-        assert "[nmap] Host: 127.0.0.1 (localhost)" in text
-        assert "Status: up" in text
-        assert "80/tcp" in text
-        assert "443/tcp" in text
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 2
+        for row in rows:
+            text = handler.render(row)
+            assert "[nmap] Host: 127.0.0.1" in text
+            assert "Port:" in text
+            assert "State: open" in text
 
-    def test_host_text_template_no_hostname(
-        self, project_env: dict, no_ports_parsed_data: dict
-    ) -> None:
-        """Host chunk text uses bare IP when hostname is empty."""
+    def test_host_text_template_no_hostname(self, no_ports_parsed_data: dict) -> None:
+        """Host up with no open ports → 1 row, render shows 'up (no open ports)'."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(no_ports_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        text = all_docs["documents"][0]
-        assert "[nmap] Host: 192.168.1.1\n" in text
-        assert "()" not in text
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 1
+        text = handler.render(rows[0])
+        assert "[nmap] Host:" in text
+        assert "up (no open ports)" in text
 
     def test_host_text_no_open_ports_shows_none(
-        self, project_env: dict, no_ports_parsed_data: dict
+        self, no_ports_parsed_data: dict
     ) -> None:
-        """Host chunk shows '(none)' when there are no open ports."""
+        """Host up with no open ports → 1 host-only row, no port field."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(no_ports_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        text = all_docs["documents"][0]
-        assert "(none)" in text
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 1
+        assert "port" not in rows[0]
 
-    def test_port_text_template(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Open port chunk text matches expected format."""
+    def test_port_text_template(self, basic_parsed_data: dict) -> None:
+        """Port row render matches expected format."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
+        rows = handler.normalize(result, profile="test-scan")
+        port_80_rows = [r for r in rows if r.get("port") == 80]
+        assert len(port_80_rows) == 1
+        text = handler.render(port_80_rows[0])
+        assert (
+            "[nmap] Host: 127.0.0.1 | Port: 80/tcp | Service: http | State: open"
+            in text
         )
-        all_docs = _get_all_docs(engine)
-        port_docs = [
-            d
-            for d, m in zip(all_docs["documents"], all_docs["metadatas"])
-            if m["finding_type"] == '["informational"]' and m.get("port") == 80
-        ]
-        assert len(port_docs) == 1
-        assert "[nmap] Port 80/tcp on 127.0.0.1: http nginx 1.29.5" in port_docs[0]
 
-    def test_no_duplicates(self, project_env: dict, basic_parsed_data: dict) -> None:
-        """Ingesting the same data twice does not double the document count."""
+    def test_no_duplicates(self, basic_parsed_data: dict) -> None:
+        """normalize() is deterministic — same input produces same count."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingestor = FindingIngestor(engine, project_env["project_name"])
-        ingestor.ingest_tool_output(result, profile="test-scan")
-        count_after_first = engine.count_documents()
-        ingestor.ingest_tool_output(result, profile="test-scan")
-        assert engine.count_documents() == count_after_first
+        rows_first = handler.normalize(result, profile="test-scan")
+        rows_second = handler.normalize(result, profile="test-scan")
+        assert len(rows_first) == len(rows_second)
 
-    def test_two_profiles_are_independent(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Two profiles coexist; re-ingesting one does not affect the other."""
-        engine = _make_rag_engine(project_env)
-        ingestor = FindingIngestor(engine, project_env["project_name"])
+    def test_two_profiles_are_independent(self, basic_parsed_data: dict) -> None:
+        """normalize() sets the profile field correctly per call."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
+        result = _make_nmap_result(basic_parsed_data)
+        rows_a = handler.normalize(result, profile="profile-a")
+        rows_b = handler.normalize(result, profile="profile-b")
+        assert all(r["profile"] == "profile-a" for r in rows_a)
+        assert all(r["profile"] == "profile-b" for r in rows_b)
 
-        result_a = _make_nmap_result(basic_parsed_data)
-        ingestor.ingest_tool_output(result_a, profile="profile-a")
-        count_a = engine.count_documents()
-
-        result_b = _make_nmap_result(basic_parsed_data)
-        ingestor.ingest_tool_output(result_b, profile="profile-b")
-        total = engine.count_documents()
-        assert total == count_a * 2
-
-        ingestor.ingest_tool_output(result_a, profile="profile-a")
-        assert engine.count_documents() == total
-
-    def test_empty_hosts_ingests_nothing(self, project_env: dict) -> None:
-        """Parsed data with no hosts produces 0 documents."""
-        empty_data = {"scan_info": {}, "hosts": []}
+    def test_empty_hosts_ingests_nothing(self) -> None:
+        """Parsed data with no hosts → 0 rows."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
+        empty_data: dict = {"scan_info": {}, "hosts": []}
         result = _make_nmap_result(empty_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-scan")
-        assert ingested == []
-        assert engine.count_documents() == 0
+        rows = handler.normalize(result, profile="test-scan")
+        assert rows == []
 
-    def test_scripts_fixture_chunk_count(
-        self, project_env: dict, scripts_parsed_data: dict
-    ) -> None:
-        """1 host + 3 open ports = 4 documents."""
+    def test_scripts_fixture_chunk_count(self, scripts_parsed_data: dict) -> None:
+        """3 open ports → 3 rows (no host-level row)."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(scripts_parsed_data)
-        engine = _make_rag_engine(project_env)
-        ingested = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-scan")
-        assert len(ingested) == 4
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 3
 
-    def test_host_chunk_has_hostname_and_state(
-        self, project_env: dict, scripts_parsed_data: dict
-    ) -> None:
+    def test_host_chunk_has_hostname_and_state(self, scripts_parsed_data: dict) -> None:
+        """Port rows include ip_address and state."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(scripts_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        host_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" not in m
-        ]
-        assert len(host_metas) == 1
-        meta = host_metas[0]
-        assert meta["hostname"] == "testserver.local"
-        assert meta["state"] == "up"
+        rows = handler.normalize(result, profile="test-scan")
+        assert len(rows) == 3
+        for row in rows:
+            assert row["state"] == "open"
+            assert row["ip_address"]
 
     def test_port_chunk_has_transport_and_service_version(
-        self, project_env: dict, scripts_parsed_data: dict
+        self, scripts_parsed_data: dict
     ) -> None:
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(scripts_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
-        ]
-        for meta in port_metas:
-            assert "transport" in meta
-            assert "service_version" in meta
+        rows = handler.normalize(result, profile="test-scan")
+        for row in rows:
+            assert "transport" in row
+            assert "service_version" in row
 
-    def test_port_chunk_tls_metadata(
-        self, project_env: dict, scripts_parsed_data: dict
-    ) -> None:
+    def test_port_chunk_tls_metadata(self, scripts_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(scripts_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [m for m in all_docs["metadatas"] if m.get("port") == 443]
-        assert len(port_metas) == 1
-        meta = port_metas[0]
-        assert meta.get("tls") is True
-        assert meta.get("tls_version") == "TLSv1.3"
+        rows = handler.normalize(result, profile="test-scan")
+        port_443_rows = [r for r in rows if r.get("port") == 443]
+        assert len(port_443_rows) == 1
+        row = port_443_rows[0]
+        assert row.get("tls") is True
+        assert row.get("tls_version") == "TLSv1.3"
 
-    def test_port_chunk_ssh_algorithms(
-        self, project_env: dict, scripts_parsed_data: dict
-    ) -> None:
+    def test_port_chunk_ssh_algorithms(self, scripts_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(scripts_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [m for m in all_docs["metadatas"] if m.get("port") == 22]
-        assert len(port_metas) == 1
-        assert "ssh_algorithms" in port_metas[0]
-        assert len(port_metas[0]["ssh_algorithms"]) > 0
+        rows = handler.normalize(result, profile="test-scan")
+        port_22_rows = [r for r in rows if r.get("port") == 22]
+        assert len(port_22_rows) == 1
+        assert "ssh_algorithms" in port_22_rows[0]
+        assert len(port_22_rows[0]["ssh_algorithms"]) > 0
 
-    def test_port_chunk_cve_ids(
-        self, project_env: dict, scripts_parsed_data: dict
-    ) -> None:
+    def test_port_chunk_cve_ids(self, scripts_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(scripts_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [m for m in all_docs["metadatas"] if m.get("port") == 80]
-        assert len(port_metas) == 1
-        assert "cve_ids" in port_metas[0]
-        assert "CVE-2019-9511" in port_metas[0]["cve_ids"]
+        rows = handler.normalize(result, profile="test-scan")
+        port_80_rows = [r for r in rows if r.get("port") == 80]
+        assert len(port_80_rows) == 1
+        assert "cve_ids" in port_80_rows[0]
+        assert "CVE-2019-9511" in port_80_rows[0]["cve_ids"]
 
     def test_optional_fields_absent_when_no_scripts(
-        self, project_env: dict, basic_parsed_data: dict
+        self, basic_parsed_data: dict
     ) -> None:
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
-        ]
-        for meta in port_metas:
+        rows = handler.normalize(result, profile="test-scan")
+        for row in rows:
             for key in (
                 "tls",
                 "tls_version",
@@ -419,57 +257,41 @@ class TestNmapIngestor:
                 "ssh_algorithms",
                 "cve_ids",
             ):
-                assert key not in meta
+                assert key not in row
 
-    def test_host_chunk_shared_metadata(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Host chunks have correct domain/enriched/type_* fields."""
+    def test_host_chunk_shared_metadata(self, basic_parsed_data: dict) -> None:
+        """Port rows have correct domain/enriched/type_* fields."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        host_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" not in m
-        ]
-        assert host_metas
-        for meta in host_metas:
-            assert meta["domain"] == "network"
-            assert meta["enriched"] is False
-            assert meta["type_exposure"] is False
-            assert meta["type_secret"] is False
-            assert meta["type_vulnerability"] is False
-            assert meta["type_weakness"] is False
-            assert meta["type_misconfiguration"] is False
-            assert meta["type_dependency"] is False
+        rows = handler.normalize(result, profile="test-scan")
+        assert rows
+        for row in rows:
+            assert row["domain"] == "network"
+            assert row["enriched"] is False
+            assert row["type_exposure"] is True
+            assert row["type_informational"] is False
+            assert row["type_secret"] is False
+            assert row["type_vulnerability"] is False
+            assert row["type_weakness"] is False
+            assert row["type_misconfiguration"] is False
+            assert row["type_dependency"] is False
 
-    def test_port_chunk_shared_metadata(
-        self, project_env: dict, basic_parsed_data: dict
-    ) -> None:
-        """Open port chunks have correct shared metadata fields."""
+    def test_port_chunk_shared_metadata(self, basic_parsed_data: dict) -> None:
+        """Open port rows have correct shared metadata fields."""
+        handler = ToolHandlerFactory.load("nmap")
+        assert handler is not None
         result = _make_nmap_result(basic_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-scan"
-        )
-        all_docs = _get_all_docs(engine)
-        port_metas = [
-            m
-            for m in all_docs["metadatas"]
-            if m["finding_type"] == '["informational"]' and "port" in m
-        ]
-        assert port_metas
-        for meta in port_metas:
-            assert meta["domain"] == "network"
-            assert meta["enriched"] is False
-            assert meta["type_exposure"] is False
-            assert meta["type_secret"] is False
-            assert meta["type_vulnerability"] is False
-            assert meta["type_weakness"] is False
-            assert meta["type_misconfiguration"] is False
-            assert meta["type_dependency"] is False
-            assert meta["state"] == "open"
+        rows = handler.normalize(result, profile="test-scan")
+        assert rows
+        for row in rows:
+            assert row["domain"] == "network"
+            assert row["enriched"] is False
+            assert row["type_exposure"] is True
+            assert row["type_informational"] is False
+            assert row["type_secret"] is False
+            assert row["type_vulnerability"] is False
+            assert row["type_weakness"] is False
+            assert row["type_misconfiguration"] is False
+            assert row["type_dependency"] is False
+            assert row["state"] == "open"

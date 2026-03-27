@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from application.rag.engine import RAGEngine
+from application.rag.query import QueryEngine
 from application.reporting.blurbs import load_blurb
 from application.reporting.draft_query import DraftQueryService
 from application.reporting.drafts import SECTION_REGISTRY
@@ -19,6 +21,55 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 logger = logging.getLogger(__name__)
+
+_SECTION_RAG_N_RESULTS: dict[str, int] = {
+    "executive-summary": 20,
+    "risk-level": 20,
+    "critical-issues": 20,
+    "improvement-points": 20,
+    "general-recommendations": 20,
+}
+
+
+def _build_rag_query(section: str, context: dict[str, Any]) -> str | None:
+    """Return a ChromaDB query string for the given section, or None to skip."""
+    if section == "scope-and-methodology":
+        return None
+
+    if section == "executive-summary":
+        return "critical and high severity vulnerabilities and security risks"
+
+    if section == "risk-level":
+        return "all security findings by severity and tool"
+
+    if section == "critical-issues":
+        findings: list[dict[str, Any]] = context.get("top_findings", [])
+        terms: list[str] = []
+        for field in ("vulnerability_id", "cwe", "risk_type"):
+            seen: set[str] = set()
+            for f in findings:
+                val = f.get(field)
+                if val and isinstance(val, str) and val not in seen:
+                    seen.add(val)
+                    terms.append(val)
+                if len(seen) >= 5:
+                    break
+        base = "critical high severity vulnerabilities exploitable"
+        return f"{base} {' '.join(terms)}" if terms else base
+
+    if section == "improvement-points":
+        groups: list[tuple[str, int]] = context.get("risk_type_groups", [])
+        names = [rt for rt, _ in groups[:5] if rt and isinstance(rt, str)]
+        base = "recurring patterns systemic weaknesses"
+        return f"recurring {' '.join(names)} {base}" if names else base
+
+    if section == "general-recommendations":
+        groups = context.get("risk_type_groups", [])
+        names = [rt for rt, _ in groups[:5] if rt and isinstance(rt, str)]
+        base = "remediation steps fix recommendations"
+        return f"{' '.join(names)} {base}" if names else base
+
+    return None
 
 
 def get_all_sections() -> list[str]:
@@ -127,8 +178,24 @@ def generate_draft(
         prefix=prefix,
     )
 
-    with console.status(f"Generating {section}..."):
-        content = generator.generate(context)
+    rag_engine = RAGEngine(project_name=project, base_path=str(base_path))
+    query_engine = QueryEngine(rag_engine)
+    try:
+        query_string = _build_rag_query(section, context)
+        if query_string:
+            try:
+                n = _SECTION_RAG_N_RESULTS.get(section, 20)
+                results = query_engine.search(query_string, n_results=n)
+                context["rag_context"] = "\n\n".join(
+                    r["document"] for r in results if r.get("document")
+                )
+            except Exception as exc:
+                logger.warning("ChromaDB query failed for section %r: %s", section, exc)
+                context["rag_context"] = ""
+        with console.status(f"Generating {section}..."):
+            content = generator.generate(context)
+    finally:
+        rag_engine.close()
 
     draft_path.write_text(content, encoding="utf-8")
     console.print(f"[green]✓ Draft saved:[/green] {draft_path}")

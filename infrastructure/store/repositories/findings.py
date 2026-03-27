@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
-    _CHROMA_TO_SQLITE,
     _COMMA_LIST_FIELDS,
+    _DIRECT_COLUMNS,
     compute_fingerprint,
     deserialise_row,
     normalise_cwe,
@@ -20,6 +20,13 @@ if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
 logger = logging.getLogger(__name__)
+
+_ENRICHMENT_META_FIELDS: frozenset[str] = frozenset(
+    {"risk_type", "remediation", "owasp_name", "title", "tags"}
+)
+_ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
+    {"severity", "confidence", "description"}
+)
 
 # ---------------------------------------------------------------------------
 # FindingRepository
@@ -73,14 +80,16 @@ class FindingRepository:
             for key, val in finding.items():
                 if key in _PRE_EXTRACTED:
                     continue
-                col = _CHROMA_TO_SQLITE.get(key)
-                if col is not None:
+                if key in _DIRECT_COLUMNS:
+                    named[key] = str(val) if val is not None else None
+                elif key == "file_path":
+                    named["file"] = str(val) if val is not None else None
+                elif key == "ip_address":
+                    named["host"] = str(val) if val is not None else None
+                elif key == "lockfile":
                     # file_path takes priority over lockfile for the file column.
-                    if col == "file" and key == "lockfile":
-                        if named.get("file") is None:
-                            named["file"] = str(val) if val is not None else None
-                    else:
-                        named[col] = str(val) if val is not None else None
+                    if named.get("file") is None:
+                        named["file"] = str(val) if val is not None else None
                 else:
                     if key in _COMMA_LIST_FIELDS and isinstance(val, str) and val:
                         meta[key] = [v.strip() for v in val.split(",") if v.strip()]
@@ -109,7 +118,7 @@ class FindingRepository:
                     named.get("description"),
                     named.get("package_version"),
                     named.get("cwe"),
-                    1,  # enriched
+                    0,  # enriched — set to 1 by EnrichmentPipeline after LLM processing
                     json.dumps(meta),
                 )
             )
@@ -117,7 +126,9 @@ class FindingRepository:
         from datetime import UTC, datetime
 
         now = datetime.now(UTC).isoformat()
-        rows_with_ts = [(*row, now, now, 1, "active") for row in rows]
+        rows_with_ts = [
+            (*row, now, now, 1, "active", 1 if row[2] == "nmap" else 0) for row in rows
+        ]
 
         sql = """
             INSERT INTO findings (
@@ -126,9 +137,9 @@ class FindingRepository:
                 confidence, file, rule_id, url, host, port,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
-                first_seen, last_seen, seen_count, status
+                first_seen, last_seen, seen_count, status, should_report
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?)
+                       ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
                 run_id          = excluded.run_id,
                 severity        = excluded.severity,
@@ -389,6 +400,40 @@ class FindingRepository:
             cursor = conn.execute(sql, params)
             return cursor.rowcount > 0
 
+    def batch_update_analyst_fields(
+        self,
+        ids: list[int],
+        fields: dict[str, Any],
+    ) -> int:
+        """Update analyst-writable named columns on multiple findings in one tx.
+
+        Sets ``triaged_by = 'analyst_web'`` and ``triaged_at`` on every row.
+        Does not touch the meta JSON blob — meta keys are not supported for batch.
+        Returns the count of rows actually updated.
+        """
+        from datetime import UTC, datetime
+
+        if not ids or not fields:
+            return 0
+
+        now_iso = datetime.now(UTC).isoformat()
+
+        set_parts: list[str] = []
+        params: list[Any] = []
+        for col, val in fields.items():
+            set_parts.append(f"{col} = ?")
+            params.append(val)
+        set_parts.extend(["triaged_by = 'analyst_web'", "triaged_at = ?"])
+        params.append(now_iso)
+
+        placeholders = ",".join("?" * len(ids))
+        params.extend(ids)
+
+        sql = f"UPDATE findings SET {', '.join(set_parts)} WHERE id IN ({placeholders})"
+        with self._factory.connect() as conn:
+            cursor = conn.execute(sql, params)
+            return cursor.rowcount
+
     def reset_tal_ids(self) -> None:
         """Set tal_id = NULL for every row in findings."""
         with self._factory.connect() as conn:
@@ -405,6 +450,83 @@ class FindingRepository:
         sql = "UPDATE findings SET tal_id = ? WHERE id = ?"
         with self._factory.connect() as conn:
             conn.executemany(sql, pairs)
+
+    def get_ids_by_fingerprints(self, fingerprints: list[str]) -> list[int]:
+        """Return SQLite findings.id values for the given fingerprints.
+
+        Returns ids in the same order as the input fingerprints list.
+        Missing fingerprints (not in DB) are silently omitted.
+        """
+        if not fingerprints:
+            return []
+        placeholders = ",".join("?" * len(fingerprints))
+        sql = (
+            f"SELECT id, fingerprint FROM findings"
+            f" WHERE fingerprint IN ({placeholders})"
+        )
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql, fingerprints).fetchall()
+        fp_to_id = {row["fingerprint"]: row["id"] for row in rows}
+        return [fp_to_id[fp] for fp in fingerprints if fp in fp_to_id]
+
+    def get_by_ids(self, ids: list[int]) -> list[dict]:
+        """Return deserialized row dicts for the given SQLite primary keys.
+
+        Each dict is the output of deserialise_row() with an added 'id' key.
+        Rows are returned in arbitrary order. Missing IDs are silently omitted.
+        """
+        if not ids:
+            return []
+        placeholders = ",".join("?" * len(ids))
+        sql = f"SELECT * FROM findings WHERE id IN ({placeholders})"
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql, ids).fetchall()
+        result: list[dict] = []
+        for row in rows:
+            d = deserialise_row(row)
+            d["id"] = row["id"]
+            result.append(d)
+        return result
+
+    def update_enrichment_fields(self, finding_id: int, fields: dict) -> None:
+        """Write LLM-enriched fields back to the SQLite row.
+
+        Named columns updated directly: severity, confidence, description.
+        Meta-blob fields: risk_type, remediation, owasp_name, title, tags.
+        Sets enriched = 1 and updates last_seen = now().
+        """
+        from datetime import UTC, datetime
+
+        row = self.get_finding(finding_id)
+        if row is None:
+            return
+
+        try:
+            existing_meta: dict[str, Any] = json.loads(row["meta"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            existing_meta = {}
+
+        column_updates: dict[str, Any] = {}
+        for key, val in fields.items():
+            if key in _ENRICHMENT_META_FIELDS:
+                existing_meta[key] = val
+            elif key in _ENRICHMENT_COLUMN_FIELDS:
+                column_updates[key] = val
+
+        updated_meta = json.dumps(existing_meta)
+        now_iso = datetime.now(UTC).isoformat()
+
+        set_parts: list[str] = ["enriched = 1", "last_seen = ?", "meta = ?"]
+        params: list[Any] = [now_iso, updated_meta]
+
+        for col, val in column_updates.items():
+            set_parts.append(f"{col} = ?")
+            params.append(val)
+
+        params.append(finding_id)
+        sql_upd = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
+        with self._factory.connect() as conn:
+            conn.execute(sql_upd, params)
 
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

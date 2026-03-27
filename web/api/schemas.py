@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
@@ -73,6 +73,62 @@ class FindingPatchRequest(BaseModel):
         if v is not None and v not in STATUS_LEVELS:
             raise ValueError(f"status must be one of {sorted(STATUS_LEVELS)}")
         return v
+
+
+class BatchFindingPatchRequest(BaseModel):
+    """Batch-update request body for PATCH /api/findings/batch.
+
+    Applies the same field-level updates to every finding ID in ``ids``.
+    At least one field besides ``ids`` must be present.
+    ``triaged_at`` and ``triaged_by`` are set automatically on every write.
+    Meta keys (meta_*) are not supported for batch updates.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    ids: list[int]
+    should_report: bool | None = None
+    status: str | None = None
+    severity: str | None = None
+    confidence: str | None = None
+    description: str | None = None
+    business_impact: str | None = None
+    tal_id: str | None = None
+
+    @field_validator("ids")
+    @classmethod
+    def validate_ids_nonempty(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("ids must not be empty")
+        return v
+
+    @field_validator("severity")
+    @classmethod
+    def validate_severity(cls, v: str | None) -> str | None:
+        if v is not None and v not in SEVERITY_LEVELS:
+            raise ValueError(f"severity must be one of {sorted(SEVERITY_LEVELS)}")
+        return v
+
+    @field_validator("confidence")
+    @classmethod
+    def validate_confidence(cls, v: str | None) -> str | None:
+        if v is not None and v not in CONFIDENCE_LEVELS:
+            raise ValueError(f"confidence must be one of {sorted(CONFIDENCE_LEVELS)}")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in STATUS_LEVELS:
+            raise ValueError(f"status must be one of {sorted(STATUS_LEVELS)}")
+        return v
+
+    @model_validator(mode="after")
+    def validate_has_patch_fields(self) -> BatchFindingPatchRequest:
+        fields = self.model_dump(exclude={"ids"}, exclude_none=True)
+        if not fields:
+            raise ValueError("at least one field besides ids is required")
+        return self
 
 
 class FindingResponse(BaseModel):

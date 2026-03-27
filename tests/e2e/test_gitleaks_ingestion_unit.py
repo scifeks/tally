@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from application.rag.query import QueryEngine
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
@@ -18,6 +19,7 @@ from tests.conftest import requires_ollama
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +81,7 @@ def _make_gitleaks_result() -> ToolResult:
             },
         },
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
 
@@ -93,14 +95,25 @@ def _ingest(
     project_name: str,
     result: ToolResult,
     profile: str = "my-test-repo",
-) -> list[str]:
+) -> list[dict]:
+    """Normalize rows and embed rendered text into ChromaDB via Ollama."""
+    if not result.success or not result.parsed_data:
+        return []
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None:
+        return []
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return []
     engine = _make_rag_engine(base_path, project_name)
     try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
+        texts = [handler.render(row) for row in rows]
+        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        ids = [row["fingerprint"] for row in rows]
+        engine.add_documents(texts, metadatas, ids)
     finally:
         engine.close()
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -128,20 +141,17 @@ def project_env(tmp_path: Path) -> dict:
 @requires_ollama
 class TestIngestionUnit:
     def test_ingestion_returns_positive_count(self, project_env: dict) -> None:
-        ids = _ingest(
+        rows = _ingest(
             project_env["base_path"],
             project_env["project_name"],
             _make_gitleaks_result(),
         )
-        assert len(ids) >= 1
+        assert len(rows) >= 1
 
     def test_stats_shows_gitleaks_documents(self, project_env: dict) -> None:
-        _ingest(
-            project_env["base_path"],
-            project_env["project_name"],
-            _make_gitleaks_result(),
-        )
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        base, name = project_env["base_path"], project_env["project_name"]
+        _ingest(base, name, _make_gitleaks_result())
+        engine = _make_rag_engine(base, name)
         try:
             stats = engine.get_stats()
         finally:
@@ -156,11 +166,11 @@ class TestIngestionUnit:
             output="permission denied",
             parsed_data=None,
             output_files={},
-            timestamp=RAGEngine.now_iso(),
+            timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
-        ids = _ingest(project_env["base_path"], project_env["project_name"], failed)
-        assert ids == []
+        rows = _ingest(project_env["base_path"], project_env["project_name"], failed)
+        assert rows == []
 
     def test_empty_secrets_not_ingested(self, project_env: dict) -> None:
         empty = ToolResult(
@@ -169,11 +179,11 @@ class TestIngestionUnit:
             output="",
             parsed_data={"secrets": [], "summary": {"total_secrets": 0}},
             output_files={},
-            timestamp=RAGEngine.now_iso(),
+            timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
-        ids = _ingest(project_env["base_path"], project_env["project_name"], empty)
-        assert ids == []
+        rows = _ingest(project_env["base_path"], project_env["project_name"], empty)
+        assert rows == []
 
     def test_secret_value_not_in_document_text(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]

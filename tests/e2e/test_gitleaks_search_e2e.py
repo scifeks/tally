@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
+from application.rag.ingestor import ToolHandlerFactory
 from application.rag.query import QueryEngine
 from application.tools.executor import ToolExecutor
 from application.tools.registry import discover_tools, tool_registry
@@ -116,14 +117,25 @@ def _ingest(
     project_name: str,
     result: ToolResult,
     profile: str = "my-test-repo",
-) -> list[str]:
+) -> list[dict]:
+    """Normalize rows and add rendered text to ChromaDB for search tests."""
+    if not result.success or not result.parsed_data:
+        return []
+    handler = ToolHandlerFactory.load(result.tool_name)
+    if handler is None:
+        return []
+    rows = handler.normalize(result, profile=profile)
+    if not rows:
+        return []
     engine = _make_rag_engine(base_path, project_name)
     try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
+        texts = [handler.render(row) for row in rows]
+        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        ids = [row["fingerprint"] for row in rows]
+        engine.add_documents(texts, metadatas, ids)
     finally:
         engine.close()
+    return rows
 
 
 # ---------------------------------------------------------------------------

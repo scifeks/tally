@@ -58,3 +58,46 @@ class TestGetFinding:
 
     def test_returns_none_for_missing(self, repo: FindingRepository) -> None:
         assert repo.get_finding(999_999) is None
+
+
+class TestGetByIds:
+    def test_get_by_ids_empty_list_returns_empty(self, repo: FindingRepository) -> None:
+        """get_by_ids([]) returns [] with no error."""
+        result = repo.get_by_ids([])
+        assert result == []
+
+    def test_get_by_ids_missing_ids_silently_omitted(
+        self, repo: FindingRepository, run_repo: RunRepository
+    ) -> None:
+        """get_by_ids with non-existent IDs silently omits them."""
+        _seed(
+            run_repo,
+            repo,
+            [
+                {"tool": "nmap", "severity": "low"},
+                {"tool": "semgrep", "severity": "high"},
+            ],
+        )
+        with repo._factory.connect() as conn:
+            rows = conn.execute("SELECT id FROM findings ORDER BY id").fetchall()
+        id1 = rows[0]["id"]
+        id2 = rows[1]["id"]
+
+        result = repo.get_by_ids([id1, 99999, id2])
+        assert len(result) == 2
+        returned_ids = {r["id"] for r in result}
+        assert id1 in returned_ids
+        assert id2 in returned_ids
+        assert 99999 not in returned_ids
+
+    def test_get_by_ids_returns_correct_tool(
+        self, repo: FindingRepository, run_repo: RunRepository
+    ) -> None:
+        """Returned dicts contain expected tool values."""
+        _seed(run_repo, repo, [{"tool": "gitleaks", "severity": "high"}])
+        with repo._factory.connect() as conn:
+            fid = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()["id"]
+        result = repo.get_by_ids([fid])
+        assert len(result) == 1
+        assert result[0]["tool"] == "gitleaks"
+        assert result[0]["id"] == fid

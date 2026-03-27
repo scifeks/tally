@@ -1,52 +1,50 @@
-"""Finding ingestion pipeline — converts ToolResult output into ChromaDB documents."""
+"""Finding ingestion pipeline — ToolHandler protocol and path-normalisation helpers."""
 
 import importlib
 import inspect
 import logging
-from typing import Any, Protocol
+from typing import Protocol
 
 from core.config.schemas import Repository
 from domain.tools.base import ToolResult
-
-from .engine import RAGEngine
+from domain.tools.enrichment import FieldEnrichmentSpec
 
 logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
-# ChunkBuilder Protocol
+# ToolHandler Protocol
 # ------------------------------------------------------------------
 
 
-class ChunkBuilder(Protocol):
+class ToolHandler(Protocol):
     tool_name: str
     domain: str
     segment: str
     non_enriched_fields: frozenset[str]
     type_flags: dict[str, set[str]]
     should_enrich: bool
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] | None
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]: ...
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]: ...
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str: ...
+    def render(self, row: dict) -> str: ...
 
 
 # ------------------------------------------------------------------
-# ChunkBuilderFactory
+# ToolHandlerFactory
 # ------------------------------------------------------------------
 
 
-class ChunkBuilderFactory:
+class ToolHandlerFactory:
     @staticmethod
-    def load(tool_name: str) -> ChunkBuilder | None:
-        """Load and instantiate the chunk builder for tool_name, or None."""
+    def load(tool_name: str) -> ToolHandler | None:
+        """Load and instantiate the tool handler for tool_name, or None."""
         stem = tool_name.replace("-", "_")
         try:
             module = importlib.import_module(f"application.rag.chunks.{stem}")
         except ImportError:
-            logger.debug("No chunk builder module for tool %r", tool_name)
+            logger.debug("No tool handler module for tool %r", tool_name)
             return None
         for _, obj in inspect.getmembers(module, inspect.isclass):
             if (
@@ -54,38 +52,22 @@ class ChunkBuilderFactory:
                 and getattr(obj, "tool_name", None) == tool_name
             ):
                 return obj()
-        logger.debug("No ChunkBuilder class found in module for tool %r", tool_name)
+        logger.debug("No ToolHandler class found in module for tool %r", tool_name)
         return None
 
 
 # ------------------------------------------------------------------
-# Builder registry helpers
+# Handler registry helpers
 # ------------------------------------------------------------------
-
-
-def _default_builders() -> dict[str, ChunkBuilder]:
-    """Discover all chunk builders by scanning the chunks package directory."""
-    from pathlib import Path
-
-    result: dict[str, ChunkBuilder] = {}
-    chunks_dir = Path(__file__).parent / "chunks"
-    for module_file in sorted(chunks_dir.glob("*.py")):
-        if module_file.name.startswith("_") or module_file.stem == "sca":
-            continue
-        tool_name = module_file.stem.replace("_", "-")
-        builder = ChunkBuilderFactory.load(tool_name)
-        if builder is not None:
-            result[builder.tool_name] = builder
-    return result
 
 
 def get_tool_domain(tool_name: str) -> str | None:
     """Return the domain ('code', 'web', 'network') for a tool, or None."""
-    builder = ChunkBuilderFactory.load(tool_name)
-    return builder.domain if builder is not None else None
+    handler = ToolHandlerFactory.load(tool_name)
+    return handler.domain if handler is not None else None
 
 
-def _is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
+def is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
     """Return True if rel_path falls inside one of the given test dirs.
 
     rel_path must start with '/': e.g. '/tests/foo.py'.
@@ -132,167 +114,64 @@ def _relativize_path(
     return file_path
 
 
-# ------------------------------------------------------------------
-# FindingIngestor
-# ------------------------------------------------------------------
+def normalize_file_path(
+    file_path: str,
+    repositories: list[Repository],
+    repo_name: str | None = None,
+) -> tuple[str, str | None] | None:
+    """Normalize file_path relative to repositories.
 
-
-class FindingIngestor:
-    """Ingests tool findings into the project's ChromaDB collection.
-
-    Uses delete-insert: stale findings for a tool/profile are removed before
-    new ones are added, so re-running a scan never produces duplicates.
-
-    Document ID format::
-
-        <tool>_<profile>_<type>_<indices>_<compact_utc>
-        nmap_webservers_host_0_20240228T143022
+    Returns (relative_path, repo_name) or None when file_path is empty.
+    When repo_name is provided, strips that repo's path prefix; otherwise
+    finds the best-matching repo from the list.
     """
+    if not file_path:
+        return None
+    if repo_name is not None:
+        rel = _relativize_path(file_path, repo_name, repositories)
+        return (rel, repo_name)
+    return _normalize_path(file_path, repositories)
 
-    def __init__(
-        self,
-        rag_engine: RAGEngine,
-        project_name: str,
-        builders: dict[str, ChunkBuilder] | None = None,
-        repositories: list[Repository] | None = None,
-        repo_name: str | None = None,
-    ) -> None:
-        self._engine = rag_engine
-        self.project_name = project_name
-        self._builders: dict[str, ChunkBuilder] = (
-            builders if builders is not None else _default_builders()
-        )
-        self._repositories = repositories
-        self._repo_name = repo_name
-        self._repo_test_dirs: dict[str, list[str]] = {
-            r.name: r.test_dirs for r in (repositories or []) if r.test_dirs
-        }
 
-    def ingest_tool_output(
-        self,
-        tool_result: ToolResult,
-        profile: str | None = None,
-    ) -> list[str]:
-        """Index a tool's findings into ChromaDB, replacing stale entries."""
-        tool = tool_result.tool_name
-        effective_profile = profile or "manual"
+def filter_code_rows(
+    rows: list[dict],
+    repos: list[Repository] | None,
+    repo_name: str | None,
+    tool_name: str,
+) -> list[dict]:
+    """Apply path normalization and test-dir filtering to code-domain rows.
 
-        if not tool_result.success or tool_result.parsed_data is None:
-            logger.warning(
-                "Skipping ingestion for %s/%s: "
-                "tool did not succeed or produced no parsed data",
-                tool,
-                effective_profile,
+    Returns the filtered list. Rows with unresolvable paths are dropped and
+    logged. Rows in test directories are dropped and logged.
+    """
+    if not repos:
+        return rows
+    repo_test_dirs: dict[str, list[str]] = {
+        r.name: r.test_dirs for r in repos if r.test_dirs
+    }
+    filtered: list[dict] = []
+    for row in rows:
+        file_path: str = row.get("file_path", "") or ""
+        result_path = normalize_file_path(file_path, repos, repo_name=repo_name)
+        if result_path is None:
+            logger.error(
+                "Excluding row with missing file path: tool=%s rule_id=%s",
+                tool_name,
+                row.get("rule_id", ""),
             )
-            return []
-
-        if "error" in tool_result.parsed_data:
-            logger.warning(
-                "Skipping ingestion for %s/%s: parse error — %s",
-                tool,
-                effective_profile,
-                tool_result.parsed_data["error"],
-            )
-            return []
-
-        deleted = self._engine.delete_findings(tool, effective_profile)
-        if deleted:
-            logger.debug(
-                "Deleted %d stale findings for %s/%s", deleted, tool, effective_profile
-            )
-
-        chunks = self._build_chunks(tool_result, effective_profile)
-
-        if not chunks:
-            logger.info("No findings to ingest for %s/%s", tool, effective_profile)
-            return []
-
-        texts, metadatas, ids = zip(*chunks)
-        self._engine.add_documents(list(texts), list(metadatas), list(ids))
-        logger.info(
-            "Ingested %d documents for %s/%s", len(chunks), tool, effective_profile
-        )
-        return list(ids)
-
-    def _build_chunks(
-        self,
-        tool_result: ToolResult,
-        profile: str,
-    ) -> list[tuple[str, dict[str, Any], str]]:
-        """Dispatch to the registered ChunkBuilder for the tool."""
-        tool = tool_result.tool_name
-        builder = self._builders.get(tool)
-        if builder is None:
-            logger.debug(
-                "No chunk builder registered for tool '%s'; skipping ingestion", tool
-            )
-            return []
-
-        raw_chunks = builder.build(tool_result, profile)
-
-        if self._repositories is None:
-            _gen = getattr(builder, "generate_title", None)
-            if _gen is not None:
-                for _, meta, _ in raw_chunks:
-                    _t = _gen(meta)
-                    if _t is not None:
-                        meta["title"] = _t
-            return raw_chunks
-
-        chunks: list[tuple[str, dict[str, Any], str]] = []
-        for text, meta, doc_id in raw_chunks:
-            file_path: str = meta.get("file_path", "") or ""
-            if self._repo_name is not None:
-                repo_name: str | None = self._repo_name
-                rel_path = _relativize_path(
-                    file_path, self._repo_name, self._repositories
-                )
-            else:
-                rel_path, repo_name = _normalize_path(file_path, self._repositories)
-            meta["file_path"] = rel_path
-            if repo_name is not None:
-                meta["repo"] = repo_name
-
-            if builder.domain == "code" and not rel_path:
-                logger.error(
-                    "Excluding chunk with missing file path: tool=%s rule_id=%s",
-                    tool,
-                    meta.get("rule_id", ""),
+            continue
+        rel, matched_repo = result_path
+        row["file_path"] = rel
+        if matched_repo is not None:
+            row["repo"] = matched_repo
+        if matched_repo is not None and rel:
+            _tdirs = repo_test_dirs.get(matched_repo, [])
+            if _tdirs and is_test_path(rel, _tdirs):
+                logger.debug(
+                    "Excluding test-dir row: tool=%s path=%s",
+                    tool_name,
+                    rel,
                 )
                 continue
-
-            if builder.domain == "code" and repo_name is not None and rel_path:
-                _tdirs = self._repo_test_dirs.get(repo_name, [])
-                if _tdirs and _is_test_path(rel_path, _tdirs):
-                    logger.debug(
-                        "Excluding test-dir chunk: tool=%s path=%s",
-                        tool,
-                        rel_path,
-                    )
-                    continue
-
-            _gen = getattr(builder, "generate_title", None)
-            if _gen is not None:
-                _t = _gen(meta)
-                if _t is not None:
-                    meta["title"] = _t
-
-            chunks.append((text, meta, doc_id))
-
-        return chunks
-
-    def _process_finding(
-        self,
-        finding: dict[str, Any],
-        tool_name: str,
-        profile: str,
-    ) -> tuple[str, dict[str, Any]]:
-        """Convert a single finding dict to a (text, metadata) pair (stub)."""
-        text = str(finding)
-        metadata: dict[str, Any] = {
-            "tool": tool_name,
-            "profile": profile,
-            "finding_type": finding.get("type", "unknown"),
-            "timestamp": RAGEngine.now_iso(),
-        }
-        return text, metadata
+        filtered.append(row)
+    return filtered

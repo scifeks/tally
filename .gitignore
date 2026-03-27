@@ -58,6 +58,7 @@ MagicMock
 
 #Roadmap and arch decisions
 /docs/roadmap/
+/docs/superpowers/
 
 #Claude MCP stuff
 .claude/

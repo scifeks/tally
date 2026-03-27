@@ -1,10 +1,8 @@
-"""Unit tests for nmap chunk builder metadata (no ChromaDB)."""
+"""Unit tests for NmapHandler.normalize() metadata."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
-from application.rag.ingestor import FindingIngestor
+from application.rag.chunks.nmap import NmapHandler
 from domain.tools.base import ToolResult
 
 
@@ -37,51 +35,30 @@ class TestNmapIngestorMetadata:
             duration_seconds=0.1,
         )
 
-    def _get_chunks(self):
-        ingestor = FindingIngestor(MagicMock(), "test-proj")
-        return ingestor._build_chunks(self._make_nmap_result(), "default")
+    def _get_rows(self) -> list[dict]:
+        return NmapHandler().normalize(self._make_nmap_result(), "default")
 
-    def test_host_chunk_severity_informational(self) -> None:
-        chunks = self._get_chunks()
-        host_chunks = [
-            c
-            for c in chunks
-            if c[1].get("finding_type") == '["informational"]' and "port" not in c[1]
-        ]
-        assert host_chunks, "Expected at least one host chunk"
-        assert host_chunks[0][1]["severity"] == "informational"
+    def test_no_host_level_rows(self) -> None:
+        rows = self._get_rows()
+        host_rows = [r for r in rows if "port" not in r]
+        assert host_rows == [], "Host-level rows must not be produced"
 
-    def test_open_port_chunk_severity_informational(self) -> None:
-        chunks = self._get_chunks()
-        port_chunks = [
-            c
-            for c in chunks
-            if c[1].get("finding_type") == '["informational"]' and "port" in c[1]
-        ]
-        assert port_chunks, "Expected at least one open_port chunk"
-        assert port_chunks[0][1]["severity"] == "informational"
+    def test_one_row_per_open_port(self) -> None:
+        rows = self._get_rows()
+        assert len(rows) == 1
 
-    def test_host_chunk_no_risk_type(self) -> None:
-        chunks = self._get_chunks()
-        host_chunks = [
-            c
-            for c in chunks
-            if c[1].get("finding_type") == '["informational"]' and "port" not in c[1]
-        ]
-        assert "risk_type" not in host_chunks[0][1]
+    def test_port_row_finding_type_exposure(self) -> None:
+        rows = self._get_rows()
+        assert rows[0]["finding_type"] == '["exposure"]'
 
-    def test_open_port_chunk_no_risk_type(self) -> None:
-        chunks = self._get_chunks()
-        port_chunks = [
-            c
-            for c in chunks
-            if c[1].get("finding_type") == '["informational"]' and "port" in c[1]
-        ]
-        assert "risk_type" not in port_chunks[0][1]
+    def test_port_row_type_exposure_true(self) -> None:
+        rows = self._get_rows()
+        assert rows[0]["type_exposure"] is True
 
-    def test_no_type_boolean_true(self) -> None:
-        chunks = self._get_chunks()
-        for _text, meta, _id in chunks:
-            for key, val in meta.items():
-                if key.startswith("type_"):
-                    assert val is not True, f"{key} should not be True for nmap chunks"
+    def test_port_row_severity_informational(self) -> None:
+        rows = self._get_rows()
+        assert rows[0]["severity"] == "informational"
+
+    def test_port_row_no_risk_type(self) -> None:
+        rows = self._get_rows()
+        assert "risk_type" not in rows[0]

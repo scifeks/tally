@@ -1,7 +1,6 @@
-"""SemgrepChunkBuilder — converts semgrep ToolResult into ChromaDB document chunks."""
+"""SemgrepHandler — converts semgrep ToolResult into normalized finding dicts."""
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 
 from domain.tools.base import ToolResult
@@ -11,7 +10,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 from ._shared import _first_output_file, _shared_meta
 
 
-class SemgrepChunkBuilder:
+class SemgrepHandler:
     tool_name = "semgrep"
     domain = "code"
     segment = "sast"
@@ -50,19 +49,16 @@ class SemgrepChunkBuilder:
         ),
     )
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]:
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
         parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
         findings: list[dict[str, Any]] = parsed.get("findings", [])
 
         timestamp = result.timestamp
         source_file = _first_output_file(result.output_files)
-        ts_compact = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
-        chunks: list[tuple[str, dict[str, Any], str]] = []
+        rows: list[dict] = []
 
-        for fi, finding in enumerate(findings):
+        for finding in findings:
             rule_id = finding.get("rule_id", "")
             severity = finding.get("severity", "low")
             message = finding.get("message", "")
@@ -83,13 +79,7 @@ class SemgrepChunkBuilder:
             impact = finding.get("impact") or ""
             references: list[str] = finding.get("references") or []
 
-            text = (
-                f"[semgrep] [{severity.upper()}] {rule_id} "
-                f"in {file_path}:{line_start}\n"
-                f"Message: {message}"
-            )
-
-            meta: dict[str, Any] = {
+            row: dict[str, Any] = {
                 "tool": "semgrep",
                 "profile": profile,
                 "finding_type": json.dumps(["vulnerability"]),
@@ -103,13 +93,13 @@ class SemgrepChunkBuilder:
                 "source_file": source_file,
             }
             if col_start is not None:
-                meta["col_start"] = col_start
+                row["col_start"] = col_start
             if col_end is not None:
-                meta["col_end"] = col_end
+                row["col_end"] = col_end
             if cwe:
-                meta["cwe"] = cwe
+                row["cwe"] = cwe
             if owasp:
-                meta["owasp"] = owasp
+                row["owasp"] = owasp
                 raw_list: list = owasp if isinstance(owasp, list) else [owasp]
                 names: list[str] = []
                 for entry in raw_list:
@@ -118,38 +108,55 @@ class SemgrepChunkBuilder:
                     if name:
                         names.append(name)
                 if names:
-                    meta["owasp_name"] = json.dumps(list(dict.fromkeys(names)))
+                    row["owasp_name"] = json.dumps(list(dict.fromkeys(names)))
             if confidence:
-                meta["confidence"] = confidence
+                row["confidence"] = confidence
             if fix:
-                meta["fix"] = fix
+                row["fix"] = fix
             if fingerprint:
-                meta["fingerprint"] = fingerprint
+                row["fingerprint"] = fingerprint
             if category:
-                meta["category"] = category
+                row["category"] = category
             if technology:
-                meta["technology"] = ", ".join(technology)
+                row["technology"] = ", ".join(technology)
             if subcategory:
-                meta["subcategory"] = ", ".join(subcategory)
+                row["subcategory"] = ", ".join(subcategory)
             if likelihood:
-                meta["likelihood"] = likelihood
+                row["likelihood"] = likelihood
             if impact:
-                meta["impact"] = impact
+                row["impact"] = impact
             if references:
-                meta["references"] = ", ".join(references)
-            meta.update(_shared_meta(self, "vulnerability"))
+                row["references"] = ", ".join(references)
+            row.update(_shared_meta(self, "vulnerability"))
 
-            doc_id = f"semgrep_{profile}_finding_{fi}_{ts_compact}"
-            chunks.append((text, meta, doc_id))
+            rows.append(row)
 
-        return chunks
+        return rows
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str:
-        return "|".join(
-            [
-                "semgrep",
-                str(finding.get("rule_id", "")),
-                str(finding.get("file_path", "")),
-                str(finding.get("line_start", "")),
-            ]
-        )
+    def render(self, row: dict) -> str:
+        parts = [
+            f"Rule: {row.get('rule_id', '')}",
+            f"File: {row.get('file_path', '')}:{row.get('line_start', '')}",
+            f"Severity: {row.get('severity', '')}",
+        ]
+        if row.get("description"):
+            parts.append(f"Description: {row['description']}")
+        if row.get("cwe"):
+            parts.append(f"CWE: {row['cwe']}")
+        if row.get("owasp"):
+            parts.append(f"OWASP: {row['owasp']}")
+        if row.get("confidence"):
+            parts.append(f"Confidence: {row['confidence']}")
+        if row.get("category"):
+            parts.append(f"Category: {row['category']}")
+        if row.get("risk_type"):
+            parts.append(f"Risk type: {row['risk_type']}")
+        if row.get("title"):
+            parts.append(f"Title: {row['title']}")
+        if row.get("remediation"):
+            parts.append(f"Remediation: {row['remediation']}")
+        if row.get("owasp_name"):
+            parts.append(f"OWASP category: {row['owasp_name']}")
+        if row.get("references"):
+            parts.append(f"References: {row['references']}")
+        return "[semgrep] " + " | ".join(parts)

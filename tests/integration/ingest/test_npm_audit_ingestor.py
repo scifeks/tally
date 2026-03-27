@@ -1,27 +1,24 @@
-"""Integration tests for the npm-audit → ChromaDB ingestion pipeline."""
+"""Integration tests for NpmAuditHandler.normalize() and render()."""
 
 from __future__ import annotations
 
 import json
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
-from application.rag import FindingIngestor, RAGEngine  # noqa: E402
+from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _make_sca_result(tool_name: str, parsed_data: dict) -> ToolResult:
@@ -31,74 +28,9 @@ def _make_sca_result(tool_name: str, parsed_data: dict) -> ToolResult:
         output="",
         parsed_data=parsed_data,
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
-
-
-def _write_global_config(base_path: Path) -> None:
-    real_config = _TALLY_ROOT / "config" / "global.json"
-    if not real_config.exists():
-        pytest.skip("config/global.json not found")
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(real_config, config_dir / "global.json")
-
-
-def _write_commands_config(base_path: Path) -> None:
-    config_dir = base_path / "config"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "commands.json").write_text(
-        json.dumps(
-            {
-                "gitleaks": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/local/bin/gitleaks",
-                },
-                "nmap": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/bin/nmap",
-                },
-                "pip-audit": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/home/justin/.local/bin/pip-audit",
-                },
-            }
-        )
-    )
-
-
-def _make_rag_engine(project_env: dict) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
-
-
-def _get_all_docs(engine: RAGEngine) -> dict[str, list]:
-    assert engine._collection is not None
-    result = engine._collection.get(include=["documents", "metadatas"])
-    return {
-        "ids": result["ids"],
-        "documents": list(result["documents"] or []),
-        "metadatas": list(result["metadatas"] or []),
-    }
-
-
-@pytest.fixture()
-def project_env(tmp_path: Path) -> dict:
-    name = "test-proj"
-    _write_global_config(tmp_path)
-    _write_commands_config(tmp_path)
-    pm = ProjectManager(base_path=str(tmp_path))
-    pm.create_project_dirs(name)
-    pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
 
 
 class TestNpmAuditIngestor:
@@ -121,53 +53,42 @@ class TestNpmAuditIngestor:
             vulns.append(entry)
         return {"vulnerabilities": vulns, "summary": raw["summary"]}
 
-    def test_tool_name_in_metadata(
-        self, project_env: dict, npm_parsed_data: dict
-    ) -> None:
+    def test_tool_name_in_metadata(self, npm_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("npm-audit")
+        assert handler is not None
         result = _make_sca_result("npm-audit", npm_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        for meta in all_docs["metadatas"]:
-            assert meta["tool"] == "npm-audit"
+        rows = handler.normalize(result, profile="test-repo")
+        for row in rows:
+            assert row["tool"] == "npm-audit"
 
-    def test_shared_metadata(self, project_env: dict, npm_parsed_data: dict) -> None:
+    def test_shared_metadata(self, npm_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("npm-audit")
+        assert handler is not None
         result = _make_sca_result("npm-audit", npm_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        for meta in all_docs["metadatas"]:
-            assert meta["domain"] == "code"
-            assert meta["enriched"] is False
-            assert meta["type_dependency"] is True
-            assert meta["type_vulnerability"] is True
+        rows = handler.normalize(result, profile="test-repo")
+        for row in rows:
+            assert row["domain"] == "code"
+            assert row["enriched"] is False
+            assert row["type_dependency"] is True
+            assert row["type_vulnerability"] is True
 
-    def test_metadata_fidelity(self, project_env: dict, npm_parsed_data: dict) -> None:
+    def test_metadata_fidelity(self, npm_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("npm-audit")
+        assert handler is not None
         result = _make_sca_result("npm-audit", npm_parsed_data)
-        engine = _make_rag_engine(project_env)
-        FindingIngestor(engine, project_env["project_name"]).ingest_tool_output(
-            result, profile="test-repo"
-        )
-        all_docs = _get_all_docs(engine)
-        assert len(all_docs["metadatas"]) == len(npm_parsed_data["vulnerabilities"])
-        meta = all_docs["metadatas"][0]
+        rows = handler.normalize(result, profile="test-repo")
+        assert len(rows) == len(npm_parsed_data["vulnerabilities"])
+        row = rows[0]
         vuln = npm_parsed_data["vulnerabilities"][0]
-        assert meta["package_name"] == vuln["package_name"]
-        assert meta["vulnerability_id"] == vuln["vulnerability_id"]
-        assert meta["severity"] == vuln["severity"]
+        assert row["package_name"] == vuln["package_name"]
+        assert row["vulnerability_id"] == vuln["vulnerability_id"]
+        assert row["severity"] == vuln["severity"]
 
-    def test_return_type_is_list(
-        self, project_env: dict, npm_parsed_data: dict
-    ) -> None:
+    def test_return_type_is_list(self, npm_parsed_data: dict) -> None:
+        handler = ToolHandlerFactory.load("npm-audit")
+        assert handler is not None
         result = _make_sca_result("npm-audit", npm_parsed_data)
-        engine = _make_rag_engine(project_env)
-        doc_ids = FindingIngestor(
-            engine, project_env["project_name"]
-        ).ingest_tool_output(result, profile="test-repo")
-        assert isinstance(doc_ids, list)
-        assert len(doc_ids) == len(npm_parsed_data["vulnerabilities"])
-        assert all(isinstance(i, str) for i in doc_ids)
+        rows = handler.normalize(result, profile="test-repo")
+        assert isinstance(rows, list)
+        assert len(rows) == len(npm_parsed_data["vulnerabilities"])
+        assert all(isinstance(r, dict) for r in rows)

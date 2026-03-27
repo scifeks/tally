@@ -39,12 +39,12 @@ def _tool_completed(
 
 
 def _ingest_completed(
-    doc_ids: list[str] | None = None,
+    ids: list[int] | None = None,
     failed_tools: list[str] | None = None,
     run_id: int | None = 1,
 ) -> IngestCompleted:
     return IngestCompleted(
-        doc_ids=["doc1", "doc2"] if doc_ids is None else doc_ids,
+        ids=[1, 2] if ids is None else ids,
         failed_tools=[] if failed_tools is None else failed_tools,
         run_id=run_id,
         project_name="test-proj",

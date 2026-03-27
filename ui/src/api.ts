@@ -97,6 +97,24 @@ export async function patchFinding(id: number, patch: FindingPatch): Promise<Fin
   return response.data
 }
 
+export interface BatchFindingPatch {
+  ids: number[]
+  should_report?: boolean
+  status?: string
+  severity?: string
+  confidence?: string
+  description?: string
+  business_impact?: string
+  tal_id?: string
+}
+
+export async function batchPatchFindings(
+  body: BatchFindingPatch,
+): Promise<{ updated: number }> {
+  const response = await http.patch<{ updated: number }>('/api/findings/batch', body)
+  return response.data
+}
+
 export interface FieldSpec {
   editor: 'select' | 'text' | 'boolean' | 'tags'
   options?: string[]

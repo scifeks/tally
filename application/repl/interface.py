@@ -13,9 +13,9 @@ from rich.panel import Panel
 from rich.table import Table
 
 from application.pipeline.handlers import (
+    ChromaDBHandler,
     EnrichmentHandler,
     IngestHandler,
-    PersistenceHandler,
 )
 from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
@@ -245,7 +245,7 @@ class REPL:
         self.event_bus = EventBus()
         _ingest = IngestHandler(self.event_bus, console=self.console)
         _enrich = EnrichmentHandler(self.event_bus, console=self.console)
-        _persist = PersistenceHandler(self.event_bus)
+        _persist = ChromaDBHandler()
         self.event_bus.subscribe(ToolCompleted, _ingest.handle)
         self.event_bus.subscribe(IngestCompleted, _enrich.handle)
         self.event_bus.subscribe(EnrichmentCompleted, _persist.handle)

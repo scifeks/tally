@@ -1,8 +1,6 @@
-"""Shared stub ChunkBuilder implementations for ingestor tests."""
+"""Shared stub ToolHandler implementations for ingestor tests."""
 
 from __future__ import annotations
-
-from typing import Any
 
 from domain.tools.base import ToolResult
 
@@ -14,19 +12,16 @@ class _StubBuilder:
     non_enriched_fields: frozenset[str] = frozenset()
     type_flags: dict[str, set[str]] = {}
     should_enrich = False
+    enrichment_fields = None
 
-    def __init__(
-        self, chunks: list[tuple[str, dict[str, Any], str]] | None = None
-    ) -> None:
-        self._chunks = chunks or []
+    def __init__(self, rows: list[dict] | None = None) -> None:
+        self._rows = rows or []
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]:
-        return list(self._chunks)
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
+        return list(self._rows)
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str:
-        return str(finding)
+    def render(self, row: dict) -> str:
+        return "stub"
 
 
 class _NetworkStubBuilder:
@@ -38,16 +33,13 @@ class _NetworkStubBuilder:
     non_enriched_fields: frozenset[str] = frozenset()
     type_flags: dict[str, set[str]] = {}
     should_enrich = False
+    enrichment_fields = None
 
-    def __init__(
-        self, chunks: list[tuple[str, dict[str, Any], str]] | None = None
-    ) -> None:
-        self._chunks = chunks or []
+    def __init__(self, rows: list[dict] | None = None) -> None:
+        self._rows = rows or []
 
-    def build(
-        self, result: ToolResult, profile: str
-    ) -> list[tuple[str, dict[str, Any], str]]:
-        return list(self._chunks)
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
+        return list(self._rows)
 
-    def fingerprint_key(self, finding: dict[str, Any]) -> str:
-        return str(finding)
+    def render(self, row: dict) -> str:
+        return "stub"

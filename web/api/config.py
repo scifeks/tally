@@ -45,7 +45,6 @@ def get_config() -> dict:
                 "options": sorted(FINDING_TYPES),
             },
             "description": {"editor": "text"},
-            "should_report": {"editor": "boolean"},
             "business_impact": {"editor": "text"},
             "tal_id": {"editor": "text"},
             "cwe": {"editor": "tags"},

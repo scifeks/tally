@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import FindingIngestor, RAGEngine
+from application.rag import RAGEngine
 from application.rag.query import QueryEngine
 from application.tools.executor import ToolExecutor
 from application.tools.registry import tool_registry
@@ -63,57 +63,46 @@ def _run_scan(
     )
 
 
-def _make_nmap_result() -> ToolResult:
-    """Synthetic ToolResult with valid parsed nmap data. No nmap binary needed."""
-    return ToolResult(
-        tool_name="nmap",
-        success=True,
-        output="",
-        parsed_data={
-            "hosts": [
-                {
-                    "ip_address": "127.0.0.1",
-                    "hostname": "localhost",
-                    "state": "up",
-                    "ports": [
-                        {
-                            "port": 22,
-                            "protocol": "tcp",
-                            "state": "open",
-                            "service": "ssh",
-                            "version": "",
-                        },
-                        {
-                            "port": 80,
-                            "protocol": "tcp",
-                            "state": "open",
-                            "service": "http",
-                            "version": "",
-                        },
-                    ],
-                }
-            ]
-        },
-        output_files={},
-        timestamp=RAGEngine.now_iso(),
-        duration_seconds=0.1,
-    )
-
-
 def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
     return RAGEngine(project_name=project_name, base_path=str(base_path))
 
 
-def _ingest(
-    base_path: Path, project_name: str, result: ToolResult, profile: str = "localhost"
-) -> list[str]:
-    engine = _make_rag_engine(base_path, project_name)
-    try:
-        return FindingIngestor(engine, project_name).ingest_tool_output(
-            result, profile=profile
-        )
-    finally:
-        engine.close()
+def _run_pipeline(
+    base_path: Path,
+    project_name: str,
+    result: ToolResult,
+    profile: str,
+) -> list[int]:
+    """Drive the full ingest pipeline; returns SQLite finding IDs."""
+    from application.pipeline.handlers import (
+        ChromaDBHandler,
+        EnrichmentHandler,
+        IngestHandler,
+    )
+    from domain.pipeline.events import (
+        EnrichmentCompleted,
+        EventBus,
+        IngestCompleted,
+        ToolCompleted,
+    )
+
+    bus = EventBus()
+    ingest = IngestHandler(bus)
+    enrich = EnrichmentHandler(bus)
+    chroma = ChromaDBHandler()
+
+    bus.subscribe(ToolCompleted, ingest.handle)
+    bus.subscribe(IngestCompleted, enrich.handle)
+    bus.subscribe(EnrichmentCompleted, chroma.handle)
+
+    ids: list[int] = []
+
+    def _capture(event: IngestCompleted) -> None:
+        ids.extend(event.ids)
+
+    bus.subscribe(IngestCompleted, _capture)
+    bus.dispatch(ToolCompleted(result, profile, None, project_name, str(base_path)))
+    return ids
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +140,19 @@ class TestChatE2E:
     def test_chat_references_scan_data(self, nmap_project_env: dict) -> None:
         base, name = nmap_project_env["base_path"], nmap_project_env["project_name"]
         result = _run_scan(base, name)
-        _ingest(base, name, result)
-        response = QueryEngine(_make_rag_engine(base, name)).chat(
-            "what hosts were scanned?"
-        )
+        ids = _run_pipeline(base, name, result, profile=name)
+        if not ids:
+            pytest.skip(
+                "nmap found no open ports on 127.0.0.1 — no documents to chat about"
+            )
+        engine = _make_rag_engine(base, name)
+        try:
+            assert engine.count_documents() == len(ids), (
+                f"ChromaDB doc count {engine.count_documents()} "
+                f"!= SQLite row count {len(ids)}"
+            )
+            response = QueryEngine(engine).chat("what hosts were scanned?")
+        finally:
+            engine.close()
         assert isinstance(response, str)
         assert len(response) > 0

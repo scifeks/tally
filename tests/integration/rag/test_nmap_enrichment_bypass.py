@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
@@ -16,7 +15,11 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.project import ProjectManager  # noqa: E402
-from application.rag import EnrichmentPipeline, RAGEngine  # noqa: E402
+from application.rag import EnrichmentPipeline  # noqa: E402
+from infrastructure.store import make_store  # noqa: E402
+from infrastructure.store.repositories.findings_serial import (  # noqa: E402
+    compute_fingerprint,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -56,25 +59,11 @@ def _write_commands_config(base_path: Path) -> None:
     )
 
 
-def _make_rag_engine(project_env: dict) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
-
-
-def _make_llm_response(fields: list[str]) -> dict:
-    values = {
-        "risk_type": "exposed_service",
-        "remediation": "Restrict access to this port via firewall rules.",
-        "severity": "potential",
-        "description": (
-            "An open port was found exposing a potentially exploitable service."
-        ),
-    }
-    return {f: values[f] for f in fields if f in values}
+def _seed(finding_repo: object, run_id: int, row: dict) -> int:
+    finding_repo.upsert_findings(run_id, [row])  # type: ignore[union-attr]
+    fps = [compute_fingerprint(row)]
+    ids = finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]
+    return ids[0]
 
 
 @pytest.fixture()
@@ -85,90 +74,100 @@ def project_env(tmp_path: Path) -> dict:
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
     pm.save_project(name, [])
-    return {"base_path": tmp_path, "project_name": name}
+    run_repo, finding_repo, _, _ = make_store(str(tmp_path), name)
+    run_id = run_repo.create_run({})
+    return {
+        "base_path": tmp_path,
+        "project_name": name,
+        "finding_repo": finding_repo,
+        "run_id": run_id,
+    }
 
 
 class TestNmapEnrichmentBypass:
     def test_nmap_zero_llm_calls(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env)
-        engine.add_documents(
-            texts=["[nmap] Port 22/tcp on 10.0.0.1: ssh"],
-            metadatas=[
-                {
-                    "tool": "nmap",
-                    "enriched": False,
-                    "severity": "informational",
-                }
-            ],
-            ids=["nmap-bypass-001"],
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        row = {
+            "tool": "nmap",
+            "profile": "default",
+            "finding_type": json.dumps(["reconnaissance"]),
+            "severity": "informational",
+            "ip_address": "10.0.0.1",
+            "port": "22",
+        }
+        fid = _seed(finding_repo, run_id, row)
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
-        p = EnrichmentPipeline(engine, console=None)
         with patch.object(p, "_call_llm") as mock_llm:
-            p.enrich(["nmap-bypass-001"])
+            p.enrich([fid])
             mock_llm.assert_not_called()
 
-    def test_nmap_enriched_true_after_pipeline(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env)
-        engine.add_documents(
-            texts=["[nmap] Host: 10.0.0.1\nStatus: up"],
-            metadatas=[
-                {
-                    "tool": "nmap",
-                    "enriched": False,
-                    "severity": "informational",
-                }
-            ],
-            ids=["nmap-bypass-002"],
+    def test_nmap_enriched_stays_false_after_pipeline(self, project_env: dict) -> None:
+        # nmap has should_enrich=False: the pipeline skips it, enriched stays 0
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        row = {
+            "tool": "nmap",
+            "profile": "default",
+            "finding_type": json.dumps(["reconnaissance"]),
+            "severity": "informational",
+            "ip_address": "10.0.0.1",
+        }
+        fid = _seed(finding_repo, run_id, row)
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
-        p = EnrichmentPipeline(engine, console=None)
-        with patch.object(p, "_call_llm"):
-            p.enrich(["nmap-bypass-002"])
-        doc = engine.get_document_by_id("nmap-bypass-002")
-        assert doc is not None
-        assert doc["metadata"].get("enriched") is True
+        p.enrich([fid])
+        db_row = finding_repo.get_finding(fid)
+        assert db_row is not None
+        assert db_row["enriched"] == 0
 
     def test_semgrep_still_calls_llm(self, project_env: dict) -> None:
         # semgrep uses the per-field path; verify enrichment runs (not skipped
         # like nmap) by checking _call_per_field is called.
-        engine = _make_rag_engine(project_env)
-        engine.add_documents(
-            texts=["SQL injection in login.py line 42"],
-            metadatas=[
-                {
-                    "tool": "semgrep",
-                    "enriched": False,
-                    "severity": "confirmed",
-                }
-            ],
-            ids=["semgrep-regression-001"],
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        row = {
+            "tool": "semgrep",
+            "profile": "default",
+            "finding_type": json.dumps(["vulnerability"]),
+            "severity": "high",
+            "description": "SQL injection in login.py line 42",
+            "rule_id": "python.sqli",
+            "file_path": "login.py",
+        }
+        fid = _seed(finding_repo, run_id, row)
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
-        p = EnrichmentPipeline(engine, console=None)
         with patch.object(
             p, "_call_per_field", return_value={"risk_type": "sql_injection"}
         ) as mock_pf:
-            p.enrich(["semgrep-regression-001"])
+            p.enrich([fid])
             mock_pf.assert_called_once()
 
     def test_zap_still_calls_llm(self, project_env: dict) -> None:
         # zap uses the per-field path; verify enrichment runs (not skipped
         # like nmap) by checking _call_per_field is called.
-        engine = _make_rag_engine(project_env)
-        engine.add_documents(
-            texts=["Reflected XSS in search param"],
-            metadatas=[
-                {
-                    "tool": "zap",
-                    "enriched": False,
-                    "severity": "high",
-                    "remediation": "Encode output.",
-                    "description": "XSS via search param.",
-                }
-            ],
-            ids=["zap-regression-001"],
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        row = {
+            "tool": "zap",
+            "profile": "default",
+            "finding_type": json.dumps(["vulnerability"]),
+            "severity": "high",
+            "remediation": "Encode output.",
+            "description": "XSS via search param.",
+            "alert_name": "Reflected XSS",
+        }
+        fid = _seed(finding_repo, run_id, row)
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
-        p = EnrichmentPipeline(engine, console=None)
         with patch.object(
             p, "_call_per_field", return_value={"owasp_name": "Injection"}
         ) as mock_pf:
-            p.enrich(["zap-regression-001"])
+            p.enrich([fid])
             mock_pf.assert_called_once()

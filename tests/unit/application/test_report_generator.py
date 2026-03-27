@@ -4,32 +4,74 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from application.reporting.generator import ReportGenerator
 
-_GITLEAKS_FINDING = {
-    "tool": "gitleaks",
-    "severity": "high",
-    "rule_id": "aws-key",
-    "file_path": "/src/main.py",
-    "line_number": 10,
-}
+# Minimal SQLite-shaped row: all columns deserialise_row accesses must be present.
+_SQLITE_COLS = (
+    "tool",
+    "domain",
+    "segment",
+    "repo",
+    "severity",
+    "confidence",
+    "rule_id",
+    "url",
+    "port",
+    "vulnerability_id",
+    "package_name",
+    "ecosystem",
+    "description",
+    "package_version",
+    "file",
+    "host",
+    "fingerprint",
+    "run_id",
+    "finding_type",
+    "meta",
+    "cwe",
+    "enriched",
+)
+
+
+def _sql_row(**kwargs: object) -> dict[str, Any]:
+    """Return a dict with all SQLite column keys defaulting to None."""
+    row: dict[str, Any] = {col: None for col in _SQLITE_COLS}
+    row.update(kwargs)
+    return row
+
+
+_GITLEAKS_ROW = _sql_row(
+    tool="gitleaks",
+    severity="high",
+    rule_id="aws-key",
+    file="/src/main.py",
+    meta='{"line_number": 10}',
+)
 
 
 @pytest.fixture()
 def mock_engine() -> MagicMock:
     engine = MagicMock()
-    engine.count_documents.return_value = 0
-    engine.get_all_metadatas.return_value = []
     return engine
 
 
 @pytest.fixture()
-def generator(mock_engine: MagicMock) -> ReportGenerator:
-    return ReportGenerator(mock_engine, project="test-project")
+def mock_finding_repo() -> MagicMock:
+    repo = MagicMock()
+    repo.get_all_findings.return_value = []
+    return repo
+
+
+@pytest.fixture()
+def generator(mock_engine: MagicMock, mock_finding_repo: MagicMock) -> ReportGenerator:
+    return ReportGenerator(
+        mock_engine, project="test-project", finding_repo=mock_finding_repo
+    )
 
 
 class TestReportGenerator:
@@ -42,34 +84,30 @@ class TestReportGenerator:
         assert isinstance(result, str)
 
     def test_generate_markdown_contains_header(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 1
-        mock_engine.get_all_metadatas.return_value = [_GITLEAKS_FINDING]
+        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
         result = generator.generate(output_format="markdown")
         assert "# Tally Security Report: test-project" in result
 
     def test_generate_markdown_contains_gitleaks_section(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 1
-        mock_engine.get_all_metadatas.return_value = [_GITLEAKS_FINDING]
+        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
         result = generator.generate(output_format="markdown")
         assert "### Secrets (gitleaks)" in result
 
     def test_generate_html_contains_doctype(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 1
-        mock_engine.get_all_metadatas.return_value = [_GITLEAKS_FINDING]
+        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
         result = generator.generate(output_format="html")
         assert result.startswith("<!DOCTYPE html>")
 
     def test_generate_html_contains_project_name(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 1
-        mock_engine.get_all_metadatas.return_value = [_GITLEAKS_FINDING]
+        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
         result = generator.generate(output_format="html")
         assert "test-project" in result
 
@@ -78,18 +116,16 @@ class TestReportGenerator:
         json.loads(result)
 
     def test_generate_json_structure(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 1
-        mock_engine.get_all_metadatas.return_value = [
-            {
-                "tool": "semgrep",
-                "severity": "medium",
-                "rule_id": "sqli",
-                "file_path": "/app/db.py",
-                "line_start": 5,
-                "cwe": "CWE-89",
-            }
+        mock_finding_repo.get_all_findings.return_value = [
+            _sql_row(
+                tool="semgrep",
+                severity="medium",
+                rule_id="sqli",
+                file="/app/db.py",
+                meta='{"line_start": 5, "cwe": "CWE-89"}',
+            )
         ]
         result = generator.generate(output_format="json")
         data = json.loads(result)
@@ -108,7 +144,7 @@ class TestReportGenerator:
         assert (tmp_path / "report.md").exists()
         assert (tmp_path / "report.md").read_text() == result
 
-    def test_aggregate_empty_engine_returns_zero_totals(
+    def test_aggregate_empty_repo_returns_zero_totals(
         self, generator: ReportGenerator
     ) -> None:
         result = generator._aggregate_findings()
@@ -116,34 +152,31 @@ class TestReportGenerator:
         assert result["summary"]["by_tool"] == {}
 
     def test_aggregate_groups_by_tool(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 3
-        mock_engine.get_all_metadatas.return_value = [
-            {"tool": "gitleaks", "severity": "high"},
-            {"tool": "gitleaks", "severity": "medium"},
-            {"tool": "nmap", "severity": "low"},
+        mock_finding_repo.get_all_findings.return_value = [
+            _sql_row(tool="gitleaks", severity="high"),
+            _sql_row(tool="gitleaks", severity="medium"),
+            _sql_row(tool="nmap", severity="low"),
         ]
         result = generator._aggregate_findings()
         assert result["summary"]["by_tool"]["gitleaks"] == 2
         assert result["summary"]["by_tool"]["nmap"] == 1
 
     def test_aggregate_counts_severity(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 2
-        mock_engine.get_all_metadatas.return_value = [
-            {"tool": "gitleaks", "severity": "high"},
-            {"tool": "nmap", "severity": "critical"},
+        mock_finding_repo.get_all_findings.return_value = [
+            _sql_row(tool="gitleaks", severity="high"),
+            _sql_row(tool="nmap", severity="critical"),
         ]
         result = generator._aggregate_findings()
         assert result["summary"]["by_severity"]["high"] == 1
         assert result["summary"]["by_severity"]["critical"] == 1
 
-    def test_aggregate_engine_exception_logs_warning_and_returns_zeros(
-        self, generator: ReportGenerator, mock_engine: MagicMock
+    def test_aggregate_repo_exception_logs_warning_and_returns_zeros(
+        self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_engine.count_documents.return_value = 1
-        mock_engine.get_all_metadatas.side_effect = RuntimeError("db error")
+        mock_finding_repo.get_all_findings.side_effect = RuntimeError("db error")
         result = generator._aggregate_findings()
         assert result["summary"]["total_findings"] == 0

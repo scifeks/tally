@@ -22,7 +22,7 @@ class ToolCompleted:
 
 @dataclass
 class IngestCompleted:
-    doc_ids: list[str]
+    ids: list[int]
     failed_tools: list[str]
     run_id: int | None
     project_name: str
@@ -31,7 +31,7 @@ class IngestCompleted:
 
 @dataclass
 class EnrichmentCompleted:
-    doc_ids: list[str]
+    ids: list[int]
     partial_success: bool
     run_id: int | None
     project_name: str
