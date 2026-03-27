@@ -29,6 +29,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-timeout>=2.0.0",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=4.0.0",
 ]
 
 [tool.ruff]
@@ -48,6 +49,22 @@ pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
 extraPaths = []
+
+[tool.coverage.run]
+branch = true
+source = ["application", "domain", "infrastructure", "tally_mcp", "core", "web"]
+omit = ["*/__pycache__/*", "*/site-packages/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]
+fail_under = 70
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

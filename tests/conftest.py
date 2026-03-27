@@ -48,3 +48,20 @@ requires_ollama = pytest.mark.skipif(
     _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),
     reason="Ollama not configured or not running",
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_tool_registry():
+    """Isolate tool_registry singleton state across all test scopes."""
+    try:
+        from application.tools.registry import tool_registry
+
+        saved_tools = dict(tool_registry._tools)
+        saved_configs = dict(tool_registry._configs)
+        yield
+        tool_registry._tools.clear()
+        tool_registry._tools.update(saved_tools)
+        tool_registry._configs.clear()
+        tool_registry._configs.update(saved_configs)
+    except ImportError:
+        yield

@@ -35,4 +35,6 @@ jobs:
         run: pyright
 
       - name: pytest
+        env:
+          CI: "true"
         run: pytest
