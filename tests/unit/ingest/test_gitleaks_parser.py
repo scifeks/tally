@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.tools.parsers.gitleaks_parser import (
     _parse_secret,
+    combine_gitleaks_results,
     parse_gitleaks_json,
 )
 
@@ -102,3 +103,82 @@ class TestGitleaksParser:
             f"summary.total_secrets {parsed['summary']['total_secrets']} "
             f"!= raw finding count {len(raw)}"
         )
+
+
+class TestCombineGitleaksSource:
+    """Verify source stamping in combine_gitleaks_results."""
+
+    _DIR_SECRET: dict = {
+        "rule_id": "aws-access-token",
+        "file_path": "config/aws.js",
+        "line_number": 10,
+        "end_line": 10,
+        "start_column": 1,
+        "end_column": 20,
+        "entropy": 3.5,
+        "author": "",
+        "email": "",
+        "date": "",
+        "message": "",
+        "commit": None,
+        "symlink_file": None,
+        "tags": [],
+        "fingerprint": "fp-dir",
+        "description": "AWS Access Token",
+    }
+
+    _GIT_SECRET: dict = {
+        "rule_id": "aws-access-token",
+        "file_path": "config/aws.js",
+        "line_number": 10,
+        "end_line": 10,
+        "start_column": 1,
+        "end_column": 20,
+        "entropy": 3.5,
+        "author": "dev",
+        "email": "dev@example.com",
+        "date": "2024-01-01",
+        "message": "add config",
+        "commit": "abc123",
+        "symlink_file": None,
+        "tags": [],
+        "fingerprint": "fp-git",
+        "description": "AWS Access Token",
+    }
+
+    def _dir_data(self, secrets: list[dict] | None = None) -> dict:
+        s = secrets if secrets is not None else [dict(self._DIR_SECRET)]
+        return {"secrets": s, "summary": {"total_secrets": len(s)}}
+
+    def _git_data(self, secrets: list[dict] | None = None) -> dict:
+        s = secrets if secrets is not None else [dict(self._GIT_SECRET)]
+        return {"secrets": s, "summary": {"total_secrets": len(s)}}
+
+    def test_dir_only_finding_has_source_dir(self) -> None:
+        result = combine_gitleaks_results(self._dir_data(), {"secrets": []})
+        assert len(result["secrets"]) == 1
+        assert result["secrets"][0]["source"] == "dir"
+
+    def test_git_only_finding_has_source_git(self) -> None:
+        result = combine_gitleaks_results({"secrets": []}, self._git_data())
+        assert len(result["secrets"]) == 1
+        assert result["secrets"][0]["source"] == "git"
+
+    def test_same_finding_in_both_dir_wins(self) -> None:
+        """Same (rule_id, file_path, line_number) in both scans → source='dir'."""
+        result = combine_gitleaks_results(self._dir_data(), self._git_data())
+        # Dedup keeps only one finding
+        assert len(result["secrets"]) == 1
+        assert result["secrets"][0]["source"] == "dir"
+
+    def test_distinct_git_finding_gets_source_git(self) -> None:
+        """Git finding at a different line not in dir → source='git'."""
+        git_secret = dict(self._GIT_SECRET)
+        git_secret["line_number"] = 99  # different line → not deduped
+        git_secret["fingerprint"] = "fp-git-2"
+        result = combine_gitleaks_results(
+            self._dir_data(), self._git_data([git_secret])
+        )
+        assert len(result["secrets"]) == 2
+        sources = {s["source"] for s in result["secrets"]}
+        assert sources == {"dir", "git"}

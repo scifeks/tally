@@ -112,6 +112,15 @@ class ToolInterface(ABC):
         ...
 
     @property
+    def timeout(self) -> int | None:
+        """Per-tool subprocess timeout in seconds.
+
+        Return ``None`` to defer to the executor's ``DEFAULT_TIMEOUT``.
+        Override in subclasses for tools that routinely need more (or less) time.
+        """
+        return None
+
+    @property
     def display_fields(self) -> list[str]:
         """Optional ordered list of field names to show in result tables."""
         return []

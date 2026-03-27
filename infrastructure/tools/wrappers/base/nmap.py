@@ -57,6 +57,10 @@ class BaseNmapTool(ToolInterface):
         return False
 
     @property
+    def timeout(self) -> int:
+        return 14400  # 4 hours — comprehensive network scans can be very slow
+
+    @property
     def candidate_commands(self) -> list[str]:
         return self._candidate_commands
 

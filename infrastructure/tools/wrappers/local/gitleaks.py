@@ -48,7 +48,9 @@ class GitleaksLocalTool(BaseGitleaksTool):
         tmp = tempfile.mktemp(suffix=".json", prefix=f"gitleaks_{scan_type}_")
         self._last_report_path = Path(tmp)
 
-        return [
+        gitleaks_ignore_path: str | None = kwargs.get("gitleaks_ignore_path")
+
+        cmd = [
             "gitleaks",
             scan_type,
             repo_path,
@@ -59,6 +61,9 @@ class GitleaksLocalTool(BaseGitleaksTool):
             "--exit-code",
             "0",
         ]
+        if gitleaks_ignore_path:
+            cmd.extend(["--gitleaks-ignore-path", gitleaks_ignore_path])
+        return cmd
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse gitleaks JSON output into structured data.

@@ -5,7 +5,7 @@ import inspect
 import logging
 from typing import Protocol
 
-from core.config.schemas import Repository
+from core.config.schemas import Repository, build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.enrichment import FieldEnrichmentSpec
 
@@ -67,17 +67,16 @@ def get_tool_domain(tool_name: str) -> str | None:
     return handler.domain if handler is not None else None
 
 
-def is_test_path(rel_path: str, test_dirs: list[str]) -> bool:
-    """Return True if rel_path falls inside one of the given test dirs.
+def is_excluded_path(rel_path: str, excluded_dirs: list[str]) -> bool:
+    """Return True if rel_path contains any segment matching an excluded dir name.
 
-    rel_path must start with '/': e.g. '/tests/foo.py'.
-    test_dirs are bare names or relative sub-paths: e.g. ['tests', 'spec'].
+    rel_path must start with '/': e.g. '/src/module/tests/foo.py'.
+    excluded_dirs are bare dir names matched case-insensitively at any depth:
+    e.g. ['tests', 'vendor'] excludes any path segment equal to those names.
     """
-    for td in test_dirs:
-        prefix = f"/{td}/"
-        if rel_path.startswith(prefix) or rel_path == f"/{td}":
-            return True
-    return False
+    parts = {p.lower() for p in rel_path.strip("/").split("/")}
+    lowered = {d.lower() for d in excluded_dirs}
+    return bool(parts & lowered)
 
 
 def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, str | None]:
@@ -146,8 +145,8 @@ def filter_code_rows(
     """
     if not repos:
         return rows
-    repo_test_dirs: dict[str, list[str]] = {
-        r.name: r.test_dirs for r in repos if r.test_dirs
+    repo_excluded_dirs: dict[str, list[str]] = {
+        r.name: excl for r in repos if (excl := build_excluded_dirs(r))
     }
     filtered: list[dict] = []
     for row in rows:
@@ -165,10 +164,10 @@ def filter_code_rows(
         if matched_repo is not None:
             row["repo"] = matched_repo
         if matched_repo is not None and rel:
-            _tdirs = repo_test_dirs.get(matched_repo, [])
-            if _tdirs and is_test_path(rel, _tdirs):
+            _excl = repo_excluded_dirs.get(matched_repo, [])
+            if _excl and is_excluded_path(rel, _excl):
                 logger.debug(
-                    "Excluding test-dir row: tool=%s path=%s",
+                    "Excluding dir row: tool=%s path=%s",
                     tool_name,
                     rel,
                 )

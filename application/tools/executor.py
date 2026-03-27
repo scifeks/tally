@@ -16,7 +16,7 @@ _METACHAR_TOKENS = {"&&", "||", ";", ">", ">>", "<", "<<", "|"}
 # Characters that indicate shell-injection within a single token
 _METACHAR_CHARS = frozenset(";&|<>`$")
 
-DEFAULT_TIMEOUT = 300  # seconds
+DEFAULT_TIMEOUT = 10800  # seconds (3 hours)
 
 _NEEDS_ROOT_PATTERNS = [
     "requires root privileges",
@@ -110,6 +110,7 @@ class ToolExecutor:
 
         # 4. Run (with privilege escalation if needed)
         print(f"Running {tool.name}...")
+        _log.info("Tool %s: command: %s", tool.name, shlex.join(cmd))
         output_dir = self._ensure_output_dir(tool.name)
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
         findings_exit_ok = getattr(tool, "findings_exit_ok", False)
@@ -148,6 +149,11 @@ class ToolExecutor:
 
         status = "✓ Complete" if success else "✗ Failed "
         print(f"{status} (exit {proc.returncode}, {duration}s)")
+        _log.info(
+            "Tool %s: exit=%d duration=%.1fs", tool.name, proc.returncode, duration
+        )
+        if proc.stderr:
+            _log.info("Tool %s stderr:\n%s", tool.name, proc.stderr[:5000])
         if not success and proc.stderr:
             _log.error(
                 "Tool %s exited %d. stderr: %s",
@@ -173,9 +179,11 @@ class ToolExecutor:
         auto_approve: bool = True,
     ) -> ToolResult:
         """Execute a single ExecutionPass."""
+        tool_timeout: int = getattr(tool, "timeout", None) or DEFAULT_TIMEOUT
         return self.execute(
             tool,  # type: ignore[arg-type]
             auto_approve=auto_approve,
+            timeout=tool_timeout,
             label=pass_.label_suffix,
             cwd=pass_.cwd,
             **pass_.kwargs,
@@ -234,6 +242,7 @@ class ToolExecutor:
         tool_name: str, timestamp: str, start: float, timeout: int
     ) -> ToolResult:
         duration = round(perf_counter() - start, 3)
+        _log.error("Tool %s: timed out after %ds", tool_name, timeout)
         print(f"✗ Failed  (timeout after {timeout}s)")
         return ToolResult(
             tool_name=tool_name,

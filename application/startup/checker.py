@@ -16,9 +16,24 @@ _INSTALL_HINTS = {
     "pip-audit": "pip install pip-audit",
     "npm-audit": "Included with Node.js: https://nodejs.org",
     "composer-audit": "Included with Composer: https://getcomposer.org",
-    "gitleaks": "brew install gitleaks  OR  https://github.com/gitleaks/gitleaks/releases",
+    "gitleaks": "https://github.com/gitleaks/gitleaks?tab=readme-ov-file#installing",
     "zap": "https://www.zaproxy.org/download/",
 }
+
+# Minimum compatible versions for system tools (major, minor, patch).
+_MIN_VERSIONS: dict[str, tuple[int, ...]] = {
+    "gitleaks": (8, 30, 0),
+}
+
+
+def _parse_version(version_str: str) -> tuple[int, ...] | None:
+    """Parse 'v8.30.0' or '8.30.0' into (8, 30, 0), or None on failure."""
+    cleaned = version_str.lstrip("v").split()[0]
+    try:
+        return tuple(int(p) for p in cleaned.split("."))
+    except ValueError:
+        return None
+
 
 # Map package names in requirements.txt to importable module names
 _PACKAGE_IMPORT_MAP = {
@@ -40,6 +55,7 @@ class DepCheck:
     installed: bool
     version: str | None = None
     install_hint: str | None = None
+    warning: str | None = None
 
 
 @dataclass
@@ -166,16 +182,24 @@ class DependencyChecker:
                         break
                     available = tool.check_available()  # type: ignore[attr-defined]
                     version = tool.get_version() if available else None  # type: ignore[attr-defined]
-                    results.append(
-                        DepCheck(
-                            name=tool.name,
-                            type="system_tool",
-                            required=False,
-                            installed=available,
-                            version=version,
-                            install_hint=_INSTALL_HINTS.get(tool.name),
-                        )
+                    dep = DepCheck(
+                        name=tool.name,
+                        type="system_tool",
+                        required=False,
+                        installed=available,
+                        version=version,
+                        install_hint=_INSTALL_HINTS.get(tool.name),
                     )
+                    if available and version and tool.name in _MIN_VERSIONS:
+                        parsed = _parse_version(version)
+                        min_ver = _MIN_VERSIONS[tool.name]
+                        if parsed is not None and parsed < min_ver:
+                            min_str = ".".join(str(p) for p in min_ver)
+                            dep.warning = (
+                                f"Version {version} is not compatible."
+                                f" Requires >= v{min_str}."
+                            )
+                    results.append(dep)
                     break
 
         return results
@@ -194,7 +218,10 @@ class DependencyChecker:
 
         for check in result.checks:
             if check.installed:
-                status = f"[green]v {check.version or 'installed'}[/green]"
+                if check.warning:
+                    status = f"[yellow]v {check.version} (incompatible)[/yellow]"
+                else:
+                    status = f"[green]v {check.version or 'installed'}[/green]"
             else:
                 status = "[yellow]! NOT FOUND[/yellow]"
 
@@ -237,7 +264,10 @@ def print_installed_system_tools(console: Console) -> None:
 
     for check in tool_checks:
         if check.installed:
-            status = f"[green]v {check.version or 'installed'}[/green]"
+            if check.warning:
+                status = f"[yellow]v {check.version} (incompatible)[/yellow]"
+            else:
+                status = f"[green]v {check.version or 'installed'}[/green]"
         else:
             status = "[yellow]! NOT FOUND[/yellow]"
         hint = check.install_hint or ""

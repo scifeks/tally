@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
 from infrastructure.tools.parsers.semgrep_parser import (
@@ -76,24 +77,10 @@ class BaseSemgrepTool(ToolInterface):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
-
-        if context.repo.test_dirs:
-            exclude: list[str] = list(context.repo.test_dirs)
-        elif context.repo.path:
-            # Mirrors _TEST_DIR_NAMES in core/project/manager.py
-            _TEST_NAMES = frozenset({"test", "tests", "spec", "__tests__", "e2e"})
-            exclude = sorted(
-                e.name
-                for e in Path(context.repo.path).iterdir()
-                if e.is_dir() and e.name in _TEST_NAMES
-            )
-        else:
-            exclude = []
-
+        exclude = build_excluded_dirs(context.repo)
         kwargs: dict[str, object] = {"repo_path": repo_path}
         if exclude:
             kwargs["exclude"] = exclude
-
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,

@@ -23,7 +23,19 @@ class Repository(BaseModel):
     base_urls: list[str] = Field(default_factory=list, description="API base URLs")
     test_dirs: list[str] = Field(
         default_factory=list,
-        description="Test directory names/paths to exclude from scan findings",
+        description=(
+            "Dir names to treat as test directories. Matched by name at any depth "
+            "in the tree (e.g. 'tests' excludes src/module/tests/). "
+            "Case-insensitive. Used to exclude test code from scan findings."
+        ),
+    )
+    ignore_dirs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Dir names to exclude from scans. Matched by name at any depth "
+            "in the tree (e.g. 'vendor' excludes app/vendor/). "
+            "Case-insensitive. Applies to SAST and secrets tool segments."
+        ),
     )
 
     @field_validator("type")
@@ -57,3 +69,13 @@ class Repository(BaseModel):
         if self.docker_path and not self.container_name:
             raise ValueError("'container_name' is required when 'docker_path' is set")
         return self
+
+
+def build_excluded_dirs(repo: Repository) -> list[str]:
+    """Return deduplicated list of dir names to exclude from scans.
+
+    Combines repo.test_dirs and repo.ignore_dirs, preserving insertion order.
+    Callers (tool wrappers, ingestor) should treat entries as bare dir names
+    matched case-insensitively at any depth in the file tree.
+    """
+    return list(dict.fromkeys(repo.test_dirs + repo.ignore_dirs))
