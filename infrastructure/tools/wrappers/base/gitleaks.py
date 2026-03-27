@@ -72,20 +72,23 @@ class BaseGitleaksTool(ToolInterface):
         exclude = build_excluded_dirs(context.repo)
 
         shared_kwargs: dict[str, object] = {"repo_path": repo_path}
-        if exclude:
-            patterns = "\n".join(f"**/{d}" for d in exclude) + "\n"
-            if context.repo.docker_path and context.repo.path:
-                # Docker mode: write to local repo path (already mounted in container).
-                # The file is overwritten on each scan; it is not committed.
-                ignore_file = Path(context.repo.path) / ".tally_gitleaksignore"
-                ignore_file.write_text(patterns)
-                container_ignore = f"{context.repo.docker_path}/.tally_gitleaksignore"
-                shared_kwargs["gitleaks_ignore_path"] = container_ignore
-            else:
-                # Local mode: write to a temp file.
-                tmp = tempfile.mktemp(suffix=".gitleaksignore", prefix="tally_")
-                Path(tmp).write_text(patterns)
-                shared_kwargs["gitleaks_ignore_path"] = tmp
+        # Always exclude .git — the dir scan is a plain filesystem walk and
+        # would otherwise crawl .git/objects/pack files (potentially GBs of
+        # binary data). The git pass handles history via git's own traversal.
+        all_excludes = [".git"] + exclude
+        patterns = "\n".join(f"**/{d}" for d in all_excludes) + "\n"
+        if context.repo.docker_path and context.repo.path:
+            # Docker mode: write to local repo path (already mounted in container).
+            # The file is overwritten on each scan; it is not committed.
+            ignore_file = Path(context.repo.path) / ".tally_gitleaksignore"
+            ignore_file.write_text(patterns)
+            container_ignore = f"{context.repo.docker_path}/.tally_gitleaksignore"
+            shared_kwargs["gitleaks_ignore_path"] = container_ignore
+        else:
+            # Local mode: write to a temp file.
+            tmp = tempfile.mktemp(suffix=".gitleaksignore", prefix="tally_")
+            Path(tmp).write_text(patterns)
+            shared_kwargs["gitleaks_ignore_path"] = tmp
 
         return [
             ExecutionPass(
