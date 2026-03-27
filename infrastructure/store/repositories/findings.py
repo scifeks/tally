@@ -126,7 +126,9 @@ class FindingRepository:
         from datetime import UTC, datetime
 
         now = datetime.now(UTC).isoformat()
-        rows_with_ts = [(*row, now, now, 1, "active", 0) for row in rows]
+        rows_with_ts = [
+            (*row, now, now, 1, "active", 1 if row[2] == "nmap" else 0) for row in rows
+        ]
 
         sql = """
             INSERT INTO findings (
