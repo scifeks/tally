@@ -52,6 +52,10 @@ class BaseGitleaksTool(ToolInterface):
         return True
 
     @property
+    def timeout(self) -> int:
+        return 7200  # 2 hours — large repos with deep git history can be slow
+
+    @property
     def candidate_commands(self) -> list[str]:
         return self._candidate_commands
 
