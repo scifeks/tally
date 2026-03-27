@@ -1,12 +1,16 @@
-"""Unit tests for application.reporting.draft_runner.generate_draft()."""
+"""Unit tests for application.reporting.draft_runner."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from application.reporting.draft_runner import generate_draft
-from application.reporting.risk_level import RiskCounts
+from application.reporting.draft_runner import (
+    _build_context,
+    _build_rag_query,
+    generate_draft,
+)
+from application.reporting.risk_level import RiskCounts, RiskLevel
 
 _ZERO_RISK_COUNTS = RiskCounts(
     confirmed_critical=0,
@@ -260,3 +264,208 @@ class TestGenerateDraftPrompt:
         printed = " ".join(str(c) for c in console.print.call_args_list)
         assert "scan" in printed.lower()
         assert "triage" not in printed.lower()
+
+
+# ---------------------------------------------------------------------------
+# _build_rag_query
+# ---------------------------------------------------------------------------
+
+
+class TestBuildRagQuery:
+    def test_scope_and_methodology_returns_none(self) -> None:
+        assert _build_rag_query("scope-and-methodology", {}) is None
+
+    def test_executive_summary_mentions_severity(self) -> None:
+        result = _build_rag_query("executive-summary", {})
+        assert result is not None
+        assert "critical" in result
+        assert "high" in result
+
+    def test_risk_level_mentions_severity_and_tool(self) -> None:
+        result = _build_rag_query("risk-level", {})
+        assert result is not None
+        assert "severity" in result
+        assert "tool" in result
+
+    def test_critical_issues_no_terms_returns_base(self) -> None:
+        result = _build_rag_query("critical-issues", {"top_findings": []})
+        assert result is not None
+        assert "critical" in result
+        assert "high" in result
+
+    def test_critical_issues_includes_vulnerability_id_from_findings(self) -> None:
+        ctx = {
+            "top_findings": [
+                {"vulnerability_id": "CVE-2023-001", "cwe": None, "risk_type": None}
+            ]
+        }
+        result = _build_rag_query("critical-issues", ctx)
+        assert result is not None
+        assert "CVE-2023-001" in result
+
+    def test_improvement_points_no_groups_returns_base(self) -> None:
+        result = _build_rag_query("improvement-points", {"risk_type_groups": []})
+        assert result is not None
+        assert "recurring" in result
+
+    def test_improvement_points_includes_group_names(self) -> None:
+        ctx = {"risk_type_groups": [("injection", 5), ("secrets", 2)]}
+        result = _build_rag_query("improvement-points", ctx)
+        assert result is not None
+        assert "injection" in result
+
+    def test_general_recommendations_no_groups_returns_base(self) -> None:
+        result = _build_rag_query("general-recommendations", {"risk_type_groups": []})
+        assert result is not None
+        assert "remediation" in result
+
+    def test_general_recommendations_includes_group_names(self) -> None:
+        ctx = {"risk_type_groups": [("injection", 4), ("secrets", 2)]}
+        result = _build_rag_query("general-recommendations", ctx)
+        assert result is not None
+        assert "injection" in result
+
+    def test_unknown_section_returns_none(self) -> None:
+        assert _build_rag_query("nonexistent-section", {}) is None
+
+
+# ---------------------------------------------------------------------------
+# _build_context
+# ---------------------------------------------------------------------------
+
+_BASE_RISK_COUNTS = RiskCounts(
+    confirmed_critical=0,
+    confirmed_high=1,
+    prob_confirmed_medium=2,
+    low_total=0,
+    recurring=0,
+)
+_BASE_RISK_LEVEL = RiskLevel.HIGH
+
+
+def _make_query(
+    top_findings: list | None = None,
+    risk_type_groups: list | None = None,
+    recurring: dict | None = None,
+    tools: list | None = None,
+    url_hosts: list | None = None,
+    hosts: list | None = None,
+    ecosystems: list | None = None,
+) -> MagicMock:
+    q = MagicMock()
+    q.top_findings.return_value = top_findings or []
+    q.risk_type_groups.return_value = risk_type_groups or []
+    q.recurring_by_risk_type.return_value = recurring or {}
+    q.distinct_tools.return_value = tools or []
+    q.distinct_url_hosts.return_value = url_hosts or []
+    q.distinct_hosts.return_value = hosts or []
+    q.distinct_ecosystems.return_value = ecosystems or []
+    return q
+
+
+def _call_build_context(
+    section: str,
+    query: MagicMock,
+    tmp_path: Path,
+    findings: list | None = None,
+) -> dict:
+    return _build_context(
+        section=section,
+        query=query,
+        findings=findings or [{"id": 1}],
+        sev_dist={"high": 1},
+        conf_dist={"confirmed": 1},
+        risk_counts=_BASE_RISK_COUNTS,
+        risk_level=_BASE_RISK_LEVEL,
+        project_name="TestCo",
+        engagement_date="2025-01-01",
+        repos=["repo/a"],
+        draft_dir=tmp_path,
+        prefix="TC",
+    )
+
+
+class TestBuildContext:
+    def test_executive_summary_has_base_keys(self, tmp_path: Path) -> None:
+        ctx = _call_build_context("executive-summary", _make_query(), tmp_path)
+        assert ctx["project_name"] == "TestCo"
+        assert ctx["engagement_date"] == "2025-01-01"
+        assert ctx["repos"] == ["repo/a"]
+        assert ctx["total"] == 1
+        assert ctx["risk_level"] is _BASE_RISK_LEVEL
+        assert "top_findings" not in ctx
+
+    def test_risk_level_has_base_keys_only(self, tmp_path: Path) -> None:
+        ctx = _call_build_context("risk-level", _make_query(), tmp_path)
+        assert ctx["project_name"] == "TestCo"
+        assert "top_findings" not in ctx
+        assert "risk_type_groups" not in ctx
+
+    def test_critical_issues_includes_top_findings(self, tmp_path: Path) -> None:
+        findings = [{"id": 1, "severity": "high"}]
+        query = _make_query(top_findings=findings)
+        ctx = _call_build_context("critical-issues", query, tmp_path)
+        assert ctx["top_findings"] == findings
+
+    def test_improvement_points_includes_risk_type_groups(self, tmp_path: Path) -> None:
+        groups = [("injection", 3)]
+        query = _make_query(risk_type_groups=groups)
+        ctx = _call_build_context("improvement-points", query, tmp_path)
+        assert ctx["risk_type_groups"] == groups
+
+    def test_scope_includes_tools_and_hosts(self, tmp_path: Path) -> None:
+        query = _make_query(
+            tools=["semgrep"],
+            url_hosts=["example.com"],
+            hosts=["10.0.0.1"],
+            ecosystems=["PyPI"],
+        )
+        with patch(
+            "application.reporting.draft_runner._load_tools_blurb",
+            return_value="blurb text",
+        ):
+            ctx = _call_build_context("scope-and-methodology", query, tmp_path)
+        assert ctx["tools"] == ["semgrep"]
+        assert ctx["url_hosts"] == ["example.com"]
+        assert ctx["hosts"] == ["10.0.0.1"]
+        assert ctx["ecosystems"] == ["PyPI"]
+        assert ctx["tools_blurb"] == "blurb text"
+
+    def test_general_recommendations_includes_recurring(self, tmp_path: Path) -> None:
+        recurring = {"injection": [{"id": 1}]}
+        query = _make_query(
+            risk_type_groups=[("injection", 2)],
+            recurring=recurring,
+        )
+        ctx = _call_build_context("general-recommendations", query, tmp_path)
+        assert ctx["recurring_by_risk_type"] == recurring
+        assert ctx["risk_type_groups"] == [("injection", 2)]
+
+    def test_general_recommendations_loads_existing_improvement_draft(
+        self, tmp_path: Path
+    ) -> None:
+        draft_dir = tmp_path / "draft"
+        draft_dir.mkdir()
+        (draft_dir / "improvement-points.md").write_text(
+            "existing draft", encoding="utf-8"
+        )
+        ctx = _build_context(
+            section="general-recommendations",
+            query=_make_query(),
+            findings=[{"id": 1}],
+            sev_dist={},
+            conf_dist={},
+            risk_counts=_BASE_RISK_COUNTS,
+            risk_level=_BASE_RISK_LEVEL,
+            project_name="TestCo",
+            engagement_date="2025-01-01",
+            repos=[],
+            draft_dir=draft_dir,
+        )
+        assert ctx["improvement_points_draft"] == "existing draft"
+
+    def test_general_recommendations_improvement_draft_none_when_missing(
+        self, tmp_path: Path
+    ) -> None:
+        ctx = _call_build_context("general-recommendations", _make_query(), tmp_path)
+        assert ctx["improvement_points_draft"] is None

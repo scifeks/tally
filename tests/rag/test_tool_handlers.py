@@ -95,6 +95,9 @@ class TestGitleaksHandler:
         assert "file_path" in row
         assert "rule_id" in row
         assert "line_number" in row
+        assert row["file_path"] == "config/aws.py"
+        assert row["rule_id"] == "aws-access-token"
+        assert row["line_number"] == 10
 
     def test_normalize_type_flags_present(self) -> None:
         handler = GitleaksHandler()
@@ -225,6 +228,9 @@ class TestNmapHandler:
         handler = NmapHandler()
         rows = handler.normalize(_make_result("nmap", self._PARSED_TWO_PORTS), _PROFILE)
         assert len(rows) == 2
+        port_numbers = {row["port"] for row in rows}
+        assert port_numbers == {22, 80}
+        assert all(row["ip_address"] == "192.168.1.1" for row in rows)
 
     def test_normalize_no_host_level_rows(self) -> None:
         handler = NmapHandler()
@@ -368,6 +374,9 @@ class TestSemgrepHandler:
         assert "file_path" in row
         assert "rule_id" in row
         assert "line_start" in row
+        assert row["file_path"] == "src/auth.py"
+        assert row["rule_id"] == "python.lang.security.audit.hardcoded-password"
+        assert row["line_start"] == 42
 
     def test_normalize_type_flags_present(self) -> None:
         handler = SemgrepHandler()
@@ -452,6 +461,9 @@ class TestZapHandler:
         assert "url" in row
         assert "alert_name" in row
         assert "method" in row
+        assert row["url"] == "https://example.com/api/users"
+        assert row["alert_name"] == "SQL Injection"
+        assert row["method"] == "POST"
 
     def test_normalize_type_flags_present(self) -> None:
         handler = ZapHandler()
