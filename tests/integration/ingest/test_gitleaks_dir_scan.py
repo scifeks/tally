@@ -1,4 +1,4 @@
-"""Integration tests for gitleaks GitleaksChunkBuilder.normalize() and render()."""
+"""Integration tests for gitleaks GitleaksHandler.normalize() and render()."""
 
 from __future__ import annotations
 

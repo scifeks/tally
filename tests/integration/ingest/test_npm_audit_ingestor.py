@@ -1,4 +1,4 @@
-"""Integration tests for NpmAuditChunkBuilder.normalize() and render()."""
+"""Integration tests for NpmAuditHandler.normalize() and render()."""
 
 from __future__ import annotations
 

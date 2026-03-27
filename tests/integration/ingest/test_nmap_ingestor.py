@@ -1,4 +1,4 @@
-"""Integration tests for NmapChunkBuilder.normalize() and render()."""
+"""Integration tests for NmapHandler.normalize() and render()."""
 
 from __future__ import annotations
 

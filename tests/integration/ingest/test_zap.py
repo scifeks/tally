@@ -1,4 +1,4 @@
-"""Integration tests for ZapChunkBuilder.normalize() and render()."""
+"""Integration tests for ZapHandler.normalize() and render()."""
 
 from __future__ import annotations
 

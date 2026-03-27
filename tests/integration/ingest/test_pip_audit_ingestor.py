@@ -1,4 +1,4 @@
-"""Integration tests for PipAuditChunkBuilder.normalize() and render()."""
+"""Integration tests for PipAuditHandler.normalize() and render()."""
 
 from __future__ import annotations
 

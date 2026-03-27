@@ -1,4 +1,4 @@
-"""Integration tests for OsvScannerChunkBuilder.normalize() and render()."""
+"""Integration tests for OsvScannerHandler.normalize() and render()."""
 
 from __future__ import annotations
 

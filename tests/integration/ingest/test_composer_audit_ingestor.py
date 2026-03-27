@@ -1,4 +1,4 @@
-"""Integration tests for ComposerAuditChunkBuilder.normalize() and render()."""
+"""Integration tests for ComposerAuditHandler.normalize() and render()."""
 
 from __future__ import annotations
 

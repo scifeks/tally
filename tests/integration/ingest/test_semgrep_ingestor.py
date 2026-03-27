@@ -1,4 +1,4 @@
-"""Integration tests for SemgrepChunkBuilder.normalize() and render()."""
+"""Integration tests for SemgrepHandler.normalize() and render()."""
 
 from __future__ import annotations
 

@@ -188,7 +188,7 @@ class TestEnrichmentPipeline:
     def test_missing_fields_calls_per_field(
         self, pipeline: EnrichmentPipeline, seeded_env: dict
     ) -> None:
-        # zap-row uses the per-field path (ZapChunkBuilder has enrichment_fields)
+        # zap-row uses the per-field path (ZapHandler has enrichment_fields)
         with patch.object(
             pipeline,
             "_call_per_field",
