@@ -21,6 +21,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_ENRICHMENT_META_FIELDS: frozenset[str] = frozenset(
+    {"risk_type", "remediation", "owasp_name", "title", "tags"}
+)
+_ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
+    {"severity", "confidence", "description"}
+)
+
 # ---------------------------------------------------------------------------
 # FindingRepository
 # ---------------------------------------------------------------------------
@@ -463,18 +470,11 @@ class FindingRepository:
         except (json.JSONDecodeError, TypeError):
             existing_meta = {}
 
-        _META_FIELDS: frozenset[str] = frozenset(
-            {"risk_type", "remediation", "owasp_name", "title", "tags"}
-        )
-        _COLUMN_FIELDS: frozenset[str] = frozenset(
-            {"severity", "confidence", "description"}
-        )
-
         column_updates: dict[str, Any] = {}
         for key, val in fields.items():
-            if key in _META_FIELDS:
+            if key in _ENRICHMENT_META_FIELDS:
                 existing_meta[key] = val
-            elif key in _COLUMN_FIELDS:
+            elif key in _ENRICHMENT_COLUMN_FIELDS:
                 column_updates[key] = val
 
         updated_meta = json.dumps(existing_meta)
