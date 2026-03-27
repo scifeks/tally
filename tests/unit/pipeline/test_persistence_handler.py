@@ -157,3 +157,98 @@ class TestChromaDBHandler:
 
         mock_engine.delete_findings.assert_called_once_with("unknown-tool", "default")
         mock_engine.add_documents.assert_not_called()
+
+    def test_render_exception_is_caught(self) -> None:
+        """render() raising ValueError is caught by outer handler; no propagation."""
+        mock_engine = MagicMock()
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_by_ids.return_value = [
+            {"id": 1, "tool": "semgrep", "profile": "default"},
+        ]
+        mock_tool_handler = MagicMock()
+        mock_tool_handler.render.side_effect = ValueError("render boom")
+
+        handler = ChromaDBHandler()
+        with (
+            patch(
+                "application.pipeline.handlers.ChromaDBHandler._get_engine",
+                return_value=mock_engine,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+            patch(
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_tool_handler,
+            ),
+        ):
+            handler.handle(_enrich_completed(ids=[1]))
+
+        mock_engine.add_documents.assert_not_called()
+
+    def test_get_by_ids_exception_is_caught(self) -> None:
+        """get_by_ids() raising OperationalError is caught; no propagation."""
+        import sqlite3
+
+        mock_engine = MagicMock()
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_by_ids.side_effect = sqlite3.OperationalError("db locked")
+
+        handler = ChromaDBHandler()
+        with (
+            patch(
+                "application.pipeline.handlers.ChromaDBHandler._get_engine",
+                return_value=mock_engine,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+        ):
+            handler.handle(_enrich_completed(ids=[1]))
+
+        mock_engine.add_documents.assert_not_called()
+
+    def test_add_documents_exception_is_caught(self) -> None:
+        """add_documents() raising is caught by outer handler; no propagation."""
+        mock_engine = MagicMock()
+        mock_engine.add_documents.side_effect = RuntimeError("chroma write failed")
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_by_ids.return_value = [
+            {"id": 1, "tool": "nmap", "profile": "default"},
+        ]
+        mock_tool_handler = MagicMock()
+        mock_tool_handler.render.return_value = "nmap text"
+
+        handler = ChromaDBHandler()
+        with (
+            patch(
+                "application.pipeline.handlers.ChromaDBHandler._get_engine",
+                return_value=mock_engine,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+            patch(
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_tool_handler,
+            ),
+        ):
+            handler.handle(_enrich_completed(ids=[1]))

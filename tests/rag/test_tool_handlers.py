@@ -139,6 +139,44 @@ class TestGitleaksHandler:
         text = handler.render(rows[0])
         assert "config/aws.py" in text
 
+    def test_normalize_multiple_secrets_returns_multiple_rows(self) -> None:
+        """Multiple secrets in parsed_data produce one row each."""
+        parsed = {
+            "secrets": [
+                {
+                    "rule_id": "aws-access-token",
+                    "description": "AWS key",
+                    "file_path": "config/aws.py",
+                    "line_number": 10,
+                    "tags": [],
+                    "fingerprint": "fp-001",
+                },
+                {
+                    "rule_id": "github-token",
+                    "description": "GitHub token",
+                    "file_path": "config/github.py",
+                    "line_number": 20,
+                    "tags": [],
+                    "fingerprint": "fp-002",
+                },
+                {
+                    "rule_id": "generic-api-key",
+                    "description": "Generic API key",
+                    "file_path": "src/api.py",
+                    "line_number": 5,
+                    "tags": [],
+                    "fingerprint": "fp-003",
+                },
+            ]
+        }
+        handler = GitleaksHandler()
+        rows = handler.normalize(_make_result("gitleaks", parsed), _PROFILE)
+        assert len(rows) == 3
+        rule_ids = {r["rule_id"] for r in rows}
+        assert "aws-access-token" in rule_ids
+        assert "github-token" in rule_ids
+        assert "generic-api-key" in rule_ids
+
 
 # ---------------------------------------------------------------------------
 # Nmap
@@ -254,6 +292,42 @@ class TestNmapHandler:
         rows = handler.normalize(_make_result("nmap", self._PARSED_ONE_PORT), _PROFILE)
         text = handler.render(rows[0])
         assert "22" in text
+
+    def test_normalize_multiple_hosts_multiple_ports(self) -> None:
+        """Multiple hosts with varying open ports produce correct row count."""
+        parsed = {
+            "scan_info": {},
+            "hosts": [
+                {
+                    "ip_address": "10.0.0.1",
+                    "state": "up",
+                    "ports": [
+                        {"port": 22, "state": "open", "service": "ssh"},
+                        {"port": 80, "state": "open", "service": "http"},
+                    ],
+                },
+                {
+                    "ip_address": "10.0.0.2",
+                    "state": "up",
+                    "ports": [
+                        {"port": 443, "state": "open", "service": "https"},
+                    ],
+                },
+                {
+                    "ip_address": "10.0.0.3",
+                    "state": "up",
+                    "ports": [],
+                },
+            ],
+        }
+        handler = NmapHandler()
+        rows = handler.normalize(_make_result("nmap", parsed), _PROFILE)
+        # host1: 2 port rows, host2: 1 port row, host3: 1 host-only row
+        assert len(rows) == 4
+        ips = [r["ip_address"] for r in rows]
+        assert ips.count("10.0.0.1") == 2
+        assert ips.count("10.0.0.2") == 1
+        assert ips.count("10.0.0.3") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +570,44 @@ class TestScaHandlers:
         rows = handler.normalize(_make_result(tool_name, _SCA_PARSED), _PROFILE)
         assert rows[0]["type_dependency"] is True
         assert rows[0]["type_vulnerability"] is True
+
+    def test_normalize_multiple_vulns_returns_multiple_rows(
+        self, handler_cls: type, tool_name: str
+    ) -> None:
+        """Multiple vulnerabilities produce one row each with distinct IDs."""
+        parsed: dict = {
+            "vulnerabilities": [
+                {
+                    "package_name": "requests",
+                    "package_version": "2.25.0",
+                    "vulnerability_id": "CVE-2023-001",
+                    "severity": "high",
+                    "summary": "vuln 1",
+                    "affected_ecosystem": "PyPI",
+                },
+                {
+                    "package_name": "flask",
+                    "package_version": "1.0.0",
+                    "vulnerability_id": "CVE-2023-002",
+                    "severity": "medium",
+                    "summary": "vuln 2",
+                    "affected_ecosystem": "PyPI",
+                },
+                {
+                    "package_name": "django",
+                    "package_version": "2.2.0",
+                    "vulnerability_id": "CVE-2023-003",
+                    "severity": "critical",
+                    "summary": "vuln 3",
+                    "affected_ecosystem": "PyPI",
+                },
+            ]
+        }
+        handler = handler_cls()
+        rows = handler.normalize(_make_result(tool_name, parsed), _PROFILE)
+        assert len(rows) == 3
+        vuln_ids = {r["vulnerability_id"] for r in rows}
+        assert vuln_ids == {"CVE-2023-001", "CVE-2023-002", "CVE-2023-003"}
 
     def test_normalize_empty_vulnerabilities(
         self, handler_cls: type, tool_name: str

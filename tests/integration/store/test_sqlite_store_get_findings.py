@@ -156,6 +156,37 @@ class TestGetFindings:
         assert all(r["repo"] == "myrepo" for r in rows)
         assert len(rows) == 1
 
+    def test_get_findings_status_filter(self, tmp_path: Path) -> None:
+        """get_findings(status=...) returns only findings with that status."""
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.upsert_findings(
+            run_id,
+            [
+                {"tool": "semgrep", "severity": "high"},
+                {"tool": "gitleaks", "severity": "critical"},
+            ],
+        )
+        with store._connect() as conn:
+            conn.execute("UPDATE findings SET status='triaged' WHERE tool='semgrep'")
+        rows = store.get_findings(status="triaged", limit=100)
+        assert len(rows) >= 1
+        assert all(r["status"] == "triaged" for r in rows)
+        rows_active = store.get_findings(status="active", limit=100)
+        for r in rows_active:
+            assert r["status"] != "triaged"
+
+    def test_get_findings_domain_filter(self, tmp_path: Path) -> None:
+        """get_findings(domain=...) returns only findings with that domain."""
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        rows = store.get_findings(domain="sca", limit=100)
+        assert len(rows) >= 1
+        assert all(r["domain"] == "sca" for r in rows)
+        rows_code = store.get_findings(domain="code", limit=100)
+        assert len(rows_code) >= 1
+        assert all(r["domain"] == "code" for r in rows_code)
+
     def test_get_findings_combined_filters(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})

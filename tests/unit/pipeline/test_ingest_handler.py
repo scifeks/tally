@@ -127,3 +127,86 @@ class TestIngestHandler:
         assert len(received) == 1
         assert received[0].ids == [1, 2]
         assert received[0].failed_tools == []
+
+    def test_code_domain_tool_runs_filter_code_rows(self) -> None:
+        """filter_code_rows is called for code-domain tools (semgrep)."""
+        bus = EventBus()
+        received: list[IngestCompleted] = []
+        bus.subscribe(IngestCompleted, received.append)
+
+        mock_handler = MagicMock()
+        mock_handler.domain = "code"
+        mock_handler.normalize.return_value = [
+            {"tool": "semgrep", "rule_id": "r1", "file_path": "/src/app.py"}
+        ]
+
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_ids_by_fingerprints.return_value = [1]
+
+        filtered_rows = [
+            {"tool": "semgrep", "rule_id": "r1", "file_path": "/src/app.py"}
+        ]
+
+        handler = IngestHandler(bus)
+        with (
+            patch(
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_handler,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+            patch(
+                "application.pipeline.handlers.filter_code_rows",
+                return_value=filtered_rows,
+            ) as mock_filter,
+        ):
+            handler.handle(_tool_completed(result=_make_tool_result("semgrep")))
+
+        mock_filter.assert_called_once()
+        assert received[0].ids == [1]
+
+    def test_network_domain_tool_skips_filter_code_rows(self) -> None:
+        """filter_code_rows is NOT called for non-code-domain tools (nmap)."""
+        bus = EventBus()
+        received: list[IngestCompleted] = []
+        bus.subscribe(IngestCompleted, received.append)
+
+        mock_handler = MagicMock()
+        mock_handler.domain = "network"
+        mock_handler.normalize.return_value = [
+            {"tool": "nmap", "ip_address": "10.0.0.1", "port": 80}
+        ]
+
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_ids_by_fingerprints.return_value = [42]
+
+        handler = IngestHandler(bus)
+        with (
+            patch(
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_handler,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+            patch(
+                "application.pipeline.handlers.filter_code_rows",
+            ) as mock_filter,
+        ):
+            handler.handle(_tool_completed(result=_make_tool_result("nmap")))
+
+        mock_filter.assert_not_called()
+        assert received[0].ids == [42]

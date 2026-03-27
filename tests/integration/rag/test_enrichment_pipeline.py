@@ -6,16 +6,20 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.pipeline.handlers import ChromaDBHandler  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
+from application.rag.engine import RAGEngine  # noqa: E402
+from domain.pipeline.events import EnrichmentCompleted  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.store.repositories.findings_serial import (  # noqa: E402
     compute_fingerprint,
@@ -377,3 +381,137 @@ class TestEnrichmentPipeline:
         metadata = {"tool": "semgrep"}
         fields = pipeline._get_fields_to_enrich(metadata)
         assert "confidence" in fields
+
+    # ------------------------------------------------------------------
+    # INT-4: gitleaks (should_enrich=False) still written to ChromaDB
+    # ------------------------------------------------------------------
+
+    def test_enrichment_failure_still_writes_to_chroma(self, project_env: dict) -> None:
+        """Gitleaks rows skipped by enrichment are still written to ChromaDB.
+
+        should_enrich=False means the enrichment pipeline skips the row,
+        but EnrichmentCompleted still fires with the finding ID and
+        ChromaDBHandler must write it to ChromaDB regardless.
+        """
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        gl_ids = _seed(finding_repo, run_id, [_GL_ROW])
+        gl_id = gl_ids[0]
+
+        event = EnrichmentCompleted(
+            ids=[gl_id],
+            partial_success=False,
+            run_id=run_id,
+            project_name=project_env["project_name"],
+            base_path=str(project_env["base_path"]),
+        )
+        default_fn = ef.DefaultEmbeddingFunction()
+        handler = ChromaDBHandler()
+        with patch.object(
+            RAGEngine, "_build_embedding_function", return_value=default_fn
+        ):
+            handler.handle(event)
+            engine = RAGEngine(
+                project_name=project_env["project_name"],
+                base_path=str(project_env["base_path"]),
+            )
+
+        assert engine.count_documents() == 1
+        metadatas = engine.get_all_metadatas()
+        assert metadatas[0]["tool"] == "gitleaks"
+
+    # ------------------------------------------------------------------
+    # PIPE-3: single per-field failure leaves other fields intact
+    # ------------------------------------------------------------------
+
+    def test_single_field_failure_allows_other_fields_to_complete(
+        self, project_env: dict
+    ) -> None:
+        """A ValueError in one per-field call does not prevent other fields.
+
+        _call_per_field catches exceptions per spec and continues. The
+        successfully-enriched fields are written; the failed field is absent.
+        Because _call_per_field never propagates the exception to the outer
+        thread pool, had_errors stays False and enriched is set to 1.
+        """
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        semgrep_row = {
+            "tool": "semgrep",
+            "profile": "default",
+            "finding_type": json.dumps(["vulnerability"]),
+            "severity": "medium",
+            "description": "SQL injection",
+            "rule_id": "python.sqli",
+            "file_path": "src/db.py",
+        }
+        ids = _seed(finding_repo, run_id, [semgrep_row])
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo,
+            base_path=str(project_env["base_path"]),
+        )
+
+        def fake_generic(spec: object, source_values: dict) -> str | None:
+            field = getattr(spec, "field_name", "")
+            if field == "risk_type":
+                raise ValueError("boom")
+            if field == "remediation":
+                return "fix it"
+            return None
+
+        with patch.object(p, "_call_generic_field", side_effect=fake_generic):
+            p.enrich(ids)
+
+        row = finding_repo.get_finding(ids[0])
+        assert row is not None
+        meta = json.loads(row["meta"] or "{}")
+        assert meta.get("remediation") == "fix it"
+        assert meta.get("risk_type") is None
+        # Per-field exceptions are caught inside _call_per_field; the future
+        # resolves successfully so had_errors stays False and enriched=1.
+        assert row["enriched"] == 1
+        assert p.had_errors is False
+
+    # ------------------------------------------------------------------
+    # PIPE-4: non-JSON LLM response does not crash the pipeline
+    # ------------------------------------------------------------------
+
+    def test_generic_field_json_parse_failure_does_not_crash(
+        self, project_env: dict
+    ) -> None:
+        """Non-JSON LLM response is caught per-field; pipeline completes cleanly.
+
+        json.loads("oops") raises JSONDecodeError inside _call_generic_field.
+        _call_per_field catches it per spec and returns an empty merged dict.
+        The future resolves successfully: had_errors stays False and the row
+        is marked enriched=1 (update_enrichment_fields always sets it).
+        """
+        finding_repo = project_env["finding_repo"]
+        run_id = project_env["run_id"]
+        semgrep_row = {
+            "tool": "semgrep",
+            "profile": "default",
+            "finding_type": json.dumps(["vulnerability"]),
+            "severity": "medium",
+            "description": "SQL injection",
+            "rule_id": "python.sqli",
+            "file_path": "src/db.py",
+        }
+        ids = _seed(finding_repo, run_id, [semgrep_row])
+        p = EnrichmentPipeline(
+            finding_repo=finding_repo,
+            base_path=str(project_env["base_path"]),
+        )
+        mock_provider = MagicMock()
+        mock_provider.complete.return_value = "oops"
+        p._llm_provider = mock_provider
+
+        # Must not raise
+        p.enrich(ids)
+
+        # All per-field JSONDecodeErrors are caught; thread future resolves OK
+        assert p.had_errors is False
+        row = finding_repo.get_finding(ids[0])
+        assert row is not None
+        # update_enrichment_fields always writes enriched=1
+        assert row["enriched"] == 1

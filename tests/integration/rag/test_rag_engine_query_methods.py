@@ -125,3 +125,79 @@ class TestRagEngineQueryMethods:
         engine = _make_engine(project_env)
         engine._collection = None
         assert engine.get_all_metadatas() == []
+
+    # ------------------------------------------------------------------
+    # RAG-1: delete_findings(None, None) removes all documents
+    # ------------------------------------------------------------------
+
+    def test_delete_findings_both_none_deletes_all(self, project_env: dict) -> None:
+        """delete_findings(tool=None, profile=None) removes all documents."""
+        engine = _make_engine(project_env)
+        engine.add_documents(
+            texts=["nmap result", "semgrep result", "gitleaks result"],
+            metadatas=[
+                {"tool": "nmap", "profile": "default"},
+                {"tool": "semgrep", "profile": "default"},
+                {"tool": "gitleaks", "profile": "default"},
+            ],
+            ids=["del-001", "del-002", "del-003"],
+        )
+        assert engine.count_documents() == 3
+        engine.delete_findings(tool=None, profile=None)
+        assert engine.count_documents() == 0
+
+    # ------------------------------------------------------------------
+    # RAG-2: get_stats() returns correct structure and counts
+    # ------------------------------------------------------------------
+
+    def test_get_stats_reflects_tool_and_severity_counts(
+        self, project_env: dict
+    ) -> None:
+        """get_stats() reports total_documents, by_tool, and by_severity."""
+        engine = _make_engine(project_env)
+        engine.add_documents(
+            texts=["nmap high", "nmap low", "semgrep critical"],
+            metadatas=[
+                {"tool": "nmap", "severity": "high"},
+                {"tool": "nmap", "severity": "low"},
+                {"tool": "semgrep", "severity": "critical"},
+            ],
+            ids=["gs-001", "gs-002", "gs-003"],
+        )
+        stats = engine.get_stats()
+        assert stats["total_documents"] == 3
+        assert stats["by_tool"].get("nmap") == 2
+        assert stats["by_tool"].get("semgrep") == 1
+        assert stats["by_severity"].get("high") == 1
+        assert stats["by_severity"].get("low") == 1
+        assert stats["by_severity"].get("critical") == 1
+
+    # ------------------------------------------------------------------
+    # RAG-3: close() is idempotent — calling twice does not raise
+    # ------------------------------------------------------------------
+
+    def test_close_twice_does_not_raise(self, project_env: dict) -> None:
+        """Calling close() twice does not raise an exception."""
+        engine = _make_engine(project_env)
+        engine.close()
+        engine.close()  # Should not raise
+
+    # ------------------------------------------------------------------
+    # RAG-4: query_collection with n_results > collection size
+    # ------------------------------------------------------------------
+
+    def test_search_n_results_larger_than_collection(self, project_env: dict) -> None:
+        """query_collection with n_results > doc count returns all docs."""
+        engine = _make_engine(project_env)
+        engine.add_documents(
+            texts=["doc one", "doc two", "doc three"],
+            metadatas=[
+                {"tool": "nmap"},
+                {"tool": "nmap"},
+                {"tool": "nmap"},
+            ],
+            ids=["nr-001", "nr-002", "nr-003"],
+        )
+        result = engine.query_collection(query_texts=["test"], n_results=1000)
+        docs = result.get("documents", [[]])[0]
+        assert len(docs) == 3

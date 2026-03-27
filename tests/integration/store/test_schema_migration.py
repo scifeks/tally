@@ -68,3 +68,29 @@ class TestSchemaNewColumns:
         factory.init_schema()
         defaults = _insert_and_read(factory)
         assert defaults["tal_id"] is None
+
+
+class TestForeignKeyEnforcement:
+    def test_foreign_key_enforcement_is_on(self, tmp_path: Path) -> None:
+        """PRAGMA foreign_keys is ON after connect()."""
+        factory = ConnectionFactory(tmp_path / "findings.db")
+        factory.init_schema()
+        with factory.connect() as conn:
+            result = conn.execute("PRAGMA foreign_keys").fetchone()
+        assert result[0] == 1
+
+    def test_foreign_key_violation_raises(self, tmp_path: Path) -> None:
+        """A declared FK constraint is enforced when foreign_keys=ON."""
+        import sqlite3
+
+        factory = ConnectionFactory(tmp_path / "test_fk.db")
+        with factory.connect() as conn:
+            conn.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
+            conn.execute(
+                "CREATE TABLE child "
+                "(id INTEGER PRIMARY KEY, "
+                "parent_id INTEGER REFERENCES parent(id))"
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            with factory.connect() as conn:
+                conn.execute("INSERT INTO child (parent_id) VALUES (99999)")
