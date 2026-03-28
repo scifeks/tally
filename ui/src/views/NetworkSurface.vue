@@ -95,10 +95,7 @@ function buildColumnDefs(fields: Record<string, FieldSpec>): ColDef<Finding>[] {
   ]
 }
 
-let _reverting = false
-
 async function onCellValueChanged(event: CellValueChangedEvent<Finding>) {
-  if (_reverting) return
   const id = event.data.id
   const colId = event.colDef.colId ?? event.colDef.field ?? ''
   const patch: FindingPatch = {}
@@ -112,13 +109,11 @@ async function onCellValueChanged(event: CellValueChangedEvent<Finding>) {
     Object.assign(event.data, updated)
     event.api.refreshCells({ rowNodes: [event.node!], force: true })
   } catch {
-    _reverting = true
-    try {
-      const key = event.colDef.colId ?? event.colDef.field
-      if (key) event.node?.setDataValue(key, event.oldValue)
-    } finally {
-      _reverting = false
-    }
+    // Revert in-memory data directly — setDataValue would re-fire cellValueChanged
+    // and bypass any guard because onCellValueChanged is async.
+    const field = event.colDef.field
+    if (field) (event.data as unknown as Record<string, unknown>)[field] = event.oldValue
+    event.api.refreshCells({ rowNodes: [event.node!], force: true })
   }
 }
 
