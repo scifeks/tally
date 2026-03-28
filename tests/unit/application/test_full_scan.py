@@ -98,7 +98,7 @@ class TestFullScan:
             patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
-                "application.tools.scan_types.full._tools_for_segment",
+                "application.tools.scan_types.full.tools_for_segment",
                 return_value=[],
             ),
         ):
@@ -142,7 +142,7 @@ class TestFullScan:
             patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
-                "application.tools.scan_types.full._tools_for_segment",
+                "application.tools.scan_types.full.tools_for_segment",
                 return_value=["semgrep"],
             ),
         ):
@@ -174,7 +174,7 @@ class TestFullScan:
             patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
-                "application.tools.scan_types.full._tools_for_segment",
+                "application.tools.scan_types.full.tools_for_segment",
                 return_value=[],
             ),
         ):

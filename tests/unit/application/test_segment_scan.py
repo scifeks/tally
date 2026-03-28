@@ -132,7 +132,7 @@ class TestSegmentScan:
         with (
             patch("application.tools.scan_types.segment.RepoSegmentScan") as mock_repo,
             patch(
-                "application.tools.scan_types.segment._tools_for_segment",
+                "application.tools.scan_types.segment.tools_for_segment",
                 return_value=["semgrep"],
             ),
         ):

@@ -9,10 +9,10 @@ from typing import Any, cast
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
-from application.tools.scan_types._helpers import (
-    _dispatch_and_count_ingested,
-    _execute_tool_passes,
-    _make_context,
+from application.tools.scan_types.execution import (
+    dispatch_and_count_ingested,
+    execute_tool_passes,
+    make_context,
 )
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
@@ -107,7 +107,7 @@ class NetworkSegmentScan(ScanType):
             )
 
         resources.display.print_running("nmap")
-        context = _make_context(
+        context = make_context(
             config.config_manager,
             config.project_name,
             config.base_path,
@@ -115,7 +115,7 @@ class NetworkSegmentScan(ScanType):
             None,
             tool_config,
         )
-        result = _execute_tool_passes(
+        result = execute_tool_passes(
             tool,
             context,
             config,
@@ -139,7 +139,7 @@ class NetworkSegmentScan(ScanType):
                         "nmap", True, False, findings, result.duration_seconds
                     )
                 )
-                total_ingested += _dispatch_and_count_ingested(
+                total_ingested += dispatch_and_count_ingested(
                     resources.event_bus,
                     ToolCompleted(
                         result,

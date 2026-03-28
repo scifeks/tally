@@ -1,8 +1,8 @@
-"""Unit tests for _dispatch_and_count_ingested."""
+"""Unit tests for dispatch_and_count_ingested."""
 
 from __future__ import annotations
 
-from application.tools.scan_types._helpers import _dispatch_and_count_ingested
+from application.tools.scan_types.execution import dispatch_and_count_ingested
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 
@@ -54,7 +54,7 @@ def _ingest_completed(
 
 
 class TestDispatchAndCountIngested:
-    """_dispatch_and_count_ingested returns the total ids emitted via
+    """dispatch_and_count_ingested returns the total ids emitted via
     IngestCompleted and cleans up its internal counter handler afterward."""
 
     def _make_ingest_subscriber(self, bus: EventBus, ids: list[int]) -> None:
@@ -76,14 +76,14 @@ class TestDispatchAndCountIngested:
     def test_returns_zero_when_no_ingest_completed_emitted(self) -> None:
         bus = EventBus()
         # No subscriber emits IngestCompleted, so count must be 0.
-        count = _dispatch_and_count_ingested(bus, _tool_completed())
+        count = dispatch_and_count_ingested(bus, _tool_completed())
         assert count == 0
 
     def test_returns_id_count_on_successful_ingest(self) -> None:
         bus = EventBus()
         self._make_ingest_subscriber(bus, [1, 2, 3])
 
-        count = _dispatch_and_count_ingested(bus, _tool_completed())
+        count = dispatch_and_count_ingested(bus, _tool_completed())
 
         assert count == 3
 
@@ -92,8 +92,8 @@ class TestDispatchAndCountIngested:
         bus = EventBus()
         self._make_ingest_subscriber(bus, [1, 2])
 
-        first = _dispatch_and_count_ingested(bus, _tool_completed())
-        second = _dispatch_and_count_ingested(bus, _tool_completed())
+        first = dispatch_and_count_ingested(bus, _tool_completed())
+        second = dispatch_and_count_ingested(bus, _tool_completed())
 
         assert first == 2
         assert second == 2  # not 4
@@ -102,6 +102,6 @@ class TestDispatchAndCountIngested:
         bus = EventBus()
         self._make_ingest_subscriber(bus, [])
 
-        count = _dispatch_and_count_ingested(bus, _tool_completed())
+        count = dispatch_and_count_ingested(bus, _tool_completed())
 
         assert count == 0

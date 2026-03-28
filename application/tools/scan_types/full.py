@@ -6,7 +6,7 @@ from time import perf_counter
 from typing import cast
 
 from application.tools.registry import ToolRegistry
-from application.tools.scan_types._helpers import _tools_for_segment
+from application.tools.scan_types.execution import tools_for_segment
 from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.tools.base import ToolResult
@@ -49,7 +49,7 @@ class FullScan(ScanType):
                 seg_summary = NetworkSegmentScan().execute(config, resources)
             else:
                 seg_summary = RepoSegmentScan(
-                    _tools_for_segment(segment, cast(ToolRegistry, resources.registry))
+                    tools_for_segment(segment, cast(ToolRegistry, resources.registry))
                 ).execute(config, resources)
 
             all_results.extend(seg_summary.results)

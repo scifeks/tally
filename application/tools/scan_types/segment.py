@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from application.tools.registry import ToolRegistry
-from application.tools.scan_types._helpers import _tools_for_segment
+from application.tools.scan_types.execution import tools_for_segment
 from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.tools.exceptions import InvalidSegmentError
@@ -30,6 +30,6 @@ class SegmentScan(ScanType):
             raise InvalidSegmentError(self.segment_name, sorted(valid_segments))
         if self.segment_name == "network":
             return NetworkSegmentScan().execute(config, resources)
-        return RepoSegmentScan(_tools_for_segment(self.segment_name, registry)).execute(
+        return RepoSegmentScan(tools_for_segment(self.segment_name, registry)).execute(
             config, resources
         )

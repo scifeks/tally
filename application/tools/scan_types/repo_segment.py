@@ -9,11 +9,11 @@ from typing import Any, cast
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
-from application.tools.scan_types._helpers import (
-    _dispatch_and_count_ingested,
-    _execute_tool_passes,
-    _make_context,
-    _normalize_success,
+from application.tools.scan_types.execution import (
+    dispatch_and_count_ingested,
+    execute_tool_passes,
+    make_context,
+    normalize_success,
 )
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
@@ -127,7 +127,7 @@ class RepoSegmentScan(ScanType):
                     continue
 
                 resources.display.print_running(tool_name, repo.name)
-                context = _make_context(
+                context = make_context(
                     config.config_manager,
                     config.project_name,
                     config.base_path,
@@ -136,7 +136,7 @@ class RepoSegmentScan(ScanType):
                     tool_config,
                 )
                 _remaining = (_total_invocations - _invocation) + config.remaining_peers
-                result = _execute_tool_passes(
+                result = execute_tool_passes(
                     tool,
                     context,
                     config,
@@ -150,7 +150,7 @@ class RepoSegmentScan(ScanType):
                     )
                     total_skipped += 1
                 else:
-                    result = _normalize_success(result, tool)
+                    result = normalize_success(result, tool)
                     repo_results.append(result)
                     findings = tool.count_findings(result.parsed_data or {})
                     findings_by_tool[result.tool_name] = (
@@ -181,7 +181,7 @@ class RepoSegmentScan(ScanType):
 
             all_results.extend(repo_results)
             for r in repo_results:
-                total_ingested += _dispatch_and_count_ingested(
+                total_ingested += dispatch_and_count_ingested(
                     resources.event_bus,
                     ToolCompleted(
                         r,
