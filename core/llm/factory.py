@@ -36,6 +36,7 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
             base_url=config.ollama_report.base_url,
             model=config.ollama_report.model,
             timeout_seconds=config.ollama_report.timeout_seconds,
+            num_ctx=config.ollama_report.num_ctx,
         )
     if provider_name == "ollama":
         assert config.ollama is not None
@@ -43,6 +44,7 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
             base_url=config.ollama.base_url,
             model=config.ollama.model,
             timeout_seconds=config.ollama.timeout_seconds,
+            num_ctx=config.ollama.num_ctx,
         )
     if provider_name == "claude":
         assert config.claude is not None

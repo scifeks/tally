@@ -23,10 +23,12 @@ class OllamaAdapter(LLMProvider):
         base_url: str,
         model: str,
         timeout_seconds: int = 60,
+        num_ctx: int | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout_seconds
+        self._num_ctx = num_ctx
 
     # ------------------------------------------------------------------
     # LLMProvider interface
@@ -45,10 +47,13 @@ class OllamaAdapter(LLMProvider):
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         """Call ollama.Client.chat and return the response content string."""
         client = ollama.Client(host=self._base_url)
+        options: dict[str, Any] = {**kwargs}
+        if self._num_ctx is not None:
+            options["num_ctx"] = self._num_ctx
         response = client.chat(
             model=self._model,
             messages=messages,
-            options={**kwargs},
+            options=options,
         )
         msg = response.message if hasattr(response, "message") else response["message"]
         content = msg.content if hasattr(msg, "content") else msg["content"]
