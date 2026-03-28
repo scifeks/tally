@@ -1,3 +1,4 @@
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -45,7 +46,8 @@ class GitleaksLocalTool(BaseGitleaksTool):
         if scan_type not in ("dir", "git"):
             raise ValueError(f"scan_type must be 'dir' or 'git', got {scan_type!r}")
 
-        tmp = tempfile.mktemp(suffix=".json", prefix=f"gitleaks_{scan_type}_")
+        fd, tmp = tempfile.mkstemp(suffix=".json", prefix=f"gitleaks_{scan_type}_")
+        os.close(fd)
         self._last_report_path = Path(tmp)
 
         gitleaks_ignore_path: str | None = kwargs.get("gitleaks_ignore_path")
@@ -71,9 +73,14 @@ class GitleaksLocalTool(BaseGitleaksTool):
         Prefers the report file written via --report-path; falls back to the
         saved stdout file, then parses the raw output string.
         """
-        if self._last_report_path is not None and self._last_report_path.exists():
-            return parse_gitleaks_json(self._last_report_path)
-        json_path = files.get("stdout")
-        if json_path is not None and json_path.exists():
-            return parse_gitleaks_json(json_path)
-        return parse_gitleaks_json_string(output)
+        try:
+            if self._last_report_path is not None and self._last_report_path.exists():
+                return parse_gitleaks_json(self._last_report_path)
+            json_path = files.get("stdout")
+            if json_path is not None and json_path.exists():
+                return parse_gitleaks_json(json_path)
+            return parse_gitleaks_json_string(output)
+        finally:
+            if self._last_report_path is not None:
+                self._last_report_path.unlink(missing_ok=True)
+                self._last_report_path = None
