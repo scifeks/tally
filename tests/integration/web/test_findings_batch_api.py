@@ -13,7 +13,7 @@ import pytest_asyncio
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
-from tests.unit.web.conftest import AUTH, TOKEN
+from tests.integration.web.conftest import AUTH, TOKEN
 from web.server import create_app
 
 pytestmark = pytest.mark.integration
