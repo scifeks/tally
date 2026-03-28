@@ -5,5 +5,13 @@ from domain.tools.scan_types.models import (
     ScanTypeConfig,
     ToolRun,
 )
+from domain.tools.scan_types.resources import IExecutionResources
 
-__all__ = ["ScanType", "SEGMENT_ORDER", "ScanSummary", "ScanTypeConfig", "ToolRun"]
+__all__ = [
+    "IExecutionResources",
+    "ScanType",
+    "SEGMENT_ORDER",
+    "ScanSummary",
+    "ScanTypeConfig",
+    "ToolRun",
+]

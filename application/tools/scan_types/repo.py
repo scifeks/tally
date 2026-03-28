@@ -6,6 +6,9 @@ import logging
 from time import perf_counter
 from typing import Any, cast
 
+from application.tools.executor import ToolExecutor
+from application.tools.factory import ToolWrapperFactory
+from application.tools.registry import ToolRegistry
 from application.tools.scan_types._helpers import (
     _dispatch_and_count_ingested,
     _execute_tool_passes,
@@ -13,12 +16,12 @@ from application.tools.scan_types._helpers import (
     _normalize_success,
     _ordered_repo_tools,
 )
-from application.tools.scan_types.resources import ExecutionResources
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +33,12 @@ class RepoScan(ScanType):
         self.repo_name = repo_name
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
+        registry = cast(ToolRegistry, resources.registry)
+        factory = cast(ToolWrapperFactory, resources.factory)
+        executor = cast(ToolExecutor, resources.executor)
+
         repos = config.config_manager.load_repositories(config.project_name)
         repo = next((r for r in repos if r.name == self.repo_name), None)
         if repo is None:
@@ -41,7 +48,7 @@ class RepoScan(ScanType):
             )
 
         tool_set: set[str] = set()
-        for registered_tool in cast(list[Any], resources.registry.get_all_tools()):
+        for registered_tool in cast(list[Any], registry.get_all_tools()):
             if registered_tool.always_run:
                 tool_set.add(registered_tool.name)
             elif registered_tool.language_gates:
@@ -51,7 +58,7 @@ class RepoScan(ScanType):
                         tool_set.add(registered_tool.name)
                         break
 
-        ordered_tools = _ordered_repo_tools(tool_set, resources.registry)
+        ordered_tools = _ordered_repo_tools(tool_set, registry)
 
         lang_str = ", ".join(repo.languages) if repo.languages else "unknown"
         config.display.print_repo_scan_header(repo.name, lang_str, ordered_tools)
@@ -62,7 +69,7 @@ class RepoScan(ScanType):
         findings_by_tool: dict[str, int] = {}
 
         for _tool_idx, tool_name in enumerate(ordered_tools):
-            tool_config = resources.registry.get_tool_config(tool_name)
+            tool_config = registry.get_tool_config(tool_name)
             if tool_config is None:
                 config.display.print_tool_line(
                     ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
@@ -71,7 +78,7 @@ class RepoScan(ScanType):
                 continue
 
             try:
-                tool: Any = resources.factory.create(tool_name, tool_config)
+                tool: Any = factory.create(tool_name, tool_config)
             except Exception as exc:
                 logger.warning("Factory failed for %r: %s", tool_name, exc)
                 config.display.print_tool_line(
@@ -101,7 +108,7 @@ class RepoScan(ScanType):
                 config.config_manager,
                 config.project_name,
                 config.base_path,
-                resources.registry,
+                registry,
                 repo,
                 tool_config,
             )
@@ -110,7 +117,7 @@ class RepoScan(ScanType):
                 tool,
                 context,
                 config,
-                resources.executor,
+                executor,
                 remaining_tools=_remaining,
             )
 

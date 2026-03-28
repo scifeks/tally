@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from time import perf_counter
+from typing import cast
 
+from application.tools.registry import ToolRegistry
 from application.tools.scan_types._helpers import _tools_for_segment
 from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
-from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 
 class FullScan(ScanType):
@@ -21,7 +23,7 @@ class FullScan(ScanType):
         self.exclude_segments = exclude_segments or []
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
         start = perf_counter()
 
@@ -45,7 +47,7 @@ class FullScan(ScanType):
                 seg_summary = NetworkSegmentScan().execute(config, resources)
             else:
                 seg_summary = RepoSegmentScan(
-                    _tools_for_segment(segment, resources.registry)
+                    _tools_for_segment(segment, cast(ToolRegistry, resources.registry))
                 ).execute(config, resources)
 
             all_results.extend(seg_summary.results)

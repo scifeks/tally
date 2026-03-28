@@ -4,20 +4,23 @@ from __future__ import annotations
 
 import logging
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
+from application.tools.executor import ToolExecutor
+from application.tools.factory import ToolWrapperFactory
+from application.tools.registry import ToolRegistry
 from application.tools.scan_types._helpers import (
     _dispatch_and_count_ingested,
     _execute_tool_passes,
     _make_context,
     _normalize_success,
 )
-from application.tools.scan_types.resources import ExecutionResources
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +32,12 @@ class RepoSegmentScan(ScanType):
         self.tool_names = tool_names
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
+        registry = cast(ToolRegistry, resources.registry)
+        factory = cast(ToolWrapperFactory, resources.factory)
+        executor = cast(ToolExecutor, resources.executor)
+
         start = perf_counter()
         repos = config.config_manager.load_repositories(config.project_name)
         if not repos:
@@ -51,7 +58,7 @@ class RepoSegmentScan(ScanType):
         total_run = total_skipped = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
-        _reg_tools: list[Any] = resources.registry.get_all_tools()
+        _reg_tools: list[Any] = registry.get_all_tools()
         _lang_specific: set[str] = {
             t.name for t in _reg_tools if t.name in self.tool_names and t.language_gates
         }
@@ -67,7 +74,7 @@ class RepoSegmentScan(ScanType):
                 _invocation += 1
                 if tool_name in _lang_specific:
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}
-                    tool_inst: Any = resources.registry.get_tool(tool_name)
+                    tool_inst: Any = registry.get_tool(tool_name)
                     gates = (
                         [g.lower() for g in tool_inst.language_gates]
                         if tool_inst is not None
@@ -87,7 +94,7 @@ class RepoSegmentScan(ScanType):
                         total_skipped += 1
                         continue
 
-                tool_config = resources.registry.get_tool_config(tool_name)
+                tool_config = registry.get_tool_config(tool_name)
                 if tool_config is None:
                     config.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
@@ -96,7 +103,7 @@ class RepoSegmentScan(ScanType):
                     continue
 
                 try:
-                    tool: Any = resources.factory.create(tool_name, tool_config)
+                    tool: Any = factory.create(tool_name, tool_config)
                 except Exception as exc:
                     logger.warning("Factory failed for %r: %s", tool_name, exc)
                     config.display.print_tool_line(
@@ -124,7 +131,7 @@ class RepoSegmentScan(ScanType):
                     config.config_manager,
                     config.project_name,
                     config.base_path,
-                    resources.registry,
+                    registry,
                     repo,
                     tool_config,
                 )
@@ -133,7 +140,7 @@ class RepoSegmentScan(ScanType):
                     tool,
                     context,
                     config,
-                    resources.executor,
+                    executor,
                     remaining_tools=_remaining,
                 )
 

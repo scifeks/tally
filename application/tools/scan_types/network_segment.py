@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import logging
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
+from application.tools.executor import ToolExecutor
+from application.tools.factory import ToolWrapperFactory
+from application.tools.registry import ToolRegistry
 from application.tools.scan_types._helpers import (
     _dispatch_and_count_ingested,
     _execute_tool_passes,
     _make_context,
 )
-from application.tools.scan_types.resources import ExecutionResources
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +28,12 @@ class NetworkSegmentScan(ScanType):
     """Run nmap for all configured profiles as a single merged result."""
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
+        registry = cast(ToolRegistry, resources.registry)
+        factory = cast(ToolWrapperFactory, resources.factory)
+        executor = cast(ToolExecutor, resources.executor)
+
         start = perf_counter()
         results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
@@ -50,7 +57,7 @@ class NetworkSegmentScan(ScanType):
                 findings_by_tool=findings_by_tool,
             )
 
-        tool_config = resources.registry.get_tool_config("nmap")
+        tool_config = registry.get_tool_config("nmap")
         if tool_config is None:
             config.display.print_tool_line(
                 ToolDisplayRow("nmap", False, True, 0, 0.0, "not registered")
@@ -67,7 +74,7 @@ class NetworkSegmentScan(ScanType):
             )
 
         try:
-            tool: Any = resources.factory.create("nmap", tool_config)
+            tool: Any = factory.create("nmap", tool_config)
         except Exception as exc:
             logger.warning("Factory failed for 'nmap': %s", exc)
             config.display.print_tool_line(
@@ -104,7 +111,7 @@ class NetworkSegmentScan(ScanType):
             config.config_manager,
             config.project_name,
             config.base_path,
-            resources.registry,
+            registry,
             None,
             tool_config,
         )
@@ -112,7 +119,7 @@ class NetworkSegmentScan(ScanType):
             tool,
             context,
             config,
-            resources.executor,
+            executor,
             remaining_tools=config.remaining_peers,
         )
 

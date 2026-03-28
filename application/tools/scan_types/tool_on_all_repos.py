@@ -5,10 +5,10 @@ from __future__ import annotations
 from time import perf_counter
 
 from application.tools.scan_types.repo_segment import RepoSegmentScan
-from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 
 class ToolOnAllReposScan(ScanType):
@@ -18,7 +18,7 @@ class ToolOnAllReposScan(ScanType):
         self.tool_name = tool_name
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
         start = perf_counter()
 
