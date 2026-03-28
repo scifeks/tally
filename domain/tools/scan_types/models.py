@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from domain.pipeline.events import EventBus
 from domain.tools.base import ToolResult
-from domain.tools.display import OrchestratorDisplay
+from domain.tools.display import DisplayProtocol
 
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
@@ -33,7 +33,7 @@ class ScanTypeConfig:
     base_path: str
     config_manager: ConfigManager
     event_bus: EventBus
-    display: OrchestratorDisplay
+    display: DisplayProtocol
     run_id: int | None
     auto_approve: bool = False
     on_auto_approve: Callable[[], None] | None = field(default=None, repr=False)

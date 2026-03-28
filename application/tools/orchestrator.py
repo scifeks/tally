@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from application.tools.display import OrchestratorDisplay
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
@@ -17,7 +18,6 @@ from application.tools.scan_types import (
     ToolOnRepoScan,
 )
 from domain.pipeline.events import EventBus
-from domain.tools.display import OrchestratorDisplay
 from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
 
 if TYPE_CHECKING:

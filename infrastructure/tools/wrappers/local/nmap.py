@@ -1,6 +1,6 @@
 import shutil
 
-from domain.tools.base import get_tool_version
+from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.nmap import BaseNmapTool
 
 
