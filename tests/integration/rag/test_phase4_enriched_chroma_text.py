@@ -17,8 +17,8 @@ import pytest
 from application.pipeline.handlers import ChromaDBHandler
 from application.rag.engine import RAGEngine
 from domain.pipeline.events import EnrichmentCompleted
+from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
-from infrastructure.store.repositories.findings_serial import compute_fingerprint
 
 pytestmark = pytest.mark.integration
 

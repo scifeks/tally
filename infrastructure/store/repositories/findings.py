@@ -6,11 +6,11 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
     _COMMA_LIST_FIELDS,
     _DIRECT_COLUMNS,
-    compute_fingerprint,
     deserialise_row,
     normalise_cwe,
     normalise_finding_type,

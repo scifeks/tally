@@ -32,7 +32,7 @@ def _seed_finding(
     if extra:
         row.update(extra)
     finding_repo.upsert_findings(run_id, [row])  # type: ignore[union-attr]
-    from infrastructure.store.repositories.findings_serial import compute_fingerprint
+    from domain.pipeline.fingerprint import compute_fingerprint
 
     fps = [compute_fingerprint(row)]
     ids = finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]

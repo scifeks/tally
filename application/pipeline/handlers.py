@@ -18,8 +18,8 @@ from domain.pipeline.events import (
     IngestCompleted,
     ToolCompleted,
 )
+from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
-from infrastructure.store.repositories.findings_serial import compute_fingerprint
 
 if TYPE_CHECKING:
     from rich.console import Console
