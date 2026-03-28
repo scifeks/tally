@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Literal
 
 from application.findings.updater import (
     FindingUpdateService,
@@ -74,14 +73,6 @@ async def get_findings_batch(finding_ids: list[int]) -> list[dict]:
         for fid in finding_ids
         if (finding := await get_finding(fid)) is not None
     ]
-
-
-async def complete_triage_batch(
-    batch_id: int, status: Literal["success", "failed"]
-) -> None:
-    """Sets status and completed_at on the given batch."""
-    assert _ctx is not None
-    await asyncio.to_thread(_ctx.triage_repo.complete_batch, batch_id, status)
 
 
 async def update_finding(
