@@ -14,8 +14,10 @@ from chromadb.api.types import Documents, Embeddable, EmbeddingFunction, Embeddi
 from core.config.manager import ConfigManager
 from core.embedding import EmbeddingProvider, get_embedding_provider
 from core.llm import LLMProvider, get_llm_provider
-from core.llm.ollama_adapter import get_ollama_models as get_ollama_models  # re-export
-from core.llm.ollama_adapter import (  # re-export
+from infrastructure.llm.ollama_utils import (
+    get_ollama_models as get_ollama_models,
+)  # re-export
+from infrastructure.llm.ollama_utils import (  # re-export
     verify_ollama_available as verify_ollama_available,
 )
 

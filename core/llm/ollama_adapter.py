@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import urllib.error
 import urllib.request
 from typing import Any
 
 import ollama
+
+# Moved to infrastructure layer; re-exported for backward compatibility.
+from infrastructure.llm.ollama_utils import (
+    get_ollama_models as get_ollama_models,
+)
+from infrastructure.llm.ollama_utils import (
+    verify_ollama_available as verify_ollama_available,
+)
 
 from .base import LLMProvider
 
@@ -62,28 +69,3 @@ class OllamaAdapter(LLMProvider):
     def complete(self, prompt: str, **kwargs: Any) -> str:
         """Delegate to chat() with a single user message."""
         return self.chat([{"role": "user", "content": prompt}], **kwargs)
-
-
-# ---------------------------------------------------------------------------
-# Module-level shims — preserve existing import paths in callers that
-# previously imported these helpers directly from core.rag.engine.
-# ---------------------------------------------------------------------------
-
-
-def verify_ollama_available(base_url: str) -> bool:
-    """Return True if Ollama is reachable at base_url."""
-    try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=5) as resp:
-            return resp.status == 200
-    except (urllib.error.URLError, OSError):
-        return False
-
-
-def get_ollama_models(base_url: str) -> list[str]:
-    """Return a list of model names available in Ollama."""
-    try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-            return [m["name"] for m in data.get("models", [])]
-    except (urllib.error.URLError, OSError, KeyError, ValueError):
-        return []
