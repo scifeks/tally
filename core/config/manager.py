@@ -28,9 +28,9 @@ class ConfigManager:
         self.projects_dir = self.base_path / "projects"
 
         self.global_config_path.parent.mkdir(parents=True, exist_ok=True)
-        self.global_config = self._load_global_config()
+        self.global_config = self.load_global_config()
 
-    def _load_global_config(self) -> GlobalConfig:
+    def load_global_config(self) -> GlobalConfig:
         """Load global configuration from disk.
 
         Raises:

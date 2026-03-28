@@ -28,7 +28,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def _ollama_url() -> str | None:
     try:
-        cfg = ConfigManager()._load_global_config()
+        cfg = ConfigManager().load_global_config()
         return cfg.ollama.base_url if cfg.ollama else None
     except Exception:
         return None
@@ -56,12 +56,8 @@ def _restore_tool_registry():
     try:
         from application.tools.registry import tool_registry
 
-        saved_tools = dict(tool_registry._tools)
-        saved_configs = dict(tool_registry._configs)
+        saved = tool_registry.snapshot()
         yield
-        tool_registry._tools.clear()
-        tool_registry._tools.update(saved_tools)
-        tool_registry._configs.clear()
-        tool_registry._configs.update(saved_configs)
+        tool_registry.restore(saved)
     except ImportError:
         yield
