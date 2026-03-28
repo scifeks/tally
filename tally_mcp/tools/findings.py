@@ -5,11 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from application.findings.updater import (
-    FindingUpdateService,
-    reconstruct_abs_path,
-    resolve_repo_path,
-)
+from application.findings.updater import FindingUpdateService
+from core.config.manager import ConfigManager
 from tally_mcp.context import FindingsContext
 
 # Injected at startup by server.py
@@ -21,7 +18,9 @@ def init(ctx: FindingsContext) -> None:
     """Inject repository dependencies. Called once at server startup."""
     global _ctx, _service
     _ctx = ctx
-    _service = FindingUpdateService(ctx.finding_repo, ctx.audit_repo)
+    _service = FindingUpdateService(
+        ctx.finding_repo, ctx.audit_repo, config_manager=ConfigManager()
+    )
 
 
 def _parse_row(row: dict) -> dict:
@@ -52,17 +51,12 @@ async def get_finding(finding_id: int) -> dict:
     if row is None:
         raise ValueError(f"Finding {finding_id} not found")
     row = _parse_row(row)
-    repos: list[dict] = []
-    if _ctx.project_name:
-        try:
-            from tally_mcp.tools.project import get_project_config
-
-            cfg = await get_project_config(_ctx.project_name)
-            repos = cfg.get("repositories", [])
-        except FileNotFoundError:
-            pass
-    row["abs_path"] = reconstruct_abs_path(row.get("file"), row.get("repo"), repos)
-    row["repo_path"] = resolve_repo_path(row.get("repo"), repos)
+    assert _service is not None
+    abs_path, repo_path = _service.resolve_finding_paths(
+        row.get("file"), row.get("repo"), _ctx.project_name
+    )
+    row["abs_path"] = abs_path
+    row["repo_path"] = repo_path
     return row
 
 
