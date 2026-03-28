@@ -19,6 +19,7 @@ class GlobalConfig(BaseModel):
     report_llm_provider: str = "ollama"
     embedding_provider: str = "ollama_embedding"
     ollama: OllamaConfig | None = None
+    ollama_report: OllamaConfig | None = None
     claude: ClaudeConfig | None = None
     ollama_embedding: OllamaEmbeddingConfig | None = None
     projects_dir: str = Field(default="./projects")

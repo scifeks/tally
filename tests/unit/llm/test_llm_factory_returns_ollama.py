@@ -45,3 +45,60 @@ class TestGetLlmProviderReturnsOllama:
         _write_global_config(tmp_path)
         provider = get_llm_provider("report", tmp_path)
         assert isinstance(provider, OllamaAdapter)
+
+
+class TestOllamaReportOverride:
+    """ollama_report is a first-class provider name for the report role."""
+
+    def test_report_uses_ollama_report_config(self, tmp_path: Path) -> None:
+        _write_global_config(
+            tmp_path,
+            {
+                "report_llm_provider": "ollama_report",
+                "ollama_report": {
+                    "base_url": _OLLAMA_URL,
+                    "model": "qwen2.5:14b",
+                },
+            },
+        )
+        provider = get_llm_provider("report", tmp_path)
+        assert isinstance(provider, OllamaAdapter)
+        assert provider._model == "qwen2.5:14b"
+
+    def test_report_uses_ollama_when_provider_is_ollama(self, tmp_path: Path) -> None:
+        _write_global_config(tmp_path)
+        provider = get_llm_provider("report", tmp_path)
+        assert isinstance(provider, OllamaAdapter)
+        assert provider._model == "qwen3:14b"
+
+    def test_enrichment_unaffected_by_ollama_report_provider(
+        self, tmp_path: Path
+    ) -> None:
+        _write_global_config(
+            tmp_path,
+            {
+                "report_llm_provider": "ollama_report",
+                "ollama_report": {
+                    "base_url": _OLLAMA_URL,
+                    "model": "qwen2.5:14b",
+                },
+            },
+        )
+        provider = get_llm_provider("enrichment", tmp_path)
+        assert isinstance(provider, OllamaAdapter)
+        assert provider._model == "qwen3:14b"
+
+    def test_chat_unaffected_by_ollama_report_provider(self, tmp_path: Path) -> None:
+        _write_global_config(
+            tmp_path,
+            {
+                "report_llm_provider": "ollama_report",
+                "ollama_report": {
+                    "base_url": _OLLAMA_URL,
+                    "model": "qwen2.5:14b",
+                },
+            },
+        )
+        provider = get_llm_provider("chat", tmp_path)
+        assert isinstance(provider, OllamaAdapter)
+        assert provider._model == "qwen3:14b"

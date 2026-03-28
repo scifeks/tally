@@ -30,6 +30,13 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
         "report": config.report_llm_provider,
     }[role]
 
+    if provider_name == "ollama_report":
+        assert config.ollama_report is not None
+        return OllamaAdapter(
+            base_url=config.ollama_report.base_url,
+            model=config.ollama_report.model,
+            timeout_seconds=config.ollama_report.timeout_seconds,
+        )
     if provider_name == "ollama":
         assert config.ollama is not None
         return OllamaAdapter(
@@ -47,5 +54,5 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
         )
     raise ValueError(
         f"Unknown llm_provider {provider_name!r} for role {role!r}. "
-        "Registered providers: ollama, claude"
+        "Registered providers: ollama, ollama_report, claude"
     )

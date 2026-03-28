@@ -1,12 +1,17 @@
 {
   "chat_llm_provider": "ollama",
   "enrichment_llm_provider": "ollama",
-  "report_llm_provider": "ollama",
+  "report_llm_provider": "ollama_report",
   "embedding_provider": "ollama_embedding",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen2.5:14b",
     "timeout_seconds": 60
+  },
+  "ollama_report": {
+    "base_url": "http://10.1.20.101:11434",
+    "model": "qwen2.5:14b",
+    "timeout_seconds": 120
   },
   "ollama_embedding": {
     "base_url": "http://localhost:11434",
