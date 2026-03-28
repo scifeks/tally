@@ -37,7 +37,8 @@ const activeTab = ref<'findings' | 'network'>('findings')
         Network Surface
       </button>
     </nav>
-    <FindingsTable v-if="activeTab === 'findings'" />
-    <NetworkSurface v-else />
+    <KeepAlive>
+      <component :is="activeTab === 'findings' ? FindingsTable : NetworkSurface" />
+    </KeepAlive>
   </div>
 </template>
