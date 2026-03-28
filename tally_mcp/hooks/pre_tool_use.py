@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
+
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.audit import AuditRepository
 
 _DEFAULT_APP_ROOT = Path(__file__).parent.parent.parent
 
@@ -40,18 +41,10 @@ def main(app_root: Path | None = None) -> int:
     db_path = _resolve_db(root)
     if db_path is None:
         return 0
-    called_at = datetime.now(UTC).isoformat()
     try:
-        conn = sqlite3.connect(str(db_path))
-        try:
-            conn.execute(
-                "INSERT INTO tool_audit_log"
-                " (tool_name, arguments, success, called_at) VALUES (?, ?, 1, ?)",
-                (tool_name, json.dumps(tool_input), called_at),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        factory = ConnectionFactory(db_path)
+        audit_repo = AuditRepository(factory)
+        audit_repo.log_invocation(tool_name, tool_input)
     except Exception as exc:
         print(f"pre_tool_use: DB write failed: {exc}", file=sys.stderr)
     return 0
