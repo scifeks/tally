@@ -16,10 +16,8 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
+from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
-from infrastructure.store.repositories.findings_serial import (  # noqa: E402
-    compute_fingerprint,
-)
 
 pytestmark = pytest.mark.integration
 

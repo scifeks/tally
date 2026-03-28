@@ -6,11 +6,11 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
     _COMMA_LIST_FIELDS,
     _DIRECT_COLUMNS,
-    compute_fingerprint,
     deserialise_row,
     normalise_cwe,
     normalise_finding_type,
@@ -324,6 +324,10 @@ class FindingRepository:
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM findings").fetchall()
         return [dict(r) for r in rows]
+
+    def get_all_findings_deserialized(self) -> list[dict]:
+        """Return all findings with no triage filter, deserialised."""
+        return [deserialise_row(row) for row in self.get_all_findings()]
 
     def get_all_nmap_findings(self) -> list[dict]:
         """Return all nmap findings with no triage filter.

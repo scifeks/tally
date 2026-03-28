@@ -15,6 +15,7 @@ class PipAuditHandler:
     type_flags: dict[str, set[str]] = {
         "dependency": {"type_dependency", "type_vulnerability"}
     }
+    should_enrich = True
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
         return _build_sca_normalize(self, result, profile)

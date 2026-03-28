@@ -1,4 +1,4 @@
-"""Unit tests for _execute_tool_passes in application/tools/scan_types/_helpers.py."""
+"""Unit tests for execute_tool_passes in application/tools/scan_types/execution.py."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from application.tools.scan_types._helpers import _execute_tool_passes
+from application.tools.scan_types.execution import execute_tool_passes
 from domain.tools.scan_types.models import ScanTypeConfig
 
 
@@ -15,8 +15,6 @@ def _make_config(**overrides) -> ScanTypeConfig:
         project_name="proj",
         base_path="/tmp/proj",
         config_manager=MagicMock(),
-        event_bus=MagicMock(),
-        display=MagicMock(),
         run_id=1,
     )
     defaults.update(overrides)
@@ -39,7 +37,7 @@ class TestExecuteToolPassesApproval:
         executor = MagicMock()
 
         with patch("builtins.input") as mock_input:
-            result = _execute_tool_passes(tool, MagicMock(), config, executor)
+            result = execute_tool_passes(tool, MagicMock(), config, executor)
 
         mock_input.assert_not_called()
         assert result is not None
@@ -50,7 +48,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", return_value="n"):
-            result = _execute_tool_passes(
+            result = execute_tool_passes(
                 tool, MagicMock(), config, executor=MagicMock()
             )
 
@@ -64,7 +62,7 @@ class TestExecuteToolPassesApproval:
         executor = MagicMock()
 
         with patch("builtins.input", return_value="y") as mock_input:
-            result = _execute_tool_passes(
+            result = execute_tool_passes(
                 tool, MagicMock(), config, executor, remaining_tools=0
             )
 
@@ -80,7 +78,7 @@ class TestExecuteToolPassesApproval:
         executor = MagicMock()
 
         with patch("builtins.input", side_effect=["y", "n"]) as mock_input:
-            result = _execute_tool_passes(
+            result = execute_tool_passes(
                 tool, MagicMock(), config, executor, remaining_tools=2
             )
 
@@ -95,7 +93,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", "y"]):
-            _execute_tool_passes(
+            execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=1
             )
 
@@ -108,7 +106,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", "y"]):
-            _execute_tool_passes(
+            execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=1
             )
 
@@ -121,7 +119,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", "n"]):
-            _execute_tool_passes(
+            execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=1
             )
 
@@ -134,7 +132,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", "y"]):
-            _execute_tool_passes(
+            execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=1
             )
 
@@ -146,7 +144,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=EOFError):
-            result = _execute_tool_passes(
+            result = execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=2
             )
 
@@ -159,7 +157,7 @@ class TestExecuteToolPassesApproval:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", EOFError()]):
-            result = _execute_tool_passes(
+            result = execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=1
             )
 
@@ -179,7 +177,7 @@ class TestExecuteToolPassesOrchestratorIntegration:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", "y"]):
-            _execute_tool_passes(
+            execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=3
             )
 
@@ -192,7 +190,7 @@ class TestExecuteToolPassesOrchestratorIntegration:
         tool = _make_tool()
 
         with patch("builtins.input", side_effect=["y", "n"]) as mock_input:
-            _execute_tool_passes(
+            execute_tool_passes(
                 tool, MagicMock(), config, MagicMock(), remaining_tools=remaining
             )
 

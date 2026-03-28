@@ -20,7 +20,7 @@ class TriageBatchRepository:
 
         Returns the number of batches written.
         """
-        from tally_mcp.batching import compute_batches
+        from application.triage.batching import compute_batches
 
         params = (segment, tool, repo)
         if segment == "api":

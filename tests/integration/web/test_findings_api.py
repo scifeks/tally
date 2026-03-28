@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.unit.web.conftest import AUTH
+from tests.integration.web.conftest import AUTH
 
 pytestmark = pytest.mark.integration
 

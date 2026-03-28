@@ -18,6 +18,7 @@ class SemgrepHandler:
     type_flags: dict[str, set[str]] = {
         "vulnerability": {"type_vulnerability", "type_weakness"}
     }
+    should_enrich = True
     # Per-field enrichment spec: each entry declares which metadata keys to send
     # to the LLM and which prompt strategy to use. description is omitted because
     # semgrep always sets it from the rule message; no LLM call is needed.

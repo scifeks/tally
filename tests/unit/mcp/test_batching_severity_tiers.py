@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tally_mcp.batching import compute_batches
+from application.triage.batching import compute_batches
 from tests.unit.mcp.conftest import _f
 
 

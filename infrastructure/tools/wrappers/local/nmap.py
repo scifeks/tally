@@ -1,6 +1,6 @@
 import shutil
 
-from domain.tools.base import get_tool_version
+from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.nmap import BaseNmapTool
 
 
@@ -38,8 +38,8 @@ class NmapLocalTool(BaseNmapTool):
             if not project_name:
                 raise ValueError("project_name is required when using a profile")
 
-            from application.setup.nmap_setup import check_exclusion_conflicts
             from core.config import ConfigManager
+            from infrastructure.tools.nmap_utils import check_exclusion_conflicts
 
             config = ConfigManager(base_path=str(base_path))
             nmap_config = config.load_nmap_hosts(project_name)

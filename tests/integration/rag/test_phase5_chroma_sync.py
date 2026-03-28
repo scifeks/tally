@@ -10,8 +10,8 @@ import chromadb.utils.embedding_functions as ef
 import pytest
 
 from application.rag.engine import RAGEngine
+from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
-from infrastructure.store.repositories.findings_serial import compute_fingerprint
 from web.api.chroma_sync import sync_finding_to_chroma
 
 pytestmark = pytest.mark.integration

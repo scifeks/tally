@@ -10,7 +10,7 @@ from domain.tools.constants import (
     SEVERITY_LEVELS,
     STATUS_LEVELS,
 )
-from tests.unit.web.conftest import AUTH
+from tests.integration.web.conftest import AUTH
 
 pytestmark = pytest.mark.integration
 

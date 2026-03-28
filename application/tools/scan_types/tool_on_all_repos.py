@@ -5,10 +5,10 @@ from __future__ import annotations
 from time import perf_counter
 
 from application.tools.scan_types.repo_segment import RepoSegmentScan
-from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 
 class ToolOnAllReposScan(ScanType):
@@ -18,11 +18,11 @@ class ToolOnAllReposScan(ScanType):
         self.tool_name = tool_name
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
         start = perf_counter()
 
-        config.display.print_scan_header(
+        resources.display.print_scan_header(
             f"Repo Tool Scan: {config.project_name} — {self.tool_name}"
         )
 
@@ -39,7 +39,7 @@ class ToolOnAllReposScan(ScanType):
             )
             for r in seg_summary.results
         ]
-        config.display.print_summary_table(rows)
+        resources.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=seg_summary.total_tools_run,
@@ -50,7 +50,7 @@ class ToolOnAllReposScan(ScanType):
             findings_ingested=seg_summary.findings_ingested,
             findings_by_tool=seg_summary.findings_by_tool,
         )
-        config.display.print_final_line(
+        resources.display.print_final_line(
             run=summary.total_tools_run,
             failed=summary.total_tools_failed,
             skipped=summary.total_tools_skipped,

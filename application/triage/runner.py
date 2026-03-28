@@ -14,12 +14,13 @@ from typing import TYPE_CHECKING
 
 from application.tools.registry import tool_registry
 from core.config.manager import ConfigManager as _ConfigManager
+from core.config.schemas.global_config import MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 
 try:
     _cfg = _ConfigManager(str(Path(__file__).parent.parent.parent)).global_config
     SESSION_TIMEOUT_SECONDS: int = _cfg.mcp_session_timeout_seconds
 except FileNotFoundError:
-    SESSION_TIMEOUT_SECONDS = 300
+    SESSION_TIMEOUT_SECONDS = MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 
 if TYPE_CHECKING:
     from infrastructure.store.repositories.audit import AuditRepository

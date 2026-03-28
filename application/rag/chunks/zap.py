@@ -27,6 +27,7 @@ class ZapHandler:
         {"severity", "confidence", "remediation", "description"}
     )
     type_flags: dict[str, set[str]] = {"vulnerability": {"type_vulnerability"}}
+    should_enrich = True
     # risk_type is already in metadata as alert_name so the metadata check filters
     # it out before any LLM call. Only owasp_name needs dedicated enrichment.
     enrichment_fields: tuple[FieldEnrichmentSpec, ...] = (

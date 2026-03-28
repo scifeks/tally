@@ -42,6 +42,23 @@ class AuditRepository:
                 ),
             )
 
+    def log_invocation(
+        self,
+        tool_name: str,
+        arguments: dict,
+    ) -> None:
+        """Record a pre-execution audit entry (before outcome is known)."""
+        from datetime import UTC, datetime
+
+        called_at = datetime.now(UTC).isoformat()
+        with self._factory.connect() as conn:
+            conn.execute(
+                "INSERT INTO tool_audit_log"
+                " (tool_name, arguments, success, called_at)"
+                " VALUES (?, ?, 1, ?)",
+                (tool_name, json.dumps(arguments), called_at),
+            )
+
     def count_events_since(self, tool_names: tuple[str, ...], since: str) -> int:
         """Count audit log entries for tool_names recorded at or after since."""
         placeholders = ",".join("?" * len(tool_names))

@@ -2,11 +2,11 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from domain.tools.base import get_tool_version
 from infrastructure.tools.parsers.gitleaks_parser import (
     parse_gitleaks_json,
     parse_gitleaks_json_string,
 )
+from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.gitleaks import BaseGitleaksTool
 
 

@@ -8,21 +8,23 @@ import secrets
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import uvicorn
 
-import web.server as web_server
-
 if TYPE_CHECKING:
     from application.repl.interface import REPL
+
+ServerFactory = Callable[[str, str, int, str], uvicorn.Server]
 
 
 class FindingsCommands:
     """Handlers for the findings web UI command."""
 
-    def __init__(self, repl: REPL) -> None:
+    def __init__(self, repl: REPL, server_factory: ServerFactory) -> None:
         self._repl = repl
+        self._server_factory = server_factory
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
 
@@ -74,7 +76,7 @@ class FindingsCommands:
 
         token = secrets.token_hex(16)
 
-        server = web_server.create_server(base_path, project_name, port, token)
+        server = self._server_factory(base_path, project_name, port, token)
         self._server = server
 
         thread = threading.Thread(

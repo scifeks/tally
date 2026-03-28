@@ -40,6 +40,7 @@ from domain.pipeline.events import (
     IngestCompleted,
     ToolCompleted,
 )
+from web.server import create_server as _create_web_server
 
 _log = logging.getLogger(__name__)
 
@@ -257,7 +258,9 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self)
-        self.findings_commands = FindingsCommands(self)
+        self.findings_commands = FindingsCommands(
+            self, server_factory=_create_web_server
+        )
 
     # ------------------------------------------------------------------
     # Public entry point

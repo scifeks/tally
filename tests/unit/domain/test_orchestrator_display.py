@@ -1,4 +1,4 @@
-"""Unit tests for OrchestratorDisplay (domain.tools.display)."""
+"""Unit tests for OrchestratorDisplay (application.tools.display)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ from io import StringIO
 
 from rich.console import Console
 
-from domain.tools.display import OrchestratorDisplay, ToolDisplayRow
+from application.tools.display import OrchestratorDisplay
+from domain.tools.display import ToolDisplayRow
 
 
 def _make() -> tuple[OrchestratorDisplay, StringIO]:

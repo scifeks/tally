@@ -31,6 +31,16 @@ class ToolRegistry:
         self._tools.clear()
         self._configs.clear()
 
+    def snapshot(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        return (dict(self._tools), dict(self._configs))
+
+    def restore(self, snapshot: tuple[dict[str, Any], dict[str, Any]]) -> None:
+        tools, configs = snapshot
+        self._tools.clear()
+        self._tools.update(tools)
+        self._configs.clear()
+        self._configs.update(configs)
+
     def get_tool(self, name: str) -> Any | None:
         return self._tools.get(name)
 

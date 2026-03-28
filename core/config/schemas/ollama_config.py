@@ -9,6 +9,7 @@ class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
     model: str
     timeout_seconds: int = 60
+    num_ctx: int | None = None
 
     @field_validator("base_url")
     @classmethod

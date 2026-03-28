@@ -3,7 +3,7 @@
 import shutil
 from pathlib import Path
 
-from domain.tools.base import get_tool_version
+from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.osv_scanner import BaseOSVScannerTool
 
 

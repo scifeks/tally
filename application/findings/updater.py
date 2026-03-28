@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from domain.tools.constants import CONFIDENCE_LEVELS, FINDING_TYPES, SEVERITY_LEVELS
 
 if TYPE_CHECKING:
+    from core.config.manager import ConfigManager
     from infrastructure.store.repositories.audit import AuditRepository
     from infrastructure.store.repositories.findings import FindingRepository
 
@@ -50,9 +51,35 @@ class FindingUpdateService:
         self,
         finding_repo: FindingRepository,
         audit_repo: AuditRepository,
+        config_manager: ConfigManager | None = None,
     ) -> None:
         self._finding_repo = finding_repo
         self._audit_repo = audit_repo
+        self._config_manager = config_manager
+
+    def resolve_finding_paths(
+        self,
+        file: str | None,
+        repo_name: str | None,
+        project_name: str | None,
+    ) -> tuple[str | None, str | None]:
+        """Resolve absolute and repo-relative paths for a finding.
+
+        Returns (abs_path, repo_path), or (None, None) if resolution fails.
+        """
+        try:
+            if project_name is None or self._config_manager is None:
+                return (None, None)
+            config = self._config_manager.load_project_config(project_name)
+            if config is None:
+                return (None, None)
+            repos = [r.model_dump() for r in config.repositories]
+            return (
+                reconstruct_abs_path(file, repo_name, repos),
+                resolve_repo_path(repo_name, repos),
+            )
+        except Exception:
+            return (None, None)
 
     async def update(
         self,

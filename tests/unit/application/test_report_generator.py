@@ -11,46 +11,19 @@ import pytest
 
 from application.reporting.generator import ReportGenerator
 
-# Minimal SQLite-shaped row: all columns deserialise_row accesses must be present.
-_SQLITE_COLS = (
-    "tool",
-    "domain",
-    "segment",
-    "repo",
-    "severity",
-    "confidence",
-    "rule_id",
-    "url",
-    "port",
-    "vulnerability_id",
-    "package_name",
-    "ecosystem",
-    "description",
-    "package_version",
-    "file",
-    "host",
-    "fingerprint",
-    "run_id",
-    "finding_type",
-    "meta",
-    "cwe",
-    "enriched",
-)
+
+def _finding(**kwargs: object) -> dict[str, Any]:
+    """Return a minimal deserialized finding dict."""
+    return dict(kwargs)  # type: ignore[arg-type]
 
 
-def _sql_row(**kwargs: object) -> dict[str, Any]:
-    """Return a dict with all SQLite column keys defaulting to None."""
-    row: dict[str, Any] = {col: None for col in _SQLITE_COLS}
-    row.update(kwargs)
-    return row
-
-
-_GITLEAKS_ROW = _sql_row(
+_GITLEAKS_FINDING = _finding(
     tool="gitleaks",
     severity="high",
     rule_id="aws-key",
     file="/src/main.py",
-    meta='{"line_number": 10}',
+    file_path="/src/main.py",
+    line_number=10,
 )
 
 
@@ -63,7 +36,7 @@ def mock_engine() -> MagicMock:
 @pytest.fixture()
 def mock_finding_repo() -> MagicMock:
     repo = MagicMock()
-    repo.get_all_findings.return_value = []
+    repo.get_all_findings_deserialized.return_value = []
     return repo
 
 
@@ -86,28 +59,36 @@ class TestReportGenerator:
     def test_generate_markdown_contains_header(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _GITLEAKS_FINDING
+        ]
         result = generator.generate(output_format="markdown")
         assert "# Tally Security Report: test-project" in result
 
     def test_generate_markdown_contains_gitleaks_section(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _GITLEAKS_FINDING
+        ]
         result = generator.generate(output_format="markdown")
         assert "### Secrets (gitleaks)" in result
 
     def test_generate_html_contains_doctype(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _GITLEAKS_FINDING
+        ]
         result = generator.generate(output_format="html")
         assert result.startswith("<!DOCTYPE html>")
 
     def test_generate_html_contains_project_name(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [_GITLEAKS_ROW]
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _GITLEAKS_FINDING
+        ]
         result = generator.generate(output_format="html")
         assert "test-project" in result
 
@@ -118,13 +99,15 @@ class TestReportGenerator:
     def test_generate_json_structure(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [
-            _sql_row(
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _finding(
                 tool="semgrep",
                 severity="medium",
                 rule_id="sqli",
                 file="/app/db.py",
-                meta='{"line_start": 5, "cwe": "CWE-89"}',
+                file_path="/app/db.py",
+                line_start=5,
+                cwe="CWE-89",
             )
         ]
         result = generator.generate(output_format="json")
@@ -154,10 +137,10 @@ class TestReportGenerator:
     def test_aggregate_groups_by_tool(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [
-            _sql_row(tool="gitleaks", severity="high"),
-            _sql_row(tool="gitleaks", severity="medium"),
-            _sql_row(tool="nmap", severity="low"),
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _finding(tool="gitleaks", severity="high"),
+            _finding(tool="gitleaks", severity="medium"),
+            _finding(tool="nmap", severity="low"),
         ]
         result = generator._aggregate_findings()
         assert result["summary"]["by_tool"]["gitleaks"] == 2
@@ -166,9 +149,9 @@ class TestReportGenerator:
     def test_aggregate_counts_severity(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.return_value = [
-            _sql_row(tool="gitleaks", severity="high"),
-            _sql_row(tool="nmap", severity="critical"),
+        mock_finding_repo.get_all_findings_deserialized.return_value = [
+            _finding(tool="gitleaks", severity="high"),
+            _finding(tool="nmap", severity="critical"),
         ]
         result = generator._aggregate_findings()
         assert result["summary"]["by_severity"]["high"] == 1
@@ -177,6 +160,8 @@ class TestReportGenerator:
     def test_aggregate_repo_exception_logs_warning_and_returns_zeros(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings.side_effect = RuntimeError("db error")
+        mock_finding_repo.get_all_findings_deserialized.side_effect = RuntimeError(
+            "db error"
+        )
         result = generator._aggregate_findings()
         assert result["summary"]["total_findings"] == 0

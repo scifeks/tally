@@ -66,8 +66,6 @@ def mock_config() -> Any:
         project_name="test-project",
         base_path="/tmp/test",
         config_manager=cm,
-        event_bus=MagicMock(),
-        display=MagicMock(),
         run_id=1,
         auto_approve=True,
     )
@@ -83,6 +81,8 @@ def mock_resources() -> Any:
         executor=MagicMock(),
         registry=registry,
         factory=MagicMock(),
+        event_bus=MagicMock(),
+        display=MagicMock(),
     )
 
 
@@ -132,7 +132,7 @@ class TestSegmentScan:
         with (
             patch("application.tools.scan_types.segment.RepoSegmentScan") as mock_repo,
             patch(
-                "application.tools.scan_types.segment._tools_for_segment",
+                "application.tools.scan_types.segment.tools_for_segment",
                 return_value=["semgrep"],
             ),
         ):

@@ -8,14 +8,25 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
-    from application.tools.registry import ToolRegistry
     from core.config.manager import ConfigManager
     from core.config.schemas import Repository
 
 from domain.tools.base import ToolResult
+
+
+class RegistryLike(Protocol):
+    """Pure-domain protocol satisfied by any registry that can resolve repo paths.
+
+    Defined here so that domain types carry no runtime dependency on
+    application.tools.registry.ToolRegistry.
+    """
+
+    def get_repo_path(self, tool_name: str, repo) -> str:
+        """Return the filesystem path to use for the given tool and repo."""
+        ...
 
 
 @dataclass
@@ -35,7 +46,7 @@ class ExecutionContext:
     base_path: str
     repo: Repository | None  # None for network tools
     config_manager: ConfigManager
-    registry: ToolRegistry
+    registry: RegistryLike
     is_docker: bool
     execution_mode: Literal["scan", "manual"] = "scan"
     # currently dead; TODO: implement when gate-level exclusion is required

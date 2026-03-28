@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from time import perf_counter
+from typing import cast
 
-from application.tools.scan_types._helpers import _tools_for_segment
+from application.tools.registry import ToolRegistry
+from application.tools.scan_types.execution import tools_for_segment
 from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
-from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.resources import IExecutionResources
 
 
 class FullScan(ScanType):
@@ -21,7 +23,7 @@ class FullScan(ScanType):
         self.exclude_segments = exclude_segments or []
 
     def execute(
-        self, config: ScanTypeConfig, resources: ExecutionResources
+        self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
         start = perf_counter()
 
@@ -29,23 +31,25 @@ class FullScan(ScanType):
         total_run = total_skipped = total_failed = total_ingested = 0
         merged_fbt: dict[str, int] = {}
 
-        config.display.print_scan_header(f"Full Scan: {config.project_name}")
+        resources.display.print_scan_header(f"Full Scan: {config.project_name}")
 
         active_segments = [s for s in SEGMENT_ORDER if s not in self.exclude_segments]
         seg_idx = 0
         for segment in SEGMENT_ORDER:
             if segment in self.exclude_segments:
-                config.display.print_status(f"[dim]Skipping segment: {segment}[/dim]")
+                resources.display.print_status(
+                    f"[dim]Skipping segment: {segment}[/dim]"
+                )
                 continue
             config.remaining_peers = len(active_segments) - seg_idx - 1
             seg_idx += 1
-            config.display.print_segment_header(segment)
+            resources.display.print_segment_header(segment)
 
             if segment == "network":
                 seg_summary = NetworkSegmentScan().execute(config, resources)
             else:
                 seg_summary = RepoSegmentScan(
-                    _tools_for_segment(segment, resources.registry)
+                    tools_for_segment(segment, cast(ToolRegistry, resources.registry))
                 ).execute(config, resources)
 
             all_results.extend(seg_summary.results)
@@ -67,7 +71,7 @@ class FullScan(ScanType):
             )
             for r in all_results
         ]
-        config.display.print_summary_table(rows)
+        resources.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -78,7 +82,7 @@ class FullScan(ScanType):
             findings_ingested=total_ingested,
             findings_by_tool=merged_fbt,
         )
-        config.display.print_final_line(
+        resources.display.print_final_line(
             run=summary.total_tools_run,
             failed=summary.total_tools_failed,
             skipped=summary.total_tools_skipped,

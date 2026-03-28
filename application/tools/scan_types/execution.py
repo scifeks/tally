@@ -1,4 +1,4 @@
-"""Intra-package utility helpers for scan-type strategy classes."""
+"""Execution orchestration for scan-type strategy classes."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from core.config.manager import ConfigManager
 
 
-def _make_context(
+def make_context(
     config_manager: ConfigManager,
     project_name: str,
     base_path: str,
@@ -34,7 +34,7 @@ def _make_context(
     )
 
 
-def _execute_tool_passes(
+def execute_tool_passes(
     tool: ToolInterface,
     context: ExecutionContext,
     config: ScanTypeConfig,
@@ -66,7 +66,7 @@ def _execute_tool_passes(
     return tool.merge_pass_results(pass_results)
 
 
-def _normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
+def normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
     """Mark tools that exit non-zero on findings as successful when
     parsed_data is valid.
     """
@@ -76,13 +76,13 @@ def _normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
     return result
 
 
-def _tools_for_segment(segment: str, registry: ToolRegistry) -> list[str]:
+def tools_for_segment(segment: str, registry: ToolRegistry) -> list[str]:
     """Return tool names registered under the given scan segment."""
     tools: list[Any] = registry.get_all_tools()
     return [t.name for t in tools if t.scan_segment == segment]
 
 
-def _dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
+def dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
     """Dispatch a ToolCompleted event and return the number of findings ingested.
 
     Subscribes a one-shot counter to IngestCompleted before dispatching, then
@@ -100,7 +100,7 @@ def _dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
     return count
 
 
-def _ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
+def ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
     """Order tool_set by SEGMENT_ORDER, then alphabetically within each segment."""
     result: list[str] = []
     for segment in SEGMENT_ORDER:
