@@ -11,7 +11,6 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from application.audit.runner import AuditRunner
-from core.config.manager import ConfigManager
 from infrastructure.store import make_store
 
 from .context import FindingsContext
@@ -35,7 +34,6 @@ _args = _parser.parse_args()
 # ---------------------------------------------------------------------------
 _app_root = Path(__file__).parent.parent
 _project_name: str = _args.project
-_cfg = ConfigManager(str(_app_root)).global_config  # noqa: F841 — reserved for Phase 2
 _run_repo, _finding_repo, _triage_repo, _audit_repo = make_store(
     _app_root, _project_name
 )
