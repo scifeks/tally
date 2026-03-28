@@ -213,6 +213,33 @@ class TriageRunner:
         prompt_text = render_fn(finding_ids, self._project)
         session_start = datetime.now(UTC).isoformat()
 
+        # SECURITY: --dangerously-skip-permissions and --disallowedTools must
+        # ALWAYS be present together. Removing or weakening either flag creates
+        # a privilege-escalation path. Rationale:
+        #
+        # 1. --dangerously-skip-permissions is required because the MCP server
+        #    startup otherwise triggers interactive permission prompts that
+        #    cannot be answered in a non-interactive subprocess.
+        #
+        # 2. --disallowedTools is the compensating control that prevents Claude
+        #    from using any tool that directly modifies the filesystem or makes
+        #    network requests (Bash, Write, Edit, MultiEdit, WebFetch,
+        #    WebSearch). Without this list, --dangerously-skip-permissions
+        #    would grant the Claude subprocess full filesystem and network
+        #    access under the operator's user identity.
+        #
+        # 3. The MCP permission manifest in .mcp.json
+        #    (allow: [get_findings_batch, update_findings_batch], deny: [*])
+        #    is a third layer of defense: the MCP server itself refuses calls
+        #    to any tool not explicitly allow-listed.
+        #
+        # 4. If --disallowedTools is removed or its tool list is shortened,
+        #    the Claude subprocess gains unrestricted filesystem write and
+        #    network access as the current user — a critical security
+        #    regression.
+        #
+        # NEVER remove --dangerously-skip-permissions or --disallowedTools,
+        # and NEVER reduce the set of tools listed in --disallowedTools.
         try:
             result = subprocess.run(
                 [
