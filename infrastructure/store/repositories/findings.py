@@ -325,6 +325,10 @@ class FindingRepository:
             rows = conn.execute("SELECT * FROM findings").fetchall()
         return [dict(r) for r in rows]
 
+    def get_all_findings_deserialized(self) -> list[dict]:
+        """Return all findings with no triage filter, deserialised."""
+        return [deserialise_row(row) for row in self.get_all_findings()]
+
     def get_all_nmap_findings(self) -> list[dict]:
         """Return all nmap findings with no triage filter.
 

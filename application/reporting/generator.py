@@ -6,8 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from infrastructure.store.repositories.findings import FindingRepository
-from infrastructure.store.repositories.findings_serial import deserialise_row
+from infrastructure.store import FindingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +69,7 @@ class ReportGenerator:
         by_severity = {level: 0 for level in _SEVERITY_LEVELS}
 
         try:
-            raw_rows = self._finding_repo.get_all_findings()
-            findings_list = [deserialise_row(row) for row in raw_rows]
+            findings_list = self._finding_repo.get_all_findings_deserialized()
             for finding in findings_list:
                 tool = finding.get("tool", "unknown")
                 findings_by_tool.setdefault(tool, []).append(finding)
