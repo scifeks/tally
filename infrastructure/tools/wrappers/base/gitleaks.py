@@ -1,5 +1,6 @@
 """Shared base class for gitleaks local and docker wrappers."""
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from infrastructure.tools.parsers.gitleaks_parser import combine_gitleaks_result
 class BaseGitleaksTool(ToolInterface):
     _candidate_commands: list[str] = ["gitleaks"]
     _command_entry_type: str = "repo"
+    _last_ignore_path: str | None = None
 
     @property
     def name(self) -> str:
@@ -86,8 +88,10 @@ class BaseGitleaksTool(ToolInterface):
             shared_kwargs["gitleaks_ignore_path"] = container_ignore
         else:
             # Local mode: write to a temp file.
-            tmp = tempfile.mktemp(suffix=".gitleaksignore", prefix="tally_")
-            Path(tmp).write_text(patterns)
+            fd, tmp = tempfile.mkstemp(suffix=".gitleaksignore", prefix="tally_")
+            with os.fdopen(fd, "w") as f:
+                f.write(patterns)
+            self._last_ignore_path = tmp
             shared_kwargs["gitleaks_ignore_path"] = tmp
 
         return [
@@ -103,6 +107,9 @@ class BaseGitleaksTool(ToolInterface):
 
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
         """Mirrors _run_gitleaks_both_scans in orchestrator.py."""
+        if self._last_ignore_path is not None:
+            Path(self._last_ignore_path).unlink(missing_ok=True)
+            self._last_ignore_path = None
         dir_result, git_result = pass_results[0], pass_results[1]
         dir_data = dir_result.parsed_data or {}
         git_data = git_result.parsed_data or {}
