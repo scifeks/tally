@@ -41,7 +41,7 @@ class RepoSegmentScan(ScanType):
         start = perf_counter()
         repos = config.config_manager.load_repositories(config.project_name)
         if not repos:
-            config.display.print_status(
+            resources.display.print_status(
                 "[yellow]No repositories configured — skipping[/yellow]"
             )
             return ScanSummary(
@@ -67,7 +67,7 @@ class RepoSegmentScan(ScanType):
         _invocation = 0
 
         for repo in repos:
-            config.display.print_status(f"  [bold]Repository:[/bold] {repo.name}")
+            resources.display.print_status(f"  [bold]Repository:[/bold] {repo.name}")
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:
@@ -81,7 +81,7 @@ class RepoSegmentScan(ScanType):
                         else []
                     )
                     if not any(lang in gates for lang in repo_langs):
-                        config.display.print_tool_line(
+                        resources.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name,
                                 False,
@@ -96,7 +96,7 @@ class RepoSegmentScan(ScanType):
 
                 tool_config = registry.get_tool_config(tool_name)
                 if tool_config is None:
-                    config.display.print_tool_line(
+                    resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
                     )
                     total_skipped += 1
@@ -106,27 +106,27 @@ class RepoSegmentScan(ScanType):
                     tool: Any = factory.create(tool_name, tool_config)
                 except Exception as exc:
                     logger.warning("Factory failed for %r: %s", tool_name, exc)
-                    config.display.print_tool_line(
+                    resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
                     )
                     total_skipped += 1
                     continue
 
                 if tool.requires_base_urls and not repo.base_urls:
-                    config.display.print_tool_line(
+                    resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "no base_urls")
                     )
                     total_skipped += 1
                     continue
 
                 if not tool.check_available():
-                    config.display.print_tool_line(
+                    resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
                     )
                     total_skipped += 1
                     continue
 
-                config.display.print_running(tool_name, repo.name)
+                resources.display.print_running(tool_name, repo.name)
                 context = _make_context(
                     config.config_manager,
                     config.project_name,
@@ -145,7 +145,7 @@ class RepoSegmentScan(ScanType):
                 )
 
                 if result is None:
-                    config.display.print_tool_line(
+                    resources.display.print_tool_line(
                         ToolDisplayRow(f"{tool_name}/{repo.name}", False, True, 0, 0.0)
                     )
                     total_skipped += 1
@@ -158,7 +158,7 @@ class RepoSegmentScan(ScanType):
                     )
                     if result.success:
                         total_run += 1
-                        config.display.print_tool_line(
+                        resources.display.print_tool_line(
                             ToolDisplayRow(
                                 f"{tool_name}/{repo.name}",
                                 True,
@@ -169,7 +169,7 @@ class RepoSegmentScan(ScanType):
                         )
                     else:
                         total_failed += 1
-                        config.display.print_tool_line(
+                        resources.display.print_tool_line(
                             ToolDisplayRow(
                                 f"{tool_name}/{repo.name}",
                                 False,
@@ -182,7 +182,7 @@ class RepoSegmentScan(ScanType):
             all_results.extend(repo_results)
             for r in repo_results:
                 total_ingested += _dispatch_and_count_ingested(
-                    config.event_bus,
+                    resources.event_bus,
                     ToolCompleted(
                         r,
                         repo.name,

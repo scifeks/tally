@@ -61,7 +61,7 @@ class ToolOnRepoScan(ScanType):
         if not tool.check_available():
             raise ValueError(f"Tool '{self.tool_name}' is not installed.")
 
-        config.display.print_scan_header(
+        resources.display.print_scan_header(
             f"Repo Tool Scan: {repo.name} — {self.tool_name}"
         )
 
@@ -87,7 +87,7 @@ class ToolOnRepoScan(ScanType):
         findings_by_tool: dict[str, int] = {}
 
         if result is None:
-            config.display.print_tool_line(
+            resources.display.print_tool_line(
                 ToolDisplayRow(self.tool_name, False, True, 0, 0.0)
             )
             total_skipped += 1
@@ -98,7 +98,7 @@ class ToolOnRepoScan(ScanType):
             findings_by_tool = {result.tool_name: findings}
             if result.success:
                 total_run += 1
-                config.display.print_tool_line(
+                resources.display.print_tool_line(
                     ToolDisplayRow(
                         self.tool_name,
                         True,
@@ -109,7 +109,7 @@ class ToolOnRepoScan(ScanType):
                 )
             else:
                 total_failed += 1
-                config.display.print_tool_line(
+                resources.display.print_tool_line(
                     ToolDisplayRow(
                         self.tool_name, False, False, 0, result.duration_seconds
                     )
@@ -118,7 +118,7 @@ class ToolOnRepoScan(ScanType):
         duration = round(perf_counter() - start, 1)
         for r in results:
             total_ingested += _dispatch_and_count_ingested(
-                config.event_bus,
+                resources.event_bus,
                 ToolCompleted(
                     r,
                     repo.name,
@@ -138,7 +138,7 @@ class ToolOnRepoScan(ScanType):
             )
             for r in results
         ]
-        config.display.print_summary_table(rows)
+        resources.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -149,7 +149,7 @@ class ToolOnRepoScan(ScanType):
             findings_ingested=total_ingested,
             findings_by_tool=findings_by_tool,
         )
-        config.display.print_final_line(
+        resources.display.print_final_line(
             run=summary.total_tools_run,
             failed=summary.total_tools_failed,
             skipped=summary.total_tools_skipped,

@@ -31,17 +31,19 @@ class FullScan(ScanType):
         total_run = total_skipped = total_failed = total_ingested = 0
         merged_fbt: dict[str, int] = {}
 
-        config.display.print_scan_header(f"Full Scan: {config.project_name}")
+        resources.display.print_scan_header(f"Full Scan: {config.project_name}")
 
         active_segments = [s for s in SEGMENT_ORDER if s not in self.exclude_segments]
         seg_idx = 0
         for segment in SEGMENT_ORDER:
             if segment in self.exclude_segments:
-                config.display.print_status(f"[dim]Skipping segment: {segment}[/dim]")
+                resources.display.print_status(
+                    f"[dim]Skipping segment: {segment}[/dim]"
+                )
                 continue
             config.remaining_peers = len(active_segments) - seg_idx - 1
             seg_idx += 1
-            config.display.print_segment_header(segment)
+            resources.display.print_segment_header(segment)
 
             if segment == "network":
                 seg_summary = NetworkSegmentScan().execute(config, resources)
@@ -69,7 +71,7 @@ class FullScan(ScanType):
             )
             for r in all_results
         ]
-        config.display.print_summary_table(rows)
+        resources.display.print_summary_table(rows)
 
         summary = ScanSummary(
             total_tools_run=total_run,
@@ -80,7 +82,7 @@ class FullScan(ScanType):
             findings_ingested=total_ingested,
             findings_by_tool=merged_fbt,
         )
-        config.display.print_final_line(
+        resources.display.print_final_line(
             run=summary.total_tools_run,
             failed=summary.total_tools_failed,
             skipped=summary.total_tools_skipped,

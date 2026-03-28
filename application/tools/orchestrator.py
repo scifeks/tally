@@ -91,8 +91,6 @@ class ScanOrchestrator:
             project_name=self.project_name,
             base_path=str(self.executor.base_path),
             config_manager=self._config,
-            event_bus=self._event_bus,
-            display=self.display,
             run_id=self._run_id,
             auto_approve=auto_approve or self._auto_approve,
             on_auto_approve=self._on_auto_approve_set,
@@ -105,6 +103,8 @@ class ScanOrchestrator:
             executor=self.executor,
             registry=self.registry,
             factory=self._factory,
+            event_bus=self._event_bus,
+            display=self.display,
         )
 
     # ------------------------------------------------------------------

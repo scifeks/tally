@@ -13,8 +13,6 @@ class TestScanTypeConfig:
             project_name="proj",
             base_path="/tmp/proj",
             config_manager=MagicMock(),
-            event_bus=MagicMock(),
-            display=MagicMock(),
             run_id=42,
         )
         defaults.update(overrides)

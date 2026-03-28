@@ -9,3 +9,5 @@ class IExecutionResources(Protocol):
     executor: Any
     registry: Any
     factory: Any
+    event_bus: Any
+    display: Any

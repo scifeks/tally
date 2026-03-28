@@ -16,7 +16,7 @@ def test_iexecution_resources_declares_required_attributes() -> None:
     from domain.tools.scan_types.resources import IExecutionResources
 
     attrs: set[str] = getattr(IExecutionResources, "__protocol_attrs__")
-    assert attrs == {"executor", "registry", "factory"}
+    assert attrs == {"executor", "registry", "factory", "event_bus", "display"}
 
 
 def test_domain_base_does_not_import_application() -> None:

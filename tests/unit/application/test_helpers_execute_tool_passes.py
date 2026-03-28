@@ -15,8 +15,6 @@ def _make_config(**overrides) -> ScanTypeConfig:
         project_name="proj",
         base_path="/tmp/proj",
         config_manager=MagicMock(),
-        event_bus=MagicMock(),
-        display=MagicMock(),
         run_id=1,
     )
     defaults.update(overrides)

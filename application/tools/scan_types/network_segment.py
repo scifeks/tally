@@ -42,7 +42,7 @@ class NetworkSegmentScan(ScanType):
         nmap_cfg = config.config_manager.load_nmap_hosts(config.project_name)
         profiles = nmap_cfg.profiles if nmap_cfg else {}
         if not profiles:
-            config.display.print_status(
+            resources.display.print_status(
                 "[yellow]No nmap profiles configured"
                 " — skipping network segment[/yellow]"
             )
@@ -59,7 +59,7 @@ class NetworkSegmentScan(ScanType):
 
         tool_config = registry.get_tool_config("nmap")
         if tool_config is None:
-            config.display.print_tool_line(
+            resources.display.print_tool_line(
                 ToolDisplayRow("nmap", False, True, 0, 0.0, "not registered")
             )
             total_skipped += 1
@@ -77,7 +77,7 @@ class NetworkSegmentScan(ScanType):
             tool: Any = factory.create("nmap", tool_config)
         except Exception as exc:
             logger.warning("Factory failed for 'nmap': %s", exc)
-            config.display.print_tool_line(
+            resources.display.print_tool_line(
                 ToolDisplayRow("nmap", False, True, 0, 0.0, "factory error")
             )
             total_skipped += 1
@@ -92,7 +92,7 @@ class NetworkSegmentScan(ScanType):
             )
 
         if not tool.check_available():
-            config.display.print_tool_line(
+            resources.display.print_tool_line(
                 ToolDisplayRow("nmap", False, True, 0, 0.0, "not installed")
             )
             total_skipped += 1
@@ -106,7 +106,7 @@ class NetworkSegmentScan(ScanType):
                 findings_by_tool=findings_by_tool,
             )
 
-        config.display.print_running("nmap")
+        resources.display.print_running("nmap")
         context = _make_context(
             config.config_manager,
             config.project_name,
@@ -124,7 +124,9 @@ class NetworkSegmentScan(ScanType):
         )
 
         if result is None:
-            config.display.print_tool_line(ToolDisplayRow("nmap", False, True, 0, 0.0))
+            resources.display.print_tool_line(
+                ToolDisplayRow("nmap", False, True, 0, 0.0)
+            )
             total_skipped += 1
         else:
             results.append(result)
@@ -132,13 +134,13 @@ class NetworkSegmentScan(ScanType):
             findings_by_tool["nmap"] = findings_by_tool.get("nmap", 0) + findings
             if result.success:
                 total_run += 1
-                config.display.print_tool_line(
+                resources.display.print_tool_line(
                     ToolDisplayRow(
                         "nmap", True, False, findings, result.duration_seconds
                     )
                 )
                 total_ingested += _dispatch_and_count_ingested(
-                    config.event_bus,
+                    resources.event_bus,
                     ToolCompleted(
                         result,
                         config.project_name,
@@ -149,7 +151,7 @@ class NetworkSegmentScan(ScanType):
                 )
             else:
                 total_failed += 1
-                config.display.print_tool_line(
+                resources.display.print_tool_line(
                     ToolDisplayRow("nmap", False, False, 0, result.duration_seconds)
                 )
 

@@ -46,8 +46,6 @@ def mock_config() -> Any:
         project_name="test-project",
         base_path="/tmp/test",
         config_manager=cm,
-        event_bus=MagicMock(),
-        display=MagicMock(),
         run_id=1,
         auto_approve=True,
     )
@@ -63,6 +61,8 @@ def mock_resources() -> Any:
         executor=MagicMock(),
         registry=registry,
         factory=MagicMock(),
+        event_bus=MagicMock(),
+        display=MagicMock(),
     )
 
 
@@ -106,7 +106,9 @@ class TestFullScan:
             mock_repo.return_value.execute.return_value = _zero_summary()
             FullScan(exclude_segments=["sast"]).execute(mock_config, mock_resources)
 
-        calls = [str(call) for call in mock_config.display.print_status.call_args_list]
+        calls = [
+            str(call) for call in mock_resources.display.print_status.call_args_list
+        ]
         assert any("sast" in c for c in calls)
 
     def test_delegates_network_segment_to_network_scan(
