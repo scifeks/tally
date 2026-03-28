@@ -4,22 +4,25 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import TYPE_CHECKING
 
 from application.findings.updater import FindingUpdateService
-from core.config.manager import ConfigManager
 from tally_mcp.context import FindingsContext
+
+if TYPE_CHECKING:
+    from core.config.manager import ConfigManager
 
 # Injected at startup by server.py
 _ctx: FindingsContext | None = None
 _service: FindingUpdateService | None = None
 
 
-def init(ctx: FindingsContext) -> None:
+def init(ctx: FindingsContext, config_manager: ConfigManager | None = None) -> None:
     """Inject repository dependencies. Called once at server startup."""
     global _ctx, _service
     _ctx = ctx
     _service = FindingUpdateService(
-        ctx.finding_repo, ctx.audit_repo, config_manager=ConfigManager()
+        ctx.finding_repo, ctx.audit_repo, config_manager=config_manager
     )
 
 

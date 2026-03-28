@@ -11,6 +11,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from application.audit.runner import AuditRunner
+from core.config.manager import ConfigManager
 from infrastructure.store import make_store
 
 from .context import FindingsContext
@@ -84,7 +85,8 @@ def main() -> None:
             audit_repo=_audit_repo,
             triage_repo=_triage_repo,
             project_name=_project_name,
-        )
+        ),
+        config_manager=ConfigManager(str(_app_root)),
     )
     _audit_runner = AuditRunner(_audit_repo)
 
