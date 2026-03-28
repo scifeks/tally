@@ -5,8 +5,6 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock
 
-import pytest
-
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from domain.tools.base import ToolResult
 
@@ -28,7 +26,6 @@ def _make_result(
     )
 
 
-@pytest.mark.unit
 class TestScanResultPresenterDispatch(unittest.TestCase):
     def setUp(self) -> None:
         self.console = MagicMock()
@@ -119,7 +116,6 @@ class TestScanResultPresenterDispatch(unittest.TestCase):
         self.assertIn("Scan complete", self._first_printed())
 
 
-@pytest.mark.unit
 class TestScanResultPresenterGitleaks(unittest.TestCase):
     def setUp(self) -> None:
         self.console = MagicMock()
@@ -209,7 +205,6 @@ class TestScanResultPresenterGitleaks(unittest.TestCase):
         self.assertIn("scan complete", printed)
 
 
-@pytest.mark.unit
 class TestScanResultPresenterSemgrep(unittest.TestCase):
     def setUp(self) -> None:
         self.console = MagicMock()
@@ -248,7 +243,6 @@ class TestScanResultPresenterSemgrep(unittest.TestCase):
         self.assertIn("Scan failed", printed)
 
 
-@pytest.mark.unit
 class TestScanResultPresenterSca(unittest.TestCase):
     def setUp(self) -> None:
         self.console = MagicMock()
@@ -292,7 +286,6 @@ class TestScanResultPresenterSca(unittest.TestCase):
         self.assertIn("Scan failed", printed)
 
 
-@pytest.mark.unit
 class TestScanResultPresenterZap(unittest.TestCase):
     def setUp(self) -> None:
         self.console = MagicMock()
@@ -332,7 +325,6 @@ class TestScanResultPresenterZap(unittest.TestCase):
         self.assertLessEqual(len(suffix), 200)
 
 
-@pytest.mark.unit
 class TestScanResultPresenterGeneric(unittest.TestCase):
     def setUp(self) -> None:
         self.console = MagicMock()
@@ -372,7 +364,6 @@ class TestScanResultPresenterGeneric(unittest.TestCase):
         self.assertIn("Scan failed", printed)
 
 
-@pytest.mark.unit
 class TestScanResultPresenterStaticSummaries(unittest.TestCase):
     def test_summarize_gitleaks_with_secrets(self) -> None:
         result = _make_result(

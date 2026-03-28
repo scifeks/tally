@@ -61,7 +61,6 @@ class _StubTool(ToolInterface):
         return 0
 
 
-@pytest.mark.unit
 class TestToolWrapperFactory:
     def setup_method(self) -> None:
         self.factory = ToolWrapperFactory()

@@ -3,12 +3,9 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from application.repl.commands.project_commands import ProjectCommands
 
 
-@pytest.mark.unit
 class TestProjectCommands(unittest.TestCase):
     def setUp(self) -> None:
         self.repl = MagicMock()

@@ -7,8 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 _TALLY_ROOT = Path(__file__).resolve().parents[4]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
@@ -19,7 +17,6 @@ from application.reporting.draft_query import (  # noqa: E402
 )
 
 
-@pytest.mark.unit
 class TestDraftQueryService(unittest.TestCase):
     """Tests for DraftQueryService and module-level _parse_meta."""
 

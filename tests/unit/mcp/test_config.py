@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from application.config.mcp_defaults import load_mcp_defaults
 
 
-@pytest.mark.unit
 class TestLoadMcpDefaults:
     """Tests for load_mcp_defaults()."""
 

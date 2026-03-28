@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from application.setup.nmap_setup import (
     _interview_hosts,
     _prompt,
@@ -15,7 +13,6 @@ from core.config.schemas.nmap_hosts_config import NmapHostsConfig
 from core.config.schemas.nmap_profile import NmapProfile
 
 
-@pytest.mark.unit
 class TestInterviewNmapConfig:
     # ------------------------------------------------------------------
     # _prompt
