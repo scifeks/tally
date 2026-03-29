@@ -151,20 +151,19 @@ class RepoScan(ScanType):
                             tool_name, False, False, 0, result.duration_seconds
                         )
                     )
+                total_ingested += dispatch_and_count_ingested(
+                    resources.event_bus,
+                    ToolCompleted(
+                        result,
+                        repo.name,
+                        config.run_id,
+                        config.project_name,
+                        config.base_path,
+                        repo=repo.name,
+                    ),
+                )
 
         duration = round(perf_counter() - start, 1)
-        for r in results:
-            total_ingested += dispatch_and_count_ingested(
-                resources.event_bus,
-                ToolCompleted(
-                    r,
-                    repo.name,
-                    config.run_id,
-                    config.project_name,
-                    config.base_path,
-                    repo=repo.name,
-                ),
-            )
 
         rows = [
             ToolDisplayRow(

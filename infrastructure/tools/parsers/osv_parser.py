@@ -8,6 +8,7 @@ _SEVERITY_MAP = {
     "CRITICAL": "critical",
     "HIGH": "high",
     "MEDIUM": "medium",
+    "MODERATE": "medium",
     "LOW": "low",
 }
 
@@ -55,7 +56,19 @@ def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
             if ecosystem:
                 ecosystems.add(ecosystem)
 
+            id_to_max_severity: dict[str, float] = {}
+            for g in pkg.get("groups", []):
+                sev_str = g.get("max_severity") or ""
+                try:
+                    sev_float = float(sev_str)
+                except (ValueError, TypeError):
+                    continue
+                for vid in g.get("ids", []):
+                    id_to_max_severity[vid] = sev_float
+
             for vuln in pkg.get("vulnerabilities", []):
+                vuln_id = vuln.get("id", "")
+                max_severity = id_to_max_severity.get(vuln_id)
                 parsed_vuln = _parse_vulnerability(
                     vuln,
                     pkg_name,
@@ -63,6 +76,7 @@ def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
                     ecosystem,
                     source_path,
                     source_type,
+                    max_severity=max_severity,
                 )
                 vulnerabilities.append(parsed_vuln)
 
@@ -89,8 +103,10 @@ def _parse_vulnerability(
     ecosystem: str,
     source_file: str,
     source_type: str = "",
+    max_severity: float | None = None,
 ) -> dict[str, Any]:
     introduced, fixed = _extract_version_range(vuln, ecosystem, pkg_name)
+    cvss_score = max_severity if max_severity is not None else _extract_cvss_score(vuln)
     return {
         "vulnerability_id": vuln.get("id", ""),
         "aliases": vuln.get("aliases", []),
@@ -98,7 +114,7 @@ def _parse_vulnerability(
         "package_version": pkg_version,
         "affected_ecosystem": ecosystem,
         "severity": _normalize_severity(vuln),
-        "summary": vuln.get("summary", ""),
+        "summary": vuln.get("summary") or vuln.get("details", "")[:300],
         "details": vuln.get("details", ""),
         "published": vuln.get("published", ""),
         "modified": vuln.get("modified", ""),
@@ -106,7 +122,7 @@ def _parse_vulnerability(
         "cwe_ids": vuln.get("database_specific", {}).get("cwe_ids", []),
         "introduced_version": introduced,
         "fixed_version": fixed,
-        "cvss_score": _extract_cvss_score(vuln),
+        "cvss_score": cvss_score,
         "cvss_vector": _extract_cvss_vector(vuln),
         "source_file": source_file,
         "source_type": source_type,

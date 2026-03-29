@@ -92,13 +92,18 @@ class IngestHandler(BaseHandler):
             rows: list[dict] = handler.normalize(result, event.profile)
 
             if handler.domain == "code":
-                try:
-                    repos = ConfigManager(event.base_path).load_repositories(
-                        event.project_name
-                    )
-                except Exception:
-                    repos = None
-                rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
+                if handler.segment == "sca":
+                    if event.repo:
+                        for row in rows:
+                            row.setdefault("repo", event.repo)
+                else:
+                    try:
+                        repos = ConfigManager(event.base_path).load_repositories(
+                            event.project_name
+                        )
+                    except Exception:
+                        repos = None
+                    rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
 
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
             finding_repo.upsert_findings(event.run_id or 0, rows)

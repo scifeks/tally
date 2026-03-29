@@ -54,7 +54,7 @@ def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
                     "summary": advisory.get("title", ""),
                     "fixed_version": None,
                     "cvss_score": None,
-                    "source_file": advisory.get("link", ""),
+                    "source_file": "composer.json",
                 }
             )
 
