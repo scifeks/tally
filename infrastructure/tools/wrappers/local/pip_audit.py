@@ -27,32 +27,15 @@ class PipAuditLocalTool(BasePipAuditTool):
         Keyword Args:
             repo_path (str): Path to the repository to scan (required).
 
-        The command targets requirements.txt if present, otherwise falls back
-        to --path for projects using pyproject.toml / setup.cfg / setup.py.
+        Runs pip-audit with no requirements flag so it audits the ambient
+        Python environment from the repository directory (cwd is set by
+        build_execution_passes). Avoids triggering venv creation which fails
+        for projects with Python 3.13-incompatible build dependencies.
         """
         repo_path: str | None = kwargs.get("repo_path")
         if not repo_path:
             raise ValueError("repo_path is required for pip-audit")
-
         repo = Path(repo_path)
         if not repo.exists():
             raise ValueError(f"Repository path does not exist: {repo_path!r}")
-
-        cmd = ["pip-audit", "--format", "json"]
-
-        req_file = repo / "requirements.txt"
-        if req_file.exists():
-            cmd.extend(["-r", str(req_file)])
-        elif (
-            (repo / "pyproject.toml").exists()
-            or (repo / "setup.cfg").exists()
-            or (repo / "setup.py").exists()
-        ):
-            cmd.extend(["--path", str(repo)])
-        else:
-            raise ValueError(
-                "No Python manifest (requirements.txt, pyproject.toml, setup.py)"
-                f" found in {repo_path!r}"
-            )
-
-        return cmd
+        return ["pip-audit", "--format", "json"]

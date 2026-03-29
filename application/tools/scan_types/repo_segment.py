@@ -178,20 +178,19 @@ class RepoSegmentScan(ScanType):
                                 result.duration_seconds,
                             )
                         )
+                    total_ingested += dispatch_and_count_ingested(
+                        resources.event_bus,
+                        ToolCompleted(
+                            result,
+                            repo.name,
+                            config.run_id,
+                            config.project_name,
+                            config.base_path,
+                            repo=repo.name,
+                        ),
+                    )
 
             all_results.extend(repo_results)
-            for r in repo_results:
-                total_ingested += dispatch_and_count_ingested(
-                    resources.event_bus,
-                    ToolCompleted(
-                        r,
-                        repo.name,
-                        config.run_id,
-                        config.project_name,
-                        config.base_path,
-                        repo=repo.name,
-                    ),
-                )
 
         return ScanSummary(
             total_tools_run=total_run,

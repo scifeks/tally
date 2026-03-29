@@ -252,7 +252,12 @@ class ToolCommands:
         discover_tools(self.repl.base_path)
 
     def _get_wrapper_availability(self) -> tuple:
-        wrappers_dir = Path(__file__).parent.parent.parent / "tools" / "wrappers"
+        wrappers_dir = (
+            Path(__file__).parent.parent.parent.parent
+            / "infrastructure"
+            / "tools"
+            / "wrappers"
+        )
         local_dir = wrappers_dir / "local"
         docker_dir = wrappers_dir / "docker"
         local_tools = {

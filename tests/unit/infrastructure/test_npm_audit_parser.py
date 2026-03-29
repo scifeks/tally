@@ -106,6 +106,27 @@ class TestNpmAuditParser:
         result = parse_npm_audit_json_string(json.dumps(data))
         assert result["vulnerabilities"][0]["vulnerability_id"] == "npm-advisory-5678"
 
+    def test_v2_source_file_is_package_json(self) -> None:
+        data = _v2_data({"lodash": _v2_vuln("high")})
+        result = parse_npm_audit_json_string(json.dumps(data))
+        assert result["vulnerabilities"][0]["source_file"] == "package.json"
+
+    def test_v1_source_file_is_package_json(self) -> None:
+        data = {
+            "advisories": {
+                "1234": {
+                    "module_name": "lodash",
+                    "severity": "high",
+                    "cves": ["CVE-2020-1234"],
+                    "title": "Prototype pollution",
+                    "vulnerable_versions": ">=0.0.0 <4.17.21",
+                    "patched_versions": ">=4.17.21",
+                }
+            }
+        }
+        result = parse_npm_audit_json_string(json.dumps(data))
+        assert result["vulnerabilities"][0]["source_file"] == "package.json"
+
     def test_summary_total_and_ecosystems(self) -> None:
         data = _v2_data(
             {
