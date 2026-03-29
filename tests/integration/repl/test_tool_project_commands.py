@@ -322,6 +322,58 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
         discover_tools()
 
 
+# ---------------------------------------------------------------------------
+# _get_wrapper_availability path fix
+# ---------------------------------------------------------------------------
+
+
+def test_tool_add_global_shows_unconfigured_wrapper(tmp_path: Path) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "commands.json").write_text("{}")
+
+    tc, repl = _make_tc(base_path=str(tmp_path))
+
+    with (
+        patch.object(
+            tc, "_get_wrapper_availability", return_value=({"npm-audit"}, set())
+        ),
+        patch("builtins.input", return_value=""),
+    ):
+        tc._cmd_tool_add()
+
+    printed_calls = [str(c) for c in repl.console.print.call_args_list]
+    assert not any(
+        "All available tools are already configured" in c for c in printed_calls
+    )
+
+
+def test_tool_add_project_shows_unconfigured_wrapper(tmp_path: Path) -> None:
+    project_dir = tmp_path / "projects" / "myproject" / "config"
+    project_dir.mkdir(parents=True)
+    (project_dir / "project.json").write_text("{}")
+    (project_dir / "commands.json").write_text("{}")
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "commands.json").write_text("{}")
+
+    tc, repl = _make_tc(base_path=str(tmp_path))
+
+    with (
+        patch.object(
+            tc, "_get_wrapper_availability", return_value=({"npm-audit"}, set())
+        ),
+        patch("builtins.input", return_value=""),
+    ):
+        tc._cmd_tool_add_project("myproject")
+
+    printed_calls = [str(c) for c in repl.console.print.call_args_list]
+    assert not any(
+        "All available tools are already configured at the project level" in c
+        for c in printed_calls
+    )
+
+
 def test_discover_tools_no_project(tmp_path: Path) -> None:
     from application.tools.registry import discover_tools, tool_registry
 
