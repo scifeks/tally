@@ -85,7 +85,7 @@ def _parse_v2(data: dict[str, Any]) -> dict[str, Any]:
                 "summary": summary or f"Vulnerability in {pkg_name} ({affected_range})",
                 "fixed_version": fixed_version,
                 "cvss_score": None,
-                "source_file": "",
+                "source_file": "package.json",
             }
         )
 
@@ -129,7 +129,7 @@ def _parse_v1(data: dict[str, Any]) -> dict[str, Any]:
                 "summary": advisory.get("title", ""),
                 "fixed_version": fixed_version,
                 "cvss_score": None,
-                "source_file": "",
+                "source_file": "package.json",
             }
         )
 
