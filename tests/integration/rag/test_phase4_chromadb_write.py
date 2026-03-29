@@ -139,6 +139,7 @@ class TestPhase4ChromaDBWrite:
         assert doc is not None
         assert "[nmap]" in doc["document"]
         assert "10.0.0.1" in doc["document"]
+        assert "Repository: " in doc["document"]
 
     def test_delete_then_add_on_rerun(self, phase4_env: dict) -> None:
         """Second dispatch replaces existing ChromaDB docs for the same tool/profile."""

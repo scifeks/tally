@@ -161,7 +161,9 @@ class QueryEngine:
         for i, r in enumerate(results, 1):
             meta = r["metadata"]
             tool = meta.get("tool", "")
-            label = f"[{tool}]" if tool else ""
+            profile = meta.get("profile", "")
+            repo_part = f" repo={profile}" if profile else ""
+            label = f"[{tool}{repo_part}]" if (tool or profile) else ""
             context_lines.append(f"{i}. {label} {r['document']}")
         context = "\n".join(context_lines)
 

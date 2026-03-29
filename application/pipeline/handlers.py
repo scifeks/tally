@@ -183,7 +183,10 @@ class ChromaDBHandler(BaseHandler):
                 handler = ToolHandlerFactory.load(tool)
                 if handler is None:
                     continue
-                texts = [handler.render(row) for row in group_rows]
+                texts = [
+                    f"Repository: {profile} | {handler.render(row)}"
+                    for row in group_rows
+                ]
                 metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
                 ids = [str(row["id"]) for row in group_rows]
                 engine.add_documents(texts=texts, metadatas=metadatas, ids=ids)
