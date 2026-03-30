@@ -69,6 +69,9 @@ fail_under = 70
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+  "ignore::DeprecationWarning:chromadb",
+]
 markers = [
   "slow: marks tests as slow-running (nmap scans)",
   "requires_nmap: marks tests that need nmap installed",
