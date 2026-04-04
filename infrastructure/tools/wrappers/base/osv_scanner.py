@@ -40,6 +40,10 @@ class BaseOSVScannerTool(ToolInterface):
         return False
 
     @property
+    def should_visualize(self) -> bool:
+        return True
+
+    @property
     def findings_exit_ok(self) -> bool:
         return True
 

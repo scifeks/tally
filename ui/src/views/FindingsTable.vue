@@ -234,14 +234,11 @@ onMounted(async () => {
   try {
     const [config, codeFindings, webFindings] = await Promise.all([
       getConfig(),
-      getFindings({ domain: 'code' }),
-      getFindings({ domain: 'web' }),
+      getFindings({ domain: 'code', visualize_only: true }),
+      getFindings({ domain: 'web', visualize_only: true }),
     ])
     columnDefs.value = buildColumnDefs(config.editable_fields)
-    // Noir findings (domain='code', tool='noir') are attack-surface metadata,
-    // not triage targets — exclude them from the findings table.
-    // todo: Filter this out at the domain layer instead of the UI
-    rowData.push(...codeFindings.filter(f => f.tool !== 'noir'), ...webFindings)
+    rowData.push(...codeFindings, ...webFindings)
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Failed to load findings'
   } finally {

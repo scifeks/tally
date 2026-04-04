@@ -82,6 +82,7 @@ export async function getFindings(params?: {
   domain?: string
   status?: string
   segment?: string
+  visualize_only?: boolean
 }): Promise<Finding[]> {
   const response = await http.get<Finding[]>('/api/findings/', { params })
   return response.data

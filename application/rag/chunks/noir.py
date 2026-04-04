@@ -94,6 +94,7 @@ class NoirHandler:
     # Empty set → all type_* columns are False (see ADR-009 rationale).
     type_flags: dict[str, set[str]] = {"informational": set()}
     should_enrich = False
+    should_visualize = False
     enrichment_fields = None
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:

@@ -123,6 +123,16 @@ class ToolInterface(ABC):
         ...
 
     @property
+    @abstractmethod
+    def should_visualize(self) -> bool:
+        """True if this tool's findings should appear in visualization (web UI).
+
+        Tools that produce metadata rather than triage-able findings (e.g., noir)
+        set this to False to exclude them from the findings browser table.
+        """
+        ...
+
+    @property
     def timeout(self) -> int | None:
         """Per-tool subprocess timeout in seconds.
 

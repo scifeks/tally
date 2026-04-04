@@ -72,6 +72,7 @@ def list_findings(
     domain: str | None = Query(default=None),
     status: str | None = Query(default=None),
     segment: str | None = Query(default=None),
+    visualize_only: bool = Query(default=False),
 ) -> list[dict]:
     """Return findings, optionally filtered by tool, domain, status, or segment."""
     factory = request.app.state.connection_factory
@@ -83,6 +84,14 @@ def list_findings(
         segments=[segment] if segment else None,
         limit=10_000,
     )
+    if visualize_only:
+        from application.rag.ingestor import ToolHandlerFactory
+
+        rows = [
+            r
+            for r in rows
+            if getattr(ToolHandlerFactory.load(r["tool"]), "should_visualize", True)
+        ]
     return [_serialise_finding(r) for r in rows]
 
 

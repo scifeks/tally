@@ -164,6 +164,11 @@ class BaseNoirTool(ToolInterface):
         return True
 
     @property
+    def should_visualize(self) -> bool:
+        """Noir findings are endpoint metadata, not triage-able findings."""
+        return False
+
+    @property
     def findings_exit_ok(self) -> bool:
         # Noir exits 0 regardless of how many endpoints it finds.
         return True
