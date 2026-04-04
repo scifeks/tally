@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import socket
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -86,6 +87,19 @@ class ZAPLocalTool(BaseZapTool):
 
         openapi_file: str | None = kwargs.get("openapi_file")
 
+        # zap.sh cd's to its install dir before launching Java, so any relative
+        # path for openapi_file would be resolved there.  Always use absolute.
+        if openapi_file:
+            openapi_file = str(Path(openapi_file).resolve())
+
+        # ZAP defaults its HTTP proxy to port 8080, which may already be in use
+        # (e.g. by the tally web server or a scanned app).  Use a fresh isolated
+        # home directory (-dir) per scan so ZAP writes its own config.xml with
+        # the chosen port — this avoids TOCTOU races and any residual config from
+        # a previous run overriding our -port flag.
+        zap_home = str(Path(tempfile.gettempdir()) / f"zap_home_{os.getpid()}")
+        proxy_port = str(_find_free_port())
+
         if openapi_file:
             # OpenAPI mode: ZAP imports the OAS3 spec so it discovers all defined
             # paths, then uses -quickurl to trigger the spider + active scan.
@@ -93,6 +107,10 @@ class ZAPLocalTool(BaseZapTool):
             return [
                 self._zap_path,
                 "-cmd",
+                "-dir",
+                zap_home,
+                "-port",
+                proxy_port,
                 "-openapifile",
                 openapi_file,
                 "-openapitargeturl",
@@ -108,6 +126,10 @@ class ZAPLocalTool(BaseZapTool):
         return [
             self._zap_path,
             "-cmd",
+            "-dir",
+            zap_home,
+            "-port",
+            proxy_port,
             "-quickurl",
             base_url,
             "-quickprogress",
@@ -174,6 +196,18 @@ class ZAPLocalTool(BaseZapTool):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _find_free_port() -> int:
+    """Ask the OS to assign a free TCP port and return it.
+
+    Uses ``socket.bind(("", 0))`` so the OS picks an available port.  There is
+    a small TOCTOU window between this call and ZAP starting, but in practice
+    scans run sequentially and the race is negligible.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
 
 
 def _find_noir_oas3(base_path: str, project_name: str, repo_name: str) -> str | None:

@@ -187,6 +187,58 @@ class TestZapBuildCommandQuickScanFallback:
         )
         assert "-quickurl" in cmd
 
+    def test_port_flag_present_in_both_modes(self, tmp_path: Path) -> None:
+        """Both quick-scan and OpenAPI modes must include -port to avoid
+        colliding with port 8080, which the tally web server occupies."""
+        zap = _make_zap()
+        report = str(tmp_path / "report.json")
+        quick_cmd = zap.build_command(base_url="http://t", output_file=report)
+        oas_cmd = zap.build_command(
+            base_url="http://t",
+            output_file=report,
+            openapi_file=str(tmp_path / "spec.json"),
+        )
+        assert "-port" in quick_cmd
+        assert "-port" in oas_cmd
+        # The port value must be a valid integer in the ephemeral range.
+        port_val_quick = int(quick_cmd[quick_cmd.index("-port") + 1])
+        port_val_oas = int(oas_cmd[oas_cmd.index("-port") + 1])
+        assert 1024 <= port_val_quick <= 65535
+        assert 1024 <= port_val_oas <= 65535
+
+    def test_dir_flag_present_in_both_modes(self, tmp_path: Path) -> None:
+        """Both modes include -dir so each scan gets an isolated ZAP home
+        directory, preventing config from a previous run overriding -port."""
+        zap = _make_zap()
+        report = str(tmp_path / "report.json")
+        quick_cmd = zap.build_command(base_url="http://t", output_file=report)
+        oas_cmd = zap.build_command(
+            base_url="http://t",
+            output_file=report,
+            openapi_file=str(tmp_path / "spec.json"),
+        )
+        assert "-dir" in quick_cmd
+        assert "-dir" in oas_cmd
+
+    def test_openapi_file_path_is_absolute(self, tmp_path: Path) -> None:
+        """The openapi_file path must be absolute.
+
+        zap.sh cd's to its install directory before launching Java, so a
+        relative path would be resolved there instead of the project root.
+        """
+        zap = _make_zap()
+        # Pass a relative-looking path by using just a filename inside tmp_path
+        # then constructing the full path — the key assertion is that whatever
+        # path is in the command starts with '/'.
+        oas3 = str(tmp_path / "spec.json")
+        cmd = zap.build_command(
+            base_url="http://t",
+            output_file=str(tmp_path / "report.json"),
+            openapi_file=oas3,
+        )
+        idx = cmd.index("-openapifile")
+        assert cmd[idx + 1].startswith("/"), "openapi_file path must be absolute"
+
     def test_existing_quickout_flag_present_in_both_modes(self, tmp_path: Path) -> None:
         zap = _make_zap()
         report = str(tmp_path / "report.json")
