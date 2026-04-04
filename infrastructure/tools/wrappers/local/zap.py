@@ -17,9 +17,22 @@ from infrastructure.tools.wrappers.base.zap import BaseZapTool
 
 
 class ZAPLocalTool(BaseZapTool):
-    """Wrapper for OWASP ZAP quick-scan (DAST) mode.
+    """Wrapper for OWASP ZAP DAST scanning.
 
-    Quick-scan MVP: ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
+    Supports two invocation modes:
+
+    **Quick-scan (default):**
+        ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
+
+    **OpenAPI mode (when a Noir OAS3 file is available):**
+        ``zap.sh -cmd -openapifile <oas3_path> -openapitargeturl <url>``
+        ``        -quickprogress -quickout <file>``
+
+    OpenAPI mode is activated automatically by ``build_execution_passes``
+    when a Noir OAS3 output file exists for the target repository (discovered
+    via the ``tool_outputs/noir/`` directory).  It can also be triggered
+    explicitly by passing ``openapi_file`` in the kwargs handed to
+    ``build_command``.
     """
 
     def __init__(self, config=None) -> None:
@@ -43,7 +56,7 @@ class ZAPLocalTool(BaseZapTool):
         return shutil.which(self._zap_path)
 
     def build_command(self, **kwargs) -> list[str]:
-        """Build the ZAP quick-scan argv list.
+        """Build the ZAP scan argv list.
 
         Keyword Args:
             base_url (str): API base URL to scan. Required.
@@ -52,6 +65,9 @@ class ZAPLocalTool(BaseZapTool):
             api_type (str): ``"rest"`` or ``"graphql"`` (default: ``"rest"``).
             auth_token (Optional[str]): Bearer token for authenticated targets.
             output_file (Optional[str]): Filesystem path for the ZAP JSON report.
+            openapi_file (Optional[str]): Path to an OAS3 file produced by Noir.
+                When provided, ZAP imports the spec via ``-openapifile`` and
+                ``-openapitargeturl`` instead of using ``-quickurl`` mode.
         """
         base_url: str | None = kwargs.get("base_url")
         if not base_url:
@@ -68,6 +84,27 @@ class ZAPLocalTool(BaseZapTool):
         output_file = str(Path(output_file).resolve())
         self._last_report_path = Path(output_file)
 
+        openapi_file: str | None = kwargs.get("openapi_file")
+
+        if openapi_file:
+            # OpenAPI mode: ZAP imports the OAS3 spec so it discovers all defined
+            # paths, then uses -quickurl to trigger the spider + active scan.
+            # Without -quickurl the scan does not execute and no report is written.
+            return [
+                self._zap_path,
+                "-cmd",
+                "-openapifile",
+                openapi_file,
+                "-openapitargeturl",
+                base_url,
+                "-quickurl",
+                base_url,
+                "-quickprogress",
+                "-quickout",
+                output_file,
+            ]
+
+        # Quick-scan mode: ZAP crawls the target URL directly.
         return [
             self._zap_path,
             "-cmd",
@@ -96,6 +133,13 @@ class ZAPLocalTool(BaseZapTool):
         return parse_zap_json_string(output)
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        """Return one ExecutionPass for ZAP.
+
+        When a Noir OAS3 file exists for the target repository (written by a
+        prior Noir scan), it is passed as ``openapi_file`` so that ZAP uses
+        OpenAPI mode.  If no Noir output is found, ZAP falls back to
+        ``-quickurl`` mode.
+        """
         assert context.repo is not None
         output_dir = (
             Path(context.base_path)
@@ -107,12 +151,45 @@ class ZAPLocalTool(BaseZapTool):
         output_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{context.repo.name}_{ts}_report.json")
+
+        kwargs: dict[str, Any] = {
+            "base_url": context.repo.base_urls[0],
+            "output_file": output_file,
+        }
+
+        openapi_file = _find_noir_oas3(
+            context.base_path, context.project_name, context.repo.name
+        )
+        if openapi_file:
+            kwargs["openapi_file"] = openapi_file
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,
-                kwargs={
-                    "base_url": context.repo.base_urls[0],
-                    "output_file": output_file,
-                },
+                kwargs=kwargs,
             )
         ]
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_noir_oas3(base_path: str, project_name: str, repo_name: str) -> str | None:
+    """Return the most recent Noir OAS3 file for *repo_name*, or ``None``.
+
+    Looks in ``projects/<project>/tool_outputs/noir/<repo>_*_oas3.json``
+    (the naming convention set by ``BaseNoirTool.build_execution_passes``).
+    Returns the lexicographically last match, which corresponds to the most
+    recent timestamp-prefixed filename.
+
+    Returns ``None`` when the directory does not exist or contains no
+    matching files.
+    """
+    noir_dir = Path(base_path) / "projects" / project_name / "tool_outputs" / "noir"
+    if not noir_dir.exists():
+        return None
+    pattern = f"{repo_name}_*_oas3.json"
+    matches = sorted(noir_dir.glob(pattern))
+    return str(matches[-1]) if matches else None

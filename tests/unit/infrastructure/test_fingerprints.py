@@ -79,4 +79,5 @@ class TestFingerprintKeys:
             "npm-audit",
             "composer-audit",
             "osv-scanner",
+            "noir",
         }
