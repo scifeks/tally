@@ -26,7 +26,7 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
-        """scan [--repo=<repo>] [--tool=<tool,...>] [--domain=<domain,...>]"""
+        """scan [--repo=<repo,...>] [--tool=<tool,...>] [--domain=<domain,...>]"""
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'project add' first.[/yellow]"
@@ -67,7 +67,7 @@ class ScanCommands:
         if unrecognized:
             self.repl.console.print(
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
-                "Usage: scan [--repo=<repo>] [--tool=<tool,...>]"
+                "Usage: scan [--repo=<repo,...>] [--tool=<tool,...>]"
                 " [--domain=<domain,...>] [--yes]"
             )
             return
@@ -75,18 +75,20 @@ class ScanCommands:
         assert self.repl.active_project is not None
 
         # Validate --repo
-        repo_name: str | None = None
+        repo_names: list[str] | None = None
         if repo_val is not None:
+            requested_repos = [r.strip() for r in repo_val.split(",") if r.strip()]
             repos = self.repl.config.load_repositories(self.repl.active_project)
-            match = next((r for r in repos if r.name.lower() == repo_val.lower()), None)
-            if match is None:
-                names = sorted(r.name for r in repos)
+            repo_map = {r.name.lower(): r.name for r in repos}
+            invalid_repos = [r for r in requested_repos if r.lower() not in repo_map]
+            if invalid_repos:
+                names = sorted(repo_map.values())
                 self.repl.console.print(
-                    f"[red]Unknown repository:[/red] {repo_val!r}\n"
+                    f"[red]Unknown repository:[/red] {', '.join(invalid_repos)}\n"
                     f"Configured repos: {', '.join(names) or 'none'}"
                 )
                 return
-            repo_name = match.name
+            repo_names = [repo_map[r.lower()] for r in requested_repos]
 
         # Validate --tool
         requested_tools: list[str] | None = None
@@ -132,24 +134,26 @@ class ScanCommands:
             return
 
         try:
-            if repo_name is not None:
+            if repo_names is not None:
                 if effective_tools is not None:
                     effective_tools = self._maybe_warn_zap_without_noir(
                         effective_tools,
-                        repo_name,
+                        repo_names,
                         auto_approve,
                         orchestrator,
                     )
                     if effective_tools is None:
                         return
-                    for _i, tool_name in enumerate(effective_tools):
-                        orchestrator.run_tool_on_repo(
-                            tool_name,
-                            repo_name,
-                            remaining_peers=len(effective_tools) - _i - 1,
-                        )
+                    for repo_name in repo_names:
+                        for _i, tool_name in enumerate(effective_tools):
+                            orchestrator.run_tool_on_repo(
+                                tool_name,
+                                repo_name,
+                                remaining_peers=len(effective_tools) - _i - 1,
+                            )
                 else:
-                    orchestrator.run_repo_scan(repo_name=repo_name)
+                    for repo_name in repo_names:
+                        orchestrator.run_repo_scan(repo_name=repo_name)
             else:
                 if effective_tools is not None:
                     effective_tools = self._maybe_warn_zap_without_noir(
@@ -318,7 +322,7 @@ class ScanCommands:
     def _maybe_warn_zap_without_noir(
         self,
         tools: list[str],
-        repo_name: str | None,
+        repo_names: list[str] | None,
         auto_approve: bool,
         orchestrator: object,
     ) -> list[str] | None:
@@ -340,8 +344,8 @@ class ScanCommands:
         assert self.repl.active_project is not None
         repos = self.repl.config.load_repositories(self.repl.active_project)
         target_repos = (
-            [r for r in repos if r.name == repo_name]
-            if repo_name is not None
+            [r for r in repos if r.name in repo_names]
+            if repo_names is not None
             else repos
         )
 

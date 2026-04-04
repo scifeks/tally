@@ -53,6 +53,7 @@ class TestMaybeWarnZapWithoutNoir:
     ) -> list[str] | None:
         sc = _make_sc(repo_names)
         oas3_result = "/tmp/dvna_oas3.json" if oas3_exists else None
+        names: list[str] | None = [repo_name] if repo_name is not None else repo_names
         with (
             patch(
                 "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
@@ -61,7 +62,7 @@ class TestMaybeWarnZapWithoutNoir:
             patch("builtins.input", return_value=user_input),
         ):
             return sc._maybe_warn_zap_without_noir(
-                tools, repo_name, auto_approve, MagicMock()
+                tools, names, auto_approve, MagicMock()
             )
 
     def test_no_warning_when_zap_not_in_tools(self) -> None:

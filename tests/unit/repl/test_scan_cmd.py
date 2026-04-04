@@ -52,6 +52,31 @@ def test_scan_repo_calls_run_repo_scan() -> None:
     assert orchestrator.run_repo_scan.call_args == call(repo_name="myrepo")
 
 
+def test_scan_multiple_repos_calls_run_repo_scan_for_each() -> None:
+    repos = [_make_repo("repo-a"), _make_repo("repo-b")]
+    _repl, orchestrator = _run(["--repo=repo-a,repo-b"], repos=repos)
+    called = [c.kwargs["repo_name"] for c in orchestrator.run_repo_scan.call_args_list]
+    assert called == ["repo-a", "repo-b"]
+
+
+def test_scan_multiple_repos_unknown_repo_prints_error() -> None:
+    repos = [_make_repo("repo-a")]
+    repl, orchestrator = _run(["--repo=repo-a,nope"], repos=repos)
+    printed = repl.console.print.call_args[0][0]
+    assert "Unknown repository" in printed
+    assert "nope" in printed
+    assert not orchestrator.run_repo_scan.called
+
+
+def test_scan_multiple_repos_with_tool() -> None:
+    repos = [_make_repo("repo-a"), _make_repo("repo-b")]
+    _repl, orchestrator = _run(["--repo=repo-a,repo-b", "--tool=semgrep"], repos=repos)
+    calls = orchestrator.run_tool_on_repo.call_args_list
+    called = [(c.args[0], c.args[1]) for c in calls]
+    assert ("semgrep", "repo-a") in called
+    assert ("semgrep", "repo-b") in called
+
+
 def test_scan_tool_single_calls_run_tool_on_all_repos() -> None:
     _repl, orchestrator = _run(["--tool=semgrep"])
     assert orchestrator.run_tool_on_all_repos.call_args == call(
