@@ -31,7 +31,7 @@ _HELP_TEXT = (
     "  Examples:\n"
     "    purge\n"
     "    purge --keep-reports\n"
-    "    purge --tool=nmap\n"
+    "    purge --tool=gitleaks\n"
     "    purge --tool=semgrep,gitleaks\n"
 )
 

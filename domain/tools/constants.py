@@ -37,7 +37,7 @@ STATUS_LEVELS: frozenset[str] = frozenset(
     {"active", "false_positive", "fixed", "wont_fix"}
 )
 
-DOMAINS: set[str] = {"code", "web", "network"}
+DOMAINS: set[str] = {"code", "web"}
 
 BOOLEAN_TYPE_FIELDS: set[str] = {f"type_{t}" for t in FINDING_TYPES}
 

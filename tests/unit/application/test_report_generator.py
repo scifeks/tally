@@ -140,18 +140,18 @@ class TestReportGenerator:
         mock_finding_repo.get_all_findings_deserialized.return_value = [
             _finding(tool="gitleaks", severity="high"),
             _finding(tool="gitleaks", severity="medium"),
-            _finding(tool="nmap", severity="low"),
+            _finding(tool="semgrep", severity="low"),
         ]
         result = generator._aggregate_findings()
         assert result["summary"]["by_tool"]["gitleaks"] == 2
-        assert result["summary"]["by_tool"]["nmap"] == 1
+        assert result["summary"]["by_tool"]["semgrep"] == 1
 
     def test_aggregate_counts_severity(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
         mock_finding_repo.get_all_findings_deserialized.return_value = [
             _finding(tool="gitleaks", severity="high"),
-            _finding(tool="nmap", severity="critical"),
+            _finding(tool="semgrep", severity="critical"),
         ]
         result = generator._aggregate_findings()
         assert result["summary"]["by_severity"]["high"] == 1

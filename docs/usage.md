@@ -18,13 +18,11 @@ Tally - Dependency Check
  chromadb           | package      | v 1.5.2          |
  ollama             | package      | v installed      |
  ...
- nmap               | system_tool  | v available      |
  semgrep            | system_tool  | ! NOT FOUND      | pip install semgrep
 
 Warning: 1 optional tool not found. Some scan features will be unavailable.
 
 [*] Discovering tools...
-  v nmap                 network    project      available
   ! semgrep              sast       repository   NOT INSTALLED
   ...
 Loaded 8 tools (2 available, 6 not installed)
@@ -84,11 +82,9 @@ Project files are created under `projects/acme-security-audit/`:
 config/
   project.json         # Project metadata
   repositories.json    # Configured repositories
-  nmap_hosts.json      # Nmap scan profiles (starts empty: {})
   endpoints/           # Per-repo API endpoint configs
 chroma_db/             # RAG vector store
 tool_outputs/          # Raw tool output files
-  nmap/
   semgrep/
   ...
 sessions/              # Chat history
@@ -246,7 +242,7 @@ Removes the project-level override. The tool reverts to the global configuration
 
 ### Full Scan
 
-Runs all segments (network, sast, sca, secrets, api) in order across all configured repositories. The network segment uses nmap profiles from `nmap_hosts.json`.
+Runs all segments (sast, sca, secrets, api) in order across all configured repositories.
 
 ```
 [acme-security-audit]> scan
@@ -257,11 +253,6 @@ Tally prompts for approval before each tool execution:
 ```
 Full Scan: acme-security-audit
 ──────────────────────────────────────────────────
-
-NETWORK
-  [*] Running nmap (management)...
-Run nmap? [y/N]: y
-  ✓ nmap/management         | 4 findings    | 12.3s
 
 SAST
   [*] Running semgrep (api-server)...
@@ -285,7 +276,7 @@ Use flags to scope a scan. All flags accept comma-separated lists.
 
 **Run all tools of a given domain:**
 
-Valid domains: `code`, `web`, `network`
+Valid domains: `code`, `web`
 
 ```
 [acme-security-audit]> scan --domain=code
@@ -307,9 +298,6 @@ If you have only one repository, `scan` (no flags) already targets it.
 [acme-security-audit]> scan --tool=semgrep --domain=code
 ```
 
-Network tools (`nmap`) cannot be scoped to a repository.
-Use `scan --tool=nmap` (without `--repo`) to run nmap.
-
 ### Docker vs Local Execution
 
 Each tool runs in whichever mode is configured in `config/commands.json` — either locally as a subprocess or via `docker exec` inside a running container. From the scan commands' perspective, the execution mode is transparent: output is captured, parsed, and ingested identically regardless of whether a tool runs locally or in Docker.
@@ -327,7 +315,7 @@ For Docker tools, repositories must have a `docker_path` set — the container-s
 Run a tool with custom arguments, bypassing orchestration:
 
 ```
-[acme-security-audit]> run nmap --timeout 120 -sV 192.168.1.0/24
+[acme-security-audit]> run semgrep --config auto /path/to/repo
 ```
 
 Tally asks if you want to ingest the output into the knowledge base after execution.
@@ -441,7 +429,7 @@ Ask a question about the findings using RAG-augmented LLM chat:
 ```
 [acme-security-audit]> chat What are the most critical vulnerabilities found?
 [acme-security-audit]> chat Are there any exposed admin endpoints?
-[acme-security-audit]> chat Summarize the open ports and services found by nmap
+[acme-security-audit]> chat Summarize the most critical vulnerabilities found
 ```
 
 Tally retrieves relevant findings from the knowledge base and passes them to the Ollama LLM as context. The response appears in a panel:
@@ -451,7 +439,7 @@ Tally retrieves relevant findings from the knowledge base and passes them to the
 │ Based on the scan findings, the most critical issues    │
 │ are:                                                    │
 │ 1. SQL injection risk at api/users.py (semgrep)         │
-│ 2. Exposed admin endpoint on port 8080 (nmap)           │
+│ 2. Exposed admin endpoint on port 8080 (ZAP)            │
 │ ...                                                     │
 ╰─────────────────────────────────────────────────────────╯
 ```
@@ -464,7 +452,6 @@ View a summary of what has been ingested:
 [acme-security-audit]> stats
  Metric            | Value
  Total Documents   | 42
-   nmap            | 8
    semgrep         | 18
    gitleaks        | 4
    pip-audit       | 12
@@ -533,7 +520,6 @@ Output:
 
 The Markdown report contains:
 - Executive summary (total findings, counts by severity)
-- Network findings table (nmap open ports)
 - SAST findings table (semgrep)
 - SCA findings tables (osv-scanner, pip-audit, npm-audit, composer-audit)
 - Secrets table (gitleaks, without secret values)

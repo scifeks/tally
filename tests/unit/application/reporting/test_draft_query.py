@@ -262,26 +262,6 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(result, [])
 
     # ------------------------------------------------------------------ #
-    # distinct_hosts
-    # ------------------------------------------------------------------ #
-
-    def test_distinct_hosts_nmap(self) -> None:
-        findings = [
-            {"tool": "nmap", "host": "10.0.0.1"},
-            {"tool": "nmap", "host": "10.0.0.2"},
-            {"tool": "nmap", "host": "10.0.0.1"},
-        ]
-        result = self.svc.distinct_hosts(findings)
-        self.assertEqual(result, ["10.0.0.1", "10.0.0.2"])
-
-    def test_distinct_hosts_non_nmap_excluded(self) -> None:
-        findings = [
-            {"tool": "semgrep", "host": "10.0.0.1"},
-        ]
-        result = self.svc.distinct_hosts(findings)
-        self.assertEqual(result, [])
-
-    # ------------------------------------------------------------------ #
     # distinct_ecosystems
     # ------------------------------------------------------------------ #
 

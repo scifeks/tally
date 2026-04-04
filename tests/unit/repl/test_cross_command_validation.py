@@ -14,9 +14,9 @@ from application.repl.commands.knowledge_commands import KnowledgeCommands  # no
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from application.repl.commands.scan_commands import ScanCommands  # noqa: E402
 
-_VALID_TOOLS = ["nmap", "semgrep", "gitleaks"]
+_VALID_TOOLS = ["semgrep", "gitleaks"]
 _INVALID_TOOL = "nonexistent-tool"
-_VALID_TOOL = "nmap"
+_VALID_TOOL = "semgrep"
 
 
 # ---------------------------------------------------------------------------

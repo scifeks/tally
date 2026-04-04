@@ -290,10 +290,10 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
     (config_dir / "commands.json").write_text(
         json.dumps(
             {
-                "nmap": {
+                "gitleaks": {
                     "type": "repo",
                     "location": "local",
-                    "path": "/usr/bin/nmap",
+                    "path": "/usr/bin/gitleaks",
                 }
             }
         )
@@ -304,10 +304,10 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
     (project_config / "commands.json").write_text(
         json.dumps(
             {
-                "nmap": {
+                "gitleaks": {
                     "type": "repo",
                     "location": "local",
-                    "path": "/custom/nmap",
+                    "path": "/custom/gitleaks",
                 }
             }
         )
@@ -315,9 +315,9 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
 
     try:
         discover_tools(str(tmp_path), project_name="proj")
-        config = tool_registry.get_tool_config("nmap")
+        config = tool_registry.get_tool_config("gitleaks")
         assert config is not None
-        assert config.path == "/custom/nmap"
+        assert config.path == "/custom/gitleaks"
     finally:
         discover_tools()
 
@@ -382,10 +382,10 @@ def test_discover_tools_no_project(tmp_path: Path) -> None:
     (config_dir / "commands.json").write_text(
         json.dumps(
             {
-                "nmap": {
+                "gitleaks": {
                     "type": "repo",
                     "location": "local",
-                    "path": "/usr/bin/nmap",
+                    "path": "/usr/bin/gitleaks",
                 }
             }
         )
@@ -393,8 +393,8 @@ def test_discover_tools_no_project(tmp_path: Path) -> None:
 
     try:
         discover_tools(str(tmp_path))
-        config = tool_registry.get_tool_config("nmap")
+        config = tool_registry.get_tool_config("gitleaks")
         assert config is not None
-        assert config.path == "/usr/bin/nmap"
+        assert config.path == "/usr/bin/gitleaks"
     finally:
         discover_tools()

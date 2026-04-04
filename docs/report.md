@@ -1,6 +1,6 @@
 # Report Generation
 
-Tally's report pipeline generates professional penetration testing reports in two modes: **quick text reports** (Markdown, HTML, or JSON) built directly from the findings database, and a **full PDF report** assembled from LLM-drafted narrative sections and structured findings data.
+Tally's report pipeline generates professional security audit reports in two modes: **quick text reports** (Markdown, HTML, or JSON) built directly from the findings database, and a **full PDF report** assembled from LLM-drafted narrative sections and structured findings data.
 
 The `report` command defaults to PDF assembly — the full client-deliverable report.
 

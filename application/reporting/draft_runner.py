@@ -246,7 +246,6 @@ def _build_context(
             {
                 "tools": distinct_tools,
                 "url_hosts": query.distinct_url_hosts(findings),
-                "hosts": query.distinct_hosts(findings),
                 "ecosystems": query.distinct_ecosystems(findings),
                 "tools_blurb": _load_tools_blurb(distinct_tools),
             }

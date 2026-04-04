@@ -59,9 +59,6 @@ def _make_mock_repo(
 def mock_config() -> Any:
     cm = MagicMock()
     cm.load_repositories.return_value = [_make_mock_repo()]
-    nmap_cfg = MagicMock()
-    nmap_cfg.profiles = {"default": {}}
-    cm.load_nmap_hosts.return_value = nmap_cfg
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
@@ -99,25 +96,6 @@ class TestSegmentScan:
         ]
         with pytest.raises(InvalidSegmentError):
             SegmentScan("unknown").execute(mock_config, mock_resources)
-
-    def test_valid_network_segment_delegates_to_network_scan(
-        self,
-        mock_config: Any,
-        mock_resources: Any,
-    ) -> None:
-        from application.tools.scan_types.segment import SegmentScan
-
-        mock_resources.registry.get_all_tools.return_value = [
-            _make_mock_tool_obj(scan_segment="network")
-        ]
-        with patch(
-            "application.tools.scan_types.segment.NetworkSegmentScan"
-        ) as mock_net:
-            mock_net.return_value.execute.return_value = _zero_summary()
-            SegmentScan("network").execute(mock_config, mock_resources)
-
-        mock_net.assert_called_once()
-        mock_net.return_value.execute.assert_called_once()
 
     def test_valid_repo_segment_delegates_to_repo_segment_scan(
         self,

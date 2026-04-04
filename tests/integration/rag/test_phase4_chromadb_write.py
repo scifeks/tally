@@ -51,16 +51,18 @@ def phase4_env(tmp_path: Path) -> dict:
     run_repo, finding_repo, _, _ = make_store(base_path, project_name)
     run_id = run_repo.create_run({})
 
-    nmap_row = {
-        "tool": "nmap",
+    semgrep_row = {
+        "tool": "semgrep",
         "profile": "default",
-        "ip_address": "10.0.0.1",
-        "port": 80,
-        "severity": "info",
-        "finding_type": json.dumps(["exposure"]),
-        "meta": json.dumps({"service": "http"}),
+        "rule_id": "python.django.security.sql-injection",
+        "file_path": "src/api/users.py",
+        "line_start": 42,
+        "line_end": 42,
+        "severity": "high",
+        "finding_type": json.dumps(["vulnerability"]),
+        "description": "SQL injection via unsanitized user input",
     }
-    nmap_id = _seed_finding(finding_repo, run_id, nmap_row)
+    semgrep_id = _seed_finding(finding_repo, run_id, semgrep_row)
 
     gitleaks_row = {
         "tool": "gitleaks",
@@ -80,7 +82,7 @@ def phase4_env(tmp_path: Path) -> dict:
         "base_path": base_path,
         "project_name": project_name,
         "run_id": run_id,
-        "nmap_id": nmap_id,
+        "semgrep_id": semgrep_id,
         "gitleaks_id": gitleaks_id,
         "engine": engine,
         "handler": handler,
@@ -110,7 +112,7 @@ class TestPhase4ChromaDBWrite:
         self, phase4_env: dict
     ) -> None:
         """ChromaDB docs contain exactly {tool, profile} metadata."""
-        _dispatch(phase4_env, ids=[phase4_env["nmap_id"], phase4_env["gitleaks_id"]])
+        _dispatch(phase4_env, ids=[phase4_env["semgrep_id"], phase4_env["gitleaks_id"]])
 
         all_meta = phase4_env["engine"].get_all_metadatas()
         assert len(all_meta) == 2
@@ -118,47 +120,47 @@ class TestPhase4ChromaDBWrite:
             assert set(meta.keys()) == {"tool", "profile"}
             assert meta["profile"] == "default"
         tools = {m["tool"] for m in all_meta}
-        assert tools == {"nmap", "gitleaks"}
+        assert tools == {"semgrep", "gitleaks"}
 
     def test_chromadb_doc_ids_are_sqlite_primary_keys(self, phase4_env: dict) -> None:
         """ChromaDB doc IDs equal str(findings.id)."""
-        nmap_id = phase4_env["nmap_id"]
+        semgrep_id = phase4_env["semgrep_id"]
         gitleaks_id = phase4_env["gitleaks_id"]
-        _dispatch(phase4_env, ids=[nmap_id, gitleaks_id])
+        _dispatch(phase4_env, ids=[semgrep_id, gitleaks_id])
 
         engine = phase4_env["engine"]
-        assert engine.get_document_by_id(str(nmap_id)) is not None
+        assert engine.get_document_by_id(str(semgrep_id)) is not None
         assert engine.get_document_by_id(str(gitleaks_id)) is not None
 
     def test_chromadb_doc_text_is_rendered(self, phase4_env: dict) -> None:
         """ChromaDB document text comes from ToolHandler.render()."""
-        nmap_id = phase4_env["nmap_id"]
-        _dispatch(phase4_env, ids=[nmap_id])
+        semgrep_id = phase4_env["semgrep_id"]
+        _dispatch(phase4_env, ids=[semgrep_id])
 
-        doc = phase4_env["engine"].get_document_by_id(str(nmap_id))
+        doc = phase4_env["engine"].get_document_by_id(str(semgrep_id))
         assert doc is not None
-        assert "[nmap]" in doc["document"]
-        assert "10.0.0.1" in doc["document"]
+        assert "[semgrep]" in doc["document"]
+        assert "src/api/users.py" in doc["document"]
 
     def test_delete_then_add_on_rerun(self, phase4_env: dict) -> None:
         """Second dispatch replaces existing ChromaDB docs for the same tool/profile."""
-        nmap_id = phase4_env["nmap_id"]
+        semgrep_id = phase4_env["semgrep_id"]
 
-        _dispatch(phase4_env, ids=[nmap_id])
+        _dispatch(phase4_env, ids=[semgrep_id])
         assert phase4_env["engine"].count_documents() == 1
 
-        _dispatch(phase4_env, ids=[nmap_id])
+        _dispatch(phase4_env, ids=[semgrep_id])
         assert phase4_env["engine"].count_documents() == 1
 
     def test_only_requested_ids_are_written(self, phase4_env: dict) -> None:
         """Only the IDs in event.ids are written; others remain absent."""
-        nmap_id = phase4_env["nmap_id"]
+        semgrep_id = phase4_env["semgrep_id"]
         gitleaks_id = phase4_env["gitleaks_id"]
 
-        _dispatch(phase4_env, ids=[nmap_id])
+        _dispatch(phase4_env, ids=[semgrep_id])
 
         engine = phase4_env["engine"]
-        assert engine.get_document_by_id(str(nmap_id)) is not None
+        assert engine.get_document_by_id(str(semgrep_id)) is not None
         assert engine.get_document_by_id(str(gitleaks_id)) is None
 
     def test_orphan_removal_on_rescan_with_fewer_findings(
@@ -166,8 +168,8 @@ class TestPhase4ChromaDBWrite:
     ) -> None:
         """Second scan with fewer findings leaves no orphaned ChromaDB docs.
 
-        First scan produces 3 nmap findings → 3 docs in ChromaDB.
-        Second scan produces 1 nmap finding → exactly 1 doc remains.
+        First scan produces 3 semgrep findings → 3 docs in ChromaDB.
+        Second scan produces 1 semgrep finding → exactly 1 doc remains.
         The 2 docs from the first scan must be deleted, not left behind.
         """
         base_path = phase4_env["base_path"]
@@ -175,39 +177,43 @@ class TestPhase4ChromaDBWrite:
         run_repo, finding_repo, _, _ = make_store(base_path, project_name)
         run_id = phase4_env["run_id"]
 
-        # Seed 2 more nmap rows (different ports) to simulate a 3-finding scan
+        # Seed 2 more semgrep rows (different files/lines) to simulate a 3-finding scan
         extra_rows = [
             {
-                "tool": "nmap",
+                "tool": "semgrep",
                 "profile": "default",
-                "ip_address": "10.0.0.1",
-                "port": port,
-                "severity": "informational",
-                "finding_type": json.dumps(["exposure"]),
+                "rule_id": "python.django.security.sql-injection",
+                "file_path": f"src/api/endpoint{i}.py",
+                "line_start": 10 * i,
+                "line_end": 10 * i,
+                "severity": "high",
+                "finding_type": json.dumps(["vulnerability"]),
             }
-            for port in (443, 8080)
+            for i in (2, 3)
         ]
         extra_ids = [_seed_finding(finding_repo, run_id, r) for r in extra_rows]
-        first_scan_ids = [phase4_env["nmap_id"]] + extra_ids
+        first_scan_ids = [phase4_env["semgrep_id"]] + extra_ids
 
-        # First scan: 3 nmap findings
+        # First scan: 3 semgrep findings
         _dispatch(phase4_env, ids=first_scan_ids)
         assert phase4_env["engine"].count_documents() == 3, (
             "expected 3 ChromaDB docs after first scan"
         )
 
-        # Seed 1 new nmap finding (different port) to simulate rescan result
+        # Seed 1 new semgrep finding to simulate rescan result
         new_row = {
-            "tool": "nmap",
+            "tool": "semgrep",
             "profile": "default",
-            "ip_address": "10.0.0.2",
-            "port": 22,
-            "severity": "informational",
-            "finding_type": json.dumps(["exposure"]),
+            "rule_id": "python.flask.security.xss",
+            "file_path": "src/views/index.py",
+            "line_start": 99,
+            "line_end": 99,
+            "severity": "medium",
+            "finding_type": json.dumps(["vulnerability"]),
         }
         new_id = _seed_finding(finding_repo, run_id, new_row)
 
-        # Second scan: only 1 nmap finding
+        # Second scan: only 1 semgrep finding
         _dispatch(phase4_env, ids=[new_id])
         assert phase4_env["engine"].count_documents() == 1, (
             "orphaned docs from first scan were not deleted"

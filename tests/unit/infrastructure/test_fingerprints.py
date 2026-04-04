@@ -5,7 +5,6 @@ from __future__ import annotations
 from infrastructure.tools.fingerprints import (
     FINGERPRINT_REGISTRY,
     _gitleaks_fingerprint_key,
-    _nmap_fingerprint_key,
     _sca_fingerprint_key,
     _semgrep_fingerprint_key,
     _zap_fingerprint_key,
@@ -18,12 +17,6 @@ class TestFingerprintKeys:
             {"rule_id": "aws-key", "file_path": "/src/main.py", "line_number": 42}
         )
         assert result == "gitleaks|aws-key|/src/main.py|42"
-
-    def test_nmap_key_exact(self) -> None:
-        result = _nmap_fingerprint_key(
-            {"ip_address": "10.0.0.1", "port": 443, "transport": "tcp"}
-        )
-        assert result == "nmap|10.0.0.1|443|tcp"
 
     def test_semgrep_key_exact(self) -> None:
         result = _semgrep_fingerprint_key(
@@ -80,7 +73,6 @@ class TestFingerprintKeys:
     def test_registry_contains_all_expected_tools(self) -> None:
         assert set(FINGERPRINT_REGISTRY.keys()) == {
             "gitleaks",
-            "nmap",
             "semgrep",
             "zap",
             "pip-audit",

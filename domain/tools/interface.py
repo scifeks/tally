@@ -44,7 +44,7 @@ class ExecutionContext:
 
     project_name: str
     base_path: str
-    repo: Repository | None  # None for network tools
+    repo: Repository | None  # None when not repo-scoped
     config_manager: ConfigManager
     registry: RegistryLike
     is_docker: bool
@@ -68,7 +68,7 @@ class ToolInterface(ABC):
     @property
     @abstractmethod
     def scan_segment(self) -> str:
-        """Logical scan segment this tool belongs to (e.g. 'network', 'sast')."""
+        """Logical scan segment this tool belongs to (e.g. 'sast')."""
         ...
 
     @property
@@ -119,7 +119,7 @@ class ToolInterface(ABC):
     @property
     @abstractmethod
     def skip(self) -> bool:
-        """True if this tool produces no triage-able findings (e.g. nmap)."""
+        """True if this tool produces no triage-able findings."""
         ...
 
     @property

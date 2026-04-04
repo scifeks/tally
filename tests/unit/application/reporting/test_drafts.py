@@ -365,9 +365,8 @@ class TestScopeMethodologyGenerator:
         ctx = _base_ctx()
         ctx.update(
             {
-                "tools": ["semgrep", "gitleaks", "nmap"],
+                "tools": ["semgrep", "gitleaks"],
                 "url_hosts": ["example.com"],
-                "hosts": ["192.168.1.1"],
                 "ecosystems": ["PyPI", "npm"],
                 "tools_blurb": "Semgrep performs static analysis.",
             }
@@ -387,11 +386,6 @@ class TestScopeMethodologyGenerator:
             self._ctx_with_scope()
         )
 
-    def test_prompt_contains_hosts(self, tmp_path: Path) -> None:
-        assert "192.168.1.1" in self._gen(tmp_path)._build_prompt(
-            self._ctx_with_scope()
-        )
-
     def test_prompt_contains_url_hosts(self, tmp_path: Path) -> None:
         assert "example.com" in self._gen(tmp_path)._build_prompt(
             self._ctx_with_scope()
@@ -402,10 +396,8 @@ class TestScopeMethodologyGenerator:
 
     def test_prompt_omits_network_section_when_no_hosts(self, tmp_path: Path) -> None:
         ctx = self._ctx_with_scope()
-        ctx["hosts"] = []
         ctx["url_hosts"] = []
         prompt = self._gen(tmp_path)._build_prompt(ctx)
-        assert "Network hosts" not in prompt
         assert "Web endpoints" not in prompt
 
     def test_prompt_contains_tools_blurb(self, tmp_path: Path) -> None:

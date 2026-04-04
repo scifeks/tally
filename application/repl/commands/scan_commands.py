@@ -134,17 +134,6 @@ class ScanCommands:
         try:
             if repo_name is not None:
                 if effective_tools is not None:
-                    # Network tools (nmap) cannot be scoped to a single repo
-                    net = [
-                        t for t in effective_tools if get_tool_domain(t) == "network"
-                    ]
-                    if net:
-                        self.repl.console.print(
-                            f"[red]Error:[/red] Network tool(s) cannot be scoped"
-                            f" to a repository: {', '.join(net)}\n"
-                            "Omit --repo to run network tools."
-                        )
-                        return
                     for _i, tool_name in enumerate(effective_tools):
                         orchestrator.run_tool_on_repo(
                             tool_name,
@@ -155,20 +144,10 @@ class ScanCommands:
                     orchestrator.run_repo_scan(repo_name=repo_name)
             else:
                 if effective_tools is not None:
-                    net = [
-                        t for t in effective_tools if get_tool_domain(t) == "network"
-                    ]
-                    repo_tools = [
-                        t for t in effective_tools if get_tool_domain(t) != "network"
-                    ]
-                    if net:
-                        orchestrator.run_segment(
-                            "network", remaining_peers=len(repo_tools)
-                        )
-                    for _i, tool_name in enumerate(repo_tools):
+                    for _i, tool_name in enumerate(effective_tools):
                         orchestrator.run_tool_on_all_repos(
                             tool_name,
-                            remaining_peers=len(repo_tools) - _i - 1,
+                            remaining_peers=len(effective_tools) - _i - 1,
                         )
                 else:
                     orchestrator.run_full_scan()

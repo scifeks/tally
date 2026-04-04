@@ -33,30 +33,11 @@ def test_help_search_full_shows_all_domains():
     rendered = _render(_build_search_help_table())
     assert "Code Domain" in rendered
     assert "Web Domain" in rendered
-    assert "Network Domain" in rendered
 
 
 def test_help_search_full_does_not_show_project_management():
     rendered = _render(_build_search_help_table())
     assert "Project Management" not in rendered
-
-
-# ---------------------------------------------------------------------------
-# _build_search_help_table — nmap (network domain)
-# ---------------------------------------------------------------------------
-
-
-def test_help_search_nmap_shows_network_keys():
-    rendered = _render(_build_search_help_table("nmap"))
-    assert "host" in rendered
-    assert "port" in rendered
-    assert "service" in rendered
-    assert "transport" in rendered
-
-
-def test_help_search_nmap_hides_code_keys():
-    rendered = _render(_build_search_help_table("nmap"))
-    assert "Code Domain" not in rendered
 
 
 # ---------------------------------------------------------------------------
@@ -71,11 +52,6 @@ def test_help_search_gitleaks_shows_code_keys():
     assert "rule" in rendered
 
 
-def test_help_search_gitleaks_hides_network_keys():
-    rendered = _render(_build_search_help_table("gitleaks"))
-    assert "Network Domain" not in rendered
-
-
 # ---------------------------------------------------------------------------
 # _build_search_help_table — zap (web domain)
 # ---------------------------------------------------------------------------
@@ -88,11 +64,6 @@ def test_help_search_zap_shows_web_keys():
     assert "method" in rendered
     assert "param" in rendered
     assert "alert" in rendered
-
-
-def test_help_search_zap_hides_network_keys():
-    rendered = _render(_build_search_help_table("zap"))
-    assert "Network Domain" not in rendered
 
 
 # ---------------------------------------------------------------------------

@@ -65,8 +65,7 @@ def _parse_meta(finding: dict[str, Any]) -> dict[str, Any]:
 class AttackSurfaceBuilder:
     """Builds the Attack Surface Overview HTML block for the report.
 
-    Three subsections:
-    - Network Surface  — nmap host/port recon data
+    Two subsections:
     - Repository Surface — which tool categories ran against each repo
     - Dependency Surface — which ecosystems were audited per repo
     """
@@ -88,17 +87,12 @@ class AttackSurfaceBuilder:
         Returns:
             Self-contained HTML fragment including scoped ``<style>`` block.
         """
-        nmap_rows = self._repo.get_all_nmap_findings()
-
-        network_html = self._build_network_surface(nmap_rows)
         repo_html = self._build_repository_surface(filtered_findings)
         dep_html = self._build_dependency_surface(filtered_findings)
 
         return (
             _STYLES
             + '<div class="tally-surface">'
-            + "<h3>Network Surface</h3>"
-            + network_html
             + "<h3>Repository Surface</h3>"
             + repo_html
             + "<h3>Dependency Surface</h3>"
@@ -109,53 +103,6 @@ class AttackSurfaceBuilder:
     # ------------------------------------------------------------------ #
     # Private helpers
     # ------------------------------------------------------------------ #
-
-    def _build_network_surface(self, nmap_rows: list[dict[str, Any]]) -> str:
-        """Render a port table for each discovered host.
-
-        Groups nmap port-level findings by host and produces one HTML table
-        per host with columns: Port | Protocol | Service | Version.
-        """
-        if not nmap_rows:
-            return (
-                '<p class="notice">'
-                "Network scanning data is not available for this project."
-                "</p>"
-            )
-
-        # Group port-level rows by host, preserving insertion order.
-        by_host: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in nmap_rows:
-            host = (row.get("host") or "").strip() or "unknown"
-            by_host[host].append(row)
-
-        parts: list[str] = []
-        for host, rows in by_host.items():
-            parts.append(f"<p><strong>{html.escape(str(host))}</strong></p>")
-            parts.append(
-                "<table>"
-                "<thead><tr>"
-                "<th>Port</th><th>Protocol</th><th>Service</th><th>Version</th>"
-                "</tr></thead>"
-                "<tbody>"
-            )
-            for row in sorted(rows, key=lambda r: int(r.get("port") or 0)):
-                meta = _parse_meta(row)
-                port = row.get("port") or ""
-                transport = (meta.get("transport") or "tcp").lower()
-                service = meta.get("service") or ""
-                version = meta.get("service_version") or ""
-                parts.append(
-                    f"<tr>"
-                    f"<td>{html.escape(str(port))}</td>"
-                    f"<td>{html.escape(str(transport))}</td>"
-                    f"<td>{html.escape(str(service))}</td>"
-                    f"<td>{html.escape(str(version))}</td>"
-                    f"</tr>"
-                )
-            parts.append("</tbody></table>")
-
-        return "".join(parts)
 
     def _build_repository_surface(self, findings: list[dict[str, Any]]) -> str:
         """Render a repo × tool-category coverage matrix.

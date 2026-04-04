@@ -23,17 +23,6 @@ def _gitleaks_fingerprint_key(finding: dict[str, Any]) -> str:
     )
 
 
-def _nmap_fingerprint_key(finding: dict[str, Any]) -> str:
-    return "|".join(
-        [
-            "nmap",
-            str(finding.get("ip_address", "")),
-            str(finding.get("port", "")),
-            str(finding.get("transport", "")),
-        ]
-    )
-
-
 def _semgrep_fingerprint_key(finding: dict[str, Any]) -> str:
     return "|".join(
         [
@@ -70,7 +59,6 @@ def _sca_fingerprint_key(tool_name: str, finding: dict[str, Any]) -> str:
 
 FINGERPRINT_REGISTRY: dict[str, Any] = {
     "gitleaks": _gitleaks_fingerprint_key,
-    "nmap": _nmap_fingerprint_key,
     "semgrep": _semgrep_fingerprint_key,
     "zap": _zap_fingerprint_key,
     "pip-audit": lambda f: _sca_fingerprint_key("pip-audit", f),

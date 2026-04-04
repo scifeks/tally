@@ -25,7 +25,7 @@ class FindingQueryBuilder:
         SELECT fingerprint, run_id,
                tool, domain, segment, repo,
                finding_type, severity, confidence,
-               file, rule_id, url, host, port,
+               file, rule_id, url,
                vulnerability_id, package_name, ecosystem,
                description, package_version, cwe, enriched, meta
         FROM findings

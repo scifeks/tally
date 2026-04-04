@@ -164,15 +164,15 @@ class TestBasicRoundTrip:
         assert "file_path" in results[0]["metadata"]
         assert "file" in results[0]["metadata"]
 
-    def test_ip_address_remapped(self, tmp_path: Path) -> None:
-        """SQLite column 'host' is returned as 'ip_address' in metadata."""
+    def test_ip_address_survives_round_trip(self, tmp_path: Path) -> None:
+        """ip_address is stored in the meta blob and returned in metadata."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
         store.upsert_findings(run_id, _NMAP_FINDINGS)
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "ip_address" in results[0]["metadata"]
-        assert "host" in results[0]["metadata"]
+        assert results[0]["metadata"]["ip_address"] == "192.168.1.1"
 
     def test_enriched_set_to_false_on_ingest(self, tmp_path: Path) -> None:
         # upsert_findings writes enriched=0; EnrichmentPipeline sets it to 1

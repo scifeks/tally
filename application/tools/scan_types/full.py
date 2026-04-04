@@ -7,7 +7,6 @@ from typing import cast
 
 from application.tools.registry import ToolRegistry
 from application.tools.scan_types.execution import tools_for_segment
-from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -45,12 +44,9 @@ class FullScan(ScanType):
             seg_idx += 1
             resources.display.print_segment_header(segment)
 
-            if segment == "network":
-                seg_summary = NetworkSegmentScan().execute(config, resources)
-            else:
-                seg_summary = RepoSegmentScan(
-                    tools_for_segment(segment, cast(ToolRegistry, resources.registry))
-                ).execute(config, resources)
+            seg_summary = RepoSegmentScan(
+                tools_for_segment(segment, cast(ToolRegistry, resources.registry))
+            ).execute(config, resources)
 
             all_results.extend(seg_summary.results)
             total_run += seg_summary.total_tools_run

@@ -130,7 +130,7 @@ class ScanResultPresenter:
         return f"{total} alerts ({risk_str}), {urls} URLs scanned"
 
     def _present_generic(self, result: ToolResult) -> None:
-        """Fallback for tools without specific presentation logic (e.g. nmap)."""
+        """Fallback for tools without specific presentation logic."""
         if result.success:
             summary = self._summarize_generic(result)
             self._console.print(f"[green]✓ Scan complete:[/green] {summary}")

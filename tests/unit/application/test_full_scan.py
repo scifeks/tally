@@ -39,9 +39,6 @@ def _make_mock_repo(
 def mock_config() -> Any:
     cm = MagicMock()
     cm.load_repositories.return_value = [_make_mock_repo()]
-    nmap_cfg = MagicMock()
-    nmap_cfg.profiles = {"default": {}}
-    cm.load_nmap_hosts.return_value = nmap_cfg
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
@@ -74,17 +71,13 @@ class TestFullScan:
     ) -> None:
         from application.tools.scan_types.full import FullScan
 
-        with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
-            patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
-        ):
+        with patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo:
             summary = FullScan(
-                exclude_segments=["network", "sast", "sca", "secrets", "api"]
+                exclude_segments=["sast", "sca", "secrets", "api"]
             ).execute(mock_config, mock_resources)
 
         assert summary.total_tools_run == 0
         assert summary.findings_ingested == 0
-        mock_net.assert_not_called()
         mock_repo.assert_not_called()
 
     def test_excluded_segment_calls_print_status(
@@ -95,14 +88,12 @@ class TestFullScan:
         from application.tools.scan_types.full import FullScan
 
         with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
                 "application.tools.scan_types.full.tools_for_segment",
                 return_value=[],
             ),
         ):
-            mock_net.return_value.execute.return_value = _zero_summary()
             mock_repo.return_value.execute.return_value = _zero_summary()
             FullScan(exclude_segments=["sast"]).execute(mock_config, mock_resources)
 
@@ -110,26 +101,6 @@ class TestFullScan:
             str(call) for call in mock_resources.display.print_status.call_args_list
         ]
         assert any("sast" in c for c in calls)
-
-    def test_delegates_network_segment_to_network_scan(
-        self,
-        mock_config: Any,
-        mock_resources: Any,
-    ) -> None:
-        from application.tools.scan_types.full import FullScan
-
-        with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
-            patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
-        ):
-            mock_net.return_value.execute.return_value = _zero_summary()
-            mock_repo.return_value.execute.return_value = _zero_summary()
-            FullScan(exclude_segments=["sast", "sca", "secrets", "api"]).execute(
-                mock_config, mock_resources
-            )
-
-        mock_net.assert_called_once()
-        mock_net.return_value.execute.assert_called_once()
 
     def test_delegates_repo_segment_to_repo_segment_scan(
         self,
@@ -139,16 +110,14 @@ class TestFullScan:
         from application.tools.scan_types.full import FullScan
 
         with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
                 "application.tools.scan_types.full.tools_for_segment",
                 return_value=["semgrep"],
             ),
         ):
-            mock_net.return_value.execute.return_value = _zero_summary()
             mock_repo.return_value.execute.return_value = _zero_summary()
-            FullScan(exclude_segments=["network", "sca", "secrets", "api"]).execute(
+            FullScan(exclude_segments=["sca", "secrets", "api"]).execute(
                 mock_config, mock_resources
             )
 
@@ -171,16 +140,14 @@ class TestFullScan:
             findings_by_tool={"semgrep": 3},
         )
         with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as mock_net,
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
                 "application.tools.scan_types.full.tools_for_segment",
                 return_value=[],
             ),
         ):
-            mock_net.return_value.execute.return_value = _zero_summary()
             mock_repo.return_value.execute.return_value = sub
-            summary = FullScan(exclude_segments=["network", "secrets", "api"]).execute(
+            summary = FullScan(exclude_segments=["secrets", "api"]).execute(
                 mock_config, mock_resources
             )
 

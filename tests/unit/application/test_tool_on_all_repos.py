@@ -39,9 +39,6 @@ def _make_mock_repo(
 def mock_config() -> Any:
     cm = MagicMock()
     cm.load_repositories.return_value = [_make_mock_repo()]
-    nmap_cfg = MagicMock()
-    nmap_cfg.profiles = {"default": {}}
-    cm.load_nmap_hosts.return_value = nmap_cfg
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",

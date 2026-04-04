@@ -1,6 +1,6 @@
 ## Testing Approach
 
-This engagement was conducted as a **{{testing_type}}** penetration test.
+This engagement was conducted as a **{{testing_type}}** security audit.
 {{testing_type_description}}
 
 All testing activities were performed within the agreed scope and rules of

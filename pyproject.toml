@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "tally"
 version = "0.1.0"
-description = "CLI REPL for orchestrating web application penetration testing"
+description = "CLI REPL for orchestrating web application security auditing"
 requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.0.0",
@@ -73,8 +73,7 @@ filterwarnings = [
   "ignore::DeprecationWarning:chromadb",
 ]
 markers = [
-  "slow: marks tests as slow-running (nmap scans)",
-  "requires_nmap: marks tests that need nmap installed",
+  "slow: marks tests as slow-running",
   "requires_ollama: marks tests that need Ollama running",
   "requires_gitleaks: marks tests that need gitleaks installed",
   "integration: marks tests that require real SQLite / filesystem / ChromaDB",

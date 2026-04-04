@@ -78,8 +78,6 @@ class ConnectionFactory:
                     file             TEXT,
                     rule_id          TEXT,
                     url              TEXT,
-                    host             TEXT,
-                    port             TEXT,
                     vulnerability_id TEXT,
                     package_name     TEXT,
                     ecosystem        TEXT,

@@ -4,7 +4,6 @@
 
 | Tool | Category | What it does |
 |---|---|---|
-| nmap | Network | Host/port discovery and service fingerprinting |
 | OWASP ZAP | DAST | Dynamic web/API security scanning |
 | Semgrep | SAST | Static analysis across many languages |
 | tree-sitter | SAST | AST-based code analysis (Python library) |
@@ -21,7 +20,7 @@ All tools are optional — Tally skips any tool that is not detected.
 Tally calls `check_system_tools()` on startup and when you run the `tools` REPL command.
 Three detection strategies are used:
 
-1. **PATH lookup** (`shutil.which`) — used by most tools (nmap, semgrep, gitleaks, osv-scanner,
+1. **PATH lookup** (`shutil.which`) — used by most tools (semgrep, gitleaks, osv-scanner,
    pip-audit, npm-audit, composer-audit). A tool is available if its binary is on `$PATH`.
 2. **Configured path** (`Path.exists`) — used by OWASP ZAP. Checks the absolute path set in
    `config/commands.json` (e.g. `/usr/share/zaproxy/zap.sh`), which allows ZAP to be detected

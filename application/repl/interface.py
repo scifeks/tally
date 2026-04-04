@@ -79,24 +79,9 @@ _DOMAIN_KEYS_DISPLAY: dict[str, list[tuple[str, str]]] = {
         ("--param~=<name>", "Parameter name (partial match)"),
         ("--alert~=<name>", "Alert name (partial match)"),
     ],
-    "network": [
-        ("--host=<ip>", "IP address (exact match)"),
-        ("--host~=<pattern>", "IP address (partial match)"),
-        ("--port=<number>", "Port number"),
-        ("--service~=<name>", "Service name (partial match)"),
-        ("--transport=<proto>", "Transport protocol (tcp, udp)"),
-    ],
 }
 
 _TOOL_EXAMPLES: dict[str, list[tuple[str, str]]] = {
-    "nmap": [
-        ("search --tool=nmap", "All nmap findings"),
-        ("search --host=10.0.0.1", "Exact host match"),
-        ("search --port=443", "Findings on port 443"),
-        ("search --service~=ssh", "Services containing 'ssh'"),
-        ("search --tool=nmap --severity=high", "High-severity nmap findings"),
-        ("search --transport=tcp --severity=high", "High-severity TCP findings"),
-    ],
     "gitleaks": [
         ("search --tool=gitleaks", "All gitleaks findings"),
         ("search --file~=config", "Secrets in paths containing 'config'"),
@@ -125,7 +110,6 @@ _GENERIC_EXAMPLES: list[tuple[str, str]] = [
     ("search --tool=gitleaks", "All gitleaks findings"),
     ("search --severity=high", "High-severity findings"),
     ("search --type=secret", "Findings of type 'secret'"),
-    ("search --tool=nmap --port=443", "nmap findings on port 443"),
     ("search --tool=zap --url~=/api/", "ZAP findings on /api/ endpoints"),
     ("search --file~=config", "Secrets in paths containing 'config'"),
     ("search --tool=gitleaks --severity=high --page-size=50", "Paginated results"),
@@ -137,7 +121,6 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
     domain = get_tool_domain(tool_name) if tool_name else None
     show_code = domain in (None, "code")
     show_web = domain in (None, "web")
-    show_network = domain in (None, "network")
 
     table = Table(
         show_header=True,
@@ -164,7 +147,7 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
         "search --type=<type>",
         "Filter by finding type: secret, vulnerability, ...",
     )
-    table.add_row("search --domain=<domain>", "Filter by domain: code, web, network")
+    table.add_row("search --domain=<domain>", "Filter by domain: code, web")
     table.add_row("search --<field>=<value>", "Exact match filter on metadata key")
     table.add_row("search --<field>~=<value>", "Partial match filter on metadata key")
     table.add_row("search --tool=<n> --type=<t> --severity=<s>", "Chain filters (AND)")
@@ -173,7 +156,7 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
     # Global filter keys
     table.add_row("[bold yellow]Global Filter Keys[/bold yellow]", "")
     table.add_row("--tool=<name,...>", "Configured tool name(s). Comma-separated.")
-    table.add_row("--domain=<domain>", "code, web, network")
+    table.add_row("--domain=<domain>", "code, web")
     table.add_row(
         "--type=<type,...>",
         "secret, vulnerability, weakness, misconfiguration, ...",
@@ -194,11 +177,6 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
     if show_web:
         table.add_row("[bold yellow]Web Domain Keys[/bold yellow]", "")
         for syntax, desc in _DOMAIN_KEYS_DISPLAY["web"]:
-            table.add_row(syntax, desc)
-
-    if show_network:
-        table.add_row("[bold yellow]Network Domain Keys[/bold yellow]", "")
-        for syntax, desc in _DOMAIN_KEYS_DISPLAY["network"]:
             table.add_row(syntax, desc)
 
     # Pagination

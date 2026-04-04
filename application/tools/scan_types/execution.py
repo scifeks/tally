@@ -104,8 +104,6 @@ def ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
     """Order tool_set by SEGMENT_ORDER, then alphabetically within each segment."""
     result: list[str] = []
     for segment in SEGMENT_ORDER:
-        if segment == "network":
-            continue
         tools_in_seg = sorted(
             name
             for name in tool_set

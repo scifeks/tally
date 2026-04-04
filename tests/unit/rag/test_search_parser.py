@@ -26,7 +26,7 @@ from application.repl.search_command_parser import (  # noqa: E402
 )
 from core.exceptions import SearchValidationError  # noqa: E402
 
-_KNOWN_TOOLS = frozenset({"nmap", "gitleaks", "semgrep", "zap", "pip-audit"})
+_KNOWN_TOOLS = frozenset({"gitleaks", "semgrep", "zap", "pip-audit"})
 
 
 def _parse(raw: str) -> SearchQuery:
@@ -333,20 +333,15 @@ def test_unknown_key_error_without_tool_suggests_help_search():
         _parse("finding=foo")
 
 
-def test_unknown_key_error_with_nmap_suggests_help_search_nmap():
-    with pytest.raises(SearchValidationError, match="help search nmap"):
-        _parse("tool=nmap finding=foo")
-
-
 def test_unknown_key_error_with_gitleaks_suggests_help_search_gitleaks():
     with pytest.raises(SearchValidationError, match="help search gitleaks"):
         _parse("tool=gitleaks finding=foo")
 
 
 def test_unknown_key_error_with_tool_after_bad_key_uses_tool_context():
-    # Pre-scan finds tool=nmap even though the bad key comes first.
-    with pytest.raises(SearchValidationError, match="help search nmap"):
-        _parse("finding=foo tool=nmap")
+    # Pre-scan finds tool=gitleaks even though the bad key comes first.
+    with pytest.raises(SearchValidationError, match="help search gitleaks"):
+        _parse("finding=foo tool=gitleaks")
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +358,7 @@ def test_no_results_message():
 
     mock_qe = MagicMock()
     mock_qe.search.return_value = []
-    mock_qe._known_tools = frozenset({"nmap", "gitleaks"})
+    mock_qe._known_tools = frozenset({"semgrep", "gitleaks"})
     kc._get_query_engine = MagicMock(return_value=mock_qe)
 
     kc.cmd_search("search", ["--type=secret"])
@@ -376,7 +371,7 @@ def test_no_results_message():
 # parse_search_command tests
 # ---------------------------------------------------------------------------
 
-_CMD_KNOWN_TOOLS = frozenset({"nmap", "semgrep", "gitleaks", "zap"})
+_CMD_KNOWN_TOOLS = frozenset({"semgrep", "gitleaks", "zap"})
 
 
 def _cmd_parse(args: list[str]) -> SearchQuery:
@@ -390,18 +385,18 @@ def test_search_cmd_bare_word_rejected():
 
 def test_search_cmd_old_key_equals_rejected():
     with pytest.raises(SearchValidationError, match="Old syntax"):
-        _cmd_parse(["tool=nmap"])
+        _cmd_parse(["tool=gitleaks"])
 
 
 def test_search_cmd_tool_flag():
-    sq = _cmd_parse(["--tool=nmap"])
-    assert sq.where_filter == {"tool": {"$eq": "nmap"}}
+    sq = _cmd_parse(["--tool=gitleaks"])
+    assert sq.where_filter == {"tool": {"$eq": "gitleaks"}}
 
 
 def test_search_cmd_multi_tool():
-    sq = _cmd_parse(["--tool=nmap,semgrep"])
+    sq = _cmd_parse(["--tool=gitleaks,semgrep"])
     assert sq.where_filter == {
-        "$and": [{"tool": {"$eq": "nmap"}}, {"tool": {"$eq": "semgrep"}}]
+        "$and": [{"tool": {"$eq": "gitleaks"}}, {"tool": {"$eq": "semgrep"}}]
     }
 
 
@@ -473,5 +468,5 @@ def test_search_cmd_no_args():
 
 
 def test_search_cmd_is_never_semantic():
-    sq = _cmd_parse(["--tool=nmap"])
+    sq = _cmd_parse(["--tool=gitleaks"])
     assert sq.is_semantic is False

@@ -24,7 +24,9 @@ from domain.pipeline.events import (  # noqa: E402
 )
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
-from infrastructure.tools.parsers.nmap_parser import parse_nmap_xml  # noqa: E402
+from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
+    parse_gitleaks_json,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -51,10 +53,10 @@ def project_env(tmp_path: Path) -> dict:
 
 
 @pytest.fixture()
-def nmap_result() -> ToolResult:
-    parsed = parse_nmap_xml(_FIXTURES / "nmap_basic.xml")
+def gitleaks_result() -> ToolResult:
+    parsed = parse_gitleaks_json(_FIXTURES / "gitleaks_git.json")
     return ToolResult(
-        tool_name="nmap",
+        tool_name="gitleaks",
         success=True,
         output="",
         parsed_data=parsed,
@@ -66,7 +68,7 @@ def nmap_result() -> ToolResult:
 
 class TestIngestHandlerPhase2:
     def test_sqlite_rows_written_after_tool_completed(
-        self, project_env: dict, nmap_result: ToolResult
+        self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
         bus = EventBus()
         received: list[IngestCompleted] = []
@@ -74,7 +76,7 @@ class TestIngestHandlerPhase2:
 
         handler = IngestHandler(bus)
         event = ToolCompleted(
-            result=nmap_result,
+            result=gitleaks_result,
             profile="test-profile",
             run_id=1,
             project_name=project_env["project_name"],
@@ -90,20 +92,17 @@ class TestIngestHandlerPhase2:
             str(project_env["base_path"]), project_env["project_name"]
         )
         findings = finding_repo.get_all_findings()
-        # nmap_basic.xml has 2 open ports (80, 443)
-        assert len(findings) == 2
-        assert all(f["tool"] == "nmap" for f in findings)
-        assert all(f["domain"] == "network" for f in findings)
-        ports = {f["port"] for f in findings}
-        assert ports == {"80", "443"}
+        assert len(findings) >= 1
+        assert all(f["tool"] == "gitleaks" for f in findings)
+        assert all(f["domain"] == "code" for f in findings)
 
     def test_chromadb_not_written_after_tool_completed(
-        self, project_env: dict, nmap_result: ToolResult
+        self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
         bus = EventBus()
         handler = IngestHandler(bus)
         event = ToolCompleted(
-            result=nmap_result,
+            result=gitleaks_result,
             profile="test-profile",
             run_id=1,
             project_name=project_env["project_name"],
@@ -122,7 +121,7 @@ class TestIngestHandlerPhase2:
         assert engine.count_documents() == 0
 
     def test_sqlite_deduplicates_on_second_ingest(
-        self, project_env: dict, nmap_result: ToolResult
+        self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
         """Dispatching the same ToolCompleted twice must not add new rows.
 
@@ -132,7 +131,7 @@ class TestIngestHandlerPhase2:
         bus = EventBus()
         handler = IngestHandler(bus)
         event = ToolCompleted(
-            result=nmap_result,
+            result=gitleaks_result,
             profile="test-profile",
             run_id=1,
             project_name=project_env["project_name"],
@@ -145,12 +144,12 @@ class TestIngestHandlerPhase2:
             str(project_env["base_path"]), project_env["project_name"]
         )
         findings = finding_repo.get_all_findings()
-        assert len(findings) == 2  # still only 2 rows (port 80 and 443)
+        assert len(findings) >= 1
         for finding in findings:
             assert finding["seen_count"] == 2
 
     def test_ingest_completed_ids_are_sqlite_primary_keys(
-        self, project_env: dict, nmap_result: ToolResult
+        self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
         bus = EventBus()
         received: list[IngestCompleted] = []
@@ -158,7 +157,7 @@ class TestIngestHandlerPhase2:
 
         handler = IngestHandler(bus)
         event = ToolCompleted(
-            result=nmap_result,
+            result=gitleaks_result,
             profile="test-profile",
             run_id=1,
             project_name=project_env["project_name"],
@@ -168,7 +167,7 @@ class TestIngestHandlerPhase2:
 
         assert len(received) == 1
         ids = received[0].ids
-        assert len(ids) == 2
+        assert len(ids) >= 1
         assert all(isinstance(i, int) for i in ids)
 
         _, finding_repo, _, _ = make_store(
@@ -177,4 +176,4 @@ class TestIngestHandlerPhase2:
         for finding_id in ids:
             row = finding_repo.get_finding(finding_id)
             assert row is not None
-            assert row["tool"] == "nmap"
+            assert row["tool"] == "gitleaks"

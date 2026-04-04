@@ -46,7 +46,7 @@ def test_enrichment_fields_includes_confidence() -> None:
 
 
 def test_domains() -> None:
-    assert DOMAINS == {"code", "web", "network"}
+    assert DOMAINS == {"code", "web"}
 
 
 def test_field_source_attributes_exist() -> None:

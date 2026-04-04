@@ -62,4 +62,3 @@ class ReportContext:
     raw_sast_html: str = field(default="")
     raw_dast_html: str = field(default="")
     sca_results_html: str = field(default="")
-    nmap_results_html: str = field(default="")

@@ -149,17 +149,6 @@ class ToolCommands:
         self._reload_registry()
         self.repl.console.print(f"[green]Tool added:[/green] {tool_name}")
 
-        if tool_name == "nmap":
-            if not self.repl.active_project:
-                self.repl.console.print(
-                    "[yellow]No active project. "
-                    "Use 'project add' or 'project switch <name>'[/yellow]"
-                )
-            else:
-                from application.setup.nmap_setup import interview_nmap_config
-
-                interview_nmap_config(self.repl.active_project, self.repl.base_path)
-
     def _cmd_tool_edit(self, tool_name: str) -> None:
         from application.setup.commands_setup import interview_tool
 
@@ -186,23 +175,6 @@ class ToolCommands:
         self._save_commands_json(commands)
         self._reload_registry()
         self.repl.console.print(f"[green]Tool updated:[/green] {tool_name}")
-
-        if tool_name == "nmap":
-            if not self.repl.active_project:
-                self.repl.console.print(
-                    "[yellow]No active project. "
-                    "Use 'project add' or 'project switch <name>'[/yellow]"
-                )
-            else:
-                from application.setup.nmap_setup import interview_nmap_config
-                from core.config.manager import ConfigManager
-
-                existing = ConfigManager(self.repl.base_path).load_nmap_hosts(
-                    self.repl.active_project
-                )
-                interview_nmap_config(
-                    self.repl.active_project, self.repl.base_path, existing=existing
-                )
 
     def _cmd_tool_remove(self, tool_name: str) -> None:
         commands = self._load_commands_json()
@@ -427,11 +399,6 @@ class ToolCommands:
         project_commands[tool_name] = entry
         self._save_project_commands_json(project_name, project_commands)
         self.repl.console.print(f"[green]Tool added:[/green] {tool_name}")
-
-        if tool_name == "nmap":
-            from application.setup.nmap_setup import interview_nmap_config
-
-            interview_nmap_config(project_name, self.repl.base_path)
 
     def _cmd_tool_edit_project(self, tool_name: str, project_name: str) -> None:
         from application.setup.commands_setup import interview_tool

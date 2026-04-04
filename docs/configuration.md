@@ -265,39 +265,6 @@ Supported language values for SCA tool selection:
 
 ---
 
-### nmap_hosts.json
-
-**File:** `projects/<name>/config/nmap_hosts.json`
-**Created:** When `project add` is run. Starts as `{}`.
-
-Defines named nmap scan profiles. Each profile specifies a set of hosts and nmap arguments. Profiles are referenced by name in `scan -t nmap <profile>` and run in sequence during the network segment.
-
-This file must be edited manually — Tally does not provide an interactive interface for nmap profiles.
-
-#### Profile Object Fields
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `hosts` | array of string | yes | List of IP addresses, hostnames, or CIDR ranges to scan. |
-| `nmap_args` | string | yes | nmap flags to pass (e.g. `-sV -p 22,80,443`). |
-
-#### Example
-
-```json
-{
-  "management": {
-    "hosts": ["10.0.0.1", "10.0.0.2"],
-    "nmap_args": "-sV -p 22,80,443,8080"
-  },
-  "full-range": {
-    "hosts": ["192.168.1.0/24"],
-    "nmap_args": "-sV -T4 --top-ports 1000"
-  }
-}
-```
-
----
-
 ### endpoints/\<repo\>.json
 
 **File:** `projects/<name>/config/endpoints/<repo-name>.json`
@@ -426,11 +393,6 @@ The `container` object has two fields:
     "type": "repo",
     "location": "local",
     "path": "/usr/local/bin/gitleaks"
-  },
-  "nmap": {
-    "type": "repo",
-    "location": "local",
-    "path": "/usr/bin/nmap"
   },
   "semgrep": {
     "type": "repo",
