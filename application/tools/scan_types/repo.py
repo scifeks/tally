@@ -135,6 +135,17 @@ class RepoScan(ScanType):
                 )
                 if result.success:
                     total_run += 1
+                    total_ingested += dispatch_and_count_ingested(
+                        resources.event_bus,
+                        ToolCompleted(
+                            result,
+                            repo.name,
+                            config.run_id,
+                            config.project_name,
+                            config.base_path,
+                            repo=repo.name,
+                        ),
+                    )
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -155,22 +166,22 @@ class RepoScan(ScanType):
                         )
                 else:
                     total_failed += 1
+                    total_ingested += dispatch_and_count_ingested(
+                        resources.event_bus,
+                        ToolCompleted(
+                            result,
+                            repo.name,
+                            config.run_id,
+                            config.project_name,
+                            config.base_path,
+                            repo=repo.name,
+                        ),
+                    )
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name, False, False, 0, result.duration_seconds
                         )
                     )
-                total_ingested += dispatch_and_count_ingested(
-                    resources.event_bus,
-                    ToolCompleted(
-                        result,
-                        repo.name,
-                        config.run_id,
-                        config.project_name,
-                        config.base_path,
-                        repo=repo.name,
-                    ),
-                )
 
         duration = round(perf_counter() - start, 1)
 

@@ -44,7 +44,7 @@ def execute_tool_passes(
     """Prompt approval once, run all ExecutionPasses, return merged result."""
     if not config.auto_approve:
         try:
-            answer = input(f"Run {tool.name}? [y/N]: ").strip().lower()
+            answer = input(f"  Run {tool.name}? [y/N]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print()
             return None
@@ -52,7 +52,7 @@ def execute_tool_passes(
             return None
         if remaining_tools > 0:
             try:
-                all_ans = input("Approve all remaining? [y/N]: ").strip().lower()
+                all_ans = input("    Approve all remaining? [y/N]: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 print()
             else:

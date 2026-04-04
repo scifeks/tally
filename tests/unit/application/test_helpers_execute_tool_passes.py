@@ -67,7 +67,7 @@ class TestExecuteToolPassesApproval:
             )
 
         # Only the "Run X?" prompt should have been asked — not "Approve all remaining?"
-        mock_input.assert_called_once_with(f"Run {tool.name}? [y/N]: ")
+        mock_input.assert_called_once_with(f"  Run {tool.name}? [y/N]: ")
         assert result is not None
         assert config.auto_approve is False
 
@@ -83,7 +83,9 @@ class TestExecuteToolPassesApproval:
             )
 
         assert mock_input.call_count == 2
-        assert mock_input.call_args_list[1] == call("Approve all remaining? [y/N]: ")
+        assert mock_input.call_args_list[1] == call(
+            "    Approve all remaining? [y/N]: "
+        )
         assert result is not None
         assert config.auto_approve is False  # user answered 'n' to approve-all
 

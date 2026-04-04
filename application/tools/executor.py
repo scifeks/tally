@@ -109,7 +109,6 @@ class ToolExecutor:
                 return self._failure(tool.name, timestamp, "Execution denied by user.")
 
         # 4. Run (with privilege escalation if needed)
-        print(f"Running {tool.name}...")
         _log.info("Tool %s: command: %s", tool.name, shlex.join(cmd))
         output_dir = self._ensure_output_dir(tool.name)
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
@@ -148,7 +147,7 @@ class ToolExecutor:
             _log.exception("Tool %s: parse_output raised an exception", tool.name)
 
         status = "✓ Complete" if success else "✗ Failed "
-        print(f"{status} (exit {proc.returncode}, {duration}s)")
+        print(f"    {status} (exit {proc.returncode}, {duration}s)")
         _log.info(
             "Tool %s: exit=%d duration=%.1fs", tool.name, proc.returncode, duration
         )
@@ -243,7 +242,7 @@ class ToolExecutor:
     ) -> ToolResult:
         duration = round(perf_counter() - start, 3)
         _log.error("Tool %s: timed out after %ds", tool_name, timeout)
-        print(f"✗ Failed  (timeout after {timeout}s)")
+        print(f"    ✗ Failed  (timeout after {timeout}s)")
         return ToolResult(
             tool_name=tool_name,
             success=False,
@@ -276,11 +275,11 @@ class ToolExecutor:
         except subprocess.TimeoutExpired:
             return self._timeout_result(tool_name, timestamp, start, timeout)
         except FileNotFoundError:
-            print("✗ Failed  (command not found)")
+            print("    ✗ Failed  (command not found)")
             _log.error("Tool %s: command not found: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Command not found: {cmd[0]!r}")
         except PermissionError:
-            print("✗ Failed  (permission denied)")
+            print("    ✗ Failed  (permission denied)")
             _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
 
@@ -297,7 +296,7 @@ class ToolExecutor:
                     return self._timeout_result(tool_name, timestamp, start, timeout)
                 except FileNotFoundError:
                     su_cmd = ["su", "-c", shlex.join(cmd)]
-                    print("  (sudo not found, retrying with su -c...)")
+                    print("    (sudo not found, retrying with su -c...)")
                     start = perf_counter()
                     try:
                         proc = self._run_subprocess(su_cmd, timeout, cwd)
@@ -306,7 +305,7 @@ class ToolExecutor:
                             tool_name, timestamp, start, timeout
                         )
                     except (FileNotFoundError, PermissionError):
-                        print("✗ Failed  (elevated privileges not available)")
+                        print("    ✗ Failed  (elevated privileges not available)")
                         _log.error(
                             "Tool %s: elevated privileges unavailable", tool_name
                         )
@@ -317,7 +316,7 @@ class ToolExecutor:
                             " (sudo and su both failed)",
                         )
                 except PermissionError:
-                    print("✗ Failed  (permission denied)")
+                    print("    ✗ Failed  (permission denied)")
                     _log.error("Tool %s: permission denied running sudo", tool_name)
                     return self._failure(
                         tool_name, timestamp, "Permission denied running sudo"

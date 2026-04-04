@@ -67,7 +67,7 @@ class RepoSegmentScan(ScanType):
         _invocation = 0
 
         for repo in repos:
-            resources.display.print_status(f"  [bold]Repository:[/bold] {repo.name}")
+            resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:
@@ -158,6 +158,17 @@ class RepoSegmentScan(ScanType):
                     )
                     if result.success:
                         total_run += 1
+                        total_ingested += dispatch_and_count_ingested(
+                            resources.event_bus,
+                            ToolCompleted(
+                                result,
+                                repo.name,
+                                config.run_id,
+                                config.project_name,
+                                config.base_path,
+                                repo=repo.name,
+                            ),
+                        )
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 f"{tool_name}/{repo.name}",
@@ -178,6 +189,17 @@ class RepoSegmentScan(ScanType):
                             )
                     else:
                         total_failed += 1
+                        total_ingested += dispatch_and_count_ingested(
+                            resources.event_bus,
+                            ToolCompleted(
+                                result,
+                                repo.name,
+                                config.run_id,
+                                config.project_name,
+                                config.base_path,
+                                repo=repo.name,
+                            ),
+                        )
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 f"{tool_name}/{repo.name}",
@@ -187,17 +209,6 @@ class RepoSegmentScan(ScanType):
                                 result.duration_seconds,
                             )
                         )
-                    total_ingested += dispatch_and_count_ingested(
-                        resources.event_bus,
-                        ToolCompleted(
-                            result,
-                            repo.name,
-                            config.run_id,
-                            config.project_name,
-                            config.base_path,
-                            repo=repo.name,
-                        ),
-                    )
 
             all_results.extend(repo_results)
 
