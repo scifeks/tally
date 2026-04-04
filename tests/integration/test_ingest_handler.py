@@ -66,6 +66,23 @@ def gitleaks_result() -> ToolResult:
     )
 
 
+@pytest.fixture()
+def zap_result() -> ToolResult:
+    import json
+
+    raw = json.loads((_FIXTURES / "zap_alerts.json").read_text())
+    # The fixture is already in normalized format (alert_name, risk, etc.)
+    return ToolResult(
+        tool_name="zap",
+        success=True,
+        output="",
+        parsed_data={"alerts": raw["alerts"], "summary": raw["summary"]},
+        output_files={},
+        timestamp=ToolResult.now_iso(),
+        duration_seconds=0.1,
+    )
+
+
 class TestIngestHandlerPhase2:
     def test_sqlite_rows_written_after_tool_completed(
         self, project_env: dict, gitleaks_result: ToolResult
@@ -177,3 +194,30 @@ class TestIngestHandlerPhase2:
             row = finding_repo.get_finding(finding_id)
             assert row is not None
             assert row["tool"] == "gitleaks"
+
+    def test_zap_findings_have_repo_populated(
+        self, project_env: dict, zap_result: ToolResult
+    ) -> None:
+        """ZAP findings must have the repo column populated from event.repo."""
+        bus = EventBus()
+        handler = IngestHandler(bus)
+        event = ToolCompleted(
+            result=zap_result,
+            profile="target-site",
+            run_id=1,
+            project_name=project_env["project_name"],
+            base_path=str(project_env["base_path"]),
+            repo="target-site",
+        )
+        handler.handle(event)
+
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        findings = finding_repo.get_all_findings()
+        assert len(findings) >= 1
+        assert all(f["tool"] == "zap" for f in findings)
+        assert all(f["repo"] == "target-site" for f in findings), (
+            f"Expected repo='target-site' on all ZAP findings, got: "
+            f"{[f['repo'] for f in findings]}"
+        )

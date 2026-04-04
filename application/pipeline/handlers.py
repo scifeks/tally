@@ -106,6 +106,11 @@ class IngestHandler(BaseHandler):
                     except Exception:
                         repos = None
                     rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
+            else:
+                # web/network tools: set repo from execution context
+                if event.repo:
+                    for row in rows:
+                        row.setdefault("repo", event.repo)
 
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
             finding_repo.upsert_findings(event.run_id or 0, rows)
