@@ -48,7 +48,6 @@ _VALID_KEYS: frozenset[str] = frozenset(_KEY_MAP) | {"type"}
 _DOMAIN_KEYS: dict[str, list[str]] = {
     "code": ["file", "rule"],
     "web": ["url", "method", "param", "alert"],
-    "network": ["host", "port", "service", "transport"],
 }
 
 

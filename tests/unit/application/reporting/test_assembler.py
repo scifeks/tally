@@ -171,7 +171,6 @@ class TestBuildContext:
         assert ctx.findings_table_html != ""
         assert ctx.detailed_findings_html != ""
         assert ctx.raw_sast_html != ""
-        assert ctx.nmap_results_html != ""
         # Fields not used by this segment remain empty.
         assert ctx.false_positive_log_html == ""
 

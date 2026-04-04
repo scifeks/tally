@@ -39,25 +39,6 @@ def _finding(**kwargs: Any) -> dict[str, Any]:
         "segment": "sast",
         "url": None,
         "cwe": None,
-        "host": None,
-        "port": None,
-    }
-    base.update(kwargs)
-    return base
-
-
-def _nmap_finding(**kwargs: Any) -> dict[str, Any]:
-    """Return a minimal nmap finding dict with optional overrides."""
-    base: dict[str, Any] = {
-        "id": 100,
-        "tool": "nmap",
-        "segment": "network",
-        "domain": "network",
-        "host": "10.0.0.1",
-        "port": "80",
-        "meta": '{"service": "http", "service_version": "Apache/2.4"}',
-        "severity": "informational",
-        "confidence": "confirmed",
     }
     base.update(kwargs)
     return base
@@ -70,60 +51,34 @@ def _nmap_finding(**kwargs: Any) -> dict[str, Any]:
 
 class TestBuildMasterTable:
     def test_empty_code_findings_renders_placeholder(self) -> None:
-        html = FindingsBuilder().build_master_table([], [])
+        html = FindingsBuilder().build_master_table([])
         assert "placeholder" in html
         assert "No code findings" in html
 
-    def test_empty_nmap_findings_renders_placeholder(self) -> None:
-        html = FindingsBuilder().build_master_table([], [])
-        assert "No network findings" in html
-
     def test_code_finding_tal_id_appears(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding()], [])
+        html = FindingsBuilder().build_master_table([_finding()])
         assert "TAL-001" in html
 
     def test_missing_tal_id_renders_dash(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding(tal_id=None)], [])
+        html = FindingsBuilder().build_master_table([_finding(tal_id=None)])
         assert "—" in html
 
     def test_recurring_row_gets_css_class(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding(seen_count=3)], [])
+        html = FindingsBuilder().build_master_table([_finding(seen_count=3)])
         assert "recurring-row" in html
 
     def test_non_recurring_row_lacks_css_class(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding(seen_count=1)], [])
+        html = FindingsBuilder().build_master_table([_finding(seen_count=1)])
         assert "recurring-row" not in html
 
     def test_severity_badge_present(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding(severity="high")], [])
+        html = FindingsBuilder().build_master_table([_finding(severity="high")])
         assert "severity-badge" in html
         assert "high" in html
 
-    def test_nmap_hosts_grouped(self) -> None:
-        findings = [
-            _nmap_finding(host="10.0.0.1", port="80"),
-            _nmap_finding(host="10.0.0.1", port="443"),
-            _nmap_finding(host="10.0.0.2", port="22"),
-        ]
-        html = FindingsBuilder().build_master_table([], findings)
-        # Two distinct hosts → two NW-0xx row IDs.
-        assert "NW-001" in html
-        assert "NW-002" in html
-        assert "10.0.0.1" in html
-        assert "10.0.0.2" in html
-
-    def test_nmap_ports_comma_joined(self) -> None:
-        findings = [
-            _nmap_finding(host="10.0.0.1", port="80"),
-            _nmap_finding(host="10.0.0.1", port="443"),
-        ]
-        html = FindingsBuilder().build_master_table([], findings)
-        assert "80, 443" in html or "443, 80" in html
-
-    def test_code_and_network_headings_present(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding()], [_nmap_finding()])
+    def test_code_heading_present(self) -> None:
+        html = FindingsBuilder().build_master_table([_finding()])
         assert "Code Findings" in html
-        assert "Network Findings" in html
 
 
 # ---------------------------------------------------------------------------
@@ -327,44 +282,3 @@ class TestBuildComprehensiveCodeTable:
     def test_null_repo_shows_unattributed(self) -> None:
         html = FindingsBuilder().build_comprehensive_code_table([_finding(repo=None)])
         assert "Unattributed" in html
-
-
-# ---------------------------------------------------------------------------
-# TestBuildComprehensiveNetworkTable
-# ---------------------------------------------------------------------------
-
-
-class TestBuildComprehensiveNetworkTable:
-    def test_empty_returns_placeholder(self) -> None:
-        html = FindingsBuilder.build_comprehensive_network_table([])
-        assert "placeholder" in html
-
-    def test_host_present(self) -> None:
-        html = FindingsBuilder.build_comprehensive_network_table(
-            [_nmap_finding(host="192.168.1.1")]
-        )
-        assert "192.168.1.1" in html
-
-    def test_nw_tal_id_assigned(self) -> None:
-        html = FindingsBuilder.build_comprehensive_network_table([_nmap_finding()])
-        assert "NW-001" in html
-
-    def test_ports_comma_joined_for_host(self) -> None:
-        findings = [
-            _nmap_finding(host="10.0.0.1", port="22"),
-            _nmap_finding(host="10.0.0.1", port="443"),
-        ]
-        html = FindingsBuilder.build_comprehensive_network_table(findings)
-        assert "22" in html
-        assert "443" in html
-        # Both ports on same host → comma-separated in one row.
-        assert "22, 443" in html or "443, 22" in html
-
-    def test_multiple_hosts_multiple_rows(self) -> None:
-        findings = [
-            _nmap_finding(host="10.0.0.1", port="80"),
-            _nmap_finding(host="10.0.0.2", port="22"),
-        ]
-        html = FindingsBuilder.build_comprehensive_network_table(findings)
-        assert "NW-001" in html
-        assert "NW-002" in html

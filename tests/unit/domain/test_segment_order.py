@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from domain.tools.scan_types.models import SEGMENT_ORDER
 
-_EXPECTED = {"network", "sast", "sca", "secrets", "api"}
+_EXPECTED = {"sast", "sca", "secrets", "api"}
 
 
 def test_is_a_list() -> None:

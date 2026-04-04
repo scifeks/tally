@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { initToken } from './api'
 import FindingsTable from './views/FindingsTable.vue'
-import NetworkSurface from './views/NetworkSurface.vue'
 
 // initToken() runs synchronously at setup time so the token is stored in
 // authStore before any child component mounts and makes API calls.
@@ -12,7 +11,6 @@ const error = ref<string | null>(
     ? null
     : 'No authentication token found. Please launch the UI via the `findings visualize` command.'
 )
-const activeTab = ref<'findings' | 'network'>('findings')
 </script>
 
 <template>
@@ -23,22 +21,6 @@ const activeTab = ref<'findings' | 'network'>('findings')
     {{ error }}
   </div>
   <div v-else>
-    <nav style="padding: 8px 12px; border-bottom: 1px solid #429356; background: #21222C;">
-      <button
-        @click="activeTab = 'findings'"
-        :style="{ fontWeight: activeTab === 'findings' ? 'bold' : 'normal', marginRight: '8px' }"
-      >
-        Code &amp; Web Findings
-      </button>
-      <button
-        @click="activeTab = 'network'"
-        :style="{ fontWeight: activeTab === 'network' ? 'bold' : 'normal' }"
-      >
-        Network Surface
-      </button>
-    </nav>
-    <KeepAlive>
-      <component :is="activeTab === 'findings' ? FindingsTable : NetworkSurface" />
-    </KeepAlive>
+    <FindingsTable />
   </div>
 </template>

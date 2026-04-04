@@ -117,23 +117,6 @@ class ReportGenerator:
             "## Findings by Tool",
         ]
 
-        # --- nmap ---
-        nmap_ports = [f for f in findings.get("nmap", []) if f.get("port") is not None]
-        if nmap_ports:
-            lines += [
-                "",
-                "### Network (nmap)",
-                "| IP Address | Port | Service | Protocol |",
-                "|------------|------|---------|----------|",
-            ]
-            for f in nmap_ports:
-                lines.append(
-                    f"| {f.get('ip_address', '')} | {f.get('port', '')} "
-                    f"| {f.get('service', '')} | tcp |"
-                )
-        elif "nmap" in findings:
-            lines += ["", "### Network (nmap)", "_No open ports found._"]
-
         # --- semgrep ---
         semgrep_findings = findings.get("semgrep", [])
         if semgrep_findings:
@@ -261,29 +244,6 @@ class ReportGenerator:
             return "<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>"
 
         sections: list[str] = []
-
-        # --- nmap ---
-        nmap_ports = [f for f in findings.get("nmap", []) if f.get("port") is not None]
-        if nmap_ports:
-            rows = "".join(
-                tr(
-                    f.get("ip_address", ""),
-                    str(f.get("port", "")),
-                    f.get("service", ""),
-                    "tcp",
-                )
-                for f in nmap_ports
-            )
-            sections.append(
-                f'<div class="section"><h3>Network (nmap)</h3>'
-                f"<table>{th('IP Address', 'Port', 'Service', 'Protocol')}"
-                f"<tbody>{rows}</tbody></table></div>"
-            )
-        elif "nmap" in findings:
-            sections.append(
-                '<div class="section"><h3>Network (nmap)</h3>'
-                "<p><em>No open ports found.</em></p></div>"
-            )
 
         # --- semgrep ---
         semgrep_findings = findings.get("semgrep", [])

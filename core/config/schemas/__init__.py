@@ -10,8 +10,6 @@ from .global_config import (
     MCP_SESSION_TIMEOUT_SECONDS_DEFAULT,
     GlobalConfig,
 )
-from .nmap_hosts_config import NmapHostsConfig
-from .nmap_profile import NmapProfile
 from .ollama_config import OllamaConfig
 from .ollama_embedding_config import OllamaEmbeddingConfig
 from .project_config import ProjectConfig
@@ -26,8 +24,6 @@ __all__ = [
     "MCP_BATCH_SIZE_DEFAULT",
     "MCP_BATCH_TIMEOUT_SECONDS_DEFAULT",
     "MCP_SESSION_TIMEOUT_SECONDS_DEFAULT",
-    "NmapHostsConfig",
-    "NmapProfile",
     "OllamaConfig",
     "OllamaEmbeddingConfig",
     "ProjectConfig",

@@ -6,7 +6,6 @@ from typing import Any, cast
 
 from application.tools.registry import ToolRegistry
 from application.tools.scan_types.execution import tools_for_segment
-from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.tools.exceptions import InvalidSegmentError
 from domain.tools.scan_types.base import ScanType
@@ -28,8 +27,6 @@ class SegmentScan(ScanType):
         valid_segments = {t.scan_segment for t in _all_tools}
         if self.segment_name not in valid_segments:
             raise InvalidSegmentError(self.segment_name, sorted(valid_segments))
-        if self.segment_name == "network":
-            return NetworkSegmentScan().execute(config, resources)
         return RepoSegmentScan(tools_for_segment(self.segment_name, registry)).execute(
             config, resources
         )

@@ -35,11 +35,6 @@ def _write_commands_config(base_path: Path) -> None:
                 location="local",
                 path=shutil.which("gitleaks") or "/usr/local/bin/gitleaks",
             ),
-            "nmap": CommandEntry(
-                type="repo",
-                location="local",
-                path=shutil.which("nmap") or "/usr/bin/nmap",
-            ),
         }
     )
 
@@ -62,7 +57,6 @@ class TestProjectCreation:
         expected = [
             root / "config" / "endpoints",
             root / "chroma_db",
-            root / "tool_outputs" / "nmap",
             root / "tool_outputs" / "semgrep",
             root / "tool_outputs" / "osv-scanner",
             root / "tool_outputs" / "gitleaks",
@@ -84,17 +78,6 @@ class TestProjectCreation:
         data = json.loads(p.read_text())
         assert data["project_name"] == project_env["project_name"]
         assert "created" in data
-
-    def test_nmap_hosts_initialised_empty(self, project_env: dict) -> None:
-        p = (
-            project_env["base_path"]
-            / "projects"
-            / project_env["project_name"]
-            / "config"
-            / "nmap_hosts.json"
-        )
-        assert p.exists()
-        assert json.loads(p.read_text()) == {}
 
     def test_project_listed_by_manager(self, project_env: dict) -> None:
         pm = ProjectManager(base_path=str(project_env["base_path"]))

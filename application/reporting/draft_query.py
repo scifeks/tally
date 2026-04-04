@@ -159,11 +159,6 @@ class DraftQueryService:
                     pass
         return sorted(hosts)
 
-    def distinct_hosts(self, findings: list[dict[str, Any]]) -> list[str]:
-        """Extract distinct host values from nmap findings."""
-        nmap = [f for f in findings if (f.get("tool") or "").lower() == "nmap"]
-        return sorted({(f.get("host") or "").strip() for f in nmap if f.get("host")})
-
     def distinct_ecosystems(self, findings: list[dict[str, Any]]) -> list[str]:
         """Extract distinct ecosystem values from SCA findings."""
         _sca = frozenset({"osv-scanner", "pip-audit", "npm-audit", "composer-audit"})

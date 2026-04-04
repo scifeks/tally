@@ -111,7 +111,6 @@ class Base<ToolName>Tool(ToolInterface):
         "sca"     — dependency/supply-chain auditing (pip-audit-style)
         "secrets" — secret detection (gitleaks-style)
         "api"     — web/API scanning (zap-style)
-        "network" — host/port scanning (nmap-style)
         """
         return "<segment>"
 
@@ -123,7 +122,7 @@ class Base<ToolName>Tool(ToolInterface):
         they report findings and 0 when clean. Set this to True for those tools so
         tally does not treat a finding-laden scan as a failure.
 
-        Set to False for tools like nmap that exit 0 on success regardless of what
+        Set to False for tools that exit 0 on success regardless of what
         they found.
         """
         return True
@@ -163,7 +162,6 @@ class Base<ToolName>Tool(ToolInterface):
         Typical values:
           True  — semgrep, gitleaks, osv-scanner, zap (run on all repos)
           False — pip-audit, npm-audit, composer-audit (only when language matches)
-                  nmap (network tool, not part of repo scan at all)
         """
         return True
 
@@ -347,7 +345,7 @@ container (some tools read relative paths from cwd).
 ## Step 4 — Parser
 
 If the tool produces JSON, write `infrastructure/tools/parsers/<tool_name>_parser.py`. Look at
-`semgrep_parser.py` (JSON) or `nmap_parser.py` (XML) as reference implementations.
+`semgrep_parser.py` (JSON) as a reference implementation.
 
 The parser module should expose two public functions:
 
@@ -374,7 +372,7 @@ codebase and the RAG chunk builders expect them:
     "secrets": [...],        # gitleaks convention
     "vulnerabilities": [...],# SCA convention (pip-audit, osv-scanner, …)
     "alerts": [...],         # ZAP convention
-    "hosts": [...],          # nmap convention
+
 
     # Optional but helpful for `scan` display output
     "summary": {
@@ -437,7 +435,6 @@ class <ToolName>ChunkBuilder:
 
     # "code"    — SAST, SCA, secrets (most tools)
     # "web"     — API/DAST scanners (ZAP)
-    # "network" — network/host scanners (nmap)
     domain = "code"
 
     # Fields the tool already provides, so the LLM enrichment pipeline skips them.

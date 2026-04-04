@@ -10,7 +10,6 @@ from rich.console import Console
 from rich.table import Table
 
 _INSTALL_HINTS = {
-    "nmap": "sudo apt install nmap  OR  brew install nmap",
     "semgrep": "pip install semgrep",
     "osv-scanner": "go install github.com/google/osv-scanner/cmd/osv-scanner@latest",
     "pip-audit": "pip install pip-audit",

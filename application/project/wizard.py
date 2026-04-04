@@ -114,13 +114,6 @@ class InteractiveProjectWizard:
             print(f"\n✓ Project '{name}' created with {repo_str}")
             self._manager.switch_project(name)
 
-            try:
-                from application.setup.nmap_setup import interview_nmap_config
-
-                interview_nmap_config(name, str(self._manager.base_path))
-            except KeyboardInterrupt:
-                print("\n\n[Nmap config skipped]")
-
             return name
 
         except KeyboardInterrupt:

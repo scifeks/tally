@@ -4,7 +4,6 @@ from .manager import ConfigManager
 from .schemas import (
     EndpointConfig,
     GlobalConfig,
-    NmapProfile,
     OllamaConfig,
     ProjectConfig,
     Repository,
@@ -16,6 +15,5 @@ __all__ = [
     "OllamaConfig",
     "ProjectConfig",
     "Repository",
-    "NmapProfile",
     "EndpointConfig",
 ]

@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/scifeks/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/scifeks/tally/actions/workflows/ci.yml)
 
-Tally is a CLI REPL for orchestrating web application penetration testing. It wraps common security tools, stores findings in a RAG knowledge base (ChromaDB + Ollama), and lets you search, chat over, and report on findings — all within a single terminal session.
+Tally is a CLI REPL for orchestrating web application security auditing. It wraps common security tools, stores findings in a RAG knowledge base (ChromaDB + Ollama), and lets you search, chat over, and report on findings — all within a single terminal session.
 
 ## Features
 
-- Wraps tools like nmap, OWASP ZAP, OSV-Scanner, and [more](docs/tools.md)
+- Wraps tools like Semgrep, OWASP ZAP, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup — skips tools that are not installed
 - RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
@@ -88,7 +88,7 @@ report
 | `scan` | Full scan: all configured tools across all repos |
 | `scan --tool=<tool,...>` | Run one or more specific tools (comma-separated) |
 | `scan --repo=<repo>` | Run all repo-appropriate tools on one repository |
-| `scan --domain=<domain,...>` | Run all tools in one or more domains: `code`, `web`, `network` |
+| `scan --domain=<domain,...>` | Run all tools in one or more domains: `code`, `web` |
 | `scan --repo=<repo> --tool=<tool,...>` | Run specific tools on one repository |
 | `run <tool> [args...]` | Execute a tool with raw arguments |
 

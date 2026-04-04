@@ -7,8 +7,6 @@ from .schemas import (
     CommandEntry,
     EndpointConfig,
     GlobalConfig,
-    NmapHostsConfig,
-    NmapProfile,
     ProjectConfig,
     Repository,
 )
@@ -92,51 +90,6 @@ class ConfigManager:
         config_path = config_dir / "project.json"
         with open(config_path, "w") as f:
             json.dump(config.model_dump(), f, indent=2)
-
-    def load_nmap_hosts(self, project_name: str) -> NmapHostsConfig | None:
-        """Load nmap hosts configuration for a project.
-
-        Args:
-            project_name: Name of the project
-
-        Returns:
-            NmapHostsConfig, or None if not found
-        """
-        config_path = self.projects_dir / project_name / "config" / "nmap_hosts.json"
-
-        if not config_path.exists():
-            return None
-
-        with open(config_path) as f:
-            data = json.load(f)
-
-        excluded = data.pop("excluded_networks", [])
-        profiles = {name: NmapProfile(**profile) for name, profile in data.items()}
-        return NmapHostsConfig(profiles=profiles, excluded_networks=excluded)
-
-    def save_nmap_hosts(
-        self,
-        project_name: str,
-        profiles: dict[str, NmapProfile],
-        excluded_networks: list[str] | None = None,
-    ) -> None:
-        """Save nmap hosts configuration.
-
-        Args:
-            project_name: Name of the project
-            profiles: Dictionary of profile name to NmapProfile
-            excluded_networks: Optional list of excluded IPs/CIDRs
-        """
-        config_dir = self.projects_dir / project_name / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-
-        config_path = config_dir / "nmap_hosts.json"
-        data: dict = {name: profile.model_dump() for name, profile in profiles.items()}
-        if excluded_networks:
-            data["excluded_networks"] = excluded_networks
-
-        with open(config_path, "w") as f:
-            json.dump(data, f, indent=2)
 
     def load_repositories(self, project_name: str) -> list[Repository]:
         """Load repositories from project.json for a project.

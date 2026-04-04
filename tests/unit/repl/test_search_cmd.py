@@ -12,7 +12,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
 
-_KNOWN_TOOLS = frozenset({"nmap", "semgrep", "gitleaks", "zap"})
+_KNOWN_TOOLS = frozenset({"semgrep", "gitleaks", "zap"})
 
 
 def _make_repl_and_kc(active_project: str | None = "testproj"):
@@ -37,7 +37,7 @@ def _make_mock_store(results=None):
     return mock_store
 
 
-def _make_results(n=3, tool="nmap", distance=None):
+def _make_results(n=3, tool="semgrep", distance=None):
     return [
         {
             "document": f"doc{i}",
@@ -104,7 +104,7 @@ def test_search_multi_tool():
     mock_store = _make_mock_store([])
     kc._get_finding_repo = MagicMock(return_value=mock_store)
 
-    kc.cmd_search("search", ["--tool=nmap,semgrep"])
+    kc.cmd_search("search", ["--tool=gitleaks,semgrep"])
 
     mock_store.search.assert_called_once()
     printed = [str(c) for c in repl.console.print.call_args_list]
@@ -260,7 +260,7 @@ def test_search_no_results_prints_message():
     mock_store = _make_mock_store([])
     kc._get_finding_repo = MagicMock(return_value=mock_store)
 
-    kc.cmd_search("search", ["--tool=nmap"])
+    kc.cmd_search("search", ["--tool=semgrep"])
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("No findings matched" in p for p in printed)
@@ -274,11 +274,11 @@ def test_search_no_results_prints_message():
 def test_search_page_hint_shown():
     repl, kc = _make_repl_and_kc()
     # Return page_size (200) results to trigger the "next page" hint
-    results = _make_results(n=200, tool="nmap")
+    results = _make_results(n=200, tool="semgrep")
     mock_store = _make_mock_store(results)
     kc._get_finding_repo = MagicMock(return_value=mock_store)
 
-    kc.cmd_search("search", ["--tool=nmap"])
+    kc.cmd_search("search", ["--tool=semgrep"])
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("--page=2" in p for p in printed)
@@ -292,7 +292,7 @@ def test_search_page_hint_shown():
 def test_search_no_active_project_prints_warning():
     repl, kc = _make_repl_and_kc(active_project=None)
 
-    kc.cmd_search("search", ["--tool=nmap"])
+    kc.cmd_search("search", ["--tool=semgrep"])
 
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("No active project" in p for p in printed)
@@ -413,7 +413,7 @@ def test_fields_column_order_preserved():
     from rich.table import Table as RichTable
 
     repl, kc = _make_repl_and_kc()
-    mock_store = _make_mock_store(_make_results(n=1, tool="nmap"))
+    mock_store = _make_mock_store(_make_results(n=1, tool="semgrep"))
     kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", ["--fields=severity,tool,confidence"])
     tables = [

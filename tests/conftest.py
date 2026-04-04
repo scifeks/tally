@@ -2,7 +2,6 @@
 
 Skip markers — defined once here, used throughout the suite:
   requires_gitleaks  — skip when the gitleaks binary is not installed
-  requires_nmap      — skip when the nmap binary is not installed
   requires_ollama    — skip when Ollama is not reachable or not configured
 
 These are module-level constants, not fixtures. Test files import them:
@@ -39,10 +38,6 @@ _OLLAMA_URL = _ollama_url()
 requires_gitleaks = pytest.mark.skipif(
     shutil.which("gitleaks") is None,
     reason="gitleaks binary not installed",
-)
-requires_nmap = pytest.mark.skipif(
-    shutil.which("nmap") is None,
-    reason="nmap binary not installed",
 )
 requires_ollama = pytest.mark.skipif(
     _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),

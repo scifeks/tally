@@ -321,20 +321,14 @@ class ScopeMethodologyGenerator(SectionDraftGenerator):
         repos = _fmt_repos(ctx.get("repos", []), max_enum)
         tools = _fmt_list(ctx.get("tools", []), max_enum)
         url_hosts: list[str] = ctx.get("url_hosts", [])
-        hosts: list[str] = ctx.get("hosts", [])
         ecosystems: list[str] = ctx.get("ecosystems", [])
         tools_blurb: str = ctx.get("tools_blurb", "")
 
-        network_lines: list[str] = []
-        if hosts:
-            network_lines.append(
-                f"Network hosts in scope: {_fmt_list(hosts, max_enum)}"
-            )
+        network_section = ""
         if url_hosts:
-            network_lines.append(
-                f"Web endpoints in scope: {_fmt_list(url_hosts, max_enum)}"
+            network_section = (
+                f"Web endpoints in scope: {_fmt_list(url_hosts, max_enum)}\n"
             )
-        network_section = ("\n".join(network_lines) + "\n") if network_lines else ""
 
         ecosystem_section = ""
         if ecosystems:

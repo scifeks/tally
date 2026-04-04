@@ -58,11 +58,7 @@ class TestFullScanRemainingPeers:
         active = [s for s in SEGMENT_ORDER]
         assert len(active) >= 2, "Need ≥2 segments for this test to be meaningful"
 
-        with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as MockNet,
-            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
-        ):
-            MockNet.return_value.execute.side_effect = _fake_execute
+        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
             MockRepo.return_value.execute.side_effect = _fake_execute
 
             FullScan().execute(config, resources)
@@ -91,11 +87,7 @@ class TestFullScanRemainingPeers:
                 findings_by_tool={},
             )
 
-        with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as MockNet,
-            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
-        ):
-            MockNet.return_value.execute.side_effect = _fake_execute
+        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
             MockRepo.return_value.execute.side_effect = _fake_execute
 
             FullScan().execute(config, resources)
@@ -120,11 +112,7 @@ class TestFullScanRemainingPeers:
                 findings_by_tool={},
             )
 
-        with (
-            patch("application.tools.scan_types.full.NetworkSegmentScan") as MockNet,
-            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
-        ):
-            MockNet.return_value.execute.side_effect = _fake_execute
+        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
             MockRepo.return_value.execute.side_effect = _fake_execute
 
             FullScan().execute(config, resources)
@@ -152,7 +140,7 @@ class TestFullScanRemainingPeers:
                 findings_by_tool={},
             )
 
-        excluded = ["network"]
+        excluded = []
         active = [s for s in SEGMENT_ORDER if s not in excluded]
 
         with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:

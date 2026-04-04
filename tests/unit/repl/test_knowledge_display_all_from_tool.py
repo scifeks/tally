@@ -31,15 +31,15 @@ def _gitleaks_result(
     }
 
 
-def _nmap_result(distance: float | None = None) -> dict[str, Any]:
+def _semgrep_result(distance: float | None = None) -> dict[str, Any]:
     return {
-        "document": "[nmap] Host 127.0.0.1 port 22 open ssh",
+        "document": "[semgrep] SQL injection in /src/db.py:10",
         "metadata": {
-            "tool": "nmap",
-            "domain": "network",
-            "severity": "informational",
-            "risk_type": "exposed_service",
-            "type_exposure": True,
+            "tool": "semgrep",
+            "domain": "code",
+            "severity": "high",
+            "risk_type": "injection",
+            "type_vulnerability": True,
         },
         "distance": distance,
     }
@@ -57,11 +57,11 @@ class TestAllFromTool:
         assert _all_from_tool(results, "gitleaks") is True
 
     def test_single_non_matching_result(self) -> None:
-        assert _all_from_tool([_nmap_result()], "gitleaks") is False
+        assert _all_from_tool([_semgrep_result()], "gitleaks") is False
 
     def test_mixed_tools_returns_false(self) -> None:
-        results = [_gitleaks_result(), _nmap_result()]
+        results = [_gitleaks_result(), _semgrep_result()]
         assert _all_from_tool(results, "gitleaks") is False
 
     def test_non_gitleaks_tool_name(self) -> None:
-        assert _all_from_tool([_nmap_result()], "nmap") is True
+        assert _all_from_tool([_semgrep_result()], "semgrep") is True

@@ -199,7 +199,7 @@ def build_tool_table(tools, registry) -> Table:
         else:
             avail = tool.check_available()
             version = tool.get_version() if avail else None
-            # Extract bare version number from verbose strings like "Nmap version 7.95"
+            # Extract bare version number from verbose strings like "semgrep 1.2.3"
             if version:
                 match = re.search(r"\d+\.\d+[\d.]*", version)
                 version = match.group(0) if match else version.split("(")[0].strip()

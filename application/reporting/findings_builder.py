@@ -190,19 +190,17 @@ class FindingsBuilder:
     def build_master_table(
         self,
         code_findings: list[dict[str, Any]],
-        nmap_findings: list[dict[str, Any]],
     ) -> str:
-        """Return HTML for the Master Findings Table (code + network subtables).
+        """Return HTML for the Master Findings Table.
 
-        The ``<h2>`` headings for each subtable are included in the returned
-        HTML (the template does not provide headings for this slot).
+        The ``<h2>`` heading is included in the returned HTML (the template
+        does not provide headings for this slot).
 
         Args:
-            code_findings: Pre-sorted, finding-ID-assigned non-network findings.
-            nmap_findings: All nmap findings (no triage filter).
+            code_findings: Pre-sorted, finding-ID-assigned findings.
 
         Returns:
-            HTML string containing both subtables.
+            HTML string of the findings table.
         """
         parts: list[str] = []
 
@@ -236,11 +234,6 @@ class FindingsBuilder:
                     "</tr>"
                 )
             parts.append("</tbody></table>")
-
-        # --- Network findings ---
-        parts.append("<h2>Network Findings</h2>")
-        network_html = FindingsBuilder._build_network_table(nmap_findings)
-        parts.append(network_html)
 
         return "\n".join(parts)
 
@@ -430,80 +423,8 @@ class FindingsBuilder:
         return "\n".join(parts)
 
     # ------------------------------------------------------------------ #
-    # Appendix — Comprehensive Network Findings
-    # ------------------------------------------------------------------ #
-
-    @staticmethod
-    def build_comprehensive_network_table(
-        nmap_findings: list[dict[str, Any]],
-    ) -> str:
-        """Return HTML for the comprehensive network findings appendix table.
-
-        Mirrors the network subtable structure from :meth:`build_master_table`.
-        The section heading is provided by the template after its rename.
-
-        Args:
-            nmap_findings: All nmap findings (no triage filter).
-
-        Returns:
-            HTML string of the network detail table.
-        """
-        return FindingsBuilder._build_network_table(nmap_findings)
-
-    # ------------------------------------------------------------------ #
     # Internal helpers
     # ------------------------------------------------------------------ #
-
-    @staticmethod
-    def _build_network_table(nmap_findings: list[dict[str, Any]]) -> str:
-        """Build a host-grouped network findings table with in-memory NW-IDs.
-
-        One row per host; ports and services are aggregated across all findings
-        for that host.  NW-IDs (``NW-001``, ``NW-002``, …) are assigned here
-        and are not persisted to the database.
-        """
-        if not nmap_findings:
-            return '<p class="placeholder">No network findings available.</p>'
-
-        # Group by host.
-        host_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for f in nmap_findings:
-            key = f.get("host") or "(unknown host)"
-            host_groups[key].append(f)
-
-        parts: list[str] = [
-            "<table>",
-            "<thead><tr>"
-            "<th>NW-ID</th><th>Host (IP)</th><th>Open Ports</th><th>Services</th>"
-            "</tr></thead><tbody>",
-        ]
-        for i, host in enumerate(sorted(host_groups), start=1):
-            tal_id = f"NW-{i:03d}"
-            findings = host_groups[host]
-
-            ports = sorted(
-                {str(f["port"]) for f in findings if f.get("port")},
-                key=lambda p: int(p) if p.isdigit() else 0,
-            )
-            services: list[str] = []
-            for f in findings:
-                meta = _parse_meta(f)
-                svc = meta.get("service") or ""
-                ver = meta.get("service_version") or ""
-                label = f"{svc} {ver}".strip()
-                if label and label not in services:
-                    services.append(label)
-
-            parts.append(
-                f"<tr>"
-                f"<td>{html.escape(tal_id)}</td>"
-                f"<td>{html.escape(host)}</td>"
-                f"<td>{html.escape(', '.join(ports))}</td>"
-                f"<td>{html.escape('; '.join(services))}</td>"
-                "</tr>"
-            )
-        parts.append("</tbody></table>")
-        return "\n".join(parts)
 
 
 __all__ = ["FindingsBuilder"]

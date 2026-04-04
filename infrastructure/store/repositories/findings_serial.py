@@ -29,7 +29,6 @@ _DIRECT_COLUMNS: tuple[str, ...] = (
     "confidence",
     "rule_id",
     "url",
-    "port",
     "vulnerability_id",
     "package_name",
     "ecosystem",
@@ -45,7 +44,6 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
         "references",
         "aliases",
         "tags",
-        "ssh_algorithms",
     }
 )
 
@@ -117,11 +115,6 @@ def deserialise_row(row: Any) -> dict[str, Any]:
     if file_val is not None:
         metadata["file"] = file_val
         metadata["file_path"] = file_val
-
-    host_val = row["host"]
-    if host_val is not None:
-        metadata["host"] = host_val
-        metadata["ip_address"] = host_val
 
     fp_val = row["fingerprint"]
     if fp_val is not None:

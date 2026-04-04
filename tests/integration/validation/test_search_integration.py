@@ -60,34 +60,36 @@ def _printed(repl: MagicMock) -> list[str]:
 # Seed data
 # ---------------------------------------------------------------------------
 
-_NMAP_WITH_META = [
+_SEMGREP_WITH_META = [
     {
-        "tool": "nmap",
-        "domain": "network",
-        "finding_type": "informational",
+        "tool": "semgrep",
+        "domain": "code",
+        "finding_type": "vulnerability",
         "severity": "informational",
-        "confidence": "confirmed",
-        "ip_address": "10.0.0.1",
-        "port": "22",
-        "service": "ssh",
-        "transport": "tcp",
+        "confidence": "medium",
+        "rule_id": "python.django.security.injection.sql-injection",
+        "file_path": "src/api/users.py",
+        "line_start": 42,
+        "category": "security",  # goes into meta blob — used for N/A rendering test
+        "cwe": "CWE-89",
     },
     {
-        "tool": "nmap",
-        "domain": "network",
-        "finding_type": "informational",
+        "tool": "semgrep",
+        "domain": "code",
+        "finding_type": "vulnerability",
         "severity": "high",
-        "confidence": "confirmed",
-        "ip_address": "10.0.0.2",
-        "port": "443",
-        # no service — to test N/A rendering
+        "confidence": "high",
+        "rule_id": "python.flask.security.audit.hardcoded-password",
+        "file_path": "src/views/admin.py",
+        "line_start": 15,
+        # no category — row intentionally missing this field to test N/A rendering
     },
 ]
 
 
-def _seed_nmap(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
+def _seed_semgrep(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
     run_id = run_repo.create_run({"args": []})
-    finding_repo.upsert_findings(run_id, _NMAP_WITH_META)
+    finding_repo.upsert_findings(run_id, _SEMGREP_WITH_META)
 
 
 # ---------------------------------------------------------------------------
@@ -96,23 +98,23 @@ def _seed_nmap(run_repo: RunRepository, finding_repo: FindingRepository) -> None
 
 
 def test_show_fields_with_tool_and_findings(tmp_path: Path) -> None:
-    """--show-fields --tool=nmap returns two labeled sections."""
+    """--show-fields --tool=semgrep returns two labeled sections."""
     run_repo, finding_repo = _make_store(tmp_path)
-    _seed_nmap(run_repo, finding_repo)
+    _seed_semgrep(run_repo, finding_repo)
     repl, kc = _make_kc(finding_repo)
 
-    kc._cmd_show_fields(["--show-fields", "--tool=nmap"])
+    kc._cmd_show_fields(["--show-fields", "--tool=semgrep"])
 
     printed = _printed(repl)
     assert any("Schema fields" in p for p in printed)
     schema_line = next(p for p in printed if "Schema fields" in p)
-    assert "severity" in schema_line
-    assert "ip_address" in schema_line
+    assert "rule_id" in schema_line
     assert "fingerprint" in schema_line
-    # service and transport go into meta blob
+    assert "confidence" in schema_line
+    # line_start and category go into meta blob
     assert any("Meta fields" in p for p in printed)
     meta_line = next(p for p in printed if "Meta fields" in p)
-    assert "service" in meta_line
+    assert "category" in meta_line
 
 
 def test_show_fields_no_tool_prints_error(tmp_path: Path) -> None:
@@ -131,7 +133,7 @@ def test_show_fields_extra_flag_prints_error(tmp_path: Path) -> None:
     _, finding_repo = _make_store(tmp_path)
     repl, kc = _make_kc(finding_repo)
 
-    kc._cmd_show_fields(["--show-fields", "--tool=nmap", "--severity=high"])
+    kc._cmd_show_fields(["--show-fields", "--tool=semgrep", "--severity=high"])
 
     printed = _printed(repl)
     assert any("Error" in p for p in printed)
@@ -162,31 +164,31 @@ def _get_table(repl: MagicMock) -> Table | None:
 
 
 def test_fields_basic_projection(tmp_path: Path) -> None:
-    """--fields=severity,ip_address,service renders those columns."""
+    """--fields=severity,rule_id,file_path renders those columns."""
     run_repo, finding_repo = _make_store(tmp_path)
-    _seed_nmap(run_repo, finding_repo)
+    _seed_semgrep(run_repo, finding_repo)
     repl, kc = _make_kc(finding_repo)
 
-    kc.cmd_search("search", ["--tool=nmap", "--fields=severity,ip_address,service"])
+    kc.cmd_search("search", ["--tool=semgrep", "--fields=severity,rule_id,file_path"])
 
     table = _get_table(repl)
     assert table is not None, "expected a Rich Table to be printed"
     rendered = _render(table)
     assert "severity" in rendered
-    assert "ip_address" in rendered
-    assert "service" in rendered
+    assert "rule_id" in rendered
+    assert "file_path" in rendered
     assert "informational" in rendered
-    assert "10.0.0.1" in rendered
-    assert "ssh" in rendered
+    assert "src/api/users.py" in rendered
+    assert "sql-injection" in rendered
 
 
 def test_fields_na_for_missing_key(tmp_path: Path) -> None:
     """--fields renders N/A for a field absent from a row."""
     run_repo, finding_repo = _make_store(tmp_path)
-    _seed_nmap(run_repo, finding_repo)
+    _seed_semgrep(run_repo, finding_repo)
     repl, kc = _make_kc(finding_repo)
 
-    kc.cmd_search("search", ["--tool=nmap", "--fields=severity,service"])
+    kc.cmd_search("search", ["--tool=semgrep", "--fields=severity,category"])
 
     table = _get_table(repl)
     assert table is not None
@@ -197,7 +199,7 @@ def test_fields_na_for_missing_key(tmp_path: Path) -> None:
 def test_fields_empty_value_prints_error(tmp_path: Path) -> None:
     """--fields= (empty value) prints a search error."""
     run_repo, finding_repo = _make_store(tmp_path)
-    _seed_nmap(run_repo, finding_repo)
+    _seed_semgrep(run_repo, finding_repo)
     repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--fields="])
@@ -209,10 +211,10 @@ def test_fields_empty_value_prints_error(tmp_path: Path) -> None:
 def test_fields_fingerprint_shows_sha256(tmp_path: Path) -> None:
     """--fields=fingerprint shows the computed SHA256, not N/A."""
     run_repo, finding_repo = _make_store(tmp_path)
-    _seed_nmap(run_repo, finding_repo)
+    _seed_semgrep(run_repo, finding_repo)
     repl, kc = _make_kc(finding_repo)
 
-    kc.cmd_search("search", ["--tool=nmap", "--fields=fingerprint"])
+    kc.cmd_search("search", ["--tool=semgrep", "--fields=fingerprint"])
 
     table = _get_table(repl)
     assert table is not None
@@ -224,7 +226,7 @@ def test_fields_fingerprint_shows_sha256(tmp_path: Path) -> None:
 def test_fields_no_tool_with_severity_filter(tmp_path: Path) -> None:
     """--severity=high --fields=severity,tool works without --tool."""
     run_repo, finding_repo = _make_store(tmp_path)
-    _seed_nmap(run_repo, finding_repo)
+    _seed_semgrep(run_repo, finding_repo)
     repl, kc = _make_kc(finding_repo)
 
     kc.cmd_search("search", ["--severity=high", "--fields=severity,tool"])
@@ -234,4 +236,4 @@ def test_fields_no_tool_with_severity_filter(tmp_path: Path) -> None:
     rendered = _render(table)
     assert "severity" in rendered
     assert "tool" in rendered
-    assert "nmap" in rendered
+    assert "semgrep" in rendered

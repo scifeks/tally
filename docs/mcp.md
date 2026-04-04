@@ -253,7 +253,7 @@ It uses the active project set with `project switch <name>`. Two optional flags 
    | `zap` | `api_trace` |
    | `osv-scanner`, `pip-audit`, `npm-audit`, `composer-audit` | `dependency` |
    | `gitleaks` | `enrich_only` |
-   | `nmap`, `tree-sitter` | skipped — not triaged |
+   | `tree-sitter` | skipped — not triaged |
 
    Findings from skipped tools are counted and logged but otherwise ignored.
 

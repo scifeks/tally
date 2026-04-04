@@ -1,5 +1,4 @@
 from application.tools.scan_types.full import FullScan
-from application.tools.scan_types.network_segment import NetworkSegmentScan
 from application.tools.scan_types.repo import RepoScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from application.tools.scan_types.resources import ExecutionResources
@@ -18,7 +17,6 @@ __all__ = [
     "SEGMENT_ORDER",
     "ExecutionResources",
     "FullScan",
-    "NetworkSegmentScan",
     "RepoScan",
     "RepoSegmentScan",
     "ScanSummary",

@@ -55,7 +55,7 @@ class RAGEngine:
 
     Metadata schema stored per document:
         - tool (str)         – which tool generated the finding
-        - profile (str)      – nmap profile / repo name (optional)
+        - profile (str)      – repo name (optional)
         - timestamp (str)    – ISO-8601 UTC
         - severity (str)     – low/medium/high/critical (optional)
         - finding_type (str) – vulnerability/informational/secret/dependency/etc.
@@ -339,7 +339,7 @@ class RAGEngine:
         """Delete stored findings, optionally filtered by tool and/or profile.
 
         Args:
-            tool:    Tool name (e.g. ``"nmap"``). If ``None``, all findings are
+            tool:    Tool name (e.g. ``"semgrep"``). If ``None``, all findings are
                      deleted (only valid when ``profile`` is also ``None``).
             profile: Profile name to scope the deletion. If ``None``, all
                      findings for the tool are deleted regardless of profile.

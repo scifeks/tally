@@ -74,7 +74,7 @@ _HELP_REGISTRY = [
         "scan",
         "scan",
         "--domain=<domain,...>",
-        "Filter by domain: code, web, network. Comma-separated.",
+        "Filter by domain: code, web. Comma-separated.",
     ),
     # Manual Run
     ("run", None, None, "Manual Run"),
@@ -213,7 +213,7 @@ _HELP_REGISTRY = [
         "search",
         "search",
         "--domain=<domain,...>",
-        "Filter by domain: code, web, network. Comma-separated.",
+        "Filter by domain: code, web. Comma-separated.",
     ),
     (
         "search",

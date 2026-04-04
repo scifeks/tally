@@ -62,23 +62,23 @@ def _make_store(tmp_path: Path) -> _TestStore:
 
 
 class TestNoCommaStringsInMeta:
-    def test_ssh_algorithms_stored_as_list(self, tmp_path: Path) -> None:
+    def test_tags_stored_as_list(self, tmp_path: Path) -> None:
+        """Comma-joined 'tags' field is deserialized as a list from meta blob."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
         store.upsert_findings(
             run_id,
             [
                 {
-                    "tool": "nmap",
-                    "ip_address": "10.0.0.1",
-                    "port": "22",
-                    "ssh_algorithms": (
-                        "diffie-hellman-group14-sha256, curve25519-sha256"
-                    ),
+                    "tool": "gitleaks",
+                    "rule_id": "aws-key",
+                    "file": "src/config.py",
+                    "severity": "high",
+                    "tags": "key, aws, secret",
                 }
             ],
         )
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
-        ssh_algs = results[0]["metadata"].get("ssh_algorithms")
-        assert isinstance(ssh_algs, list)
-        assert len(ssh_algs) == 2
+        tags = results[0]["metadata"].get("tags")
+        assert isinstance(tags, list)
+        assert len(tags) == 3

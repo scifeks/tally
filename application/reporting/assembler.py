@@ -164,9 +164,7 @@ class ReportAssembler:
         attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
 
         # -- Segment 5: Finding ID assignment ---------------------------------
-        nmap_findings = finding_repo.get_all_nmap_findings()
-        # Use segment column — no tool-name checks in reporting code.
-        code_findings_raw = [f for f in filtered if f.get("segment") != "network"]
+        code_findings_raw = filtered
         code_sorted = sorted(
             code_findings_raw,
             key=lambda f: (
@@ -184,11 +182,10 @@ class ReportAssembler:
         # -- Segment 5: HTML sections -------------------------------------
         secrets = [f for f in code_with_ids if f.get("segment") == "secrets"]
         builder = FindingsBuilder(prefix=prefix)
-        findings_table_html = builder.build_master_table(code_with_ids, nmap_findings)
+        findings_table_html = builder.build_master_table(code_with_ids)
         secrets_exposure_html = builder.build_secrets_cards(secrets)
         detailed_findings_html = builder.build_code_cards(code_with_ids)
         raw_sast_html = builder.build_comprehensive_code_table(code_with_ids)
-        nmap_results_html = builder.build_comprehensive_network_table(nmap_findings)
 
         return ReportContext(
             project_name=project_name,
@@ -206,7 +203,6 @@ class ReportAssembler:
             secrets_exposure_html=secrets_exposure_html,
             detailed_findings_html=detailed_findings_html,
             raw_sast_html=raw_sast_html,
-            nmap_results_html=nmap_results_html,
             **draft_html,
         )
 

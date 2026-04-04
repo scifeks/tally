@@ -99,7 +99,6 @@ class ProjectManager:
             project_root / "config" / "endpoints",
             project_root / "chroma_db",
             project_root / "sqlite",
-            project_root / "tool_outputs" / "nmap",
             project_root / "tool_outputs" / "semgrep",
             project_root / "tool_outputs" / "osv-scanner",
             project_root / "tool_outputs" / "pip-audit",
@@ -111,10 +110,6 @@ class ProjectManager:
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
-
-        nmap_hosts = project_root / "config" / "nmap_hosts.json"
-        if not nmap_hosts.exists():
-            nmap_hosts.write_text("{}")
 
     def save_project(
         self,

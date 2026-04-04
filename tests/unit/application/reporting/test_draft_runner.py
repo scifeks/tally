@@ -349,7 +349,6 @@ def _make_query(
     recurring: dict | None = None,
     tools: list | None = None,
     url_hosts: list | None = None,
-    hosts: list | None = None,
     ecosystems: list | None = None,
 ) -> MagicMock:
     q = MagicMock()
@@ -358,7 +357,6 @@ def _make_query(
     q.recurring_by_risk_type.return_value = recurring or {}
     q.distinct_tools.return_value = tools or []
     q.distinct_url_hosts.return_value = url_hosts or []
-    q.distinct_hosts.return_value = hosts or []
     q.distinct_ecosystems.return_value = ecosystems or []
     return q
 
@@ -417,7 +415,6 @@ class TestBuildContext:
         query = _make_query(
             tools=["semgrep"],
             url_hosts=["example.com"],
-            hosts=["10.0.0.1"],
             ecosystems=["PyPI"],
         )
         with patch(
@@ -427,7 +424,6 @@ class TestBuildContext:
             ctx = _call_build_context("scope-and-methodology", query, tmp_path)
         assert ctx["tools"] == ["semgrep"]
         assert ctx["url_hosts"] == ["example.com"]
-        assert ctx["hosts"] == ["10.0.0.1"]
         assert ctx["ecosystems"] == ["PyPI"]
         assert ctx["tools_blurb"] == "blurb text"
 

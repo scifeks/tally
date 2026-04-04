@@ -84,8 +84,6 @@ class FindingRepository:
                     named[key] = str(val) if val is not None else None
                 elif key == "file_path":
                     named["file"] = str(val) if val is not None else None
-                elif key == "ip_address":
-                    named["host"] = str(val) if val is not None else None
                 elif key == "lockfile":
                     # file_path takes priority over lockfile for the file column.
                     if named.get("file") is None:
@@ -110,8 +108,6 @@ class FindingRepository:
                     named.get("file"),
                     named.get("rule_id"),
                     named.get("url"),
-                    named.get("host"),
-                    named.get("port"),
                     named.get("vulnerability_id"),
                     named.get("package_name"),
                     named.get("ecosystem"),
@@ -126,20 +122,18 @@ class FindingRepository:
         from datetime import UTC, datetime
 
         now = datetime.now(UTC).isoformat()
-        rows_with_ts = [
-            (*row, now, now, 1, "active", 1 if row[2] == "nmap" else 0) for row in rows
-        ]
+        rows_with_ts = [(*row, now, now, 1, "active", 0) for row in rows]
 
         sql = """
             INSERT INTO findings (
                 fingerprint, run_id, tool, domain, segment, repo,
                 finding_type, severity,
-                confidence, file, rule_id, url, host, port,
+                confidence, file, rule_id, url,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
                 first_seen, last_seen, seen_count, status, should_report
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (fingerprint) DO UPDATE SET
                 run_id          = excluded.run_id,
                 severity        = excluded.severity,
@@ -328,18 +322,6 @@ class FindingRepository:
     def get_all_findings_deserialized(self) -> list[dict]:
         """Return all findings with no triage filter, deserialised."""
         return [deserialise_row(row) for row in self.get_all_findings()]
-
-    def get_all_nmap_findings(self) -> list[dict]:
-        """Return all nmap findings with no triage filter.
-
-        Nmap findings are always informational reconnaissance data and are
-        never subject to triage filtering — they are queried in full for the
-        Network Surface section of the report.
-        """
-        sql = "SELECT * FROM findings WHERE tool = 'nmap'"
-        with self._factory.connect() as conn:
-            rows = conn.execute(sql).fetchall()
-        return [dict(r) for r in rows]
 
     def update_analyst_fields(
         self,

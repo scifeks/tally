@@ -7,9 +7,8 @@ from the REPL via `findings visualize`. It starts a short-lived FastAPI server, 
 a pre-built Vue 3 SPA, and opens a browser tab pointed at it.
 
 The visualizer gives analysts a table-based view of all ingested findings from the
-active project's SQLite database. Two views are available: **Code & Web Findings**
-for code, secret, and web findings (semgrep, gitleaks, ZAP, SCA tools), and
-**Network Surface** for network scan results (nmap).
+active project's SQLite database. Findings from all tools (semgrep, gitleaks, ZAP,
+SCA tools) are displayed in a single **Code & Web Findings** table.
 
 Analyst edits to writable fields are written to SQLite and synced to ChromaDB
 immediately. The server runs in a background thread and stops when the REPL exits.
@@ -101,24 +100,6 @@ gitleaks, ZAP, and all SCA tools (pip-audit, npm-audit, composer-audit, osv-scan
 | Title | `meta.title` (editable) |
 | Remediation | `meta.remediation` (editable) |
 | CWE | `cwe` (editable) |
-
-### Network Surface
-
-Displays all findings where `tool = 'nmap'`.
-
-| Column | Source |
-|---|---|
-| ID | `id` |
-| Host | `host` |
-| Hostname | `meta.hostname` |
-| Port | `port` |
-| Service | `meta.service` |
-| Version | `meta.service_version` |
-| Transport | `meta.transport` |
-| State | `meta.state` |
-| Severity | `severity` (editable) |
-| TLS | `meta.tls_version` |
-| Notes | `description` (editable) |
 
 ---
 
