@@ -206,6 +206,197 @@ class TestPurge:
         count = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
         assert count >= 1
 
+    def test_purge_all_clears_triage_batches(self, tmp_path: Path) -> None:
+        """Full purge must delete all triage_batches records."""
+        import json
+
+        store = _make_store(tmp_path)
+        run_id = _seed_all(store)
+
+        conn = store._connect()
+        conn.execute(
+            "INSERT INTO triage_batches (run_id, finding_ids, batch_data, status) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, json.dumps([1]), "[]", "pending"),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=None)
+
+        conn = store._connect()
+        assert conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[0] == 0
+        conn.close()
+
+    def test_purge_all_clears_tool_audit_log(self, tmp_path: Path) -> None:
+        """Full purge must delete all tool_audit_log records."""
+        store = _make_store(tmp_path)
+        _seed_all(store)
+
+        conn = store._connect()
+        conn.execute(
+            "INSERT INTO tool_audit_log (tool_name, arguments, called_at) "
+            "VALUES (?, ?, datetime('now'))",
+            ("semgrep", "{}"),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=None)
+
+        conn = store._connect()
+        assert conn.execute("SELECT COUNT(*) FROM tool_audit_log").fetchone()[0] == 0
+        conn.close()
+
+    def test_purge_all_clears_run_tools(self, tmp_path: Path) -> None:
+        """Full purge must delete all run_tools records."""
+        store = _make_store(tmp_path)
+        run_id = _seed_all(store)
+
+        conn = store._connect()
+        conn.execute(
+            "INSERT INTO run_tools (run_id, tool, findings_count) VALUES (?, ?, ?)",
+            (run_id, "semgrep", 2),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=None)
+
+        conn = store._connect()
+        assert conn.execute("SELECT COUNT(*) FROM run_tools").fetchone()[0] == 0
+        conn.close()
+
+    def test_purge_all_clears_run_repos(self, tmp_path: Path) -> None:
+        """Full purge must delete all run_repos records."""
+        store = _make_store(tmp_path)
+        run_id = _seed_all(store)
+
+        conn = store._connect()
+        conn.execute(
+            "INSERT INTO run_repos (run_id, repo) VALUES (?, ?)",
+            (run_id, "repo1"),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=None)
+
+        conn = store._connect()
+        assert conn.execute("SELECT COUNT(*) FROM run_repos").fetchone()[0] == 0
+        conn.close()
+
+    def test_purge_tool_clears_triage_batches_for_tool(self, tmp_path: Path) -> None:
+        """Tool-specific purge deletes triage_batches that only reference that tool."""
+        import json
+
+        store = _make_store(tmp_path)
+        run_id = _seed_all(store)
+
+        conn = store._connect()
+        semgrep_id = conn.execute(
+            "SELECT id FROM findings WHERE tool = 'semgrep' LIMIT 1"
+        ).fetchone()["id"]
+        gitleaks_id = conn.execute(
+            "SELECT id FROM findings WHERE tool = 'gitleaks' LIMIT 1"
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO triage_batches (run_id, finding_ids, batch_data, status) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, json.dumps([semgrep_id]), "[]", "pending"),
+        )
+        conn.execute(
+            "INSERT INTO triage_batches (run_id, finding_ids, batch_data, status) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, json.dumps([gitleaks_id]), "[]", "pending"),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=["semgrep"])
+
+        conn = store._connect()
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE tool = 'semgrep'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE tool = 'gitleaks'"
+            ).fetchone()[0]
+            > 0
+        )
+        # Semgrep batch deleted, gitleaks batch preserved
+        assert conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[0] == 1
+        conn.close()
+
+    def test_purge_tool_clears_tool_audit_log_for_tool(self, tmp_path: Path) -> None:
+        """Tool-specific purge deletes tool_audit_log only for that tool."""
+        store = _make_store(tmp_path)
+        _seed_all(store)
+
+        conn = store._connect()
+        conn.execute(
+            "INSERT INTO tool_audit_log (tool_name, arguments, called_at) "
+            "VALUES (?, ?, datetime('now'))",
+            ("semgrep", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO tool_audit_log (tool_name, arguments, called_at) "
+            "VALUES (?, ?, datetime('now'))",
+            ("gitleaks", "{}"),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=["semgrep"])
+
+        conn = store._connect()
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM tool_audit_log WHERE tool_name = 'semgrep'"
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM tool_audit_log WHERE tool_name = 'gitleaks'"
+            ).fetchone()[0]
+            == 1
+        )
+        conn.close()
+
+    def test_purge_mixed_batch_preserved(self, tmp_path: Path) -> None:
+        """Triage batch referencing multiple tools is kept on single-tool purge."""
+        import json
+
+        store = _make_store(tmp_path)
+        run_id = _seed_all(store)
+
+        conn = store._connect()
+        semgrep_id = conn.execute(
+            "SELECT id FROM findings WHERE tool = 'semgrep' LIMIT 1"
+        ).fetchone()["id"]
+        gitleaks_id = conn.execute(
+            "SELECT id FROM findings WHERE tool = 'gitleaks' LIMIT 1"
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT INTO triage_batches (run_id, finding_ids, batch_data, status) "
+            "VALUES (?, ?, ?, ?)",
+            (run_id, json.dumps([semgrep_id, gitleaks_id]), "[]", "pending"),
+        )
+        conn.commit()
+        conn.close()
+
+        store.delete_findings(tools=["semgrep"])
+
+        conn = store._connect()
+        # Batch has a gitleaks finding still present — must not be deleted
+        assert conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[0] == 1
+        conn.close()
+
     def test_schema_recreated_after_db_delete(self, tmp_path: Path) -> None:
         """After deleting and recreating the DB, _init_schema works cleanly."""
         store = _make_store(tmp_path)
