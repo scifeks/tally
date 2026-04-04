@@ -20,6 +20,7 @@ from unittest.mock import MagicMock
 from core.config.schemas import Repository
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.parsers.noir_parser import parse_noir_json
+from infrastructure.tools.wrappers.local.noir import NoirLocalTool
 from infrastructure.tools.wrappers.local.zap import ZAPLocalTool, _find_noir_oas3
 
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
@@ -323,7 +324,7 @@ class TestFindNoirOas3:
         noir_dir = tmp_path / "projects" / "MYPROJ" / "tool_outputs" / "noir"
         noir_dir.mkdir(parents=True)
         oas3 = noir_dir / "dvna_20260101T120000_oas3.json"
-        oas3.write_text("{}", encoding="utf-8")
+        oas3.write_text('{"paths": {"/api/user": {}}}', encoding="utf-8")
         result = _find_noir_oas3(str(tmp_path), "MYPROJ", "dvna")
         assert result == str(oas3)
 
@@ -332,8 +333,8 @@ class TestFindNoirOas3:
         noir_dir.mkdir(parents=True)
         f1 = noir_dir / "dvna_20260101T120000_oas3.json"
         f2 = noir_dir / "dvna_20260102T120000_oas3.json"
-        f1.write_text("{}", encoding="utf-8")
-        f2.write_text("{}", encoding="utf-8")
+        f1.write_text('{"paths": {"/api/user": {}}}', encoding="utf-8")
+        f2.write_text('{"paths": {"/api/login": {}}}', encoding="utf-8")
         result = _find_noir_oas3(str(tmp_path), "MYPROJ", "dvna")
         # lexicographically last = most recent timestamp
         assert result == str(f2)
@@ -342,6 +343,30 @@ class TestFindNoirOas3:
         noir_dir = tmp_path / "projects" / "MYPROJ" / "tool_outputs" / "noir"
         noir_dir.mkdir(parents=True)
         (noir_dir / "other_repo_20260101T120000_oas3.json").write_text("{}")
+        result = _find_noir_oas3(str(tmp_path), "MYPROJ", "dvna")
+        assert result is None
+
+    def test_returns_none_when_paths_empty(self, tmp_path: Path) -> None:
+        noir_dir = tmp_path / "projects" / "MYPROJ" / "tool_outputs" / "noir"
+        noir_dir.mkdir(parents=True)
+        oas3 = noir_dir / "dvna_20260101T120000_oas3.json"
+        oas3.write_text('{"paths": {}}', encoding="utf-8")
+        result = _find_noir_oas3(str(tmp_path), "MYPROJ", "dvna")
+        assert result is None
+
+    def test_returns_none_when_paths_key_missing(self, tmp_path: Path) -> None:
+        noir_dir = tmp_path / "projects" / "MYPROJ" / "tool_outputs" / "noir"
+        noir_dir.mkdir(parents=True)
+        oas3 = noir_dir / "dvna_20260101T120000_oas3.json"
+        oas3.write_text("{}", encoding="utf-8")
+        result = _find_noir_oas3(str(tmp_path), "MYPROJ", "dvna")
+        assert result is None
+
+    def test_returns_none_when_invalid_json(self, tmp_path: Path) -> None:
+        noir_dir = tmp_path / "projects" / "MYPROJ" / "tool_outputs" / "noir"
+        noir_dir.mkdir(parents=True)
+        oas3 = noir_dir / "dvna_20260101T120000_oas3.json"
+        oas3.write_text("not valid json", encoding="utf-8")
         result = _find_noir_oas3(str(tmp_path), "MYPROJ", "dvna")
         assert result is None
 
@@ -366,7 +391,7 @@ class TestZapBuildExecutionPassesWithNoir:
         noir_dir = tmp_path / "projects" / "DVPA" / "tool_outputs" / "noir"
         noir_dir.mkdir(parents=True)
         oas3 = noir_dir / "dvna_20260101T120000_oas3.json"
-        oas3.write_text("{}", encoding="utf-8")
+        oas3.write_text('{"paths": {"/api/user": {}}}', encoding="utf-8")
 
         ctx = _make_context(repo, str(tmp_path))
         zap = _make_zap()
@@ -379,3 +404,47 @@ class TestZapBuildExecutionPassesWithNoir:
         zap = _make_zap()
         passes = zap.build_execution_passes(ctx)
         assert passes[0].kwargs["base_url"] == "http://localhost:9090"
+
+    def test_empty_oas3_file_not_passed_as_openapi_file(self, tmp_path: Path) -> None:
+        repo = _make_repo()
+        noir_dir = tmp_path / "projects" / "DVPA" / "tool_outputs" / "noir"
+        noir_dir.mkdir(parents=True)
+        oas3 = noir_dir / "dvna_20260101T120000_oas3.json"
+        oas3.write_text('{"paths": {}}', encoding="utf-8")
+
+        ctx = _make_context(repo, str(tmp_path))
+        zap = _make_zap()
+        passes = zap.build_execution_passes(ctx)
+        assert "openapi_file" not in passes[0].kwargs
+
+
+# ---------------------------------------------------------------------------
+# NoirLocalTool.parse_output — empty OAS3 cleanup
+# ---------------------------------------------------------------------------
+
+
+class TestNoirParseOutputEmptyCleanup:
+    def test_empty_oas3_file_is_deleted_after_parse(self, tmp_path: Path) -> None:
+        oas3 = tmp_path / "dvna_20260101T120000_oas3.json"
+        oas3.write_text('{"openapi": "3.0.0", "paths": {}}', encoding="utf-8")
+        tool = NoirLocalTool()
+        tool._last_report_path = oas3
+        tool.parse_output("", {})
+        assert not oas3.exists()
+
+    def test_populated_oas3_file_is_preserved_after_parse(self, tmp_path: Path) -> None:
+        oas3 = tmp_path / "dvna_20260101T120000_oas3.json"
+        oas3.write_text(
+            json.dumps(
+                {
+                    "openapi": "3.0.0",
+                    "info": {"title": "t", "version": "1"},
+                    "paths": {"/api/login": {"post": {"responses": {"200": {}}}}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        tool = NoirLocalTool()
+        tool._last_report_path = oas3
+        tool.parse_output("", {})
+        assert oas3.exists()

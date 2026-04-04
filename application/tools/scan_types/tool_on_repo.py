@@ -61,6 +61,12 @@ class ToolOnRepoScan(ScanType):
         if not tool.check_available():
             raise ValueError(f"Tool '{self.tool_name}' is not installed.")
 
+        if tool.requires_base_urls and not repo.base_urls:
+            raise ValueError(
+                f"Tool '{self.tool_name}' requires base_urls but none are"
+                f" configured for repository '{repo.name}'."
+            )
+
         resources.display.print_scan_header(
             f"Repo Tool Scan: {repo.name} — {self.tool_name}"
         )
@@ -107,6 +113,15 @@ class ToolOnRepoScan(ScanType):
                         result.duration_seconds,
                     )
                 )
+                if self.tool_name == "noir" and findings == 0:
+                    resources.display.print_status(
+                        "    [yellow]⚠ noir found 0 endpoints. "
+                        "The framework may not be supported by noir.[/yellow]"
+                    )
+                    resources.display.print_status(
+                        "    [dim]ZAP will fall back to spider-only "
+                        "mode for this repository.[/dim]"
+                    )
             else:
                 total_failed += 1
                 resources.display.print_tool_line(

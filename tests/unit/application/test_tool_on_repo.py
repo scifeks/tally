@@ -101,3 +101,21 @@ class TestToolOnRepoScan:
         mock_resources.factory.create.return_value = tool
         with pytest.raises(ValueError, match="not installed"):
             ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+
+    def test_requires_base_urls_raises_when_empty(
+        self,
+        mock_config: Any,
+        mock_resources: Any,
+    ) -> None:
+        from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
+
+        mock_config.config_manager.load_repositories.return_value = [
+            _make_mock_repo(base_urls=[])
+        ]
+        mock_resources.registry.get_tool_config.return_value = MagicMock()
+        tool = MagicMock()
+        tool.check_available.return_value = True
+        tool.requires_base_urls = True
+        mock_resources.factory.create.return_value = tool
+        with pytest.raises(ValueError, match="requires base_urls"):
+            ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)

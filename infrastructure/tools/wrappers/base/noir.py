@@ -27,6 +27,98 @@ from infrastructure.tools.parsers.noir_parser import (
     parse_noir_json_string,
 )
 
+# Mapping from tally Repository.languages values to Noir -t tech identifiers.
+# Derived from `noir --list-techs` output (v0.25.1).
+LANGUAGE_TO_NOIR_TECHS: dict[str, list[str]] = {
+    "python": [
+        "python_django",
+        "python_fastapi",
+        "python_flask",
+        "python_sanic",
+        "python_tornado",
+    ],
+    "php": [
+        "php_pure",
+        "php_laravel",
+        "php_symfony",
+    ],
+    "javascript/typescript": [
+        "js_express",
+        "js_restify",
+        "js_fastify",
+        "js_koa",
+        "js_nestjs",
+    ],
+    "node": [
+        "js_express",
+        "js_restify",
+        "js_fastify",
+        "js_koa",
+        "js_nestjs",
+    ],
+    "ruby": [
+        "ruby_hanami",
+        "ruby_rails",
+        "ruby_sinatra",
+    ],
+    "go": [
+        "go_beego",
+        "go_echo",
+        "go_fasthttp",
+        "go_fiber",
+        "go_gin",
+        "go_chi",
+        "go_gozero",
+        "go_mux",
+    ],
+    "java": [
+        "java_armeria",
+        "java_jsp",
+        "java_spring",
+        "java_vertx",
+    ],
+    "kotlin": [
+        "kotlin_spring",
+        "kotlin_ktor",
+    ],
+    "rust": [
+        "rust_axum",
+        "rust_rocket",
+        "rust_actix_web",
+        "rust_loco",
+        "rust_rwf",
+        "rust_tide",
+        "rust_warp",
+        "rust_gotham",
+    ],
+    "c#": [
+        "cs_aspnet_mvc",
+    ],
+    "crystal": [
+        "crystal_amber",
+        "crystal_kemal",
+        "crystal_lucky",
+        "crystal_marten",
+        "crystal_grip",
+    ],
+    "elixir": [
+        "elixir_phoenix",
+        "elixir_plug",
+    ],
+}
+
+
+def _compute_noir_techs(repo_languages: list[str]) -> list[str]:
+    """Compute a deduplicated list of Noir tech identifiers from repo languages."""
+    techs: list[str] = []
+    seen: set[str] = set()
+    for lang in repo_languages:
+        for tech in LANGUAGE_TO_NOIR_TECHS.get(lang.lower(), []):
+            if tech not in seen:
+                techs.append(tech)
+                seen.add(tech)
+    return techs
+
 
 class BaseNoirTool(ToolInterface):
     """Base class shared by local (and any future Docker) Noir wrappers."""
@@ -128,12 +220,16 @@ class BaseNoirTool(ToolInterface):
         output_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{context.repo.name}_{ts}_oas3.json")
+
+        techs = _compute_noir_techs(context.repo.languages or [])
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,
                 kwargs={
                     "source_path": repo_path,
                     "output_file": output_file,
+                    "techs": techs,
                 },
             )
         ]

@@ -10,7 +10,11 @@ Covers:
 
 from __future__ import annotations
 
-from application.rag.chunks.noir import NoirHandler, _uri_only
+from application.rag.chunks.noir import (
+    NoirHandler,
+    _is_vendor_or_dependency_path,
+    _uri_only,
+)
 from domain.tools.base import ToolResult
 
 _TIMESTAMP = "2026-04-03T00:00:00"
@@ -91,6 +95,64 @@ class TestNoirColumnMapping:
     def test_profile_present(self) -> None:
         row = self._row()
         assert row["profile"] == "myrepo"
+
+
+class TestVendorPathFilter:
+    """Vendor/dependency paths must not appear in normalized findings."""
+
+    _VENDOR_PATHS = [
+        "/vendor/lib/router.php",
+        "/node_modules/react/index.js",
+        "/venv/lib/python.py",
+        "/.venv/bin/activate",
+        "/site-packages/django/views.py",
+        "/__pycache__/module.pyc",
+        "/build/artifact.zip",
+        "/dist/package.tar.gz",
+        "/.git/config",
+    ]
+    _LEGIT_PATHS = [
+        "/api/users",
+        "/vendor-api/users",  # contains "vendor" but not as directory segment
+        "/node/index.js",  # not /node_modules/
+        "/builds",  # prefix match must not fire
+    ]
+
+    def test_vendor_detection(self) -> None:
+        for path in self._VENDOR_PATHS:
+            assert _is_vendor_or_dependency_path(path), (
+                f"Should detect vendor: {path!r}"
+            )
+
+    def test_legit_not_detected(self) -> None:
+        for path in self._LEGIT_PATHS:
+            assert not _is_vendor_or_dependency_path(path), f"False positive: {path!r}"
+
+    def test_vendor_paths_skipped_in_normalize(self) -> None:
+        endpoints = [
+            {
+                "path": "/api/users",
+                "method": "GET",
+                "path_params": [],
+                "query_params": [],
+                "header_params": [],
+                "cookie_params": [],
+                "body_params": [],
+            },
+            {
+                "path": "/vendor/sabberworm/php-css-parser/src/Renderable.php",
+                "method": "POST",
+                "path_params": [],
+                "query_params": [],
+                "header_params": [],
+                "cookie_params": [],
+                "body_params": [],
+            },
+        ]
+        handler = NoirHandler()
+        rows = handler.normalize(_make_result(endpoints), profile="test")
+        assert len(rows) == 1
+        assert rows[0]["url"] == "/api/users"
 
 
 class TestUriOnlyHelper:

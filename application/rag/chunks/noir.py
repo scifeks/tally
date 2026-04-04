@@ -11,6 +11,13 @@ JSON field is the canonical classification.
 
 ``should_enrich = False`` because LLM enrichment adds no value to raw
 endpoint metadata.
+
+NOTE: The ``file`` field (source file path) cannot be populated from Noir's
+OAS3 output (v0.25.1) because the OAS3 format does not include source file
+metadata.  The ``file`` column in findings rows is left as NULL.
+
+The ``source_file`` field captures the OAS3 report file path itself, not
+the source file where each endpoint was discovered.
 """
 
 from __future__ import annotations
@@ -22,6 +29,31 @@ from urllib.parse import urlparse
 from domain.tools.base import ToolResult
 
 from ._shared import _first_output_file, _shared_meta
+
+_VENDOR_INDICATORS: frozenset[str] = frozenset(
+    {
+        "/vendor/",
+        "/node_modules/",
+        "/venv/",
+        "/.venv/",
+        "/site-packages/",
+        "/__pycache__/",
+        "/.git/",
+        "/build/",
+        "/dist/",
+    }
+)
+
+
+def _is_vendor_or_dependency_path(path: str) -> bool:
+    """Return True if *path* looks like a vendor/dependency directory path.
+
+    These are paths that Noir may surface when scanning PHP, Node.js, or
+    Python projects that include dependency trees in the repository root.
+    They are not application endpoints and should be excluded from findings.
+    """
+    path_lower = path.lower()
+    return any(indicator in path_lower for indicator in _VENDOR_INDICATORS)
 
 
 def _uri_only(raw: str) -> str:
@@ -75,6 +107,10 @@ class NoirHandler:
 
         for endpoint in endpoints:
             path: str = endpoint.get("path") or ""
+
+            if _is_vendor_or_dependency_path(path):
+                continue
+
             method: str = (endpoint.get("method") or "").upper()
 
             all_params: list[dict[str, Any]] = (

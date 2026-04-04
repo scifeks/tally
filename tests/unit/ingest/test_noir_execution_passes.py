@@ -9,6 +9,7 @@ import pytest
 
 from core.config.schemas import Repository
 from domain.tools.interface import ExecutionContext
+from infrastructure.tools.wrappers.base.noir import _compute_noir_techs
 from infrastructure.tools.wrappers.local.noir import NoirLocalTool
 
 
@@ -153,3 +154,104 @@ class TestNoirBuildExecutionPasses:
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
         assert passes[0].label_suffix == "dvna"
+
+    def test_pass_kwargs_include_techs(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path))
+        tool = NoirLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert "techs" in passes[0].kwargs
+
+    def test_pass_techs_match_repo_languages(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))  # languages=["javascript/typescript"]
+        ctx = _make_context(repo, str(tmp_path))
+        tool = NoirLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        techs: list[str] = passes[0].kwargs["techs"]
+        assert "js_express" in techs
+
+
+# ---------------------------------------------------------------------------
+# _compute_noir_techs
+# ---------------------------------------------------------------------------
+
+
+class TestComputeNoirTechs:
+    def test_python_returns_five_techs(self) -> None:
+        result = _compute_noir_techs(["python"])
+        assert len(result) == 5
+        assert "python_django" in result
+        assert "python_flask" in result
+
+    def test_python_and_js_combined_no_duplicates(self) -> None:
+        result = _compute_noir_techs(["python", "javascript/typescript"])
+        assert len(result) == len(set(result))
+        assert "python_django" in result
+        assert "js_express" in result
+
+    def test_unknown_language_returns_empty(self) -> None:
+        assert _compute_noir_techs(["aiohttp"]) == []
+
+    def test_empty_list_returns_empty(self) -> None:
+        assert _compute_noir_techs([]) == []
+
+    def test_case_insensitive(self) -> None:
+        lower = _compute_noir_techs(["python"])
+        upper = _compute_noir_techs(["Python"])
+        assert lower == upper
+
+
+# ---------------------------------------------------------------------------
+# build_command with techs
+# ---------------------------------------------------------------------------
+
+
+class TestNoirBuildCommandTechs:
+    def test_techs_appended_as_t_flag(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            techs=["python_flask", "python_django"],
+        )
+        assert "-t" in cmd
+        t_idx = cmd.index("-t")
+        assert cmd[t_idx + 1] == "python_flask,python_django"
+
+    def test_empty_techs_omits_t_flag(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            techs=[],
+        )
+        assert "-t" not in cmd
+
+    def test_absent_techs_omits_t_flag(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+        )
+        assert "-t" not in cmd
+
+    def test_none_techs_omits_t_flag(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            techs=None,
+        )
+        assert "-t" not in cmd

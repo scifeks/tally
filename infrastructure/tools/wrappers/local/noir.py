@@ -53,6 +53,8 @@ class NoirLocalTool(BaseNoirTool):
             output_file (str): Absolute path for the OAS3 JSON output.  Required.
                 The directory must already exist (created by
                 ``build_execution_passes``).
+            techs (list[str]): Noir tech identifiers to pass via ``-t``.
+                Optional — when empty or absent, no ``-t`` flag is added.
         """
         source_path: str | None = (
             str(kwargs["source_path"]) if "source_path" in kwargs else None
@@ -72,7 +74,10 @@ class NoirLocalTool(BaseNoirTool):
         output_file = str(Path(output_file).resolve())
         self._last_report_path = Path(output_file)
 
-        return [
+        raw_techs = kwargs.get("techs")
+        techs: list[str] = list(raw_techs) if isinstance(raw_techs, list) else []
+
+        cmd = [
             "noir",
             "-b",
             source_path,
@@ -83,6 +88,11 @@ class NoirLocalTool(BaseNoirTool):
             output_file,
         ]
 
+        if techs:
+            cmd.extend(["-t", ",".join(techs)])
+
+        return cmd
+
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse Noir OAS3 output into structured endpoint data.
 
@@ -91,16 +101,19 @@ class NoirLocalTool(BaseNoirTool):
         2. The stdout file saved by the executor (unusual, but safe fallback).
         3. The raw output string.
 
-        The OAS3 file is intentionally NOT removed after parsing — ZAP reads
-        it in the subsequent pipeline stage.
+        Empty OAS3 files (zero paths) are deleted so ZAP does not import an
+        empty spec.  ZAP will fall back to spider-only mode via ``-quickurl``.
         """
         try:
             if self._last_report_path is not None and self._last_report_path.exists():
-                return parse_noir_json(self._last_report_path)
+                parsed = parse_noir_json(self._last_report_path)
+                endpoints = parsed.get("endpoints", [])
+                if not endpoints and self._last_report_path.exists():
+                    self._last_report_path.unlink()
+                return parsed
             json_path = files.get("stdout")
             if json_path is not None and json_path.exists():
                 return parse_noir_json(json_path)
             return parse_noir_json_string(output)
         finally:
-            # Clear the instance reference; the file on disk is preserved.
             self._last_report_path = None

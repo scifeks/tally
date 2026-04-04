@@ -218,12 +218,30 @@ def _find_noir_oas3(base_path: str, project_name: str, repo_name: str) -> str | 
     Returns the lexicographically last match, which corresponds to the most
     recent timestamp-prefixed filename.
 
-    Returns ``None`` when the directory does not exist or contains no
-    matching files.
+    Returns ``None`` when:
+    - the directory does not exist
+    - no matching files exist
+    - the most recent file has zero paths (empty spec)
+    - the most recent file cannot be read or parsed
     """
+    import json
+
     noir_dir = Path(base_path) / "projects" / project_name / "tool_outputs" / "noir"
     if not noir_dir.exists():
         return None
     pattern = f"{repo_name}_*_oas3.json"
     matches = sorted(noir_dir.glob(pattern))
-    return str(matches[-1]) if matches else None
+    if not matches:
+        return None
+
+    candidate = matches[-1]
+    try:
+        with open(candidate, encoding="utf-8") as fh:
+            data = json.load(fh)
+        paths = data.get("paths", {})
+        if not paths:
+            return None
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+    return str(candidate)
