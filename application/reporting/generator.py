@@ -183,6 +183,31 @@ class ReportGenerator:
                     f"| {f.get('param', '')} | {f.get('cwe_id', '')} |"
                 )
 
+        # --- noir (attack surface) ---
+        noir_findings = findings.get("noir", [])
+        if noir_findings:
+            lines += [
+                "",
+                "### Discovered Attack Surface (noir)",
+                "| Method | URI | Source File | Parameters |",
+                "|--------|-----|-------------|------------|",
+            ]
+            for f in noir_findings:
+                source = f.get("file") or ""
+                desc = f.get("description", "")
+                # Extract param summary from description if present
+                params = ""
+                if "params:" in desc:
+                    params = desc.split("params:", 1)[-1].strip()
+                lines.append(
+                    f"| {f.get('method', '')} | {f.get('url', '')} "
+                    f"| {source} | {params} |"
+                )
+            lines.append(
+                "_Note: Discovered Attack Surface entries are informational — "
+                "not vulnerability findings._"
+            )
+
         return "\n".join(lines)
 
     def _render_html(self, aggregated: dict[str, Any]) -> str:
@@ -324,6 +349,31 @@ class ReportGenerator:
                 f'<div class="section"><h3>API (zap)</h3>'
                 f"<table>{th('Severity', 'Alert', 'URL', 'Method', 'Param', 'CWE')}"
                 f"<tbody>{rows}</tbody></table></div>"
+            )
+
+        # --- noir (attack surface) ---
+        noir_findings = findings.get("noir", [])
+        if noir_findings:
+            rows = "".join(
+                tr(
+                    f.get("method", ""),
+                    f.get("url", ""),
+                    f.get("file") or "",
+                    (
+                        f.get("description", "").split("params:", 1)[-1].strip()
+                        if "params:" in f.get("description", "")
+                        else ""
+                    ),
+                )
+                for f in noir_findings
+            )
+            sections.append(
+                '<div class="section">'
+                "<h3>Discovered Attack Surface (noir)</h3>"
+                f"<table>{th('Method', 'URI', 'Source File', 'Parameters')}"
+                f"<tbody>{rows}</tbody></table>"
+                '<p class="note">Note: Discovered Attack Surface entries are'
+                " informational — not vulnerability findings.</p></div>"
             )
 
         if not sections:

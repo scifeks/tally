@@ -134,6 +134,14 @@ class ScanCommands:
         try:
             if repo_name is not None:
                 if effective_tools is not None:
+                    effective_tools = self._maybe_warn_zap_without_noir(
+                        effective_tools,
+                        repo_name,
+                        auto_approve,
+                        orchestrator,
+                    )
+                    if effective_tools is None:
+                        return
                     for _i, tool_name in enumerate(effective_tools):
                         orchestrator.run_tool_on_repo(
                             tool_name,
@@ -144,6 +152,14 @@ class ScanCommands:
                     orchestrator.run_repo_scan(repo_name=repo_name)
             else:
                 if effective_tools is not None:
+                    effective_tools = self._maybe_warn_zap_without_noir(
+                        effective_tools,
+                        None,
+                        auto_approve,
+                        orchestrator,
+                    )
+                    if effective_tools is None:
+                        return
                     for _i, tool_name in enumerate(effective_tools):
                         orchestrator.run_tool_on_all_repos(
                             tool_name,
@@ -294,6 +310,79 @@ class ScanCommands:
                 remaining = args[:i] + args[i + 2 :]
                 return value, remaining
         return None, args
+
+    # ------------------------------------------------------------------
+    # Private — ZAP-without-Noir warning
+    # ------------------------------------------------------------------
+
+    def _maybe_warn_zap_without_noir(
+        self,
+        tools: list[str],
+        repo_name: str | None,
+        auto_approve: bool,
+        orchestrator: object,
+    ) -> list[str] | None:
+        """Warn when ZAP is requested but Noir OAS3 output is absent.
+
+        Returns the (possibly expanded) effective tool list to execute, or
+        ``None`` to indicate that the scan was cancelled by the user.
+
+        When ``auto_approve`` is True the warning is suppressed and ZAP
+        proceeds in quickscan mode.
+        """
+        if "zap" not in tools or "noir" in tools:
+            return tools
+        if auto_approve:
+            return tools
+
+        from infrastructure.tools.wrappers.local.zap import _find_noir_oas3
+
+        assert self.repl.active_project is not None
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        target_repos = (
+            [r for r in repos if r.name == repo_name]
+            if repo_name is not None
+            else repos
+        )
+
+        missing = [
+            r.name
+            for r in target_repos
+            if not _find_noir_oas3(
+                self.repl.base_path, self.repl.active_project, r.name
+            )
+        ]
+        if not missing:
+            return tools
+
+        missing_str = ", ".join(missing)
+        self.repl.console.print(
+            f"\n[yellow]Warning:[/yellow] No Noir endpoint scan found"
+            f" for: {missing_str}.\n"
+            "ZAP will run in quickscan mode only and may miss"
+            " API-only endpoints.\n"
+        )
+        self.repl.console.print(
+            "  1. Run Noir first, then ZAP [bold](recommended)[/bold]\n"
+            "  2. Run ZAP now in quickscan mode\n"
+            "  3. Cancel\n"
+        )
+        try:
+            raw = input("Enter choice [1/2/3] (default: 1): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+
+        choice = raw if raw in ("1", "2", "3") else "1"
+
+        if choice == "3":
+            self.repl.console.print("[dim]Scan cancelled.[/dim]")
+            return None
+        if choice == "1":
+            # Prepend noir so it runs first in the tool loop.
+            return ["noir"] + [t for t in tools if t != "noir"]
+        # choice == "2": proceed with ZAP only
+        return tools
 
     # ------------------------------------------------------------------
     # Private — orchestrator factory and export

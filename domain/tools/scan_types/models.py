@@ -11,7 +11,7 @@ from domain.tools.base import ToolResult
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
 
-SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "api"]
+SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web"]
 
 
 @dataclass

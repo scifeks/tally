@@ -44,7 +44,7 @@ class BaseNoirTool(ToolInterface):
 
     @property
     def category(self) -> str:
-        return "api"
+        return "web"
 
     @property
     def scope(self) -> str:
@@ -59,7 +59,7 @@ class BaseNoirTool(ToolInterface):
 
     @property
     def scan_segment(self) -> str:
-        return "api"
+        return "web"
 
     # ------------------------------------------------------------------
     # ToolInterface — behaviour flags

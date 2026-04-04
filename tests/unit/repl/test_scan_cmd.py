@@ -31,6 +31,10 @@ def _run(
     with (
         patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
         patch.object(sc, "_make_orchestrator", return_value=mock_orchestrator),
+        patch(
+            "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
+            return_value="/tmp/oas3.json",
+        ),
     ):
         mock_reg.list_tool_names.return_value = tools
         sc.cmd_scan("scan", args)

@@ -17,18 +17,45 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from urllib.parse import urlparse
 
 from domain.tools.base import ToolResult
 
 from ._shared import _first_output_file, _shared_meta
 
 
+def _uri_only(raw: str) -> str:
+    """Strip scheme, host, and port from *raw*, returning only the path+query+fragment.
+
+    OAS3 paths are already URI-relative, but this guard ensures that if the
+    parser ever surfaces a full URL (e.g. from Noir's native JSON mode), the
+    ``url`` column never stores a host.
+
+    Examples::
+
+        "/api/users"                  → "/api/users"
+        "http://host:9090/api/users"  → "/api/users"
+        ""                            → ""
+    """
+    if not raw:
+        return raw
+    if "://" in raw:
+        parsed = urlparse(raw)
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+        if parsed.fragment:
+            path = f"{path}#{parsed.fragment}"
+        return path
+    return raw
+
+
 class NoirHandler:
     """Normalise and render Noir endpoint-discovery output."""
 
     tool_name = "noir"
-    domain = "web"
-    segment = "api"
+    domain = "code"
+    segment = "web"
     non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "description"}
     )
@@ -48,7 +75,7 @@ class NoirHandler:
 
         for endpoint in endpoints:
             path: str = endpoint.get("path") or ""
-            method: str = endpoint.get("method") or ""
+            method: str = (endpoint.get("method") or "").upper()
 
             all_params: list[dict[str, Any]] = (
                 endpoint.get("path_params", [])
@@ -70,7 +97,7 @@ class NoirHandler:
                 "severity": "informational",
                 "confidence": "confirmed",
                 "risk_type": "endpoint-discovery",
-                "url": path,
+                "url": _uri_only(path),
                 "method": method,
                 "description": description,
                 "timestamp": timestamp,

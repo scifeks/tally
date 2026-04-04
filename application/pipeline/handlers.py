@@ -92,7 +92,9 @@ class IngestHandler(BaseHandler):
             rows: list[dict] = handler.normalize(result, event.profile)
 
             if handler.domain == "code":
-                if handler.segment == "sca":
+                if handler.segment in ("sca", "web"):
+                    # SCA and web-segment code tools (e.g. Noir) have no file path
+                    # to normalise; set repo directly from execution context.
                     if event.repo:
                         for row in rows:
                             row.setdefault("repo", event.repo)
