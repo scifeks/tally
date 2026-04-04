@@ -43,6 +43,74 @@ def test_parse_project_flag_absent() -> None:
     assert remaining == original
 
 
+def test_parse_project_flag_bare_with_active_project() -> None:
+    """Bare --project resolves to the active project name."""
+    tc, _repl = _make_tc(active_project="DVPA")
+    project, remaining = tc._parse_project_flag(["add", "--project"])
+    assert project == "DVPA"
+    assert remaining == ["add"]
+
+
+def test_parse_project_flag_bare_without_active_project() -> None:
+    """Bare --project with no active project returns empty string (not None).
+
+    The empty string is passed to _validate_project_arg, which surfaces the
+    'No active project' error rather than silently falling through to the
+    global command path.
+    """
+    tc, _repl = _make_tc(active_project=None)
+    project, remaining = tc._parse_project_flag(["add", "--project"])
+    assert project == ""
+    assert remaining == ["add"]
+
+
+def test_tool_add_bare_project_flag_routes_to_project_add(
+    tmp_path: Path,
+) -> None:
+    """tool add --project (without =name) must route to the project-level add.
+
+    Regression: previously bare --project was not recognised, so the command
+    fell through to the global _cmd_tool_add, which reported 'All available
+    tools are already configured' even though no project-level overrides
+    existed.
+    """
+    project_dir = tmp_path / "projects" / "DVPA" / "config"
+    project_dir.mkdir(parents=True)
+    (project_dir / "project.json").write_text("{}")
+    # No project-level commands.json — zero project overrides
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "commands.json").write_text("{}")
+
+    tc, repl = _make_tc(active_project="DVPA", base_path=str(tmp_path))
+
+    with (
+        patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())),
+        patch("builtins.input", return_value=""),
+    ):
+        tc.cmd_tool("tool", ["add", "--project"])
+
+    printed_calls = [str(c) for c in repl.console.print.call_args_list]
+    # Must offer tools to add at project level, not claim everything is done
+    assert any("Available tools to add" in c for c in printed_calls)
+    # Must NOT emit the global "all configured" message
+    assert not any(
+        "All available tools are already configured" in c and "project level" not in c
+        for c in printed_calls
+    )
+
+
+def test_tool_add_bare_project_flag_no_active_project(tmp_path: Path) -> None:
+    """tool add --project with no active project shows 'No active project' error."""
+    tc, repl = _make_tc(active_project=None, base_path=str(tmp_path))
+
+    with patch.object(tc, "_get_wrapper_availability", return_value=({"nmap"}, set())):
+        tc.cmd_tool("tool", ["add", "--project"])
+
+    printed_calls = [str(c) for c in repl.console.print.call_args_list]
+    assert any("No active project" in c for c in printed_calls)
+
+
 # ---------------------------------------------------------------------------
 # _validate_project_arg
 # ---------------------------------------------------------------------------

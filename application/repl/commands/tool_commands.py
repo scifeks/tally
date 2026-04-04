@@ -249,10 +249,17 @@ class ToolCommands:
     # ------------------------------------------------------------------
 
     def _parse_project_flag(self, args: list) -> tuple[str | None, list]:
-        """Extract --project=<name> from args. Returns (project_name, remaining)."""
+        """Extract --project[=<name>] from args. Returns (project_name, remaining).
+
+        Bare ``--project`` (without ``=name``) resolves to the active project.
+        Returning an empty string (when no project is active) lets
+        ``_validate_project_arg`` surface the "No active project" error.
+        """
         for i, arg in enumerate(args):
             if isinstance(arg, str) and arg.startswith("--project="):
                 return arg[10:], args[:i] + args[i + 1 :]
+            if isinstance(arg, str) and arg == "--project":
+                return self.repl.active_project or "", args[:i] + args[i + 1 :]
         return None, args
 
     def _validate_project_arg(self, project_name: str) -> bool:
