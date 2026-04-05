@@ -34,7 +34,7 @@ class TestFindingTypeJsonEach:
     ) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.upsert_findings(
+        finding_repo.insert_findings(
             run_id,
             [
                 {
@@ -66,7 +66,7 @@ class TestFindingTypeJsonEach:
     def test_exact_match_multi_value_returns_both_types(self, tmp_path: Path) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.upsert_findings(
+        finding_repo.insert_findings(
             run_id,
             [
                 {
@@ -105,7 +105,7 @@ class TestFindingTypeJsonEach:
     def test_partial_match_vuln_matches_vulnerability(self, tmp_path: Path) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.upsert_findings(
+        finding_repo.insert_findings(
             run_id,
             [
                 {
@@ -137,7 +137,7 @@ class TestFindingTypeJsonEach:
     def test_exact_match_does_not_return_unrelated_type(self, tmp_path: Path) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.upsert_findings(
+        finding_repo.insert_findings(
             run_id,
             [
                 {

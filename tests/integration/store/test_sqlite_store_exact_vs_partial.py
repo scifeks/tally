@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -91,7 +91,7 @@ class TestExactVsPartial:
     def test_exact_match_does_not_return_partial(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, _SEMGREP_FINDINGS)
 
         # "high" should not return "medium"
         results = store.search(
@@ -107,7 +107,7 @@ class TestExactVsPartial:
     def test_contains_returns_substring_match(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, _SEMGREP_FINDINGS)
 
         # "sql" should match "python.sql-injection"
         results = store.search(

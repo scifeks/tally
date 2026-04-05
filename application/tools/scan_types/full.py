@@ -18,8 +18,13 @@ from domain.tools.scan_types.resources import IExecutionResources
 class FullScan(ScanType):
     """Run all segments across all repos in SEGMENT_ORDER."""
 
-    def __init__(self, exclude_segments: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        exclude_segments: list[str] | None = None,
+        exclude_tools: set[str] | None = None,
+    ) -> None:
         self.exclude_segments = exclude_segments or []
+        self.exclude_tools: set[str] = exclude_tools or set()
 
     def execute(
         self, config: ScanTypeConfig, resources: IExecutionResources
@@ -40,13 +45,20 @@ class FullScan(ScanType):
                     f"[dim]Skipping segment: {segment}[/dim]"
                 )
                 continue
+            seg_tools = tools_for_segment(
+                segment, cast(ToolRegistry, resources.registry)
+            )
+            if self.exclude_tools:
+                seg_tools = [t for t in seg_tools if t not in self.exclude_tools]
+
+            if not seg_tools:
+                continue
+
             config.remaining_peers = len(active_segments) - seg_idx - 1
             seg_idx += 1
             resources.display.print_segment_header(segment)
 
-            seg_summary = RepoSegmentScan(
-                tools_for_segment(segment, cast(ToolRegistry, resources.registry))
-            ).execute(config, resources)
+            seg_summary = RepoSegmentScan(seg_tools).execute(config, resources)
 
             all_results.extend(seg_summary.results)
             total_run += seg_summary.total_tools_run
@@ -62,8 +74,9 @@ class FullScan(ScanType):
                 tool_name=r.tool_name,
                 success=r.success,
                 skipped=False,
-                finding_count=merged_fbt.get(r.tool_name, 0),
+                finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
+                repo=r.repo,
             )
             for r in all_results
         ]

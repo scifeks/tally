@@ -1,4 +1,4 @@
-"""RunRepository — manages run, run_tools, and run_repos tables."""
+"""RunRepository — manages run and run_tools tables."""
 
 from __future__ import annotations
 
@@ -36,12 +36,4 @@ class RunRepository:
                     (run_id, t.get("tool", ""), t.get("findings_count", 0))
                     for t in tools
                 ],
-            )
-
-    def add_run_repos(self, run_id: int, repos: list[str]) -> None:
-        """Insert one row per repo for a run."""
-        with self._factory.connect() as conn:
-            conn.executemany(
-                "INSERT INTO run_repos (run_id, repo) VALUES (?, ?)",
-                [(run_id, repo) for repo in repos],
             )

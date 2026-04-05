@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -105,7 +105,7 @@ _NO_FILE_FINDING = {
 
 def _seed_gf(store: _TestStore) -> None:
     run_id = store.create_run({})
-    store.upsert_findings(
+    store.insert_findings(
         run_id,
         [_SAST_FINDING, _SECRETS_FINDING, _SCA_FINDING_GF, _NO_FILE_FINDING],
     )
@@ -145,7 +145,7 @@ class TestGetFindings:
     def test_get_findings_repo_equality(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {**_SAST_FINDING, "repo": "myrepo"},
@@ -160,7 +160,7 @@ class TestGetFindings:
         """get_findings(status=...) returns only findings with that status."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {"tool": "semgrep", "severity": "high"},
@@ -190,7 +190,7 @@ class TestGetFindings:
     def test_get_findings_combined_filters(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {**_SAST_FINDING},

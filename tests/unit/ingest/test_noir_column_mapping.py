@@ -10,12 +10,17 @@ Covers:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from application.rag.chunks.noir import (
     NoirHandler,
-    _is_vendor_or_dependency_path,
     _uri_only,
 )
 from domain.tools.base import ToolResult
+from infrastructure.tools.parsers.noir_parser import (
+    is_vendor_or_dependency_path as _is_vendor_or_dependency_path,
+)
+from infrastructure.tools.wrappers.local.noir import NoirLocalTool
 
 _TIMESTAMP = "2026-04-03T00:00:00"
 
@@ -128,7 +133,33 @@ class TestVendorPathFilter:
         for path in self._LEGIT_PATHS:
             assert not _is_vendor_or_dependency_path(path), f"False positive: {path!r}"
 
-    def test_vendor_paths_skipped_in_normalize(self) -> None:
+    def test_vendor_paths_filtered_in_parse_output(self, tmp_path: Path) -> None:
+        """Vendor paths are excluded in parse_output, before normalize sees them."""
+        import json
+
+        endpoints = [
+            {"path": "/api/users", "method": "get", "parameters": []},
+            {
+                "path": "/vendor/sabberworm/php-css-parser/src/Renderable.php",
+                "method": "post",
+                "parameters": [],
+            },
+        ]
+        oas3 = {
+            "openapi": "3.0.0",
+            "paths": {ep["path"]: {ep["method"]: {}} for ep in endpoints},
+        }
+        report = tmp_path / "report.json"
+        report.write_text(json.dumps(oas3))
+
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        parsed = tool.parse_output("", {})
+        assert len(parsed["endpoints"]) == 1
+        assert parsed["endpoints"][0]["path"] == "/api/users"
+
+    def test_normalize_passes_through_all_received_endpoints(self) -> None:
+        """normalize no longer filters — parse_output already cleaned the data."""
         endpoints = [
             {
                 "path": "/api/users",
@@ -140,7 +171,7 @@ class TestVendorPathFilter:
                 "body_params": [],
             },
             {
-                "path": "/vendor/sabberworm/php-css-parser/src/Renderable.php",
+                "path": "/api/posts",
                 "method": "POST",
                 "path_params": [],
                 "query_params": [],
@@ -151,8 +182,7 @@ class TestVendorPathFilter:
         ]
         handler = NoirHandler()
         rows = handler.normalize(_make_result(endpoints), profile="test")
-        assert len(rows) == 1
-        assert rows[0]["url"] == "/api/users"
+        assert len(rows) == 2
 
 
 class TestUriOnlyHelper:

@@ -76,6 +76,12 @@ _HELP_REGISTRY = [
         "--domain=<domain,...>",
         "Filter by domain: code, web. Comma-separated.",
     ),
+    (
+        "scan",
+        "scan",
+        "--skip-tools=<tool,...>",
+        "Exclude named tool(s) from an otherwise full scan. Comma-separated.",
+    ),
     # Manual Run
     ("run", None, None, "Manual Run"),
     ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),

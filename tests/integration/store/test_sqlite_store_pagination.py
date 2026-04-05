@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -161,7 +161,7 @@ class TestPagination:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
         # Seed 7 findings (2 semgrep + 2 gitleaks + 1 nmap + 2 zap)
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS,
         )
@@ -176,7 +176,7 @@ class TestPagination:
     def test_page_one_and_two_no_overlap(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS,
         )
@@ -195,7 +195,7 @@ class TestPagination:
     def test_empty_second_page(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _NMAP_FINDINGS)
+        store.insert_findings(run_id, _NMAP_FINDINGS)
 
         page2 = store.search({"conditions": [], "page": 2, "page_size": 200})
         assert page2 == []

@@ -89,6 +89,7 @@ report
 | `scan --tool=<tool,...>` | Run one or more specific tools (comma-separated) |
 | `scan --repo=<repo>` | Run all repo-appropriate tools on one repository |
 | `scan --domain=<domain,...>` | Run all tools in one or more domains: `code`, `web` |
+| `scan --skip-tools=<tool,...>` | Run all tools except the ones listed (comma-separated) |
 | `scan --repo=<repo> --tool=<tool,...>` | Run specific tools on one repository |
 | `run <tool> [args...]` | Execute a tool with raw arguments |
 

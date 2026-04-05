@@ -38,7 +38,7 @@ def _upsert(
 ) -> int:
     run_id = run_repo.create_run({})
     row = {"tool": tool, "severity": "low", "profile": "default", **(extra or {})}
-    repo.upsert_findings(run_id, [row])
+    repo.insert_findings(run_id, [row])
     with repo._factory.connect() as conn:
         fid = conn.execute(
             "SELECT id FROM findings WHERE tool=? ORDER BY id DESC LIMIT 1",

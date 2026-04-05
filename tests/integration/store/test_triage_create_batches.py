@@ -48,7 +48,7 @@ def _seed_findings(
     findings: list[dict],
 ) -> int:
     run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(run_id, findings)
+    finding_repo.insert_findings(run_id, findings)
     return run_id
 
 

@@ -29,7 +29,7 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
-    finding_repo.upsert_findings(run_id, [row])  # type: ignore[union-attr]
+    finding_repo.insert_findings(run_id, [row])  # type: ignore[union-attr]
     fp = compute_fingerprint(row)
     ids = finding_repo.get_ids_by_fingerprints([fp])  # type: ignore[union-attr]
     return ids[0]

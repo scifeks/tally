@@ -41,7 +41,7 @@ def _seed(
     findings: list[dict],
 ) -> int:
     run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(run_id, findings)
+    finding_repo.insert_findings(run_id, findings)
     return run_id
 
 
@@ -76,7 +76,6 @@ class TestUpsertAndDelete:
             assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
             assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
             assert conn.execute("SELECT COUNT(*) FROM run_tools").fetchone()[0] == 0
-            assert conn.execute("SELECT COUNT(*) FROM run_repos").fetchone()[0] == 0
 
     def test_delete_by_tool_removes_only_that_tool(
         self,

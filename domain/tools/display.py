@@ -14,6 +14,7 @@ class ToolDisplayRow:
     finding_count: int
     duration_seconds: float
     skip_reason: str = ""
+    repo: str = ""
 
 
 @runtime_checkable

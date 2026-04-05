@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -131,7 +131,7 @@ class TestBasicRoundTrip:
     def test_upsert_and_query_all(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, _SEMGREP_FINDINGS)
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert len(results) == len(_SEMGREP_FINDINGS)
@@ -139,7 +139,7 @@ class TestBasicRoundTrip:
     def test_result_has_metadata_and_distance(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        store.insert_findings(run_id, _SEMGREP_FINDINGS[:1])
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         r = results[0]
@@ -149,7 +149,7 @@ class TestBasicRoundTrip:
     def test_metadata_tool_field(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        store.insert_findings(run_id, _SEMGREP_FINDINGS[:1])
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"]["tool"] == "semgrep"
@@ -158,7 +158,7 @@ class TestBasicRoundTrip:
         """SQLite column 'file' is returned as 'file_path' in metadata."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        store.insert_findings(run_id, _SEMGREP_FINDINGS[:1])
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "file_path" in results[0]["metadata"]
@@ -168,17 +168,17 @@ class TestBasicRoundTrip:
         """ip_address is stored in the meta blob and returned in metadata."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _NMAP_FINDINGS)
+        store.insert_findings(run_id, _NMAP_FINDINGS)
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "ip_address" in results[0]["metadata"]
         assert results[0]["metadata"]["ip_address"] == "192.168.1.1"
 
     def test_enriched_set_to_false_on_ingest(self, tmp_path: Path) -> None:
-        # upsert_findings writes enriched=0; EnrichmentPipeline sets it to 1
+        # insert_findings writes enriched=0; EnrichmentPipeline sets it to 1
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id, _GITLEAKS_FINDINGS[:1])
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"]["enriched"] is False

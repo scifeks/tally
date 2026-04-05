@@ -75,7 +75,7 @@ def _make_llm_response(fields: list[str]) -> dict:
 
 def _seed(finding_repo: object, run_id: int, rows: list[dict]) -> list[int]:
     """Insert findings and return their SQLite ids."""
-    finding_repo.upsert_findings(run_id, rows)  # type: ignore[union-attr]
+    finding_repo.insert_findings(run_id, rows)  # type: ignore[union-attr]
     fps = [compute_fingerprint(r) for r in rows]
     return finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]
 

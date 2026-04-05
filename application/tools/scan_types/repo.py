@@ -29,8 +29,9 @@ logger = logging.getLogger(__name__)
 class RepoScan(ScanType):
     """Run all applicable tools for a single repo."""
 
-    def __init__(self, repo_name: str) -> None:
+    def __init__(self, repo_name: str, exclude_tools: set[str] | None = None) -> None:
         self.repo_name = repo_name
+        self.exclude_tools: set[str] = exclude_tools or set()
 
     def execute(
         self, config: ScanTypeConfig, resources: IExecutionResources
@@ -59,6 +60,8 @@ class RepoScan(ScanType):
                         break
 
         ordered_tools = ordered_repo_tools(tool_set, registry)
+        if self.exclude_tools:
+            ordered_tools = [t for t in ordered_tools if t not in self.exclude_tools]
 
         lang_str = ", ".join(repo.languages) if repo.languages else "unknown"
         resources.display.print_repo_scan_header(repo.name, lang_str, ordered_tools)
@@ -128,6 +131,7 @@ class RepoScan(ScanType):
                 total_skipped += 1
             else:
                 result = normalize_success(result, tool)
+                result.repo = self.repo_name
                 results.append(result)
                 findings = tool.count_findings(result.parsed_data or {})
                 findings_by_tool[result.tool_name] = (
@@ -192,6 +196,7 @@ class RepoScan(ScanType):
                 skipped=False,
                 finding_count=findings_by_tool.get(r.tool_name, 0),
                 duration_seconds=r.duration_seconds,
+                repo=r.repo,
             )
             for r in results
         ]

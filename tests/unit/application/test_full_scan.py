@@ -143,7 +143,7 @@ class TestFullScan:
             patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
             patch(
                 "application.tools.scan_types.full.tools_for_segment",
-                return_value=[],
+                return_value=["semgrep"],
             ),
         ):
             mock_repo.return_value.execute.return_value = sub

@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -65,7 +65,7 @@ class TestDescription:
     def test_zap_description_set(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
@@ -84,7 +84,7 @@ class TestDescription:
     def test_semgrep_description_equals_message(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
@@ -102,7 +102,7 @@ class TestDescription:
     def test_sca_description_from_summary(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
@@ -121,7 +121,7 @@ class TestDescription:
     def test_gitleaks_description_set_when_present(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {

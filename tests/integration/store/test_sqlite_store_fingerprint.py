@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -88,25 +88,28 @@ _GITLEAKS_FINDINGS = [
 
 
 class TestFingerprint:
-    def test_fingerprint_stability(self, tmp_path: Path) -> None:
-        """Same finding with two different run_ids produces one row."""
+    def test_same_finding_two_runs_produces_two_rows(self, tmp_path: Path) -> None:
+        """Same finding in two different runs produces two separate rows.
+
+        Scans are INSERT-only; each run_id gets its own findings rows.
+        """
         store = _make_store(tmp_path)
 
         run_id1 = store.create_run({"args": []})
-        store.upsert_findings(run_id1, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id1, _GITLEAKS_FINDINGS[:1])
 
         run_id2 = store.create_run({"args": []})
-        store.upsert_findings(run_id2, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id2, _GITLEAKS_FINDINGS[:1])
 
         conn = store._connect()
         count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
-        assert count == 1  # ON CONFLICT deduplicates
+        assert count == 2
 
     def test_fingerprint_uniqueness(self, tmp_path: Path) -> None:
         """Two different findings produce different fingerprints."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _GITLEAKS_FINDINGS)  # 2 findings
+        store.insert_findings(run_id, _GITLEAKS_FINDINGS)  # 2 findings
 
         conn = store._connect()
         count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]

@@ -30,7 +30,7 @@ def _make_store(
 
 def _seed_two_tools(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
     run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(
+    finding_repo.insert_findings(
         run_id,
         [
             {
@@ -61,7 +61,6 @@ class TestDeleteFindings:
             assert conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
             assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
             assert conn.execute("SELECT COUNT(*) FROM run_tools").fetchone()[0] == 0
-            assert conn.execute("SELECT COUNT(*) FROM run_repos").fetchone()[0] == 0
 
     def test_delete_by_tool_removes_only_that_tool(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo = _make_store(tmp_path)

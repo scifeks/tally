@@ -56,7 +56,7 @@ def _seed(
 ) -> None:
     finding = {**_BASE_FINDING, **(overrides or {})}
     run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(run_id, [finding])
+    finding_repo.insert_findings(run_id, [finding])
 
 
 def _first_id(factory: ConnectionFactory) -> int:

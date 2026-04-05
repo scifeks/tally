@@ -49,7 +49,9 @@ def test_scan_no_args_calls_run_full_scan() -> None:
 
 def test_scan_repo_calls_run_repo_scan() -> None:
     _repl, orchestrator = _run(["--repo=myrepo"])
-    assert orchestrator.run_repo_scan.call_args == call(repo_name="myrepo")
+    kwargs = orchestrator.run_repo_scan.call_args.kwargs
+    assert kwargs["repo_name"] == "myrepo"
+    assert kwargs.get("exclude_tools") is None
 
 
 def test_scan_multiple_repos_calls_run_repo_scan_for_each() -> None:
@@ -132,3 +134,48 @@ def test_scan_old_positional_syntax_rejected() -> None:
     assert not orchestrator.run_repo_scan.called
     assert not orchestrator.run_tool_on_all_repos.called
     assert not orchestrator.run_tool_on_repo.called
+
+
+# ------------------------------------------------------------------
+# --skip-tools tests
+# ------------------------------------------------------------------
+
+
+def test_skip_tools_uses_full_scan_path() -> None:
+    _repl, orchestrator = _run(["--skip-tools=zap,nmap"])
+    assert orchestrator.run_full_scan.called
+    assert not orchestrator.run_tool_on_all_repos.called
+    call_kwargs = orchestrator.run_full_scan.call_args.kwargs
+    assert call_kwargs.get("exclude_tools") == {"zap", "nmap"}
+
+
+def test_skip_tools_single_tool_uses_full_scan() -> None:
+    _repl, orchestrator = _run(["--skip-tools=zap"])
+    assert orchestrator.run_full_scan.called
+    call_kwargs = orchestrator.run_full_scan.call_args.kwargs
+    assert call_kwargs.get("exclude_tools") == {"zap"}
+
+
+def test_skip_tools_invalid_tool_prints_error() -> None:
+    repl, orchestrator = _run(["--skip-tools=notreal"])
+    printed = repl.console.print.call_args[0][0]
+    assert "Unknown tool" in printed
+    assert not orchestrator.run_full_scan.called
+    assert not orchestrator.run_tool_on_all_repos.called
+
+
+def test_skip_tools_and_tool_flag_are_mutually_exclusive() -> None:
+    repl, orchestrator = _run(["--tool=semgrep", "--skip-tools=zap"])
+    printed = repl.console.print.call_args[0][0]
+    assert "mutually exclusive" in printed
+    assert not orchestrator.run_full_scan.called
+    assert not orchestrator.run_tool_on_all_repos.called
+
+
+def test_skip_tools_with_repo_uses_repo_scan_path() -> None:
+    repos = [_make_repo("repo-a")]
+    _repl, orchestrator = _run(["--repo=repo-a", "--skip-tools=zap,nmap"], repos=repos)
+    assert orchestrator.run_repo_scan.called
+    assert not orchestrator.run_tool_on_repo.called
+    call_kwargs = orchestrator.run_repo_scan.call_args.kwargs
+    assert call_kwargs.get("exclude_tools") == {"zap", "nmap"}

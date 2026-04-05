@@ -15,6 +15,18 @@
 
 All tools are optional — Tally skips any tool that is not detected.
 
+### pip-audit Dependency File
+
+pip-audit behavior depends on the `dependencies_file` field in the repository configuration and the execution mode:
+
+**Local mode** — `dependencies_file` is **required**. If the field is empty, pip-audit is skipped entirely for that repository. When set, pip-audit runs with `-r <dependencies_file>` to scan only declared dependencies. The path should be relative to the repo root (e.g. `requirements.txt`) or an absolute path on the host filesystem.
+
+**Docker mode** — `dependencies_file` is **optional**. When empty, pip-audit scans all packages installed in the container environment (no `-r` flag). When set, the scan is scoped to declared dependencies via `-r <dependencies_file>`. The path should be the container-internal path (e.g. `/app/requirements.txt`).
+
+Accepted file formats include `requirements.txt`, `Pipfile`, and any file format supported by `pip-audit -r`.
+
+Set the dependencies file when adding a repository (`repo add` — Tally prompts automatically for Python repos) or update it later with `repo edit <name>`. You can also set it directly in `repositories.json`.
+
 ## Tool Detection
 
 Tally calls `check_system_tools()` on startup and when you run the `tools` REPL command.

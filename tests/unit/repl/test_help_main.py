@@ -139,13 +139,14 @@ def test_no_arg_syntax_in_command_column():
 
 
 def test_scan_command_rows_exact():
-    """scan command rows: no-arg + --repo= + --tool= + --domain= (in order)."""
+    """scan command rows: no-arg + --repo= + --tool= + --domain= + --skip-tools=."""
     scan_args = [arg for _, cmd, arg, _ in _HELP_REGISTRY if cmd == "scan"]
     assert scan_args == [
         None,
         "--repo=<repo>",
         "--tool=<tool,...>",
         "--domain=<domain,...>",
+        "--skip-tools=<tool,...>",
     ]
 
 

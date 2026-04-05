@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -77,7 +77,7 @@ class TestD2OsvSearch:
     def test_aliases_stored_as_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, [self._OSV_FINDING])
+        store.insert_findings(run_id, [self._OSV_FINDING])
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         aliases = results[0]["metadata"].get("aliases")
         assert isinstance(aliases, list)
@@ -86,7 +86,7 @@ class TestD2OsvSearch:
     def test_null_meta_does_not_cause_error(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
