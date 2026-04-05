@@ -16,6 +16,7 @@ def _gitleaks_fingerprint_key(finding: dict[str, Any]) -> str:
     return "|".join(
         [
             "gitleaks",
+            str(finding.get("repo", "")),
             str(finding.get("rule_id", "")),
             str(finding.get("file_path", "")),
             str(finding.get("line_number", "")),
@@ -27,6 +28,7 @@ def _semgrep_fingerprint_key(finding: dict[str, Any]) -> str:
     return "|".join(
         [
             "semgrep",
+            str(finding.get("repo", "")),
             str(finding.get("rule_id", "")),
             str(finding.get("file_path", "")),
             str(finding.get("line_start", "")),
@@ -38,6 +40,7 @@ def _zap_fingerprint_key(finding: dict[str, Any]) -> str:
     return "|".join(
         [
             "zap",
+            str(finding.get("repo", "")),
             str(finding.get("url", "")),
             str(finding.get("method", "")),
             str(finding.get("alert_name", "")),
@@ -50,6 +53,7 @@ def _sca_fingerprint_key(tool_name: str, finding: dict[str, Any]) -> str:
     return "|".join(
         [
             str(tool),
+            str(finding.get("repo", "")),
             str(finding.get("package_name", "")),
             str(finding.get("vulnerability_id", "")),
             str(finding.get("ecosystem", "")),
@@ -61,6 +65,7 @@ def _noir_fingerprint_key(finding: dict[str, Any]) -> str:
     return "|".join(
         [
             "noir",
+            str(finding.get("repo", "")),
             str(finding.get("method", "")),
             str(finding.get("url", "")),
         ]

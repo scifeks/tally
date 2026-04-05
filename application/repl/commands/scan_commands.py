@@ -128,10 +128,16 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        _finding_repo, run_id = self._create_sqlite_run(args)
+        _finding_repo, run_repo, run_id = self._create_sqlite_run(args)
         orchestrator = self._make_orchestrator(run_id=run_id, auto_approve=auto_approve)
         if orchestrator is None:
             return
+
+        accumulated_fbt: dict[str, int] = {}
+
+        def _merge_fbt(summary) -> None:  # type: ignore[no-untyped-def]
+            for tool, count in summary.findings_by_tool.items():
+                accumulated_fbt[tool] = accumulated_fbt.get(tool, 0) + count
 
         try:
             if repo_names is not None:
@@ -146,14 +152,16 @@ class ScanCommands:
                         return
                     for repo_name in repo_names:
                         for _i, tool_name in enumerate(effective_tools):
-                            orchestrator.run_tool_on_repo(
-                                tool_name,
-                                repo_name,
-                                remaining_peers=len(effective_tools) - _i - 1,
+                            _merge_fbt(
+                                orchestrator.run_tool_on_repo(
+                                    tool_name,
+                                    repo_name,
+                                    remaining_peers=len(effective_tools) - _i - 1,
+                                )
                             )
                 else:
                     for repo_name in repo_names:
-                        orchestrator.run_repo_scan(repo_name=repo_name)
+                        _merge_fbt(orchestrator.run_repo_scan(repo_name=repo_name))
             else:
                 if effective_tools is not None:
                     effective_tools = self._maybe_warn_zap_without_noir(
@@ -165,14 +173,22 @@ class ScanCommands:
                     if effective_tools is None:
                         return
                     for _i, tool_name in enumerate(effective_tools):
-                        orchestrator.run_tool_on_all_repos(
-                            tool_name,
-                            remaining_peers=len(effective_tools) - _i - 1,
+                        _merge_fbt(
+                            orchestrator.run_tool_on_all_repos(
+                                tool_name,
+                                remaining_peers=len(effective_tools) - _i - 1,
+                            )
                         )
                 else:
-                    orchestrator.run_full_scan()
+                    _merge_fbt(orchestrator.run_full_scan())
         except ValueError as exc:
             self.repl.console.print(f"[red]Error:[/red] {exc}")
+
+        if run_id is not None and run_repo is not None and accumulated_fbt:
+            run_repo.add_run_tools(  # type: ignore[union-attr]
+                run_id,
+                [{"tool": t, "findings_count": c} for t, c in accumulated_fbt.items()],
+            )
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
         """run <tool> [--timeout <seconds>] [args...]  — execute a tool with raw
@@ -392,10 +408,11 @@ class ScanCommands:
     # Private — orchestrator factory and export
     # ------------------------------------------------------------------
 
-    def _create_sqlite_run(self, args: list[str]) -> tuple[object, int | None]:
+    def _create_sqlite_run(self, args: list[str]) -> tuple[object, object, int | None]:
         """Instantiate repositories and create a run record.
 
-        Returns (finding_repo, run_id).  On failure returns (None, None).
+        Returns (finding_repo, run_repo, run_id).
+        On failure returns (None, None, None).
         """
         assert self.repl.active_project is not None
         try:
@@ -405,10 +422,10 @@ class ScanCommands:
                 self.repl.base_path, self.repl.active_project
             )
             run_id = run_repo.create_run({"args": args})
-            return finding_repo, run_id
+            return finding_repo, run_repo, run_id
         except Exception as exc:
             self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
-            return None, None
+            return None, None, None
 
     def _make_orchestrator(self, run_id: int | None = None, auto_approve: bool = False):
         """Create a ScanOrchestrator for the active project."""

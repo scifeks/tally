@@ -165,7 +165,9 @@ class TestCmdScanInnerWarning:
         with (
             patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
             patch.object(sc, "_make_orchestrator", return_value=mock_orchestrator),
-            patch.object(sc, "_create_sqlite_run", return_value=(MagicMock(), 1)),
+            patch.object(
+                sc, "_create_sqlite_run", return_value=(MagicMock(), MagicMock(), 1)
+            ),
             patch(
                 "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
                 return_value=oas3_result,
