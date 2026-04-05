@@ -52,6 +52,7 @@ class ScanCommands:
         repo_val: str | None = None
         tool_val: str | None = None
         domain_val: str | None = None
+        skip_tools_val: str | None = None
         unrecognized: list[str] = []
 
         for arg in args:
@@ -61,6 +62,8 @@ class ScanCommands:
                 tool_val = arg[7:]
             elif arg.startswith("--domain="):
                 domain_val = arg[9:]
+            elif arg.startswith("--skip-tools="):
+                skip_tools_val = arg[13:]
             else:
                 unrecognized.append(arg)
 
@@ -68,7 +71,13 @@ class ScanCommands:
             self.repl.console.print(
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
                 "Usage: scan [--repo=<repo,...>] [--tool=<tool,...>]"
-                " [--domain=<domain,...>] [--yes]"
+                " [--skip-tools=<tool,...>] [--domain=<domain,...>] [--yes]"
+            )
+            return
+
+        if tool_val is not None and skip_tools_val is not None:
+            self.repl.console.print(
+                "[red]--tool and --skip-tools are mutually exclusive.[/red]"
             )
             return
 
@@ -115,7 +124,21 @@ class ScanCommands:
                 )
                 return
 
-        # Compute effective tool list (intersection of --tool and --domain filters)
+        # Validate --skip-tools
+        skip_tools: set[str] = set()
+        if skip_tools_val is not None:
+            parsed_skips = [t.strip() for t in skip_tools_val.split(",") if t.strip()]
+            known = set(tool_registry.list_tool_names())
+            invalid_skips = [t for t in parsed_skips if t not in known]
+            if invalid_skips:
+                self.repl.console.print(
+                    f"[red]Unknown tool(s):[/red] {', '.join(invalid_skips)}\n"
+                    f"Configured tools: {', '.join(sorted(known))}"
+                )
+                return
+            skip_tools = set(parsed_skips)
+
+        # Compute effective tool list (--tool and/or --domain only)
         effective_tools: list[str] | None = None
         if requested_tools is not None or requested_domains is not None:
             all_configured = list(tool_registry.list_tool_names())
@@ -161,7 +184,12 @@ class ScanCommands:
                             )
                 else:
                     for repo_name in repo_names:
-                        _merge_fbt(orchestrator.run_repo_scan(repo_name=repo_name))
+                        _merge_fbt(
+                            orchestrator.run_repo_scan(
+                                repo_name=repo_name,
+                                exclude_tools=skip_tools or None,
+                            )
+                        )
             else:
                 if effective_tools is not None:
                     effective_tools = self._maybe_warn_zap_without_noir(
@@ -180,7 +208,9 @@ class ScanCommands:
                             )
                         )
                 else:
-                    _merge_fbt(orchestrator.run_full_scan())
+                    _merge_fbt(
+                        orchestrator.run_full_scan(exclude_tools=skip_tools or None)
+                    )
         except ValueError as exc:
             self.repl.console.print(f"[red]Error:[/red] {exc}")
 

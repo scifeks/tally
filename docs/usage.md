@@ -288,6 +288,17 @@ Valid domains: `code`, `web`
 [acme-security-audit]> scan --domain=code,web
 ```
 
+**Skip specific tools:**
+
+Run the full scan but exclude one or more tools:
+
+```
+[acme-security-audit]> scan --skip-tools=noir,zap
+[acme-security-audit]> scan --skip-tools=zap
+```
+
+`--skip-tools` and `--tool` are mutually exclusive — use `--tool` to run only named tools, or `--skip-tools` to run everything except named tools.
+
 **Scope to a single repository:**
 
 ```
@@ -301,6 +312,7 @@ If you have only one repository, `scan` (no flags) already targets it.
 ```
 [acme-security-audit]> scan --repo=api-server --tool=semgrep
 [acme-security-audit]> scan --tool=semgrep --domain=code
+[acme-security-audit]> scan --repo=api-server --skip-tools=zap
 ```
 
 ### Docker vs Local Execution

@@ -115,8 +115,9 @@ class ScanOrchestrator:
         self,
         auto_approve: bool = False,
         exclude_segments: list[str] | None = None,
+        exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
-        return FullScan(exclude_segments or []).execute(
+        return FullScan(exclude_segments or [], exclude_tools or set()).execute(
             self._make_config(auto_approve), self._make_resources()
         )
 
@@ -137,8 +138,9 @@ class ScanOrchestrator:
         auto_approve: bool = False,
         exclude_dirs: list[str] | None = None,
         severity_filter: str | None = None,
+        exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
-        return RepoScan(repo_name).execute(
+        return RepoScan(repo_name, exclude_tools or set()).execute(
             self._make_config(auto_approve), self._make_resources()
         )
 
