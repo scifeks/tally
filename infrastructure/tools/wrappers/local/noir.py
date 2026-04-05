@@ -100,6 +100,15 @@ class NoirLocalTool(BaseNoirTool):
         if techs:
             cmd.extend(["-t", ",".join(techs)])
 
+        ai_provider_url = kwargs.get("ai_provider_url")
+        ai_model = kwargs.get("ai_model")
+        if ai_provider_url and ai_model:
+            cmd.extend(["--ai-provider", str(ai_provider_url)])
+            cmd.extend(["--ai-model", str(ai_model)])
+            ai_max_token = kwargs.get("ai_max_token")
+            if ai_max_token is not None:
+                cmd.extend(["--ai-max-token", str(ai_max_token)])
+
         return cmd
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:

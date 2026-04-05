@@ -32,6 +32,15 @@ _TEST_DIR_NAMES: frozenset[str] = frozenset(
     {"test", "tests", "spec", "__tests__", "e2e"}
 )
 
+_JS_LANGS: frozenset[str] = frozenset(
+    {"javascript", "javascript/typescript", "node", "typescript"}
+)
+
+
+def _has_js(langs: list[str]) -> bool:
+    """Return True if any entry in langs indicates a JavaScript/Node codebase."""
+    return any(lang.lower() in _JS_LANGS for lang in langs)
+
 
 def _parse_repo_types(raw: str) -> list[str]:
     """Split comma-separated type input and strip whitespace."""
@@ -248,6 +257,18 @@ class InteractiveProjectWizard:
             lang_input = _prompt(prompt_label, default=default_langs)
             langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
+            # todo: Add support for
+            # Node.js app flag — Noir skipped for Node apps (JS parser limitation)
+            if _has_js(langs):
+                current_node = "y" if existing.node_app else "N"
+                ans = _prompt(
+                    "  Is this a Node.js app? (Noir will be skipped)",
+                    default=current_node,
+                ).lower()
+                node_app = ans in ("y", "yes")
+            else:
+                node_app = False
+
             # Dependencies file — pip-audit scope, only relevant for Python repos
             dependencies_file = existing.dependencies_file
             if "python" in [lang.lower() for lang in langs]:
@@ -317,6 +338,7 @@ class InteractiveProjectWizard:
                 docker_path=docker_path,
                 container_name=container_name,
                 languages=langs,
+                node_app=node_app,
                 base_urls=base_urls,
                 test_dirs=test_dirs,
                 ignore_dirs=ignore_dirs,
@@ -548,6 +570,15 @@ class InteractiveProjectWizard:
         lang_input = _prompt(prompt_label, default=default_langs)
         langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
+        # Node.js app flag — Noir skipped for Node apps (JS parser limitation)
+        node_app = False
+        if _has_js(langs):
+            ans = _prompt(
+                "  Is this a Node.js app? (Noir will be skipped) [y/N]",
+                default="N",
+            ).lower()
+            node_app = ans in ("y", "yes")
+
         # Dependencies file — pip-audit scope, only relevant for Python repos
         dependencies_file = ""
         if "python" in [lang.lower() for lang in langs]:
@@ -601,6 +632,7 @@ class InteractiveProjectWizard:
             docker_path=docker_path,
             container_name=container_name,
             languages=langs,
+            node_app=node_app,
             base_urls=base_urls,
             test_dirs=test_dirs,
             ignore_dirs=ignore_dirs,

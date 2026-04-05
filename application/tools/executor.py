@@ -1,4 +1,5 @@
 import logging
+import os
 import shlex
 import subprocess
 from datetime import UTC, datetime
@@ -72,6 +73,7 @@ class ToolExecutor:
         timeout: int = DEFAULT_TIMEOUT,
         label: str = "output",
         cwd: str | None = None,
+        env: dict[str, str] | None = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, capture, and return a ToolResult.
@@ -110,13 +112,15 @@ class ToolExecutor:
 
         # 4. Run (with privilege escalation if needed)
         _log.info("Tool %s: command: %s", tool.name, shlex.join(cmd))
+        if env:
+            _log.info("Tool %s: env overrides: %s", tool.name, list(env.keys()))
         output_dir = self._ensure_output_dir(tool.name)
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
         findings_exit_ok = getattr(tool, "findings_exit_ok", False)
 
         start = perf_counter()
         run_result = self._run_with_escalation(
-            cmd, tool.name, timestamp, timeout, cwd, start, findings_exit_ok
+            cmd, tool.name, timestamp, timeout, cwd, start, findings_exit_ok, env
         )
         if isinstance(run_result, ToolResult):
             return run_result
@@ -185,6 +189,7 @@ class ToolExecutor:
             timeout=tool_timeout,
             label=pass_.label_suffix,
             cwd=pass_.cwd,
+            env=pass_.env,
             **pass_.kwargs,
         )
 
@@ -254,10 +259,20 @@ class ToolExecutor:
         )
 
     def _run_subprocess(
-        self, cmd: list[str], timeout: int, cwd: str | None
+        self,
+        cmd: list[str],
+        timeout: int,
+        cwd: str | None,
+        env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        effective_env = {**os.environ, **env} if env else None
         return subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
+            env=effective_env,
         )
 
     def _run_with_escalation(
@@ -269,9 +284,10 @@ class ToolExecutor:
         cwd: str | None,
         start: float,
         findings_exit_ok: bool,
+        env: dict[str, str] | None = None,
     ) -> _RunResult | ToolResult:
         try:
-            proc = self._run_subprocess(cmd, timeout, cwd)
+            proc = self._run_subprocess(cmd, timeout, cwd, env)
         except subprocess.TimeoutExpired:
             return self._timeout_result(tool_name, timestamp, start, timeout)
         except FileNotFoundError:
@@ -291,7 +307,7 @@ class ToolExecutor:
                 self._sudo_approved = True
                 start = perf_counter()
                 try:
-                    proc = self._run_subprocess(sudo_cmd, timeout, cwd)
+                    proc = self._run_subprocess(sudo_cmd, timeout, cwd, env)
                 except subprocess.TimeoutExpired:
                     return self._timeout_result(tool_name, timestamp, start, timeout)
                 except FileNotFoundError:
@@ -299,7 +315,7 @@ class ToolExecutor:
                     print("    (sudo not found, retrying with su -c...)")
                     start = perf_counter()
                     try:
-                        proc = self._run_subprocess(su_cmd, timeout, cwd)
+                        proc = self._run_subprocess(su_cmd, timeout, cwd, env)
                     except subprocess.TimeoutExpired:
                         return self._timeout_result(
                             tool_name, timestamp, start, timeout

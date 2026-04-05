@@ -109,6 +109,7 @@ Tally first asks for the execution mode, then collects the appropriate paths.
 - **Mode** — `local` (default) or `docker`
 - **Local path** — absolute filesystem path on the host (required in all modes)
 - **Languages** — comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
+- **Node.js app** — shown when JavaScript or TypeScript is detected; see below
 - **Dependencies file** — for Python repos, path to a dependencies file for pip-audit (optional; if omitted, pip-audit is skipped in local mode)
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 
@@ -143,6 +144,34 @@ Repository #1:
   Python dependencies file (container path, e.g. /app/requirements.txt, optional): /app/requirements.txt
   Base URLs (comma-separated, optional):
 ✓ Repository 'api-server' added to project 'acme-security-audit'
+```
+
+### Node.js repositories and Noir
+
+When Tally detects JavaScript or TypeScript in a repository it asks:
+
+```
+  Is this a Node.js app? (Noir will be skipped) [y/N]:
+```
+
+Answering `y` marks the repository as a Node.js app (`node_app: true` in
+`repositories.json`). This causes Noir to be skipped for that repository in
+all scan types. ZAP will fall back to quickscan mode for those repositories.
+
+The reason for this flag is a known defect in Noir's JavaScript parser that
+causes it to loop indefinitely on complex Node.js codebases and produce no
+output. Skipping Noir avoids a silent, wasted scan step.
+
+**Workaround (planned):** A future release will let you configure a path to a
+pre-existing OAS3, OAS2/Swagger, or Postman collection file on the repository.
+When set, Tally will pass it directly to ZAP, bypassing Noir entirely — which
+gives Node.js apps (and any project that maintains its own API spec) the same
+endpoint-guided scanning that Noir provides for other stacks.
+
+To set or clear the `node_app` flag after a repository has been created:
+
+```
+[acme-security-audit]> repo edit api-server
 ```
 
 View configured repositories:

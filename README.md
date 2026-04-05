@@ -197,6 +197,23 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/docker.md](docs/docker.md) — Security Audit Containers
 - [docs/restrictions.md](docs/restrictions.md) — Legal restrictions
 
+## Known Limitations
+
+### Noir on Node.js repositories
+
+OWASP Noir has a known defect in its JavaScript parser that causes it to loop
+indefinitely on complex Node.js codebases and produce no output. Tally works
+around this by letting you mark a repository as a Node.js app during
+`repo add` / `repo edit`. When marked, Noir is skipped for that repository
+across all scan types and ZAP falls back to quickscan (spider-only) mode.
+
+**Planned:** A future release will allow configuring a path to a pre-existing
+OAS3, OAS2/Swagger, or Postman collection file on the repository so that ZAP
+can use it in place of a Noir-generated spec — bypassing Noir entirely for
+Node.js apps and for projects that already maintain an API spec.
+
+See [docs/tools.md](docs/tools.md) for details.
+
 ## Legal Notice (California and Colorado)
 
 This software is **not intended for use in the States of California or Colorado**.

@@ -20,8 +20,10 @@ class GlobalConfig(BaseModel):
     embedding_provider: str = "ollama_embedding"
     ollama: OllamaConfig | None = None
     ollama_report: OllamaConfig | None = None
+    ollama_noir: OllamaConfig | None = None
     claude: ClaudeConfig | None = None
     ollama_embedding: OllamaEmbeddingConfig | None = None
+    noir_provider: str = ""
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
     enrichment_max_concurrency: int = Field(default=4)

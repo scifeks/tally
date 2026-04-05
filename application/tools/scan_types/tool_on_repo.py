@@ -49,6 +49,13 @@ class ToolOnRepoScan(ScanType):
                 f" project '{config.project_name}'"
             )
 
+        # Noir's JS parser crashes on complex Node apps — skip entirely.
+        if self.tool_name == "noir" and repo.node_app:
+            raise ValueError(
+                f"Noir is not supported for Node.js repository '{repo.name}'."
+                " Set node_app=false in config to run Noir on this repo."
+            )
+
         tool_config = registry.get_tool_config(self.tool_name)
         if tool_config is None:
             raise ValueError(f"Tool '{self.tool_name}' is not registered.")

@@ -5,6 +5,7 @@
 | Tool | Category | What it does |
 |---|---|---|
 | OWASP ZAP | DAST | Dynamic web/API security scanning |
+| OWASP Noir | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
 | Semgrep | SAST | Static analysis across many languages |
 | tree-sitter | SAST | AST-based code analysis (Python library) |
 | Gitleaks | Secrets | Git history and working-tree secret scanning |
@@ -26,6 +27,46 @@ pip-audit behavior depends on the `dependencies_file` field in the repository co
 Accepted file formats include `requirements.txt`, `Pipfile`, and any file format supported by `pip-audit -r`.
 
 Set the dependencies file when adding a repository (`repo add` — Tally prompts automatically for Python repos) or update it later with `repo edit <name>`. You can also set it directly in `repositories.json`.
+
+### OWASP Noir and ZAP
+
+Noir is a static endpoint-discovery tool that analyses source code and emits an
+OAS3 (OpenAPI 3) spec. Tally runs Noir before ZAP so that ZAP can use the
+spec via `-openapifile` instead of relying on spider-only discovery. When no
+Noir output exists for a repository, ZAP falls back to quickscan mode and may
+miss API-only endpoints.
+
+#### Node.js limitation
+
+Noir's JavaScript parser has a known defect that causes it to enter an
+effectively infinite loop on complex Node.js codebases. When this happens,
+Noir exits without writing any output and makes no AI inference calls.
+
+To avoid wasting scan time, Tally lets you mark a repository as a Node.js
+app during `repo add` / `repo edit`. When JavaScript or TypeScript is
+detected in the repository, Tally asks:
+
+```
+  Is this a Node.js app? (Noir will be skipped) [y/N]:
+```
+
+Answering `y` sets `node_app: true` in `repositories.json`. Noir is then
+skipped for that repository across all scan types — full scans, targeted
+tool scans, and when ZAP requests a Noir pre-scan. ZAP falls back to
+quickscan mode for Node.js repositories.
+
+This flag can be set or cleared at any time with `repo edit <name>`.
+
+#### Planned: OAS3 / OAS2 / Postman file support
+
+A future release will allow you to configure a path to a pre-existing
+endpoint collection file (OAS3 JSON/YAML, OAS2/Swagger JSON, or a Postman
+collection) directly on the repository. When set, Tally will pass that file
+to ZAP in place of a Noir-generated spec, bypassing Noir entirely. This will
+provide a clean workaround for Node.js apps and for any project that already
+maintains an OpenAPI spec or Postman collection.
+
+---
 
 ## Tool Detection
 
