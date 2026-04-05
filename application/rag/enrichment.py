@@ -458,6 +458,13 @@ class EnrichmentPipeline:
         )
         content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
         if not content:
+            logger.warning(
+                "LLM returned empty response for field %r; "
+                "source_fields=%r source_values=%r",
+                spec.field_name,
+                list(source_values.keys()),
+                source_values,
+            )
             return None
         raw = json.loads(content)
         validated = self._validate_response(raw, [spec.field_name])
@@ -475,6 +482,13 @@ class EnrichmentPipeline:
         prompt = get_dedicated_prompt(spec.field_name, source_values)
         content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
         if not content:
+            logger.warning(
+                "LLM returned empty response for field %r; "
+                "source_fields=%r source_values=%r",
+                spec.field_name,
+                list(source_values.keys()),
+                source_values,
+            )
             return None
         raw = json.loads(content)
         validated = self._validate_response(raw, [spec.field_name])
