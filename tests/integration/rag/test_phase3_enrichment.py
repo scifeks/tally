@@ -31,7 +31,7 @@ def _seed_finding(
     }
     if extra:
         row.update(extra)
-    finding_repo.upsert_findings(run_id, [row])  # type: ignore[union-attr]
+    finding_repo.insert_findings(run_id, [row])  # type: ignore[union-attr]
     from domain.pipeline.fingerprint import compute_fingerprint
 
     fps = [compute_fingerprint(row)]

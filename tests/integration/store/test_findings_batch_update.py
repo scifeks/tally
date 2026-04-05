@@ -30,34 +30,52 @@ _BASE_FINDING: dict = {
 
 
 class TestUpsertShouldReportDefault:
-    def test_upsert_findings_sets_should_report_to_0(self, tmp_path: Path) -> None:
+    def test_insert_findings_sets_should_report_to_0(self, tmp_path: Path) -> None:
         factory = ConnectionFactory(tmp_path / "findings.db")
         factory.init_schema()
         run_repo = RunRepository(factory)
         finding_repo = FindingRepository(factory)
         run_id = run_repo.create_run({})
-        finding_repo.upsert_findings(run_id, [_BASE_FINDING])
+        finding_repo.insert_findings(run_id, [_BASE_FINDING])
         with factory.connect() as conn:
             row = conn.execute("SELECT should_report FROM findings LIMIT 1").fetchone()
         assert row["should_report"] == 0
 
-    def test_rescan_does_not_reset_approved_finding(self, tmp_path: Path) -> None:
-        """Re-upserting a finding must not clear analyst approval."""
+    def test_rescan_inserts_new_row_preserving_prior_approval(
+        self, tmp_path: Path
+    ) -> None:
+        """A rescan inserts a new row; the approved row from run 1 is untouched.
+
+        Scans are INSERT-only.  The new row for run 2 starts with
+        should_report = 0 (the default).  The row approved in run 1 retains
+        should_report = 1 — INSERT never touches other runs' rows.
+        """
         factory = ConnectionFactory(tmp_path / "findings.db")
         factory.init_schema()
         run_repo = RunRepository(factory)
         finding_repo = FindingRepository(factory)
-        run_id = run_repo.create_run({})
-        finding_repo.upsert_findings(run_id, [_BASE_FINDING])
-        # Simulate analyst approval
+
+        run_id1 = run_repo.create_run({})
+        finding_repo.insert_findings(run_id1, [_BASE_FINDING])
         with factory.connect() as conn:
-            conn.execute("UPDATE findings SET should_report = 1")
-        # Re-scan same fingerprint
+            conn.execute(
+                "UPDATE findings SET should_report = 1 WHERE run_id = ?",
+                (run_id1,),
+            )
+
         run_id2 = run_repo.create_run({})
-        finding_repo.upsert_findings(run_id2, [_BASE_FINDING])
+        finding_repo.insert_findings(run_id2, [_BASE_FINDING])
+
         with factory.connect() as conn:
-            row = conn.execute("SELECT should_report FROM findings LIMIT 1").fetchone()
-        assert row["should_report"] == 1
+            rows = conn.execute(
+                "SELECT run_id, should_report FROM findings ORDER BY run_id"
+            ).fetchall()
+
+        assert len(rows) == 2
+        assert rows[0]["run_id"] == run_id1
+        assert rows[0]["should_report"] == 1
+        assert rows[1]["run_id"] == run_id2
+        assert rows[1]["should_report"] == 0
 
 
 class TestBatchUpdateAnalystFields:
@@ -73,7 +91,7 @@ class TestBatchUpdateAnalystFields:
             {**_BASE_FINDING, "rule_id": f"rule-{i}", "file_path": f"src/{i}.py"}
             for i in range(count)
         ]
-        finding_repo.upsert_findings(run_id, findings)
+        finding_repo.insert_findings(run_id, findings)
         with factory.connect() as conn:
             ids = [
                 r["id"]

@@ -17,7 +17,7 @@ async def test_update_findings_batch_mixed(
     audit_repo: AuditRepository,
 ) -> None:
     run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(
+    finding_repo.insert_findings(
         run_id,
         [
             {**_BASE_FINDING, "rule_id": "rule-a", "file_path": "src/a.py"},

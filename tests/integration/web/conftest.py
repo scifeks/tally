@@ -54,7 +54,7 @@ async def app_client(tmp_path: Path):
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
     run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(run_id, [_BASE_FINDING])
+    finding_repo.insert_findings(run_id, [_BASE_FINDING])
 
     with factory.connect() as conn:
         row = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()

@@ -113,9 +113,11 @@ class IngestHandler(BaseHandler):
                         row.setdefault("repo", event.repo)
 
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-            finding_repo.upsert_findings(event.run_id or 0, rows)
+            finding_repo.insert_findings(event.run_id or 0, rows)
             fingerprints = [compute_fingerprint(row) for row in rows]
-            sqlite_ids = finding_repo.get_ids_by_fingerprints(fingerprints)
+            sqlite_ids = finding_repo.get_ids_by_fingerprints(
+                fingerprints, run_id=event.run_id or 0
+            )
         except Exception as exc:
             logger.error(
                 "IngestHandler: ingestion failed for %s: %s",

@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -161,7 +161,7 @@ def _seed_all(store: _TestStore) -> int:
     all_findings = (
         _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS
     )
-    store.upsert_findings(run_id, all_findings)
+    store.insert_findings(run_id, all_findings)
     return run_id
 
 
@@ -265,25 +265,6 @@ class TestPurge:
 
         conn = store._connect()
         assert conn.execute("SELECT COUNT(*) FROM run_tools").fetchone()[0] == 0
-        conn.close()
-
-    def test_purge_all_clears_run_repos(self, tmp_path: Path) -> None:
-        """Full purge must delete all run_repos records."""
-        store = _make_store(tmp_path)
-        run_id = _seed_all(store)
-
-        conn = store._connect()
-        conn.execute(
-            "INSERT INTO run_repos (run_id, repo) VALUES (?, ?)",
-            (run_id, "repo1"),
-        )
-        conn.commit()
-        conn.close()
-
-        store.delete_findings(tools=None)
-
-        conn = store._connect()
-        assert conn.execute("SELECT COUNT(*) FROM run_repos").fetchone()[0] == 0
         conn.close()
 
     def test_purge_tool_clears_triage_batches_for_tool(self, tmp_path: Path) -> None:

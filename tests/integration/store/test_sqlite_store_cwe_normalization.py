@@ -29,8 +29,8 @@ class _TestStore:
     def create_run(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._run_repo.create_run(*args, **kwargs)  # type: ignore[attr-defined]
 
-    def upsert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        return self._finding_repo.upsert_findings(*args, **kwargs)  # type: ignore[attr-defined]
+    def insert_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.insert_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
     def search(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.search(*args, **kwargs)  # type: ignore[attr-defined]
@@ -106,7 +106,7 @@ class TestCweNormalization:
     def test_semgrep_cwe_is_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
@@ -125,7 +125,7 @@ class TestCweNormalization:
     def test_zap_cwe_id_int_becomes_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
@@ -144,7 +144,7 @@ class TestCweNormalization:
     def test_sca_cwe_ids_is_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(
+        store.insert_findings(
             run_id,
             [
                 {
@@ -163,13 +163,13 @@ class TestCweNormalization:
     def test_gitleaks_no_cwe(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id, _GITLEAKS_FINDINGS[:1])
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("cwe") is None
 
     def test_nmap_no_cwe(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.upsert_findings(run_id, _NMAP_FINDINGS)
+        store.insert_findings(run_id, _NMAP_FINDINGS)
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("cwe") is None

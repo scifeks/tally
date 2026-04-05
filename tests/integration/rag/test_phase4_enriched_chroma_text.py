@@ -43,7 +43,7 @@ def _make_rag_engine(base_path: str, project_name: str) -> RAGEngine:
 
 
 def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
-    finding_repo.upsert_findings(run_id, [row])  # type: ignore[union-attr]
+    finding_repo.insert_findings(run_id, [row])  # type: ignore[union-attr]
     fp = compute_fingerprint(row)
     ids = finding_repo.get_ids_by_fingerprints([fp])  # type: ignore[union-attr]
     return ids[0]
@@ -87,7 +87,7 @@ class TestEnrichedChromaText:
     def test_enriched_semgrep_meta_appears_in_chroma_text(self, env: dict) -> None:
         """risk_type and remediation from meta blob appear in ChromaDB text.
 
-        upsert_findings() stores unknown fields (not in _DIRECT_COLUMNS) in the
+        insert_findings() stores unknown fields (not in _DIRECT_COLUMNS) in the
         meta blob.  get_by_ids() / deserialise_row() merges the blob back into
         the row dict at the top level.  SemgrepHandler.render() then writes
         risk_type and remediation into the ChromaDB document text.
@@ -100,7 +100,7 @@ class TestEnrichedChromaText:
             "line_start": 12,
             "severity": "high",
             "finding_type": json.dumps(["vulnerability"]),
-            # These unknown keys are stored in the meta blob by upsert_findings
+            # These unknown keys are stored in the meta blob by insert_findings
             "risk_type": "injection",
             "remediation": "sanitize inputs",
         }

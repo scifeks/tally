@@ -89,7 +89,7 @@ _SEMGREP_WITH_META = [
 
 def _seed_semgrep(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
     run_id = run_repo.create_run({"args": []})
-    finding_repo.upsert_findings(run_id, _SEMGREP_WITH_META)
+    finding_repo.insert_findings(run_id, _SEMGREP_WITH_META)
 
 
 # ---------------------------------------------------------------------------

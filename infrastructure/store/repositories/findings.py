@@ -39,16 +39,18 @@ class FindingRepository:
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    def upsert_findings(self, run_id: int, findings: list[dict]) -> None:
-        """Insert or update findings rows.
+    def insert_findings(self, run_id: int, findings: list[dict]) -> None:
+        """Insert new findings rows for a scan run.
+
+        Every finding produced by a scan is a new row bound to its run_id.
+        This method never updates existing rows — scans are INSERT-only.
 
         For each finding:
 
-        - Computes a per-tool fingerprint (sha256).
+        - Computes a per-tool fingerprint (sha256) for later lookup.
         - Maps known ChromaDB field names to named SQLite columns.
         - Converts comma-joined list fields to JSON arrays in the meta blob.
         - Stores all remaining fields in the meta JSON blob.
-        - Sets ``enriched = 1`` on every row.
 
         Wrapped in a single transaction.
         """
@@ -134,17 +136,6 @@ class FindingRepository:
                 first_seen, last_seen, seen_count, status, should_report
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (fingerprint) DO UPDATE SET
-                run_id          = excluded.run_id,
-                severity        = excluded.severity,
-                confidence      = excluded.confidence,
-                description     = excluded.description,
-                package_version = excluded.package_version,
-                cwe             = excluded.cwe,
-                enriched        = excluded.enriched,
-                meta            = excluded.meta,
-                last_seen       = excluded.last_seen,
-                seen_count      = COALESCE(seen_count, 0) + 1
         """
         with self._factory.connect() as conn:
             conn.executemany(sql, rows_with_ts)
@@ -153,7 +144,7 @@ class FindingRepository:
         """Delete findings from the store.
 
         ``tools=None``   — DELETE all rows from all tables (findings, run_tools,
-                           run_repos, runs, triage_batches, tool_audit_log).
+                           runs, triage_batches, tool_audit_log).
         ``tools=[...]``  — DELETE findings, triage_batches, and tool_audit_log
                            records for those tools only.
         """
@@ -165,7 +156,6 @@ class FindingRepository:
             conn.execute("DELETE FROM tool_audit_log")
             conn.execute("DELETE FROM findings")
             conn.execute("DELETE FROM run_tools")
-            conn.execute("DELETE FROM run_repos")
             conn.execute("DELETE FROM runs")
 
     def delete_findings_by_tool_name(self, tools: list[str]) -> None:
@@ -176,7 +166,7 @@ class FindingRepository:
         - Triage batches whose finding_ids are all from those findings
         - Tool audit log entries for those tools
 
-        Does NOT delete: runs, run_tools, run_repos.
+        Does NOT delete: runs, run_tools.
         """
         if not tools:
             return
@@ -487,23 +477,35 @@ class FindingRepository:
         with self._factory.connect() as conn:
             conn.executemany(sql, pairs)
 
-    def get_ids_by_fingerprints(self, fingerprints: list[str]) -> list[int]:
+    def get_ids_by_fingerprints(
+        self, fingerprints: list[str], run_id: int | None = None
+    ) -> list[int]:
         """Return SQLite findings.id values for the given fingerprints.
 
-        Returns ids in the same order as the input fingerprints list.
-        Missing fingerprints (not in DB) are silently omitted.
+        When ``run_id`` is provided, only rows from that run are considered.
+        This is required now that fingerprints are non-unique across runs —
+        multiple rows may share the same fingerprint value.
+
+        All matching ids are returned (there may be more than one per
+        fingerprint). Missing fingerprints are silently omitted.
         """
         if not fingerprints:
             return []
-        placeholders = ",".join("?" * len(fingerprints))
-        sql = (
-            f"SELECT id, fingerprint FROM findings"
-            f" WHERE fingerprint IN ({placeholders})"
-        )
+        unique_fps = list(set(fingerprints))
+        placeholders = ",".join("?" * len(unique_fps))
+        if run_id is not None:
+            sql = (
+                f"SELECT id FROM findings"
+                f" WHERE fingerprint IN ({placeholders})"
+                f" AND run_id = ?"
+            )
+            params: list = unique_fps + [run_id]
+        else:
+            sql = f"SELECT id FROM findings WHERE fingerprint IN ({placeholders})"
+            params = unique_fps
         with self._factory.connect() as conn:
-            rows = conn.execute(sql, fingerprints).fetchall()
-        fp_to_id = {row["fingerprint"]: row["id"] for row in rows}
-        return [fp_to_id[fp] for fp in fingerprints if fp in fp_to_id]
+            rows = conn.execute(sql, params).fetchall()
+        return [row["id"] for row in rows]
 
     def get_by_ids(self, ids: list[int]) -> list[dict]:
         """Return deserialized row dicts for the given SQLite primary keys.

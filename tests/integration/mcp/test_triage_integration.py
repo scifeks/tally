@@ -65,7 +65,7 @@ def _seed(
         {**_BASE_FINDING, "file_path": f"src/file{i}.py", **(overrides or {})}
         for i in range(n)
     ]
-    finding_repo.upsert_findings(run_id, batch)
+    finding_repo.insert_findings(run_id, batch)
     return run_id
 
 
@@ -414,7 +414,7 @@ def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     # Seed 2 findings in different files so batching produces 2+ batches
     seed_run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(
+    finding_repo.insert_findings(
         seed_run_id,
         [
             {**_BASE_FINDING, "file_path": "src/alpha.py"},
@@ -443,7 +443,7 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     # Two findings → should produce at least 1 batch
     seed_run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(
+    finding_repo.insert_findings(
         seed_run_id,
         [
             {**_BASE_FINDING, "file_path": "src/a.py"},
@@ -478,7 +478,7 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
 def test_both_findings_enriched(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     seed_run_id = run_repo.create_run({})
-    finding_repo.upsert_findings(
+    finding_repo.insert_findings(
         seed_run_id,
         [
             {**_BASE_FINDING, "file_path": "src/a.py"},

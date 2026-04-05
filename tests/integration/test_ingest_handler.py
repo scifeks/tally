@@ -137,13 +137,13 @@ class TestIngestHandlerPhase2:
             )
         assert engine.count_documents() == 0
 
-    def test_sqlite_deduplicates_on_second_ingest(
+    def test_second_ingest_adds_new_rows(
         self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
-        """Dispatching the same ToolCompleted twice must not add new rows.
+        """Dispatching the same ToolCompleted twice produces separate rows.
 
-        The ON CONFLICT (fingerprint) clause in upsert_findings() must
-        increment seen_count instead of inserting duplicates.
+        Scans are INSERT-only; each dispatch creates a new set of rows
+        bound to its run_id.  No deduplication via fingerprint occurs.
         """
         bus = EventBus()
         handler = IngestHandler(bus)
@@ -155,15 +155,15 @@ class TestIngestHandlerPhase2:
             base_path=str(project_env["base_path"]),
         )
         handler.handle(event)
-        handler.handle(event)
-
         _, finding_repo, _, _ = make_store(
             str(project_env["base_path"]), project_env["project_name"]
         )
-        findings = finding_repo.get_all_findings()
-        assert len(findings) >= 1
-        for finding in findings:
-            assert finding["seen_count"] == 2
+        count_after_first = len(finding_repo.get_all_findings())
+        assert count_after_first >= 1
+
+        handler.handle(event)
+        count_after_second = len(finding_repo.get_all_findings())
+        assert count_after_second == count_after_first * 2
 
     def test_ingest_completed_ids_are_sqlite_primary_keys(
         self, project_env: dict, gitleaks_result: ToolResult

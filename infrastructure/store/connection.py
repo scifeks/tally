@@ -41,32 +41,10 @@ class ConnectionFactory:
         finally:
             conn.close()
 
-    def init_schema(self) -> None:
-        """Create all tables and indexes if they do not exist."""
-        with self.connect() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS runs (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    args       TEXT,
-                    created_at TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS run_tools (
-                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id         INTEGER,
-                    tool           TEXT,
-                    findings_count INTEGER DEFAULT 0
-                );
-
-                CREATE TABLE IF NOT EXISTS run_repos (
-                    id     INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id INTEGER,
-                    repo   TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS findings (
+    # DDL shared between init_schema and _migrate_fingerprint_unique.
+    _FINDINGS_COLUMNS = """
                     id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                    fingerprint      TEXT UNIQUE,
+                    fingerprint      TEXT,
                     run_id           INTEGER,
                     tool             TEXT,
                     domain           TEXT,
@@ -95,8 +73,9 @@ class ConnectionFactory:
                     should_report    INTEGER NOT NULL DEFAULT 0,
                     business_impact  TEXT,
                     tal_id           TEXT
-                );
+    """
 
+    _FINDINGS_INDEXES = """
                 CREATE INDEX IF NOT EXISTS idx_findings_tool
                     ON findings (tool);
                 CREATE INDEX IF NOT EXISTS idx_findings_severity
@@ -107,6 +86,30 @@ class ConnectionFactory:
                     ON findings (segment);
                 CREATE INDEX IF NOT EXISTS idx_findings_repo
                     ON findings (repo);
+    """
+
+    def init_schema(self) -> None:
+        """Create all tables and indexes if they do not exist."""
+        with self.connect() as conn:
+            conn.executescript(f"""
+                CREATE TABLE IF NOT EXISTS runs (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    args       TEXT,
+                    created_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS run_tools (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id         INTEGER,
+                    tool           TEXT,
+                    findings_count INTEGER DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS findings (
+                    {self._FINDINGS_COLUMNS}
+                );
+
+                {self._FINDINGS_INDEXES}
 
                 CREATE TABLE IF NOT EXISTS tool_audit_log (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,3 +133,52 @@ class ConnectionFactory:
                     completed_at TEXT
                 );
             """)
+        self._migrate_fingerprint_unique()
+        self._migrate_drop_run_repos()
+
+    def _migrate_fingerprint_unique(self) -> None:
+        """Remove the UNIQUE constraint on findings.fingerprint if present.
+
+        Existing databases created before this fix have
+        ``fingerprint TEXT UNIQUE``.  SQLite does not support
+        ``ALTER TABLE DROP CONSTRAINT``, so the migration recreates the
+        table without the constraint and copies all rows.
+
+        The check uses ``PRAGMA index_list`` — rows with ``origin = 'u'``
+        are unique constraints from the CREATE TABLE definition (not
+        explicit CREATE UNIQUE INDEX statements).
+        """
+        with self.connect() as conn:
+            idx_rows = conn.execute("PRAGMA index_list(findings)").fetchall()
+            has_unique = any(row["origin"] == "u" for row in idx_rows)
+            if not has_unique:
+                return
+
+        with self.connect() as conn:
+            conn.executescript(f"""
+                CREATE TABLE findings_new (
+                    {self._FINDINGS_COLUMNS}
+                );
+
+                INSERT INTO findings_new SELECT * FROM findings;
+                DROP TABLE findings;
+                ALTER TABLE findings_new RENAME TO findings;
+
+                {self._FINDINGS_INDEXES}
+            """)
+
+    def _migrate_drop_run_repos(self) -> None:
+        """Drop the run_repos table if it still exists.
+
+        The table was removed from the schema because it was never
+        written to by any production code path — repo-level data is
+        already available via the ``repo`` column on ``findings``.
+        """
+        with self.connect() as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='run_repos'"
+            ).fetchone()
+            if not exists:
+                return
+        with self.connect() as conn:
+            conn.execute("DROP TABLE run_repos")
