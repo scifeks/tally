@@ -309,14 +309,16 @@ class EnrichmentPipeline:
             # current tools but left in place.
             work_items.append((row, "", row, legacy_fields, specs))
 
+        if not work_items:
+            return
+
         # Phase 2: LLM calls (concurrent)
         updates: list[tuple[dict[str, Any], dict[str, Any]]] = []
         completed = 0
         n_work = len(work_items)
 
-        if work_items:
-            # Pre-resolve LLM provider once before spawning threads
-            _ = self._provider
+        # Pre-resolve LLM provider once before spawning threads
+        _ = self._provider
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_row = {

@@ -59,6 +59,10 @@ class RepoScan(ScanType):
                         tool_set.add(registered_tool.name)
                         break
 
+        # Noir's JS parser crashes on complex Node apps — skip it entirely.
+        if repo.node_app:
+            tool_set.discard("noir")
+
         ordered_tools = ordered_repo_tools(tool_set, registry)
         if self.exclude_tools:
             ordered_tools = [t for t in ordered_tools if t not in self.exclude_tools]

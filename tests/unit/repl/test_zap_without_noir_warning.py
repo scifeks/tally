@@ -27,6 +27,7 @@ def _make_repl(repo_names: list[str] | None = None) -> MagicMock:
     for name in names:
         r = MagicMock()
         r.name = name
+        r.node_app = False
         repos.append(r)
     repl.config.load_repositories.return_value = repos
     return repl
@@ -156,6 +157,7 @@ class TestCmdScanInnerWarning:
         repl = _make_repl()
         _repo = MagicMock()
         _repo.name = "dvna"
+        _repo.node_app = False
         repl.config.load_repositories.return_value = [_repo]
 
         sc = ScanCommands(repl)

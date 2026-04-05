@@ -8,7 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.config.schemas import Repository
+from core.config.schemas import OllamaConfig, Repository
+from core.config.schemas.global_config import GlobalConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.base.noir import _compute_noir_techs
 from infrastructure.tools.wrappers.local.noir import NoirLocalTool
@@ -32,6 +33,9 @@ def _make_context(repo: Repository, base_path: str) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = repo.path or "/repo"
     config_manager = MagicMock()
+    config_manager.global_config = GlobalConfig.model_construct(
+        noir_provider="",
+    )
     return ExecutionContext(
         project_name="DVPA",
         base_path=base_path,
@@ -385,3 +389,173 @@ class TestExcludePathPrefixes:
         tool._exclude_path_prefixes = ["/vendor/"]
         parsed = tool.parse_output("", {})
         assert tool.count_findings(parsed) == len(parsed["endpoints"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# AI flags in build_command
+# ---------------------------------------------------------------------------
+
+
+class TestNoirAiFlags:
+    def test_ai_flags_appended_when_both_present(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            ai_provider_url="http://localhost:11434",
+            ai_model="gemma3:27b",
+        )
+        assert "--ai-provider" in cmd
+        assert "http://localhost:11434" in cmd
+        assert "--ai-model" in cmd
+        assert "gemma3:27b" in cmd
+
+    def test_ai_flags_omitted_when_absent(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+        )
+        assert "--ai-provider" not in cmd
+        assert "--ai-model" not in cmd
+
+    def test_ai_flags_omitted_when_provider_empty(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            ai_provider_url="",
+            ai_model="gemma3:27b",
+        )
+        assert "--ai-provider" not in cmd
+        assert "--ai-model" not in cmd
+
+    def test_ai_flags_omitted_when_model_empty(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            ai_provider_url="http://localhost:11434",
+            ai_model="",
+        )
+        assert "--ai-provider" not in cmd
+        assert "--ai-model" not in cmd
+
+    def test_ai_max_token_appended_when_set(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            ai_provider_url="http://localhost:11434",
+            ai_model="gemma3:27b",
+            ai_max_token=8192,
+        )
+        assert "--ai-max-token" in cmd
+        assert "8192" in cmd
+
+    def test_ai_max_token_omitted_when_absent(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        tool = NoirLocalTool()
+        cmd = tool.build_command(
+            source_path=str(src),
+            output_file=str(tmp_path / "out.json"),
+            ai_provider_url="http://localhost:11434",
+            ai_model="gemma3:27b",
+        )
+        assert "--ai-max-token" not in cmd
+
+
+# ---------------------------------------------------------------------------
+# AI config resolution in build_execution_passes
+# ---------------------------------------------------------------------------
+
+
+def _make_global_config(
+    noir_provider: str = "",
+    ollama_noir: OllamaConfig | None = None,
+) -> GlobalConfig:
+    return GlobalConfig.model_construct(
+        noir_provider=noir_provider,
+        ollama_noir=ollama_noir,
+    )
+
+
+class TestNoirExecutionPassesAiConfig:
+    def test_ai_kwargs_present_when_noir_provider_set(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path))
+        ollama_noir = OllamaConfig(
+            base_url="http://10.0.0.1:11434",
+            model="gemma3:27b",
+            num_ctx=8192,
+        )
+        ctx.config_manager.global_config = _make_global_config(
+            noir_provider="ollama_noir",
+            ollama_noir=ollama_noir,
+        )
+        tool = NoirLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        kw = passes[0].kwargs
+        assert kw.get("ai_provider_url") == "ollama"
+        assert kw.get("ai_model") == "gemma3:27b"
+        assert kw.get("ai_max_token") == 8192
+        assert passes[0].env == {"OLLAMA_HOST": "http://10.0.0.1:11434"}
+
+    def test_ai_max_token_absent_when_num_ctx_none(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path))
+        ollama_noir = OllamaConfig(
+            base_url="http://10.0.0.1:11434",
+            model="gemma3:27b",
+            num_ctx=None,
+        )
+        ctx.config_manager.global_config = _make_global_config(
+            noir_provider="ollama_noir",
+            ollama_noir=ollama_noir,
+        )
+        tool = NoirLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert "ai_max_token" not in passes[0].kwargs
+        assert passes[0].env == {"OLLAMA_HOST": "http://10.0.0.1:11434"}
+
+    def test_ai_kwargs_absent_when_noir_provider_empty(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path))
+        ctx.config_manager.global_config = _make_global_config(
+            noir_provider="",
+        )
+        tool = NoirLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert "ai_provider_url" not in passes[0].kwargs
+        assert "ai_model" not in passes[0].kwargs
+        assert passes[0].env is None
+
+    def test_ai_kwargs_absent_when_provider_name_invalid(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path))
+        ctx.config_manager.global_config = _make_global_config(
+            noir_provider="nonexistent_provider",
+        )
+        tool = NoirLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert "ai_provider_url" not in passes[0].kwargs
+        assert "ai_model" not in passes[0].kwargs

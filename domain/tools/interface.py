@@ -36,6 +36,7 @@ class ExecutionPass:
     label_suffix: str
     kwargs: dict[str, Any]
     cwd: str | None = None
+    env: dict[str, str] | None = None
 
 
 @dataclass

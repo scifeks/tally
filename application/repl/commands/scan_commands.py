@@ -398,7 +398,8 @@ class ScanCommands:
         missing = [
             r.name
             for r in target_repos
-            if not _find_noir_oas3(
+            if not r.node_app
+            and not _find_noir_oas3(
                 self.repl.base_path, self.repl.active_project, r.name
             )
         ]

@@ -15,6 +15,13 @@
     "timeout_seconds": 120,
     "num_ctx": null
   },
+  "ollama_noir": {
+    "base_url": "http://localhost:11434",
+    "model": "gemma3:27b",
+    "timeout_seconds": 120,
+    "num_ctx": null
+  },
+  "noir_provider": "ollama_noir",
   "ollama_embedding": {
     "base_url": "http://localhost:11434",
     "model": "nomic-embed-text:latest",
