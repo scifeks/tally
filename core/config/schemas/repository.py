@@ -37,6 +37,16 @@ class Repository(BaseModel):
             "Case-insensitive. Applies to SAST and secrets tool segments."
         ),
     )
+    dependencies_file: str = Field(
+        default="",
+        description=(
+            "Path to the Python dependencies file used to scope pip-audit. "
+            "For docker repos, use the container-internal path "
+            "(e.g. /app/requirements.txt). For local repos, a local filesystem "
+            "path (e.g. requirements.txt). When absent, pip-audit is skipped "
+            "for local repos; docker repos fall back to a full environment scan."
+        ),
+    )
 
     @field_validator("type")
     @classmethod

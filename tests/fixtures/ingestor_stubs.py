@@ -12,6 +12,7 @@ class _StubBuilder:
     non_enriched_fields: frozenset[str] = frozenset()
     type_flags: dict[str, set[str]] = {}
     should_enrich = False
+    should_visualize = True
     enrichment_fields = None
 
     def __init__(self, rows: list[dict] | None = None) -> None:

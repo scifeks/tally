@@ -26,7 +26,7 @@ class ScanCommands:
     # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
-        """scan [--repo=<repo>] [--tool=<tool,...>] [--domain=<domain,...>]"""
+        """scan [--repo=<repo,...>] [--tool=<tool,...>] [--domain=<domain,...>]"""
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'project add' first.[/yellow]"
@@ -67,7 +67,7 @@ class ScanCommands:
         if unrecognized:
             self.repl.console.print(
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
-                "Usage: scan [--repo=<repo>] [--tool=<tool,...>]"
+                "Usage: scan [--repo=<repo,...>] [--tool=<tool,...>]"
                 " [--domain=<domain,...>] [--yes]"
             )
             return
@@ -75,18 +75,20 @@ class ScanCommands:
         assert self.repl.active_project is not None
 
         # Validate --repo
-        repo_name: str | None = None
+        repo_names: list[str] | None = None
         if repo_val is not None:
+            requested_repos = [r.strip() for r in repo_val.split(",") if r.strip()]
             repos = self.repl.config.load_repositories(self.repl.active_project)
-            match = next((r for r in repos if r.name.lower() == repo_val.lower()), None)
-            if match is None:
-                names = sorted(r.name for r in repos)
+            repo_map = {r.name.lower(): r.name for r in repos}
+            invalid_repos = [r for r in requested_repos if r.lower() not in repo_map]
+            if invalid_repos:
+                names = sorted(repo_map.values())
                 self.repl.console.print(
-                    f"[red]Unknown repository:[/red] {repo_val!r}\n"
+                    f"[red]Unknown repository:[/red] {', '.join(invalid_repos)}\n"
                     f"Configured repos: {', '.join(names) or 'none'}"
                 )
                 return
-            repo_name = match.name
+            repo_names = [repo_map[r.lower()] for r in requested_repos]
 
         # Validate --tool
         requested_tools: list[str] | None = None
@@ -132,18 +134,36 @@ class ScanCommands:
             return
 
         try:
-            if repo_name is not None:
+            if repo_names is not None:
                 if effective_tools is not None:
-                    for _i, tool_name in enumerate(effective_tools):
-                        orchestrator.run_tool_on_repo(
-                            tool_name,
-                            repo_name,
-                            remaining_peers=len(effective_tools) - _i - 1,
-                        )
+                    effective_tools = self._maybe_warn_zap_without_noir(
+                        effective_tools,
+                        repo_names,
+                        auto_approve,
+                        orchestrator,
+                    )
+                    if effective_tools is None:
+                        return
+                    for repo_name in repo_names:
+                        for _i, tool_name in enumerate(effective_tools):
+                            orchestrator.run_tool_on_repo(
+                                tool_name,
+                                repo_name,
+                                remaining_peers=len(effective_tools) - _i - 1,
+                            )
                 else:
-                    orchestrator.run_repo_scan(repo_name=repo_name)
+                    for repo_name in repo_names:
+                        orchestrator.run_repo_scan(repo_name=repo_name)
             else:
                 if effective_tools is not None:
+                    effective_tools = self._maybe_warn_zap_without_noir(
+                        effective_tools,
+                        None,
+                        auto_approve,
+                        orchestrator,
+                    )
+                    if effective_tools is None:
+                        return
                     for _i, tool_name in enumerate(effective_tools):
                         orchestrator.run_tool_on_all_repos(
                             tool_name,
@@ -294,6 +314,79 @@ class ScanCommands:
                 remaining = args[:i] + args[i + 2 :]
                 return value, remaining
         return None, args
+
+    # ------------------------------------------------------------------
+    # Private — ZAP-without-Noir warning
+    # ------------------------------------------------------------------
+
+    def _maybe_warn_zap_without_noir(
+        self,
+        tools: list[str],
+        repo_names: list[str] | None,
+        auto_approve: bool,
+        orchestrator: object,
+    ) -> list[str] | None:
+        """Warn when ZAP is requested but Noir OAS3 output is absent.
+
+        Returns the (possibly expanded) effective tool list to execute, or
+        ``None`` to indicate that the scan was cancelled by the user.
+
+        When ``auto_approve`` is True the warning is suppressed and ZAP
+        proceeds in quickscan mode.
+        """
+        if "zap" not in tools or "noir" in tools:
+            return tools
+        if auto_approve:
+            return tools
+
+        from infrastructure.tools.wrappers.local.zap import _find_noir_oas3
+
+        assert self.repl.active_project is not None
+        repos = self.repl.config.load_repositories(self.repl.active_project)
+        target_repos = (
+            [r for r in repos if r.name in repo_names]
+            if repo_names is not None
+            else repos
+        )
+
+        missing = [
+            r.name
+            for r in target_repos
+            if not _find_noir_oas3(
+                self.repl.base_path, self.repl.active_project, r.name
+            )
+        ]
+        if not missing:
+            return tools
+
+        missing_str = ", ".join(missing)
+        self.repl.console.print(
+            f"\n[yellow]Warning:[/yellow] No Noir endpoint scan found"
+            f" for: {missing_str}.\n"
+            "ZAP will run in quickscan mode only and may miss"
+            " API-only endpoints.\n"
+        )
+        self.repl.console.print(
+            "  1. Run Noir first, then ZAP [bold](recommended)[/bold]\n"
+            "  2. Run ZAP now in quickscan mode\n"
+            "  3. Cancel\n"
+        )
+        try:
+            raw = input("Enter choice [1/2/3] (default: 1): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+
+        choice = raw if raw in ("1", "2", "3") else "1"
+
+        if choice == "3":
+            self.repl.console.print("[dim]Scan cancelled.[/dim]")
+            return None
+        if choice == "1":
+            # Prepend noir so it runs first in the tool loop.
+            return ["noir"] + [t for t in tools if t != "noir"]
+        # choice == "2": proceed with ZAP only
+        return tools
 
     # ------------------------------------------------------------------
     # Private — orchestrator factory and export

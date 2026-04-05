@@ -234,8 +234,8 @@ onMounted(async () => {
   try {
     const [config, codeFindings, webFindings] = await Promise.all([
       getConfig(),
-      getFindings({ domain: 'code' }),
-      getFindings({ domain: 'web' }),
+      getFindings({ domain: 'code', visualize_only: true }),
+      getFindings({ domain: 'web', visualize_only: true }),
     ])
     columnDefs.value = buildColumnDefs(config.editable_fields)
     rowData.push(...codeFindings, ...webFindings)

@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import socket
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,9 +18,22 @@ from infrastructure.tools.wrappers.base.zap import BaseZapTool
 
 
 class ZAPLocalTool(BaseZapTool):
-    """Wrapper for OWASP ZAP quick-scan (DAST) mode.
+    """Wrapper for OWASP ZAP DAST scanning.
 
-    Quick-scan MVP: ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
+    Supports two invocation modes:
+
+    **Quick-scan (default):**
+        ``zap.sh -cmd -quickurl <url> -quickprogress -quickout <file>``
+
+    **OpenAPI mode (when a Noir OAS3 file is available):**
+        ``zap.sh -cmd -openapifile <oas3_path> -openapitargeturl <url>``
+        ``        -quickprogress -quickout <file>``
+
+    OpenAPI mode is activated automatically by ``build_execution_passes``
+    when a Noir OAS3 output file exists for the target repository (discovered
+    via the ``tool_outputs/noir/`` directory).  It can also be triggered
+    explicitly by passing ``openapi_file`` in the kwargs handed to
+    ``build_command``.
     """
 
     def __init__(self, config=None) -> None:
@@ -43,7 +57,7 @@ class ZAPLocalTool(BaseZapTool):
         return shutil.which(self._zap_path)
 
     def build_command(self, **kwargs) -> list[str]:
-        """Build the ZAP quick-scan argv list.
+        """Build the ZAP scan argv list.
 
         Keyword Args:
             base_url (str): API base URL to scan. Required.
@@ -52,6 +66,9 @@ class ZAPLocalTool(BaseZapTool):
             api_type (str): ``"rest"`` or ``"graphql"`` (default: ``"rest"``).
             auth_token (Optional[str]): Bearer token for authenticated targets.
             output_file (Optional[str]): Filesystem path for the ZAP JSON report.
+            openapi_file (Optional[str]): Path to an OAS3 file produced by Noir.
+                When provided, ZAP imports the spec via ``-openapifile`` and
+                ``-openapitargeturl`` instead of using ``-quickurl`` mode.
         """
         base_url: str | None = kwargs.get("base_url")
         if not base_url:
@@ -68,9 +85,51 @@ class ZAPLocalTool(BaseZapTool):
         output_file = str(Path(output_file).resolve())
         self._last_report_path = Path(output_file)
 
+        openapi_file: str | None = kwargs.get("openapi_file")
+
+        # zap.sh cd's to its install dir before launching Java, so any relative
+        # path for openapi_file would be resolved there.  Always use absolute.
+        if openapi_file:
+            openapi_file = str(Path(openapi_file).resolve())
+
+        # ZAP defaults its HTTP proxy to port 8080, which may already be in use
+        # (e.g. by the tally web server or a scanned app).  Use a fresh isolated
+        # home directory (-dir) per scan so ZAP writes its own config.xml with
+        # the chosen port — this avoids TOCTOU races and any residual config from
+        # a previous run overriding our -port flag.
+        zap_home = str(Path(tempfile.gettempdir()) / f"zap_home_{os.getpid()}")
+        proxy_port = str(_find_free_port())
+
+        if openapi_file:
+            # OpenAPI mode: ZAP imports the OAS3 spec so it discovers all defined
+            # paths, then uses -quickurl to trigger the spider + active scan.
+            # Without -quickurl the scan does not execute and no report is written.
+            return [
+                self._zap_path,
+                "-cmd",
+                "-dir",
+                zap_home,
+                "-port",
+                proxy_port,
+                "-openapifile",
+                openapi_file,
+                "-openapitargeturl",
+                base_url,
+                "-quickurl",
+                base_url,
+                "-quickprogress",
+                "-quickout",
+                output_file,
+            ]
+
+        # Quick-scan mode: ZAP crawls the target URL directly.
         return [
             self._zap_path,
             "-cmd",
+            "-dir",
+            zap_home,
+            "-port",
+            proxy_port,
             "-quickurl",
             base_url,
             "-quickprogress",
@@ -96,6 +155,13 @@ class ZAPLocalTool(BaseZapTool):
         return parse_zap_json_string(output)
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        """Return one ExecutionPass for ZAP.
+
+        When a Noir OAS3 file exists for the target repository (written by a
+        prior Noir scan), it is passed as ``openapi_file`` so that ZAP uses
+        OpenAPI mode.  If no Noir output is found, ZAP falls back to
+        ``-quickurl`` mode.
+        """
         assert context.repo is not None
         output_dir = (
             Path(context.base_path)
@@ -107,12 +173,75 @@ class ZAPLocalTool(BaseZapTool):
         output_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{context.repo.name}_{ts}_report.json")
+
+        kwargs: dict[str, Any] = {
+            "base_url": context.repo.base_urls[0],
+            "output_file": output_file,
+        }
+
+        openapi_file = _find_noir_oas3(
+            context.base_path, context.project_name, context.repo.name
+        )
+        if openapi_file:
+            kwargs["openapi_file"] = openapi_file
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,
-                kwargs={
-                    "base_url": context.repo.base_urls[0],
-                    "output_file": output_file,
-                },
+                kwargs=kwargs,
             )
         ]
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_free_port() -> int:
+    """Ask the OS to assign a free TCP port and return it.
+
+    Uses ``socket.bind(("", 0))`` so the OS picks an available port.  There is
+    a small TOCTOU window between this call and ZAP starting, but in practice
+    scans run sequentially and the race is negligible.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def _find_noir_oas3(base_path: str, project_name: str, repo_name: str) -> str | None:
+    """Return the most recent Noir OAS3 file for *repo_name*, or ``None``.
+
+    Looks in ``projects/<project>/tool_outputs/noir/<repo>_*_oas3.json``
+    (the naming convention set by ``BaseNoirTool.build_execution_passes``).
+    Returns the lexicographically last match, which corresponds to the most
+    recent timestamp-prefixed filename.
+
+    Returns ``None`` when:
+    - the directory does not exist
+    - no matching files exist
+    - the most recent file has zero paths (empty spec)
+    - the most recent file cannot be read or parsed
+    """
+    import json
+
+    noir_dir = Path(base_path) / "projects" / project_name / "tool_outputs" / "noir"
+    if not noir_dir.exists():
+        return None
+    pattern = f"{repo_name}_*_oas3.json"
+    matches = sorted(noir_dir.glob(pattern))
+    if not matches:
+        return None
+
+    candidate = matches[-1]
+    try:
+        with open(candidate, encoding="utf-8") as fh:
+            data = json.load(fh)
+        paths = data.get("paths", {})
+        if not paths:
+            return None
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+    return str(candidate)

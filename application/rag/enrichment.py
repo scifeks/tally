@@ -330,7 +330,7 @@ class EnrichmentPipeline:
                 completed += 1
                 if self._console:
                     self._console.print(
-                        f"[dim]Enriching findings... {completed}/{n_work}[/dim]",
+                        f"[dim]    Enriching findings... {completed}/{n_work}[/dim]",
                         end="\r",
                     )
                 try:
@@ -348,7 +348,7 @@ class EnrichmentPipeline:
         if self._console:
             self._console.print()  # newline after \r progress
             msg = (
-                f"[dim]Enrichment complete."
+                f"[dim]    Enrichment complete."
                 f" {enriched_count}/{total} findings enriched.[/dim]"
             )
             self._console.print(msg)

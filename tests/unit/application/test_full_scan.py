@@ -73,7 +73,7 @@ class TestFullScan:
 
         with patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo:
             summary = FullScan(
-                exclude_segments=["sast", "sca", "secrets", "api"]
+                exclude_segments=["sast", "sca", "secrets", "web"]
             ).execute(mock_config, mock_resources)
 
         assert summary.total_tools_run == 0
@@ -117,7 +117,7 @@ class TestFullScan:
             ),
         ):
             mock_repo.return_value.execute.return_value = _zero_summary()
-            FullScan(exclude_segments=["sca", "secrets", "api"]).execute(
+            FullScan(exclude_segments=["sca", "secrets", "web"]).execute(
                 mock_config, mock_resources
             )
 
@@ -147,7 +147,7 @@ class TestFullScan:
             ),
         ):
             mock_repo.return_value.execute.return_value = sub
-            summary = FullScan(exclude_segments=["secrets", "api"]).execute(
+            summary = FullScan(exclude_segments=["secrets", "web"]).execute(
                 mock_config, mock_resources
             )
 

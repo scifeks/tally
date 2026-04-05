@@ -40,6 +40,10 @@ class BasePipAuditTool(ToolInterface):
         return False
 
     @property
+    def should_visualize(self) -> bool:
+        return True
+
+    @property
     def findings_exit_ok(self) -> bool:
         return True
 
@@ -75,11 +79,16 @@ class BasePipAuditTool(ToolInterface):
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
+        if not context.is_docker and not context.repo.dependencies_file:
+            return []  # local pip-audit requires a dependencies file — skip this repo
         repo_path = context.registry.get_repo_path(self.name, context.repo)
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,
-                kwargs={"repo_path": repo_path},
+                kwargs={
+                    "repo_path": repo_path,
+                    "dependencies_file": context.repo.dependencies_file,
+                },
                 cwd=repo_path,
             )
         ]

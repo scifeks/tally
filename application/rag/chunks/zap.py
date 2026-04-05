@@ -22,7 +22,7 @@ _ZAP_VERSION_ALERT_PREFIX = (
 class ZapHandler:
     tool_name = "zap"
     domain = "web"
-    segment = "api"
+    segment = "web"
     non_enriched_fields: frozenset[str] = frozenset(
         {"severity", "confidence", "remediation", "description"}
     )

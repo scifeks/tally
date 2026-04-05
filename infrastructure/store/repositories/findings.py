@@ -152,23 +152,73 @@ class FindingRepository:
     def delete_findings(self, tools: list[str] | None = None) -> None:
         """Delete findings from the store.
 
-        ``tools=None``   — DELETE all rows from findings, run_tools, run_repos,
-                           and runs.
-        ``tools=[...]``  — DELETE FROM findings WHERE tool IN (...).
-                           Does NOT delete run / run_tools / run_repos rows.
+        ``tools=None``   — DELETE all rows from all tables (findings, run_tools,
+                           run_repos, runs, triage_batches, tool_audit_log).
+        ``tools=[...]``  — DELETE findings, triage_batches, and tool_audit_log
+                           records for those tools only.
         """
+        if tools is not None:
+            return self.delete_findings_by_tool_name(tools)
+
         with self._factory.connect() as conn:
-            if tools is None:
-                conn.execute("DELETE FROM findings")
-                conn.execute("DELETE FROM run_tools")
-                conn.execute("DELETE FROM run_repos")
-                conn.execute("DELETE FROM runs")
-            else:
-                placeholders = ",".join("?" * len(tools))
+            conn.execute("DELETE FROM triage_batches")
+            conn.execute("DELETE FROM tool_audit_log")
+            conn.execute("DELETE FROM findings")
+            conn.execute("DELETE FROM run_tools")
+            conn.execute("DELETE FROM run_repos")
+            conn.execute("DELETE FROM runs")
+
+    def delete_findings_by_tool_name(self, tools: list[str]) -> None:
+        """Delete all records related to specific tool(s).
+
+        Deletes:
+        - Findings where tool IN (tools)
+        - Triage batches whose finding_ids are all from those findings
+        - Tool audit log entries for those tools
+
+        Does NOT delete: runs, run_tools, run_repos.
+        """
+        if not tools:
+            return
+
+        placeholders = ",".join("?" * len(tools))
+
+        with self._factory.connect() as conn:
+            # Collect finding IDs being deleted (for triage_batch cleanup)
+            rows = conn.execute(
+                f"SELECT id FROM findings WHERE tool IN ({placeholders})",
+                tools,
+            ).fetchall()
+            deleted_finding_ids = {row["id"] for row in rows}
+
+            conn.execute(
+                f"DELETE FROM findings WHERE tool IN ({placeholders})",
+                tools,
+            )
+
+            # Delete triage_batches where ALL finding_ids are in the deleted set
+            all_batches = conn.execute(
+                "SELECT id, finding_ids FROM triage_batches"
+            ).fetchall()
+            batch_ids_to_delete = []
+            for batch in all_batches:
+                batch_finding_ids = json.loads(batch["finding_ids"])
+                if batch_finding_ids and all(
+                    fid in deleted_finding_ids for fid in batch_finding_ids
+                ):
+                    batch_ids_to_delete.append(batch["id"])
+
+            if batch_ids_to_delete:
+                batch_placeholders = ",".join("?" * len(batch_ids_to_delete))
                 conn.execute(
-                    f"DELETE FROM findings WHERE tool IN ({placeholders})",
-                    tools,
+                    f"DELETE FROM triage_batches WHERE id IN ({batch_placeholders})",
+                    batch_ids_to_delete,
                 )
+
+            conn.execute(
+                f"DELETE FROM tool_audit_log WHERE tool_name IN ({placeholders})",
+                tools,
+            )
 
     def get_tool_meta_keys(
         self, tool_name: str, sample: int = 200

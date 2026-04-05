@@ -92,7 +92,9 @@ class IngestHandler(BaseHandler):
             rows: list[dict] = handler.normalize(result, event.profile)
 
             if handler.domain == "code":
-                if handler.segment == "sca":
+                if handler.segment in ("sca", "web"):
+                    # SCA and web-segment code tools (e.g. Noir) have no file path
+                    # to normalise; set repo directly from execution context.
                     if event.repo:
                         for row in rows:
                             row.setdefault("repo", event.repo)
@@ -104,6 +106,11 @@ class IngestHandler(BaseHandler):
                     except Exception:
                         repos = None
                     rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
+            else:
+                # web/network tools: set repo from execution context
+                if event.repo:
+                    for row in rows:
+                        row.setdefault("repo", event.repo)
 
             _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
             finding_repo.upsert_findings(event.run_id or 0, rows)

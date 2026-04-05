@@ -51,6 +51,10 @@ class _StubTool(ToolInterface):
     def skip(self) -> bool:
         return False
 
+    @property
+    def should_visualize(self) -> bool:
+        return True
+
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         return []
 

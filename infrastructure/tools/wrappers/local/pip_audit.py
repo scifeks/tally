@@ -26,11 +26,11 @@ class PipAuditLocalTool(BasePipAuditTool):
 
         Keyword Args:
             repo_path (str): Path to the repository to scan (required).
-
-        Runs pip-audit with no requirements flag so it audits the ambient
-        Python environment from the repository directory (cwd is set by
-        build_execution_passes). Avoids triggering venv creation which fails
-        for projects with Python 3.13-incompatible build dependencies.
+            dependencies_file (str): Local path to the dependencies file.
+                When set, passes ``-r <dependencies_file>`` to pip-audit to
+                scope the scan to declared dependencies.  The base class
+                ensures this is always non-empty for local runs (repos without
+                a dependencies file are skipped before reaching here).
         """
         repo_path: str | None = kwargs.get("repo_path")
         if not repo_path:
@@ -38,4 +38,8 @@ class PipAuditLocalTool(BasePipAuditTool):
         repo = Path(repo_path)
         if not repo.exists():
             raise ValueError(f"Repository path does not exist: {repo_path!r}")
-        return ["pip-audit", "--format", "json"]
+        dependencies_file: str = kwargs.get("dependencies_file", "")
+        cmd = ["pip-audit", "--format", "json"]
+        if dependencies_file:
+            cmd.extend(["-r", dependencies_file])
+        return cmd

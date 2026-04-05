@@ -248,6 +248,30 @@ class InteractiveProjectWizard:
             lang_input = _prompt(prompt_label, default=default_langs)
             langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
+            # Dependencies file — pip-audit scope, only relevant for Python repos
+            dependencies_file = existing.dependencies_file
+            if "python" in [lang.lower() for lang in langs]:
+                if mode == "docker":
+                    print(
+                        "  Note: if no dependencies file is provided, pip-audit will "
+                        "scan all packages installed in the container environment."
+                    )
+                    dependencies_file = _prompt(
+                        "  Python dependencies file"
+                        " (container path, e.g. /app/requirements.txt, optional)",
+                        default=existing.dependencies_file,
+                    )
+                else:
+                    print(
+                        "  Note: without a dependencies file, pip-audit will be "
+                        "skipped for this repository."
+                    )
+                    dependencies_file = _prompt(
+                        "  Python dependencies file"
+                        " (local path, e.g. requirements.txt, optional)",
+                        default=existing.dependencies_file,
+                    )
+
             # Base URLs
             current_urls = ", ".join(existing.base_urls) if existing.base_urls else ""
             url_input = _prompt(
@@ -296,6 +320,7 @@ class InteractiveProjectWizard:
                 base_urls=base_urls,
                 test_dirs=test_dirs,
                 ignore_dirs=ignore_dirs,
+                dependencies_file=dependencies_file,
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
@@ -523,6 +548,28 @@ class InteractiveProjectWizard:
         lang_input = _prompt(prompt_label, default=default_langs)
         langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
+        # Dependencies file — pip-audit scope, only relevant for Python repos
+        dependencies_file = ""
+        if "python" in [lang.lower() for lang in langs]:
+            if mode == "docker":
+                print(
+                    "  Note: if no dependencies file is provided, pip-audit will "
+                    "scan all packages installed in the container environment."
+                )
+                dependencies_file = _prompt(
+                    "  Python dependencies file"
+                    " (container path, e.g. /app/requirements.txt, optional)"
+                )
+            else:
+                print(
+                    "  Note: without a dependencies file, pip-audit will be "
+                    "skipped for this repository."
+                )
+                dependencies_file = _prompt(
+                    "  Python dependencies file"
+                    " (local path, e.g. requirements.txt, optional)"
+                )
+
         # Base URLs
         url_input = _prompt("  Base URLs (comma-separated, optional)")
         base_urls = [u.strip() for u in url_input.split(",") if u.strip()]
@@ -557,4 +604,5 @@ class InteractiveProjectWizard:
             base_urls=base_urls,
             test_dirs=test_dirs,
             ignore_dirs=ignore_dirs,
+            dependencies_file=dependencies_file,
         )

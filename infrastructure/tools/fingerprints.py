@@ -57,10 +57,21 @@ def _sca_fingerprint_key(tool_name: str, finding: dict[str, Any]) -> str:
     )
 
 
+def _noir_fingerprint_key(finding: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            "noir",
+            str(finding.get("method", "")),
+            str(finding.get("url", "")),
+        ]
+    )
+
+
 FINGERPRINT_REGISTRY: dict[str, Any] = {
     "gitleaks": _gitleaks_fingerprint_key,
     "semgrep": _semgrep_fingerprint_key,
     "zap": _zap_fingerprint_key,
+    "noir": _noir_fingerprint_key,
     "pip-audit": lambda f: _sca_fingerprint_key("pip-audit", f),
     "npm-audit": lambda f: _sca_fingerprint_key("npm-audit", f),
     "composer-audit": lambda f: _sca_fingerprint_key("composer-audit", f),

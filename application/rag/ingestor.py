@@ -24,6 +24,7 @@ class ToolHandler(Protocol):
     non_enriched_fields: frozenset[str]
     type_flags: dict[str, set[str]]
     should_enrich: bool
+    should_visualize: bool
     enrichment_fields: tuple[FieldEnrichmentSpec, ...] | None
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]: ...

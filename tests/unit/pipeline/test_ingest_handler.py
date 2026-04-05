@@ -210,3 +210,99 @@ class TestIngestHandler:
 
         mock_filter.assert_not_called()
         assert received[0].ids == [42]
+
+    def test_code_web_segment_tool_skips_filter_code_rows(self) -> None:
+        """filter_code_rows is NOT called for code-domain web-segment tools (noir).
+
+        Noir produces URL findings, not file-path findings, so the file-path
+        normalisation step must be skipped entirely.  Instead, the repo is set
+        directly from the event's repo field.
+        """
+        bus = EventBus()
+        received: list[IngestCompleted] = []
+        bus.subscribe(IngestCompleted, received.append)
+
+        mock_handler = MagicMock()
+        mock_handler.domain = "code"
+        mock_handler.segment = "web"
+        mock_handler.normalize.return_value = [
+            {"tool": "noir", "url": "/api/users", "method": "GET"},
+        ]
+
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_ids_by_fingerprints.return_value = [99]
+
+        handler = IngestHandler(bus)
+        with (
+            patch(
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_handler,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+            patch(
+                "application.pipeline.handlers.filter_code_rows",
+            ) as mock_filter,
+        ):
+            handler.handle(
+                _tool_completed(
+                    result=_make_tool_result("noir"),
+                    profile="dvna",
+                )
+            )
+
+        mock_filter.assert_not_called()
+        assert received[0].ids == [99]
+
+    def test_code_web_segment_sets_repo_from_event(self) -> None:
+        """For code-domain/web-segment tools, repo is set from event.repo."""
+        from domain.pipeline.events import ToolCompleted
+
+        bus = EventBus()
+        bus.subscribe(IngestCompleted, lambda _: None)
+
+        row: dict = {"tool": "noir", "url": "/api/users", "method": "GET"}
+
+        mock_handler = MagicMock()
+        mock_handler.domain = "code"
+        mock_handler.segment = "web"
+        mock_handler.normalize.return_value = [row]
+
+        mock_finding_repo = MagicMock()
+        mock_finding_repo.get_ids_by_fingerprints.return_value = [1]
+
+        event = ToolCompleted(
+            result=_make_tool_result("noir"),
+            profile="dvna",
+            run_id=1,
+            project_name="test-proj",
+            base_path="/tmp",
+            repo="dvna",
+        )
+
+        handler = IngestHandler(bus)
+        with (
+            patch(
+                "application.pipeline.handlers.ToolHandlerFactory.load",
+                return_value=mock_handler,
+            ),
+            patch(
+                "application.pipeline.handlers.make_store",
+                return_value=(
+                    MagicMock(),
+                    mock_finding_repo,
+                    MagicMock(),
+                    MagicMock(),
+                ),
+            ),
+        ):
+            handler.handle(event)
+
+        assert row.get("repo") == "dvna"

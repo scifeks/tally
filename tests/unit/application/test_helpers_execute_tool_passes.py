@@ -67,7 +67,7 @@ class TestExecuteToolPassesApproval:
             )
 
         # Only the "Run X?" prompt should have been asked — not "Approve all remaining?"
-        mock_input.assert_called_once_with(f"Run {tool.name}? [y/N]: ")
+        mock_input.assert_called_once_with(f"  Run {tool.name}? [y/N]: ")
         assert result is not None
         assert config.auto_approve is False
 
@@ -83,7 +83,9 @@ class TestExecuteToolPassesApproval:
             )
 
         assert mock_input.call_count == 2
-        assert mock_input.call_args_list[1] == call("Approve all remaining? [y/N]: ")
+        assert mock_input.call_args_list[1] == call(
+            "    Approve all remaining? [y/N]: "
+        )
         assert result is not None
         assert config.auto_approve is False  # user answered 'n' to approve-all
 
@@ -163,6 +165,20 @@ class TestExecuteToolPassesApproval:
 
         assert result is not None
         assert config.auto_approve is False
+
+
+class TestExecuteToolPassesSkip:
+    def test_empty_pass_list_returns_none(self) -> None:
+        """Empty pass list signals skip — execute_tool_passes returns None."""
+        config = _make_config(auto_approve=True)
+        tool = _make_tool()
+        tool.build_execution_passes.return_value = []
+        executor = MagicMock()
+
+        result = execute_tool_passes(tool, MagicMock(), config, executor)
+
+        assert result is None
+        executor.run.assert_not_called()
 
 
 class TestExecuteToolPassesOrchestratorIntegration:

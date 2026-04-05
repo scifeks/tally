@@ -16,7 +16,7 @@ class BaseZapTool(ToolInterface):
 
     @property
     def category(self) -> str:
-        return "api"
+        return "web"
 
     @property
     def scope(self) -> str:
@@ -28,11 +28,15 @@ class BaseZapTool(ToolInterface):
 
     @property
     def scan_segment(self) -> str:
-        return "api"
+        return "web"
 
     @property
     def skip(self) -> bool:
         return False
+
+    @property
+    def should_visualize(self) -> bool:
+        return True
 
     @property
     def findings_exit_ok(self) -> bool:

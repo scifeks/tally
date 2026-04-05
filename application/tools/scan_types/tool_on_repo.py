@@ -61,6 +61,12 @@ class ToolOnRepoScan(ScanType):
         if not tool.check_available():
             raise ValueError(f"Tool '{self.tool_name}' is not installed.")
 
+        if tool.requires_base_urls and not repo.base_urls:
+            raise ValueError(
+                f"Tool '{self.tool_name}' requires base_urls but none are"
+                f" configured for repository '{repo.name}'."
+            )
+
         resources.display.print_scan_header(
             f"Repo Tool Scan: {repo.name} — {self.tool_name}"
         )
@@ -98,6 +104,17 @@ class ToolOnRepoScan(ScanType):
             findings_by_tool = {result.tool_name: findings}
             if result.success:
                 total_run += 1
+                total_ingested += dispatch_and_count_ingested(
+                    resources.event_bus,
+                    ToolCompleted(
+                        result,
+                        repo.name,
+                        config.run_id,
+                        config.project_name,
+                        config.base_path,
+                        repo=repo.name,
+                    ),
+                )
                 resources.display.print_tool_line(
                     ToolDisplayRow(
                         self.tool_name,
@@ -107,8 +124,28 @@ class ToolOnRepoScan(ScanType):
                         result.duration_seconds,
                     )
                 )
+                if self.tool_name == "noir" and findings == 0:
+                    resources.display.print_status(
+                        "    [yellow]⚠ noir found 0 endpoints. "
+                        "The framework may not be supported by noir.[/yellow]"
+                    )
+                    resources.display.print_status(
+                        "    [dim]ZAP will fall back to spider-only "
+                        "mode for this repository.[/dim]"
+                    )
             else:
                 total_failed += 1
+                total_ingested += dispatch_and_count_ingested(
+                    resources.event_bus,
+                    ToolCompleted(
+                        result,
+                        repo.name,
+                        config.run_id,
+                        config.project_name,
+                        config.base_path,
+                        repo=repo.name,
+                    ),
+                )
                 resources.display.print_tool_line(
                     ToolDisplayRow(
                         self.tool_name, False, False, 0, result.duration_seconds
@@ -116,18 +153,6 @@ class ToolOnRepoScan(ScanType):
                 )
 
         duration = round(perf_counter() - start, 1)
-        for r in results:
-            total_ingested += dispatch_and_count_ingested(
-                resources.event_bus,
-                ToolCompleted(
-                    r,
-                    repo.name,
-                    config.run_id,
-                    config.project_name,
-                    config.base_path,
-                    repo=repo.name,
-                ),
-            )
         rows = [
             ToolDisplayRow(
                 tool_name=r.tool_name,
