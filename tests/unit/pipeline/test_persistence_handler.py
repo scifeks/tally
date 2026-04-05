@@ -81,7 +81,10 @@ class TestChromaDBHandler:
 
         mock_engine.delete_findings.assert_called_once_with("nmap", "default")
         mock_engine.add_documents.assert_called_once_with(
-            texts=["nmap row 1", "nmap row 2"],
+            texts=[
+                "Repository: default | nmap row 1",
+                "Repository: default | nmap row 2",
+            ],
             metadatas=[
                 {"tool": "nmap", "profile": "default"},
                 {"tool": "nmap", "profile": "default"},

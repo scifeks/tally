@@ -141,6 +141,7 @@ class TestPhase4ChromaDBWrite:
         assert doc is not None
         assert "[semgrep]" in doc["document"]
         assert "src/api/users.py" in doc["document"]
+        assert "Repository: " in doc["document"]
 
     def test_delete_then_add_on_rerun(self, phase4_env: dict) -> None:
         """Second dispatch replaces existing ChromaDB docs for the same tool/profile."""
