@@ -40,8 +40,9 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        # inputs: name, type, mode, path, languages, base_urls, test_dirs, ignore_dirs
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", ""]
+        # inputs: name, type, mode, path, languages, dependencies_file, base_urls,
+        #         test_dirs, ignore_dirs
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
@@ -62,6 +63,7 @@ class TestInterviewSingleRepo:
             "/mnt/repo",
             str(repo_dir),
             "python",
+            "",  # dependencies_file
             "",
             "",
             "",
@@ -85,6 +87,7 @@ class TestInterviewSingleRepo:
             "local",
             str(repo_dir),
             "python",
+            "",  # dependencies_file
             "",
             "",
             "",
@@ -106,6 +109,7 @@ class TestInterviewSingleRepo:
             "/no/such/path",
             str(repo_dir),
             "python",
+            "",  # dependencies_file
             "",
             "",
             "",
@@ -121,8 +125,8 @@ class TestInterviewSingleRepo:
         (repo_dir / "tests").mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        # last two "" accept defaults for test_dirs and ignore_dirs
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", ""]
+        # "" for dependencies_file; last two "" accept defaults
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
@@ -142,6 +146,7 @@ class TestInterviewSingleRepo:
             "local",
             str(repo_dir),
             "python",
+            "",  # dependencies_file
             "",
             "spec, e2e",
             "",
@@ -157,7 +162,7 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", ""]
+        inputs = ["my-repo", "api", "local", str(repo_dir), "python", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
@@ -175,6 +180,7 @@ class TestInterviewSingleRepo:
             "local",
             str(repo_dir),
             "python",
+            "",  # dependencies_file
             "",
             "",
             "vendor, node_modules",
@@ -196,6 +202,7 @@ class TestInterviewSingleRepo:
             "local",
             str(repo_dir),
             "python",
+            "",  # dependencies_file
             "",
             "tests",
             "vendor, mocks",
