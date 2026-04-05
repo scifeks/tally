@@ -15,6 +15,7 @@ class ToolResult:
     timestamp: str
     duration_seconds: float
     finding_count: int = 0
+    repo: str = ""
 
     @staticmethod
     def now_iso() -> str:

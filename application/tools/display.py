@@ -69,8 +69,11 @@ class OrchestratorDisplay:
         rows = [r for r in rows if not r.skipped]
         if not rows:
             return
+        show_repo = any(r.repo for r in rows)
         table = Table(title=None, show_header=True, header_style="bold")
         table.add_column("Tool", style="cyan")
+        if show_repo:
+            table.add_column("Repo", style="cyan")
         table.add_column("Status", style="white")
         table.add_column("Findings", style="white")
         table.add_column("Duration", style="white")
@@ -78,7 +81,10 @@ class OrchestratorDisplay:
             status = "pass" if r.success else "fail"
             findings = str(r.finding_count)
             dur = f"{r.duration_seconds:.1f}s"
-            table.add_row(r.tool_name, status, findings, dur)
+            if show_repo:
+                table.add_row(r.tool_name, r.repo, status, findings, dur)
+            else:
+                table.add_row(r.tool_name, status, findings, dur)
         self.console.print()
         self.console.print(table)
 

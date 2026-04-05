@@ -36,6 +36,7 @@ class ToolOnAllReposScan(ScanType):
                 skipped=False,
                 finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
+                repo=r.repo,
             )
             for r in seg_summary.results
         ]

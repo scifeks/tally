@@ -45,15 +45,18 @@ class FullScan(ScanType):
                     f"[dim]Skipping segment: {segment}[/dim]"
                 )
                 continue
-            config.remaining_peers = len(active_segments) - seg_idx - 1
-            seg_idx += 1
-            resources.display.print_segment_header(segment)
-
             seg_tools = tools_for_segment(
                 segment, cast(ToolRegistry, resources.registry)
             )
             if self.exclude_tools:
                 seg_tools = [t for t in seg_tools if t not in self.exclude_tools]
+
+            if not seg_tools:
+                continue
+
+            config.remaining_peers = len(active_segments) - seg_idx - 1
+            seg_idx += 1
+            resources.display.print_segment_header(segment)
 
             seg_summary = RepoSegmentScan(seg_tools).execute(config, resources)
 
@@ -73,6 +76,7 @@ class FullScan(ScanType):
                 skipped=False,
                 finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
+                repo=r.repo,
             )
             for r in all_results
         ]

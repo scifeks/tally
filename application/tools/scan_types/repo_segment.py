@@ -151,6 +151,7 @@ class RepoSegmentScan(ScanType):
                     total_skipped += 1
                 else:
                     result = normalize_success(result, tool)
+                    result.repo = repo.name
                     repo_results.append(result)
                     findings = tool.count_findings(result.parsed_data or {})
                     result.finding_count = findings

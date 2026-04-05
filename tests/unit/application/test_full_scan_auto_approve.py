@@ -58,9 +58,14 @@ class TestFullScanRemainingPeers:
         active = [s for s in SEGMENT_ORDER]
         assert len(active) >= 2, "Need ≥2 segments for this test to be meaningful"
 
-        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
+        with (
+            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
+            patch(
+                "application.tools.scan_types.full.tools_for_segment",
+                return_value=["semgrep"],
+            ),
+        ):
             MockRepo.return_value.execute.side_effect = _fake_execute
-
             FullScan().execute(config, resources)
 
         assert len(captured) == len(active)
@@ -87,9 +92,14 @@ class TestFullScanRemainingPeers:
                 findings_by_tool={},
             )
 
-        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
+        with (
+            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
+            patch(
+                "application.tools.scan_types.full.tools_for_segment",
+                return_value=["semgrep"],
+            ),
+        ):
             MockRepo.return_value.execute.side_effect = _fake_execute
-
             FullScan().execute(config, resources)
 
         assert captured[-1] == 0, "Last segment must have remaining_peers == 0"
@@ -112,9 +122,14 @@ class TestFullScanRemainingPeers:
                 findings_by_tool={},
             )
 
-        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
+        with (
+            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
+            patch(
+                "application.tools.scan_types.full.tools_for_segment",
+                return_value=["semgrep"],
+            ),
+        ):
             MockRepo.return_value.execute.side_effect = _fake_execute
-
             FullScan().execute(config, resources)
 
         for i in range(len(captured) - 1):
@@ -143,7 +158,13 @@ class TestFullScanRemainingPeers:
         excluded = []
         active = [s for s in SEGMENT_ORDER if s not in excluded]
 
-        with patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo:
+        with (
+            patch("application.tools.scan_types.full.RepoSegmentScan") as MockRepo,
+            patch(
+                "application.tools.scan_types.full.tools_for_segment",
+                return_value=["semgrep"],
+            ),
+        ):
             MockRepo.return_value.execute.side_effect = _fake_execute
             FullScan(exclude_segments=excluded).execute(config, resources)
 

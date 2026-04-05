@@ -99,6 +99,7 @@ class ToolOnRepoScan(ScanType):
             total_skipped += 1
         else:
             result = normalize_success(result, tool)
+            result.repo = repo.name
             results.append(result)
             findings = tool.count_findings(result.parsed_data or {})
             result.finding_count = findings
@@ -161,6 +162,7 @@ class ToolOnRepoScan(ScanType):
                 skipped=False,
                 finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
+                repo=r.repo,
             )
             for r in results
         ]
