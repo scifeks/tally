@@ -109,6 +109,7 @@ Tally first asks for the execution mode, then collects the appropriate paths.
 - **Mode** — `local` (default) or `docker`
 - **Local path** — absolute filesystem path on the host (required in all modes)
 - **Languages** — comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
+- **Dependencies file** — for Python repos, path to a dependencies file for pip-audit (optional; if omitted, pip-audit is skipped in local mode)
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 
 ```
@@ -119,6 +120,8 @@ Repository #1:
   Mode [local/docker] [local]:
   Local path: /home/user/projects/acme/api
   Languages (detected python) [python]:
+  Note: without a dependencies file, pip-audit will be skipped for this repository.
+  Python dependencies file (local path, e.g. requirements.txt, optional): requirements.txt
   Base URLs (comma-separated, optional):
 ✓ Repository 'api-server' added to project 'acme-security-audit'
 ```
@@ -136,6 +139,8 @@ Repository #1:
   Docker mount point (path inside container): /mnt/api
   Local path (required for language detection and local tool execution): /home/user/projects/acme/api
   Languages (detected python) [python]:
+  Note: if no dependencies file is provided, pip-audit will scan all packages installed in the container environment.
+  Python dependencies file (container path, e.g. /app/requirements.txt, optional): /app/requirements.txt
   Base URLs (comma-separated, optional):
 ✓ Repository 'api-server' added to project 'acme-security-audit'
 ```

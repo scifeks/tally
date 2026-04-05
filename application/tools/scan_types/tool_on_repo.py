@@ -101,6 +101,7 @@ class ToolOnRepoScan(ScanType):
             result = normalize_success(result, tool)
             results.append(result)
             findings = tool.count_findings(result.parsed_data or {})
+            result.finding_count = findings
             findings_by_tool = {result.tool_name: findings}
             if result.success:
                 total_run += 1
@@ -158,7 +159,7 @@ class ToolOnRepoScan(ScanType):
                 tool_name=r.tool_name,
                 success=r.success,
                 skipped=False,
-                finding_count=findings_by_tool.get(r.tool_name, 0),
+                finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
             )
             for r in results

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from infrastructure.tools.parsers.noir_parser import (
+    is_vendor_or_dependency_path,
     parse_noir_json,
     parse_noir_json_string,
 )
@@ -33,6 +34,9 @@ class NoirLocalTool(BaseNoirTool):
     def __init__(self, config=None) -> None:
         # Stores the OAS3 output path between build_command and parse_output.
         self._last_report_path: Path | None = None
+        # Stores detected dependency path prefixes between build_command and
+        # parse_output.
+        self._exclude_path_prefixes: list[str] = []
 
     @property
     def command(self) -> str:
@@ -77,6 +81,11 @@ class NoirLocalTool(BaseNoirTool):
         raw_techs = kwargs.get("techs")
         techs: list[str] = list(raw_techs) if isinstance(raw_techs, list) else []
 
+        raw_prefixes = kwargs.get("exclude_path_prefixes")
+        self._exclude_path_prefixes = (
+            list(raw_prefixes) if isinstance(raw_prefixes, list) else []
+        )
+
         cmd = [
             "noir",
             "-b",
@@ -107,13 +116,51 @@ class NoirLocalTool(BaseNoirTool):
         try:
             if self._last_report_path is not None and self._last_report_path.exists():
                 parsed = parse_noir_json(self._last_report_path)
-                endpoints = parsed.get("endpoints", [])
-                if not endpoints and self._last_report_path.exists():
-                    self._last_report_path.unlink()
-                return parsed
-            json_path = files.get("stdout")
-            if json_path is not None and json_path.exists():
-                return parse_noir_json(json_path)
-            return parse_noir_json_string(output)
+            else:
+                json_path = files.get("stdout")
+                if json_path is not None and json_path.exists():
+                    parsed = parse_noir_json(json_path)
+                else:
+                    parsed = parse_noir_json_string(output)
+
+            parsed = self._filter_dependency_endpoints(parsed)
+
+            if (
+                not parsed.get("endpoints")
+                and self._last_report_path is not None
+                and self._last_report_path.exists()
+            ):
+                self._last_report_path.unlink()
+
+            return parsed
         finally:
             self._last_report_path = None
+            self._exclude_path_prefixes = []
+
+    def _filter_dependency_endpoints(self, parsed: dict) -> dict:
+        """Remove dependency/vendor endpoints from parsed OAS3 data.
+
+        Applies dynamic prefixes detected from the repo's package manager files
+        first, then falls back to the static vendor-indicator list.  Updates
+        ``summary.total_endpoints`` to match the filtered count.
+        """
+        endpoints = parsed.get("endpoints", [])
+        filtered = [
+            ep for ep in endpoints if not self._is_excluded_path(ep.get("path") or "")
+        ]
+        if len(filtered) == len(endpoints):
+            return parsed
+        parsed = dict(parsed)
+        parsed["endpoints"] = filtered
+        summary = dict(parsed.get("summary") or {})
+        summary["total_endpoints"] = len(filtered)
+        parsed["summary"] = summary
+        return parsed
+
+    def _is_excluded_path(self, path: str) -> bool:
+        """Return True if the endpoint path should be excluded."""
+        path_lower = path.lower()
+        for prefix in self._exclude_path_prefixes:
+            if prefix.lower() in path_lower:
+                return True
+        return is_vendor_or_dependency_path(path)

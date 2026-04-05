@@ -231,11 +231,15 @@ Stores the list of repositories configured for the project.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Short identifier used in commands (e.g. `api-server`). |
+| `type` | array of string | yes | Repository type(s): `library`, `api`, `ui`. `library` is mutually exclusive with other types. |
 | `path` | string | yes | Absolute filesystem path to the repository on the host. Required in all modes — used for language detection and locally-executed tools. |
 | `docker_path` | string | no | Mount path for the repository inside Docker containers. Set when any tool runs in Docker mode. |
 | `container_name` | string | yes (Docker) | Name of the running Docker container (as shown by `docker ps`). Required when `docker_path` is set. |
 | `languages` | array of string | yes | Programming languages in the repo (e.g. `["python", "javascript"]`). Used to select SCA tools. |
 | `base_urls` | array of string | no | API base URLs for ZAP scanning (e.g. `["http://localhost:8080"]`). Empty list disables ZAP for this repo. |
+| `test_dirs` | array of string | no | Directory names treated as test directories (matched by name at any depth, case-insensitive). Findings in these directories are excluded from SAST and secrets results. |
+| `ignore_dirs` | array of string | no | Directory names to exclude from SAST and secrets scans (matched by name at any depth, case-insensitive). |
+| `dependencies_file` | string | no | Path to a Python dependencies file for pip-audit. See [pip-audit dependency file](tools.md#pip-audit-dependency-file) for details. |
 
 Supported language values for SCA tool selection:
 - `python` → pip-audit
@@ -249,12 +253,15 @@ Supported language values for SCA tool selection:
   "repositories": [
     {
       "name": "api-server",
+      "type": ["api"],
       "path": "/home/user/projects/acme/api",
       "languages": ["python"],
-      "base_urls": ["http://localhost:8080"]
+      "base_urls": ["http://localhost:8080"],
+      "dependencies_file": "requirements.txt"
     },
     {
       "name": "frontend",
+      "type": ["ui"],
       "path": "/home/user/projects/acme/frontend",
       "languages": ["javascript", "typescript"],
       "base_urls": []

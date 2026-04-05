@@ -14,6 +14,7 @@ class ToolResult:
     output_files: dict[str, Path]
     timestamp: str
     duration_seconds: float
+    finding_count: int = 0
 
     @staticmethod
     def now_iso() -> str:

@@ -30,31 +30,6 @@ from domain.tools.base import ToolResult
 
 from ._shared import _first_output_file, _shared_meta
 
-_VENDOR_INDICATORS: frozenset[str] = frozenset(
-    {
-        "/vendor/",
-        "/node_modules/",
-        "/venv/",
-        "/.venv/",
-        "/site-packages/",
-        "/__pycache__/",
-        "/.git/",
-        "/build/",
-        "/dist/",
-    }
-)
-
-
-def _is_vendor_or_dependency_path(path: str) -> bool:
-    """Return True if *path* looks like a vendor/dependency directory path.
-
-    These are paths that Noir may surface when scanning PHP, Node.js, or
-    Python projects that include dependency trees in the repository root.
-    They are not application endpoints and should be excluded from findings.
-    """
-    path_lower = path.lower()
-    return any(indicator in path_lower for indicator in _VENDOR_INDICATORS)
-
 
 def _uri_only(raw: str) -> str:
     """Strip scheme, host, and port from *raw*, returning only the path+query+fragment.
@@ -108,10 +83,6 @@ class NoirHandler:
 
         for endpoint in endpoints:
             path: str = endpoint.get("path") or ""
-
-            if _is_vendor_or_dependency_path(path):
-                continue
-
             method: str = (endpoint.get("method") or "").upper()
 
             all_params: list[dict[str, Any]] = (

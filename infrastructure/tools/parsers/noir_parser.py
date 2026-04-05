@@ -18,6 +18,29 @@ _OAS3_METHODS: frozenset[str] = frozenset(
     {"get", "post", "put", "delete", "patch", "head", "options", "trace"}
 )
 
+# Path segments that indicate vendor/dependency directories.
+# Shared with NoirHandler.normalize and BaseNoirTool.count_findings so the
+# vendor-exclusion logic is applied consistently.
+VENDOR_INDICATORS: frozenset[str] = frozenset(
+    {
+        "/vendor/",
+        "/node_modules/",
+        "/venv/",
+        "/.venv/",
+        "/site-packages/",
+        "/__pycache__/",
+        "/.git/",
+        "/build/",
+        "/dist/",
+    }
+)
+
+
+def is_vendor_or_dependency_path(path: str) -> bool:
+    """Return True if *path* looks like a vendor/dependency directory path."""
+    path_lower = path.lower()
+    return any(indicator in path_lower for indicator in VENDOR_INDICATORS)
+
 
 # ---------------------------------------------------------------------------
 # Public API

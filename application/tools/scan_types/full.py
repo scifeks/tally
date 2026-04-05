@@ -62,7 +62,7 @@ class FullScan(ScanType):
                 tool_name=r.tool_name,
                 success=r.success,
                 skipped=False,
-                finding_count=merged_fbt.get(r.tool_name, 0),
+                finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
             )
             for r in all_results

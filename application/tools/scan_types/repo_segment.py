@@ -153,6 +153,7 @@ class RepoSegmentScan(ScanType):
                     result = normalize_success(result, tool)
                     repo_results.append(result)
                     findings = tool.count_findings(result.parsed_data or {})
+                    result.finding_count = findings
                     findings_by_tool[result.tool_name] = (
                         findings_by_tool.get(result.tool_name, 0) + findings
                     )

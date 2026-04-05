@@ -34,7 +34,7 @@ class ToolOnAllReposScan(ScanType):
                 tool_name=r.tool_name,
                 success=r.success,
                 skipped=False,
-                finding_count=seg_summary.findings_by_tool.get(r.tool_name, 0),
+                finding_count=r.finding_count,
                 duration_seconds=r.duration_seconds,
             )
             for r in seg_summary.results
