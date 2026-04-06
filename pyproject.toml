@@ -80,4 +80,5 @@ markers = [
   "requires_gitleaks: marks tests that need gitleaks installed",
   "integration: marks tests that require real SQLite / filesystem / ChromaDB",
   "e2e: marks tests that require external services such as Ollama or real binaries",
+  "local_only: marks tests that must only run locally (never in CI)",
 ]
