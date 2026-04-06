@@ -57,14 +57,16 @@ quickscan mode for Node.js repositories.
 
 This flag can be set or cleared at any time with `repo edit <name>`.
 
-#### Planned: OAS3 / OAS2 / Postman file support
+#### Endpoint file support
 
-A future release will allow you to configure a path to a pre-existing
-endpoint collection file (OAS3 JSON/YAML, OAS2/Swagger JSON, or a Postman
-collection) directly on the repository. When set, Tally will pass that file
-to ZAP in place of a Noir-generated spec, bypassing Noir entirely. This will
-provide a clean workaround for Node.js apps and for any project that already
-maintains an OpenAPI spec or Postman collection.
+You can configure a path to an existing endpoint definition file (OAS3,
+OAS2/Swagger, Postman collection, or HAR) on a repository using `repo add`
+or `repo edit`. When set, Tally converts the file to OAS3 and passes it to
+ZAP in place of a Noir-generated spec, bypassing Noir entirely. This works
+for Node.js apps and for any project that already maintains an API spec.
+
+See [docs/endpoint-files.md](endpoint-files.md) for supported formats,
+setup instructions, and a description of how conversion works.
 
 ---
 
