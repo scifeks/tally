@@ -112,6 +112,11 @@ Tally first asks for the execution mode, then collects the appropriate paths.
 - **Node.js app** — shown when JavaScript or TypeScript is detected; see below
 - **Dependencies file** — for Python repos, path to a dependencies file for pip-audit (optional; if omitted, pip-audit is skipped in local mode)
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
+- **Endpoint definition file** — an optional path to an existing API spec (OAS3,
+  OAS2/Swagger, Postman collection, or HAR). When provided, Tally converts the
+  file to OAS3 so ZAP can use it during scans instead of running Noir. See
+  [docs/endpoint-files.md](endpoint-files.md) for supported formats and a full
+  walkthrough.
 
 ```
 [acme-security-audit]> repo add
@@ -162,11 +167,11 @@ The reason for this flag is a known defect in Noir's JavaScript parser that
 causes it to loop indefinitely on complex Node.js codebases and produce no
 output. Skipping Noir avoids a silent, wasted scan step.
 
-**Workaround (planned):** A future release will let you configure a path to a
-pre-existing OAS3, OAS2/Swagger, or Postman collection file on the repository.
-When set, Tally will pass it directly to ZAP, bypassing Noir entirely — which
-gives Node.js apps (and any project that maintains its own API spec) the same
-endpoint-guided scanning that Noir provides for other stacks.
+**Workaround available:** Configure a path to an existing endpoint definition
+file (OAS3, OAS2/Swagger, Postman collection, or HAR) using `repo add` or
+`repo edit`. When set, Tally converts the file to OAS3 and passes it directly
+to ZAP, bypassing Noir entirely. See [docs/endpoint-files.md](endpoint-files.md)
+for supported formats and setup instructions.
 
 To set or clear the `node_app` flag after a repository has been created:
 
@@ -343,6 +348,13 @@ If you have only one repository, `scan` (no flags) already targets it.
 [acme-security-audit]> scan --tool=semgrep --domain=code
 [acme-security-audit]> scan --repo=api-server --skip-tools=zap
 ```
+
+### Noir and endpoint files
+
+When a repository has an endpoint file configured, Noir is skipped automatically
+and ZAP uses the configured file instead. The "run Noir first" prompt is not
+shown for those repositories. See [docs/endpoint-files.md](endpoint-files.md)
+for details.
 
 ### Docker vs Local Execution
 

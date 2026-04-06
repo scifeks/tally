@@ -144,6 +144,9 @@ class InteractiveProjectWizard:
             repo = self._interview_single_repo(idx)
             if repo is None:
                 return None
+            # Convert endpoint file if one was provided
+            if repo.oas3_path:
+                repo = self._convert_and_set_oas3_path(project_name, repo)
             existing.append(repo)
             self._manager.config.save_repositories(project_name, existing)
             print(f"\n✓ Repository '{repo.name}' added to project '{project_name}'")
@@ -331,6 +334,80 @@ class InteractiveProjectWizard:
             )
             ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
+            # Endpoint definition file
+            oas3_path = existing.oas3_path
+            if existing.oas3_path:
+                print(f"  Current endpoint file: {existing.oas3_path}")
+                replace_ans = _prompt(
+                    "  Replace endpoint file? [y/N]", default="N"
+                ).lower()
+                if replace_ans in ("y", "yes"):
+                    _old = Path(existing.oas3_path)
+                    _old.unlink(missing_ok=True)
+                    _orig_dir = (
+                        self._manager.base_path
+                        / "projects"
+                        / project_name
+                        / "endpoints"
+                        / "original"
+                    )
+                    for _f in _orig_dir.glob("*"):
+                        _f.unlink(missing_ok=True)
+                    oas3_path = ""
+                    print(
+                        "  Warning: when an endpoint file is configured, Noir"
+                        " is skipped and ZAP relies entirely on that file."
+                        " ZAP results will be less accurate if the file is"
+                        " incomplete."
+                    )
+                    endpoint_input = _prompt(
+                        "  New endpoint definition file path (optional)"
+                    )
+                else:
+                    endpoint_input = ""
+            else:
+                print(
+                    "  Supported endpoint file formats:"
+                    " OAS3 (.json/.yaml), OAS2/Swagger (.json/.yaml),"
+                    " Postman Collection v2/v2.1 (.json), HAR (.har)"
+                )
+                print(
+                    "  Warning: when an endpoint file is configured, Noir"
+                    " is skipped and ZAP relies entirely on that file."
+                    " ZAP results will be less accurate if the file is"
+                    " incomplete."
+                )
+                endpoint_input = _prompt("  Endpoint definition file path (optional)")
+
+            if endpoint_input:
+                from infrastructure.endpoints.converters import (
+                    ConverterError,
+                    convert_endpoint_file,
+                )
+
+                try:
+                    src = Path(endpoint_input).expanduser().resolve()
+                    if not src.exists():
+                        raise FileNotFoundError(str(src))
+                    endpoints_dir = (
+                        self._manager.base_path
+                        / "projects"
+                        / project_name
+                        / "endpoints"
+                    )
+                    originals_dir = endpoints_dir / "original"
+                    oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
+                    oas3_path = str(oas3_file)
+                    print(f"\n  ✓ Endpoint file converted: {oas3_file}")
+                except ConverterError as exc:
+                    print(f"\n  Endpoint file error: {exc}")
+                    print("  Keeping existing endpoint file configuration.")
+                    oas3_path = existing.oas3_path
+                except FileNotFoundError:
+                    print(f"\n  File not found: {endpoint_input}")
+                    print("  Keeping existing endpoint file configuration.")
+                    oas3_path = existing.oas3_path
+
             updated = Repository(
                 name=name,
                 type=types,
@@ -343,6 +420,7 @@ class InteractiveProjectWizard:
                 test_dirs=test_dirs,
                 ignore_dirs=ignore_dirs,
                 dependencies_file=dependencies_file,
+                oas3_path=oas3_path,
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
@@ -352,6 +430,39 @@ class InteractiveProjectWizard:
         except KeyboardInterrupt:
             print("\n\n[Cancelled]")
             return None
+
+    def _convert_and_set_oas3_path(
+        self,
+        project_name: str,
+        repo: Repository,
+    ) -> Repository:
+        """Convert the pending endpoint file and update repo.oas3_path.
+
+        If conversion fails, prints the error and clears oas3_path so
+        the repository is saved without an endpoint file.
+        Returns the (possibly updated) Repository.
+        """
+        from infrastructure.endpoints.converters import (
+            ConverterError,
+            convert_endpoint_file,
+        )
+
+        src = Path(repo.oas3_path)
+        endpoints_dir = (
+            self._manager.base_path / "projects" / project_name / "endpoints"
+        )
+        originals_dir = endpoints_dir / "original"
+        try:
+            oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
+            print(f"\n  ✓ Endpoint file converted: {oas3_file}")
+            return repo.model_copy(update={"oas3_path": str(oas3_file)})
+        except ConverterError as exc:
+            print(f"\n  Endpoint file conversion failed: {exc}")
+            print(
+                "  Repository will be added without an endpoint"
+                " file. You can add one later with 'repo edit'."
+            )
+            return repo.model_copy(update={"oas3_path": ""})
 
     def _interview_company_name(self) -> str:
         """Prompt for a required company name."""
@@ -625,6 +736,39 @@ class InteractiveProjectWizard:
         )
         ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
+        # Endpoint definition file (optional)
+        oas3_path = ""
+        print(
+            "  Supported endpoint file formats: OAS3 (.json/.yaml), "
+            "OAS2/Swagger (.json/.yaml), Postman Collection"
+            " v2/v2.1 (.json), HAR (.har)"
+        )
+        print(
+            "  Warning: when an endpoint file is configured, Noir"
+            " is skipped and ZAP relies entirely on that file."
+            " ZAP results will be less accurate if the file is"
+            " incomplete."
+        )
+        endpoint_input = _prompt("  Endpoint definition file path (optional)")
+        if endpoint_input:
+            from infrastructure.endpoints.converters import ConverterError
+            from infrastructure.endpoints.converters.detector import (
+                FormatDetector,
+            )
+
+            try:
+                src = Path(endpoint_input).expanduser().resolve()
+                if not src.exists():
+                    raise FileNotFoundError(str(src))
+                FormatDetector().detect(src)
+                oas3_path = str(src)
+            except ConverterError as exc:
+                print(f"  Endpoint file error: {exc}")
+                print("  Skipping endpoint file — repository will be added without it.")
+            except FileNotFoundError:
+                print(f"  File not found: {endpoint_input}")
+                print("  Skipping endpoint file — repository will be added without it.")
+
         return Repository(
             name=name,
             type=types,
@@ -637,4 +781,5 @@ class InteractiveProjectWizard:
             test_dirs=test_dirs,
             ignore_dirs=ignore_dirs,
             dependencies_file=dependencies_file,
+            oas3_path=oas3_path,
         )

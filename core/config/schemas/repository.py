@@ -54,6 +54,15 @@ class Repository(BaseModel):
             "Noir is skipped for Node apps due to JS parser limitations."
         ),
     )
+    oas3_path: str = Field(
+        default="",
+        description=(
+            "Path to the OAS3 file for this repository. When set, Noir is "
+            "skipped during scans and ZAP uses this file directly. "
+            "Set by 'repo add' or 'repo edit' when an endpoint file is "
+            "provided."
+        ),
+    )
 
     @field_validator("type")
     @classmethod

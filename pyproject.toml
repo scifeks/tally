@@ -19,6 +19,7 @@ dependencies = [
     "jinja2>=3.0",
     "fastapi>=0.100",
     "uvicorn>=0.29",
+    "openapi-spec-validator>=0.7",
 ]
 
 [project.optional-dependencies]

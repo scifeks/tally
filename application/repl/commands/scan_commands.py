@@ -399,6 +399,7 @@ class ScanCommands:
             r.name
             for r in target_repos
             if not r.node_app
+            and not r.oas3_path
             and not _find_noir_oas3(
                 self.repl.base_path, self.repl.active_project, r.name
             )

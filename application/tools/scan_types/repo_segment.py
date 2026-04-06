@@ -112,9 +112,22 @@ class RepoSegmentScan(ScanType):
                     total_skipped += 1
                     continue
 
-                # todo: Add support for Postman, Swagger/OAS2 and maybe HAR,
-                #  then convert to OAS3 for ZAP
-                # Noir's JS parser crashes on complex Node apps — skip entirely.
+                # Skip Noir when an endpoint file is already configured.
+                if tool_name == "noir" and repo.oas3_path:
+                    resources.display.print_tool_line(
+                        ToolDisplayRow(
+                            tool_name,
+                            False,
+                            True,
+                            0,
+                            0.0,
+                            "skipped (endpoint file configured)",
+                        )
+                    )
+                    total_skipped += 1
+                    continue
+
+                # Noir's JS parser crashes on complex Node apps — skip.
                 if tool_name == "noir" and repo.node_app:
                     resources.display.print_tool_line(
                         ToolDisplayRow(

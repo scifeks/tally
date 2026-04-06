@@ -179,9 +179,12 @@ class ZAPLocalTool(BaseZapTool):
             "output_file": output_file,
         }
 
-        openapi_file = _find_noir_oas3(
-            context.base_path, context.project_name, context.repo.name
-        )
+        if context.repo.oas3_path:
+            openapi_file: str | None = context.repo.oas3_path
+        else:
+            openapi_file = _find_noir_oas3(
+                context.base_path, context.project_name, context.repo.name
+            )
         if openapi_file:
             kwargs["openapi_file"] = openapi_file
 
