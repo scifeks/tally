@@ -1,7 +1,9 @@
 """Interactive REPL shell for tally web app security auditing."""
 
 import logging
+import os
 import shlex
+import sys
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
@@ -43,6 +45,12 @@ from domain.pipeline.events import (
 from web.server import create_server as _create_web_server
 
 _log = logging.getLogger(__name__)
+
+# When TALLY_HARNESS=1 the REPL skips prompt_toolkit and uses a plain
+# stdin loop.  After each command the sentinel below is printed to stdout
+# so the test harness can reliably detect when the REPL is ready for
+# the next command.
+_HARNESS_SENTINEL = "__TALLY_PROMPT__"
 
 _VERSION = "1.0"
 
@@ -246,6 +254,9 @@ class REPL:
 
     def run(self) -> None:
         """Start the REPL loop."""
+        if os.getenv("TALLY_HARNESS"):
+            self._run_harness()
+            return
         self.console.print(
             "[dim]Run 'tally --check' to see full dependency status at any time.[/dim]"
         )
@@ -267,6 +278,47 @@ class REPL:
                 continue
             except EOFError:
                 # Ctrl+D — exit
+                break
+
+            raw = raw.strip()
+            if not raw:
+                continue
+
+            try:
+                tokens = shlex.split(raw)
+            except ValueError as exc:
+                self.console.print(f"[red]Parse error:[/red] {exc}")
+                continue
+
+            cmd, args = tokens[0].lower(), tokens[1:]
+            try:
+                self._dispatch(cmd, args)
+            except EOFError:
+                break
+
+        self.console.print("Goodbye!")
+
+    def _run_harness(self) -> None:
+        """Plain-stdin REPL loop used by the test harness.
+
+        Prints _HARNESS_SENTINEL to stdout before waiting for each
+        command so pexpect can reliably detect when the REPL is ready.
+        Interactive wizard commands (which call input() directly) work
+        normally — the sentinel only appears at the top-level REPL
+        prompt boundary.
+        """
+        self._print_banner()
+        print_installed_system_tools(self.console)
+        print_discovery_summary(self.console)
+
+        while True:
+            sys.stdout.write(_HARNESS_SENTINEL + "\n")
+            sys.stdout.flush()
+            try:
+                raw = sys.stdin.readline()
+            except EOFError:
+                break
+            if not raw:
                 break
 
             raw = raw.strip()

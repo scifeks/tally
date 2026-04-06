@@ -36,6 +36,27 @@ def check_location_attestation(base_path: str) -> None:
 
 
 if __name__ == "__main__":
+    # Parse args first so --base-path is available for attestation and setup.
+    parser = argparse.ArgumentParser(description="Tally security auditing REPL")
+    parser.add_argument(
+        "--base-path",
+        default=_BASE_PATH,
+        metavar="DIR",
+        help="Root directory for config, projects, and logs (default: .)",
+    )
+    parser.add_argument(
+        "--skip-checks",
+        action="store_true",
+        help="Skip dependency checks on startup (for development)",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Run dependency checks and exit without starting the REPL",
+    )
+    args = parser.parse_args()
+    _BASE_PATH = args.base_path
+
     check_location_attestation(_BASE_PATH)
     # --- logging setup (first thing after attestation, before any module does work) ---
     _logs_dir = Path("logs")
@@ -60,19 +81,6 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.DEBUG, handlers=[_main_handler, _err_handler])
     # ---------------------------------------------------------------
-
-    parser = argparse.ArgumentParser(description="Tally security auditing REPL")
-    parser.add_argument(
-        "--skip-checks",
-        action="store_true",
-        help="Skip dependency checks on startup (for development)",
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="Run dependency checks and exit without starting the REPL",
-    )
-    args = parser.parse_args()
 
     # First-run setup: generate commands.json if absent.
     # Runs before --check and --skip-checks so the registry is always current.
