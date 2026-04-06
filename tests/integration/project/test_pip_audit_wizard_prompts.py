@@ -68,6 +68,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",
+            "",  # endpoint file
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -90,6 +91,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",
+            "",  # endpoint file
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -114,6 +116,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",
+            "",  # endpoint file
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -138,6 +141,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",
+            "",  # endpoint file
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -151,7 +155,17 @@ class TestInterviewSingleRepoDependenciesFile:
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
         # No dependencies_file input between "go" and base_urls
-        inputs = ["my-repo", "api", "local", str(repo_dir), "go", "", "", ""]
+        inputs = [
+            "my-repo",
+            "api",
+            "local",
+            str(repo_dir),
+            "go",
+            "",
+            "",
+            "",
+            "",
+        ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
         assert repo is not None
@@ -176,7 +190,19 @@ class TestEditRepositoryDependenciesFile:
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults except dependencies_file.
         # Index 5 is "N" for the node_app prompt (JS detected in tally root).
-        inputs = ["", "", "", "", "", "N", "requirements/prod.txt", "", "", ""]
+        inputs = [
+            "",
+            "",
+            "",
+            "",
+            "",
+            "N",
+            "requirements/prod.txt",
+            "",
+            "",
+            "",
+            "",
+        ]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"
@@ -190,7 +216,7 @@ class TestEditRepositoryDependenciesFile:
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults (including dependencies_file).
         # Index 5 is "N" for the node_app prompt (JS detected in tally root).
-        inputs = ["", "", "", "", "", "N", "", "", "", ""]
+        inputs = ["", "", "", "", "", "N", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"
@@ -208,7 +234,7 @@ class TestEditRepositoryDependenciesFile:
         # "requirements.txt", clearing requires a non-default value.
         # This test confirms that supplying "" uses the existing default unchanged.
         # Index 5 is "N" for the node_app prompt (JS detected in tally root).
-        inputs = ["", "", "", "", "", "N", "", "", "", ""]
+        inputs = ["", "", "", "", "", "N", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"

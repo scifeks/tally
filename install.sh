@@ -65,5 +65,43 @@ cd "$SCRIPT_DIR"
 echo "Frontend build complete. Static files written to web/static/."
 
 echo ""
+echo "Checking optional dependencies for endpoint file conversion..."
+
+# OAS2 and Postman collection conversion requires npx and two npm packages.
+# OAS3 and HAR files work without Node. Skip this step if you only
+# intend to provide OAS3 files.
+if ! command -v npx >/dev/null 2>&1; then
+    echo ""
+    echo "  Note: 'npx' was not found on PATH."
+    echo "  OAS2/Swagger and Postman collection conversion requires Node.js"
+    echo "  and npx. OAS3 (.json/.yaml) and HAR (.har) files work without"
+    echo "  them. If you only intend to provide OAS3 files, you can skip"
+    echo "  this step."
+    echo ""
+    read -r -p "  Install npm packages for OAS2/Postman conversion? [y/N]: " \
+        _INSTALL_CONVERTERS
+    _INSTALL_CONVERTERS="${_INSTALL_CONVERTERS:-N}"
+    if [ "$_INSTALL_CONVERTERS" = "y" ] || [ "$_INSTALL_CONVERTERS" = "Y" ]; then
+        echo "  Cannot install without npx. Install Node.js from"
+        echo "  https://nodejs.org/ and re-run install.sh."
+    else
+        echo "  Skipping converter package installation."
+    fi
+else
+    read -r -p \
+        "  Install npm packages for OAS2/Postman conversion? [y/N]: " \
+        _INSTALL_CONVERTERS
+    _INSTALL_CONVERTERS="${_INSTALL_CONVERTERS:-N}"
+    if [ "$_INSTALL_CONVERTERS" = "y" ] || [ "$_INSTALL_CONVERTERS" = "Y" ]; then
+        echo "  Installing swagger2openapi and postman-to-openapi..."
+        npm install -g swagger2openapi postman-to-openapi
+        echo "  v Converter packages installed"
+    else
+        echo "  Skipping converter package installation."
+        echo "  To install later: npm install -g swagger2openapi postman-to-openapi"
+    fi
+fi
+
+echo ""
 echo "Setup complete."
 echo "Run tally with: .venv/bin/python3 tally.py"

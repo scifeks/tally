@@ -107,6 +107,7 @@ class ProjectManager:
             project_root / "tool_outputs" / "gitleaks",
             project_root / "tool_outputs" / "zap",
             project_root / "sessions",
+            project_root / "endpoints" / "original",
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
