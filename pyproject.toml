@@ -73,6 +73,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:chromadb",
+  "ignore:This process.*is multi-threaded.*forkpty:DeprecationWarning",
 ]
 markers = [
   "slow: marks tests as slow-running",
