@@ -15,11 +15,11 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.pipeline.handlers import ChromaDBHandler  # noqa: E402
+from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
 from application.rag.engine import RAGEngine  # noqa: E402
-from domain.pipeline.events import EnrichmentCompleted  # noqa: E402
+from domain.pipeline.events import IngestCompleted  # noqa: E402
 from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 
@@ -396,15 +396,15 @@ class TestEnrichmentPipeline:
         gl_ids = _seed(finding_repo, run_id, [_GL_ROW])
         gl_id = gl_ids[0]
 
-        event = EnrichmentCompleted(
+        event = IngestCompleted(
             ids=[gl_id],
-            partial_success=False,
+            failed_tools=[],
             run_id=run_id,
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
         default_fn = ef.DefaultEmbeddingFunction()
-        handler = ChromaDBHandler()
+        handler = PersistOnlyStrategy()
         with patch.object(
             RAGEngine, "_build_embedding_function", return_value=default_fn
         ):

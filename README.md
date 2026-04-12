@@ -91,6 +91,7 @@ report
 | `scan --domain=<domain,...>` | Run all tools in one or more domains: `code`, `web` |
 | `scan --skip-tools=<tool,...>` | Run all tools except the ones listed (comma-separated) |
 | `scan --repo=<repo> --tool=<tool,...>` | Run specific tools on one repository |
+| `scan --skip-enrichment` | Skip LLM enrichment; findings are persisted to ChromaDB without enrichment fields |
 | `run <tool> [args...]` | Execute a tool with raw arguments |
 
 ### Knowledge Base

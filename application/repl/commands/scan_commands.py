@@ -49,6 +49,9 @@ class ScanCommands:
         auto_approve = "--yes" in args
         args = [a for a in args if a != "--yes"]
 
+        skip_enrichment = "--skip-enrichment" in args
+        args = [a for a in args if a != "--skip-enrichment"]
+
         repo_val: str | None = None
         tool_val: str | None = None
         domain_val: str | None = None
@@ -71,7 +74,8 @@ class ScanCommands:
             self.repl.console.print(
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
                 "Usage: scan [--repo=<repo,...>] [--tool=<tool,...>]"
-                " [--skip-tools=<tool,...>] [--domain=<domain,...>] [--yes]"
+                " [--skip-tools=<tool,...>] [--domain=<domain,...>]"
+                " [--skip-enrichment] [--yes]"
             )
             return
 
@@ -152,7 +156,11 @@ class ScanCommands:
             effective_tools = candidates
 
         _finding_repo, run_repo, run_id = self._create_sqlite_run(args)
-        orchestrator = self._make_orchestrator(run_id=run_id, auto_approve=auto_approve)
+        orchestrator = self._make_orchestrator(
+            run_id=run_id,
+            auto_approve=auto_approve,
+            skip_enrichment=skip_enrichment,
+        )
         if orchestrator is None:
             return
 
@@ -459,8 +467,18 @@ class ScanCommands:
             self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
             return None, None, None
 
-    def _make_orchestrator(self, run_id: int | None = None, auto_approve: bool = False):
-        """Create a ScanOrchestrator for the active project."""
+    def _make_orchestrator(
+        self,
+        run_id: int | None = None,
+        auto_approve: bool = False,
+        skip_enrichment: bool = False,
+    ):
+        """Create a ScanOrchestrator for the active project.
+
+        Each call creates a fresh EventBus wired with the appropriate
+        post-ingest strategy, so scans are isolated from one another.
+        """
+        from application.pipeline.factory import PipelineFactory
         from application.tools.executor import ToolExecutor
         from application.tools.orchestrator import ScanOrchestrator
 
@@ -469,11 +487,15 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
         )
+        bus = PipelineFactory.create(
+            console=self.repl.console,
+            skip_enrichment=skip_enrichment,
+        )
         return ScanOrchestrator(
             project=self.repl.active_project,
             tool_registry=tool_registry,
             tool_executor=executor,
-            event_bus=self.repl.event_bus,
+            event_bus=bus,
             run_id=run_id,
             factory=ToolWrapperFactory(),
             console=self.repl.console,

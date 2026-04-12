@@ -179,3 +179,70 @@ def test_skip_tools_with_repo_uses_repo_scan_path() -> None:
     assert not orchestrator.run_tool_on_repo.called
     call_kwargs = orchestrator.run_repo_scan.call_args.kwargs
     assert call_kwargs.get("exclude_tools") == {"zap", "nmap"}
+
+
+# ------------------------------------------------------------------
+# --skip-enrichment tests
+# ------------------------------------------------------------------
+
+
+def _run_capture_orchestrator_kwargs(
+    args: list[str],
+    tools: list[str] = MOCK_TOOLS,
+    repos: list[MagicMock] | None = None,
+    active_project: str = "proj",
+) -> dict:
+    """Like _run but returns the kwargs _make_orchestrator was called with."""
+    repl = MagicMock()
+    repl.active_project = active_project
+    repl.base_path = "/tmp/test"
+    repos = repos or [_make_repo()]
+    repl.config.load_repositories.return_value = repos
+
+    mock_orchestrator = MagicMock()
+    captured: dict = {}
+
+    sc = ScanCommands(repl)
+
+    def _capture_make_orchestrator(**kwargs: object) -> MagicMock:
+        captured.update(kwargs)
+        return mock_orchestrator
+
+    with (
+        patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
+        patch.object(sc, "_make_orchestrator", side_effect=_capture_make_orchestrator),
+        patch(
+            "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
+            return_value="/tmp/oas3.json",
+        ),
+    ):
+        mock_reg.list_tool_names.return_value = tools
+        sc.cmd_scan("scan", args)
+
+    return captured
+
+
+def test_skip_enrichment_flag_passes_true_to_make_orchestrator() -> None:
+    kwargs = _run_capture_orchestrator_kwargs(["--skip-enrichment"])
+    assert kwargs.get("skip_enrichment") is True
+
+
+def test_no_skip_enrichment_flag_defaults_to_false() -> None:
+    kwargs = _run_capture_orchestrator_kwargs([])
+    assert kwargs.get("skip_enrichment") is False
+
+
+def test_skip_enrichment_flag_is_not_unrecognized() -> None:
+    repl, _orchestrator = _run(["--skip-enrichment"])
+    # If flag were unrecognized, console.print would contain "Unrecognized".
+    for call_args in repl.console.print.call_args_list:
+        text = call_args[0][0] if call_args[0] else ""
+        assert "Unrecognized" not in str(text)
+
+
+def test_skip_enrichment_combined_with_repo_flag() -> None:
+    repos = [_make_repo("repo-a")]
+    kwargs = _run_capture_orchestrator_kwargs(
+        ["--repo=repo-a", "--skip-enrichment"], repos=repos
+    )
+    assert kwargs.get("skip_enrichment") is True

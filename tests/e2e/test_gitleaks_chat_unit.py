@@ -96,26 +96,10 @@ def _run_pipeline(
     repo: str | None = None,
 ) -> list[int]:
     """Drive the full ingest pipeline; returns SQLite finding IDs."""
-    from application.pipeline.handlers import (
-        ChromaDBHandler,
-        EnrichmentHandler,
-        IngestHandler,
-    )
-    from domain.pipeline.events import (
-        EnrichmentCompleted,
-        EventBus,
-        IngestCompleted,
-        ToolCompleted,
-    )
+    from application.pipeline.factory import PipelineFactory
+    from domain.pipeline.events import IngestCompleted, ToolCompleted
 
-    bus = EventBus()
-    ingest = IngestHandler(bus)
-    enrich = EnrichmentHandler(bus)
-    chroma = ChromaDBHandler()
-
-    bus.subscribe(ToolCompleted, ingest.handle)
-    bus.subscribe(IngestCompleted, enrich.handle)
-    bus.subscribe(EnrichmentCompleted, chroma.handle)
+    bus = PipelineFactory.create()
 
     ids: list[int] = []
 

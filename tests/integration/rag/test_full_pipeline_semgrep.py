@@ -20,20 +20,11 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.pipeline.handlers import (  # noqa: E402
-    ChromaDBHandler,
-    EnrichmentHandler,
-    IngestHandler,
-)
+from application.pipeline.factory import PipelineFactory  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag.engine import RAGEngine  # noqa: E402
 from application.rag.enrichment import EnrichmentPipeline  # noqa: E402
-from domain.pipeline.events import (  # noqa: E402
-    EnrichmentCompleted,
-    EventBus,
-    IngestCompleted,
-    ToolCompleted,
-)
+from domain.pipeline.events import ToolCompleted  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 
@@ -107,14 +98,7 @@ class TestSemgrepFullPipeline:
         run_id = run_repo.create_run({})
 
         # Wire the event bus
-        bus = EventBus()
-        ingest_handler = IngestHandler(bus)
-        enrichment_handler = EnrichmentHandler(bus)
-        chromadb_handler = ChromaDBHandler()
-
-        bus.subscribe(ToolCompleted, ingest_handler.handle)
-        bus.subscribe(IngestCompleted, enrichment_handler.handle)
-        bus.subscribe(EnrichmentCompleted, chromadb_handler.handle)
+        bus = PipelineFactory.create()
 
         # Build event
         result = _make_semgrep_result()
