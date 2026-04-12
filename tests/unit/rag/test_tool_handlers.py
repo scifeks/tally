@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from application.rag.chunks.composer_audit import ComposerAuditHandler
-from application.rag.chunks.gitleaks import GitleaksHandler
-from application.rag.chunks.npm_audit import NpmAuditHandler
-from application.rag.chunks.osv_scanner import OsvScannerHandler
-from application.rag.chunks.pip_audit import PipAuditHandler
-from application.rag.chunks.semgrep import SemgrepHandler
-from application.rag.chunks.zap import ZapHandler
 from domain.tools.base import ToolResult
+from infrastructure.tools.parsers.composer_audit import ComposerAuditHandler
+from infrastructure.tools.parsers.gitleaks import GitleaksHandler
+from infrastructure.tools.parsers.npm_audit import NpmAuditHandler
+from infrastructure.tools.parsers.osv_scanner import OsvScannerHandler
+from infrastructure.tools.parsers.pip_audit import PipAuditHandler
+from infrastructure.tools.parsers.semgrep import SemgrepHandler
+from infrastructure.tools.parsers.zap import ZapHandler
 
 _PROFILE = "test"
 _TYPE_FLAG_KEYS = frozenset(

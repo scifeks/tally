@@ -26,7 +26,7 @@ from infrastructure.tools.dependency_detection import (
     build_exclude_path_prefixes,
     detect_dependency_dirs,
 )
-from infrastructure.tools.parsers.noir_parser import (
+from infrastructure.tools.parsers.noir import (
     parse_noir_json,
     parse_noir_json_string,
 )

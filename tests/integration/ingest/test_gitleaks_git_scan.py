@@ -14,7 +14,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
-from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
+from infrastructure.tools.parsers.gitleaks import (  # noqa: E402
     parse_gitleaks_json,
 )
 

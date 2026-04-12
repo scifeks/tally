@@ -22,6 +22,7 @@ class ToolHandler(Protocol):
     domain: str
     segment: str
     non_enriched_fields: frozenset[str]
+    normalized_fields: list[str]
     type_flags: dict[str, set[str]]
     should_enrich: bool
     should_visualize: bool
@@ -30,6 +31,8 @@ class ToolHandler(Protocol):
     def normalize(self, result: ToolResult, profile: str) -> list[dict]: ...
 
     def render(self, row: dict) -> str: ...
+
+    def fingerprint_key(self, finding: dict) -> str: ...
 
 
 # ------------------------------------------------------------------
@@ -43,7 +46,7 @@ class ToolHandlerFactory:
         """Load and instantiate the tool handler for tool_name, or None."""
         stem = tool_name.replace("-", "_")
         try:
-            module = importlib.import_module(f"application.rag.chunks.{stem}")
+            module = importlib.import_module(f"infrastructure.tools.parsers.{stem}")
         except ImportError:
             logger.debug("No tool handler module for tool %r", tool_name)
             return None

@@ -19,7 +19,7 @@ from unittest.mock import MagicMock
 
 from core.config.schemas import Repository
 from domain.tools.interface import ExecutionContext
-from infrastructure.tools.parsers.noir_parser import parse_noir_json
+from infrastructure.tools.parsers.noir import parse_noir_json
 from infrastructure.tools.wrappers.local.noir import NoirLocalTool
 from infrastructure.tools.wrappers.local.zap import ZAPLocalTool, _find_noir_oas3
 
@@ -296,7 +296,7 @@ class TestEndpointHandoffIntegrity:
         assert vuln_eps[0]["path_params"][0]["name"] == "vuln"
 
     def test_empty_oas3_produces_no_endpoints(self) -> None:
-        from infrastructure.tools.parsers.noir_parser import parse_noir_json_string
+        from infrastructure.tools.parsers.noir import parse_noir_json_string
 
         empty_doc = json.dumps({"openapi": "3.0.3", "info": {}, "paths": {}})
         result = parse_noir_json_string(empty_doc)

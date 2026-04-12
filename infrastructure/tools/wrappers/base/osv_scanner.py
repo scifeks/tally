@@ -5,7 +5,7 @@ from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-from infrastructure.tools.parsers.osv_parser import (
+from infrastructure.tools.parsers.osv_scanner import (
     parse_osv_json,
     parse_osv_json_string,
 )

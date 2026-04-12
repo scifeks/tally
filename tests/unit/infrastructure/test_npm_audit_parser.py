@@ -1,11 +1,11 @@
 """Unit tests for the npm audit JSON parser
-(infrastructure.tools.parsers.npm_audit_parser)."""
+(infrastructure.tools.parsers.npm_audit)."""
 
 from __future__ import annotations
 
 import json
 
-from infrastructure.tools.parsers.npm_audit_parser import parse_npm_audit_json_string
+from infrastructure.tools.parsers.npm_audit import parse_npm_audit_json_string
 
 
 def _v2_data(vulns: dict) -> dict:

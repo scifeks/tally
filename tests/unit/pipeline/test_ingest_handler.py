@@ -98,6 +98,7 @@ class TestIngestHandler:
 
         mock_handler = MagicMock()
         mock_handler.domain = "web"
+        mock_handler.fingerprint_key.return_value = "test-key"
         mock_handler.normalize.return_value = [
             {"tool": "semgrep", "rule_id": "r1"},
             {"tool": "semgrep", "rule_id": "r2"},
@@ -136,6 +137,7 @@ class TestIngestHandler:
 
         mock_handler = MagicMock()
         mock_handler.domain = "code"
+        mock_handler.fingerprint_key.return_value = "test-key"
         mock_handler.normalize.return_value = [
             {"tool": "semgrep", "rule_id": "r1", "file_path": "/src/app.py"}
         ]
@@ -180,6 +182,7 @@ class TestIngestHandler:
 
         mock_handler = MagicMock()
         mock_handler.domain = "network"
+        mock_handler.fingerprint_key.return_value = "test-key"
         mock_handler.normalize.return_value = [
             {"tool": "nmap", "ip_address": "10.0.0.1", "port": 80}
         ]
@@ -225,6 +228,7 @@ class TestIngestHandler:
         mock_handler = MagicMock()
         mock_handler.domain = "code"
         mock_handler.segment = "web"
+        mock_handler.fingerprint_key.return_value = "test-key"
         mock_handler.normalize.return_value = [
             {"tool": "noir", "url": "/api/users", "method": "GET"},
         ]

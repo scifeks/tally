@@ -19,7 +19,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from infrastructure.tools.parsers.noir_parser import (
+from infrastructure.tools.parsers.noir import (
     is_vendor_or_dependency_path,
     parse_noir_json,
     parse_noir_json_string,

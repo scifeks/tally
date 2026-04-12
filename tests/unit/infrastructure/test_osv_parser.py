@@ -1,11 +1,11 @@
 """Unit tests for the OSV-Scanner JSON parser
-(infrastructure.tools.parsers.osv_parser)."""
+(infrastructure.tools.parsers.osv_scanner)."""
 
 from __future__ import annotations
 
 import json
 
-from infrastructure.tools.parsers.osv_parser import parse_osv_json_string
+from infrastructure.tools.parsers.osv_scanner import parse_osv_json_string
 
 
 def _wrap_vuln(vuln: dict, pkg_name: str = "requests", ecosystem: str = "PyPI") -> dict:

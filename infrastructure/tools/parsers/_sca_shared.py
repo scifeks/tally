@@ -184,3 +184,15 @@ def _sca_render(row: dict) -> str:
     if row.get("owasp_name"):
         parts.append(f"OWASP category: {row['owasp_name']}")
     return f"[{tool}] " + " | ".join(parts)
+
+
+def _sca_fingerprint_key(tool_name: str, finding: dict[str, Any]) -> str:
+    tool = finding.get("tool") or tool_name
+    return "|".join(
+        [
+            str(tool),
+            str(finding.get("package_name", "")),
+            str(finding.get("vulnerability_id", "")),
+            str(finding.get("ecosystem", "")),
+        ]
+    )

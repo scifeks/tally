@@ -2,7 +2,7 @@
 
 import json
 
-from infrastructure.tools.parsers.semgrep_parser import parse_semgrep_json_string
+from infrastructure.tools.parsers.semgrep import parse_semgrep_json_string
 
 
 def _make_semgrep_json(confidence: str | None = None) -> str:

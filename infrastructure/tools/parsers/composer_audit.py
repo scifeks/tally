@@ -1,11 +1,26 @@
-"""Parser for composer audit JSON output."""
+"""Parser and handler for composer audit JSON output."""
 
 import json
 from pathlib import Path
 from typing import Any
 
+from domain.tools.base import ToolResult
+from domain.tools.enrichment import FieldEnrichmentSpec
+
+from ._sca_shared import (
+    _SCA_COMMON_ENRICHMENT_FIELDS,
+    _build_sca_normalize,
+    _sca_fingerprint_key,
+    _sca_render,
+)
+
 # composer audit does not expose severity; all findings default to "low"
 _DEFAULT_SEVERITY = "low"
+
+
+# ---------------------------------------------------------------------------
+# Parse functions (called by BaseComposerAuditTool.parse_output)
+# ---------------------------------------------------------------------------
 
 
 def parse_composer_audit_json(json_path: Path) -> dict[str, Any]:
@@ -28,7 +43,7 @@ def parse_composer_audit_json_string(json_string: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Internal parse helpers
 # ---------------------------------------------------------------------------
 
 
@@ -72,3 +87,38 @@ def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
             "ecosystems": ["Packagist"],
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Handler (normalize → SQLite rows, render → ChromaDB text)
+# ---------------------------------------------------------------------------
+
+
+class ComposerAuditHandler:
+    tool_name = "composer-audit"
+    domain = "code"
+    segment = "sca"
+    should_enrich = True
+    should_visualize = True
+    non_enriched_fields: frozenset[str] = frozenset()
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] = _SCA_COMMON_ENRICHMENT_FIELDS
+    type_flags: dict[str, set[str]] = {
+        "dependency": {"type_dependency", "type_vulnerability"}
+    }
+    normalized_fields: list[str] = [
+        "ecosystem",
+        "file_path",
+        "finding_type",
+        "package_name",
+        "severity",
+        "vulnerability_id",
+    ]
+
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
+        return _build_sca_normalize(self, result, profile)
+
+    def render(self, row: dict) -> str:
+        return _sca_render(row)
+
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return _sca_fingerprint_key("composer-audit", finding)

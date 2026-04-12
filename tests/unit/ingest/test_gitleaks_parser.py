@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from infrastructure.tools.parsers.gitleaks_parser import (
+from infrastructure.tools.parsers.gitleaks import (
     _parse_secret,
     combine_gitleaks_results,
     parse_gitleaks_json,

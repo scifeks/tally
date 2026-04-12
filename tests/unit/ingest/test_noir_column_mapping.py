@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from application.rag.chunks.noir import (
+from domain.tools.base import ToolResult
+from infrastructure.tools.parsers.noir import (
     NoirHandler,
     _uri_only,
 )
-from domain.tools.base import ToolResult
-from infrastructure.tools.parsers.noir_parser import (
+from infrastructure.tools.parsers.noir import (
     is_vendor_or_dependency_path as _is_vendor_or_dependency_path,
 )
 from infrastructure.tools.wrappers.local.noir import NoirLocalTool

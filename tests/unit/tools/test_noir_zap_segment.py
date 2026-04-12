@@ -119,13 +119,13 @@ class TestNoirZapOrdering:
 
 class TestNoirEnrichmentSkip:
     def test_noir_handler_should_enrich_is_false(self) -> None:
-        from application.rag.chunks.noir import NoirHandler
+        from infrastructure.tools.parsers.noir import NoirHandler
 
         handler = NoirHandler()
         assert handler.should_enrich is False
 
     def test_noir_handler_enrichment_fields_is_none(self) -> None:
-        from application.rag.chunks.noir import NoirHandler
+        from infrastructure.tools.parsers.noir import NoirHandler
 
         handler = NoirHandler()
         assert handler.enrichment_fields is None
@@ -146,7 +146,7 @@ class TestNoirEnrichmentSkip:
 
     def test_zap_handler_should_enrich_is_true(self) -> None:
         """Confirm ZAP enrichment is still active after the segment change."""
-        from application.rag.chunks.zap import ZapHandler
+        from infrastructure.tools.parsers.zap import ZapHandler
 
         handler = ZapHandler()
         assert handler.should_enrich is True

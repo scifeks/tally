@@ -5,7 +5,7 @@ from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.interface import ToolInterface
-from infrastructure.tools.parsers.composer_audit_parser import (
+from infrastructure.tools.parsers.composer_audit import (
     parse_composer_audit_json,
     parse_composer_audit_json_string,
 )

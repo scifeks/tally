@@ -1,4 +1,4 @@
-"""Shared helpers used by all chunk builders."""
+"""Shared helpers used by all tool handlers."""
 
 from pathlib import Path
 from typing import Any

@@ -5,7 +5,7 @@ from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-from infrastructure.tools.parsers.pip_audit_parser import (
+from infrastructure.tools.parsers.pip_audit import (
     parse_pip_audit_json,
     parse_pip_audit_json_string,
 )

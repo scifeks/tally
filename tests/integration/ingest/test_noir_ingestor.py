@@ -16,7 +16,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
-from infrastructure.tools.parsers.noir_parser import parse_noir_json  # noqa: E402
+from infrastructure.tools.parsers.noir import parse_noir_json  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
