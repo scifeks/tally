@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from tests.e2e.harness import TallyHarness
@@ -21,5 +23,5 @@ def test_project_list_after_add(tally_harness: TallyHarness) -> None:
     output = tally_harness.run("project list")
 
     assert "ListProj" in output
-    assert "2026-04-06" in output
+    assert date.today().isoformat() in output
     assert "0" in output

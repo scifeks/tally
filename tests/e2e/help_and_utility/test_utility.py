@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import time
 
+import pexpect
 import pytest
 
 from tests.e2e.harness import TallyHarness
@@ -25,8 +25,8 @@ def test_exit_prints_goodbye(tmp_path) -> None:
     harness.spawn()
     harness.send("exit")
     harness.expect("Goodbye")
-    time.sleep(0.2)
     assert harness.child is not None
+    harness.child.expect(pexpect.EOF, timeout=10)
     assert not harness.child.isalive()
     harness.child = None
 
@@ -38,8 +38,8 @@ def test_quit_prints_goodbye(tmp_path) -> None:
     harness.spawn()
     harness.send("quit")
     harness.expect("Goodbye")
-    time.sleep(0.2)
     assert harness.child is not None
+    harness.child.expect(pexpect.EOF, timeout=10)
     assert not harness.child.isalive()
     harness.child = None
 

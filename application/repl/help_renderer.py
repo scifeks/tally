@@ -82,6 +82,12 @@ _HELP_REGISTRY = [
         "--skip-tools=<tool,...>",
         "Exclude named tool(s) from an otherwise full scan. Comma-separated.",
     ),
+    (
+        "scan",
+        "scan",
+        "--skip-enrichment",
+        "Skip LLM enrichment; persist to ChromaDB without enrichment fields.",
+    ),
     # Manual Run
     ("run", None, None, "Manual Run"),
     ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),

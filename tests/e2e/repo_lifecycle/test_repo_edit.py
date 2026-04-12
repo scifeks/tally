@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -67,3 +68,8 @@ def test_repo_edit_updates_type(
     output = h.wait_for_prompt()
 
     assert "updated" in output
+
+    config_path = h.project_dir("TestProj") / "config" / "project.json"
+    data = json.loads(config_path.read_text())
+    repo = next(r for r in data["repositories"] if r["name"] == "test-repo")
+    assert sorted(repo["type"]) == ["api", "ui"]

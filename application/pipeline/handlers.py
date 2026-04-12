@@ -1,4 +1,4 @@
-"""Pipeline handlers: IngestHandler, EnrichmentHandler, ChromaDBHandler."""
+"""Pipeline handlers: IngestHandler (and BaseHandler with shared ChromaDB logic)."""
 
 from __future__ import annotations
 
@@ -6,14 +6,12 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from application.rag.enrichment import EnrichmentPipeline
 from application.rag.ingestor import (
     ToolHandlerFactory,
     filter_code_rows,
 )
 from core.config.manager import ConfigManager
 from domain.pipeline.events import (
-    EnrichmentCompleted,
     EventBus,
     IngestCompleted,
     ToolCompleted,
@@ -30,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class BaseHandler:
-    """Shared RAGEngine cache used by all pipeline handlers."""
+    """Shared RAGEngine cache and ChromaDB persistence used by pipeline steps."""
 
     def __init__(self) -> None:
         self._engines: dict[str, RAGEngine] = {}
@@ -45,6 +43,37 @@ class BaseHandler:
                 base_path=base_path,
             )
         return self._engines[key]
+
+    def _persist_to_chromadb(
+        self, ids: list[int], project_name: str, base_path: str
+    ) -> None:
+        """Write findings to ChromaDB by their SQLite IDs."""
+        try:
+            engine = self._get_engine(project_name, base_path)
+        except Exception as exc:
+            logger.warning("%s: RAGEngine init failed: %s", type(self).__name__, exc)
+            return
+
+        try:
+            _, finding_repo, _, _ = make_store(base_path, project_name)
+            rows = finding_repo.get_by_ids(ids)
+            grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
+            for row in rows:
+                grouped[(row["tool"], row["profile"])].append(row)
+            for (tool, profile), group_rows in grouped.items():
+                engine.delete_findings(tool, profile)
+                handler = ToolHandlerFactory.load(tool)
+                if handler is None:
+                    continue
+                texts = [
+                    f"Repository: {profile} | {handler.render(row)}"
+                    for row in group_rows
+                ]
+                metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
+                doc_ids = [str(row["id"]) for row in group_rows]
+                engine.add_documents(texts=texts, metadatas=metadatas, ids=doc_ids)
+        except Exception as exc:
+            logger.error("%s: ChromaDB write error: %s", type(self).__name__, exc)
 
 
 class IngestHandler(BaseHandler):
@@ -93,8 +122,8 @@ class IngestHandler(BaseHandler):
 
             if handler.domain == "code":
                 if handler.segment in ("sca", "web"):
-                    # SCA and web-segment code tools (e.g. Noir) have no file path
-                    # to normalise; set repo directly from execution context.
+                    # SCA and web-segment code tools (e.g. Noir) have no file
+                    # path to normalise; set repo directly from execution context.
                     if event.repo:
                         for row in rows:
                             row.setdefault("repo", event.repo)
@@ -135,69 +164,3 @@ class IngestHandler(BaseHandler):
                 base_path=event.base_path,
             )
         )
-
-
-class EnrichmentHandler(BaseHandler):
-    """Handles IngestCompleted: runs LLM enrichment, emits EnrichmentCompleted."""
-
-    def __init__(self, bus: EventBus, console: Console | None = None) -> None:
-        super().__init__()
-        self._bus = bus
-        self._console = console
-
-    def handle(self, event: IngestCompleted) -> None:
-        if not event.ids:
-            return
-
-        _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-        pipeline = EnrichmentPipeline(
-            finding_repo=finding_repo,
-            console=self._console,
-            base_path=event.base_path,
-            run_id=event.run_id,
-        )
-        pipeline.enrich(event.ids)
-        self._bus.dispatch(
-            EnrichmentCompleted(
-                ids=event.ids,
-                partial_success=pipeline.had_errors,
-                run_id=event.run_id,
-                project_name=event.project_name,
-                base_path=event.base_path,
-            )
-        )
-
-
-class ChromaDBHandler(BaseHandler):
-    """Handles EnrichmentCompleted: writes enriched findings to ChromaDB."""
-
-    def handle(self, event: EnrichmentCompleted) -> None:
-        if not event.ids:
-            return
-
-        try:
-            engine = self._get_engine(event.project_name, event.base_path)
-        except Exception as exc:
-            logger.warning("ChromaDBHandler: RAGEngine init failed: %s", exc)
-            return
-
-        try:
-            _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-            rows = finding_repo.get_by_ids(event.ids)
-            grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
-            for row in rows:
-                grouped[(row["tool"], row["profile"])].append(row)
-            for (tool, profile), group_rows in grouped.items():
-                engine.delete_findings(tool, profile)
-                handler = ToolHandlerFactory.load(tool)
-                if handler is None:
-                    continue
-                texts = [
-                    f"Repository: {profile} | {handler.render(row)}"
-                    for row in group_rows
-                ]
-                metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
-                ids = [str(row["id"]) for row in group_rows]
-                engine.add_documents(texts=texts, metadatas=metadatas, ids=ids)
-        except Exception as exc:
-            logger.error("ChromaDBHandler: write error: %s", exc)

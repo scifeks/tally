@@ -341,6 +341,21 @@ Run the full scan but exclude one or more tools:
 
 If you have only one repository, `scan` (no flags) already targets it.
 
+**Skip LLM enrichment:**
+
+Skip the LLM enrichment step. Findings are still ingested into SQLite as normal,
+but enrichment fields are not populated before the findings are persisted to
+ChromaDB. Useful when you want fast ingest without waiting for the enrichment
+model, or when enrichment fields are not needed immediately.
+
+```
+[acme-security-audit]> scan --skip-enrichment
+[acme-security-audit]> scan --tool=gitleaks --skip-enrichment
+[acme-security-audit]> scan --repo=api-server --skip-enrichment
+```
+
+`--skip-enrichment` is compatible with all other scan flags.
+
 **Combine flags:**
 
 ```

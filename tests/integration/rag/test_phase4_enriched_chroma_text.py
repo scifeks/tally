@@ -14,9 +14,9 @@ from unittest.mock import patch
 import chromadb.utils.embedding_functions as ef
 import pytest
 
-from application.pipeline.handlers import ChromaDBHandler
+from application.pipeline.strategies import PersistOnlyStrategy
 from application.rag.engine import RAGEngine
-from domain.pipeline.events import EnrichmentCompleted
+from domain.pipeline.events import IngestCompleted
 from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
 
@@ -50,9 +50,9 @@ def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
 
 
 def _dispatch(env: dict, ids: list[int]) -> None:
-    event = EnrichmentCompleted(
+    event = IngestCompleted(
         ids=ids,
-        partial_success=False,
+        failed_tools=[],
         run_id=env["run_id"],
         project_name=env["project_name"],
         base_path=env["base_path"],
@@ -71,7 +71,7 @@ def env(tmp_path: Path) -> dict:
     run_id = run_repo.create_run({})
 
     engine = _make_rag_engine(base_path, _PROJECT_NAME)
-    handler = ChromaDBHandler()
+    handler = PersistOnlyStrategy()
 
     return {
         "base_path": base_path,

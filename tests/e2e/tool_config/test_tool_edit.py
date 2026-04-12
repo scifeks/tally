@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from tests.e2e.harness import TallyHarness
@@ -31,6 +33,10 @@ def test_tool_edit_updates_config(tally_harness: TallyHarness) -> None:
 
     assert "Tool updated" in output
 
+    cfg = h.base_path / "config" / "commands.json"
+    data = json.loads(cfg.read_text())
+    assert data["noir"]["path"] == "/updated/noir"
+
 
 def test_tool_edit_not_configured(tally_harness: TallyHarness) -> None:
     output = tally_harness.run("tool edit nosuch")
@@ -53,6 +59,10 @@ def test_tool_edit_project_level(tally_harness: TallyHarness) -> None:
     output = h.wait_for_prompt()
 
     assert "Tool updated" in output
+
+    cfg = h.base_path / "projects" / "EditProj" / "config" / "commands.json"
+    data = json.loads(cfg.read_text())
+    assert data["noir"]["path"] == "/updated/project/noir"
 
 
 def test_tool_edit_project_not_configured(

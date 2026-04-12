@@ -14,11 +14,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from application.pipeline.handlers import (
-    ChromaDBHandler,
-    EnrichmentHandler,
-    IngestHandler,
-)
 from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
 from application.rag.ingestor import get_tool_domain
@@ -36,12 +31,6 @@ from application.repl.help_renderer import HELP_BOX, HelpRenderer
 from application.startup.checker import print_installed_system_tools
 from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
-from domain.pipeline.events import (
-    EnrichmentCompleted,
-    EventBus,
-    IngestCompleted,
-    ToolCompleted,
-)
 from web.server import create_server as _create_web_server
 
 _log = logging.getLogger(__name__)
@@ -229,13 +218,6 @@ class REPL:
         self.projects = ProjectManager(base_path)
         self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
-        self.event_bus = EventBus()
-        _ingest = IngestHandler(self.event_bus, console=self.console)
-        _enrich = EnrichmentHandler(self.event_bus, console=self.console)
-        _persist = ChromaDBHandler()
-        self.event_bus.subscribe(ToolCompleted, _ingest.handle)
-        self.event_bus.subscribe(IngestCompleted, _enrich.handle)
-        self.event_bus.subscribe(EnrichmentCompleted, _persist.handle)
         self.help_renderer = HelpRenderer(self.console)
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
