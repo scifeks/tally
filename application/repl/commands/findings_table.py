@@ -50,13 +50,6 @@ def color_severity(sev: str) -> str:
     return f"[{color}]{sev}[/{color}]" if sev else ""
 
 
-def _all_from_tool(results: list[dict[str, Any]], tool_name: str) -> bool:
-    """Return True if every result in results belongs to tool_name."""
-    return bool(results) and all(
-        r.get("metadata", {}).get("tool") == tool_name for r in results
-    )
-
-
 # ---------------------------------------------------------------------------
 # Schema constants
 # ---------------------------------------------------------------------------
@@ -147,15 +140,20 @@ def _build_fields_table(results: list[dict[str, Any]], fields: list[str]) -> Tab
     return table
 
 
+def _truncate(text: str, max_len: int = 65) -> str:
+    """Truncate text to max_len characters, appending … if cut."""
+    if not text or len(text) <= max_len:
+        return text or ""
+    return text[: max_len - 1] + "…"
+
+
 def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Table:
-    """Build the generic findings Rich table."""
+    """Build the default findings table: Severity | Type | Description | Tool."""
     table = Table(show_header=True, header_style="bold")
-    table.add_column("Tool", style="cyan", no_wrap=True)
-    table.add_column("Domain", style="white", no_wrap=True)
-    table.add_column("Type", style="green")
     table.add_column("Severity", no_wrap=True)
-    table.add_column("Confidence", no_wrap=True)
-    table.add_column("Risk Type", style="dim white")
+    table.add_column("Type", style="green", no_wrap=True)
+    table.add_column("Description", overflow="fold")
+    table.add_column("Tool", style="cyan", no_wrap=True)
     if is_semantic:
         table.add_column("Relevance", style="dim", no_wrap=True)
 
@@ -163,12 +161,10 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
         meta = r["metadata"]
         sev = meta.get("severity", "")
         row: list[str] = [
-            meta.get("tool", ""),
-            meta.get("domain", ""),
-            render_finding_type(meta),
             color_severity(sev),
-            meta.get("confidence", ""),
-            meta.get("risk_type", ""),
+            render_finding_type(meta),
+            _truncate(meta.get("description", "")),
+            meta.get("tool", ""),
         ]
         if is_semantic:
             dist = r["distance"]
@@ -205,10 +201,20 @@ class FindingsTableFactory:
             except ImportError:
                 pass  # no renderer for this tool → falls through to generic
 
-    def build(self, results: list[dict[str, Any]], is_semantic: bool) -> Table:
-        """Return a tool-specific table, or generic if tool is mixed/unknown."""
-        for tool_name, renderer in self._renderers.items():
-            if _all_from_tool(results, tool_name):
+    def build(
+        self,
+        results: list[dict[str, Any]],
+        is_semantic: bool,
+        tool_filter: str | None = None,
+    ) -> Table:
+        """Return a tool-specific table when tool_filter is set, else generic.
+
+        Tool-specific renderers are only invoked for ``search --tool=<name>``
+        without ``--fields``. All other queries use the generic default view.
+        """
+        if tool_filter is not None:
+            renderer = self._renderers.get(tool_filter)
+            if renderer is not None:
                 return renderer.build(results, is_semantic)
         return _build_generic_table(results, is_semantic)
 
@@ -220,12 +226,14 @@ class FindingsTableFactory:
         self, sqlite_store: Any, tool_name: str
     ) -> tuple[list[str], list[str]] | None:
         """Return (schema_fields, meta_fields) for tool_name, or None if no rows."""
+        from application.rag.ingestor import ToolHandlerFactory
+
         count, meta_keys = sqlite_store.get_tool_meta_keys(tool_name)
         if count == 0:
             return None
-        renderer = self._renderers.get(tool_name)
+        handler = ToolHandlerFactory.load(tool_name)
         normalized = set(
-            renderer.normalized_fields if renderer else _ALL_NORMALIZED_FIELDS
+            handler.normalized_fields if handler is not None else _ALL_NORMALIZED_FIELDS
         )
         schema = sorted(normalized | {"fingerprint", "run_id"})
         meta = sorted(meta_keys - _SQLITE_SCHEMA_FIELDS)

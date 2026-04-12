@@ -1,11 +1,11 @@
-"""Unit tests for infrastructure.tools.parsers.noir_parser."""
+"""Unit tests for infrastructure.tools.parsers.noir."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from infrastructure.tools.parsers.noir_parser import (
+from infrastructure.tools.parsers.noir import (
     parse_noir_json,
     parse_noir_json_string,
 )

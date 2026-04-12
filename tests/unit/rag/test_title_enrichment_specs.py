@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from application.rag import EnrichmentPipeline
-from application.rag.chunks.semgrep import SemgrepHandler
-from application.rag.chunks.zap import ZapHandler
 from domain.tools.enrichment import PromptStrategy
+from infrastructure.tools.parsers.semgrep import SemgrepHandler
+from infrastructure.tools.parsers.zap import ZapHandler
 
 
 def test_semgrep_title_in_enrichment_fields() -> None:

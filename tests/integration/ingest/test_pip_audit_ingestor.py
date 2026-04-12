@@ -13,7 +13,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.rag.ingestor import ToolHandlerFactory  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
-from infrastructure.tools.parsers.pip_audit_parser import (  # noqa: E402
+from infrastructure.tools.parsers.pip_audit import (  # noqa: E402
     parse_pip_audit_json,
 )
 

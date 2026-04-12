@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from application.rag.chunks.gitleaks import GitleaksHandler
 from domain.tools.base import ToolResult
+from infrastructure.tools.parsers.gitleaks import GitleaksHandler
 
 
 class TestGitleaksIngestorMetadata:

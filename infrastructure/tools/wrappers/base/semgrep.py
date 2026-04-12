@@ -6,7 +6,7 @@ from typing import Any
 from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-from infrastructure.tools.parsers.semgrep_parser import (
+from infrastructure.tools.parsers.semgrep import (
     parse_semgrep_json,
     parse_semgrep_json_string,
 )

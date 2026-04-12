@@ -78,10 +78,13 @@ class KnowledgeCommands:
         is_semantic = False  # SQLite results are never semantic
 
         fields = filters.get("fields", [])
+        tool_filter: str | None = filters.get("tool") if not fields else None
         if fields:
             table = _findings_table_factory.build_fields(results, fields)
         else:
-            table = _findings_table_factory.build(results, is_semantic)
+            table = _findings_table_factory.build(
+                results, is_semantic, tool_filter=tool_filter
+            )
 
         self.repl.console.print(table)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from infrastructure.tools.parsers.pip_audit_parser import (
+from infrastructure.tools.parsers.pip_audit import (
     parse_pip_audit_json,
     parse_pip_audit_json_string,
 )

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from domain.tools.interface import ExecutionContext, ExecutionPass
-from infrastructure.tools.parsers.zap_parser import (
+from infrastructure.tools.parsers.zap import (
     parse_zap_json,
     parse_zap_json_string,
 )

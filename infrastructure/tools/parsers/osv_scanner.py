@@ -1,8 +1,18 @@
-"""Parser for OSV-Scanner JSON output."""
+"""Parser and handler for OSV-Scanner JSON output."""
 
 import json
 from pathlib import Path
 from typing import Any
+
+from domain.tools.base import ToolResult
+from domain.tools.enrichment import FieldEnrichmentSpec
+
+from ._sca_shared import (
+    _SCA_OSV_ENRICHMENT_FIELDS,
+    _build_sca_normalize,
+    _sca_fingerprint_key,
+    _sca_render,
+)
 
 _SEVERITY_MAP = {
     "CRITICAL": "critical",
@@ -11,6 +21,11 @@ _SEVERITY_MAP = {
     "MODERATE": "medium",
     "LOW": "low",
 }
+
+
+# ---------------------------------------------------------------------------
+# Parse functions (called by BaseOsvScannerTool.parse_output)
+# ---------------------------------------------------------------------------
 
 
 def parse_osv_json(json_path: Path) -> dict[str, Any]:
@@ -33,7 +48,7 @@ def parse_osv_json_string(json_string: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Internal parse helpers
 # ---------------------------------------------------------------------------
 
 
@@ -182,3 +197,38 @@ def _extract_version_range(
                             fixed = event["fixed"]
                     return introduced, fixed
     return None, None
+
+
+# ---------------------------------------------------------------------------
+# Handler (normalize → SQLite rows, render → ChromaDB text)
+# ---------------------------------------------------------------------------
+
+
+class OsvScannerHandler:
+    tool_name = "osv-scanner"
+    domain = "code"
+    segment = "sca"
+    should_enrich = True
+    should_visualize = True
+    non_enriched_fields: frozenset[str] = frozenset({"severity"})
+    enrichment_fields: tuple[FieldEnrichmentSpec, ...] = _SCA_OSV_ENRICHMENT_FIELDS
+    type_flags: dict[str, set[str]] = {
+        "dependency": {"type_dependency", "type_vulnerability"}
+    }
+    normalized_fields: list[str] = [
+        "ecosystem",
+        "file_path",
+        "finding_type",
+        "package_name",
+        "severity",
+        "vulnerability_id",
+    ]
+
+    def normalize(self, result: ToolResult, profile: str) -> list[dict]:
+        return _build_sca_normalize(self, result, profile)
+
+    def render(self, row: dict) -> str:
+        return _sca_render(row)
+
+    def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        return _sca_fingerprint_key("osv-scanner", finding)

@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from application.rag.chunks.semgrep import SemgrepHandler
 from application.rag.enrichment import EnrichmentPipeline
 from domain.tools.base import ToolResult
+from infrastructure.tools.parsers.semgrep import SemgrepHandler
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -4,8 +4,6 @@ import hashlib
 import json
 from typing import Any
 
-from infrastructure.tools.fingerprints import FINGERPRINT_REGISTRY
-
 
 def _generic_fingerprint_key(finding: dict[str, Any]) -> str:
     safe = {
@@ -15,8 +13,17 @@ def _generic_fingerprint_key(finding: dict[str, Any]) -> str:
 
 
 def compute_fingerprint(finding: dict[str, Any]) -> str:
-    """Compute a stable sha256 fingerprint from per-tool key fields."""
+    """Compute a stable sha256 fingerprint from per-tool key fields.
+
+    Delegates to the tool's ToolHandler.fingerprint_key() when available;
+    falls back to a generic hash over all scalar finding fields.
+    """
+    from application.rag.ingestor import ToolHandlerFactory
+
     tool = finding.get("tool", "")
-    key_fn = FINGERPRINT_REGISTRY.get(tool, _generic_fingerprint_key)
-    key = key_fn(finding)
+    handler = ToolHandlerFactory.load(tool) if tool else None
+    if handler is not None:
+        key = handler.fingerprint_key(finding)
+    else:
+        key = _generic_fingerprint_key(finding)
     return hashlib.sha256(key.encode()).hexdigest()

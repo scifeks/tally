@@ -8,7 +8,7 @@ from typing import Any
 from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-from infrastructure.tools.parsers.gitleaks_parser import combine_gitleaks_results
+from infrastructure.tools.parsers.gitleaks import combine_gitleaks_results
 
 
 class BaseGitleaksTool(ToolInterface):

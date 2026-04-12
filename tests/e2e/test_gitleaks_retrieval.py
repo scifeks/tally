@@ -15,7 +15,7 @@ from application.project import ProjectManager
 from application.rag import RAGEngine
 from application.rag.ingestor import ToolHandlerFactory
 from domain.tools.base import ToolResult
-from infrastructure.tools.parsers.gitleaks_parser import parse_gitleaks_json
+from infrastructure.tools.parsers.gitleaks import parse_gitleaks_json
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e

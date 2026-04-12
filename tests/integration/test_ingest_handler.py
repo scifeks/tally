@@ -24,7 +24,7 @@ from domain.pipeline.events import (  # noqa: E402
 )
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
-from infrastructure.tools.parsers.gitleaks_parser import (  # noqa: E402
+from infrastructure.tools.parsers.gitleaks import (  # noqa: E402
     parse_gitleaks_json,
 )
 

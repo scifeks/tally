@@ -1,11 +1,11 @@
 """Unit tests for the composer audit JSON parser
-(infrastructure.tools.parsers.composer_audit_parser)."""
+(infrastructure.tools.parsers.composer_audit)."""
 
 from __future__ import annotations
 
 import json
 
-from infrastructure.tools.parsers.composer_audit_parser import (
+from infrastructure.tools.parsers.composer_audit import (
     parse_composer_audit_json_string,
 )
 

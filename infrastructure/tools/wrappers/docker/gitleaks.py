@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from infrastructure.tools.parsers.gitleaks_parser import (
+from infrastructure.tools.parsers.gitleaks import (
     parse_gitleaks_json,
     parse_gitleaks_json_string,
 )

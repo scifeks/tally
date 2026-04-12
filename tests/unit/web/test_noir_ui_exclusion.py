@@ -12,8 +12,8 @@ These tests verify the Python-side concerns:
 
 from __future__ import annotations
 
-from application.rag.chunks.noir import NoirHandler
-from application.rag.chunks.zap import ZapHandler
+from infrastructure.tools.parsers.noir import NoirHandler
+from infrastructure.tools.parsers.zap import ZapHandler
 
 
 class TestNoirHandlerDomainAttributes:
