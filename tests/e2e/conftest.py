@@ -20,6 +20,7 @@ tally_harness_live — TallyHarness pointed at the real repo root; useful for
 
 from __future__ import annotations
 
+import json
 from collections.abc import Generator
 from pathlib import Path
 
@@ -52,6 +53,9 @@ def tally_harness(tmp_path: Path) -> Generator[TallyHarness]:
     """
     harness = TallyHarness(base_path=tmp_path)
     harness.setup()
+    commands_cfg = tmp_path / "config" / "commands.json"
+    if not commands_cfg.exists():
+        commands_cfg.write_text(json.dumps({}))
     harness.spawn()
     yield harness
     harness.teardown()

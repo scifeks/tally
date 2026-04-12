@@ -73,6 +73,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning:chromadb",
+  "ignore:This process.*is multi-threaded.*forkpty:DeprecationWarning",
 ]
 markers = [
   "slow: marks tests as slow-running",
@@ -80,4 +81,5 @@ markers = [
   "requires_gitleaks: marks tests that need gitleaks installed",
   "integration: marks tests that require real SQLite / filesystem / ChromaDB",
   "e2e: marks tests that require external services such as Ollama or real binaries",
+  "local_only: marks tests that must only run locally (never in CI)",
 ]

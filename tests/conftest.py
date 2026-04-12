@@ -22,7 +22,7 @@ from core.config import ConfigManager
 
 def pytest_configure(config: pytest.Config) -> None:
     if os.getenv("CI"):
-        config.option.markexpr = "not integration and not e2e"
+        config.option.markexpr = "not integration and not e2e and not local_only"
 
 
 def _ollama_url() -> str | None:
