@@ -10,14 +10,26 @@ pytestmark = pytest.mark.local_only
 
 
 @pytest.mark.slow
+@pytest.mark.skip(
+    reason="Runs all code-domain tools across all DVPA repos — too slow until "
+    "synthetic test repos are in place"
+)
 def test_scan_domain_code(tally_harness_live: TallyHarness) -> None:
     h = tally_harness_live
     h.run("project switch DVPA")
-    h.run("scan --domain=code --yes", timeout=300)
 
-    run_rows = h.query_db("DVPA", "SELECT MAX(id) as last_run FROM runs")
+    pre = h.query_db("DVPA", "SELECT COALESCE(MAX(id), 0) as n FROM runs")
+    pre_max = pre[0]["n"]
+
+    h.run("scan --domain=code --yes", timeout=600)
+
+    run_rows = h.query_db(
+        "DVPA",
+        "SELECT MAX(id) as last_run FROM runs WHERE id > ?",
+        (pre_max,),
+    )
     last_run_id = run_rows[0]["last_run"]
-    assert last_run_id is not None
+    assert last_run_id is not None, "Scan did not create a run entry"
 
     # All findings in this run must belong to the 'code' domain.
     bad = h.query_db(

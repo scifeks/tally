@@ -30,6 +30,39 @@ from chromadb.api.shared_system_client import SharedSystemClient
 from tests.e2e.harness import TallyHarness
 
 
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """Cap xdist auto worker count to half of available CPUs.
+
+    Long-running scan tests (semgrep, gitleaks, domain scans) spawn
+    CPU-heavy subprocesses. Running 16 pytest workers simultaneously
+    starves those subprocesses and causes pexpect timeouts. Halving the
+    worker count leaves enough CPU headroom for scans to complete.
+    """
+    import os
+
+    return max(2, (os.cpu_count() or 4) // 2)
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Assign xdist worker groups to prevent unsafe concurrency.
+
+    Three tiers:
+    - tally_harness tests: fully isolated (tmp_path REPL per test),
+      run in parallel across all workers — no group assigned.
+    - tally_harness_live tests: share the real repo root (findings.db,
+      ChromaDB), pinned to group "live" so they serialize on one worker.
+    - e2e-marked tests: hit a shared Ollama server; concurrent embedding
+      requests pile up and time out. Pinned to group "ollama" so they
+      serialize on one worker (independent of the live group).
+    """
+    for item in items:
+        marks = {m.name for m in item.iter_markers()}
+        if "tally_harness_live" in getattr(item, "fixturenames", []):
+            item.add_marker(pytest.mark.xdist_group("live"))
+        elif "e2e" in marks:
+            item.add_marker(pytest.mark.xdist_group("ollama"))
+
+
 @pytest.fixture(autouse=True)
 def _cleanup_chromadb_systems():
     yield
