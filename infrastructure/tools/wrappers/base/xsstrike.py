@@ -69,7 +69,7 @@ class BaseXSStrikeTool(ToolInterface):
 
     @property
     def always_run(self) -> bool:
-        return False
+        return True
 
     @property
     def candidate_commands(self) -> list[str]:

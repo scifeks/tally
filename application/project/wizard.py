@@ -88,58 +88,105 @@ def _prompt(message: str, default: str = "") -> str:
     return raw or default
 
 
-_XSSTRIKE_MODE_HELP = (
-    "  XSStrike URL seed mode:\n"
-    "    crawl    — spider the app from base URL (default when no endpoint "
-    "file is set)\n"
-    "    noir     — generate seeds from Noir endpoint discovery output\n"
-    "    provided — generate seeds from your endpoint file (requires "
-    "oas3_path to be set)"
-)
+_CRAWL_MODES: frozenset[str] = frozenset({"crawl", "noir", "provided"})
 
-_XSSTRIKE_VALID_MODES: frozenset[str] = frozenset({"crawl", "noir", "provided"})
+_CRAWL_MODE_DESCRIPTIONS: dict[str, str] = {
+    "crawl": "spider the app from base URL (always available)",
+    "noir": "generate seeds from Noir endpoint discovery output",
+    "provided": ("generate seeds from your endpoint file (requires endpoint file)"),
+}
+
+
+def _interview_crawl_mode(
+    tool_label: str,
+    base_urls: list[str],
+    oas3_path: str,
+    node_app: bool,
+    current_mode: str = "",
+) -> str:
+    """Generic crawl URL seed mode interview for web tools.
+
+    Computes the set of valid modes from the given constraints:
+    - 'crawl'    — always valid when base_urls is non-empty.
+    - 'noir'     — valid only when node_app is False.
+    - 'provided' — valid only when oas3_path is non-empty.
+
+    When only 'crawl' is valid, the prompt is skipped entirely and 'crawl'
+    is returned with an explanatory message.  Returns 'crawl' immediately
+    when base_urls is empty.
+    """
+    if not base_urls:
+        return "crawl"
+
+    valid_modes: set[str] = {"crawl"}
+    if not node_app:
+        valid_modes.add("noir")
+    if oas3_path:
+        valid_modes.add("provided")
+
+    if valid_modes == {"crawl"}:
+        print(
+            f"  {tool_label}: only 'crawl' mode is available "
+            "(Node.js app — Noir seeding disabled, "
+            "no endpoint file configured)."
+        )
+        return "crawl"
+
+    # Preferred default: provided > noir > crawl
+    if oas3_path:
+        default_mode = "provided"
+    elif not node_app:
+        default_mode = "noir"
+    else:
+        default_mode = "crawl"
+
+    effective_default = current_mode if current_mode in valid_modes else default_mode
+
+    print(f"  {tool_label} URL seed mode:")
+    for mode in ("crawl", "noir", "provided"):
+        if mode in valid_modes:
+            desc = _CRAWL_MODE_DESCRIPTIONS[mode]
+            print(f"    {mode:<8} — {desc}")
+    if node_app:
+        print("  (noir is unavailable — Noir cannot parse Node.js endpoints)")
+    if not oas3_path:
+        print("  (provided is unavailable — no endpoint file configured)")
+
+    while True:
+        raw = _prompt(f"  {tool_label} seed mode", default=effective_default).lower()
+        if raw in valid_modes:
+            return raw
+        if raw == "noir" and node_app:
+            print(
+                "  'noir' is not available for Node.js apps. "
+                f"Choose from: {', '.join(sorted(valid_modes))}"
+            )
+        elif raw == "provided" and not oas3_path:
+            print(
+                "  'provided' requires an endpoint file. "
+                "Add one first, then re-run 'repo edit'. "
+                f"Choose from: {', '.join(sorted(valid_modes))}"
+            )
+        else:
+            print(
+                f"  Invalid mode: {raw!r}. "
+                f"Choose from: {', '.join(sorted(valid_modes))}"
+            )
 
 
 def _interview_xsstrike_mode(
     base_urls: list[str],
     oas3_path: str,
+    node_app: bool = False,
     current_mode: str = "",
 ) -> str:
     """Prompt for XSStrike URL seed mode.
 
-    Only shown when ``base_urls`` is non-empty.  Options depend on whether
-    ``oas3_path`` is configured:
-    - oas3_path set  → [provided (default), noir, crawl]
-    - no oas3_path   → [noir (default), crawl] ('provided' hidden)
-
-    Returns the chosen mode string, or the default when the prompt is skipped.
+    Delegates to ``_interview_crawl_mode`` with label 'XSStrike'.
     """
-    if not base_urls:
-        return "crawl"
-
-    has_oas3 = bool(oas3_path)
-    default_mode = "provided" if has_oas3 else "noir"
-    effective_default = (
-        current_mode if current_mode in _XSSTRIKE_VALID_MODES else default_mode
+    return _interview_crawl_mode(
+        "XSStrike", base_urls, oas3_path, node_app, current_mode
     )
-
-    print(_XSSTRIKE_MODE_HELP)
-    if not has_oas3:
-        print("  (provided is hidden — no endpoint file configured)")
-
-    while True:
-        raw = _prompt("  XSStrike seed mode", default=effective_default).lower()
-        if raw not in _XSSTRIKE_VALID_MODES:
-            print(f"  Invalid mode: {raw!r}. Choose from: crawl, noir, provided")
-            continue
-        if raw == "provided" and not has_oas3:
-            print(
-                "  'provided' requires an endpoint file (oas3_path). "
-                "Add one via the endpoint file prompt above, then re-run "
-                "'repo edit'. Defaulting to 'noir'."
-            )
-            return "noir"
-        return raw
 
 
 class InteractiveProjectWizard:
@@ -314,12 +361,13 @@ class InteractiveProjectWizard:
             lang_input = _prompt(prompt_label, default=default_langs)
             langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-            # todo: Add support for
-            # Node.js app flag — Noir skipped for Node apps (JS parser limitation)
+            # Node.js app flag — Noir and Noir-based URL seeding skipped for
+            # Node apps (Noir JS parser limitation).
             if _has_js(langs):
                 current_node = "y" if existing.node_app else "N"
                 ans = _prompt(
-                    "  Is this a Node.js app? (Noir will be skipped)",
+                    "  Is this a Node.js app? "
+                    "(Noir scan and Noir-based URL seeding will be skipped)",
                     default=current_node,
                 ).lower()
                 node_app = ans in ("y", "yes")
@@ -466,6 +514,7 @@ class InteractiveProjectWizard:
             xsstrike_mode = _interview_xsstrike_mode(
                 base_urls=base_urls,
                 oas3_path=oas3_path,
+                node_app=node_app,
                 current_mode=existing.xsstrike_mode,
             )
 
@@ -743,11 +792,13 @@ class InteractiveProjectWizard:
         lang_input = _prompt(prompt_label, default=default_langs)
         langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-        # Node.js app flag — Noir skipped for Node apps (JS parser limitation)
+        # Node.js app flag — Noir and Noir-based URL seeding skipped for
+        # Node apps (Noir JS parser limitation).
         node_app = False
         if _has_js(langs):
             ans = _prompt(
-                "  Is this a Node.js app? (Noir will be skipped) [y/N]",
+                "  Is this a Node.js app? "
+                "(Noir scan and Noir-based URL seeding will be skipped) [y/N]",
                 default="N",
             ).lower()
             node_app = ans in ("y", "yes")
@@ -833,7 +884,7 @@ class InteractiveProjectWizard:
 
         # XSStrike URL seed mode — only shown when base URLs are configured
         xsstrike_mode = _interview_xsstrike_mode(
-            base_urls=base_urls, oas3_path=oas3_path
+            base_urls=base_urls, oas3_path=oas3_path, node_app=node_app
         )
 
         return Repository(

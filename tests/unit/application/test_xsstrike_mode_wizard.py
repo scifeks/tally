@@ -110,12 +110,68 @@ class TestXSSTrikeWizardInvalidSelections:
             )
         assert result == "crawl"
 
-    def test_provided_without_oas3_path_returns_noir(self) -> None:
-        with patch("builtins.input", return_value="provided"):
+    def test_provided_without_oas3_path_re_prompts(self) -> None:
+        with patch("builtins.input", side_effect=["provided", "crawl"]):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
             )
-        assert result == "noir"
+        assert result == "crawl"
+
+
+# ---------------------------------------------------------------------------
+# Node.js app constraints
+# ---------------------------------------------------------------------------
+
+
+class TestXSSTrikeWizardNodeApp:
+    def test_node_app_without_oas3_path_returns_crawl_without_prompt(
+        self,
+    ) -> None:
+        with patch("builtins.input") as mock_input:
+            result = _interview_xsstrike_mode(
+                base_urls=["http://localhost:8080"],
+                oas3_path="",
+                node_app=True,
+            )
+        mock_input.assert_not_called()
+        assert result == "crawl"
+
+    def test_node_app_with_oas3_path_default_is_provided(self) -> None:
+        with patch("builtins.input", return_value=""):
+            result = _interview_xsstrike_mode(
+                base_urls=["http://localhost:8080"],
+                oas3_path="/endpoints.json",
+                node_app=True,
+            )
+        assert result == "provided"
+
+    def test_node_app_with_oas3_path_can_choose_crawl(self) -> None:
+        with patch("builtins.input", return_value="crawl"):
+            result = _interview_xsstrike_mode(
+                base_urls=["http://localhost:8080"],
+                oas3_path="/endpoints.json",
+                node_app=True,
+            )
+        assert result == "crawl"
+
+    def test_noir_rejected_when_node_app_with_oas3_path(self) -> None:
+        with patch("builtins.input", side_effect=["noir", "provided"]):
+            result = _interview_xsstrike_mode(
+                base_urls=["http://localhost:8080"],
+                oas3_path="/endpoints.json",
+                node_app=True,
+            )
+        assert result == "provided"
+
+    def test_current_mode_noir_overridden_when_node_app(self) -> None:
+        with patch("builtins.input", return_value=""):
+            result = _interview_xsstrike_mode(
+                base_urls=["http://localhost:8080"],
+                oas3_path="/endpoints.json",
+                node_app=True,
+                current_mode="noir",
+            )
+        assert result == "provided"
 
 
 # ---------------------------------------------------------------------------
@@ -160,4 +216,19 @@ class TestRepositoryXSSTrikeMode:
                 path="/tmp",
                 languages=[],
                 xsstrike_mode="bad_mode",
+            )
+
+    def test_node_app_with_noir_mode_raises_validation_error(self) -> None:
+        from pydantic import ValidationError
+
+        from core.config.schemas import Repository
+
+        with pytest.raises(ValidationError, match="noir"):
+            Repository(
+                name="r",
+                type=["api"],
+                path="/tmp",
+                languages=[],
+                node_app=True,
+                xsstrike_mode="noir",
             )

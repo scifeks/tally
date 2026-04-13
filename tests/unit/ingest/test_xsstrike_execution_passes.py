@@ -81,8 +81,8 @@ class TestBaseProperties:
     def test_category(self) -> None:
         assert XSSTrikeLocalTool().category == "web"
 
-    def test_always_run_false(self) -> None:
-        assert XSSTrikeLocalTool().always_run is False
+    def test_always_run_true(self) -> None:
+        assert XSSTrikeLocalTool().always_run is True
 
     def test_count_findings_from_summary(self) -> None:
         tool = XSSTrikeLocalTool()

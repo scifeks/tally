@@ -132,6 +132,17 @@ class Repository(BaseModel):
             raise ValueError("'container_name' is required when 'docker_path' is set")
         return self
 
+    @model_validator(mode="after")
+    def validate_xsstrike_settings(self) -> "Repository":
+        """Ensure xsstrike_mode is compatible with node_app setting."""
+        if self.node_app and self.xsstrike_mode == "noir":
+            raise ValueError(
+                "xsstrike_mode='noir' is invalid for Node.js repositories "
+                "(Noir cannot parse Node.js endpoints). "
+                "Use 'crawl' or 'provided' instead."
+            )
+        return self
+
 
 def build_excluded_dirs(repo: Repository) -> list[str]:
     """Return deduplicated list of dir names to exclude from scans.
