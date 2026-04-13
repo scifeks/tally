@@ -28,6 +28,28 @@ _VULN_URL_RE = re.compile(r"Vulnerable webpage:\s*(.+)")
 # Console fmt:  "[++] Vector for <param>: <payload>"
 _VULN_VEC_RE = re.compile(r"Vector for\s+(.+?):\s*(.+)")
 
+# retireJs plugin line patterns.
+# "plugins.retireJs - GOOD - Vulnerable component: jquery v3.2.1"
+_RETIREJS_COMPONENT_RE = re.compile(
+    r"plugins\.retireJs\s+-\s+GOOD\s+-\s+Vulnerable component:\s*(.+)"
+)
+# "plugins.retireJs - INFO - Component location: <url>"
+_RETIREJS_LOCATION_RE = re.compile(
+    r"plugins\.retireJs\s+-\s+INFO\s+-\s+Component location:\s*(.+)"
+)
+# "plugins.retireJs - INFO - Summary: <text>"
+_RETIREJS_SUMMARY_RE = re.compile(
+    r"plugins\.retireJs\s+-\s+INFO\s+-\s+(?:\[92m)?Summary:(?:\[0m)?\s*(.+)"
+)
+# "plugins.retireJs - INFO - Severity: <level>"
+_RETIREJS_SEVERITY_RE = re.compile(
+    r"plugins\.retireJs\s+-\s+INFO\s+-\s+Severity:\s*(.+)"
+)
+# "plugins.retireJs - INFO - CVE: <cve-id>"
+_RETIREJS_CVE_RE = re.compile(r"plugins\.retireJs\s+-\s+INFO\s+-\s+CVE:\s*(.+)")
+# Any retireJs INFO/GOOD line (used to detect we're still inside a block).
+_RETIREJS_ANY_RE = re.compile(r"plugins\.retireJs\s+-\s+")
+
 
 # ---------------------------------------------------------------------------
 # Parse functions
@@ -46,7 +68,11 @@ def parse_xsstrike_log(log_path: Path) -> dict[str, Any]:
 def parse_xsstrike_log_string(text: str) -> dict[str, Any]:
     """Parse XSStrike log content from a string into structured finding data."""
     if not text or not text.strip():
-        return {"findings": [], "summary": {"total_findings": 0}}
+        return {
+            "findings": [],
+            "component_findings": [],
+            "summary": {"total_findings": 0},
+        }
     lines = text.splitlines()
     return _parse_xsstrike_lines(lines)
 
@@ -60,20 +86,79 @@ def _strip_ansi(line: str) -> str:
     return _ANSI_RE.sub("", line).strip()
 
 
+def _flush_retirejs(
+    pending: dict[str, Any],
+    component_findings: list[dict[str, Any]],
+) -> None:
+    """Flush a pending retireJs block into component_findings if it has a name."""
+    if pending.get("component_name"):
+        component_findings.append(dict(pending))
+    pending.clear()
+
+
 def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
-    """Correlate consecutive VULN URL + vector line pairs into findings."""
+    """Correlate VULN line pairs and retireJs blocks into findings."""
     findings: list[dict[str, Any]] = []
+    component_findings: list[dict[str, Any]] = []
     pending_url: str | None = None
+    pending_retirejs: dict[str, Any] = {}
 
     for raw_line in lines:
         line = _strip_ansi(raw_line)
         if not line:
             continue
 
+        # --- retireJs block parsing ---
+        component_match = _RETIREJS_COMPONENT_RE.search(line)
+        if component_match:
+            # New component block — flush any previous pending block first.
+            _flush_retirejs(pending_retirejs, component_findings)
+            raw_component = component_match.group(1).strip()
+            # Split "jquery v3.2.1" → name="jquery", version="3.2.1"
+            parts = raw_component.rsplit(" ", 1)
+            name = parts[0].strip()
+            version = parts[1].strip().lstrip("v") if len(parts) == 2 else ""
+            pending_retirejs = {
+                "component_name": name,
+                "component_version": version,
+            }
+            continue
+
+        if _RETIREJS_ANY_RE.search(line):
+            # We're inside a retireJs block — accumulate fields.
+            loc_match = _RETIREJS_LOCATION_RE.search(line)
+            if loc_match:
+                pending_retirejs["component_location"] = loc_match.group(1).strip()
+                continue
+
+            summary_match = _RETIREJS_SUMMARY_RE.search(line)
+            if summary_match:
+                pending_retirejs["summary"] = summary_match.group(1).strip()
+                continue
+
+            severity_match = _RETIREJS_SEVERITY_RE.search(line)
+            if severity_match:
+                pending_retirejs["severity"] = severity_match.group(1).strip().lower()
+                continue
+
+            cve_match = _RETIREJS_CVE_RE.search(line)
+            if cve_match:
+                pending_retirejs["cve"] = cve_match.group(1).strip()
+                continue
+
+            # Other retireJs INFO lines (e.g. "Total vulnerabilities:") —
+            # ignore but stay in block.
+            continue
+
+        # Non-retireJs line — flush any open retireJs block.
+        if pending_retirejs:
+            _flush_retirejs(pending_retirejs, component_findings)
+            pending_retirejs = {}
+
+        # --- VULN pair parsing ---
         url_match = _VULN_URL_RE.search(line)
         if url_match:
             if pending_url is not None:
-                # Unpaired URL — previous URL had no matching vector line.
                 logger.warning(
                     "XSStrike: unpaired 'Vulnerable webpage' line (no vector "
                     "followed): %s",
@@ -85,7 +170,6 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
         vec_match = _VULN_VEC_RE.search(line)
         if vec_match:
             if pending_url is None:
-                # Vector line with no preceding URL line — skip.
                 logger.warning(
                     "XSStrike: 'Vector for' line with no preceding URL: %s",
                     line[:120],
@@ -102,15 +186,21 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
             )
             pending_url = None
 
+    # Flush any trailing retireJs block.
+    if pending_retirejs:
+        _flush_retirejs(pending_retirejs, component_findings)
+
     if pending_url is not None:
         logger.warning(
             "XSStrike: trailing unpaired 'Vulnerable webpage' line: %s",
             pending_url,
         )
 
+    total = len(findings) + len(component_findings)
     return {
         "findings": findings,
-        "summary": {"total_findings": len(findings)},
+        "component_findings": component_findings,
+        "summary": {"total_findings": total},
     }
 
 
@@ -144,21 +234,27 @@ class XSSTrikeHandler:
     normalized_fields: list[str] = [
         "confidence",
         "cwe",
+        "description",
         "finding_type",
+        "package_name",
+        "package_version",
         "param",
         "payload",
         "severity",
         "url",
+        "vulnerability_id",
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
         parsed: dict[str, Any] = result.parsed_data or {}
         findings: list[dict[str, Any]] = parsed.get("findings", [])
+        component_findings: list[dict[str, Any]] = parsed.get("component_findings", [])
 
         timestamp = result.timestamp
         source_file = _first_output_file(result.output_files)
 
         rows: list[dict] = []
+
         for finding in findings:
             url = finding.get("url", "")
             param = finding.get("param", "")
@@ -181,25 +277,68 @@ class XSSTrikeHandler:
             row.update(_shared_meta(self, "vulnerability"))
             rows.append(row)
 
+        for cf in component_findings:
+            row = {
+                "tool": "xsstrike",
+                "profile": profile,
+                "finding_type": json.dumps(["dependency"]),
+                "severity": cf.get("severity", "low"),
+                "confidence": "confirmed",
+                "risk_type": "Vulnerable Component",
+                "package_name": cf.get("component_name", ""),
+                "package_version": cf.get("component_version", ""),
+                "vulnerability_id": cf.get("cve", ""),
+                "url": cf.get("component_location", ""),
+                "timestamp": timestamp,
+                "source_file": source_file,
+            }
+            if cf.get("summary"):
+                row["description"] = cf["summary"]
+            row.update(_shared_meta(self, "dependency"))
+            rows.append(row)
+
         return rows
 
     def render(self, row: dict) -> str:
-        parts = [
-            "Tool: xsstrike",
-            f"URL: {row.get('url', '')}",
-            f"Parameter: {row.get('param', '')}",
-            f"Payload: {row.get('payload', '')}",
-            f"Severity: {row.get('severity', '')}",
-            f"Confidence: {row.get('confidence', '')}",
-            f"CWE: {row.get('cwe_id', 79)}",
-        ]
-        if row.get("owasp_name"):
-            parts.append(f"OWASP category: {row['owasp_name']}")
-        if row.get("title"):
-            parts.append(f"Title: {row['title']}")
+        if row.get("package_name"):
+            parts = [
+                "Tool: xsstrike",
+                f"Component: {row.get('package_name', '')}@"
+                f"{row.get('package_version', '')}",
+                f"CVE: {row.get('vulnerability_id', '')}",
+                f"Severity: {row.get('severity', '')}",
+                f"URL: {row.get('url', '')}",
+            ]
+            if row.get("description"):
+                parts.append(f"Description: {row['description']}")
+            if row.get("risk_type"):
+                parts.append(f"Risk type: {row['risk_type']}")
+        else:
+            parts = [
+                "Tool: xsstrike",
+                f"URL: {row.get('url', '')}",
+                f"Parameter: {row.get('param', '')}",
+                f"Payload: {row.get('payload', '')}",
+                f"Severity: {row.get('severity', '')}",
+                f"Confidence: {row.get('confidence', '')}",
+                f"CWE: {row.get('cwe_id', 79)}",
+            ]
+            if row.get("owasp_name"):
+                parts.append(f"OWASP category: {row['owasp_name']}")
+            if row.get("title"):
+                parts.append(f"Title: {row['title']}")
         return "[xsstrike] " + " | ".join(parts)
 
     def fingerprint_key(self, finding: dict[str, Any]) -> str:
+        if finding.get("package_name"):
+            return "|".join(
+                [
+                    "xsstrike",
+                    str(finding.get("package_name", "")),
+                    str(finding.get("vulnerability_id", "")),
+                    str(finding.get("url", "")),
+                ]
+            )
         return "|".join(
             [
                 "xsstrike",

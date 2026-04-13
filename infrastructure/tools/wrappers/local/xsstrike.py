@@ -91,11 +91,17 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 When provided, ``-u`` is omitted and ``--seeds`` is used.
             log_file (str): Absolute path for the XSStrike log output.
                 Required.
+            crawl_level (int): Passed as ``-l``. Controls crawl depth.
+                Defaults to 10.
+            headers (dict[str, str] | None): Extra HTTP headers serialised
+                as JSON and passed via ``--headers``.
         """
         raw = kwargs or {}
         base_url: str | None = str(raw["base_url"]) if "base_url" in raw else None
         seeds_file: str | None = str(raw["seeds_file"]) if "seeds_file" in raw else None
         log_file: str | None = str(raw["log_file"]) if "log_file" in raw else None
+        crawl_level: int = int(raw.get("crawl_level", 10))  # type: ignore[arg-type]
+        headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
 
         if not base_url and not seeds_file:
             raise ValueError("Either base_url or seeds_file is required for xsstrike")
@@ -115,12 +121,18 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
             [
                 "--crawl",
                 "--skip",
+                "-l",
+                str(crawl_level),
                 "--file-log-level",
                 "DEBUG",
                 "--log-file",
                 str(log_file),
             ]
         )
+
+        if headers:
+            cmd.extend(["--headers", json.dumps(headers)])
+
         return cmd
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
@@ -148,7 +160,7 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         mode = (repo.xsstrike_mode or "crawl").lower()
 
         output_dir = (
-            Path(context.base_path)
+            Path(context.base_path).resolve()
             / "projects"
             / context.project_name
             / "tool_outputs"
@@ -159,7 +171,12 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         log_file = str(output_dir / f"{repo.name}_{ts}.log")
 
-        kwargs: dict[str, Any] = {"log_file": log_file}
+        kwargs: dict[str, Any] = {
+            "log_file": log_file,
+            "crawl_level": repo.xsstrike_crawl_level,
+        }
+        if repo.xsstrike_headers:
+            kwargs["headers"] = dict(repo.xsstrike_headers)
 
         if mode == "noir":
             seeds_file = _build_seeds_from_noir(

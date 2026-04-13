@@ -72,6 +72,22 @@ class Repository(BaseModel):
             "Only relevant when base_urls is non-empty."
         ),
     )
+    xsstrike_crawl_level: int = Field(
+        default=10,
+        description=(
+            "XSStrike crawl depth level passed as -l. Default 10 ensures "
+            "deeply nested pages are reached. Reduce for faster scans on "
+            "shallow apps."
+        ),
+    )
+    xsstrike_headers: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Extra HTTP headers passed to XSStrike via --headers (JSON "
+            "serialised). Use to supply authentication cookies, e.g. "
+            '{"Cookie": "session=abc123"}.'
+        ),
+    )
 
     @field_validator("xsstrike_mode")
     @classmethod

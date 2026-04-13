@@ -65,6 +65,8 @@ def test_repo_edit_updates_type(
     h.send("")
     h.expect("Endpoint definition file")
     h.send("")
+    h.expect("XSStrike seed mode")
+    h.send("")
     output = h.wait_for_prompt()
 
     assert "updated" in output

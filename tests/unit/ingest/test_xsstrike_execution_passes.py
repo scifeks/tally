@@ -26,6 +26,8 @@ def _make_repo(
     base_urls: list[str] | None = None,
     oas3_path: str = "",
     xsstrike_mode: str = "crawl",
+    xsstrike_crawl_level: int = 10,
+    xsstrike_headers: dict[str, str] | None = None,
     path: str = "/repo",
 ) -> Repository:
     return Repository.model_construct(
@@ -40,6 +42,8 @@ def _make_repo(
         ignore_dirs=[],
         oas3_path=oas3_path,
         xsstrike_mode=xsstrike_mode,
+        xsstrike_crawl_level=xsstrike_crawl_level,
+        xsstrike_headers=xsstrike_headers or {},
     )
 
 
@@ -193,6 +197,32 @@ class TestBuildCommandErrors:
 # ---------------------------------------------------------------------------
 # build_execution_passes — crawl mode
 # ---------------------------------------------------------------------------
+
+
+class TestBuildExecutionPassesLogFilePath:
+    def test_log_file_is_absolute_when_base_path_is_dot(self, tmp_path: Path) -> None:
+        """log_file must be absolute so xsstrike can write it regardless of its CWD.
+
+        XSStrike changes its working directory to its own install root on startup.
+        A relative log_file path resolves against that directory, not the tally
+        project root, causing a FileNotFoundError and an instant-exit 0-result scan.
+        """
+        repo = _make_repo(xsstrike_mode="crawl")
+        ctx = _make_context(repo, ".")
+        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        log_file = passes[0].kwargs.get("log_file", "")
+        assert Path(str(log_file)).is_absolute(), (
+            f"log_file must be absolute; got {log_file!r}"
+        )
+
+    def test_log_file_is_absolute_when_base_path_is_absolute(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _make_repo(xsstrike_mode="crawl")
+        ctx = _make_context(repo, str(tmp_path))
+        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        log_file = passes[0].kwargs.get("log_file", "")
+        assert Path(str(log_file)).is_absolute()
 
 
 class TestBuildExecutionPassesCrawl:
@@ -431,3 +461,78 @@ class TestBuildSeedsFromOas3:
         f.write_text(json.dumps({"openapi": "3.0.0", "paths": {}}))
         result = _build_seeds_from_oas3(f, "http://x.com", tmp_path, "ts")
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# build_command — crawl level
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCommandCrawlLevel:
+    def test_default_crawl_level_is_10(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        assert "-l" in cmd
+        idx = cmd.index("-l")
+        assert cmd[idx + 1] == "10"
+
+    def test_custom_crawl_level_passed_through(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(
+            base_url="http://localhost:8080", log_file=log, crawl_level=5
+        )
+        idx = cmd.index("-l")
+        assert cmd[idx + 1] == "5"
+
+    def test_crawl_level_from_repo_config_used(self, tmp_path: Path) -> None:
+        repo = _make_repo(xsstrike_crawl_level=7)
+        ctx = _make_context(repo, str(tmp_path))
+        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        assert passes[0].kwargs.get("crawl_level") == 7
+
+
+# ---------------------------------------------------------------------------
+# build_command — headers
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCommandHeaders:
+    def test_no_headers_kwarg_omits_headers_flag(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        assert "--headers" not in cmd
+
+    def test_headers_kwarg_adds_headers_flag(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        headers = {"Cookie": "session=abc123"}
+        cmd = tool.build_command(
+            base_url="http://localhost:8080", log_file=log, headers=headers
+        )
+        assert "--headers" in cmd
+
+    def test_headers_value_is_json_serialised(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        headers = {"Cookie": "session=abc123", "X-Forwarded-For": "127.0.0.1"}
+        cmd = tool.build_command(
+            base_url="http://localhost:8080", log_file=log, headers=headers
+        )
+        idx = cmd.index("--headers")
+        parsed = json.loads(cmd[idx + 1])
+        assert parsed == headers
+
+    def test_repo_xsstrike_headers_passed_to_kwargs(self, tmp_path: Path) -> None:
+        repo = _make_repo(xsstrike_headers={"Cookie": "PHPSESSID=xyz"})
+        ctx = _make_context(repo, str(tmp_path))
+        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        assert passes[0].kwargs.get("headers") == {"Cookie": "PHPSESSID=xyz"}
+
+    def test_repo_empty_xsstrike_headers_not_in_kwargs(self, tmp_path: Path) -> None:
+        repo = _make_repo(xsstrike_headers={})
+        ctx = _make_context(repo, str(tmp_path))
+        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        assert "headers" not in passes[0].kwargs

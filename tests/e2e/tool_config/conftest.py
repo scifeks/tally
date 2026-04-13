@@ -24,6 +24,7 @@ ALL_TOOL_NAMES: list[str] = sorted(
         "osv-scanner",
         "pip-audit",
         "semgrep",
+        "xsstrike",
         "zap",
     ]
 )
