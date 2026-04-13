@@ -189,6 +189,14 @@ def _interview_xsstrike_mode(
     )
 
 
+_DALFOX_MODES: frozenset[str] = frozenset({"noir", "provided"})
+
+_DALFOX_MODE_DESCRIPTIONS: dict[str, str] = {
+    "noir": "generate seeds from Noir endpoint discovery output",
+    "provided": ("generate seeds from your endpoint file (requires endpoint file)"),
+}
+
+
 def _interview_dalfox_mode(
     base_urls: list[str],
     oas3_path: str,
@@ -197,9 +205,68 @@ def _interview_dalfox_mode(
 ) -> str:
     """Prompt for DalFox URL seed mode.
 
-    Delegates to ``_interview_crawl_mode`` with label 'DalFox'.
+    DalFox has no built-in crawler; a seeds file is always required.
+    Valid modes:
+
+    - ``noir``     — seeds from Noir OAS3 output; unavailable for Node apps.
+    - ``provided`` — seeds from the user-supplied endpoint file; requires
+      ``oas3_path`` to be set.
+
+    Returns the existing/default mode without prompting when ``base_urls``
+    is empty.  Returns ``""`` when no valid mode exists (DalFox will be
+    skipped at scan time).
     """
-    return _interview_crawl_mode("DalFox", base_urls, oas3_path, node_app, current_mode)
+    if not base_urls:
+        return current_mode or "noir"
+
+    valid_modes: set[str] = set()
+    if not node_app:
+        valid_modes.add("noir")
+    if oas3_path:
+        valid_modes.add("provided")
+
+    if not valid_modes:
+        print(
+            "  DalFox: no valid seed mode available "
+            "(Node.js app — Noir seeding disabled, "
+            "no endpoint file configured). DalFox will be skipped."
+        )
+        return ""
+
+    # Preferred default: provided > noir
+    default_mode = "provided" if oas3_path else "noir"
+    effective_default = current_mode if current_mode in valid_modes else default_mode
+
+    print("  DalFox URL seed mode:")
+    for mode in ("noir", "provided"):
+        if mode in valid_modes:
+            desc = _DALFOX_MODE_DESCRIPTIONS[mode]
+            print(f"    {mode:<8} — {desc}")
+    if node_app:
+        print("  (noir is unavailable — Noir cannot parse Node.js endpoints)")
+    if not oas3_path:
+        print("  (provided is unavailable — no endpoint file configured)")
+
+    while True:
+        raw = _prompt("  DalFox seed mode", default=effective_default).lower()
+        if raw in valid_modes:
+            return raw
+        if raw == "noir" and node_app:
+            print(
+                "  'noir' is not available for Node.js apps. "
+                f"Choose from: {', '.join(sorted(valid_modes))}"
+            )
+        elif raw == "provided" and not oas3_path:
+            print(
+                "  'provided' requires an endpoint file. "
+                "Add one first, then re-run 'repo edit'. "
+                f"Choose from: {', '.join(sorted(valid_modes))}"
+            )
+        else:
+            print(
+                f"  Invalid mode: {raw!r}. "
+                f"Choose from: {', '.join(sorted(valid_modes))}"
+            )
 
 
 class InteractiveProjectWizard:

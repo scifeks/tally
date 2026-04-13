@@ -89,12 +89,12 @@ class Repository(BaseModel):
         ),
     )
     dalfox_mode: str = Field(
-        default="crawl",
+        default="noir",
         description=(
-            "DalFox URL seed mode. One of: 'crawl' (scan from base_url), "
-            "'noir' (generate seeds from Noir OAS3 output), "
-            "'provided' (generate seeds from the user-provided oas3_path). "
-            "Only relevant when base_urls is non-empty."
+            "DalFox URL seed mode. One of: 'noir' (generate seeds from Noir "
+            "OAS3 output) or 'provided' (generate seeds from the user-provided "
+            "oas3_path). DalFox has no built-in crawler; a seeds file is always "
+            "required. Only relevant when base_urls is non-empty."
         ),
     )
     dalfox_headers: dict[str, str] = Field(
@@ -120,10 +120,10 @@ class Repository(BaseModel):
     @classmethod
     def validate_dalfox_mode(cls, v: str) -> str:
         """Validate dalfox_mode is one of the accepted values."""
-        valid = {"crawl", "noir", "provided", ""}
+        valid = {"noir", "provided", ""}
         if v not in valid:
             raise ValueError(
-                f"Invalid dalfox_mode: {v!r}. Valid values: crawl, noir, provided"
+                f"Invalid dalfox_mode: {v!r}. Valid values: noir, provided"
             )
         return v
 
@@ -177,7 +177,7 @@ class Repository(BaseModel):
             raise ValueError(
                 "dalfox_mode='noir' is invalid for Node.js repositories "
                 "(Noir cannot parse Node.js endpoints). "
-                "Use 'crawl' or 'provided' instead."
+                "Use 'provided' instead."
             )
         return self
 

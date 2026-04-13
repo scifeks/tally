@@ -25,7 +25,7 @@ from infrastructure.tools.wrappers.local.dalfox import (
 def _make_repo(
     base_urls: list[str] | None = None,
     oas3_path: str = "",
-    dalfox_mode: str = "crawl",
+    dalfox_mode: str = "noir",
     dalfox_headers: dict[str, str] | None = None,
     node_app: bool = False,
     path: str = "/repo",
@@ -58,6 +58,14 @@ def _make_context(repo: Repository, base_path: str) -> ExecutionContext:
         registry=registry,
         is_docker=False,
     )
+
+
+def _setup_noir_output(tmp_path: Path, paths: dict | None = None) -> None:
+    """Write a minimal Noir OAS3 fixture into the expected directory."""
+    noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
+    noir_dir.mkdir(parents=True, exist_ok=True)
+    oas3 = {"openapi": "3.0.0", "paths": paths if paths is not None else {"/api": {}}}
+    (noir_dir / "testrepo_20240101T000000_oas3.json").write_text(json.dumps(oas3))
 
 
 # ---------------------------------------------------------------------------
@@ -237,12 +245,14 @@ class TestBuildCommandHeaders:
         assert cmd.count("-H") == 2
 
     def test_repo_dalfox_headers_passed_to_kwargs(self, tmp_path: Path) -> None:
+        _setup_noir_output(tmp_path)
         repo = _make_repo(dalfox_headers={"Cookie": "PHPSESSID=xyz"})
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
         assert passes[0].kwargs.get("headers") == {"Cookie": "PHPSESSID=xyz"}
 
     def test_repo_empty_dalfox_headers_not_in_kwargs(self, tmp_path: Path) -> None:
+        _setup_noir_output(tmp_path)
         repo = _make_repo(dalfox_headers={})
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
@@ -267,69 +277,26 @@ class TestBuildCommandErrors:
 
 
 # ---------------------------------------------------------------------------
-# build_execution_passes — crawl mode
+# build_execution_passes — output file path
 # ---------------------------------------------------------------------------
 
 
 class TestBuildExecutionPassesOutputFilePath:
-    def test_output_file_is_absolute_when_base_path_is_dot(
-        self, tmp_path: Path
-    ) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
-        ctx = _make_context(repo, ".")
-        passes = DalFoxLocalTool().build_execution_passes(ctx)
-        output_file = passes[0].kwargs.get("output_file", "")
-        assert Path(str(output_file)).is_absolute(), (
-            f"output_file must be absolute; got {output_file!r}"
-        )
-
-    def test_output_file_is_absolute_when_base_path_is_absolute(
-        self, tmp_path: Path
-    ) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
+    def test_output_file_is_absolute(self, tmp_path: Path) -> None:
+        _setup_noir_output(tmp_path)
+        repo = _make_repo(dalfox_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
         output_file = passes[0].kwargs.get("output_file", "")
         assert Path(str(output_file)).is_absolute()
 
-
-class TestBuildExecutionPassesCrawl:
-    def test_crawl_mode_returns_one_pass(self, tmp_path: Path) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert len(passes) == 1
-
-    def test_crawl_mode_kwargs_contain_base_url(self, tmp_path: Path) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
-
-    def test_crawl_mode_kwargs_no_seeds_file(self, tmp_path: Path) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert "seeds_file" not in passes[0].kwargs
-
     def test_output_dir_created(self, tmp_path: Path) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
+        _setup_noir_output(tmp_path)
+        repo = _make_repo(dalfox_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         DalFoxLocalTool().build_execution_passes(ctx)
         expected = tmp_path / "projects" / "testproject" / "tool_outputs" / "dalfox"
         assert expected.exists()
-
-    def test_label_suffix_is_repo_name(self, tmp_path: Path) -> None:
-        repo = _make_repo(dalfox_mode="crawl")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].label_suffix == "testrepo"
-
-    def test_default_empty_mode_treated_as_crawl(self, tmp_path: Path) -> None:
-        repo = _make_repo(dalfox_mode="")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
 
 
 # ---------------------------------------------------------------------------
@@ -339,10 +306,7 @@ class TestBuildExecutionPassesCrawl:
 
 class TestBuildExecutionPassesNoir:
     def test_noir_mode_with_oas3_uses_seeds(self, tmp_path: Path) -> None:
-        noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
-        noir_dir.mkdir(parents=True)
-        oas3 = {"openapi": "3.0.0", "paths": {"/api/users": {}, "/api/items": {}}}
-        (noir_dir / "testrepo_20240101T000000_oas3.json").write_text(json.dumps(oas3))
+        _setup_noir_output(tmp_path, {"/api/users": {}, "/api/items": {}})
         repo = _make_repo(dalfox_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
@@ -350,10 +314,7 @@ class TestBuildExecutionPassesNoir:
         assert "base_url" not in passes[0].kwargs
 
     def test_noir_seeds_file_contains_correct_urls(self, tmp_path: Path) -> None:
-        noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
-        noir_dir.mkdir(parents=True)
-        oas3 = {"openapi": "3.0.0", "paths": {"/api/users": {}}}
-        (noir_dir / "testrepo_20240101T000000_oas3.json").write_text(json.dumps(oas3))
+        _setup_noir_output(tmp_path, {"/api/users": {}})
         repo = _make_repo(dalfox_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
@@ -361,24 +322,18 @@ class TestBuildExecutionPassesNoir:
         urls = seeds_path.read_text(encoding="utf-8").strip().splitlines()
         assert "http://localhost:8080/api/users" in urls
 
-    def test_noir_mode_no_oas3_falls_back_to_crawl(self, tmp_path: Path) -> None:
+    def test_noir_mode_no_oas3_output_skips(self, tmp_path: Path) -> None:
         repo = _make_repo(dalfox_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
-        assert "seeds_file" not in passes[0].kwargs
+        assert passes == []
 
-    def test_noir_mode_empty_oas3_paths_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
-        noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
-        noir_dir.mkdir(parents=True)
-        oas3 = {"openapi": "3.0.0", "paths": {}}
-        (noir_dir / "testrepo_20240101T000000_oas3.json").write_text(json.dumps(oas3))
+    def test_noir_mode_empty_oas3_paths_skips(self, tmp_path: Path) -> None:
+        _setup_noir_output(tmp_path, {})
         repo = _make_repo(dalfox_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert passes == []
 
     def test_noir_mode_picks_lexicographically_last_oas3(self, tmp_path: Path) -> None:
         noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
@@ -398,6 +353,13 @@ class TestBuildExecutionPassesNoir:
         content = seeds_path.read_text(encoding="utf-8")
         assert "/new" in content
         assert "/old" not in content
+
+    def test_label_suffix_is_repo_name(self, tmp_path: Path) -> None:
+        _setup_noir_output(tmp_path)
+        repo = _make_repo(dalfox_mode="noir")
+        ctx = _make_context(repo, str(tmp_path))
+        passes = DalFoxLocalTool().build_execution_passes(ctx)
+        assert passes[0].label_suffix == "testrepo"
 
 
 # ---------------------------------------------------------------------------
@@ -428,24 +390,33 @@ class TestBuildExecutionPassesProvided:
         urls = seeds_path.read_text(encoding="utf-8").strip().splitlines()
         assert "http://localhost:8080/api/v1/health" in urls
 
-    def test_provided_mode_empty_oas3_path_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_provided_mode_empty_oas3_path_skips(self, tmp_path: Path) -> None:
         repo = _make_repo(dalfox_mode="provided", oas3_path="")
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert passes == []
 
-    def test_provided_mode_missing_oas3_file_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_provided_mode_missing_oas3_file_skips(self, tmp_path: Path) -> None:
         repo = _make_repo(
             dalfox_mode="provided",
             oas3_path=str(tmp_path / "nonexistent.json"),
         )
         ctx = _make_context(repo, str(tmp_path))
         passes = DalFoxLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert passes == []
+
+
+# ---------------------------------------------------------------------------
+# build_execution_passes — unknown / empty mode
+# ---------------------------------------------------------------------------
+
+
+class TestBuildExecutionPassesUnknownMode:
+    def test_unknown_mode_skips(self, tmp_path: Path) -> None:
+        repo = _make_repo(dalfox_mode="")
+        ctx = _make_context(repo, str(tmp_path))
+        passes = DalFoxLocalTool().build_execution_passes(ctx)
+        assert passes == []
 
 
 # ---------------------------------------------------------------------------

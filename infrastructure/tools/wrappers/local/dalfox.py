@@ -5,15 +5,10 @@ Invocation modes
 The wrapper supports three URL seed modes, controlled by
 ``repo.dalfox_mode``:
 
-**crawl** (default)
-    DalFox scans from ``base_url`` directly.  ``--deep-domxss`` enables
-    headless Chrome DOM XSS testing with an extended payload set, which is
-    essential for SPAs (Angular, React hash-routing, etc.)::
+DalFox has **no built-in crawler**.  Seeds must be provided externally;
+this wrapper supports two modes:
 
-        dalfox url <base_url> --format json -o <output_file>
-            --no-spinner --no-color --deep-domxss
-
-**noir**
+**noir** (default)
     Seeds are generated from the most recent Noir OAS3 output for the
     repository.  Each OAS3 path is joined with ``base_url`` to produce a
     seeds file.  Falls back to ``crawl`` mode when no Noir output exists::
@@ -144,13 +139,14 @@ class DalFoxLocalTool(BaseDalFoxTool):
         """Return one ExecutionPass for DalFox.
 
         Resolves the URL seed mode from ``repo.dalfox_mode`` and builds the
-        appropriate kwargs.  Falls back to crawl mode when seeds cannot be
-        generated (e.g. Noir output missing, oas3_path empty).
+        appropriate kwargs.  Returns an empty list (skipping DalFox) when no
+        seeds file can be built — e.g. Noir output is missing or oas3_path
+        is empty.
         """
         assert context.repo is not None
         repo = context.repo
         base_url = repo.base_urls[0] if repo.base_urls else ""
-        mode = (repo.dalfox_mode or "crawl").lower()
+        mode = (repo.dalfox_mode or "noir").lower()
 
         output_dir = (
             Path(context.base_path).resolve()
@@ -183,10 +179,10 @@ class DalFoxLocalTool(BaseDalFoxTool):
                 kwargs["seeds_file"] = seeds_file
             else:
                 logger.info(
-                    "DalFox: no Noir output found for %s — falling back to crawl mode",
+                    "DalFox: no Noir output found for %s — skipping",
                     repo.name,
                 )
-                kwargs["base_url"] = base_url
+                return []
 
         elif mode == "provided":
             oas3_path = repo.oas3_path or ""
@@ -199,22 +195,25 @@ class DalFoxLocalTool(BaseDalFoxTool):
                 else:
                     logger.info(
                         "DalFox: could not extract seeds from oas3_path %r "
-                        "for %s — falling back to crawl mode",
+                        "for %s — skipping",
                         oas3_path,
                         repo.name,
                     )
-                    kwargs["base_url"] = base_url
+                    return []
             else:
                 logger.info(
-                    "DalFox: mode='provided' but oas3_path is empty for %s "
-                    "— falling back to crawl mode",
+                    "DalFox: mode='provided' but oas3_path is empty for %s — skipping",
                     repo.name,
                 )
-                kwargs["base_url"] = base_url
+                return []
 
         else:
-            # crawl mode (default)
-            kwargs["base_url"] = base_url
+            logger.warning(
+                "DalFox: unknown mode %r for %s — skipping",
+                mode,
+                repo.name,
+            )
+            return []
 
         return [
             ExecutionPass(
