@@ -14,6 +14,7 @@ _EXPECTED_TOOLS = {
     "osv-scanner",
     "pip-audit",
     "semgrep",
+    "xsstrike",
     "zap",
 }
 

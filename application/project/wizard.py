@@ -88,6 +88,60 @@ def _prompt(message: str, default: str = "") -> str:
     return raw or default
 
 
+_XSSTRIKE_MODE_HELP = (
+    "  XSStrike URL seed mode:\n"
+    "    crawl    — spider the app from base URL (default when no endpoint "
+    "file is set)\n"
+    "    noir     — generate seeds from Noir endpoint discovery output\n"
+    "    provided — generate seeds from your endpoint file (requires "
+    "oas3_path to be set)"
+)
+
+_XSSTRIKE_VALID_MODES: frozenset[str] = frozenset({"crawl", "noir", "provided"})
+
+
+def _interview_xsstrike_mode(
+    base_urls: list[str],
+    oas3_path: str,
+    current_mode: str = "",
+) -> str:
+    """Prompt for XSStrike URL seed mode.
+
+    Only shown when ``base_urls`` is non-empty.  Options depend on whether
+    ``oas3_path`` is configured:
+    - oas3_path set  → [provided (default), noir, crawl]
+    - no oas3_path   → [noir (default), crawl] ('provided' hidden)
+
+    Returns the chosen mode string, or the default when the prompt is skipped.
+    """
+    if not base_urls:
+        return "crawl"
+
+    has_oas3 = bool(oas3_path)
+    default_mode = "provided" if has_oas3 else "noir"
+    effective_default = (
+        current_mode if current_mode in _XSSTRIKE_VALID_MODES else default_mode
+    )
+
+    print(_XSSTRIKE_MODE_HELP)
+    if not has_oas3:
+        print("  (provided is hidden — no endpoint file configured)")
+
+    while True:
+        raw = _prompt("  XSStrike seed mode", default=effective_default).lower()
+        if raw not in _XSSTRIKE_VALID_MODES:
+            print(f"  Invalid mode: {raw!r}. Choose from: crawl, noir, provided")
+            continue
+        if raw == "provided" and not has_oas3:
+            print(
+                "  'provided' requires an endpoint file (oas3_path). "
+                "Add one via the endpoint file prompt above, then re-run "
+                "'repo edit'. Defaulting to 'noir'."
+            )
+            return "noir"
+        return raw
+
+
 class InteractiveProjectWizard:
     """Interactive terminal wizard for project and repository management."""
 
@@ -408,6 +462,13 @@ class InteractiveProjectWizard:
                     print("  Keeping existing endpoint file configuration.")
                     oas3_path = existing.oas3_path
 
+            # XSStrike URL seed mode — only shown when base URLs are configured
+            xsstrike_mode = _interview_xsstrike_mode(
+                base_urls=base_urls,
+                oas3_path=oas3_path,
+                current_mode=existing.xsstrike_mode,
+            )
+
             updated = Repository(
                 name=name,
                 type=types,
@@ -421,6 +482,7 @@ class InteractiveProjectWizard:
                 ignore_dirs=ignore_dirs,
                 dependencies_file=dependencies_file,
                 oas3_path=oas3_path,
+                xsstrike_mode=xsstrike_mode,
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
@@ -769,6 +831,11 @@ class InteractiveProjectWizard:
                 print(f"  File not found: {endpoint_input}")
                 print("  Skipping endpoint file — repository will be added without it.")
 
+        # XSStrike URL seed mode — only shown when base URLs are configured
+        xsstrike_mode = _interview_xsstrike_mode(
+            base_urls=base_urls, oas3_path=oas3_path
+        )
+
         return Repository(
             name=name,
             type=types,
@@ -782,4 +849,5 @@ class InteractiveProjectWizard:
             ignore_dirs=ignore_dirs,
             dependencies_file=dependencies_file,
             oas3_path=oas3_path,
+            xsstrike_mode=xsstrike_mode,
         )

@@ -17,6 +17,10 @@ _INSTALL_HINTS = {
     "composer-audit": "Included with Composer: https://getcomposer.org",
     "gitleaks": "https://github.com/gitleaks/gitleaks?tab=readme-ov-file#installing",
     "zap": "https://www.zaproxy.org/download/",
+    "xsstrike": (
+        "git clone https://github.com/s0md3v/XSStrike && "
+        "pip install fuzzywuzzy python-Levenshtein"
+    ),
 }
 
 # Minimum compatible versions for system tools (major, minor, patch).

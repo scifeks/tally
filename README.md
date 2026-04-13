@@ -6,7 +6,7 @@ Tally is a CLI REPL for orchestrating web application security auditing. It wrap
 
 ## Features
 
-- Wraps tools like Semgrep, OWASP ZAP, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
+- Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup — skips tools that are not installed
 - RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
@@ -208,10 +208,11 @@ around this by letting you mark a repository as a Node.js app during
 `repo add` / `repo edit`. When marked, Noir is skipped for that repository
 across all scan types and ZAP falls back to quickscan (spider-only) mode.
 
-**Planned:** A future release will allow configuring a path to a pre-existing
-OAS3, OAS2/Swagger, or Postman collection file on the repository so that ZAP
-can use it in place of a Noir-generated spec — bypassing Noir entirely for
-Node.js apps and for projects that already maintain an API spec.
+A path to a pre-existing OAS3, OAS2/Swagger, Postman collection, or HAR file
+can be configured on a repository via `repo add` / `repo edit`. When set, Tally
+converts the file to OAS3 and passes it to ZAP in place of a Noir-generated
+spec — bypassing Noir entirely for Node.js apps and any project that already
+maintains an API spec.
 
 See [docs/tools.md](docs/tools.md) for details.
 

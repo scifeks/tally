@@ -63,6 +63,26 @@ class Repository(BaseModel):
             "provided."
         ),
     )
+    xsstrike_mode: str = Field(
+        default="crawl",
+        description=(
+            "XSStrike URL seed mode. One of: 'crawl' (spider from base_url), "
+            "'noir' (generate seeds from Noir OAS3 output), "
+            "'provided' (generate seeds from the user-provided oas3_path). "
+            "Only relevant when base_urls is non-empty."
+        ),
+    )
+
+    @field_validator("xsstrike_mode")
+    @classmethod
+    def validate_xsstrike_mode(cls, v: str) -> str:
+        """Validate xsstrike_mode is one of the accepted values."""
+        valid = {"crawl", "noir", "provided", ""}
+        if v not in valid:
+            raise ValueError(
+                f"Invalid xsstrike_mode: {v!r}. Valid values: crawl, noir, provided"
+            )
+        return v
 
     @field_validator("type")
     @classmethod
