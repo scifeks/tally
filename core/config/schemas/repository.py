@@ -88,6 +88,22 @@ class Repository(BaseModel):
             '{"Cookie": "session=abc123"}.'
         ),
     )
+    dalfox_mode: str = Field(
+        default="crawl",
+        description=(
+            "DalFox URL seed mode. One of: 'crawl' (scan from base_url), "
+            "'noir' (generate seeds from Noir OAS3 output), "
+            "'provided' (generate seeds from the user-provided oas3_path). "
+            "Only relevant when base_urls is non-empty."
+        ),
+    )
+    dalfox_headers: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Extra HTTP headers passed to DalFox via -H. Use to supply "
+            'authentication cookies, e.g. {"Cookie": "session=abc123"}.'
+        ),
+    )
 
     @field_validator("xsstrike_mode")
     @classmethod
@@ -97,6 +113,17 @@ class Repository(BaseModel):
         if v not in valid:
             raise ValueError(
                 f"Invalid xsstrike_mode: {v!r}. Valid values: crawl, noir, provided"
+            )
+        return v
+
+    @field_validator("dalfox_mode")
+    @classmethod
+    def validate_dalfox_mode(cls, v: str) -> str:
+        """Validate dalfox_mode is one of the accepted values."""
+        valid = {"crawl", "noir", "provided", ""}
+        if v not in valid:
+            raise ValueError(
+                f"Invalid dalfox_mode: {v!r}. Valid values: crawl, noir, provided"
             )
         return v
 
@@ -138,6 +165,17 @@ class Repository(BaseModel):
         if self.node_app and self.xsstrike_mode == "noir":
             raise ValueError(
                 "xsstrike_mode='noir' is invalid for Node.js repositories "
+                "(Noir cannot parse Node.js endpoints). "
+                "Use 'crawl' or 'provided' instead."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_dalfox_settings(self) -> "Repository":
+        """Ensure dalfox_mode is compatible with node_app setting."""
+        if self.node_app and self.dalfox_mode == "noir":
+            raise ValueError(
+                "dalfox_mode='noir' is invalid for Node.js repositories "
                 "(Noir cannot parse Node.js endpoints). "
                 "Use 'crawl' or 'provided' instead."
             )

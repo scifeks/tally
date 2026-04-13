@@ -189,6 +189,19 @@ def _interview_xsstrike_mode(
     )
 
 
+def _interview_dalfox_mode(
+    base_urls: list[str],
+    oas3_path: str,
+    node_app: bool = False,
+    current_mode: str = "",
+) -> str:
+    """Prompt for DalFox URL seed mode.
+
+    Delegates to ``_interview_crawl_mode`` with label 'DalFox'.
+    """
+    return _interview_crawl_mode("DalFox", base_urls, oas3_path, node_app, current_mode)
+
+
 class InteractiveProjectWizard:
     """Interactive terminal wizard for project and repository management."""
 
@@ -518,6 +531,14 @@ class InteractiveProjectWizard:
                 current_mode=existing.xsstrike_mode,
             )
 
+            # DalFox URL seed mode — only shown when base URLs are configured
+            dalfox_mode = _interview_dalfox_mode(
+                base_urls=base_urls,
+                oas3_path=oas3_path,
+                node_app=node_app,
+                current_mode=existing.dalfox_mode,
+            )
+
             updated = Repository(
                 name=name,
                 type=types,
@@ -532,6 +553,10 @@ class InteractiveProjectWizard:
                 dependencies_file=dependencies_file,
                 oas3_path=oas3_path,
                 xsstrike_mode=xsstrike_mode,
+                xsstrike_crawl_level=existing.xsstrike_crawl_level,
+                xsstrike_headers=dict(existing.xsstrike_headers),
+                dalfox_mode=dalfox_mode,
+                dalfox_headers=dict(existing.dalfox_headers),
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
@@ -887,6 +912,11 @@ class InteractiveProjectWizard:
             base_urls=base_urls, oas3_path=oas3_path, node_app=node_app
         )
 
+        # DalFox URL seed mode — only shown when base URLs are configured
+        dalfox_mode = _interview_dalfox_mode(
+            base_urls=base_urls, oas3_path=oas3_path, node_app=node_app
+        )
+
         return Repository(
             name=name,
             type=types,
@@ -901,4 +931,5 @@ class InteractiveProjectWizard:
             dependencies_file=dependencies_file,
             oas3_path=oas3_path,
             xsstrike_mode=xsstrike_mode,
+            dalfox_mode=dalfox_mode,
         )
