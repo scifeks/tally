@@ -157,12 +157,15 @@ class ToolExecutor:
         )
         if proc.stderr:
             _log.info("Tool %s stderr:\n%s", tool.name, proc.stderr[:5000])
-        if not success and proc.stderr:
+        if proc.stdout and not success:
+            _log.info("Tool %s stdout:\n%s", tool.name, proc.stdout[:5000])
+        failure_output = proc.stderr or proc.stdout
+        if not success and failure_output:
             _log.error(
-                "Tool %s exited %d. stderr: %s",
+                "Tool %s exited %d. output: %s",
                 tool.name,
                 proc.returncode,
-                proc.stderr[:2000],
+                failure_output[:2000],
             )
 
         return ToolResult(
