@@ -6,7 +6,10 @@ you will have a tool that:
 - Runs automatically in the appropriate scan segment (`scan`, `scan --domain=sast`, etc.)
 - Has its findings ingested into ChromaDB and SQLite for `search` and `chat`
 - Appears in `tool list` and `tool add` setup
-- Requires **zero edits to any existing file**
+
+> **Required:** After writing the wrapper files you must register the tool in
+> `config/commands.json` (Step 5). The wrapper files alone are not enough —
+> tally only loads tools that appear in that file.
 
 ---
 

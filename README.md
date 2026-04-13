@@ -194,7 +194,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/findings-visualize.md](docs/findings-visualize.md) — Findings visualizer: browser-based findings browser with inline editing
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
-- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers
+- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers (requires `config/commands.json` registration to take effect)
 - [docs/docker.md](docs/docker.md) — Security Audit Containers
 - [docs/restrictions.md](docs/restrictions.md) — Legal restrictions
 
