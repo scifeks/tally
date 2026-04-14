@@ -173,7 +173,7 @@ class ScanCommands:
         try:
             if repo_names is not None:
                 if effective_tools is not None:
-                    effective_tools = self._maybe_warn_zap_without_noir(
+                    effective_tools = self._maybe_warn_dast_without_discovery(
                         effective_tools,
                         repo_names,
                         auto_approve,
@@ -200,7 +200,7 @@ class ScanCommands:
                         )
             else:
                 if effective_tools is not None:
-                    effective_tools = self._maybe_warn_zap_without_noir(
+                    effective_tools = self._maybe_warn_dast_without_discovery(
                         effective_tools,
                         None,
                         auto_approve,
@@ -370,30 +370,42 @@ class ScanCommands:
         return None, args
 
     # ------------------------------------------------------------------
-    # Private — ZAP-without-Noir warning
+    # Private — DAST-without-discovery warning
     # ------------------------------------------------------------------
 
-    def _maybe_warn_zap_without_noir(
+    def _maybe_warn_dast_without_discovery(
         self,
         tools: list[str],
         repo_names: list[str] | None,
         auto_approve: bool,
         orchestrator: object,
     ) -> list[str] | None:
-        """Warn when ZAP is requested but Noir OAS3 output is absent.
+        """Warn when DAST tools are requested but no discovery output exists.
+
+        DAST tools (zap, xsstrike, dalfox) work best when an endpoint
+        discovery tool (katana, noir) has already produced OAS3 output.
+        This method checks whether that output exists for the target repos
+        and, when it doesn't, prompts the user to prepend discovery tools.
 
         Returns the (possibly expanded) effective tool list to execute, or
         ``None`` to indicate that the scan was cancelled by the user.
 
-        When ``auto_approve`` is True the warning is suppressed and ZAP
-        proceeds in quickscan mode.
+        When ``auto_approve`` is True the warning is suppressed.
         """
-        if "zap" not in tools or "noir" in tools:
+        _dast_tools = {"zap", "xsstrike", "dalfox"}
+        _discovery_tools = {"katana", "noir"}
+
+        if not (_dast_tools & set(tools)):
+            return tools
+        if _discovery_tools & set(tools):
             return tools
         if auto_approve:
             return tools
 
-        from infrastructure.tools.wrappers.local.zap import _find_noir_oas3
+        from infrastructure.tools.wrappers.local.zap import (
+            _find_katana_oas3,
+            _find_noir_oas3,
+        )
 
         assert self.repl.active_project is not None
         repos = self.repl.config.load_repositories(self.repl.active_project)
@@ -404,10 +416,12 @@ class ScanCommands:
         )
 
         missing = [
-            r.name
+            r
             for r in target_repos
-            if not r.node_app
-            and not r.oas3_path
+            if not r.oas3_path
+            and not _find_katana_oas3(
+                self.repl.base_path, self.repl.active_project, r.name
+            )
             and not _find_noir_oas3(
                 self.repl.base_path, self.repl.active_project, r.name
             )
@@ -415,16 +429,15 @@ class ScanCommands:
         if not missing:
             return tools
 
-        missing_str = ", ".join(missing)
+        missing_str = ", ".join(r.name for r in missing)
         self.repl.console.print(
-            f"\n[yellow]Warning:[/yellow] No Noir endpoint scan found"
+            f"\n[yellow]Warning:[/yellow] No endpoint discovery output found"
             f" for: {missing_str}.\n"
-            "ZAP will run in quickscan mode only and may miss"
-            " API-only endpoints.\n"
+            "DAST tools work best with prior endpoint discovery output.\n"
         )
         self.repl.console.print(
-            "  1. Run Noir first, then ZAP [bold](recommended)[/bold]\n"
-            "  2. Run ZAP now in quickscan mode\n"
+            "  1. Run discovery first, then DAST [bold](recommended)[/bold]\n"
+            "  2. Run DAST now without discovery output\n"
             "  3. Cancel\n"
         )
         try:
@@ -439,9 +452,13 @@ class ScanCommands:
             self.repl.console.print("[dim]Scan cancelled.[/dim]")
             return None
         if choice == "1":
-            # Prepend noir so it runs first in the tool loop.
-            return ["noir"] + [t for t in tools if t != "noir"]
-        # choice == "2": proceed with ZAP only
+            # Prepend discovery tools: katana always, noir for non-node repos.
+            to_prepend: list[str] = ["katana"]
+            if any(not r.node_app for r in missing):
+                to_prepend.append("noir")
+            existing = [t for t in tools if t not in to_prepend]
+            return to_prepend + existing
+        # choice == "2": proceed without discovery
         return tools
 
     # ------------------------------------------------------------------

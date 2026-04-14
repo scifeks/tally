@@ -10,6 +10,7 @@ _EXPECTED_TOOLS = {
     "composer-audit",
     "dalfox",
     "gitleaks",
+    "katana",
     "noir",
     "npm-audit",
     "osv-scanner",

@@ -14,7 +14,8 @@ _SUPPORTED_FORMATS = (
     "oas2  — Swagger 2.0 JSON/YAML (contains 'swagger: 2.0' key)\n"
     "postman — Postman collection JSON "
     "(contains 'info.schema' with 'postman/collection')\n"
-    "har   — HTTP Archive JSON (file extension .har)"
+    "har   — HTTP Archive JSON (file extension .har)\n"
+    "katana — Katana crawler JSONL output (file extension .jsonl)"
 )
 
 
@@ -55,6 +56,8 @@ class FormatDetector:
         """
         if path.suffix == ".har":
             return "har"
+        if path.suffix == ".jsonl":
+            return "katana"
 
         doc = _parse_doc(path)
 

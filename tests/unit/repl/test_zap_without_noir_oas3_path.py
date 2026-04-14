@@ -1,8 +1,8 @@
-"""Tests for _maybe_warn_zap_without_noir when oas3_path is set on repos.
+"""Tests for _maybe_warn_dast_without_discovery when oas3_path is set on repos.
 
 Covers:
 - When r.oas3_path is set, repo is NOT in the missing list (no warning)
-- When r.oas3_path is empty and no Noir output, repo IS in the missing list
+- When r.oas3_path is empty and no discovery output, repo IS in the missing list
 - Mixed repos: one with oas3_path, one without — only the second is missing
 """
 
@@ -29,7 +29,7 @@ def _make_sc(repos: list) -> ScanCommands:
     return ScanCommands(repl)
 
 
-class TestMaybeWarnZapWithoutNoirOas3Path:
+class TestMaybeWarnDastWithoutDiscoveryOas3Path:
     def test_repo_with_oas3_path_not_in_missing(self) -> None:
         """oas3_path set — repo not in missing, warning not shown."""
         repo = _make_repo("api", oas3_path="/endpoints/api.json")
@@ -37,44 +37,62 @@ class TestMaybeWarnZapWithoutNoirOas3Path:
         mock_input = MagicMock()
         with (
             patch(
+                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
+                return_value=None,
+            ),
+            patch(
                 "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
                 return_value=None,
             ),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_zap_without_noir(["zap"], None, False, MagicMock())
+            result = sc._maybe_warn_dast_without_discovery(
+                ["zap"], None, False, MagicMock()
+            )
         assert result == ["zap"]
         mock_input.assert_not_called()
 
     def test_repo_without_oas3_path_in_missing(self) -> None:
-        """oas3_path empty and no Noir output — repo IS in missing."""
+        """oas3_path empty and no discovery output — repo IS in missing."""
         repo = _make_repo("api", oas3_path="")
         sc = _make_sc([repo])
         with (
+            patch(
+                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
+                return_value=None,
+            ),
             patch(
                 "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
                 return_value=None,
             ),
             patch("builtins.input", return_value="2"),
         ):
-            result = sc._maybe_warn_zap_without_noir(["zap"], None, False, MagicMock())
+            result = sc._maybe_warn_dast_without_discovery(
+                ["zap"], None, False, MagicMock()
+            )
         # Warning shown; option 2 chosen — ZAP-only, tools unchanged
         assert result == ["zap"]
 
     def test_mixed_repos_only_missing_prompted(self) -> None:
-        """One with oas3_path, one without — Noir prepended for the latter."""
+        """One with oas3_path, one without — discovery prepended for latter."""
         repo_with = _make_repo("with-oas3", oas3_path="/api.json")
         repo_without = _make_repo("without-oas3", oas3_path="")
         sc = _make_sc([repo_with, repo_without])
         with (
+            patch(
+                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
+                return_value=None,
+            ),
             patch(
                 "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
                 return_value=None,
             ),
             patch("builtins.input", return_value="1"),
         ):
-            result = sc._maybe_warn_zap_without_noir(["zap"], None, False, MagicMock())
-        # Option 1 — Noir prepended for repo that lacks oas3_path
+            result = sc._maybe_warn_dast_without_discovery(
+                ["zap"], None, False, MagicMock()
+            )
+        # Option 1 — katana prepended (and noir for non-node repos)
         assert result is not None
-        assert result[0] == "noir"
+        assert "katana" in result
         assert "zap" in result

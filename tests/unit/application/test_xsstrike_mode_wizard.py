@@ -9,20 +9,28 @@ import pytest
 from application.project.wizard import _interview_xsstrike_mode
 
 # ---------------------------------------------------------------------------
-# Gate: no base URLs → returns crawl without prompting
+# Gate: no base URLs → returns default without prompting
 # ---------------------------------------------------------------------------
 
 
 class TestXSSTrikeWizardGate:
-    def test_no_base_urls_returns_crawl_without_prompt(self) -> None:
+    def test_no_base_urls_returns_auto_without_prompt(self) -> None:
         with patch("builtins.input") as mock_input:
             result = _interview_xsstrike_mode(base_urls=[], oas3_path="")
         mock_input.assert_not_called()
-        assert result == "crawl"
+        assert result == "auto"
 
-    def test_no_base_urls_with_oas3_path_still_returns_crawl(self) -> None:
+    def test_no_base_urls_with_oas3_path_still_skips_prompt(self) -> None:
         with patch("builtins.input") as mock_input:
             result = _interview_xsstrike_mode(base_urls=[], oas3_path="/some/path.json")
+        mock_input.assert_not_called()
+        assert result == "auto"
+
+    def test_no_base_urls_with_current_mode_returns_current(self) -> None:
+        with patch("builtins.input") as mock_input:
+            result = _interview_xsstrike_mode(
+                base_urls=[], oas3_path="", current_mode="crawl"
+            )
         mock_input.assert_not_called()
         assert result == "crawl"
 
@@ -33,20 +41,20 @@ class TestXSSTrikeWizardGate:
 
 
 class TestXSSTrikeWizardDefault:
-    def test_no_oas3_path_default_is_noir(self) -> None:
+    def test_no_oas3_path_default_is_auto(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
             )
-        assert result == "noir"
+        assert result == "auto"
 
-    def test_with_oas3_path_default_is_provided(self) -> None:
+    def test_with_oas3_path_default_is_auto(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"],
                 oas3_path="/endpoints.json",
             )
-        assert result == "provided"
+        assert result == "auto"
 
     def test_current_mode_overrides_default_when_valid(self) -> None:
         with patch("builtins.input", return_value=""):
@@ -57,14 +65,14 @@ class TestXSSTrikeWizardDefault:
             )
         assert result == "crawl"
 
-    def test_invalid_current_mode_falls_back_to_computed_default(self) -> None:
+    def test_invalid_current_mode_falls_back_to_auto(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"],
                 oas3_path="",
                 current_mode="unknown_value",
             )
-        assert result == "noir"
+        assert result == "auto"
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +81,7 @@ class TestXSSTrikeWizardDefault:
 
 
 class TestXSSTrikeWizardValidSelections:
-    @pytest.mark.parametrize("choice", ["crawl", "noir"])
+    @pytest.mark.parametrize("choice", ["auto", "crawl", "katana", "noir"])
     def test_valid_non_provided_modes_accepted(self, choice: str) -> None:
         with patch("builtins.input", return_value=choice):
             result = _interview_xsstrike_mode(
@@ -124,26 +132,33 @@ class TestXSSTrikeWizardInvalidSelections:
 
 
 class TestXSSTrikeWizardNodeApp:
-    def test_node_app_without_oas3_path_returns_crawl_without_prompt(
-        self,
-    ) -> None:
-        with patch("builtins.input") as mock_input:
+    def test_node_app_without_oas3_path_default_is_auto(self) -> None:
+        # katana, auto, crawl are valid for node_app; auto is the default
+        with patch("builtins.input", return_value=""):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"],
                 oas3_path="",
                 node_app=True,
             )
-        mock_input.assert_not_called()
-        assert result == "crawl"
+        assert result == "auto"
 
-    def test_node_app_with_oas3_path_default_is_provided(self) -> None:
+    def test_node_app_can_choose_katana(self) -> None:
+        with patch("builtins.input", return_value="katana"):
+            result = _interview_xsstrike_mode(
+                base_urls=["http://localhost:8080"],
+                oas3_path="",
+                node_app=True,
+            )
+        assert result == "katana"
+
+    def test_node_app_with_oas3_path_default_is_auto(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"],
                 oas3_path="/endpoints.json",
                 node_app=True,
             )
-        assert result == "provided"
+        assert result == "auto"
 
     def test_node_app_with_oas3_path_can_choose_crawl(self) -> None:
         with patch("builtins.input", return_value="crawl"):
@@ -154,16 +169,17 @@ class TestXSSTrikeWizardNodeApp:
             )
         assert result == "crawl"
 
-    def test_noir_rejected_when_node_app_with_oas3_path(self) -> None:
-        with patch("builtins.input", side_effect=["noir", "provided"]):
+    def test_noir_rejected_when_node_app(self) -> None:
+        with patch("builtins.input", side_effect=["noir", "auto"]):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"],
-                oas3_path="/endpoints.json",
+                oas3_path="",
                 node_app=True,
             )
-        assert result == "provided"
+        assert result == "auto"
 
     def test_current_mode_noir_overridden_when_node_app(self) -> None:
+        # noir not valid for node_app → effective_default falls back to "auto"
         with patch("builtins.input", return_value=""):
             result = _interview_xsstrike_mode(
                 base_urls=["http://localhost:8080"],
@@ -171,7 +187,7 @@ class TestXSSTrikeWizardNodeApp:
                 node_app=True,
                 current_mode="noir",
             )
-        assert result == "provided"
+        assert result == "auto"
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +199,7 @@ class TestRepositoryXSSTrikeMode:
     def test_valid_modes_accepted(self) -> None:
         from core.config.schemas import Repository
 
-        for mode in ("crawl", "noir", "provided", ""):
+        for mode in ("auto", "crawl", "katana", "noir", "provided", ""):
             repo = Repository.model_construct(
                 name="r",
                 type=["api"],

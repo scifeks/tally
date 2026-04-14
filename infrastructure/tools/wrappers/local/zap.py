@@ -157,10 +157,13 @@ class ZAPLocalTool(BaseZapTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for ZAP.
 
-        When a Noir OAS3 file exists for the target repository (written by a
-        prior Noir scan), it is passed as ``openapi_file`` so that ZAP uses
-        OpenAPI mode.  If no Noir output is found, ZAP falls back to
-        ``-quickurl`` mode.
+        When an OAS3 file is available for the target repository, it is passed
+        as ``openapi_file`` so that ZAP uses OpenAPI mode.  Resolution order:
+
+        1. ``repo.oas3_path`` (user-supplied)
+        2. Most recent Katana OAS3 output
+        3. Most recent Noir OAS3 output
+        4. Fall back to ``-quickurl`` mode (no ``openapi_file``)
         """
         assert context.repo is not None
         output_dir = (
@@ -179,12 +182,15 @@ class ZAPLocalTool(BaseZapTool):
             "output_file": output_file,
         }
 
-        if context.repo.oas3_path:
-            openapi_file: str | None = context.repo.oas3_path
-        else:
-            openapi_file = _find_noir_oas3(
+        openapi_file: str | None = (
+            context.repo.oas3_path
+            or _find_katana_oas3(
                 context.base_path, context.project_name, context.repo.name
             )
+            or _find_noir_oas3(
+                context.base_path, context.project_name, context.repo.name
+            )
+        )
         if openapi_file:
             kwargs["openapi_file"] = openapi_file
 
@@ -211,6 +217,34 @@ def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
+
+
+def _find_katana_oas3(base_path: str, project_name: str, repo_name: str) -> str | None:
+    """Return the most recent Katana OAS3 file for *repo_name*, or ``None``.
+
+    Looks in ``projects/<project>/tool_outputs/katana/<repo>_*_oas3.json``.
+    Returns ``None`` when the directory is missing, no files match, the most
+    recent file has zero paths, or parsing fails.
+    """
+    import json
+
+    katana_dir = Path(base_path) / "projects" / project_name / "tool_outputs" / "katana"
+    if not katana_dir.exists():
+        return None
+    matches = sorted(katana_dir.glob(f"{repo_name}_*_oas3.json"))
+    if not matches:
+        return None
+
+    candidate = matches[-1]
+    try:
+        with open(candidate, encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not data.get("paths", {}):
+            return None
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+
+    return str(candidate)
 
 
 def _find_noir_oas3(base_path: str, project_name: str, repo_name: str) -> str | None:

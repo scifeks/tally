@@ -104,15 +104,39 @@ class Repository(BaseModel):
             'authentication cookies, e.g. {"Cookie": "session=abc123"}.'
         ),
     )
+    katana_headless: bool = Field(
+        default=False,
+        description=(
+            "Enable headless Chrome mode for Katana. Slower but discovers "
+            "JavaScript-rendered routes and SPA endpoints. Recommended for "
+            "Node.js and SPA applications."
+        ),
+    )
+    katana_depth: int = Field(
+        default=3,
+        description=(
+            "Katana crawl depth (-d flag). Default 3. Increase for deeply "
+            "nested applications; decrease for faster scans."
+        ),
+    )
+    katana_headers: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Extra HTTP headers passed to Katana via -H. Use for "
+            "authentication cookies or custom user agents, e.g. "
+            '{"Cookie": "session=abc123"}.'
+        ),
+    )
 
     @field_validator("xsstrike_mode")
     @classmethod
     def validate_xsstrike_mode(cls, v: str) -> str:
         """Validate xsstrike_mode is one of the accepted values."""
-        valid = {"crawl", "noir", "provided", ""}
+        valid = {"crawl", "noir", "provided", "katana", "auto", ""}
         if v not in valid:
             raise ValueError(
-                f"Invalid xsstrike_mode: {v!r}. Valid values: crawl, noir, provided"
+                f"Invalid xsstrike_mode: {v!r}. "
+                "Valid values: crawl, noir, provided, katana, auto"
             )
         return v
 
@@ -120,10 +144,11 @@ class Repository(BaseModel):
     @classmethod
     def validate_dalfox_mode(cls, v: str) -> str:
         """Validate dalfox_mode is one of the accepted values."""
-        valid = {"noir", "provided", ""}
+        valid = {"noir", "provided", "katana", "auto", ""}
         if v not in valid:
             raise ValueError(
-                f"Invalid dalfox_mode: {v!r}. Valid values: noir, provided"
+                f"Invalid dalfox_mode: {v!r}. "
+                "Valid values: noir, provided, katana, auto"
             )
         return v
 
@@ -166,7 +191,7 @@ class Repository(BaseModel):
             raise ValueError(
                 "xsstrike_mode='noir' is invalid for Node.js repositories "
                 "(Noir cannot parse Node.js endpoints). "
-                "Use 'crawl' or 'provided' instead."
+                "Use 'crawl', 'katana', 'auto', or 'provided' instead."
             )
         return self
 
@@ -177,7 +202,7 @@ class Repository(BaseModel):
             raise ValueError(
                 "dalfox_mode='noir' is invalid for Node.js repositories "
                 "(Noir cannot parse Node.js endpoints). "
-                "Use 'provided' instead."
+                "Use 'katana', 'auto', or 'provided' instead."
             )
         return self
 

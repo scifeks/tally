@@ -88,9 +88,13 @@ def _prompt(message: str, default: str = "") -> str:
     return raw or default
 
 
-_CRAWL_MODES: frozenset[str] = frozenset({"crawl", "noir", "provided"})
+_CRAWL_MODES: frozenset[str] = frozenset(
+    {"auto", "crawl", "katana", "noir", "provided"}
+)
 
 _CRAWL_MODE_DESCRIPTIONS: dict[str, str] = {
+    "auto": "try katana → noir → crawl fallback (recommended)",
+    "katana": "generate seeds from Katana crawler output",
     "crawl": "spider the app from base URL (always available)",
     "noir": "generate seeds from Noir endpoint discovery output",
     "provided": ("generate seeds from your endpoint file (requires endpoint file)"),
@@ -107,43 +111,33 @@ def _interview_crawl_mode(
     """Generic crawl URL seed mode interview for web tools.
 
     Computes the set of valid modes from the given constraints:
+    - 'auto'     — always valid when base_urls is non-empty (recommended).
+    - 'katana'   — always valid when base_urls is non-empty.
     - 'crawl'    — always valid when base_urls is non-empty.
     - 'noir'     — valid only when node_app is False.
     - 'provided' — valid only when oas3_path is non-empty.
 
-    When only 'crawl' is valid, the prompt is skipped entirely and 'crawl'
-    is returned with an explanatory message.  Returns 'crawl' immediately
-    when base_urls is empty.
+    Returns 'auto' immediately when base_urls is empty (safe default).
     """
     if not base_urls:
-        return "crawl"
+        return current_mode or "auto"
 
-    valid_modes: set[str] = {"crawl"}
+    valid_modes: set[str] = {"auto", "crawl", "katana"}
     if not node_app:
         valid_modes.add("noir")
     if oas3_path:
         valid_modes.add("provided")
 
-    if valid_modes == {"crawl"}:
-        print(
-            f"  {tool_label}: only 'crawl' mode is available "
-            "(Node.js app — Noir seeding disabled, "
-            "no endpoint file configured)."
-        )
-        return "crawl"
-
-    # Preferred default: provided > noir > crawl
-    if oas3_path:
-        default_mode = "provided"
-    elif not node_app:
-        default_mode = "noir"
+    # Preferred default: auto > provided > noir > katana > crawl
+    if current_mode in valid_modes:
+        effective_default = current_mode
+    elif oas3_path:
+        effective_default = "auto"
     else:
-        default_mode = "crawl"
-
-    effective_default = current_mode if current_mode in valid_modes else default_mode
+        effective_default = "auto"
 
     print(f"  {tool_label} URL seed mode:")
-    for mode in ("crawl", "noir", "provided"):
+    for mode in ("auto", "katana", "crawl", "noir", "provided"):
         if mode in valid_modes:
             desc = _CRAWL_MODE_DESCRIPTIONS[mode]
             print(f"    {mode:<8} — {desc}")
@@ -189,9 +183,11 @@ def _interview_xsstrike_mode(
     )
 
 
-_DALFOX_MODES: frozenset[str] = frozenset({"noir", "provided"})
+_DALFOX_MODES: frozenset[str] = frozenset({"auto", "katana", "noir", "provided"})
 
 _DALFOX_MODE_DESCRIPTIONS: dict[str, str] = {
+    "auto": "try katana → noir → skip (recommended)",
+    "katana": "generate seeds from Katana crawler output",
     "noir": "generate seeds from Noir endpoint discovery output",
     "provided": ("generate seeds from your endpoint file (requires endpoint file)"),
 }
@@ -208,37 +204,29 @@ def _interview_dalfox_mode(
     DalFox has no built-in crawler; a seeds file is always required.
     Valid modes:
 
+    - ``auto``     — katana → noir → skip; always valid with base_urls.
+    - ``katana``   — seeds from Katana output; always valid with base_urls.
     - ``noir``     — seeds from Noir OAS3 output; unavailable for Node apps.
     - ``provided`` — seeds from the user-supplied endpoint file; requires
       ``oas3_path`` to be set.
 
     Returns the existing/default mode without prompting when ``base_urls``
-    is empty.  Returns ``""`` when no valid mode exists (DalFox will be
-    skipped at scan time).
+    is empty.
     """
     if not base_urls:
-        return current_mode or "noir"
+        return current_mode or "auto"
 
-    valid_modes: set[str] = set()
+    valid_modes: set[str] = {"auto", "katana"}
     if not node_app:
         valid_modes.add("noir")
     if oas3_path:
         valid_modes.add("provided")
 
-    if not valid_modes:
-        print(
-            "  DalFox: no valid seed mode available "
-            "(Node.js app — Noir seeding disabled, "
-            "no endpoint file configured). DalFox will be skipped."
-        )
-        return ""
-
-    # Preferred default: provided > noir
-    default_mode = "provided" if oas3_path else "noir"
-    effective_default = current_mode if current_mode in valid_modes else default_mode
+    # Preferred default: auto > provided > noir > katana
+    effective_default = current_mode if current_mode in valid_modes else "auto"
 
     print("  DalFox URL seed mode:")
-    for mode in ("noir", "provided"):
+    for mode in ("auto", "katana", "noir", "provided"):
         if mode in valid_modes:
             desc = _DALFOX_MODE_DESCRIPTIONS[mode]
             print(f"    {mode:<8} — {desc}")
@@ -267,6 +255,36 @@ def _interview_dalfox_mode(
                 f"  Invalid mode: {raw!r}. "
                 f"Choose from: {', '.join(sorted(valid_modes))}"
             )
+
+
+def _interview_katana(
+    base_urls: list[str],
+    node_app: bool = False,
+    current_headless: bool = False,
+    current_depth: int = 3,
+) -> tuple[bool, int]:
+    """Prompt for Katana crawler options; returns (headless, depth).
+
+    Skipped (returns current values) when base_urls is empty.
+    headless defaults to True for Node.js/SPA repos.
+    """
+    if not base_urls:
+        return current_headless, current_depth
+
+    headless_default = "y" if (node_app or current_headless) else "N"
+    raw_headless = _prompt(
+        "  Katana headless mode (slower, recommended for SPAs) [y/N]",
+        default=headless_default,
+    ).lower()
+    headless = raw_headless in ("y", "yes")
+
+    raw_depth = _prompt("  Katana crawl depth", default=str(current_depth))
+    try:
+        depth = max(1, int(raw_depth))
+    except ValueError:
+        depth = current_depth
+
+    return headless, depth
 
 
 class InteractiveProjectWizard:
@@ -606,6 +624,14 @@ class InteractiveProjectWizard:
                 current_mode=existing.dalfox_mode,
             )
 
+            # Katana crawler options
+            katana_headless, katana_depth = _interview_katana(
+                base_urls=base_urls,
+                node_app=node_app,
+                current_headless=existing.katana_headless,
+                current_depth=existing.katana_depth,
+            )
+
             updated = Repository(
                 name=name,
                 type=types,
@@ -624,6 +650,9 @@ class InteractiveProjectWizard:
                 xsstrike_headers=dict(existing.xsstrike_headers),
                 dalfox_mode=dalfox_mode,
                 dalfox_headers=dict(existing.dalfox_headers),
+                katana_headless=katana_headless,
+                katana_depth=katana_depth,
+                katana_headers=dict(existing.katana_headers),
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
@@ -984,6 +1013,11 @@ class InteractiveProjectWizard:
             base_urls=base_urls, oas3_path=oas3_path, node_app=node_app
         )
 
+        # Katana crawler options
+        katana_headless, katana_depth = _interview_katana(
+            base_urls=base_urls, node_app=node_app
+        )
+
         return Repository(
             name=name,
             type=types,
@@ -999,4 +1033,6 @@ class InteractiveProjectWizard:
             oas3_path=oas3_path,
             xsstrike_mode=xsstrike_mode,
             dalfox_mode=dalfox_mode,
+            katana_headless=katana_headless,
+            katana_depth=katana_depth,
         )
