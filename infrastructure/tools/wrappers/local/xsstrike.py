@@ -8,7 +8,8 @@ The wrapper supports three URL seed modes, controlled by
 **crawl** (default)
     XSStrike spiders from ``base_url`` directly::
 
-        xsstrike -u <base_url> --crawl --skip
+        xsstrike -u <base_url> --crawl --skip -l <level>
+            --path -e -t <threads> --timeout 15
             --file-log-level DEBUG --log-file <logfile>
 
 **noir**
@@ -16,7 +17,8 @@ The wrapper supports three URL seed modes, controlled by
     repository.  Each OAS3 path is joined with ``base_url`` to produce a
     seeds file.  Falls back to ``crawl`` mode when no Noir output exists::
 
-        xsstrike --seeds <seeds_file> --crawl --skip
+        xsstrike --seeds <seeds_file> --crawl --skip -l <level>
+            --path -e -t <threads> --timeout 15
             --file-log-level DEBUG --log-file <logfile>
 
 **provided**
@@ -24,7 +26,8 @@ The wrapper supports three URL seed modes, controlled by
     file already converted to OAS3).  Falls back to ``crawl`` mode when
     ``oas3_path`` is empty::
 
-        xsstrike --seeds <seeds_file> --crawl --skip
+        xsstrike --seeds <seeds_file> --crawl --skip -l <level>
+            --path -e -t <threads> --timeout 15
             --file-log-level DEBUG --log-file <logfile>
 
 Output
@@ -47,6 +50,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,6 +65,16 @@ from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.xsstrike import BaseXSStrikeTool
 
 logger = logging.getLogger(__name__)
+
+
+def _recommended_thread_count() -> int:
+    """Return a safe XSStrike thread count based on available CPUs.
+
+    Caps at 8 to avoid hammering targets and triggering WAF rate limits.
+    Floors at 2 so single-core environments still benefit from concurrency.
+    """
+    cpus = os.cpu_count() or 2
+    return max(2, min(cpus, 8))
 
 
 class XSSTrikeLocalTool(BaseXSStrikeTool):
@@ -123,6 +137,12 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 "--skip",
                 "-l",
                 str(crawl_level),
+                "--path",
+                "-e",
+                "-t",
+                str(_recommended_thread_count()),
+                "--timeout",
+                "15",
                 "--file-log-level",
                 "DEBUG",
                 "--log-file",

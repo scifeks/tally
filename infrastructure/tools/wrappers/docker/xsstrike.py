@@ -26,6 +26,7 @@ volume mount is required.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.xsstrike import parse_xsstrike_log_string
 from infrastructure.tools.wrappers.base.xsstrike import BaseXSStrikeTool
 from infrastructure.tools.wrappers.docker._docker_exec import build_docker_exec
+from infrastructure.tools.wrappers.local.xsstrike import _recommended_thread_count
 
 
 class XSSTrikeDockerTool(BaseXSStrikeTool):
@@ -61,9 +63,16 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
                 is not provided.
             seeds_file (str | None): Container-internal path to a seeds file.
                 When provided, ``-u`` is omitted and ``--seeds`` is used.
+            crawl_level (int): Passed as ``-l``. Controls crawl depth.
+                Defaults to 10.
+            headers (dict[str, str] | None): Extra HTTP headers serialised
+                as JSON and passed via ``--headers``.
         """
-        base_url: str | None = kwargs.get("base_url") if kwargs else None  # type: ignore[assignment]
-        seeds_file: str | None = kwargs.get("seeds_file") if kwargs else None  # type: ignore[assignment]
+        raw = kwargs or {}
+        base_url: str | None = str(raw["base_url"]) if "base_url" in raw else None
+        seeds_file: str | None = str(raw["seeds_file"]) if "seeds_file" in raw else None
+        crawl_level: int = int(raw.get("crawl_level", 10))  # type: ignore[arg-type]
+        headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
 
         if not base_url and not seeds_file:
             raise ValueError("Either base_url or seeds_file is required for xsstrike")
@@ -79,10 +88,21 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
             [
                 "--crawl",
                 "--skip",
+                "-l",
+                str(crawl_level),
+                "--path",
+                "-e",
+                "-t",
+                str(_recommended_thread_count()),
+                "--timeout",
+                "15",
                 "--console-log-level",
                 "DEBUG",
             ]
         )
+
+        if headers:
+            tool_args.extend(["--headers", json.dumps(headers)])
         return build_docker_exec(self._container_name, self._tool_path, tool_args)
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
@@ -112,7 +132,11 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
         base_url = repo.base_urls[0] if repo.base_urls else ""
         mode = (repo.xsstrike_mode or "crawl").lower()
 
-        kwargs: dict[str, Any] = {}
+        kwargs: dict[str, Any] = {
+            "crawl_level": repo.xsstrike_crawl_level,
+        }
+        if repo.xsstrike_headers:
+            kwargs["headers"] = dict(repo.xsstrike_headers)
 
         if mode == "noir":
             from infrastructure.tools.wrappers.local.xsstrike import (

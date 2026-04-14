@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,6 +14,7 @@ from infrastructure.tools.wrappers.local.xsstrike import (
     XSSTrikeLocalTool,
     _build_seeds_from_noir,
     _build_seeds_from_oas3,
+    _recommended_thread_count,
     _write_seeds_file,
 )
 
@@ -536,3 +537,104 @@ class TestBuildCommandHeaders:
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
         assert "headers" not in passes[0].kwargs
+
+
+# ---------------------------------------------------------------------------
+# build_command — scan-enhancing flags (--path, -e, -t, --timeout)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCommandScanFlags:
+    def test_path_flag_present(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        assert "--path" in cmd
+
+    def test_encode_flag_present(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        assert "-e" in cmd
+
+    def test_threads_flag_present(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        assert "-t" in cmd
+
+    def test_threads_value_in_safe_range(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        idx = cmd.index("-t")
+        thread_count = int(cmd[idx + 1])
+        assert 2 <= thread_count <= 8
+
+    def test_timeout_flag_present(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        assert "--timeout" in cmd
+
+    def test_timeout_value_is_15(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        idx = cmd.index("--timeout")
+        assert cmd[idx + 1] == "15"
+
+    def test_new_flags_present_in_seeds_mode(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        seeds = str(tmp_path / "seeds.txt")
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(seeds_file=seeds, log_file=log)
+        assert "--path" in cmd
+        assert "-e" in cmd
+        assert "-t" in cmd
+        assert "--timeout" in cmd
+
+    def test_threads_value_equals_recommended(self, tmp_path: Path) -> None:
+        tool = XSSTrikeLocalTool()
+        log = str(tmp_path / "out.log")
+        cmd = tool.build_command(base_url="http://localhost:8080", log_file=log)
+        idx = cmd.index("-t")
+        assert int(cmd[idx + 1]) == _recommended_thread_count()
+
+
+# ---------------------------------------------------------------------------
+# _recommended_thread_count — floor / cap behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestRecommendedThreadCount:
+    def test_none_cpu_count_returns_two(self) -> None:
+        with patch(
+            "infrastructure.tools.wrappers.local.xsstrike.os.cpu_count",
+            return_value=None,
+        ):
+            assert _recommended_thread_count() == 2
+
+    def test_single_cpu_floors_to_two(self) -> None:
+        with patch(
+            "infrastructure.tools.wrappers.local.xsstrike.os.cpu_count", return_value=1
+        ):
+            assert _recommended_thread_count() == 2
+
+    def test_four_cpus_returns_four(self) -> None:
+        with patch(
+            "infrastructure.tools.wrappers.local.xsstrike.os.cpu_count", return_value=4
+        ):
+            assert _recommended_thread_count() == 4
+
+    def test_high_cpu_count_caps_at_eight(self) -> None:
+        with patch(
+            "infrastructure.tools.wrappers.local.xsstrike.os.cpu_count", return_value=32
+        ):
+            assert _recommended_thread_count() == 8
+
+    def test_exactly_eight_cpus_returns_eight(self) -> None:
+        with patch(
+            "infrastructure.tools.wrappers.local.xsstrike.os.cpu_count", return_value=8
+        ):
+            assert _recommended_thread_count() == 8
