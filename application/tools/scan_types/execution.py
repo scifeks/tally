@@ -79,9 +79,17 @@ def normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
 
 
 def tools_for_segment(segment: str, registry: ToolRegistry) -> list[str]:
-    """Return tool names registered under the given scan segment."""
+    """Return tool names registered under the given scan segment.
+
+    Discovery tools (``is_discovery_tool=True``, e.g. Katana, Noir) are
+    sorted before scanners so their output is available when downstream
+    tools (DalFox, XSStrike, ZAP) start.  Matches the ordering applied
+    by ``ordered_repo_tools``.
+    """
     tools: list[Any] = registry.get_all_tools()
-    return [t.name for t in tools if t.scan_segment == segment]
+    segment_tools = [t for t in tools if t.scan_segment == segment]
+    segment_tools.sort(key=lambda t: (not cast(Any, t).is_discovery_tool, t.name))
+    return [t.name for t in segment_tools]
 
 
 def dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:

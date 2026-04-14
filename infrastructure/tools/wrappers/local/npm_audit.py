@@ -1,11 +1,14 @@
 """npm-audit wrapper for Node.js dependency vulnerability scanning (SCA)."""
 
+import logging
 import shutil
 from pathlib import Path
 
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.npm_audit import BaseNpmAuditTool
+
+logger = logging.getLogger(__name__)
 
 
 class NpmAuditLocalTool(BaseNpmAuditTool):
@@ -50,6 +53,16 @@ class NpmAuditLocalTool(BaseNpmAuditTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
+
+        lockfile = Path(repo_path) / "package-lock.json"
+        if not lockfile.exists():
+            logger.info(
+                "npm-audit: package-lock.json not found in %r — skipping. "
+                "Run 'npm install' in the repository to generate it.",
+                repo_path,
+            )
+            return []
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,

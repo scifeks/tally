@@ -14,11 +14,11 @@ from application.project.wizard import _interview_dalfox_mode
 
 
 class TestDalFoxWizardGate:
-    def test_no_base_urls_skips_prompt_and_returns_auto(self) -> None:
+    def test_no_base_urls_skips_prompt_and_returns_noir_katana(self) -> None:
         with patch("builtins.input") as mock_input:
             result = _interview_dalfox_mode(base_urls=[], oas3_path="")
         mock_input.assert_not_called()
-        assert result == "auto"
+        assert result == "noir+katana"
 
     def test_no_base_urls_with_current_mode_returns_current(self) -> None:
         with patch("builtins.input") as mock_input:
@@ -32,32 +32,31 @@ class TestDalFoxWizardGate:
         with patch("builtins.input") as mock_input:
             result = _interview_dalfox_mode(base_urls=[], oas3_path="/some/path.json")
         mock_input.assert_not_called()
-        assert result == "auto"
+        assert result == "noir+katana"
 
 
 # ---------------------------------------------------------------------------
-# Default selection
+# Default selection (Enter key with no input)
 # ---------------------------------------------------------------------------
 
 
 class TestDalFoxWizardDefault:
-    def test_no_oas3_path_default_is_auto(self) -> None:
+    def test_default_is_noir_katana(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
             )
-        assert result == "auto"
+        assert result == "noir+katana"
 
-    def test_with_oas3_path_default_is_auto(self) -> None:
+    def test_with_oas3_path_default_is_still_noir_katana(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"],
                 oas3_path="/endpoints.json",
             )
-        assert result == "auto"
+        assert result == "noir+katana"
 
-    def test_current_mode_overrides_default_when_valid(self) -> None:
-        # current_mode="provided" is valid when oas3_path is set — used as default
+    def test_current_mode_provided_used_as_default_when_oas3_path_set(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"],
@@ -66,14 +65,14 @@ class TestDalFoxWizardDefault:
             )
         assert result == "provided"
 
-    def test_invalid_current_mode_falls_back_to_auto(self) -> None:
+    def test_invalid_current_mode_falls_back_to_noir_katana(self) -> None:
         with patch("builtins.input", return_value=""):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"],
                 oas3_path="",
                 current_mode="unknown_value",
             )
-        assert result == "auto"
+        assert result == "noir+katana"
 
 
 # ---------------------------------------------------------------------------
@@ -82,12 +81,19 @@ class TestDalFoxWizardDefault:
 
 
 class TestDalFoxWizardValidSelections:
-    def test_noir_accepted_without_oas3_path(self) -> None:
-        with patch("builtins.input", return_value="noir"):
+    def test_auto_accepted(self) -> None:
+        with patch("builtins.input", return_value="auto"):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
             )
-        assert result == "noir"
+        assert result == "auto"
+
+    def test_noir_katana_accepted(self) -> None:
+        with patch("builtins.input", return_value="noir+katana"):
+            result = _interview_dalfox_mode(
+                base_urls=["http://localhost:8080"], oas3_path=""
+            )
+        assert result == "noir+katana"
 
     def test_provided_accepted_when_oas3_path_set(self) -> None:
         with patch("builtins.input", return_value="provided"):
@@ -97,12 +103,26 @@ class TestDalFoxWizardValidSelections:
             )
         assert result == "provided"
 
-    def test_case_insensitive_input(self) -> None:
-        with patch("builtins.input", return_value="NOIR"):
+    def test_legacy_noir_maps_to_noir_katana(self) -> None:
+        with patch("builtins.input", return_value="noir"):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
             )
-        assert result == "noir"
+        assert result == "noir+katana"
+
+    def test_legacy_katana_maps_to_noir_katana(self) -> None:
+        with patch("builtins.input", return_value="katana"):
+            result = _interview_dalfox_mode(
+                base_urls=["http://localhost:8080"], oas3_path=""
+            )
+        assert result == "noir+katana"
+
+    def test_case_insensitive_input(self) -> None:
+        with patch("builtins.input", return_value="AUTO"):
+            result = _interview_dalfox_mode(
+                base_urls=["http://localhost:8080"], oas3_path=""
+            )
+        assert result == "auto"
 
 
 # ---------------------------------------------------------------------------
@@ -112,14 +132,14 @@ class TestDalFoxWizardValidSelections:
 
 class TestDalFoxWizardInvalidSelections:
     def test_invalid_mode_retries_until_valid(self) -> None:
-        with patch("builtins.input", side_effect=["badvalue", "noir"]):
+        with patch("builtins.input", side_effect=["badvalue", "auto"]):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
             )
-        assert result == "noir"
+        assert result == "auto"
 
     def test_crawl_rejected_and_retries(self) -> None:
-        # 'crawl' is not a valid DalFox mode — but 'auto' is
+        # 'crawl' is not a valid DalFox mode — user must choose a valid one
         with patch("builtins.input", side_effect=["crawl", "auto"]):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
@@ -127,73 +147,9 @@ class TestDalFoxWizardInvalidSelections:
         assert result == "auto"
 
     def test_provided_without_oas3_path_re_prompts(self) -> None:
-        with patch("builtins.input", side_effect=["provided", "noir"]):
+        with patch("builtins.input", side_effect=["provided", "auto"]):
             result = _interview_dalfox_mode(
                 base_urls=["http://localhost:8080"], oas3_path=""
-            )
-        assert result == "noir"
-
-
-# ---------------------------------------------------------------------------
-# Node.js app constraints
-# ---------------------------------------------------------------------------
-
-
-class TestDalFoxWizardNodeApp:
-    def test_node_app_without_oas3_path_defaults_to_auto(self) -> None:
-        # katana and auto are valid for node_app; auto is the default
-        with patch("builtins.input", return_value=""):
-            result = _interview_dalfox_mode(
-                base_urls=["http://localhost:8080"],
-                oas3_path="",
-                node_app=True,
-            )
-        assert result == "auto"
-
-    def test_node_app_without_oas3_path_can_choose_katana(self) -> None:
-        with patch("builtins.input", return_value="katana"):
-            result = _interview_dalfox_mode(
-                base_urls=["http://localhost:8080"],
-                oas3_path="",
-                node_app=True,
-            )
-        assert result == "katana"
-
-    def test_node_app_with_oas3_path_default_is_auto(self) -> None:
-        with patch("builtins.input", return_value=""):
-            result = _interview_dalfox_mode(
-                base_urls=["http://localhost:8080"],
-                oas3_path="/endpoints.json",
-                node_app=True,
-            )
-        assert result == "auto"
-
-    def test_node_app_with_oas3_path_can_choose_provided(self) -> None:
-        with patch("builtins.input", return_value="provided"):
-            result = _interview_dalfox_mode(
-                base_urls=["http://localhost:8080"],
-                oas3_path="/endpoints.json",
-                node_app=True,
-            )
-        assert result == "provided"
-
-    def test_noir_rejected_when_node_app(self) -> None:
-        with patch("builtins.input", side_effect=["noir", "auto"]):
-            result = _interview_dalfox_mode(
-                base_urls=["http://localhost:8080"],
-                oas3_path="",
-                node_app=True,
-            )
-        assert result == "auto"
-
-    def test_current_mode_noir_overridden_when_node_app(self) -> None:
-        # noir not valid for node_app → effective_default falls back to "auto"
-        with patch("builtins.input", return_value=""):
-            result = _interview_dalfox_mode(
-                base_urls=["http://localhost:8080"],
-                oas3_path="/endpoints.json",
-                node_app=True,
-                current_mode="noir",
             )
         assert result == "auto"
 
@@ -207,7 +163,7 @@ class TestRepositoryDalFoxMode:
     def test_valid_modes_accepted(self) -> None:
         from core.config.schemas import Repository
 
-        for mode in ("auto", "katana", "noir", "provided", ""):
+        for mode in ("auto", "noir+katana", "provided", ""):
             repo = Repository.model_construct(
                 name="r",
                 type=["api"],
@@ -217,7 +173,7 @@ class TestRepositoryDalFoxMode:
             )
             assert repo.dalfox_mode == mode
 
-    def test_default_is_noir(self) -> None:
+    def test_default_is_noir_katana(self) -> None:
         from core.config.schemas import Repository
 
         repo = Repository.model_construct(
@@ -226,7 +182,31 @@ class TestRepositoryDalFoxMode:
             path="/tmp",
             languages=[],
         )
-        assert repo.dalfox_mode == "noir"
+        assert repo.dalfox_mode == "noir+katana"
+
+    def test_legacy_noir_migrates_to_noir_katana(self) -> None:
+        from core.config.schemas import Repository
+
+        repo = Repository(
+            name="r",
+            type=["api"],
+            path="/tmp",
+            languages=[],
+            dalfox_mode="noir",
+        )
+        assert repo.dalfox_mode == "noir+katana"
+
+    def test_legacy_katana_migrates_to_noir_katana(self) -> None:
+        from core.config.schemas import Repository
+
+        repo = Repository(
+            name="r",
+            type=["api"],
+            path="/tmp",
+            languages=[],
+            dalfox_mode="katana",
+        )
+        assert repo.dalfox_mode == "noir+katana"
 
     def test_crawl_is_invalid_mode(self) -> None:
         from pydantic import ValidationError
@@ -254,19 +234,4 @@ class TestRepositoryDalFoxMode:
                 path="/tmp",
                 languages=[],
                 dalfox_mode="bad_mode",
-            )
-
-    def test_node_app_with_noir_mode_raises_validation_error(self) -> None:
-        from pydantic import ValidationError
-
-        from core.config.schemas import Repository
-
-        with pytest.raises(ValidationError, match="noir"):
-            Repository(
-                name="r",
-                type=["api"],
-                path="/tmp",
-                languages=[],
-                node_app=True,
-                dalfox_mode="noir",
             )

@@ -31,10 +31,73 @@ from typing import Any
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.endpoints.converters.katana import KatanaAdapter
 from infrastructure.tools.parsers.katana import parse_katana_jsonl
-from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.katana import BaseKatanaTool
 
 logger = logging.getLogger(__name__)
+
+
+def _scope_netloc(url: str) -> tuple[str, int]:
+    """Return (hostname_lower, port) for *url*, inferring default ports.
+
+    Used to match discovered URLs against the repo base URL so out-of-scope
+    hosts are dropped.  Treats ``localhost`` and IP literals as valid FQDNs.
+    """
+    from urllib.parse import urlsplit
+
+    parsed = urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.port:
+        port = parsed.port
+    elif parsed.scheme == "https":
+        port = 443
+    else:
+        port = 80
+    return host, port
+
+
+def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
+    """Remove JSONL lines whose endpoint host:port differs from *base_url*.
+
+    Overwrites *jsonl_path* in-place.  Lines that cannot be parsed as JSON
+    or that lack a ``request.endpoint`` field are kept unchanged.
+    """
+    import json as _json
+
+    try:
+        allowed = _scope_netloc(base_url)
+    except Exception:
+        logger.warning("Katana scope filter: could not parse base_url %r", base_url)
+        return
+
+    kept: list[str] = []
+    dropped = 0
+    try:
+        lines = jsonl_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = _json.loads(line)
+            endpoint = record.get("request", {}).get("endpoint", "")
+            if endpoint and _scope_netloc(endpoint) != allowed:
+                dropped += 1
+                continue
+        except Exception:
+            pass  # keep malformed lines
+        kept.append(line)
+
+    if dropped:
+        logger.info(
+            "Katana scope filter: dropped %d out-of-scope URLs (base=%r)",
+            dropped,
+            base_url,
+        )
+
+    jsonl_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
 
 
 class KatanaLocalTool(BaseKatanaTool):
@@ -42,9 +105,10 @@ class KatanaLocalTool(BaseKatanaTool):
 
     def __init__(self, config=None) -> None:
         self._katana_path: str = config.path if config is not None else "katana"
-        # Set by build_command(); read by parse_output().
+        # Set by build_execution_passes(); read by parse_output().
         self._last_jsonl_path: Path | None = None
         self._last_oas3_path: Path | None = None
+        self._last_base_url: str | None = None
 
     @property
     def command(self) -> str:
@@ -54,7 +118,33 @@ class KatanaLocalTool(BaseKatanaTool):
         return shutil.which("katana") is not None
 
     def get_version(self) -> str | None:
-        return get_tool_version(self.command)
+        """Run ``katana -version`` and return the semver found in output.
+
+        Katana prints an ASCII-art banner on the first line; the real
+        version appears on a later line such as
+        ``[INF] Current katana version v1.5.0 (latest)``.
+        """
+        import re
+        import subprocess
+
+        binary = shutil.which("katana")
+        if binary is None:
+            return None
+        try:
+            result = subprocess.run(
+                [binary, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            output = (result.stdout or result.stderr).strip()
+            if not output:
+                return None
+            clean = re.sub(r"\x1b\[[0-9;]*m", "", output)
+            match = re.search(r"\d+\.\d+[\d.]*", clean)
+            return match.group(0) if match else None
+        except Exception:
+            return None
 
     def build_command(self, **kwargs: object) -> list[str]:
         """Build the Katana argv list.
@@ -77,7 +167,7 @@ class KatanaLocalTool(BaseKatanaTool):
         oas3_target: str | None = (
             str(raw["oas3_target"]) if "oas3_target" in raw else None
         )
-        depth: int = int(raw.get("depth", 3))  # type: ignore[arg-type]
+        depth: int = int(raw.get("depth", 10))  # type: ignore[arg-type]
         headless: bool = bool(raw.get("headless", False))
         headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
 
@@ -133,6 +223,10 @@ class KatanaLocalTool(BaseKatanaTool):
                     "summary": {"total_endpoints": 0},
                 }
 
+            # Drop URLs outside the repo's configured scope before parsing.
+            if self._last_base_url:
+                _filter_jsonl_by_scope(jsonl_path, self._last_base_url)
+
             parsed = parse_katana_jsonl(jsonl_path)
 
             # Convert JSONL → OAS3 so downstream DAST tools can consume it.
@@ -168,6 +262,7 @@ class KatanaLocalTool(BaseKatanaTool):
         finally:
             self._last_jsonl_path = None
             self._last_oas3_path = None
+            self._last_base_url = None
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for Katana.
@@ -186,6 +281,7 @@ class KatanaLocalTool(BaseKatanaTool):
             return []
 
         base_url = repo.base_urls[0]
+        self._last_base_url = base_url
 
         output_dir = (
             Path(context.base_path).resolve()

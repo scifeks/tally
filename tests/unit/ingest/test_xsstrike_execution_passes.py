@@ -26,7 +26,7 @@ from infrastructure.tools.wrappers.local.xsstrike import (
 def _make_repo(
     base_urls: list[str] | None = None,
     oas3_path: str = "",
-    xsstrike_mode: str = "crawl",
+    xsstrike_mode: str = "noir+katana",
     xsstrike_crawl_level: int = 10,
     xsstrike_headers: dict[str, str] | None = None,
     path: str = "/repo",
@@ -208,9 +208,15 @@ class TestBuildExecutionPassesLogFilePath:
         A relative log_file path resolves against that directory, not the tally
         project root, causing a FileNotFoundError and an instant-exit 0-result scan.
         """
-        repo = _make_repo(xsstrike_mode="crawl")
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(xsstrike_mode="provided", oas3_path=str(oas3_file))
         ctx = _make_context(repo, ".")
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        assert len(passes) == 1
         log_file = passes[0].kwargs.get("log_file", "")
         assert Path(str(log_file)).is_absolute(), (
             f"log_file must be absolute; got {log_file!r}"
@@ -219,50 +225,60 @@ class TestBuildExecutionPassesLogFilePath:
     def test_log_file_is_absolute_when_base_path_is_absolute(
         self, tmp_path: Path
     ) -> None:
-        repo = _make_repo(xsstrike_mode="crawl")
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(xsstrike_mode="provided", oas3_path=str(oas3_file))
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        assert len(passes) == 1
         log_file = passes[0].kwargs.get("log_file", "")
         assert Path(str(log_file)).is_absolute()
 
 
-class TestBuildExecutionPassesCrawl:
-    def test_crawl_mode_returns_one_pass(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_mode="crawl")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert len(passes) == 1
+class TestBuildExecutionPassesSkipOnNoSeeds:
+    """Verify that XSStrike is skipped when no URL seeds can be produced."""
 
-    def test_crawl_mode_kwargs_contain_base_url(self, tmp_path: Path) -> None:
+    def test_crawl_mode_skips(self, tmp_path: Path) -> None:
+        # "crawl" is no longer a valid seed mode — falls through to the else
+        # branch which skips XSStrike entirely.
         repo = _make_repo(xsstrike_mode="crawl")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert len(passes) == 0
 
-    def test_crawl_mode_kwargs_no_seeds_file(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_mode="crawl")
+    def test_empty_mode_skips(self, tmp_path: Path) -> None:
+        # Empty string is treated as unknown → skip.
+        repo = _make_repo(xsstrike_mode="")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert "seeds_file" not in passes[0].kwargs
+        assert len(passes) == 0
 
     def test_output_dir_created(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_mode="crawl")
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(xsstrike_mode="provided", oas3_path=str(oas3_file))
         ctx = _make_context(repo, str(tmp_path))
         XSSTrikeLocalTool().build_execution_passes(ctx)
         expected = tmp_path / "projects" / "testproject" / "tool_outputs" / "xsstrike"
         assert expected.exists()
 
     def test_label_suffix_is_repo_name(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_mode="crawl")
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(xsstrike_mode="provided", oas3_path=str(oas3_file))
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
+        assert len(passes) == 1
         assert passes[0].label_suffix == "testrepo"
-
-    def test_default_empty_mode_treated_as_crawl(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_mode="")
-        ctx = _make_context(repo, str(tmp_path))
-        passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
 
 
 # ---------------------------------------------------------------------------
@@ -294,24 +310,25 @@ class TestBuildExecutionPassesNoir:
         urls = seeds_path.read_text(encoding="utf-8").strip().splitlines()
         assert "http://localhost:8080/api/users" in urls
 
-    def test_noir_mode_no_oas3_falls_back_to_crawl(self, tmp_path: Path) -> None:
+    def test_noir_mode_no_oas3_skips(self, tmp_path: Path) -> None:
+        # Legacy "noir" mode with no Noir output → no seeds → skip.
         repo = _make_repo(xsstrike_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
-        assert "seeds_file" not in passes[0].kwargs
+        assert len(passes) == 0
 
-    def test_noir_mode_empty_oas3_paths_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_noir_mode_empty_oas3_paths_skips(self, tmp_path: Path) -> None:
+        # OAS3 file exists but has no paths → no seeds → skip.
         noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
         noir_dir.mkdir(parents=True)
         oas3 = {"openapi": "3.0.0", "paths": {}}
-        (noir_dir / "testrepo_20240101T000000_oas3.json").write_text(json.dumps(oas3))
+        (noir_dir / "testrepo_20240101T000000_oas3.json").write_text(
+            json.dumps(oas3), encoding="utf-8"
+        )
         repo = _make_repo(xsstrike_mode="noir")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert len(passes) == 0
 
     def test_noir_mode_picks_lexicographically_last_oas3(self, tmp_path: Path) -> None:
         noir_dir = tmp_path / "projects" / "testproject" / "tool_outputs" / "noir"
@@ -361,24 +378,22 @@ class TestBuildExecutionPassesProvided:
         urls = seeds_path.read_text(encoding="utf-8").strip().splitlines()
         assert "http://localhost:8080/api/v1/health" in urls
 
-    def test_provided_mode_empty_oas3_path_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_provided_mode_empty_oas3_path_skips(self, tmp_path: Path) -> None:
+        # No oas3_path configured → no seeds → skip.
         repo = _make_repo(xsstrike_mode="provided", oas3_path="")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert len(passes) == 0
 
-    def test_provided_mode_missing_oas3_file_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_provided_mode_missing_oas3_file_skips(self, tmp_path: Path) -> None:
+        # oas3_path points to a non-existent file → no seeds → skip.
         repo = _make_repo(
             xsstrike_mode="provided",
             oas3_path=str(tmp_path / "nonexistent.json"),
         )
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert passes[0].kwargs.get("base_url") == "http://localhost:8080"
+        assert len(passes) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +503,16 @@ class TestBuildCommandCrawlLevel:
         assert cmd[idx + 1] == "5"
 
     def test_crawl_level_from_repo_config_used(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_crawl_level=7)
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(
+            xsstrike_crawl_level=7,
+            xsstrike_mode="provided",
+            oas3_path=str(oas3_file),
+        )
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
         assert passes[0].kwargs.get("crawl_level") == 7
@@ -527,13 +551,31 @@ class TestBuildCommandHeaders:
         assert parsed == headers
 
     def test_repo_xsstrike_headers_passed_to_kwargs(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_headers={"Cookie": "PHPSESSID=xyz"})
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(
+            xsstrike_headers={"Cookie": "PHPSESSID=xyz"},
+            xsstrike_mode="provided",
+            oas3_path=str(oas3_file),
+        )
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
         assert passes[0].kwargs.get("headers") == {"Cookie": "PHPSESSID=xyz"}
 
     def test_repo_empty_xsstrike_headers_not_in_kwargs(self, tmp_path: Path) -> None:
-        repo = _make_repo(xsstrike_headers={})
+        oas3_file = tmp_path / "endpoints.json"
+        oas3_file.write_text(
+            json.dumps({"openapi": "3.0.0", "paths": {"/a": {}}}),
+            encoding="utf-8",
+        )
+        repo = _make_repo(
+            xsstrike_headers={},
+            xsstrike_mode="provided",
+            oas3_path=str(oas3_file),
+        )
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
         assert "headers" not in passes[0].kwargs

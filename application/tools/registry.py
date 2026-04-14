@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from rich.console import Console
+from rich.markup import escape as markup_escape
 from rich.table import Table
 
 from application.tools.factory import ToolWrapperFactory
@@ -203,11 +204,11 @@ def build_tool_table(tools, registry) -> Table:
             if version:
                 match = re.search(r"\d+\.\d+[\d.]*", version)
                 version = match.group(0) if match else version.split("(")[0].strip()
-            status = (
-                f"[green]v {version or 'installed'}[/green]"
-                if avail
-                else "[yellow]! NOT FOUND[/yellow]"
-            )
+            if avail:
+                safe = markup_escape(version) if version else "installed"
+                status = f"[green]v {safe}[/green]"
+            else:
+                status = "[yellow]! NOT FOUND[/yellow]"
             hint = ""
 
         table.add_row(tool.name, tool.category, location, status, hint)

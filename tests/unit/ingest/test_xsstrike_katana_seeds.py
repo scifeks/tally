@@ -230,15 +230,12 @@ class TestBuildExecutionPassesKatanaMode:
         assert "seeds_file" in passes[0].kwargs
         assert "base_url" not in passes[0].kwargs
 
-    def test_katana_mode_no_katana_output_falls_back_to_crawl(
-        self, tmp_path: Path
-    ) -> None:
+    def test_katana_mode_no_katana_output_skips(self, tmp_path: Path) -> None:
+        # Legacy "katana" mode with no Katana/Noir output → no seeds → skip.
         repo = _make_repo(xsstrike_mode="katana")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert len(passes) == 1
-        assert "base_url" in passes[0].kwargs
-        assert "seeds_file" not in passes[0].kwargs
+        assert len(passes) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -270,10 +267,9 @@ class TestBuildExecutionPassesAutoMode:
         seeds = Path(passes[0].kwargs["seeds_file"]).read_text()
         assert "/noir-path" in seeds
 
-    def test_auto_falls_back_to_crawl_when_both_absent(self, tmp_path: Path) -> None:
+    def test_auto_skips_when_both_absent(self, tmp_path: Path) -> None:
+        # auto mode: no Katana, no Noir, no oas3_path → no seeds → skip.
         repo = _make_repo(xsstrike_mode="auto")
         ctx = _make_context(repo, str(tmp_path))
         passes = XSSTrikeLocalTool().build_execution_passes(ctx)
-        assert len(passes) == 1
-        assert "base_url" in passes[0].kwargs
-        assert "seeds_file" not in passes[0].kwargs
+        assert len(passes) == 0

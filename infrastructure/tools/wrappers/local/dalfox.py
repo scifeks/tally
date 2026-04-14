@@ -53,7 +53,6 @@ from infrastructure.tools.parsers.dalfox import (
     parse_dalfox_json,
     parse_dalfox_json_string,
 )
-from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.dalfox import BaseDalFoxTool
 
 logger = logging.getLogger(__name__)
@@ -75,7 +74,29 @@ class DalFoxLocalTool(BaseDalFoxTool):
         return shutil.which("dalfox") is not None
 
     def get_version(self) -> str | None:
-        return get_tool_version(self.command)
+        """Run ``dalfox version`` (subcommand, not --version flag) and
+        return the semver string, or ``None`` on failure."""
+        import re
+        import subprocess
+
+        binary = shutil.which("dalfox")
+        if binary is None:
+            return None
+        try:
+            result = subprocess.run(
+                [binary, "version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            output = (result.stdout or result.stderr).strip()
+            if not output:
+                return None
+            clean = re.sub(r"\x1b\[[0-9;]*m", "", output)
+            match = re.search(r"\d+\.\d+[\d.]*", clean)
+            return match.group(0) if match else None
+        except Exception:
+            return None
 
     def build_command(self, **kwargs: object) -> list[str]:
         """Build the DalFox argv list.
@@ -154,7 +175,7 @@ class DalFoxLocalTool(BaseDalFoxTool):
         assert context.repo is not None
         repo = context.repo
         base_url = repo.base_urls[0] if repo.base_urls else ""
-        mode = (repo.dalfox_mode or "noir").lower()
+        mode = (repo.dalfox_mode or "noir+katana").lower()
 
         output_dir = (
             Path(context.base_path).resolve()
@@ -174,43 +195,8 @@ class DalFoxLocalTool(BaseDalFoxTool):
         if repo.dalfox_headers:
             kwargs["headers"] = dict(repo.dalfox_headers)
 
-        if mode == "noir":
-            seeds_file = _build_seeds_from_noir(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                logger.info(
-                    "DalFox: no Noir output found for %s — skipping",
-                    repo.name,
-                )
-                return []
-
-        elif mode == "katana":
-            seeds_file = _build_seeds_from_katana(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                logger.info(
-                    "DalFox: no Katana output found for %s — skipping",
-                    repo.name,
-                )
-                return []
-
-        elif mode == "auto":
+        if mode in ("noir+katana", "noir", "katana"):
+            # "noir" and "katana" are legacy values — treat as "noir+katana".
             seeds_file = _build_seeds_from_katana(
                 context.base_path,
                 context.project_name,
@@ -233,6 +219,39 @@ class DalFoxLocalTool(BaseDalFoxTool):
             else:
                 logger.info(
                     "DalFox: no Katana or Noir output found for %s — skipping",
+                    repo.name,
+                )
+                return []
+
+        elif mode == "auto":
+            seeds_file = _build_seeds_from_katana(
+                context.base_path,
+                context.project_name,
+                repo.name,
+                base_url,
+                output_dir,
+                ts,
+            )
+            if not seeds_file:
+                seeds_file = _build_seeds_from_noir(
+                    context.base_path,
+                    context.project_name,
+                    repo.name,
+                    base_url,
+                    output_dir,
+                    ts,
+                )
+            if not seeds_file:
+                oas3_path = repo.oas3_path or ""
+                if oas3_path:
+                    seeds_file = _build_seeds_from_oas3(
+                        Path(oas3_path), base_url, output_dir, ts
+                    )
+            if seeds_file:
+                kwargs["seeds_file"] = seeds_file
+            else:
+                logger.info(
+                    "DalFox: no seeds available for %s (auto mode) — skipping",
                     repo.name,
                 )
                 return []

@@ -78,14 +78,14 @@ class TestBuildCommandBasic:
         )
         assert "-u" in cmd
 
-    def test_depth_default_is_3(self, tmp_path: Path) -> None:
+    def test_depth_default_is_10(self, tmp_path: Path) -> None:
         tool = KatanaLocalTool()
         cmd = tool.build_command(
             base_url="http://localhost:8080",
             output_file=str(tmp_path / "out.jsonl"),
         )
         idx = cmd.index("-d")
-        assert cmd[idx + 1] == "3"
+        assert cmd[idx + 1] == "10"
 
     def test_jc_flag_present(self, tmp_path: Path) -> None:
         tool = KatanaLocalTool()

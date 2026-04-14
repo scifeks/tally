@@ -2,41 +2,36 @@
 
 Invocation modes
 ----------------
-The wrapper supports five URL seed modes, controlled by
-``repo.xsstrike_mode``:
+The wrapper supports three URL seed modes, controlled by
+``repo.xsstrike_mode``.  XSStrike has no built-in URL crawler — all URLs
+must be supplied from external discovery tools or a user-provided file.
 
-**crawl** (default)
-    XSStrike spiders from ``base_url`` directly::
-
-        xsstrike -u <base_url> --crawl --skip -l <level>
-            --path -e -t <threads> --timeout 15
-            --file-log-level DEBUG --log-file <logfile>
-
-**noir**
-    Seeds are generated from the most recent Noir OAS3 output for the
-    repository.  Each OAS3 path is joined with ``base_url`` to produce a
-    seeds file.  Falls back to ``crawl`` mode when no Noir output exists::
+**noir+katana** (default)
+    Seeds are generated from the most recent Katana OAS3 output for the
+    repository, with Noir OAS3 output as a fallback.  Each OAS3 path is
+    joined with ``base_url`` to produce a seeds file.  Skips XSStrike when
+    neither Katana nor Noir output exists::
 
         xsstrike --seeds <seeds_file> --crawl --skip -l <level>
             --path -e -t <threads> --timeout 15
             --file-log-level DEBUG --log-file <logfile>
 
-**katana**
-    Seeds are generated from the most recent Katana OAS3 output for the
-    repository.  Falls back to ``crawl`` mode when no Katana output exists.
-
 **auto**
-    Tries Katana output first, then Noir output.  Falls back to ``crawl``
-    mode when neither exists.
+    Tries ``noir+katana`` seeds first; if neither is available but
+    ``repo.oas3_path`` is set, falls back to the user-provided file.
+    Skips XSStrike when no seeds can be produced.
 
 **provided**
     Seeds are generated from ``repo.oas3_path`` (the user-supplied endpoint
-    file already converted to OAS3).  Falls back to ``crawl`` mode when
-    ``oas3_path`` is empty::
+    file already converted to OAS3).  Skips XSStrike when ``oas3_path`` is
+    empty or yields no paths.
 
-        xsstrike --seeds <seeds_file> --crawl --skip -l <level>
-            --path -e -t <threads> --timeout 15
-            --file-log-level DEBUG --log-file <logfile>
+Note on ``--crawl``
+-------------------
+The ``--crawl`` flag passed to XSStrike controls DOM-level crawling of each
+seed URL (following links within the page to find additional injection
+points).  It is **not** related to URL enumeration and is always included
+regardless of seed mode.
 
 Output
 ------
@@ -69,7 +64,6 @@ from infrastructure.tools.parsers.xsstrike import (
     parse_xsstrike_log,
     parse_xsstrike_log_string,
 )
-from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.xsstrike import BaseXSStrikeTool
 
 logger = logging.getLogger(__name__)
@@ -101,7 +95,8 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         return shutil.which("xsstrike") is not None
 
     def get_version(self) -> str | None:
-        return get_tool_version(self.command)
+        """XSStrike has no ``--version`` flag; always returns ``None``."""
+        return None
 
     def build_command(self, **kwargs: object) -> list[str]:
         """Build the XSStrike argv list.
@@ -178,14 +173,14 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for XSStrike.
 
-        Resolves the URL seed mode from ``repo.xsstrike_mode`` and builds the
-        appropriate kwargs.  Falls back to crawl mode when seeds cannot be
-        generated (e.g. Noir output missing, oas3_path empty).
+        Resolves the URL seed mode from ``repo.xsstrike_mode`` and builds
+        the appropriate kwargs.  Returns an empty list (skipping XSStrike)
+        when no seeds can be produced — there is no fallback crawl mode.
         """
         assert context.repo is not None
         repo = context.repo
         base_url = repo.base_urls[0] if repo.base_urls else ""
-        mode = (repo.xsstrike_mode or "crawl").lower()
+        mode = (repo.xsstrike_mode or "noir+katana").lower()
 
         output_dir = (
             Path(context.base_path).resolve()
@@ -206,45 +201,8 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         if repo.xsstrike_headers:
             kwargs["headers"] = dict(repo.xsstrike_headers)
 
-        if mode == "noir":
-            seeds_file = _build_seeds_from_noir(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                logger.info(
-                    "XSStrike: no Noir output found for %s — falling back to "
-                    "crawl mode",
-                    repo.name,
-                )
-                kwargs["base_url"] = base_url
-
-        elif mode == "katana":
-            seeds_file = _build_seeds_from_katana(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                logger.info(
-                    "XSStrike: no Katana output found for %s — falling back "
-                    "to crawl mode",
-                    repo.name,
-                )
-                kwargs["base_url"] = base_url
-
-        elif mode == "auto":
+        if mode in ("noir+katana", "noir", "katana"):
+            # "noir" and "katana" are legacy values — treat as "noir+katana".
             seeds_file = _build_seeds_from_katana(
                 context.base_path,
                 context.project_name,
@@ -266,11 +224,43 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 kwargs["seeds_file"] = seeds_file
             else:
                 logger.info(
-                    "XSStrike: no Katana or Noir output found for %s — "
-                    "falling back to crawl mode",
+                    "XSStrike: no Katana or Noir output found for %s — skipping",
                     repo.name,
                 )
-                kwargs["base_url"] = base_url
+                return []
+
+        elif mode == "auto":
+            seeds_file = _build_seeds_from_katana(
+                context.base_path,
+                context.project_name,
+                repo.name,
+                base_url,
+                output_dir,
+                ts,
+            )
+            if not seeds_file:
+                seeds_file = _build_seeds_from_noir(
+                    context.base_path,
+                    context.project_name,
+                    repo.name,
+                    base_url,
+                    output_dir,
+                    ts,
+                )
+            if not seeds_file:
+                oas3_path = repo.oas3_path or ""
+                if oas3_path:
+                    seeds_file = _build_seeds_from_oas3(
+                        Path(oas3_path), base_url, output_dir, ts
+                    )
+            if seeds_file:
+                kwargs["seeds_file"] = seeds_file
+            else:
+                logger.info(
+                    "XSStrike: no seeds available for %s (auto mode) — skipping",
+                    repo.name,
+                )
+                return []
 
         elif mode == "provided":
             oas3_path = repo.oas3_path or ""
@@ -283,22 +273,26 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 else:
                     logger.info(
                         "XSStrike: could not extract seeds from oas3_path %r "
-                        "for %s — falling back to crawl mode",
+                        "for %s — skipping",
                         oas3_path,
                         repo.name,
                     )
-                    kwargs["base_url"] = base_url
+                    return []
             else:
                 logger.info(
                     "XSStrike: mode='provided' but oas3_path is empty for %s "
-                    "— falling back to crawl mode",
+                    "— skipping",
                     repo.name,
                 )
-                kwargs["base_url"] = base_url
+                return []
 
         else:
-            # crawl mode (default)
-            kwargs["base_url"] = base_url
+            logger.warning(
+                "XSStrike: unknown mode %r for %s — skipping",
+                mode,
+                repo.name,
+            )
+            return []
 
         return [
             ExecutionPass(

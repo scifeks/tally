@@ -69,6 +69,10 @@ def test_repo_edit_updates_type(
     h.send("")
     h.expect("DalFox seed mode")
     h.send("")
+    h.expect("Katana headless")
+    h.send("")
+    h.expect("Katana crawl depth")
+    h.send("")
     output = h.wait_for_prompt()
 
     assert "updated" in output

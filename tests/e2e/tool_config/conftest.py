@@ -20,6 +20,7 @@ ALL_TOOL_NAMES: list[str] = sorted(
         "composer-audit",
         "dalfox",
         "gitleaks",
+        "katana",
         "noir",
         "npm-audit",
         "osv-scanner",

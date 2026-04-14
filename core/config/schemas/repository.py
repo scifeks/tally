@@ -64,11 +64,11 @@ class Repository(BaseModel):
         ),
     )
     xsstrike_mode: str = Field(
-        default="crawl",
+        default="noir+katana",
         description=(
-            "XSStrike URL seed mode. One of: 'crawl' (spider from base_url), "
-            "'noir' (generate seeds from Noir OAS3 output), "
-            "'provided' (generate seeds from the user-provided oas3_path). "
+            "XSStrike URL seed mode. One of: 'noir+katana' (seeds from Katana "
+            "then Noir discovery output), 'auto' (prefer noir+katana, fall back "
+            "to provided file), 'provided' (seeds from user-provided oas3_path). "
             "Only relevant when base_urls is non-empty."
         ),
     )
@@ -89,12 +89,13 @@ class Repository(BaseModel):
         ),
     )
     dalfox_mode: str = Field(
-        default="noir",
+        default="noir+katana",
         description=(
-            "DalFox URL seed mode. One of: 'noir' (generate seeds from Noir "
-            "OAS3 output) or 'provided' (generate seeds from the user-provided "
-            "oas3_path). DalFox has no built-in crawler; a seeds file is always "
-            "required. Only relevant when base_urls is non-empty."
+            "DalFox URL seed mode. One of: 'noir+katana' (seeds from Katana "
+            "then Noir discovery output), 'auto' (prefer noir+katana, fall back "
+            "to provided file), 'provided' (seeds from user-provided oas3_path). "
+            "DalFox has no built-in crawler; a seeds file is always required. "
+            "Only relevant when base_urls is non-empty."
         ),
     )
     dalfox_headers: dict[str, str] = Field(
@@ -113,10 +114,10 @@ class Repository(BaseModel):
         ),
     )
     katana_depth: int = Field(
-        default=3,
+        default=10,
         description=(
-            "Katana crawl depth (-d flag). Default 3. Increase for deeply "
-            "nested applications; decrease for faster scans."
+            "Katana crawl depth (-d flag). Default 10 for exhaustive URL "
+            "enumeration. Decrease for faster scans on shallow applications."
         ),
     )
     katana_headers: dict[str, str] = Field(
@@ -131,24 +132,39 @@ class Repository(BaseModel):
     @field_validator("xsstrike_mode")
     @classmethod
     def validate_xsstrike_mode(cls, v: str) -> str:
-        """Validate xsstrike_mode is one of the accepted values."""
-        valid = {"crawl", "noir", "provided", "katana", "auto", ""}
+        """Validate and normalise xsstrike_mode.
+
+        Legacy values are migrated transparently:
+        - ``'crawl'`` → ``'auto'``   (crawl was DOM crawling, not enumeration)
+        - ``'noir'``  → ``'noir+katana'``
+        - ``'katana'``→ ``'noir+katana'``
+        """
+        # Migrate legacy values
+        _migrate = {"crawl": "auto", "noir": "noir+katana", "katana": "noir+katana"}
+        v = _migrate.get(v, v)
+        valid = {"noir+katana", "auto", "provided", ""}
         if v not in valid:
             raise ValueError(
                 f"Invalid xsstrike_mode: {v!r}. "
-                "Valid values: crawl, noir, provided, katana, auto"
+                "Valid values: noir+katana, auto, provided"
             )
         return v
 
     @field_validator("dalfox_mode")
     @classmethod
     def validate_dalfox_mode(cls, v: str) -> str:
-        """Validate dalfox_mode is one of the accepted values."""
-        valid = {"noir", "provided", "katana", "auto", ""}
+        """Validate and normalise dalfox_mode.
+
+        Legacy values are migrated transparently:
+        - ``'noir'``  → ``'noir+katana'``
+        - ``'katana'``→ ``'noir+katana'``
+        """
+        _migrate = {"noir": "noir+katana", "katana": "noir+katana"}
+        v = _migrate.get(v, v)
+        valid = {"noir+katana", "auto", "provided", ""}
         if v not in valid:
             raise ValueError(
-                f"Invalid dalfox_mode: {v!r}. "
-                "Valid values: noir, provided, katana, auto"
+                f"Invalid dalfox_mode: {v!r}. Valid values: noir+katana, auto, provided"
             )
         return v
 
@@ -182,28 +198,6 @@ class Repository(BaseModel):
             raise ValueError("At least one of 'path' or 'docker_path' must be set")
         if self.docker_path and not self.container_name:
             raise ValueError("'container_name' is required when 'docker_path' is set")
-        return self
-
-    @model_validator(mode="after")
-    def validate_xsstrike_settings(self) -> "Repository":
-        """Ensure xsstrike_mode is compatible with node_app setting."""
-        if self.node_app and self.xsstrike_mode == "noir":
-            raise ValueError(
-                "xsstrike_mode='noir' is invalid for Node.js repositories "
-                "(Noir cannot parse Node.js endpoints). "
-                "Use 'crawl', 'katana', 'auto', or 'provided' instead."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def validate_dalfox_settings(self) -> "Repository":
-        """Ensure dalfox_mode is compatible with node_app setting."""
-        if self.node_app and self.dalfox_mode == "noir":
-            raise ValueError(
-                "dalfox_mode='noir' is invalid for Node.js repositories "
-                "(Noir cannot parse Node.js endpoints). "
-                "Use 'katana', 'auto', or 'provided' instead."
-            )
         return self
 
 

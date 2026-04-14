@@ -88,74 +88,64 @@ def _prompt(message: str, default: str = "") -> str:
     return raw or default
 
 
-_CRAWL_MODES: frozenset[str] = frozenset(
-    {"auto", "crawl", "katana", "noir", "provided"}
-)
-
-_CRAWL_MODE_DESCRIPTIONS: dict[str, str] = {
-    "auto": "try katana → noir → crawl fallback (recommended)",
-    "katana": "generate seeds from Katana crawler output",
-    "crawl": "spider the app from base URL (always available)",
-    "noir": "generate seeds from Noir endpoint discovery output",
-    "provided": ("generate seeds from your endpoint file (requires endpoint file)"),
+_XSS_SEED_MODE_DESCRIPTIONS: dict[str, str] = {
+    "noir+katana": (
+        "generate seeds from Katana crawler output, then Noir endpoint "
+        "discovery output (recommended)"
+    ),
+    "auto": (
+        "prefer noir+katana discovery output; fall back to provided file "
+        "if neither discovery tool ran"
+    ),
+    "provided": "generate seeds from your endpoint file (requires endpoint file)",
 }
 
 
-def _interview_crawl_mode(
+def _interview_xss_seed_mode(
     tool_label: str,
     base_urls: list[str],
     oas3_path: str,
-    node_app: bool,
     current_mode: str = "",
 ) -> str:
-    """Generic crawl URL seed mode interview for web tools.
+    """Generic URL seed mode interview shared by XSStrike and DalFox.
 
-    Computes the set of valid modes from the given constraints:
-    - 'auto'     — always valid when base_urls is non-empty (recommended).
-    - 'katana'   — always valid when base_urls is non-empty.
-    - 'crawl'    — always valid when base_urls is non-empty.
-    - 'noir'     — valid only when node_app is False.
-    - 'provided' — valid only when oas3_path is non-empty.
+    Valid modes (identical for both tools):
+    - ``noir+katana`` — always available when base_urls is non-empty.
+    - ``auto``        — always available when base_urls is non-empty.
+    - ``provided``    — available only when oas3_path is non-empty.
 
-    Returns 'auto' immediately when base_urls is empty (safe default).
+    Returns the existing/default mode without prompting when ``base_urls``
+    is empty.  Legacy values (``crawl``, ``noir``, ``katana``) are accepted
+    as input and mapped to their modern equivalents before validation.
     """
     if not base_urls:
-        return current_mode or "auto"
+        return current_mode or "noir+katana"
 
-    valid_modes: set[str] = {"auto", "crawl", "katana"}
-    if not node_app:
-        valid_modes.add("noir")
+    # Normalise legacy current_mode values so the default renders correctly.
+    _legacy = {"crawl": "auto", "noir": "noir+katana", "katana": "noir+katana"}
+    current_mode = _legacy.get(current_mode, current_mode)
+
+    valid_modes: set[str] = {"auto", "noir+katana"}
     if oas3_path:
         valid_modes.add("provided")
 
-    # Preferred default: auto > provided > noir > katana > crawl
-    if current_mode in valid_modes:
-        effective_default = current_mode
-    elif oas3_path:
-        effective_default = "auto"
-    else:
-        effective_default = "auto"
+    effective_default = current_mode if current_mode in valid_modes else "noir+katana"
 
     print(f"  {tool_label} URL seed mode:")
-    for mode in ("auto", "katana", "crawl", "noir", "provided"):
+    for mode in ("noir+katana", "auto", "provided"):
         if mode in valid_modes:
-            desc = _CRAWL_MODE_DESCRIPTIONS[mode]
-            print(f"    {mode:<8} — {desc}")
-    if node_app:
-        print("  (noir is unavailable — Noir cannot parse Node.js endpoints)")
+            desc = _XSS_SEED_MODE_DESCRIPTIONS[mode]
+            print(f"    {mode:<12} — {desc}")
     if not oas3_path:
         print("  (provided is unavailable — no endpoint file configured)")
 
     while True:
         raw = _prompt(f"  {tool_label} seed mode", default=effective_default).lower()
+        # Accept legacy aliases at the prompt too.
+        raw = _legacy.get(raw, raw)
         if raw in valid_modes:
             return raw
-        if raw == "noir" and node_app:
-            print(
-                "  'noir' is not available for Node.js apps. "
-                f"Choose from: {', '.join(sorted(valid_modes))}"
-            )
-        elif raw == "provided" and not oas3_path:
+        if raw == "provided" and not oas3_path:
             print(
                 "  'provided' requires an endpoint file. "
                 "Add one first, then re-run 'repo edit'. "
@@ -171,97 +161,26 @@ def _interview_crawl_mode(
 def _interview_xsstrike_mode(
     base_urls: list[str],
     oas3_path: str,
-    node_app: bool = False,
     current_mode: str = "",
 ) -> str:
-    """Prompt for XSStrike URL seed mode.
-
-    Delegates to ``_interview_crawl_mode`` with label 'XSStrike'.
-    """
-    return _interview_crawl_mode(
-        "XSStrike", base_urls, oas3_path, node_app, current_mode
-    )
-
-
-_DALFOX_MODES: frozenset[str] = frozenset({"auto", "katana", "noir", "provided"})
-
-_DALFOX_MODE_DESCRIPTIONS: dict[str, str] = {
-    "auto": "try katana → noir → skip (recommended)",
-    "katana": "generate seeds from Katana crawler output",
-    "noir": "generate seeds from Noir endpoint discovery output",
-    "provided": ("generate seeds from your endpoint file (requires endpoint file)"),
-}
+    """Prompt for XSStrike URL seed mode."""
+    return _interview_xss_seed_mode("XSStrike", base_urls, oas3_path, current_mode)
 
 
 def _interview_dalfox_mode(
     base_urls: list[str],
     oas3_path: str,
-    node_app: bool = False,
     current_mode: str = "",
 ) -> str:
-    """Prompt for DalFox URL seed mode.
-
-    DalFox has no built-in crawler; a seeds file is always required.
-    Valid modes:
-
-    - ``auto``     — katana → noir → skip; always valid with base_urls.
-    - ``katana``   — seeds from Katana output; always valid with base_urls.
-    - ``noir``     — seeds from Noir OAS3 output; unavailable for Node apps.
-    - ``provided`` — seeds from the user-supplied endpoint file; requires
-      ``oas3_path`` to be set.
-
-    Returns the existing/default mode without prompting when ``base_urls``
-    is empty.
-    """
-    if not base_urls:
-        return current_mode or "auto"
-
-    valid_modes: set[str] = {"auto", "katana"}
-    if not node_app:
-        valid_modes.add("noir")
-    if oas3_path:
-        valid_modes.add("provided")
-
-    # Preferred default: auto > provided > noir > katana
-    effective_default = current_mode if current_mode in valid_modes else "auto"
-
-    print("  DalFox URL seed mode:")
-    for mode in ("auto", "katana", "noir", "provided"):
-        if mode in valid_modes:
-            desc = _DALFOX_MODE_DESCRIPTIONS[mode]
-            print(f"    {mode:<8} — {desc}")
-    if node_app:
-        print("  (noir is unavailable — Noir cannot parse Node.js endpoints)")
-    if not oas3_path:
-        print("  (provided is unavailable — no endpoint file configured)")
-
-    while True:
-        raw = _prompt("  DalFox seed mode", default=effective_default).lower()
-        if raw in valid_modes:
-            return raw
-        if raw == "noir" and node_app:
-            print(
-                "  'noir' is not available for Node.js apps. "
-                f"Choose from: {', '.join(sorted(valid_modes))}"
-            )
-        elif raw == "provided" and not oas3_path:
-            print(
-                "  'provided' requires an endpoint file. "
-                "Add one first, then re-run 'repo edit'. "
-                f"Choose from: {', '.join(sorted(valid_modes))}"
-            )
-        else:
-            print(
-                f"  Invalid mode: {raw!r}. "
-                f"Choose from: {', '.join(sorted(valid_modes))}"
-            )
+    """Prompt for DalFox URL seed mode."""
+    return _interview_xss_seed_mode("DalFox", base_urls, oas3_path, current_mode)
 
 
 def _interview_katana(
     base_urls: list[str],
     node_app: bool = False,
     current_headless: bool = False,
-    current_depth: int = 3,
+    current_depth: int = 10,
 ) -> tuple[bool, int]:
     """Prompt for Katana crawler options; returns (headless, depth).
 
@@ -612,7 +531,6 @@ class InteractiveProjectWizard:
             xsstrike_mode = _interview_xsstrike_mode(
                 base_urls=base_urls,
                 oas3_path=oas3_path,
-                node_app=node_app,
                 current_mode=existing.xsstrike_mode,
             )
 
@@ -620,7 +538,6 @@ class InteractiveProjectWizard:
             dalfox_mode = _interview_dalfox_mode(
                 base_urls=base_urls,
                 oas3_path=oas3_path,
-                node_app=node_app,
                 current_mode=existing.dalfox_mode,
             )
 
@@ -1005,13 +922,11 @@ class InteractiveProjectWizard:
 
         # XSStrike URL seed mode — only shown when base URLs are configured
         xsstrike_mode = _interview_xsstrike_mode(
-            base_urls=base_urls, oas3_path=oas3_path, node_app=node_app
+            base_urls=base_urls, oas3_path=oas3_path
         )
 
         # DalFox URL seed mode — only shown when base URLs are configured
-        dalfox_mode = _interview_dalfox_mode(
-            base_urls=base_urls, oas3_path=oas3_path, node_app=node_app
-        )
+        dalfox_mode = _interview_dalfox_mode(base_urls=base_urls, oas3_path=oas3_path)
 
         # Katana crawler options
         katana_headless, katana_depth = _interview_katana(

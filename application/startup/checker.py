@@ -219,12 +219,16 @@ class DependencyChecker:
         table.add_column("Status", min_width=14)
         table.add_column("Install Hint")
 
+        from rich.markup import escape as _esc
+
         for check in result.checks:
             if check.installed:
                 if check.warning:
-                    status = f"[yellow]v {check.version} (incompatible)[/yellow]"
+                    safe = _esc(check.version or "")
+                    status = f"[yellow]v {safe} (incompatible)[/yellow]"
                 else:
-                    status = f"[green]v {check.version or 'installed'}[/green]"
+                    safe = _esc(check.version) if check.version else "installed"
+                    status = f"[green]v {safe}[/green]"
             else:
                 status = "[yellow]! NOT FOUND[/yellow]"
 
@@ -265,12 +269,16 @@ def print_installed_system_tools(console: Console) -> None:
     table.add_column("Status", min_width=14)
     table.add_column("Install Hint")
 
+    from rich.markup import escape as _esc
+
     for check in tool_checks:
         if check.installed:
             if check.warning:
-                status = f"[yellow]v {check.version} (incompatible)[/yellow]"
+                safe = _esc(check.version or "")
+                status = f"[yellow]v {safe} (incompatible)[/yellow]"
             else:
-                status = f"[green]v {check.version or 'installed'}[/green]"
+                safe = _esc(check.version) if check.version else "installed"
+                status = f"[green]v {safe}[/green]"
         else:
             status = "[yellow]! NOT FOUND[/yellow]"
         hint = check.install_hint or ""
