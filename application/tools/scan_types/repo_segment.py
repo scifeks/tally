@@ -21,6 +21,10 @@ from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
 from domain.tools.scan_types.resources import IExecutionResources
+from infrastructure.tools.wrappers.utils.manifest_check import (
+    has_dependency_manifests,
+    has_dependency_manifests_docker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +32,9 @@ logger = logging.getLogger(__name__)
 class RepoSegmentScan(ScanType):
     """Run a set of tools on every configured repository."""
 
-    def __init__(self, tool_names: list[str]) -> None:
+    def __init__(self, tool_names: list[str], segment_name: str = "") -> None:
         self.tool_names = tool_names
+        self.segment_name = segment_name
 
     def execute(
         self, config: ScanTypeConfig, resources: IExecutionResources
@@ -68,6 +73,28 @@ class RepoSegmentScan(ScanType):
 
         for repo in repos:
             resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
+
+            if self.segment_name == "sca":
+                if repo.path:
+                    _has_manifests = has_dependency_manifests(
+                        repo.path, repo.languages or []
+                    )
+                elif repo.docker_path and repo.container_name:
+                    _has_manifests = has_dependency_manifests_docker(
+                        repo.container_name,
+                        repo.docker_path,
+                        repo.languages or [],
+                    )
+                else:
+                    _has_manifests = False
+                if not _has_manifests:
+                    resources.display.print_status(
+                        f"  [dim]No dependency manifests found for "
+                        f"{repo.name} — skipping SCA[/dim]"
+                    )
+                    total_skipped += len(self.tool_names)
+                    continue
+
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:

@@ -7,6 +7,7 @@ from pathlib import Path
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.npm_audit import BaseNpmAuditTool
+from infrastructure.tools.wrappers.utils.install_fallback import ensure_lockfile
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +55,19 @@ class NpmAuditLocalTool(BaseNpmAuditTool):
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
 
-        lockfile = Path(repo_path) / "package-lock.json"
-        if not lockfile.exists():
+        if not (Path(repo_path) / "package.json").exists():
             logger.info(
-                "npm-audit: package-lock.json not found in %r — skipping. "
-                "Run 'npm install' in the repository to generate it.",
+                "npm-audit: package.json not found in %r — skipping",
                 repo_path,
             )
+            return []
+
+        if not ensure_lockfile(
+            "npm-audit",
+            repo_path,
+            "package-lock.json",
+            ["npm", "install", "--package-lock-only"],
+        ):
             return []
 
         return [

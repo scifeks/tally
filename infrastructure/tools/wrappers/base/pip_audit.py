@@ -1,5 +1,6 @@
 """Shared base class for pip-audit local and docker wrappers."""
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,9 @@ from infrastructure.tools.parsers.pip_audit import (
     parse_pip_audit_json,
     parse_pip_audit_json_string,
 )
+from infrastructure.tools.wrappers.utils.pip_deps import find_or_generate_requirements
+
+logger = logging.getLogger(__name__)
 
 
 class BasePipAuditTool(ToolInterface):
@@ -79,15 +83,28 @@ class BasePipAuditTool(ToolInterface):
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
-        if not context.is_docker and not context.repo.dependencies_file:
-            return []  # local pip-audit requires a dependencies file — skip this repo
         repo_path = context.registry.get_repo_path(self.name, context.repo)
+        if context.is_docker:
+            deps_file = context.repo.dependencies_file
+        else:
+            container = (
+                context.repo.container_name if context.repo.container_name else ""
+            )
+            deps_file = find_or_generate_requirements(
+                repo_path, container_name=container
+            )
+            if not deps_file:
+                logger.info(
+                    "pip-audit: no Python dependency file found in %r — skipping",
+                    repo_path,
+                )
+                return []
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,
                 kwargs={
                     "repo_path": repo_path,
-                    "dependencies_file": context.repo.dependencies_file,
+                    "dependencies_file": deps_file,
                 },
                 cwd=repo_path,
             )

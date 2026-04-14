@@ -27,6 +27,7 @@ class SegmentScan(ScanType):
         valid_segments = {t.scan_segment for t in _all_tools}
         if self.segment_name not in valid_segments:
             raise InvalidSegmentError(self.segment_name, sorted(valid_segments))
-        return RepoSegmentScan(tools_for_segment(self.segment_name, registry)).execute(
-            config, resources
-        )
+        return RepoSegmentScan(
+            tools_for_segment(self.segment_name, registry),
+            segment_name=self.segment_name,
+        ).execute(config, resources)

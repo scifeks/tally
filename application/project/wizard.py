@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import Repository
+from infrastructure.tools.wrappers.utils.manifest_check import (
+    LANGUAGE_MANIFESTS,
+    has_dependency_manifests,
+    has_dependency_manifests_docker,
+)
 
 if TYPE_CHECKING:
     from application.project.manager import ProjectManager
@@ -35,6 +40,26 @@ _TEST_DIR_NAMES: frozenset[str] = frozenset(
 _JS_LANGS: frozenset[str] = frozenset(
     {"javascript", "javascript/typescript", "node", "typescript"}
 )
+
+
+def _sca_manifest_notification(repo: Repository) -> None:
+    """Print a notice when no SCA-relevant dependency manifests are found."""
+    sca_langs = set(LANGUAGE_MANIFESTS)
+    repo_langs = {lang.lower() for lang in (repo.languages or [])}
+    if not repo_langs & sca_langs:
+        return
+    if repo.container_name:
+        found = has_dependency_manifests_docker(
+            repo.container_name, repo.docker_path, repo.languages or []
+        )
+    else:
+        found = has_dependency_manifests(repo.path, repo.languages or [])
+    if not found:
+        print(
+            "  Note: no dependency manifests found for the configured languages.\n"
+            "  SCA scanning (npm-audit, pip-audit, composer-audit, osv-scanner)\n"
+            "  will be skipped for this repository."
+        )
 
 
 def _has_js(langs: list[str]) -> bool:
@@ -391,29 +416,7 @@ class InteractiveProjectWizard:
             else:
                 node_app = False
 
-            # Dependencies file — pip-audit scope, only relevant for Python repos
             dependencies_file = existing.dependencies_file
-            if "python" in [lang.lower() for lang in langs]:
-                if mode == "docker":
-                    print(
-                        "  Note: if no dependencies file is provided, pip-audit will "
-                        "scan all packages installed in the container environment."
-                    )
-                    dependencies_file = _prompt(
-                        "  Python dependencies file"
-                        " (container path, e.g. /app/requirements.txt, optional)",
-                        default=existing.dependencies_file,
-                    )
-                else:
-                    print(
-                        "  Note: without a dependencies file, pip-audit will be "
-                        "skipped for this repository."
-                    )
-                    dependencies_file = _prompt(
-                        "  Python dependencies file"
-                        " (local path, e.g. requirements.txt, optional)",
-                        default=existing.dependencies_file,
-                    )
 
             # Base URLs
             current_urls = ", ".join(existing.base_urls) if existing.base_urls else ""
@@ -573,6 +576,7 @@ class InteractiveProjectWizard:
             )
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
+            _sca_manifest_notification(updated)
             print(f"\n✓ Repository '{name}' updated")
             return updated
 
@@ -841,27 +845,7 @@ class InteractiveProjectWizard:
             ).lower()
             node_app = ans in ("y", "yes")
 
-        # Dependencies file — pip-audit scope, only relevant for Python repos
         dependencies_file = ""
-        if "python" in [lang.lower() for lang in langs]:
-            if mode == "docker":
-                print(
-                    "  Note: if no dependencies file is provided, pip-audit will "
-                    "scan all packages installed in the container environment."
-                )
-                dependencies_file = _prompt(
-                    "  Python dependencies file"
-                    " (container path, e.g. /app/requirements.txt, optional)"
-                )
-            else:
-                print(
-                    "  Note: without a dependencies file, pip-audit will be "
-                    "skipped for this repository."
-                )
-                dependencies_file = _prompt(
-                    "  Python dependencies file"
-                    " (local path, e.g. requirements.txt, optional)"
-                )
 
         # Base URLs
         url_input = _prompt("  Base URLs (comma-separated, optional)")
@@ -933,7 +917,7 @@ class InteractiveProjectWizard:
             base_urls=base_urls, node_app=node_app
         )
 
-        return Repository(
+        new_repo = Repository(
             name=name,
             type=types,
             path=local_path_str,
@@ -951,3 +935,5 @@ class InteractiveProjectWizard:
             katana_headless=katana_headless,
             katana_depth=katana_depth,
         )
+        _sca_manifest_notification(new_repo)
+        return new_repo
