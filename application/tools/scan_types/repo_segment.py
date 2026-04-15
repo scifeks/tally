@@ -22,8 +22,7 @@ from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
 from domain.tools.scan_types.resources import IExecutionResources
 from infrastructure.tools.wrappers.utils.manifest_check import (
-    has_dependency_manifests,
-    has_dependency_manifests_docker,
+    has_manifests_for_language,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +63,7 @@ class RepoSegmentScan(ScanType):
         findings_by_tool: dict[str, int] = {}
 
         _reg_tools: list[Any] = registry.get_all_tools()
+        # Used only for non-SCA segments where language detection still applies.
         _lang_specific: set[str] = {
             t.name for t in _reg_tools if t.name in self.tool_names and t.language_gates
         }
@@ -74,32 +74,42 @@ class RepoSegmentScan(ScanType):
         for repo in repos:
             resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
 
-            if self.segment_name == "sca":
-                if repo.path:
-                    _has_manifests = has_dependency_manifests(
-                        repo.path, repo.languages or []
-                    )
-                elif repo.docker_path and repo.container_name:
-                    _has_manifests = has_dependency_manifests_docker(
-                        repo.container_name,
-                        repo.docker_path,
-                        repo.languages or [],
-                    )
-                else:
-                    _has_manifests = False
-                if not _has_manifests:
-                    resources.display.print_status(
-                        f"  [dim]No dependency manifests found for "
-                        f"{repo.name} — skipping SCA[/dim]"
-                    )
-                    total_skipped += len(self.tool_names)
-                    continue
+            # Resolve manifest-check location once per repo.
+            if repo.path:
+                _mpath, _mcontainer = repo.path, ""
+            elif repo.docker_path and repo.container_name:
+                _mpath, _mcontainer = repo.docker_path, repo.container_name
+            else:
+                _mpath, _mcontainer = "", ""
 
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:
                 _invocation += 1
-                if tool_name in _lang_specific:
+
+                if self.segment_name == "sca":
+                    # Gate on manifest presence — not language detection.
+                    tool_inst_check: Any = registry.get_tool(tool_name)
+                    if tool_inst_check is not None and tool_inst_check.language_gates:
+                        has_manifest = bool(_mpath) and any(
+                            has_manifests_for_language(_mpath, lang, _mcontainer)
+                            for lang in tool_inst_check.language_gates
+                        )
+                        if not has_manifest:
+                            resources.display.print_tool_line(
+                                ToolDisplayRow(
+                                    tool_name,
+                                    False,
+                                    True,
+                                    0,
+                                    0.0,
+                                    f"no manifest found for {repo.name}",
+                                )
+                            )
+                            total_skipped += 1
+                            continue
+                elif tool_name in _lang_specific:
+                    # Non-SCA: gate on language detection.
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}
                     tool_inst: Any = registry.get_tool(tool_name)
                     gates = (

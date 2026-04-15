@@ -7,18 +7,39 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 LANGUAGE_MANIFESTS: dict[str, list[str]] = {
-    "javascript": ["package.json"],
-    "typescript": ["package.json"],
-    "node": ["package.json"],
+    "javascript": [
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+    ],
+    "typescript": [
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+    ],
+    "node": [
+        "package.json",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+    ],
     "python": [
         "requirements.txt",
+        "requirements.in",
+        "requirements-dev.txt",
         "pyproject.toml",
         "Pipfile",
+        "Pipfile.lock",
+        "poetry.lock",
         "setup.py",
         "setup.cfg",
-        "poetry.lock",
+        "uv.lock",
+        "pdm.lock",
+        "constraints.txt",
     ],
-    "php": ["composer.json"],
+    "php": ["composer.json", "composer.lock"],
 }
 
 
@@ -88,3 +109,24 @@ def has_dependency_manifests_docker(
                     exc,
                 )
     return False
+
+
+def has_manifests_for_language(
+    repo_path: str,
+    language: str,
+    container_name: str = "",
+) -> bool:
+    """Return True if any manifest for ``language`` exists in the repo.
+
+    Uses a local stat when ``container_name`` is empty, or ``docker exec
+    test -f`` when it is set.
+
+    Args:
+        repo_path: Absolute path to the repository root (local or
+            in-container path for docker mode).
+        language: Language name (case-insensitive).
+        container_name: If non-empty, check inside this container.
+    """
+    if container_name:
+        return has_dependency_manifests_docker(container_name, repo_path, [language])
+    return has_dependency_manifests(repo_path, [language])
