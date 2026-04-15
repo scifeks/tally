@@ -10,6 +10,10 @@ pytestmark = pytest.mark.local_only
 
 
 @pytest.mark.slow
+@pytest.mark.skip(
+    reason="Katana hangs indefinitely on dvpwa — blocked pending TAL-111 "
+    "Katana hang investigation"
+)
 def test_scan_repo_scoped(tally_harness_live: TallyHarness) -> None:
     h = tally_harness_live
     h.run("project switch DVPA")
