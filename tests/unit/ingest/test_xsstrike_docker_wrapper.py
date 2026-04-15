@@ -35,10 +35,9 @@ def _make_repo(**kwargs: Any) -> MagicMock:
     repo = MagicMock()
     repo.base_urls = kwargs.get("base_urls", ["http://localhost:8080"])
     repo.name = kwargs.get("name", "myrepo")
-    repo.xsstrike_mode = kwargs.get("xsstrike_mode", "crawl")
     repo.xsstrike_crawl_level = kwargs.get("xsstrike_crawl_level", 10)
     repo.xsstrike_headers = kwargs.get("xsstrike_headers", None)
-    repo.oas3_path = kwargs.get("oas3_path", None)
+    repo.merged_seeds_path = kwargs.get("merged_seeds_path", "")
     return repo
 
 
@@ -170,46 +169,63 @@ class TestDockerBuildExecutionPasses:
         ctx.project_name = "proj"
         return ctx
 
-    def test_crawl_level_honoured(self, tmp_path: Any) -> None:
+    def _make_seeds(self, tmp_path: Any, name: str = "seeds.txt") -> str:
+        seeds = tmp_path / name
+        seeds.write_text("http://target/path\n")
+        return str(seeds)
+
+    def test_skips_when_no_seeds_file(self, tmp_path: Any) -> None:
         tool = _make_tool()
-        repo = _make_repo(xsstrike_crawl_level=7)
+        repo = _make_repo(merged_seeds_path="")
+        ctx = self._make_context(repo, tmp_path)
+        passes = tool.build_execution_passes(ctx)
+        assert passes == []
+
+    def test_returns_one_pass_when_seeds_exist(self, tmp_path: Any) -> None:
+        tool = _make_tool()
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo(merged_seeds_path=seeds)
         ctx = self._make_context(repo, tmp_path)
         passes = tool.build_execution_passes(ctx)
         assert len(passes) == 1
+
+    def test_seeds_file_passed_as_kwarg(self, tmp_path: Any) -> None:
+        tool = _make_tool()
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo(merged_seeds_path=seeds)
+        ctx = self._make_context(repo, tmp_path)
+        passes = tool.build_execution_passes(ctx)
+        assert passes[0].kwargs["seeds_file"] == seeds
+
+    def test_crawl_level_honoured(self, tmp_path: Any) -> None:
+        tool = _make_tool()
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo(merged_seeds_path=seeds, xsstrike_crawl_level=7)
+        ctx = self._make_context(repo, tmp_path)
+        passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["crawl_level"] == 7
 
     def test_headers_honoured(self, tmp_path: Any) -> None:
         tool = _make_tool()
+        seeds = self._make_seeds(tmp_path)
         hdrs = {"Cookie": "session=abc"}
-        repo = _make_repo(xsstrike_headers=hdrs)
+        repo = _make_repo(merged_seeds_path=seeds, xsstrike_headers=hdrs)
         ctx = self._make_context(repo, tmp_path)
         passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["headers"] == hdrs
 
     def test_no_headers_key_when_headers_none(self, tmp_path: Any) -> None:
         tool = _make_tool()
-        repo = _make_repo(xsstrike_headers=None)
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo(merged_seeds_path=seeds, xsstrike_headers=None)
         ctx = self._make_context(repo, tmp_path)
         passes = tool.build_execution_passes(ctx)
         assert "headers" not in passes[0].kwargs
 
-    def test_crawl_mode_uses_base_url(self, tmp_path: Any) -> None:
-        tool = _make_tool()
-        repo = _make_repo(xsstrike_mode="crawl", base_urls=["http://target"])
-        ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
-        assert passes[0].kwargs["base_url"] == "http://target"
-
-    def test_returns_one_pass(self, tmp_path: Any) -> None:
-        tool = _make_tool()
-        repo = _make_repo()
-        ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
-        assert len(passes) == 1
-
     def test_pass_label_suffix_is_repo_name(self, tmp_path: Any) -> None:
         tool = _make_tool()
-        repo = _make_repo(name="myapp")
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo(name="myapp", merged_seeds_path=seeds)
         ctx = self._make_context(repo, tmp_path)
         passes = tool.build_execution_passes(ctx)
         assert passes[0].label_suffix == "myapp"

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from application.pipeline.factory import PipelineFactory
+from application.pipeline.handlers import IngestHandler
 from application.pipeline.strategies import (
     EnrichThenPersistStrategy,
     PersistOnlyStrategy,
 )
+from application.pipeline.url_handlers import URLSourceEmitter
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 
 
@@ -30,7 +32,9 @@ class TestPipelineFactory:
     def test_ingest_handler_always_subscribed(self) -> None:
         for skip in (True, False):
             bus = PipelineFactory.create(skip_enrichment=skip)
-            assert len(bus._handlers[ToolCompleted]) == 1
+            handler_types = {type(h.__self__) for h in bus._handlers[ToolCompleted]}
+            assert IngestHandler in handler_types
+            assert URLSourceEmitter in handler_types
 
     def test_two_calls_return_independent_buses(self) -> None:
         bus_a = PipelineFactory.create()

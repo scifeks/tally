@@ -113,92 +113,22 @@ def _prompt(message: str, default: str = "") -> str:
     return raw or default
 
 
-_XSS_SEED_MODE_DESCRIPTIONS: dict[str, str] = {
-    "noir+katana": (
-        "generate seeds from Katana crawler output, then Noir endpoint "
-        "discovery output (recommended)"
-    ),
-    "auto": (
-        "prefer noir+katana discovery output; fall back to provided file "
-        "if neither discovery tool ran"
-    ),
-    "provided": "generate seeds from your endpoint file (requires endpoint file)",
-}
+def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> bool:
+    """Return whether live crawling (Katana / Noir) should be enabled.
 
-
-def _interview_xss_seed_mode(
-    tool_label: str,
-    base_urls: list[str],
-    oas3_path: str,
-    current_mode: str = "",
-) -> str:
-    """Generic URL seed mode interview shared by XSStrike and DalFox.
-
-    Valid modes (identical for both tools):
-    - ``noir+katana`` — always available when base_urls is non-empty.
-    - ``auto``        — always available when base_urls is non-empty.
-    - ``provided``    — available only when oas3_path is non-empty.
-
-    Returns the existing/default mode without prompting when ``base_urls``
-    is empty.  Legacy values (``crawl``, ``noir``, ``katana``) are accepted
-    as input and mapped to their modern equivalents before validation.
+    Only prompts when *base_urls* is non-empty and an endpoint file is
+    configured — in that case the user chooses whether to also run live
+    crawlers on top of the static file.  In all other situations crawling
+    is enabled by default and no prompt is shown.
     """
-    if not base_urls:
-        return current_mode or "noir+katana"
-
-    # Normalise legacy current_mode values so the default renders correctly.
-    _legacy = {"crawl": "auto", "noir": "noir+katana", "katana": "noir+katana"}
-    current_mode = _legacy.get(current_mode, current_mode)
-
-    valid_modes: set[str] = {"auto", "noir+katana"}
-    if oas3_path:
-        valid_modes.add("provided")
-
-    effective_default = current_mode if current_mode in valid_modes else "noir+katana"
-
-    print(f"  {tool_label} URL seed mode:")
-    for mode in ("noir+katana", "auto", "provided"):
-        if mode in valid_modes:
-            desc = _XSS_SEED_MODE_DESCRIPTIONS[mode]
-            print(f"    {mode:<12} — {desc}")
-    if not oas3_path:
-        print("  (provided is unavailable — no endpoint file configured)")
-
-    while True:
-        raw = _prompt(f"  {tool_label} seed mode", default=effective_default).lower()
-        # Accept legacy aliases at the prompt too.
-        raw = _legacy.get(raw, raw)
-        if raw in valid_modes:
-            return raw
-        if raw == "provided" and not oas3_path:
-            print(
-                "  'provided' requires an endpoint file. "
-                "Add one first, then re-run 'repo edit'. "
-                f"Choose from: {', '.join(sorted(valid_modes))}"
-            )
-        else:
-            print(
-                f"  Invalid mode: {raw!r}. "
-                f"Choose from: {', '.join(sorted(valid_modes))}"
-            )
-
-
-def _interview_xsstrike_mode(
-    base_urls: list[str],
-    oas3_path: str,
-    current_mode: str = "",
-) -> str:
-    """Prompt for XSStrike URL seed mode."""
-    return _interview_xss_seed_mode("XSStrike", base_urls, oas3_path, current_mode)
-
-
-def _interview_dalfox_mode(
-    base_urls: list[str],
-    oas3_path: str,
-    current_mode: str = "",
-) -> str:
-    """Prompt for DalFox URL seed mode."""
-    return _interview_xss_seed_mode("DalFox", base_urls, oas3_path, current_mode)
+    if not base_urls or not has_endpoint_file:
+        return True
+    ans = _prompt(
+        "  Also run live crawlers (Katana / Noir) to supplement"
+        " the endpoint file? [Y/n]",
+        default="Y",
+    ).lower()
+    return ans not in ("n", "no")
 
 
 def _interview_katana(
@@ -530,27 +460,24 @@ class InteractiveProjectWizard:
                     print("  Keeping existing endpoint file configuration.")
                     oas3_path = existing.oas3_path
 
-            # XSStrike URL seed mode — only shown when base URLs are configured
-            xsstrike_mode = _interview_xsstrike_mode(
+            # crawl_enabled — only asked when base URLs and endpoint file
+            # are both configured
+            crawl_enabled = _interview_crawl_enabled(
                 base_urls=base_urls,
-                oas3_path=oas3_path,
-                current_mode=existing.xsstrike_mode,
+                has_endpoint_file=bool(oas3_path),
             )
 
-            # DalFox URL seed mode — only shown when base URLs are configured
-            dalfox_mode = _interview_dalfox_mode(
-                base_urls=base_urls,
-                oas3_path=oas3_path,
-                current_mode=existing.dalfox_mode,
-            )
-
-            # Katana crawler options
-            katana_headless, katana_depth = _interview_katana(
-                base_urls=base_urls,
-                node_app=node_app,
-                current_headless=existing.katana_headless,
-                current_depth=existing.katana_depth,
-            )
+            # Katana crawler options — skipped when crawling is disabled
+            if crawl_enabled and base_urls:
+                katana_headless, katana_depth = _interview_katana(
+                    base_urls=base_urls,
+                    node_app=node_app,
+                    current_headless=existing.katana_headless,
+                    current_depth=existing.katana_depth,
+                )
+            else:
+                katana_headless = existing.katana_headless
+                katana_depth = existing.katana_depth
 
             updated = Repository(
                 name=name,
@@ -565,15 +492,36 @@ class InteractiveProjectWizard:
                 ignore_dirs=ignore_dirs,
                 dependencies_file=dependencies_file,
                 oas3_path=oas3_path,
-                xsstrike_mode=xsstrike_mode,
+                merged_seeds_path=existing.merged_seeds_path,
+                merged_oas3_path=existing.merged_oas3_path,
+                crawl_enabled=crawl_enabled,
                 xsstrike_crawl_level=existing.xsstrike_crawl_level,
                 xsstrike_headers=dict(existing.xsstrike_headers),
-                dalfox_mode=dalfox_mode,
                 dalfox_headers=dict(existing.dalfox_headers),
                 katana_headless=katana_headless,
                 katana_depth=katana_depth,
                 katana_headers=dict(existing.katana_headers),
             )
+            # Regenerate URL artifacts when oas3_path changed and base_urls
+            # are configured
+            if oas3_path and oas3_path != existing.oas3_path and base_urls:
+                from application.pipeline.url_handlers import regenerate_url_artifacts
+
+                seeds_path, merged_oas3 = regenerate_url_artifacts(
+                    base_path=str(self._manager.base_path),
+                    project_name=project_name,
+                    repo_name=name,
+                    base_url=base_urls[0],
+                    user_oas3_path=oas3_path,
+                )
+                if seeds_path:
+                    updated = updated.model_copy(
+                        update={
+                            "merged_seeds_path": seeds_path,
+                            "merged_oas3_path": merged_oas3,
+                        }
+                    )
+
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
             _sca_manifest_notification(updated)
@@ -590,6 +538,9 @@ class InteractiveProjectWizard:
         repo: Repository,
     ) -> Repository:
         """Convert the pending endpoint file and update repo.oas3_path.
+
+        After a successful conversion, regenerates the merged URL artifacts
+        (seeds.txt and merged_oas3.json) when base_urls are configured.
 
         If conversion fails, prints the error and clears oas3_path so
         the repository is saved without an endpoint file.
@@ -608,7 +559,29 @@ class InteractiveProjectWizard:
         try:
             oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
             print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-            return repo.model_copy(update={"oas3_path": str(oas3_file)})
+            updated = repo.model_copy(update={"oas3_path": str(oas3_file)})
+
+            if updated.base_urls:
+                from application.pipeline.url_handlers import (
+                    regenerate_url_artifacts,
+                )
+
+                seeds_path, merged_oas3_path = regenerate_url_artifacts(
+                    base_path=str(self._manager.base_path),
+                    project_name=project_name,
+                    repo_name=updated.name,
+                    base_url=updated.base_urls[0],
+                    user_oas3_path=str(oas3_file),
+                )
+                if seeds_path:
+                    updated = updated.model_copy(
+                        update={
+                            "merged_seeds_path": seeds_path,
+                            "merged_oas3_path": merged_oas3_path,
+                        }
+                    )
+
+            return updated
         except ConverterError as exc:
             print(f"\n  Endpoint file conversion failed: {exc}")
             print(
@@ -904,18 +877,19 @@ class InteractiveProjectWizard:
                 print(f"  File not found: {endpoint_input}")
                 print("  Skipping endpoint file — repository will be added without it.")
 
-        # XSStrike URL seed mode — only shown when base URLs are configured
-        xsstrike_mode = _interview_xsstrike_mode(
-            base_urls=base_urls, oas3_path=oas3_path
+        # crawl_enabled — only asked when base URLs and endpoint file are
+        # both configured
+        crawl_enabled = _interview_crawl_enabled(
+            base_urls=base_urls, has_endpoint_file=bool(oas3_path)
         )
 
-        # DalFox URL seed mode — only shown when base URLs are configured
-        dalfox_mode = _interview_dalfox_mode(base_urls=base_urls, oas3_path=oas3_path)
-
-        # Katana crawler options
-        katana_headless, katana_depth = _interview_katana(
-            base_urls=base_urls, node_app=node_app
-        )
+        # Katana crawler options — skipped when crawling is disabled
+        if crawl_enabled and base_urls:
+            katana_headless, katana_depth = _interview_katana(
+                base_urls=base_urls, node_app=node_app
+            )
+        else:
+            katana_headless, katana_depth = False, 10
 
         new_repo = Repository(
             name=name,
@@ -930,8 +904,7 @@ class InteractiveProjectWizard:
             ignore_dirs=ignore_dirs,
             dependencies_file=dependencies_file,
             oas3_path=oas3_path,
-            xsstrike_mode=xsstrike_mode,
-            dalfox_mode=dalfox_mode,
+            crawl_enabled=crawl_enabled,
             katana_headless=katana_headless,
             katana_depth=katana_depth,
         )

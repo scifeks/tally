@@ -402,11 +402,6 @@ class ScanCommands:
         if auto_approve:
             return tools
 
-        from infrastructure.tools.wrappers.local.zap import (
-            _find_katana_oas3,
-            _find_noir_oas3,
-        )
-
         assert self.repl.active_project is not None
         repos = self.repl.config.load_repositories(self.repl.active_project)
         target_repos = (
@@ -416,15 +411,7 @@ class ScanCommands:
         )
 
         missing = [
-            r
-            for r in target_repos
-            if not r.oas3_path
-            and not _find_katana_oas3(
-                self.repl.base_path, self.repl.active_project, r.name
-            )
-            and not _find_noir_oas3(
-                self.repl.base_path, self.repl.active_project, r.name
-            )
+            r for r in target_repos if not r.oas3_path and not r.merged_oas3_path
         ]
         if not missing:
             return tools

@@ -15,19 +15,20 @@ The same ``parse_xsstrike_log_string`` parser handles both the file-log
 format (used by the local wrapper) and the console-log format (used here),
 because the VULN-line patterns are identical after ANSI codes are stripped.
 
-Seeds mode
-----------
-For ``noir`` and ``provided`` modes the seeds file must be accessible inside
-the container.  Mount the tally project's ``tool_outputs`` directory as a
-volume (e.g. ``-v /path/to/tally_data:/tally_data``) and configure
-``container.tool_path`` and paths accordingly.  For simple ``crawl`` mode no
-volume mount is required.
+Seeds
+-----
+Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds file
+produced by the URL discovery pipeline after Katana, Noir, and/or a
+user-provided endpoint file run.  The seeds file must be accessible inside
+the container; mount the tally project's ``tool_outputs`` directory as a
+volume (e.g. ``-v /path/to/tally_data:/tally_data``).  When no seeds file
+is available, XSStrike is skipped and a warning is logged.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,8 @@ from infrastructure.tools.parsers.xsstrike import parse_xsstrike_log_string
 from infrastructure.tools.wrappers.base.xsstrike import BaseXSStrikeTool
 from infrastructure.tools.wrappers.docker._docker_exec import build_docker_exec
 from infrastructure.tools.wrappers.local.xsstrike import _recommended_thread_count
+
+logger = logging.getLogger(__name__)
 
 
 class XSSTrikeDockerTool(BaseXSStrikeTool):
@@ -122,77 +125,31 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for XSStrike.
 
-        Builds kwargs from ``repo.xsstrike_mode``.  Seeds files for ``noir``
-        and ``provided`` modes must be accessible inside the container; this
-        wrapper passes the same host-side paths as the local wrapper — ensure
-        the relevant directory is volume-mounted.
+        Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds
+        file produced by the URL discovery pipeline.  Returns an empty list
+        (skipping XSStrike) when no seeds file is available.  The seeds file
+        must be accessible inside the container; ensure the relevant directory
+        is volume-mounted.
         """
         assert context.repo is not None
         repo = context.repo
-        base_url = repo.base_urls[0] if repo.base_urls else ""
-        mode = (repo.xsstrike_mode or "crawl").lower()
+
+        seeds_file = repo.merged_seeds_path
+        if not seeds_file or not Path(seeds_file).exists():
+            logger.warning(
+                "XSStrike: no merged seeds file for %s — skipping. "
+                "Run Katana, Noir, or configure an endpoint file to "
+                "generate URL discovery output.",
+                repo.name,
+            )
+            return []
 
         kwargs: dict[str, Any] = {
+            "seeds_file": seeds_file,
             "crawl_level": repo.xsstrike_crawl_level,
         }
         if repo.xsstrike_headers:
             kwargs["headers"] = dict(repo.xsstrike_headers)
-
-        if mode == "noir":
-            from infrastructure.tools.wrappers.local.xsstrike import (
-                _build_seeds_from_noir,
-            )
-
-            ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-            output_dir = (
-                Path(context.base_path)
-                / "projects"
-                / context.project_name
-                / "tool_outputs"
-                / "xsstrike"
-            )
-            output_dir.mkdir(parents=True, exist_ok=True)
-            seeds_file = _build_seeds_from_noir(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                kwargs["base_url"] = base_url
-
-        elif mode == "provided":
-            from infrastructure.tools.wrappers.local.xsstrike import (
-                _build_seeds_from_oas3,
-            )
-
-            oas3_path = repo.oas3_path or ""
-            if oas3_path:
-                ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-                output_dir = (
-                    Path(context.base_path)
-                    / "projects"
-                    / context.project_name
-                    / "tool_outputs"
-                    / "xsstrike"
-                )
-                output_dir.mkdir(parents=True, exist_ok=True)
-                seeds_file = _build_seeds_from_oas3(
-                    Path(oas3_path), base_url, output_dir, ts
-                )
-                if seeds_file:
-                    kwargs["seeds_file"] = seeds_file
-                else:
-                    kwargs["base_url"] = base_url
-            else:
-                kwargs["base_url"] = base_url
-
-        else:
-            kwargs["base_url"] = base_url
 
         return [
             ExecutionPass(

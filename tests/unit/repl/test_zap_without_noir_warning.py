@@ -18,7 +18,10 @@ from unittest.mock import MagicMock, patch
 from application.repl.commands.scan_commands import ScanCommands
 
 
-def _make_repl(repo_names: list[str] | None = None) -> MagicMock:
+def _make_repl(
+    repo_names: list[str] | None = None,
+    merged_oas3_path: str = "",
+) -> MagicMock:
     repl = MagicMock()
     repl.active_project = "DVPA"
     repl.base_path = "/tmp/tally"
@@ -29,13 +32,17 @@ def _make_repl(repo_names: list[str] | None = None) -> MagicMock:
         r.name = name
         r.node_app = False
         r.oas3_path = ""
+        r.merged_oas3_path = merged_oas3_path
         repos.append(r)
     repl.config.load_repositories.return_value = repos
     return repl
 
 
-def _make_sc(repo_names: list[str] | None = None) -> ScanCommands:
-    return ScanCommands(_make_repl(repo_names))
+def _make_sc(
+    repo_names: list[str] | None = None,
+    merged_oas3_path: str = "",
+) -> ScanCommands:
+    return ScanCommands(_make_repl(repo_names, merged_oas3_path=merged_oas3_path))
 
 
 # ---------------------------------------------------------------------------
@@ -49,26 +56,14 @@ class TestMaybeWarnDastWithoutDiscovery:
         tools: list[str],
         repo_name: str | None = None,
         auto_approve: bool = False,
-        katana_oas3_exists: bool = False,
-        noir_oas3_exists: bool = False,
+        merged_oas3_exists: bool = False,
         user_input: str = "1",
         repo_names: list[str] | None = None,
     ) -> list[str] | None:
-        sc = _make_sc(repo_names)
-        katana_result = "/tmp/dvna_katana_oas3.json" if katana_oas3_exists else None
-        noir_result = "/tmp/dvna_noir_oas3.json" if noir_oas3_exists else None
+        merged_oas3 = "/tmp/dvna_merged_oas3.json" if merged_oas3_exists else ""
+        sc = _make_sc(repo_names, merged_oas3_path=merged_oas3)
         names: list[str] | None = [repo_name] if repo_name is not None else repo_names
-        with (
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=katana_result,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=noir_result,
-            ),
-            patch("builtins.input", return_value=user_input),
-        ):
+        with patch("builtins.input", return_value=user_input):
             return sc._maybe_warn_dast_without_discovery(
                 tools, names, auto_approve, MagicMock()
             )
@@ -90,11 +85,11 @@ class TestMaybeWarnDastWithoutDiscovery:
         assert result == ["zap"]
 
     def test_no_warning_when_katana_oas3_exists(self) -> None:
-        result = self._call(["zap"], katana_oas3_exists=True)
+        result = self._call(["zap"], merged_oas3_exists=True)
         assert result == ["zap"]
 
     def test_no_warning_when_noir_oas3_exists(self) -> None:
-        result = self._call(["zap"], noir_oas3_exists=True)
+        result = self._call(["zap"], merged_oas3_exists=True)
         assert result == ["zap"]
 
     def test_option1_prepends_katana_and_noir_for_non_node_repo(self) -> None:
@@ -141,17 +136,7 @@ class TestMaybeWarnDastWithoutDiscovery:
 
     def test_eof_returns_none(self) -> None:
         sc = _make_sc()
-        with (
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=None,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=None,
-            ),
-            patch("builtins.input", side_effect=EOFError),
-        ):
+        with patch("builtins.input", side_effect=EOFError):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -160,17 +145,7 @@ class TestMaybeWarnDastWithoutDiscovery:
     def test_warning_printed_to_console(self) -> None:
         repl = _make_repl()
         sc = ScanCommands(repl)
-        with (
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=None,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=None,
-            ),
-            patch("builtins.input", return_value="2"),
-        ):
+        with patch("builtins.input", return_value="2"):
             sc._maybe_warn_dast_without_discovery(["zap"], None, False, MagicMock())
 
         printed = " ".join(
@@ -189,34 +164,26 @@ class TestCmdScanInnerWarning:
         self,
         args: list[str],
         user_input: str = "2",
-        katana_oas3_exists: bool = False,
-        noir_oas3_exists: bool = False,
+        merged_oas3_exists: bool = False,
     ) -> MagicMock:
-        repl = _make_repl()
+        repl = _make_repl(
+            merged_oas3_path="/tmp/k_oas3.json" if merged_oas3_exists else ""
+        )
         _repo = MagicMock()
         _repo.name = "dvna"
         _repo.node_app = False
         _repo.oas3_path = ""
+        _repo.merged_oas3_path = "/tmp/k_oas3.json" if merged_oas3_exists else ""
         repl.config.load_repositories.return_value = [_repo]
 
         sc = ScanCommands(repl)
         mock_orchestrator = MagicMock()
-        katana_result = "/tmp/k_oas3.json" if katana_oas3_exists else None
-        noir_result = "/tmp/n_oas3.json" if noir_oas3_exists else None
 
         with (
             patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
             patch.object(sc, "_make_orchestrator", return_value=mock_orchestrator),
             patch.object(
                 sc, "_create_sqlite_run", return_value=(MagicMock(), MagicMock(), 1)
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=katana_result,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=noir_result,
             ),
             patch("builtins.input", return_value=user_input),
         ):

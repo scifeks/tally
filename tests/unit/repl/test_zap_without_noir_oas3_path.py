@@ -18,6 +18,7 @@ def _make_repo(name: str, node_app: bool = False, oas3_path: str = "") -> MagicM
     r.name = name
     r.node_app = node_app
     r.oas3_path = oas3_path
+    r.merged_oas3_path = ""
     return r
 
 
@@ -35,17 +36,7 @@ class TestMaybeWarnDastWithoutDiscoveryOas3Path:
         repo = _make_repo("api", oas3_path="/endpoints/api.json")
         sc = _make_sc([repo])
         mock_input = MagicMock()
-        with (
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=None,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=None,
-            ),
-            patch("builtins.input", mock_input),
-        ):
+        with patch("builtins.input", mock_input):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -56,17 +47,7 @@ class TestMaybeWarnDastWithoutDiscoveryOas3Path:
         """oas3_path empty and no discovery output — repo IS in missing."""
         repo = _make_repo("api", oas3_path="")
         sc = _make_sc([repo])
-        with (
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=None,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=None,
-            ),
-            patch("builtins.input", return_value="2"),
-        ):
+        with patch("builtins.input", return_value="2"):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -78,17 +59,7 @@ class TestMaybeWarnDastWithoutDiscoveryOas3Path:
         repo_with = _make_repo("with-oas3", oas3_path="/api.json")
         repo_without = _make_repo("without-oas3", oas3_path="")
         sc = _make_sc([repo_with, repo_without])
-        with (
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_katana_oas3",
-                return_value=None,
-            ),
-            patch(
-                "infrastructure.tools.wrappers.local.zap._find_noir_oas3",
-                return_value=None,
-            ),
-            patch("builtins.input", return_value="1"),
-        ):
+        with patch("builtins.input", return_value="1"):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )

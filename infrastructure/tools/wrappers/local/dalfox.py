@@ -1,36 +1,19 @@
 """DalFox local wrapper for XSS scanning of SPAs and JavaScript-heavy apps.
 
-Invocation modes
-----------------
-The wrapper supports five URL seed modes, controlled by
-``repo.dalfox_mode``:
+DalFox has **no built-in crawler** — seeds must be provided externally.
+This wrapper reads ``repo.merged_seeds_path``, the canonical deduplicated
+seeds file produced by the URL discovery pipeline after Katana, Noir,
+and/or a user-provided endpoint file run.
 
-DalFox has **no built-in crawler**.  Seeds must be provided externally;
-this wrapper supports the following modes:
+When ``merged_seeds_path`` is empty or missing, DalFox is skipped and a
+warning is logged.
 
-**noir** (default)
-    Seeds are generated from the most recent Noir OAS3 output for the
-    repository.  Each OAS3 path is joined with ``base_url`` to produce a
-    seeds file.  Skips DalFox when no Noir output exists::
+Invocation
+----------
+::
 
-        dalfox file <seeds_file> --format json -o <output_file>
-            --no-spinner --no-color --deep-domxss
-
-**katana**
-    Seeds are generated from the most recent Katana OAS3 output for the
-    repository.  Skips DalFox when no Katana output exists.
-
-**auto**
-    Tries Katana output first, then Noir output.  Skips DalFox when neither
-    exists.
-
-**provided**
-    Seeds are generated from ``repo.oas3_path`` (the user-supplied endpoint
-    file already converted to OAS3).  Skips DalFox when ``oas3_path`` is
-    empty::
-
-        dalfox file <seeds_file> --format json -o <output_file>
-            --no-spinner --no-color --deep-domxss
+    dalfox file <seeds_file> --format json -o <output_file>
+        --no-spinner --no-color --deep-domxss
 
 Output
 ------
@@ -41,7 +24,6 @@ CWE, Severity, InjectType, Method, Evidence, and MessageStr.
 
 from __future__ import annotations
 
-import json
 import logging
 import shutil
 from datetime import UTC, datetime
@@ -167,15 +149,12 @@ class DalFoxLocalTool(BaseDalFoxTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for DalFox.
 
-        Resolves the URL seed mode from ``repo.dalfox_mode`` and builds the
-        appropriate kwargs.  Returns an empty list (skipping DalFox) when no
-        seeds file can be built — e.g. Noir output is missing or oas3_path
-        is empty.
+        Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds
+        file produced by the URL discovery pipeline.  Returns an empty list
+        (skipping DalFox) when no seeds file is available.
         """
         assert context.repo is not None
         repo = context.repo
-        base_url = repo.base_urls[0] if repo.base_urls else ""
-        mode = (repo.dalfox_mode or "noir+katana").lower()
 
         output_dir = (
             Path(context.base_path).resolve()
@@ -189,103 +168,22 @@ class DalFoxLocalTool(BaseDalFoxTool):
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{repo.name}_{ts}.json")
 
+        seeds_file = repo.merged_seeds_path
+        if not seeds_file or not Path(seeds_file).exists():
+            logger.warning(
+                "DalFox: no merged seeds file for %s — skipping. "
+                "Run Katana, Noir, or configure an endpoint file to "
+                "generate URL discovery output.",
+                repo.name,
+            )
+            return []
+
         kwargs: dict[str, Any] = {
+            "seeds_file": seeds_file,
             "output_file": output_file,
         }
         if repo.dalfox_headers:
             kwargs["headers"] = dict(repo.dalfox_headers)
-
-        if mode in ("noir+katana", "noir", "katana"):
-            # "noir" and "katana" are legacy values — treat as "noir+katana".
-            seeds_file = _build_seeds_from_katana(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if not seeds_file:
-                seeds_file = _build_seeds_from_noir(
-                    context.base_path,
-                    context.project_name,
-                    repo.name,
-                    base_url,
-                    output_dir,
-                    ts,
-                )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                logger.info(
-                    "DalFox: no Katana or Noir output found for %s — skipping",
-                    repo.name,
-                )
-                return []
-
-        elif mode == "auto":
-            seeds_file = _build_seeds_from_katana(
-                context.base_path,
-                context.project_name,
-                repo.name,
-                base_url,
-                output_dir,
-                ts,
-            )
-            if not seeds_file:
-                seeds_file = _build_seeds_from_noir(
-                    context.base_path,
-                    context.project_name,
-                    repo.name,
-                    base_url,
-                    output_dir,
-                    ts,
-                )
-            if not seeds_file:
-                oas3_path = repo.oas3_path or ""
-                if oas3_path:
-                    seeds_file = _build_seeds_from_oas3(
-                        Path(oas3_path), base_url, output_dir, ts
-                    )
-            if seeds_file:
-                kwargs["seeds_file"] = seeds_file
-            else:
-                logger.info(
-                    "DalFox: no seeds available for %s (auto mode) — skipping",
-                    repo.name,
-                )
-                return []
-
-        elif mode == "provided":
-            oas3_path = repo.oas3_path or ""
-            if oas3_path:
-                seeds_file = _build_seeds_from_oas3(
-                    Path(oas3_path), base_url, output_dir, ts
-                )
-                if seeds_file:
-                    kwargs["seeds_file"] = seeds_file
-                else:
-                    logger.info(
-                        "DalFox: could not extract seeds from oas3_path %r "
-                        "for %s — skipping",
-                        oas3_path,
-                        repo.name,
-                    )
-                    return []
-            else:
-                logger.info(
-                    "DalFox: mode='provided' but oas3_path is empty for %s — skipping",
-                    repo.name,
-                )
-                return []
-
-        else:
-            logger.warning(
-                "DalFox: unknown mode %r for %s — skipping",
-                mode,
-                repo.name,
-            )
-            return []
 
         return [
             ExecutionPass(
@@ -293,121 +191,3 @@ class DalFoxLocalTool(BaseDalFoxTool):
                 kwargs=kwargs,
             )
         ]
-
-
-# ---------------------------------------------------------------------------
-# Seeds-file helpers
-# ---------------------------------------------------------------------------
-
-
-def _build_seeds_from_katana(
-    base_path: str,
-    project_name: str,
-    repo_name: str,
-    base_url: str,
-    output_dir: Path,
-    ts: str,
-) -> str | None:
-    """Locate the most recent Katana OAS3 file and write a seeds file from it.
-
-    Returns the seeds file path on success, or ``None`` when no suitable
-    Katana output exists.
-    """
-    katana_dir = Path(base_path) / "projects" / project_name / "tool_outputs" / "katana"
-    if not katana_dir.exists():
-        return None
-
-    matches = sorted(katana_dir.glob(f"{repo_name}_*_oas3.json"))
-    if not matches:
-        return None
-
-    candidate = matches[-1]
-    try:
-        with open(candidate, encoding="utf-8") as fh:
-            data = json.load(fh)
-        paths = list(data.get("paths", {}).keys())
-        if not paths:
-            return None
-    except (OSError, json.JSONDecodeError, ValueError):
-        return None
-
-    return _write_seeds_file(paths, base_url, output_dir, ts)
-
-
-def _build_seeds_from_noir(
-    base_path: str,
-    project_name: str,
-    repo_name: str,
-    base_url: str,
-    output_dir: Path,
-    ts: str,
-) -> str | None:
-    """Locate the most recent Noir OAS3 file and write a seeds file from it.
-
-    Returns the seeds file path on success, or ``None`` when no suitable
-    Noir output exists.
-    """
-    noir_dir = Path(base_path) / "projects" / project_name / "tool_outputs" / "noir"
-    if not noir_dir.exists():
-        return None
-
-    matches = sorted(noir_dir.glob(f"{repo_name}_*_oas3.json"))
-    if not matches:
-        return None
-
-    candidate = matches[-1]
-    try:
-        with open(candidate, encoding="utf-8") as fh:
-            data = json.load(fh)
-        paths = list(data.get("paths", {}).keys())
-        if not paths:
-            return None
-    except (OSError, json.JSONDecodeError, ValueError):
-        return None
-
-    return _write_seeds_file(paths, base_url, output_dir, ts)
-
-
-def _build_seeds_from_oas3(
-    oas3_path: Path,
-    base_url: str,
-    output_dir: Path,
-    ts: str,
-) -> str | None:
-    """Extract paths from an OAS3 file and write a seeds file.
-
-    Returns the seeds file path on success, or ``None`` on error.
-    """
-    if not oas3_path.exists():
-        return None
-    try:
-        with open(oas3_path, encoding="utf-8") as fh:
-            data = json.load(fh)
-        paths = list(data.get("paths", {}).keys())
-        if not paths:
-            return None
-    except (OSError, json.JSONDecodeError, ValueError):
-        return None
-
-    return _write_seeds_file(paths, base_url, output_dir, ts)
-
-
-def _write_seeds_file(
-    paths: list[str],
-    base_url: str,
-    output_dir: Path,
-    ts: str,
-) -> str | None:
-    """Combine ``base_url`` + each path and write a seeds text file.
-
-    Returns the seeds file path, or ``None`` when the path list is empty.
-    """
-    if not paths:
-        return None
-
-    base = base_url.rstrip("/")
-    urls = [base + (p if p.startswith("/") else "/" + p) for p in paths]
-
-    seeds_path = output_dir / f"seeds_{ts}.txt"
-    seeds_path.write_text("\n".join(urls) + "\n", encoding="utf-8")
-    return str(seeds_path)
