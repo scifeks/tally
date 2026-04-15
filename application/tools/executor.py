@@ -268,14 +268,37 @@ class ToolExecutor:
         cwd: str | None,
         env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        import signal as _signal
+
         effective_env = {**os.environ, **env} if env else None
-        return subprocess.run(
+        proc = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
             cwd=cwd,
             env=effective_env,
+            start_new_session=True,
+        )
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            # Drain pipes so the OS buffers are freed, then re-raise so the
+            # caller's TimeoutExpired handler fires as before.
+            try:
+                proc.communicate()
+            except Exception:
+                pass
+            raise
+        return subprocess.CompletedProcess(
+            args=proc.args,
+            returncode=proc.returncode,
+            stdout=stdout,
+            stderr=stderr,
         )
 
     def _run_with_escalation(

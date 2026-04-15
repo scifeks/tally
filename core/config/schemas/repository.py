@@ -1,5 +1,6 @@
 """Repository schema."""
 
+import warnings
 from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -120,10 +121,11 @@ class Repository(BaseModel):
         ),
     )
     katana_depth: int = Field(
-        default=10,
+        default=5,
         description=(
-            "Katana crawl depth (-d flag). Default 10 for exhaustive URL "
-            "enumeration. Decrease for faster scans on shallow applications."
+            "Katana crawl depth (-d flag). Default 5. Headless mode caps this "
+            "at 5 automatically — deeper headless crawls stall on cyclic or "
+            "parameterised apps and offer diminishing returns."
         ),
     )
     katana_headers: dict[str, str] = Field(
@@ -165,6 +167,25 @@ class Repository(BaseModel):
             raise ValueError("At least one of 'path' or 'docker_path' must be set")
         if self.docker_path and not self.container_name:
             raise ValueError("'container_name' is required when 'docker_path' is set")
+        return self
+
+    @model_validator(mode="after")
+    def cap_headless_depth(self) -> "Repository":
+        """Cap katana_depth at 5 when headless mode is enabled.
+
+        Headless Chrome at high depth stalls indefinitely on cyclic or
+        parameterised apps (e.g. DVWA ``?id=...``).  Silently truncating
+        rather than raising lets existing project configs load without error.
+        """
+        _HEADLESS_DEPTH_CAP = 5
+        if self.katana_headless and self.katana_depth > _HEADLESS_DEPTH_CAP:
+            warnings.warn(
+                f"katana_depth={self.katana_depth} with headless=True is "
+                f"capped to {_HEADLESS_DEPTH_CAP} to prevent infinite crawls.",
+                UserWarning,
+                stacklevel=2,
+            )
+            self.katana_depth = _HEADLESS_DEPTH_CAP
         return self
 
 

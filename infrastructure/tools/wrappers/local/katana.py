@@ -42,6 +42,7 @@ def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
 
     Overwrites *jsonl_path* in-place.  Lines that cannot be parsed as JSON
     or that lack a ``request.endpoint`` field are kept unchanged.
+    Reads line-by-line to avoid loading the full file into memory.
     """
     import json as _json
 
@@ -53,23 +54,22 @@ def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
     kept: list[str] = []
     dropped = 0
     try:
-        lines = jsonl_path.read_text(encoding="utf-8").splitlines()
+        with jsonl_path.open(encoding="utf-8") as fh:
+            for raw_line in fh:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                try:
+                    record = _json.loads(line)
+                    endpoint = record.get("request", {}).get("endpoint", "")
+                    if endpoint and scope_key(endpoint) != allowed:
+                        dropped += 1
+                        continue
+                except Exception:
+                    pass  # keep malformed lines
+                kept.append(line)
     except OSError:
         return
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = _json.loads(line)
-            endpoint = record.get("request", {}).get("endpoint", "")
-            if endpoint and scope_key(endpoint) != allowed:
-                dropped += 1
-                continue
-        except Exception:
-            pass  # keep malformed lines
-        kept.append(line)
 
     if dropped:
         logger.info(
@@ -127,6 +127,16 @@ class KatanaLocalTool(BaseKatanaTool):
         except Exception:
             return None
 
+    # Hardcoded crawl ceilings — these prevent infinite/multi-hour hangs when
+    # headless Chrome stalls on a single page or cyclic parameterised routes
+    # produce near-unbounded link graphs.
+    _CRAWL_TIMEOUT_SECS = 15  # per-request HTTP timeout
+    _CRAWL_CONCURRENCY = 10  # parallel browser/HTTP workers (-c)
+    _CRAWL_PARALLELISM = 10  # parallel URL processing (-p)
+    _CRAWL_RATE_LIMIT = 150  # max requests per second (-rl)
+    _CRAWL_RETRIES = 1  # per-request retries (-retry)
+    _CRAWL_MAX_DURATION = 900  # total crawl wall-clock ceiling in seconds (-ct)
+
     def build_command(self, **kwargs: object) -> list[str]:
         """Build the Katana argv list.
 
@@ -135,10 +145,12 @@ class KatanaLocalTool(BaseKatanaTool):
             output_file (str): Path for the JSONL output file.  Required.
             oas3_target (str): Destination path for the converted OAS3 file.
                 Set by ``build_execution_passes``; used in ``parse_output``.
-            depth (int): Crawl depth, passed as ``-d``.  Defaults to 3.
+            depth (int): Crawl depth, passed as ``-d``.  Defaults to 5.
             headless (bool): Enable headless Chrome via ``-hl``.
             headers (dict[str, str]): Extra headers, each passed as
                 ``-H "Key: Value"``.
+            max_duration (int): Total crawl duration ceiling in seconds,
+                passed as ``-ct``.  Defaults to ``_CRAWL_MAX_DURATION`` (900).
         """
         raw = kwargs or {}
         base_url: str | None = str(raw["base_url"]) if "base_url" in raw else None
@@ -148,9 +160,10 @@ class KatanaLocalTool(BaseKatanaTool):
         oas3_target: str | None = (
             str(raw["oas3_target"]) if "oas3_target" in raw else None
         )
-        depth: int = int(raw.get("depth", 10))  # type: ignore[arg-type]
+        depth: int = int(raw.get("depth", 5))  # type: ignore[arg-type]
         headless: bool = bool(raw.get("headless", False))
         headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
+        max_duration: int = int(raw.get("max_duration", self._CRAWL_MAX_DURATION))  # type: ignore[arg-type]
 
         if not base_url:
             raise ValueError("base_url is required for katana")
@@ -169,6 +182,14 @@ class KatanaLocalTool(BaseKatanaTool):
             "-xhr",
             "-j",
             "-o", output_file,
+            # Hard ceilings — prevent infinite crawls on cyclic/parameterised apps
+            "-ct", str(max_duration),
+            "-timeout", str(self._CRAWL_TIMEOUT_SECS),
+            "-c", str(self._CRAWL_CONCURRENCY),
+            "-p", str(self._CRAWL_PARALLELISM),
+            "-rl", str(self._CRAWL_RATE_LIMIT),
+            "-retry", str(self._CRAWL_RETRIES),
+            "-silent",
         ]  # fmt: skip
 
         if headless:
@@ -283,6 +304,7 @@ class KatanaLocalTool(BaseKatanaTool):
             "oas3_target": oas3_file,
             "depth": repo.katana_depth,
             "headless": repo.katana_headless,
+            "max_duration": self._CRAWL_MAX_DURATION,
         }
         if repo.katana_headers:
             kwargs["headers"] = dict(repo.katana_headers)

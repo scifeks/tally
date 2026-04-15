@@ -81,6 +81,12 @@ class BaseKatanaTool(ToolInterface):
         return True
 
     @property
+    def timeout(self) -> int:
+        # Katana's native -ct ceiling is 900 s; allow extra slack for Chrome
+        # startup/shutdown before the executor hard-kills the process group.
+        return 1200
+
+    @property
     def always_run(self) -> bool:
         return True
 

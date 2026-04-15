@@ -10,10 +10,6 @@ pytestmark = pytest.mark.local_only
 
 
 @pytest.mark.slow
-@pytest.mark.skip(
-    reason="Katana hangs indefinitely on dvpwa — blocked pending TAL-111 "
-    "Katana hang investigation"
-)
 def test_scan_repo_scoped(tally_harness_live: TallyHarness) -> None:
     h = tally_harness_live
     h.run("project switch DVPA")
@@ -21,7 +17,7 @@ def test_scan_repo_scoped(tally_harness_live: TallyHarness) -> None:
     pre = h.query_db("DVPA", "SELECT COALESCE(MAX(id), 0) as n FROM runs")
     pre_max = pre[0]["n"]
 
-    h.run("scan --repo=dvpwa --yes", timeout=600)
+    h.run("scan --repo=dvpwa --yes", timeout=1800)
 
     run_rows = h.query_db(
         "DVPA",
