@@ -24,6 +24,8 @@ import logging
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from infrastructure.tools.wrappers.utils.scope import in_scope
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,7 +105,16 @@ class URLMerger:
                 for path in self._load_paths_from_file(user_file):
                     raw.append(self._to_full_url(path))
 
-        return self._deduplicate(raw)
+        scoped = [u for u in raw if in_scope(u, self._base_url)]
+        dropped = len(raw) - len(scoped)
+        if dropped:
+            logger.info(
+                "URLMerger: dropped %d out-of-scope URLs (base=%r)",
+                dropped,
+                self._base_url,
+            )
+
+        return self._deduplicate(scoped)
 
     # ------------------------------------------------------------------
     # Private helpers

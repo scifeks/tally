@@ -32,27 +32,9 @@ from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.endpoints.converters.katana import KatanaAdapter
 from infrastructure.tools.parsers.katana import parse_katana_jsonl
 from infrastructure.tools.wrappers.base.katana import BaseKatanaTool
+from infrastructure.tools.wrappers.utils.scope import scope_key
 
 logger = logging.getLogger(__name__)
-
-
-def _scope_netloc(url: str) -> tuple[str, int]:
-    """Return (hostname_lower, port) for *url*, inferring default ports.
-
-    Used to match discovered URLs against the repo base URL so out-of-scope
-    hosts are dropped.  Treats ``localhost`` and IP literals as valid FQDNs.
-    """
-    from urllib.parse import urlsplit
-
-    parsed = urlsplit(url)
-    host = (parsed.hostname or "").lower()
-    if parsed.port:
-        port = parsed.port
-    elif parsed.scheme == "https":
-        port = 443
-    else:
-        port = 80
-    return host, port
 
 
 def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
@@ -63,9 +45,8 @@ def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
     """
     import json as _json
 
-    try:
-        allowed = _scope_netloc(base_url)
-    except Exception:
+    allowed = scope_key(base_url)
+    if allowed is None:
         logger.warning("Katana scope filter: could not parse base_url %r", base_url)
         return
 
@@ -83,7 +64,7 @@ def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
         try:
             record = _json.loads(line)
             endpoint = record.get("request", {}).get("endpoint", "")
-            if endpoint and _scope_netloc(endpoint) != allowed:
+            if endpoint and scope_key(endpoint) != allowed:
                 dropped += 1
                 continue
         except Exception:
