@@ -89,17 +89,17 @@ class TestScaSegmentGate:
     def test_gate_not_applied_for_non_sca_segment(self, tmp_path) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
-        # empty dir — no manifests, but segment is sast
+        # empty dir — no manifests, but segment is sast so gate must not fire
         repo = _make_repo(path=str(tmp_path), languages=["python"])
         config = _make_config([repo])
         resources = _make_resources()
 
         with patch(
-            "application.tools.scan_types.repo_segment.has_dependency_manifests"
-        ) as mock_check:
+            "application.tools.scan_types.execution.should_skip_sca_tool"
+        ) as mock_gate:
             RepoSegmentScan(["semgrep"], segment_name="sast").execute(config, resources)
 
-        mock_check.assert_not_called()
+        mock_gate.assert_not_called()
 
     def test_gate_not_applied_when_segment_name_empty(self, tmp_path) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
@@ -109,13 +109,13 @@ class TestScaSegmentGate:
         resources = _make_resources()
 
         with patch(
-            "application.tools.scan_types.repo_segment.has_dependency_manifests"
-        ) as mock_check:
+            "application.tools.scan_types.execution.should_skip_sca_tool"
+        ) as mock_gate:
             RepoSegmentScan(["semgrep"]).execute(config, resources)
 
-        mock_check.assert_not_called()
+        mock_gate.assert_not_called()
 
-    def test_docker_repo_uses_docker_check(self) -> None:
+    def test_docker_repo_uses_docker_manifest_check(self) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
         repo = _make_repo(
@@ -125,23 +125,31 @@ class TestScaSegmentGate:
             languages=["python"],
         )
         config = _make_config([repo])
-        resources = _make_resources()
+        pip_audit_mock = MagicMock()
+        pip_audit_mock.language_gates = ["python"]
+        pip_audit_mock.scan_segment = "sca"
 
-        with (
-            patch(
-                "application.tools.scan_types.repo_segment.has_dependency_manifests_docker",
-                return_value=False,
-            ) as mock_docker_check,
-            patch(
-                "application.tools.scan_types.repo_segment.has_dependency_manifests"
-            ) as mock_local_check,
-        ):
+        registry = MagicMock()
+        registry.get_all_tools.return_value = []
+        registry.get_tool.return_value = pip_audit_mock
+        registry.get_tool_config.return_value = None
+        resources = ExecutionResources(
+            executor=MagicMock(),
+            registry=registry,
+            factory=MagicMock(),
+            event_bus=MagicMock(),
+            display=MagicMock(),
+        )
+
+        with patch(
+            "application.tools.scan_types.execution.has_manifests_for_language",
+            return_value=False,
+        ) as mock_manifest_check:
             summary = RepoSegmentScan(["pip-audit"], segment_name="sca").execute(
                 config, resources
             )
 
-        mock_docker_check.assert_called_once_with("my-container", "/app", ["python"])
-        mock_local_check.assert_not_called()
+        mock_manifest_check.assert_called_once_with("/app", "python", "my-container")
         assert summary.total_tools_skipped == 1
 
     def test_repo_with_no_path_and_no_docker_path_is_skipped(self) -> None:

@@ -14,6 +14,7 @@ from application.tools.scan_types.execution import (
     execute_tool_passes,
     make_context,
     normalize_success,
+    should_skip_sca_tool,
 )
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
@@ -72,6 +73,17 @@ class ToolOnRepoScan(ScanType):
             raise ValueError(
                 f"Tool '{self.tool_name}' requires base_urls but none are"
                 f" configured for repository '{repo.name}'."
+            )
+
+        # Warn when explicitly running an SCA tool on a repo with no manifests.
+        skip_sca, skip_reason = should_skip_sca_tool(tool, repo)
+        if skip_sca:
+            logger.warning(
+                "SCA tool %r has no matching manifests for repo %r"
+                " (%s) — running anyway (explicitly requested).",
+                self.tool_name,
+                repo.name,
+                skip_reason,
             )
 
         resources.display.print_scan_header(

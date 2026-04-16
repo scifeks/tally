@@ -26,7 +26,11 @@ class ToolOnAllReposScan(ScanType):
             f"Repo Tool Scan: {config.project_name} — {self.tool_name}"
         )
 
-        seg_summary = RepoSegmentScan([self.tool_name]).execute(config, resources)
+        tool_inst = resources.registry.get_tool(self.tool_name)
+        seg_name = tool_inst.scan_segment if tool_inst is not None else ""
+        seg_summary = RepoSegmentScan([self.tool_name], segment_name=seg_name).execute(
+            config, resources
+        )
 
         duration = round(perf_counter() - start, 1)
         rows = [

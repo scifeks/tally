@@ -10,9 +10,37 @@ from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
+from infrastructure.tools.wrappers.utils.manifest_check import (
+    has_manifests_for_language,
+)
 
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
+
+
+def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
+    """Return (skip, reason) for an SCA tool that has no matching manifests.
+
+    Returns (False, "") when the tool should proceed.  Returns (True, reason)
+    when it should be skipped because no dependency manifest was found.
+    """
+    if not getattr(tool, "language_gates", None):
+        return False, ""
+    if getattr(tool, "scan_segment", "") != "sca":
+        return False, ""
+    if repo.path:
+        mpath, mcontainer = repo.path, ""
+    elif repo.docker_path and repo.container_name:
+        mpath, mcontainer = repo.docker_path, repo.container_name
+    else:
+        return True, f"no manifest found for {repo.name}"
+    has = any(
+        has_manifests_for_language(mpath, lang, mcontainer)
+        for lang in tool.language_gates
+    )
+    if not has:
+        return True, f"no manifest found for {repo.name}"
+    return False, ""
 
 
 def make_context(

@@ -14,6 +14,7 @@ from application.tools.scan_types.execution import (
     execute_tool_passes,
     make_context,
     normalize_success,
+    should_skip_sca_tool,
 )
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
@@ -21,9 +22,6 @@ from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
 from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
 from domain.tools.scan_types.resources import IExecutionResources
-from infrastructure.tools.wrappers.utils.manifest_check import (
-    has_manifests_for_language,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +72,6 @@ class RepoSegmentScan(ScanType):
         for repo in repos:
             resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
 
-            # Resolve manifest-check location once per repo.
-            if repo.path:
-                _mpath, _mcontainer = repo.path, ""
-            elif repo.docker_path and repo.container_name:
-                _mpath, _mcontainer = repo.docker_path, repo.container_name
-            else:
-                _mpath, _mcontainer = "", ""
-
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:
@@ -90,24 +80,20 @@ class RepoSegmentScan(ScanType):
                 if self.segment_name == "sca":
                     # Gate on manifest presence — not language detection.
                     tool_inst_check: Any = registry.get_tool(tool_name)
-                    if tool_inst_check is not None and tool_inst_check.language_gates:
-                        has_manifest = bool(_mpath) and any(
-                            has_manifests_for_language(_mpath, lang, _mcontainer)
-                            for lang in tool_inst_check.language_gates
-                        )
-                        if not has_manifest:
-                            resources.display.print_tool_line(
-                                ToolDisplayRow(
-                                    tool_name,
-                                    False,
-                                    True,
-                                    0,
-                                    0.0,
-                                    f"no manifest found for {repo.name}",
-                                )
+                    skip_sca, skip_reason = should_skip_sca_tool(tool_inst_check, repo)
+                    if skip_sca:
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
+                                False,
+                                True,
+                                0,
+                                0.0,
+                                skip_reason,
                             )
-                            total_skipped += 1
-                            continue
+                        )
+                        total_skipped += 1
+                        continue
                 elif tool_name in _lang_specific:
                     # Non-SCA: gate on language detection.
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}

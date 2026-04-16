@@ -87,12 +87,10 @@ class BasePipAuditTool(ToolInterface):
         if context.is_docker:
             deps_file = context.repo.dependencies_file
         else:
-            container = (
-                context.repo.container_name if context.repo.container_name else ""
-            )
-            deps_file = find_or_generate_requirements(
-                repo_path, container_name=container
-            )
+            # Local mode: never pass container_name. The repo may have a
+            # container configured for other tools, but pip-audit runs
+            # locally and must check the local filesystem only.
+            deps_file = find_or_generate_requirements(repo_path)
             if not deps_file:
                 logger.info(
                     "pip-audit: no Python dependency file found in %r — skipping",
