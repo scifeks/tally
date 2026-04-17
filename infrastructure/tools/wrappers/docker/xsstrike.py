@@ -94,7 +94,6 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
                 "-l",
                 str(crawl_level),
                 "--path",
-                "-e",
                 "-t",
                 str(_recommended_thread_count()),
                 "--timeout",

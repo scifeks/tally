@@ -13,7 +13,7 @@ Invocation
 ::
 
     xsstrike --seeds <seeds_file> --crawl --skip -l <level>
-        --path -e -t <threads> --timeout 15
+        --path -t <threads> --timeout 15
         --file-log-level DEBUG --log-file <logfile>
 
 Note on ``--crawl``
@@ -130,7 +130,6 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 "-l",
                 str(crawl_level),
                 "--path",
-                "-e",
                 "-t",
                 str(_recommended_thread_count()),
                 "--timeout",

@@ -52,11 +52,6 @@ class TestDockerBuildCommandFlags:
         cmd = tool.build_command(base_url="http://localhost:8080")
         assert "--path" in cmd
 
-    def test_encode_flag_present(self) -> None:
-        tool = _make_tool()
-        cmd = tool.build_command(base_url="http://localhost:8080")
-        assert "-e" in cmd
-
     def test_threads_flag_present(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(base_url="http://localhost:8080")
@@ -102,7 +97,6 @@ class TestDockerBuildCommandFlags:
         tool = _make_tool()
         cmd = tool.build_command(seeds_file="/tally_data/seeds.txt")
         assert "--path" in cmd
-        assert "-e" in cmd
         assert "-t" in cmd
         assert "--timeout" in cmd
 
