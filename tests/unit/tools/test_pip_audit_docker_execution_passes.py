@@ -10,11 +10,15 @@ Regression tests for two bugs:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from core.config.schemas import Repository
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.docker.pip_audit import PipAuditDockerTool
+
+_MODULE = "infrastructure.tools.wrappers.docker.pip_audit"
 
 
 def _make_config():
@@ -61,6 +65,7 @@ class TestPipAuditDockerExecutionPasses:
         repo = _make_repo("/llm/code/repos/python/dvpwa", "/app")
         ctx = _make_context(repo, "/app")
         tool = PipAuditDockerTool(_make_config())
+        # no deps_file → no container file check
         passes = tool.build_execution_passes(ctx)
         assert len(passes) == 1
         assert passes[0].cwd is None
@@ -81,15 +86,18 @@ class TestPipAuditDockerExecutionPasses:
         passes = tool.build_execution_passes(ctx)
         assert passes[0].label_suffix == "dvpa"
 
-    def test_dependencies_file_kwarg_forwarded(self) -> None:
-        """build_execution_passes forwards repo.dependencies_file to kwargs."""
+    def test_dependencies_file_kwarg_forwarded_when_file_exists_in_container(
+        self,
+    ) -> None:
+        """When deps file exists in the container it is forwarded unchanged."""
         dep_file = "/app/requirements.txt"
         repo = _make_repo(
             "/llm/code/repos/python/dvpwa", "/app", dependencies_file=dep_file
         )
         ctx = _make_context(repo, "/app")
         tool = PipAuditDockerTool(_make_config())
-        passes = tool.build_execution_passes(ctx)
+        with patch(f"{_MODULE}._container_file_exists", return_value=True):
+            passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["dependencies_file"] == dep_file
 
     def test_docker_always_produces_pass_without_dependencies_file(self) -> None:
@@ -100,6 +108,126 @@ class TestPipAuditDockerExecutionPasses:
         passes = tool.build_execution_passes(ctx)
         assert len(passes) == 1
         assert passes[0].kwargs["dependencies_file"] == ""
+
+    def test_missing_container_deps_file_resolves_and_copies(self, tmp_path) -> None:
+        """When deps file is absent in container, _resolve_and_copy_deps is called.
+
+        The helper delegates format detection to find_or_generate_requirements,
+        so any lockfile flavour (requirements.txt, poetry.lock, Pipfile.lock,
+        pyproject.toml, uv.lock, etc.) is handled without the wrapper
+        hardcoding a filename.
+        """
+        local_repo = tmp_path / "myrepo"
+        local_repo.mkdir()
+        (local_repo / "poetry.lock").write_text("")
+
+        dep_file = "/app/requirements.txt"
+        repo = _make_repo(str(local_repo), "/app", dependencies_file=dep_file)
+        ctx = _make_context(repo, "/app")
+        tool = PipAuditDockerTool(_make_config())
+
+        with (
+            patch(f"{_MODULE}._container_file_exists", return_value=False),
+            patch(
+                f"{_MODULE}._resolve_and_copy_deps", return_value=dep_file
+            ) as mock_resolve,
+        ):
+            passes = tool.build_execution_passes(ctx)
+
+        mock_resolve.assert_called_once_with(str(local_repo), "dvpwa-sqli-1", dep_file)
+        assert len(passes) == 1
+        assert passes[0].kwargs["dependencies_file"] == dep_file
+
+    def test_missing_container_deps_file_skips_when_no_local_lockfile(
+        self,
+    ) -> None:
+        """When deps file absent in container and no local lockfile, skip the pass."""
+        dep_file = "/app/requirements.txt"
+        repo = _make_repo("", "/app", dependencies_file=dep_file)
+        ctx = _make_context(repo, "/app")
+        tool = PipAuditDockerTool(_make_config())
+
+        with (
+            patch(f"{_MODULE}._container_file_exists", return_value=False),
+            patch(f"{_MODULE}._resolve_and_copy_deps", return_value=None),
+        ):
+            passes = tool.build_execution_passes(ctx)
+
+        assert passes == []
+
+
+class TestCheckAvailable:
+    def test_returns_true_when_tool_exists_in_container(self) -> None:
+        tool = PipAuditDockerTool(_make_config())
+        with patch(f"{_MODULE}._container_file_exists", return_value=True):
+            assert tool.check_available() is True
+
+    def test_installs_and_returns_true_when_tool_missing(self) -> None:
+        tool = PipAuditDockerTool(_make_config())
+        with (
+            patch(f"{_MODULE}._container_file_exists", return_value=False),
+            patch(
+                f"{_MODULE}._install_pip_audit_in_container", return_value=True
+            ) as mock_install,
+        ):
+            result = tool.check_available()
+        mock_install.assert_called_once_with("dvpwa-sqli-1")
+        assert result is True
+
+    def test_returns_false_when_install_fails(self) -> None:
+        tool = PipAuditDockerTool(_make_config())
+        with (
+            patch(f"{_MODULE}._container_file_exists", return_value=False),
+            patch(f"{_MODULE}._install_pip_audit_in_container", return_value=False),
+        ):
+            assert tool.check_available() is False
+
+
+class TestResolveAndCopyDeps:
+    def test_returns_none_when_no_local_repo_path(self) -> None:
+        from infrastructure.tools.wrappers.docker.pip_audit import (
+            _resolve_and_copy_deps,
+        )
+
+        with patch(f"{_MODULE}.find_or_generate_requirements", return_value=None):
+            result = _resolve_and_copy_deps("", "my-container", "/app/req.txt")
+        assert result is None
+
+    def test_delegates_to_find_or_generate_requirements(self, tmp_path) -> None:
+        from infrastructure.tools.wrappers.docker.pip_audit import (
+            _resolve_and_copy_deps,
+        )
+
+        generated = str(tmp_path / ".tally_requirements.txt")
+        with (
+            patch(
+                f"{_MODULE}.find_or_generate_requirements", return_value=generated
+            ) as mock_find,
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=0)
+            result = _resolve_and_copy_deps(
+                str(tmp_path), "my-container", "/app/req.txt"
+            )
+
+        mock_find.assert_called_once_with(str(tmp_path))
+        assert result == "/app/req.txt"
+
+    def test_returns_none_when_docker_cp_fails(self, tmp_path) -> None:
+        from infrastructure.tools.wrappers.docker.pip_audit import (
+            _resolve_and_copy_deps,
+        )
+
+        generated = str(tmp_path / "requirements.txt")
+        with (
+            patch(f"{_MODULE}.find_or_generate_requirements", return_value=generated),
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(returncode=1, stderr=b"no such container")
+            result = _resolve_and_copy_deps(
+                str(tmp_path), "bad-container", "/app/req.txt"
+            )
+        assert result is None
 
 
 class TestPipAuditDockerBuildCommand:
@@ -135,7 +263,5 @@ class TestPipAuditDockerBuildCommand:
 
     def test_missing_repo_path_raises(self) -> None:
         tool = PipAuditDockerTool(_make_config())
-        import pytest
-
         with pytest.raises(ValueError, match="docker_path"):
             tool.build_command(repo_path="")
