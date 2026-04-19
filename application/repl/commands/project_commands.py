@@ -202,7 +202,7 @@ class ProjectCommands:
         table.add_column("Type", style="white")
         table.add_column("Path", style="white")
         table.add_column("Languages", style="white")
-        table.add_column("Base URLs", style="white")
+        table.add_column("Base URLs", style="white", overflow="fold")
 
         for repo in repos:
             types = ", ".join(repo.type) if repo.type else "—"
