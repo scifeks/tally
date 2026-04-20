@@ -12,8 +12,8 @@ DalFox, XSStrike, and ZAP within the ``web`` segment so that DAST tools can
 consume its OAS3 output via ``_build_seeds_from_katana`` or
 ``_find_katana_oas3`` helpers.
 
-Katana is the primary discovery tool for ``node_app: true`` repositories
-where Noir is skipped (Noir's JS parser has an infinite-loop defect).
+Katana is the primary discovery tool for repositories where Noir is skipped
+(e.g. Node.js apps or repos using unsupported frameworks like aiohttp).
 """
 
 from __future__ import annotations

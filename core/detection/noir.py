@@ -1,0 +1,57 @@
+"""Noir support detection — decides whether Noir should run for a repo."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from core.config.schemas.repository import Repository
+
+# Python framework packages that Noir v0.25.1 does not support.
+# When any of these appear in the repo's dependencies file Noir is skipped
+# because it will fall back to scanning all files and emit garbage endpoints.
+_NOIR_UNSUPPORTED_PACKAGES: frozenset[str] = frozenset(
+    {
+        "aiohttp",
+        "bottle",
+        "cherrypy",
+        "falcon",
+        "pyramid",
+    }
+)
+
+
+def _first_unsupported_package(deps_file: str) -> str:
+    """Return the first unsupported package name found in *deps_file*, or ''."""
+    if not deps_file:
+        return ""
+    try:
+        text = Path(deps_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # Extract the bare package name (strip version specifiers, extras,
+        # env markers, and leading VCS prefixes such as "git+https://...").
+        pkg = re.split(r"[\[=><! ;@~]", line)[0].lower().strip()
+        if pkg in _NOIR_UNSUPPORTED_PACKAGES:
+            return pkg
+    return ""
+
+
+def noir_skip_reason(repo: Repository) -> str | None:
+    """Return ``None`` if Noir should run, or a human-readable skip reason.
+
+    Two conditions cause a skip:
+    - ``repo.node_app`` is True (Noir's JS parser crashes on complex Node apps).
+    - The repo's dependencies file contains a package that Noir does not
+      support, causing it to fall back to full-repo scanning and emit garbage.
+    """
+    if repo.node_app:
+        return "Node.js app"
+    bad_pkg = _first_unsupported_package(repo.dependencies_file)
+    if bad_pkg:
+        return f"unsupported framework ({bad_pkg})"
+    return None

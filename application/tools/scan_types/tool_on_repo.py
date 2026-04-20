@@ -16,6 +16,7 @@ from application.tools.scan_types.execution import (
     normalize_success,
     should_skip_sca_tool,
 )
+from core.detection.noir import noir_skip_reason
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -50,12 +51,10 @@ class ToolOnRepoScan(ScanType):
                 f" project '{config.project_name}'"
             )
 
-        # Noir's JS parser crashes on complex Node apps — skip entirely.
-        if self.tool_name == "noir" and repo.node_app:
-            raise ValueError(
-                f"Noir is not supported for Node.js repository '{repo.name}'."
-                " Set node_app=false in config to run Noir on this repo."
-            )
+        # Skip Noir when the repo uses a framework it doesn't support.
+        _noir_skip = noir_skip_reason(repo)
+        if self.tool_name == "noir" and _noir_skip is not None:
+            raise ValueError(f"Noir does not support '{repo.name}': {_noir_skip}.")
 
         tool_config = registry.get_tool_config(self.tool_name)
         if tool_config is None:

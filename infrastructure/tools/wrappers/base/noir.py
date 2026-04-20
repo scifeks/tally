@@ -125,7 +125,7 @@ def _compute_noir_techs(repo_languages: list[str]) -> list[str]:
 
 
 class BaseNoirTool(ToolInterface):
-    """Base class shared by local (and any future Docker) Noir wrappers."""
+    """Base class for the Noir local wrapper."""
 
     _candidate_commands: list[str] = ["noir"]
     _command_entry_type: str = "repo"

@@ -17,6 +17,7 @@ from application.tools.scan_types.execution import (
     ordered_repo_tools,
     should_skip_sca_tool,
 )
+from core.detection.noir import noir_skip_reason
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -68,8 +69,8 @@ class RepoScan(ScanType):
                             tool_set.add(registered_tool.name)
                             break
 
-        # Noir's JS parser crashes on complex Node apps — skip it entirely.
-        if repo.node_app:
+        # Skip Noir when the repo uses a framework it doesn't support.
+        if noir_skip_reason(repo) is not None:
             tool_set.discard("noir")
 
         ordered_tools = ordered_repo_tools(tool_set, registry)

@@ -16,6 +16,7 @@ from application.tools.scan_types.execution import (
     normalize_success,
     should_skip_sca_tool,
 )
+from core.detection.noir import noir_skip_reason
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -150,8 +151,9 @@ class RepoSegmentScan(ScanType):
                     total_skipped += 1
                     continue
 
-                # Noir's JS parser crashes on complex Node apps — skip.
-                if tool_name == "noir" and repo.node_app:
+                # Skip Noir when the repo uses a framework it doesn't support.
+                _noir_skip = noir_skip_reason(repo)
+                if tool_name == "noir" and _noir_skip is not None:
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -159,7 +161,7 @@ class RepoSegmentScan(ScanType):
                             True,
                             0,
                             0.0,
-                            "skipped (Node.js app)",
+                            f"skipped ({_noir_skip})",
                         )
                     )
                     total_skipped += 1

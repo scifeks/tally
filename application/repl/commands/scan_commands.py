@@ -10,6 +10,7 @@ from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import tool_registry
+from core.detection.noir import noir_skip_reason
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -439,9 +440,9 @@ class ScanCommands:
             self.repl.console.print("[dim]Scan cancelled.[/dim]")
             return None
         if choice == "1":
-            # Prepend discovery tools: katana always, noir for non-node repos.
+            # Prepend discovery tools: katana always, noir when supported.
             to_prepend: list[str] = ["katana"]
-            if any(not r.node_app for r in missing):
+            if any(noir_skip_reason(r) is None for r in missing):
                 to_prepend.append("noir")
             existing = [t for t in tools if t not in to_prepend]
             return to_prepend + existing
