@@ -18,6 +18,7 @@ gives more accurate and complete ZAP coverage than static analysis.
 | OAS2 / Swagger 2.0 | `.json`, `.yaml` | Yes — via `swagger2openapi` (npm) |
 | Postman Collection v2.0 / v2.1 | `.json` | Yes — via `postman-to-openapi` (npm) |
 | HAR (HTTP Archive) | `.har` | Yes — built-in Python converter |
+| Katana JSONL | `.jsonl` | Yes — built-in Python converter |
 
 ---
 

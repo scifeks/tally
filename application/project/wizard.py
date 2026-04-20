@@ -495,7 +495,8 @@ class InteractiveProjectWizard:
                 print(
                     "  Supported endpoint file formats:"
                     " OAS3 (.json/.yaml), OAS2/Swagger (.json/.yaml),"
-                    " Postman Collection v2/v2.1 (.json), HAR (.har)"
+                    " Postman Collection v2/v2.1 (.json), HAR (.har),"
+                    " Katana JSONL (.jsonl)"
                 )
                 print(
                     "  Warning: when an endpoint file is configured, Noir"
@@ -933,7 +934,7 @@ class InteractiveProjectWizard:
         print(
             "  Supported endpoint file formats: OAS3 (.json/.yaml), "
             "OAS2/Swagger (.json/.yaml), Postman Collection"
-            " v2/v2.1 (.json), HAR (.har)"
+            " v2/v2.1 (.json), HAR (.har), Katana JSONL (.jsonl)"
         )
         print(
             "  Warning: when an endpoint file is configured, Noir"
