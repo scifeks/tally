@@ -198,16 +198,28 @@ def _interview_katana(
     node_app: bool = False,
     current_headless: bool = False,
     current_depth: int = 10,
+    detected_spa: bool = False,
+    spa_reason: str = "",
 ) -> tuple[bool, int]:
     """Prompt for Katana crawler options; returns (headless, depth).
 
     Skipped (returns current values) when base_urls is empty.
-    headless defaults to True for Node.js/SPA repos.
+    headless defaults to True when node_app, current_headless, or
+    detected_spa is True.
     """
     if not base_urls:
         return current_headless, current_depth
 
-    headless_default = "y" if (node_app or current_headless) else "N"
+    headless_default = "y" if (node_app or current_headless or detected_spa) else "N"
+
+    if detected_spa and spa_reason:
+        print(f"\n  SPA detected: {spa_reason}.")
+        print(
+            "  Headless mode uses Chrome to render JS routes correctly,\n"
+            "  but can drop session cookies on auth-gated classic apps\n"
+            "  and may hang on some backends. Override if needed."
+        )
+
     raw_headless = _prompt(
         "  Katana headless mode (slower, recommended for SPAs) [y/N]",
         default=headless_default,
@@ -531,11 +543,18 @@ class InteractiveProjectWizard:
 
             # Katana crawler options — skipped when crawling is disabled
             if crawl_enabled and base_urls:
+                from core.detection.spa import detect_spa
+
+                _spa_detected, _spa_reason = (
+                    detect_spa(local_path_str) if local_path_str else (False, "")
+                )
                 katana_headless, katana_depth = _interview_katana(
                     base_urls=base_urls,
                     node_app=node_app,
                     current_headless=existing.katana_headless,
                     current_depth=existing.katana_depth,
+                    detected_spa=_spa_detected,
+                    spa_reason=_spa_reason,
                 )
             else:
                 katana_headless = existing.katana_headless
@@ -950,8 +969,16 @@ class InteractiveProjectWizard:
 
         # Katana crawler options — skipped when crawling is disabled
         if crawl_enabled and base_urls:
+            from core.detection.spa import detect_spa
+
+            _spa_detected, _spa_reason = (
+                detect_spa(local_path_str) if local_path_str else (False, "")
+            )
             katana_headless, katana_depth = _interview_katana(
-                base_urls=base_urls, node_app=node_app
+                base_urls=base_urls,
+                node_app=node_app,
+                detected_spa=_spa_detected,
+                spa_reason=_spa_reason,
             )
         else:
             katana_headless, katana_depth = False, 10
