@@ -166,7 +166,7 @@ def _interview_auth(
     )
 
     print(
-        "  Credentials: set an env var (e.g. DVWA_CREDS=admin:password) or enter"
+        "  Credentials: set an env var (e.g. MY_APP_CREDS=user:pass) or enter"
         " them inline."
     )
     print("  Env var takes precedence when both are set.")

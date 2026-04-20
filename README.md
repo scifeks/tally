@@ -194,27 +194,33 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/findings-visualize.md](docs/findings-visualize.md) — Findings visualizer: browser-based findings browser with inline editing
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
+- [docs/url-discovery.md](docs/url-discovery.md) — URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers
+- [docs/endpoint-files.md](docs/endpoint-files.md) — Supplying your own OAS3/Swagger/Postman/HAR endpoint file
 - [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers (requires `config/commands.json` registration to take effect)
 - [docs/docker.md](docs/docker.md) — Security Audit Containers
 - [docs/restrictions.md](docs/restrictions.md) — Legal restrictions
 
 ## Known Limitations
 
-### Noir on Node.js repositories
+### Noir framework support
 
-OWASP Noir has a known defect in its JavaScript parser that causes it to loop
-indefinitely on complex Node.js codebases and produce no output. Tally works
-around this by letting you mark a repository as a Node.js app during
-`repo add` / `repo edit`. When marked, Noir is skipped for that repository
-across all scan types and ZAP falls back to quickscan (spider-only) mode.
+Noir does not support every web framework. It is skipped automatically for:
 
-A path to a pre-existing OAS3, OAS2/Swagger, Postman collection, or HAR file
-can be configured on a repository via `repo add` / `repo edit`. When set, Tally
-converts the file to OAS3 and passes it to ZAP in place of a Noir-generated
-spec — bypassing Noir entirely for Node.js apps and any project that already
-maintains an API spec.
+- **Node.js apps** — Noir's JavaScript parser has a known defect that causes it
+  to loop indefinitely on complex Node.js codebases. Mark a repository as a
+  Node.js app during `repo add` / `repo edit` to skip Noir for it.
+- **Unsupported Python frameworks** — aiohttp, bottle, cherrypy, falcon, and
+  pyramid are not recognised by Noir v0.25.1. Tally detects them via the
+  repository's `dependencies_file` and skips Noir automatically.
 
-See [docs/tools.md](docs/tools.md) for details.
+When Noir is skipped, ZAP falls back to spider-only discovery mode. You can
+supply a user-provided OAS3, OAS2/Swagger, Postman collection, or HAR file
+via `repo add` / `repo edit` to give ZAP accurate endpoint coverage regardless
+of Noir support.
+
+See [docs/url-discovery.md](docs/url-discovery.md) for the full discovery
+pipeline and [docs/endpoint-files.md](docs/endpoint-files.md) for endpoint file
+setup.
 
 ## Legal Notice (California and Colorado)
 
