@@ -6,6 +6,7 @@ from .schemas import (
     GlobalConfig,
     OllamaConfig,
     ProjectConfig,
+    RepoAuth,
     Repository,
 )
 
@@ -14,6 +15,7 @@ __all__ = [
     "GlobalConfig",
     "OllamaConfig",
     "ProjectConfig",
+    "RepoAuth",
     "Repository",
     "EndpointConfig",
 ]

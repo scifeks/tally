@@ -298,6 +298,16 @@ class KatanaLocalTool(BaseKatanaTool):
         jsonl_file = str(output_dir / f"{repo.name}_{ts}.jsonl")
         oas3_file = str(output_dir / f"{repo.name}_{ts}_oas3.json")
 
+        headers: dict[str, str] = dict(repo.katana_headers)
+
+        if repo.auth is not None:
+            from infrastructure.tools.wrappers.utils.auth_login import perform_login
+
+            auth_headers = perform_login(repo.auth)
+            if auth_headers:
+                # Merge: auth-derived cookie wins if key already present.
+                headers = {**headers, **auth_headers}
+
         kwargs: dict[str, Any] = {
             "base_url": base_url,
             "output_file": jsonl_file,
@@ -306,8 +316,8 @@ class KatanaLocalTool(BaseKatanaTool):
             "headless": repo.katana_headless,
             "max_duration": self._CRAWL_MAX_DURATION,
         }
-        if repo.katana_headers:
-            kwargs["headers"] = dict(repo.katana_headers)
+        if headers:
+            kwargs["headers"] = headers
 
         return [
             ExecutionPass(

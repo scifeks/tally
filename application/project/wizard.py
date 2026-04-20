@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import Repository
+from core.config.schemas.repository import RepoAuth
 from infrastructure.tools.wrappers.utils.manifest_check import (
     LANGUAGE_MANIFESTS,
     has_dependency_manifests,
@@ -129,6 +130,67 @@ def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> b
         default="Y",
     ).lower()
     return ans not in ("n", "no")
+
+
+def _interview_auth(
+    current: RepoAuth | None = None,
+) -> RepoAuth | None:
+    """Prompt for optional pre-crawl login config.
+
+    Returns a populated ``RepoAuth`` when the user opts in, or ``None``
+    when the site does not require login (or the user skips).
+    """
+    current_yn = "y" if current is not None else "N"
+    ans = _prompt(
+        "  Does this site require login to crawl? [y/N]",
+        default=current_yn,
+    ).lower()
+    if ans not in ("y", "yes"):
+        return None
+
+    login_url = _prompt(
+        "  Login URL",
+        default=current.login_url if current else "",
+    )
+    if not login_url:
+        print("  Login URL required — skipping auth config.")
+        return None
+
+    username_field = _prompt(
+        "  Username field name",
+        default=current.username_field if current else "username",
+    )
+    password_field = _prompt(
+        "  Password field name",
+        default=current.password_field if current else "password",
+    )
+
+    print(
+        "  Credentials: set an env var (e.g. DVWA_CREDS=admin:password) or enter"
+        " them inline."
+    )
+    print("  Env var takes precedence when both are set.")
+    credentials_env = _prompt(
+        "  Credentials env var name (optional)",
+        default=current.credentials_env if current else "",
+    )
+    username = _prompt(
+        "  Inline username (optional fallback)",
+        default=current.username if current else "",
+    )
+    password = _prompt(
+        "  Inline password (optional fallback)",
+        default=current.password if current else "",
+    )
+
+    return RepoAuth(
+        login_url=login_url,
+        username_field=username_field,
+        password_field=password_field,
+        credentials_env=credentials_env,
+        username=username,
+        password=password,
+    )
 
 
 def _interview_katana(
@@ -479,6 +541,8 @@ class InteractiveProjectWizard:
                 katana_headless = existing.katana_headless
                 katana_depth = existing.katana_depth
 
+            auth = _interview_auth(current=existing.auth)
+
             updated = Repository(
                 name=name,
                 type=types,
@@ -501,6 +565,7 @@ class InteractiveProjectWizard:
                 katana_headless=katana_headless,
                 katana_depth=katana_depth,
                 katana_headers=dict(existing.katana_headers),
+                auth=auth,
             )
             # Regenerate URL artifacts when oas3_path changed and base_urls
             # are configured
@@ -891,6 +956,8 @@ class InteractiveProjectWizard:
         else:
             katana_headless, katana_depth = False, 10
 
+        auth = _interview_auth()
+
         new_repo = Repository(
             name=name,
             type=types,
@@ -907,6 +974,7 @@ class InteractiveProjectWizard:
             crawl_enabled=crawl_enabled,
             katana_headless=katana_headless,
             katana_depth=katana_depth,
+            auth=auth,
         )
         _sca_manifest_notification(new_repo)
         return new_repo

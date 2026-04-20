@@ -8,6 +8,35 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 _VALID_REPO_TYPES: frozenset[str] = frozenset({"library", "api", "ui"})
 
 
+class RepoAuth(BaseModel):
+    """Optional auth config for repos that require login before crawling.
+
+    Credential resolution order: ``credentials_env`` env var (format
+    ``user:pass``) takes precedence over inline ``username`` / ``password``.
+    """
+
+    login_url: str = Field(..., description="Full URL of the login form endpoint")
+    username_field: str = Field(
+        default="username", description="Name attribute of the username input"
+    )
+    password_field: str = Field(
+        default="password", description="Name attribute of the password input"
+    )
+    extra_fields: dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional form fields (e.g. submit button values)",
+    )
+    credentials_env: str = Field(
+        default="",
+        description=(
+            "Env var containing credentials as 'user:pass'. "
+            "Takes precedence over inline username/password when set."
+        ),
+    )
+    username: str = Field(default="", description="Inline username (fallback)")
+    password: str = Field(default="", description="Inline password (fallback)")
+
+
 class Repository(BaseModel):
     """Repository configuration."""
 
@@ -134,6 +163,14 @@ class Repository(BaseModel):
             "Extra HTTP headers passed to Katana via -H. Use for "
             "authentication cookies or custom user agents, e.g. "
             '{"Cookie": "session=abc123"}.'
+        ),
+    )
+    auth: RepoAuth | None = Field(
+        default=None,
+        description=(
+            "Optional login config. When set, Tally performs a pre-crawl "
+            "login (POST to login_url), extracts the session cookie, and "
+            "injects it into Katana headers automatically."
         ),
     )
 
