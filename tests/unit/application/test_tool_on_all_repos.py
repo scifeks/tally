@@ -77,7 +77,7 @@ class TestToolOnAllReposScan:
             mock_repo.return_value.execute.return_value = _zero_summary()
             ToolOnAllReposScan("semgrep").execute(mock_config, mock_resources)
 
-        mock_repo.assert_called_once_with(["semgrep"])
+        mock_repo.assert_called_once_with(["semgrep"], segment_name="")
 
     def test_returns_summary_wrapping_sub_scan_totals(
         self,
