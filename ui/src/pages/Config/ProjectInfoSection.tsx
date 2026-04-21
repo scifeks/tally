@@ -1,0 +1,190 @@
+import { useState, useEffect } from "react"
+import { Settings, RotateCcw, Save } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Panel } from "@/components/tty"
+import type { ProjectInfo } from "@/lib/types"
+import { SectionHeader } from "./shared"
+
+// ─── Project Info Section ─────────────────────────────────────────────────────
+
+export function ProjectInfoSection({
+  projectInfo,
+  onSave,
+  isSaving,
+}: {
+  projectInfo: ProjectInfo | null
+  onSave: (updates: Partial<ProjectInfo>) => void
+  isSaving: boolean
+}) {
+  const [form, setForm] = useState<Partial<ProjectInfo>>({})
+  const [isDirty, setIsDirty] = useState(false)
+
+  useEffect(() => {
+    if (projectInfo) {
+      setForm({
+        name: projectInfo.name,
+        code: projectInfo.code,
+        company: projectInfo.company ?? "",
+        department: projectInfo.department ?? "",
+        abbreviation: projectInfo.abbreviation ?? "",
+      })
+      setIsDirty(false)
+    }
+  }, [projectInfo])
+
+  const updateField = (field: keyof ProjectInfo, value: string) => {
+    setForm((f) => ({ ...f, [field]: value }))
+    setIsDirty(true)
+  }
+
+  const handleSave = () => {
+    onSave(form)
+    setIsDirty(false)
+  }
+
+  const handleReset = () => {
+    if (projectInfo) {
+      setForm({
+        name: projectInfo.name,
+        code: projectInfo.code,
+        company: projectInfo.company ?? "",
+        department: projectInfo.department ?? "",
+        abbreviation: projectInfo.abbreviation ?? "",
+      })
+      setIsDirty(false)
+    }
+  }
+
+  if (!projectInfo) {
+    return (
+      <Panel>
+        <SectionHeader icon={Settings} title="PROJECT INFO" />
+        <div className="text-sm text-dim">Loading project info...</div>
+      </Panel>
+    )
+  }
+
+  return (
+    <Panel>
+      <SectionHeader icon={Settings} title="PROJECT INFO">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleReset}
+            disabled={!isDirty}
+            className={cn(
+              "flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider border transition-colors",
+              isDirty
+                ? "border-border text-muted-foreground hover:bg-muted/30"
+                : "border-border/50 text-dim cursor-not-allowed",
+            )}
+          >
+            <RotateCcw className="h-3 w-3" />
+            Reset
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!isDirty || isSaving}
+            className={cn(
+              "flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider transition-colors",
+              isDirty
+                ? "bg-accent text-background hover:bg-accent/80"
+                : "bg-muted text-dim cursor-not-allowed",
+            )}
+          >
+            <Save className="h-3 w-3" />
+            {isSaving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </SectionHeader>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Editable fields */}
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+              Project Name
+            </label>
+            <input
+              type="text"
+              value={form.name ?? ""}
+              onChange={(e) => updateField("name", e.target.value)}
+              className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+              Code
+            </label>
+            <input
+              type="text"
+              value={form.code ?? ""}
+              onChange={(e) => updateField("code", e.target.value.toUpperCase())}
+              maxLength={4}
+              className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+              Company
+            </label>
+            <input
+              type="text"
+              value={form.company ?? ""}
+              onChange={(e) => updateField("company", e.target.value)}
+              className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+              Department
+            </label>
+            <input
+              type="text"
+              value={form.department ?? ""}
+              onChange={(e) => updateField("department", e.target.value)}
+              className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Read-only info */}
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+              Path (read-only)
+            </label>
+            <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim font-mono">
+              {projectInfo.path}
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+              Created
+            </label>
+            <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim">
+              {new Date(projectInfo.createdAt).toLocaleDateString()}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+                Repositories
+              </label>
+              <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim tabular-nums">
+                {projectInfo.repoCount}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+                Findings
+              </label>
+              <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim tabular-nums">
+                {projectInfo.findingCount}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Panel>
+  )
+}

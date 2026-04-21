@@ -1,21 +1,12 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import {
   Play,
   Square,
   RotateCcw,
-  Download,
-  Upload,
-  FileText,
-  RefreshCw,
-  ChevronDown,
-  ChevronRight,
-  Check,
-  X,
-  Clock,
-  Loader2,
   AlertTriangle,
-  FileCheck,
-  FilePlus,
+  Loader2,
+  RefreshCw,
+  X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Panel, Bar } from "@/components/tty"
@@ -31,564 +22,14 @@ import type {
   ReportHistoryEntry,
   ReportDraftStatus,
 } from "@/lib/types"
+import { SECTION_ORDER, SECTION_LABELS, FORMAT_OPTIONS, TESTING_TYPE_OPTIONS } from "./constants"
+import { PrinterAnimation } from "./PrinterAnimation"
+import { DraftCard } from "./DraftCard"
+import { HistoryTable } from "./HistoryTable"
+import { LogRow } from "./LogRow"
+import { PreflightChecklist } from "./PreflightChecklist"
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const SECTION_LABELS: Record<ReportDraftSection, string> = {
-  executive_summary: "Executive Summary",
-  risk_level: "Risk Level Assessment",
-  critical_issues: "Critical Issues",
-  improvement_points: "Improvement Points",
-  scope_methodology: "Scope & Methodology",
-  general_recommendations: "General Recommendations",
-}
-
-const SECTION_ORDER: ReportDraftSection[] = [
-  "executive_summary",
-  "risk_level",
-  "critical_issues",
-  "improvement_points",
-  "scope_methodology",
-  "general_recommendations",
-]
-
-const FORMAT_OPTIONS: { value: ReportFormat; label: string; requiresDrafts: boolean }[] = [
-  { value: "pdf", label: "PDF", requiresDrafts: true },
-  { value: "markdown", label: "Markdown", requiresDrafts: false },
-  { value: "html", label: "HTML", requiresDrafts: false },
-  { value: "json", label: "JSON", requiresDrafts: false },
-]
-
-const TESTING_TYPE_OPTIONS: { value: TestingType; label: string }[] = [
-  { value: "white_box", label: "White Box" },
-  { value: "grey_box", label: "Grey Box" },
-  { value: "black_box", label: "Black Box" },
-]
-
-// ─── Document Printer Animation ─────────────────────────────────────────────
-
-function PrinterAnimation({
-  active,
-  progress,
-  size = 220,
-}: {
-  active: boolean
-  progress: number
-  size?: number
-}) {
-  const pageCount = 6
-  const pagesComplete = Math.floor((progress / 100) * pageCount)
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 220 220"
-      className="shrink-0"
-      aria-hidden
-    >
-      {/* Corner brackets */}
-      <g stroke="var(--color-accent)" strokeWidth={2} fill="none">
-        <path d="M 15 5 L 5 5 L 5 15" />
-        <path d="M 205 5 L 215 5 L 215 15" />
-        <path d="M 15 215 L 5 215 L 5 205" />
-        <path d="M 205 215 L 215 215 L 215 205" />
-      </g>
-
-      {/* Outer frame */}
-      <rect
-        x="30"
-        y="50"
-        width="160"
-        height="120"
-        fill="none"
-        stroke="var(--color-border)"
-        strokeWidth="2"
-        rx="4"
-      />
-
-      {/* Paper tray (input) */}
-      <rect
-        x="60"
-        y="30"
-        width="100"
-        height="25"
-        fill="var(--color-muted)"
-        stroke="var(--color-border)"
-        strokeWidth="1"
-        rx="2"
-      />
-
-      {/* Document stack in tray */}
-      {[0, 1, 2].map((i) => (
-        <rect
-          key={i}
-          x={65 + i * 2}
-          y={35 + i * 2}
-          width={86 - i * 4}
-          height={15}
-          fill="var(--color-background)"
-          stroke="var(--color-dim)"
-          strokeWidth="0.5"
-        />
-      ))}
-
-      {/* Printer body */}
-      <rect
-        x="40"
-        y="60"
-        width="140"
-        height="70"
-        fill="var(--color-muted)"
-        stroke="var(--color-border)"
-        strokeWidth="1"
-        rx="2"
-      />
-
-      {/* Status lights */}
-      <circle
-        cx="60"
-        cy="75"
-        r="4"
-        fill={active ? "var(--color-accent)" : "var(--color-dim)"}
-        className={active ? "tty-glow" : ""}
-      />
-      <circle
-        cx="75"
-        cy="75"
-        r="4"
-        fill={active ? "var(--color-warn)" : "var(--color-dim)"}
-        className={active ? "animate-pulse" : ""}
-      />
-
-      {/* LCD display area */}
-      <rect
-        x="90"
-        y="68"
-        width="80"
-        height="16"
-        fill="var(--color-background)"
-        stroke="var(--color-border)"
-        strokeWidth="1"
-      />
-      <text
-        x="130"
-        y="80"
-        textAnchor="middle"
-        fill="var(--color-accent)"
-        fontSize="8"
-        fontFamily="monospace"
-        className={active ? "tty-glow" : ""}
-      >
-        {active ? `PRINTING ${progress}%` : "READY"}
-      </text>
-
-      {/* Paper output slot */}
-      <rect
-        x="60"
-        y="125"
-        width="100"
-        height="8"
-        fill="var(--color-background)"
-        stroke="var(--color-border)"
-        strokeWidth="1"
-      />
-
-      {/* Output tray */}
-      <path
-        d="M 55 170 L 60 135 L 160 135 L 165 170 Z"
-        fill="var(--color-muted)"
-        stroke="var(--color-border)"
-        strokeWidth="1"
-      />
-
-      {/* Printed pages in output tray */}
-      {Array.from({ length: pagesComplete }).map((_, i) => (
-        <g key={i}>
-          <rect
-            x={65 + i * 1.5}
-            y={140 + i * 3}
-            width={90 - i * 3}
-            height={25}
-            fill="var(--color-background)"
-            stroke="var(--color-accent)"
-            strokeWidth="0.5"
-            className="tty-glow"
-          />
-          {[0, 1, 2].map((line) => (
-            <line
-              key={line}
-              x1={70 + i * 1.5}
-              y1={148 + i * 3 + line * 5}
-              x2={145 - i * 3}
-              y2={148 + i * 3 + line * 5}
-              stroke="var(--color-dim)"
-              strokeWidth="0.5"
-            />
-          ))}
-        </g>
-      ))}
-
-      {/* Currently printing page (animated) */}
-      {active && pagesComplete < pageCount && (
-        <g className="animate-pulse">
-          <rect
-            x="70"
-            y="110"
-            width="80"
-            height="20"
-            fill="var(--color-background)"
-            stroke="var(--color-accent)"
-            strokeWidth="1"
-          />
-        </g>
-      )}
-    </svg>
-  )
-}
-
-// ─── Draft Section Card ─────────────────────────────────────────────────────
-
-function DraftCard({
-  draft,
-  onGenerate,
-  onUpload,
-  isGenerating,
-  skipTriage,
-}: {
-  draft: ReportDraft
-  onGenerate: (force: boolean) => void
-  onUpload: (file: File) => void
-  isGenerating: boolean
-  skipTriage: boolean
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const hasDraft = draft.status === "draft" || draft.status === "reviewed"
-  const isReviewed = draft.status === "reviewed"
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      onUpload(file)
-    }
-    e.target.value = ""
-  }
-
-  return (
-    <div className={cn(
-      "border bg-muted/20 transition-colors",
-      isReviewed ? "border-good/50" : "border-border"
-    )}>
-      <div
-        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <button className="shrink-0 text-dim hover:text-foreground">
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
-
-        {isReviewed ? (
-          <FileCheck className="h-4 w-4 text-good shrink-0" />
-        ) : (
-          <FileText className="h-4 w-4 text-accent shrink-0" />
-        )}
-
-        <span className="flex-1 text-sm font-medium">
-          {SECTION_LABELS[draft.section]}
-        </span>
-
-        {/* Status badge */}
-        {draft.status === "reviewed" && (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-good">
-            <Check className="h-3 w-3" />
-            Reviewed
-          </span>
-        )}
-        {draft.status === "draft" && (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-accent">
-            <FileText className="h-3 w-3" />
-            Draft Ready
-          </span>
-        )}
-        {draft.status === "generating" && (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-warn">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Generating
-          </span>
-        )}
-        {draft.status === "not_generated" && (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-dim">
-            <Clock className="h-3 w-3" />
-            Not Generated
-          </span>
-        )}
-        {draft.status === "failed" && (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-crit">
-            <X className="h-3 w-3" />
-            Failed
-          </span>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-          {/* Generate / Regenerate */}
-          {!hasDraft ? (
-            <button
-              onClick={() => onGenerate(false)}
-              disabled={isGenerating}
-              className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Generate"}
-            </button>
-          ) : (
-            <button
-              onClick={() => onGenerate(true)}
-              disabled={isGenerating}
-              className="p-1.5 text-[10px] border border-border text-muted-foreground hover:border-warn hover:text-warn transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Regenerate (overwrites existing)"
-            >
-              <RefreshCw className="h-3 w-3" />
-            </button>
-          )}
-
-          {/* Upload reviewed version */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.txt"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              "p-1.5 text-[10px] border transition-colors",
-              hasDraft
-                ? "border-border text-muted-foreground hover:border-good hover:text-good"
-                : "border-border/50 text-dim cursor-not-allowed"
-            )}
-            disabled={!hasDraft}
-            title={hasDraft ? "Upload reviewed version" : "Generate draft first"}
-          >
-            <Upload className="h-3 w-3" />
-          </button>
-
-          {/* Download */}
-          <button
-            className={cn(
-              "p-1.5 text-[10px] border transition-colors",
-              hasDraft
-                ? "border-border text-muted-foreground hover:border-accent hover:text-accent"
-                : "border-border/50 text-dim cursor-not-allowed"
-            )}
-            disabled={!hasDraft}
-            title={hasDraft ? "Download draft" : "No draft to download"}
-          >
-            <Download className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-
-      {/* Expanded preview */}
-      {expanded && (
-        <div className="px-4 py-3 border-t border-border bg-background/50">
-          {hasDraft && draft.preview ? (
-            <>
-              <div className="flex items-center gap-4 mb-2 text-[10px] text-dim">
-                <span>{draft.wordCount} words</span>
-                {draft.generatedAt && (
-                  <span>Generated {new Date(draft.generatedAt).toLocaleDateString()}</span>
-                )}
-                {draft.reviewedAt && (
-                  <span className="text-good">
-                    Reviewed {new Date(draft.reviewedAt).toLocaleDateString()}
-                  </span>
-                )}
-                {draft.uploadedFilename && (
-                  <span className="text-good">Uploaded: {draft.uploadedFilename}</span>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed">
-                {draft.preview}
-              </p>
-            </>
-          ) : draft.error ? (
-            <p className="text-sm text-crit">{draft.error}</p>
-          ) : (
-            <p className="text-sm text-dim italic">
-              No content yet. Click &quot;Generate&quot; to create this section using AI.
-              {skipTriage ? " (skip-triage mode: includes all findings)" : " (only triaged findings will be included)"}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── History Table ──────────────────────────────────────────────────────────
-
-function HistoryTable({ entries }: { entries: ReportHistoryEntry[] }) {
-  if (entries.length === 0) {
-    return (
-      <div className="text-center py-12 text-dim">
-        <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p>No reports generated yet</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="border border-border">
-      <div className="grid grid-cols-[1fr_80px_140px_80px_60px] gap-4 px-4 py-2 bg-muted/30 border-b border-border text-[10px] uppercase tracking-wider text-dim">
-        <span>Filename</span>
-        <span>Format</span>
-        <span>Generated</span>
-        <span>Size</span>
-        <span></span>
-      </div>
-      {entries.map((entry) => (
-        <div
-          key={entry.id}
-          className="grid grid-cols-[1fr_80px_140px_80px_60px] gap-4 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
-        >
-          <span className="text-sm font-mono truncate" title={entry.filename}>
-            {entry.filename}
-          </span>
-          <span className="text-sm uppercase text-accent">{entry.format}</span>
-          <span className="text-sm text-muted-foreground">
-            {new Date(entry.generatedAt).toLocaleString()}
-          </span>
-          <span className="text-sm text-muted-foreground tabular-nums">
-            {(entry.sizeBytes / 1024).toFixed(0)} KB
-          </span>
-          <button className="text-accent hover:text-foreground transition-colors">
-            <Download className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ─── Log Event Row ──────────────────────────────────────────────────────────
-
-function LogRow({ event }: { event: ReportLogEvent }) {
-  const time = new Date(event.timestamp).toLocaleTimeString("en-US", { hour12: false })
-
-  const typeColors: Record<string, string> = {
-    generation_started: "text-accent",
-    step_started: "text-muted-foreground",
-    step_completed: "text-good",
-    step_failed: "text-crit",
-    generation_completed: "text-good",
-    generation_failed: "text-crit",
-    draft_started: "text-warn",
-    draft_completed: "text-good",
-    draft_failed: "text-crit",
-  }
-
-  return (
-    <div className="flex items-start gap-3 px-3 py-1.5 font-mono text-[11px] hover:bg-muted/20">
-      <span className="text-dim shrink-0">{time}</span>
-      <span className={cn("uppercase shrink-0 w-24", typeColors[event.type] ?? "text-foreground")}>
-        {event.type.replace(/_/g, " ")}
-      </span>
-      <span className="text-foreground flex-1">{event.message}</span>
-      {event.progress !== undefined && (
-        <span className="text-accent tabular-nums">{event.progress}%</span>
-      )}
-    </div>
-  )
-}
-
-// ─── Pre-flight Checklist ───────────────────────────────────────────────────
-
-function PreflightChecklist({
-  drafts,
-  onClose,
-  onConfirm,
-}: {
-  drafts: ReportDraft[]
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  const allReady = drafts.every((d) => d.status === "draft" || d.status === "reviewed")
-  const reviewedCount = drafts.filter((d) => d.status === "reviewed").length
-
-  return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-background border border-border w-full max-w-lg">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider">
-            <span className="text-accent">[</span>
-            PDF Pre-flight Check
-            <span className="text-accent">]</span>
-          </h2>
-          <button onClick={onClose} className="text-dim hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="p-4 space-y-3">
-          {SECTION_ORDER.map((section) => {
-            const draft = drafts.find((d) => d.section === section)
-            const status = draft?.status ?? "not_generated"
-            const ready = status === "draft" || status === "reviewed"
-
-            return (
-              <div key={section} className="flex items-center gap-3">
-                {ready ? (
-                  <Check className="h-4 w-4 text-good" />
-                ) : (
-                  <X className="h-4 w-4 text-crit" />
-                )}
-                <span className={cn("flex-1 text-sm", ready ? "text-foreground" : "text-dim")}>
-                  {SECTION_LABELS[section]}
-                </span>
-                {status === "reviewed" && (
-                  <span className="text-[10px] uppercase text-good">Reviewed</span>
-                )}
-                {status === "draft" && (
-                  <span className="text-[10px] uppercase text-accent">Draft</span>
-                )}
-                {status === "not_generated" && (
-                  <span className="text-[10px] uppercase text-crit">Missing</span>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="px-4 py-3 border-t border-border bg-muted/20">
-          {allReady ? (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-good">
-                All sections ready ({reviewedCount} reviewed, {6 - reviewedCount} drafts)
-              </span>
-              <button
-                onClick={onConfirm}
-                className="px-4 py-2 bg-accent text-background text-sm font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
-              >
-                Generate PDF
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-crit text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              <span>
-                {6 - drafts.filter((d) => d.status === "draft" || d.status === "reviewed").length} section(s) missing. Generate all drafts before creating PDF.
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Main Component ─────────────────────────────────────────────────────────
+// ─── Reports Page ─────────────────────────────────────────────────────────────
 
 export default function Reports() {
   const activeProjectId = useUI((s) => s.activeProjectId)
@@ -606,6 +47,14 @@ export default function Reports() {
   const { generate: generateDraftMutation, isLoading: isGeneratingDraft } = useGenerateDraft()
   // POST /api/v1/projects/:id/reports/generate
   const { generate: generateReportMutation, isLoading: isGeneratingReport } = useGenerateReport()
+
+  // Suppress unused warnings — hooks are wired for future backend integration
+  void draftData
+  void historyData
+  void generateDraftMutation
+  void isGeneratingDraft
+  void generateReportMutation
+  void isGeneratingReport
 
   const project = projects.find((p) => p.id === activeProjectId)
 
@@ -676,7 +125,6 @@ export default function Reports() {
       : []
   )
 
-  // Counts
   const draftCount = drafts.filter((d) => d.status === "draft" || d.status === "reviewed").length
   const reviewedCount = drafts.filter((d) => d.status === "reviewed").length
   const allDraftsReady = draftCount === 6
@@ -691,18 +139,13 @@ export default function Reports() {
     }
   }, [logs])
 
-  // Simulate draft generation
   const handleGenerateDraft = useCallback((section: ReportDraftSection, force: boolean) => {
     setGeneratingSection(section)
-
-    // Update draft to generating status
     setDrafts((prev) =>
       prev.map((d) =>
         d.section === section ? { ...d, status: "generating" as ReportDraftStatus } : d
       )
     )
-
-    // Simulate generation delay
     setTimeout(() => {
       setDrafts((prev) =>
         prev.map((d) =>
@@ -719,9 +162,9 @@ export default function Reports() {
       )
       setGeneratingSection(null)
     }, 1500 + Math.random() * 1000)
+    void force
   }, [])
 
-  // Generate all drafts
   const handleGenerateAll = useCallback(async (force: boolean) => {
     setGeneratingAll(true)
     const toGenerate = force
@@ -759,7 +202,6 @@ export default function Reports() {
     setGeneratingAll(false)
   }, [drafts])
 
-  // Handle file upload for reviewed version
   const handleUpload = useCallback((section: ReportDraftSection, file: File) => {
     setDrafts((prev) =>
       prev.map((d) =>
@@ -884,33 +326,29 @@ export default function Reports() {
         </div>
       </div>
 
-  {/* TAL ID Warning */}
-  {showTalWarning && (
-    <div className="mx-6 mt-4 flex items-start gap-2 px-3 py-2 border border-warn/50 bg-warn/10 text-warn text-[11px]">
-      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-      <span className="flex-1">
-        Generating a new PDF report will re-assign TAL IDs to all approved findings. If you have shared a previous report, IDs may change.
-      </span>
-      <button
-        onClick={() => setShowTalWarning(false)}
-        className="shrink-0 p-0.5 hover:bg-warn/20 transition-colors"
-        title="Dismiss"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  )}
+      {/* TAL ID Warning */}
+      {showTalWarning && (
+        <div className="mx-6 mt-4 flex items-start gap-2 px-3 py-2 border border-warn/50 bg-warn/10 text-warn text-[11px]">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span className="flex-1">
+            Generating a new PDF report will re-assign TAL IDs to all approved findings. If you have shared a previous report, IDs may change.
+          </span>
+          <button
+            onClick={() => setShowTalWarning(false)}
+            className="shrink-0 p-0.5 hover:bg-warn/20 transition-colors"
+            title="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Content - Graphic on LEFT, controls on RIGHT */}
       <div className="flex-1 overflow-auto p-6">
         <div className="flex gap-8">
           {/* Left: Animated Graphic + Status */}
           <div className="shrink-0 flex flex-col items-center gap-4">
-            <PrinterAnimation
-              active={isRunning}
-              progress={progress}
-              size={220}
-            />
+            <PrinterAnimation active={isRunning} progress={progress} size={220} />
 
             {/* Status indicator */}
             <div className="text-center">
