@@ -58,7 +58,9 @@ class FullScan(ScanType):
             seg_idx += 1
             resources.display.print_segment_header(segment)
 
-            seg_summary = RepoSegmentScan(seg_tools).execute(config, resources)
+            seg_summary = RepoSegmentScan(seg_tools, segment_name=segment).execute(
+                config, resources
+            )
 
             all_results.extend(seg_summary.results)
             total_run += seg_summary.total_tools_run

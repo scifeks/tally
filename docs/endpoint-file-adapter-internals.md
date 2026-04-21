@@ -120,7 +120,7 @@ class <Format>Adapter(ConverterAdapter):
 
     def convert(self, source: Path, output_dir: Path) -> Path:
         """Convert source to OAS3 and return the output path."""
-        output_file = output_dir / "endpoints.json"
+        output_file = output_dir / "seed.json"
         ...
         return output_file
 ```
@@ -217,7 +217,7 @@ pattern they follow:
    repeated requests to the same endpoint.
 3. Builds an OAS3 document from the grouped entries, extracting query
    parameters from `queryString` and request bodies from `postData`.
-4. Writes the result as `endpoints.json` in `output_dir`.
+4. Writes the result as `seed.json` in `output_dir`.
 
 When writing a pure-Python adapter, the same structure applies: parse the
 input, build an OAS3 dict, and write it with `json.dumps`.

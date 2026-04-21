@@ -16,13 +16,13 @@ def test_returns_none_when_binary_not_on_path() -> None:
         assert get_tool_version("nonexistent") is None
 
 
-def test_returns_first_line_of_stdout() -> None:
+def test_returns_first_semver_from_stdout() -> None:
     proc = MagicMock(stdout="mytool 1.2.3\nextra line", stderr="")
     with (
         patch(_WHICH, return_value=_BINARY),
         patch(_RUN, return_value=proc),
     ):
-        assert get_tool_version("mytool") == "mytool 1.2.3"
+        assert get_tool_version("mytool") == "1.2.3"
 
 
 def test_falls_back_to_stderr_when_stdout_empty() -> None:
@@ -31,7 +31,7 @@ def test_falls_back_to_stderr_when_stdout_empty() -> None:
         patch(_WHICH, return_value=_BINARY),
         patch(_RUN, return_value=proc),
     ):
-        assert get_tool_version("mytool") == "version 2.0"
+        assert get_tool_version("mytool") == "2.0"
 
 
 def test_returns_none_when_output_empty() -> None:

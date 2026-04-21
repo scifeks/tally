@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import Repository
+from core.config.schemas.repository import RepoAuth
+from infrastructure.tools.wrappers.utils.manifest_check import (
+    LANGUAGE_MANIFESTS,
+    has_dependency_manifests,
+    has_dependency_manifests_docker,
+)
 
 if TYPE_CHECKING:
     from application.project.manager import ProjectManager
@@ -32,14 +39,25 @@ _TEST_DIR_NAMES: frozenset[str] = frozenset(
     {"test", "tests", "spec", "__tests__", "e2e"}
 )
 
-_JS_LANGS: frozenset[str] = frozenset(
-    {"javascript", "javascript/typescript", "node", "typescript"}
-)
 
-
-def _has_js(langs: list[str]) -> bool:
-    """Return True if any entry in langs indicates a JavaScript/Node codebase."""
-    return any(lang.lower() in _JS_LANGS for lang in langs)
+def _sca_manifest_notification(repo: Repository) -> None:
+    """Print a notice when no SCA-relevant dependency manifests are found."""
+    sca_langs = set(LANGUAGE_MANIFESTS)
+    repo_langs = {lang.lower() for lang in (repo.languages or [])}
+    if not repo_langs & sca_langs:
+        return
+    if repo.container_name:
+        found = has_dependency_manifests_docker(
+            repo.container_name, repo.docker_path, repo.languages or []
+        )
+    else:
+        found = has_dependency_manifests(repo.path, repo.languages or [])
+    if not found:
+        print(
+            "  Note: no dependency manifests found for the configured languages.\n"
+            "  SCA scanning (npm-audit, pip-audit, composer-audit, osv-scanner)\n"
+            "  will be skipped for this repository."
+        )
 
 
 def _parse_repo_types(raw: str) -> list[str]:
@@ -86,6 +104,125 @@ def _prompt(message: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     raw = input(f"{message}{suffix}: ").strip()
     return raw or default
+
+
+def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> bool:
+    """Return whether live crawling (Katana / Noir) should be enabled.
+
+    Only prompts when *base_urls* is non-empty and an endpoint file is
+    configured — in that case the user chooses whether to also run live
+    crawlers on top of the static file.  In all other situations crawling
+    is enabled by default and no prompt is shown.
+    """
+    if not base_urls or not has_endpoint_file:
+        return True
+    ans = _prompt(
+        "  Also run live crawlers (Katana / Noir) to supplement"
+        " the endpoint file? [Y/n]",
+        default="Y",
+    ).lower()
+    return ans not in ("n", "no")
+
+
+def _interview_auth(
+    current: RepoAuth | None = None,
+) -> RepoAuth | None:
+    """Prompt for optional pre-crawl login config.
+
+    Returns a populated ``RepoAuth`` when the user opts in, or ``None``
+    when the site does not require login (or the user skips).
+    """
+    current_yn = "y" if current is not None else "N"
+    ans = _prompt(
+        "  Does this site require login to crawl? [y/N]",
+        default=current_yn,
+    ).lower()
+    if ans not in ("y", "yes"):
+        return None
+
+    login_url = _prompt(
+        "  Login URL",
+        default=current.login_url if current else "",
+    )
+    if not login_url:
+        print("  Login URL required — skipping auth config.")
+        return None
+
+    username_field = _prompt(
+        "  Username field name",
+        default=current.username_field if current else "username",
+    )
+    password_field = _prompt(
+        "  Password field name",
+        default=current.password_field if current else "password",
+    )
+
+    print(
+        "  Credentials: set an env var (e.g. MY_APP_CREDS=user:pass) or enter"
+        " them inline."
+    )
+    print("  Env var takes precedence when both are set.")
+    credentials_env = _prompt(
+        "  Credentials env var name (optional)",
+        default=current.credentials_env if current else "",
+    )
+    username = _prompt(
+        "  Inline username (optional fallback)",
+        default=current.username if current else "",
+    )
+    password = _prompt(
+        "  Inline password (optional fallback)",
+        default=current.password if current else "",
+    )
+
+    return RepoAuth(
+        login_url=login_url,
+        username_field=username_field,
+        password_field=password_field,
+        credentials_env=credentials_env,
+        username=username,
+        password=password,
+    )
+
+
+def _interview_katana(
+    base_urls: list[str],
+    current_headless: bool = False,
+    current_depth: int = 10,
+    detected_spa: bool = False,
+    spa_reason: str = "",
+) -> tuple[bool, int]:
+    """Prompt for Katana crawler options; returns (headless, depth).
+
+    Skipped (returns current values) when base_urls is empty.
+    headless defaults to True when current_headless or detected_spa is True.
+    """
+    if not base_urls:
+        return current_headless, current_depth
+
+    headless_default = "y" if (current_headless or detected_spa) else "N"
+
+    if detected_spa and spa_reason:
+        print(f"\n  SPA detected: {spa_reason}.")
+        print(
+            "  Headless mode uses Chrome to render JS routes correctly,\n"
+            "  but can drop session cookies on auth-gated classic apps\n"
+            "  and may hang on some backends. Override if needed."
+        )
+
+    raw_headless = _prompt(
+        "  Katana headless mode (slower, recommended for SPAs) [y/N]",
+        default=headless_default,
+    ).lower()
+    headless = raw_headless in ("y", "yes")
+
+    raw_depth = _prompt("  Katana crawl depth", default=str(current_depth))
+    try:
+        depth = max(1, int(raw_depth))
+    except ValueError:
+        depth = current_depth
+
+    return headless, depth
 
 
 class InteractiveProjectWizard:
@@ -260,41 +397,7 @@ class InteractiveProjectWizard:
             lang_input = _prompt(prompt_label, default=default_langs)
             langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-            # todo: Add support for
-            # Node.js app flag — Noir skipped for Node apps (JS parser limitation)
-            if _has_js(langs):
-                current_node = "y" if existing.node_app else "N"
-                ans = _prompt(
-                    "  Is this a Node.js app? (Noir will be skipped)",
-                    default=current_node,
-                ).lower()
-                node_app = ans in ("y", "yes")
-            else:
-                node_app = False
-
-            # Dependencies file — pip-audit scope, only relevant for Python repos
             dependencies_file = existing.dependencies_file
-            if "python" in [lang.lower() for lang in langs]:
-                if mode == "docker":
-                    print(
-                        "  Note: if no dependencies file is provided, pip-audit will "
-                        "scan all packages installed in the container environment."
-                    )
-                    dependencies_file = _prompt(
-                        "  Python dependencies file"
-                        " (container path, e.g. /app/requirements.txt, optional)",
-                        default=existing.dependencies_file,
-                    )
-                else:
-                    print(
-                        "  Note: without a dependencies file, pip-audit will be "
-                        "skipped for this repository."
-                    )
-                    dependencies_file = _prompt(
-                        "  Python dependencies file"
-                        " (local path, e.g. requirements.txt, optional)",
-                        default=existing.dependencies_file,
-                    )
 
             # Base URLs
             current_urls = ", ".join(existing.base_urls) if existing.base_urls else ""
@@ -335,41 +438,78 @@ class InteractiveProjectWizard:
             ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
             # Endpoint definition file
+            from infrastructure.endpoints.converters import (
+                ConverterError,
+                convert_endpoint_file,
+            )
+
             oas3_path = existing.oas3_path
+            endpoints_dir = (
+                self._manager.base_path
+                / "projects"
+                / project_name
+                / "config"
+                / "endpoints"
+                / name
+            )
+            originals_dir = endpoints_dir / "original"
+
             if existing.oas3_path:
                 print(f"  Current endpoint file: {existing.oas3_path}")
                 replace_ans = _prompt(
                     "  Replace endpoint file? [y/N]", default="N"
                 ).lower()
                 if replace_ans in ("y", "yes"):
-                    _old = Path(existing.oas3_path)
-                    _old.unlink(missing_ok=True)
-                    _orig_dir = (
-                        self._manager.base_path
-                        / "projects"
-                        / project_name
-                        / "endpoints"
-                        / "original"
-                    )
-                    for _f in _orig_dir.glob("*"):
-                        _f.unlink(missing_ok=True)
-                    oas3_path = ""
                     print(
                         "  Warning: when an endpoint file is configured, Noir"
                         " is skipped and ZAP relies entirely on that file."
                         " ZAP results will be less accurate if the file is"
                         " incomplete."
                     )
-                    endpoint_input = _prompt(
-                        "  New endpoint definition file path (optional)"
-                    )
-                else:
-                    endpoint_input = ""
+                    while True:
+                        endpoint_input = _prompt(
+                            "  New endpoint definition file path (optional)"
+                        )
+                        if not endpoint_input:
+                            break
+                        try:
+                            src = Path(endpoint_input).expanduser().resolve()
+                            if not src.exists():
+                                raise FileNotFoundError(str(src))
+                            shutil.rmtree(endpoints_dir, ignore_errors=True)
+                            oas3_file = convert_endpoint_file(
+                                src, endpoints_dir, originals_dir
+                            )
+                            oas3_path = str(oas3_file)
+                            print(f"\n  ✓ Endpoint file converted: {oas3_file}")
+                            break
+                        except (ConverterError, FileNotFoundError) as exc:
+                            _err = (
+                                exc
+                                if isinstance(exc, ConverterError)
+                                else f"File not found: {endpoint_input}"
+                            )
+                            print(f"\n  Endpoint file error: {_err}")
+                            choice = (
+                                _prompt(
+                                    "  [r]etry / [s]kip / [k]eep existing? [r/s/k]",
+                                    default="k",
+                                )
+                                .strip()
+                                .lower()
+                            )
+                            if choice in ("k", "keep", ""):
+                                oas3_path = existing.oas3_path
+                                break
+                            if choice in ("s", "skip"):
+                                oas3_path = ""
+                                break
             else:
                 print(
                     "  Supported endpoint file formats:"
                     " OAS3 (.json/.yaml), OAS2/Swagger (.json/.yaml),"
-                    " Postman Collection v2/v2.1 (.json), HAR (.har)"
+                    " Postman Collection v2/v2.1 (.json), HAR (.har),"
+                    " Katana JSONL (.jsonl)"
                 )
                 print(
                     "  Warning: when an endpoint file is configured, Noir"
@@ -377,36 +517,63 @@ class InteractiveProjectWizard:
                     " ZAP results will be less accurate if the file is"
                     " incomplete."
                 )
-                endpoint_input = _prompt("  Endpoint definition file path (optional)")
-
-            if endpoint_input:
-                from infrastructure.endpoints.converters import (
-                    ConverterError,
-                    convert_endpoint_file,
-                )
-
-                try:
-                    src = Path(endpoint_input).expanduser().resolve()
-                    if not src.exists():
-                        raise FileNotFoundError(str(src))
-                    endpoints_dir = (
-                        self._manager.base_path
-                        / "projects"
-                        / project_name
-                        / "endpoints"
+                while True:
+                    endpoint_input = _prompt(
+                        "  Endpoint definition file path (optional)"
                     )
-                    originals_dir = endpoints_dir / "original"
-                    oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
-                    oas3_path = str(oas3_file)
-                    print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-                except ConverterError as exc:
-                    print(f"\n  Endpoint file error: {exc}")
-                    print("  Keeping existing endpoint file configuration.")
-                    oas3_path = existing.oas3_path
-                except FileNotFoundError:
-                    print(f"\n  File not found: {endpoint_input}")
-                    print("  Keeping existing endpoint file configuration.")
-                    oas3_path = existing.oas3_path
+                    if not endpoint_input:
+                        break
+                    try:
+                        src = Path(endpoint_input).expanduser().resolve()
+                        if not src.exists():
+                            raise FileNotFoundError(str(src))
+                        oas3_file = convert_endpoint_file(
+                            src, endpoints_dir, originals_dir
+                        )
+                        oas3_path = str(oas3_file)
+                        print(f"\n  ✓ Endpoint file converted: {oas3_file}")
+                        break
+                    except (ConverterError, FileNotFoundError) as exc:
+                        _err = (
+                            exc
+                            if isinstance(exc, ConverterError)
+                            else f"File not found: {endpoint_input}"
+                        )
+                        print(f"\n  Endpoint file error: {_err}")
+                        choice = (
+                            _prompt("  [r]etry / [s]kip? [r/s]", default="s")
+                            .strip()
+                            .lower()
+                        )
+                        if choice in ("s", "skip", ""):
+                            break
+
+            # crawl_enabled — only asked when base URLs and endpoint file
+            # are both configured
+            crawl_enabled = _interview_crawl_enabled(
+                base_urls=base_urls,
+                has_endpoint_file=bool(oas3_path),
+            )
+
+            # Katana crawler options — skipped when crawling is disabled
+            if crawl_enabled and base_urls:
+                from core.detection.spa import detect_spa
+
+                _spa_detected, _spa_reason = (
+                    detect_spa(local_path_str) if local_path_str else (False, "")
+                )
+                katana_headless, katana_depth = _interview_katana(
+                    base_urls=base_urls,
+                    current_headless=existing.katana_headless,
+                    current_depth=existing.katana_depth,
+                    detected_spa=_spa_detected,
+                    spa_reason=_spa_reason,
+                )
+            else:
+                katana_headless = existing.katana_headless
+                katana_depth = existing.katana_depth
+
+            auth = _interview_auth(current=existing.auth)
 
             updated = Repository(
                 name=name,
@@ -415,15 +582,45 @@ class InteractiveProjectWizard:
                 docker_path=docker_path,
                 container_name=container_name,
                 languages=langs,
-                node_app=node_app,
                 base_urls=base_urls,
                 test_dirs=test_dirs,
                 ignore_dirs=ignore_dirs,
                 dependencies_file=dependencies_file,
                 oas3_path=oas3_path,
+                merged_seeds_path=existing.merged_seeds_path,
+                merged_oas3_path=existing.merged_oas3_path,
+                crawl_enabled=crawl_enabled,
+                xsstrike_crawl_level=existing.xsstrike_crawl_level,
+                xsstrike_headers=dict(existing.xsstrike_headers),
+                dalfox_headers=dict(existing.dalfox_headers),
+                katana_headless=katana_headless,
+                katana_depth=katana_depth,
+                katana_headers=dict(existing.katana_headers),
+                auth=auth,
             )
+            # Regenerate URL artifacts when oas3_path changed and base_urls
+            # are configured
+            if oas3_path and oas3_path != existing.oas3_path and base_urls:
+                from application.pipeline.url_handlers import regenerate_url_artifacts
+
+                seeds_path, merged_oas3 = regenerate_url_artifacts(
+                    base_path=str(self._manager.base_path),
+                    project_name=project_name,
+                    repo_name=name,
+                    base_url=base_urls[0],
+                    user_oas3_path=oas3_path,
+                )
+                if seeds_path:
+                    updated = updated.model_copy(
+                        update={
+                            "merged_seeds_path": seeds_path,
+                            "merged_oas3_path": merged_oas3,
+                        }
+                    )
+
             repos[idx] = updated
             self._manager.config.save_repositories(project_name, repos)
+            _sca_manifest_notification(updated)
             print(f"\n✓ Repository '{name}' updated")
             return updated
 
@@ -438,6 +635,9 @@ class InteractiveProjectWizard:
     ) -> Repository:
         """Convert the pending endpoint file and update repo.oas3_path.
 
+        After a successful conversion, regenerates the merged URL artifacts
+        (seeds.txt and merged_oas3.json) when base_urls are configured.
+
         If conversion fails, prints the error and clears oas3_path so
         the repository is saved without an endpoint file.
         Returns the (possibly updated) Repository.
@@ -449,13 +649,40 @@ class InteractiveProjectWizard:
 
         src = Path(repo.oas3_path)
         endpoints_dir = (
-            self._manager.base_path / "projects" / project_name / "endpoints"
+            self._manager.base_path
+            / "projects"
+            / project_name
+            / "config"
+            / "endpoints"
+            / repo.name
         )
         originals_dir = endpoints_dir / "original"
         try:
             oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
             print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-            return repo.model_copy(update={"oas3_path": str(oas3_file)})
+            updated = repo.model_copy(update={"oas3_path": str(oas3_file)})
+
+            if updated.base_urls:
+                from application.pipeline.url_handlers import (
+                    regenerate_url_artifacts,
+                )
+
+                seeds_path, merged_oas3_path = regenerate_url_artifacts(
+                    base_path=str(self._manager.base_path),
+                    project_name=project_name,
+                    repo_name=updated.name,
+                    base_url=updated.base_urls[0],
+                    user_oas3_path=str(oas3_file),
+                )
+                if seeds_path:
+                    updated = updated.model_copy(
+                        update={
+                            "merged_seeds_path": seeds_path,
+                            "merged_oas3_path": merged_oas3_path,
+                        }
+                    )
+
+            return updated
         except ConverterError as exc:
             print(f"\n  Endpoint file conversion failed: {exc}")
             print(
@@ -681,36 +908,7 @@ class InteractiveProjectWizard:
         lang_input = _prompt(prompt_label, default=default_langs)
         langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-        # Node.js app flag — Noir skipped for Node apps (JS parser limitation)
-        node_app = False
-        if _has_js(langs):
-            ans = _prompt(
-                "  Is this a Node.js app? (Noir will be skipped) [y/N]",
-                default="N",
-            ).lower()
-            node_app = ans in ("y", "yes")
-
-        # Dependencies file — pip-audit scope, only relevant for Python repos
         dependencies_file = ""
-        if "python" in [lang.lower() for lang in langs]:
-            if mode == "docker":
-                print(
-                    "  Note: if no dependencies file is provided, pip-audit will "
-                    "scan all packages installed in the container environment."
-                )
-                dependencies_file = _prompt(
-                    "  Python dependencies file"
-                    " (container path, e.g. /app/requirements.txt, optional)"
-                )
-            else:
-                print(
-                    "  Note: without a dependencies file, pip-audit will be "
-                    "skipped for this repository."
-                )
-                dependencies_file = _prompt(
-                    "  Python dependencies file"
-                    " (local path, e.g. requirements.txt, optional)"
-                )
 
         # Base URLs
         url_input = _prompt("  Base URLs (comma-separated, optional)")
@@ -741,7 +939,7 @@ class InteractiveProjectWizard:
         print(
             "  Supported endpoint file formats: OAS3 (.json/.yaml), "
             "OAS2/Swagger (.json/.yaml), Postman Collection"
-            " v2/v2.1 (.json), HAR (.har)"
+            " v2/v2.1 (.json), HAR (.har), Katana JSONL (.jsonl)"
         )
         print(
             "  Warning: when an endpoint file is configured, Noir"
@@ -749,37 +947,72 @@ class InteractiveProjectWizard:
             " ZAP results will be less accurate if the file is"
             " incomplete."
         )
-        endpoint_input = _prompt("  Endpoint definition file path (optional)")
-        if endpoint_input:
-            from infrastructure.endpoints.converters import ConverterError
-            from infrastructure.endpoints.converters.detector import (
-                FormatDetector,
-            )
+        from infrastructure.endpoints.converters import ConverterError
+        from infrastructure.endpoints.converters.detector import FormatDetector
 
+        while True:
+            endpoint_input = _prompt("  Endpoint definition file path (optional)")
+            if not endpoint_input:
+                break
             try:
                 src = Path(endpoint_input).expanduser().resolve()
                 if not src.exists():
                     raise FileNotFoundError(str(src))
                 FormatDetector().detect(src)
                 oas3_path = str(src)
-            except ConverterError as exc:
-                print(f"  Endpoint file error: {exc}")
-                print("  Skipping endpoint file — repository will be added without it.")
-            except FileNotFoundError:
-                print(f"  File not found: {endpoint_input}")
-                print("  Skipping endpoint file — repository will be added without it.")
+                break
+            except (ConverterError, FileNotFoundError) as exc:
+                _err = (
+                    exc
+                    if isinstance(exc, ConverterError)
+                    else f"File not found: {endpoint_input}"
+                )
+                print(f"  Endpoint file error: {_err}")
+                choice = (
+                    _prompt("  [r]etry / [s]kip? [r/s]", default="s").strip().lower()
+                )
+                if choice in ("s", "skip", ""):
+                    break
 
-        return Repository(
+        # crawl_enabled — only asked when base URLs and endpoint file are
+        # both configured
+        crawl_enabled = _interview_crawl_enabled(
+            base_urls=base_urls, has_endpoint_file=bool(oas3_path)
+        )
+
+        # Katana crawler options — skipped when crawling is disabled
+        if crawl_enabled and base_urls:
+            from core.detection.spa import detect_spa
+
+            _spa_detected, _spa_reason = (
+                detect_spa(local_path_str) if local_path_str else (False, "")
+            )
+            katana_headless, katana_depth = _interview_katana(
+                base_urls=base_urls,
+                detected_spa=_spa_detected,
+                spa_reason=_spa_reason,
+            )
+        else:
+            katana_headless, katana_depth = False, 10
+
+        auth = _interview_auth()
+
+        new_repo = Repository(
             name=name,
             type=types,
             path=local_path_str,
             docker_path=docker_path,
             container_name=container_name,
             languages=langs,
-            node_app=node_app,
             base_urls=base_urls,
             test_dirs=test_dirs,
             ignore_dirs=ignore_dirs,
             dependencies_file=dependencies_file,
             oas3_path=oas3_path,
+            crawl_enabled=crawl_enabled,
+            katana_headless=katana_headless,
+            katana_depth=katana_depth,
+            auth=auth,
         )
+        _sca_manifest_notification(new_repo)
+        return new_repo

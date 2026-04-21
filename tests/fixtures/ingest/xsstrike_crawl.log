@@ -1,0 +1,9 @@
+2024-01-01 12:00:00,001 xsstrike - INFO - Starting XSStrike v3.1.6
+2024-01-01 12:00:00,002 xsstrike - DEBUG - Crawling https://app.example.com/
+2024-01-01 12:00:01,100 xsstrike - INFO - Discovered 5 URLs
+2024-01-01 12:00:02,200 xsstrike - VULN - Vulnerable webpage: https://app.example.com/search
+2024-01-01 12:00:02,201 xsstrike - VULN - Vector for q: <img src=x onerror=alert(1)>
+2024-01-01 12:00:03,300 xsstrike - DEBUG - Testing https://app.example.com/comment
+2024-01-01 12:00:04,400 xsstrike - VULN - Vulnerable webpage: https://app.example.com/profile
+2024-01-01 12:00:04,401 xsstrike - VULN - Vector for name: "><svg onload=alert(document.domain)>
+2024-01-01 12:00:05,500 xsstrike - INFO - Scan complete

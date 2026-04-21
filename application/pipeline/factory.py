@@ -10,7 +10,15 @@ from application.pipeline.strategies import (
     PersistOnlyStrategy,
     PostIngestStrategy,
 )
+from application.pipeline.url_handlers import (
+    ConfigUpdateHandler,
+    URLDedupeHandler,
+    URLOS3Handler,
+    URLSeedsHandler,
+    URLSourceEmitter,
+)
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
+from domain.pipeline.url_events import URLsConverted, URLsDeduped, URLSourceChanged
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -39,6 +47,8 @@ class PipelineFactory:
                               enrich-then-persist path is used.
         """
         bus = EventBus()
+
+        # --- Findings ingest pipeline ---
         ingest = IngestHandler(bus, console=console)
         bus.subscribe(ToolCompleted, ingest.handle)
 
@@ -49,4 +59,21 @@ class PipelineFactory:
             strategy = EnrichThenPersistStrategy(console=console)
 
         bus.subscribe(IngestCompleted, strategy.handle)
+
+        # --- URL discovery pipeline ---
+        # URLSourceEmitter and IngestHandler both subscribe to ToolCompleted;
+        # they run sequentially (SQLite ingest then URL merge) per the bus
+        # registration order.  Neither depends on the other's output.
+        url_emitter = URLSourceEmitter(bus)
+        url_deduper = URLDedupeHandler(bus)
+        url_seeds = URLSeedsHandler()
+        url_oas3 = URLOS3Handler()
+        config_update = ConfigUpdateHandler()
+
+        bus.subscribe(ToolCompleted, url_emitter.handle)
+        bus.subscribe(URLSourceChanged, url_deduper.handle)
+        bus.subscribe(URLsDeduped, url_seeds.handle)
+        bus.subscribe(URLsDeduped, url_oas3.handle)
+        bus.subscribe(URLsConverted, config_update.handle)
+
         return bus

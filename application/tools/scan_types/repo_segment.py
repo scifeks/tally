@@ -14,7 +14,9 @@ from application.tools.scan_types.execution import (
     execute_tool_passes,
     make_context,
     normalize_success,
+    should_skip_sca_tool,
 )
+from core.detection.noir import noir_skip_reason
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -28,8 +30,9 @@ logger = logging.getLogger(__name__)
 class RepoSegmentScan(ScanType):
     """Run a set of tools on every configured repository."""
 
-    def __init__(self, tool_names: list[str]) -> None:
+    def __init__(self, tool_names: list[str], segment_name: str = "") -> None:
         self.tool_names = tool_names
+        self.segment_name = segment_name
 
     def execute(
         self, config: ScanTypeConfig, resources: IExecutionResources
@@ -59,6 +62,7 @@ class RepoSegmentScan(ScanType):
         findings_by_tool: dict[str, int] = {}
 
         _reg_tools: list[Any] = registry.get_all_tools()
+        # Used only for non-SCA segments where language detection still applies.
         _lang_specific: set[str] = {
             t.name for t in _reg_tools if t.name in self.tool_names and t.language_gates
         }
@@ -68,11 +72,31 @@ class RepoSegmentScan(ScanType):
 
         for repo in repos:
             resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
+
             repo_results: list[ToolResult] = []
 
             for tool_name in self.tool_names:
                 _invocation += 1
-                if tool_name in _lang_specific:
+
+                if self.segment_name == "sca":
+                    # Gate on manifest presence — not language detection.
+                    tool_inst_check: Any = registry.get_tool(tool_name)
+                    skip_sca, skip_reason = should_skip_sca_tool(tool_inst_check, repo)
+                    if skip_sca:
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
+                                False,
+                                True,
+                                0,
+                                0.0,
+                                skip_reason,
+                            )
+                        )
+                        total_skipped += 1
+                        continue
+                elif tool_name in _lang_specific:
+                    # Non-SCA: gate on language detection.
                     repo_langs = {lang.lower() for lang in (repo.languages or [])}
                     tool_inst: Any = registry.get_tool(tool_name)
                     gates = (
@@ -112,8 +136,8 @@ class RepoSegmentScan(ScanType):
                     total_skipped += 1
                     continue
 
-                # Skip Noir when an endpoint file is already configured.
-                if tool_name == "noir" and repo.oas3_path:
+                # Skip live crawlers when the user opted out of crawling.
+                if tool_name in ("noir", "katana") and not repo.crawl_enabled:
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -121,14 +145,15 @@ class RepoSegmentScan(ScanType):
                             True,
                             0,
                             0.0,
-                            "skipped (endpoint file configured)",
+                            "skipped (live crawling disabled)",
                         )
                     )
                     total_skipped += 1
                     continue
 
-                # Noir's JS parser crashes on complex Node apps — skip.
-                if tool_name == "noir" and repo.node_app:
+                # Skip Noir when the repo uses a framework it doesn't support.
+                _noir_skip = noir_skip_reason(repo)
+                if tool_name == "noir" and _noir_skip is not None:
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -136,7 +161,7 @@ class RepoSegmentScan(ScanType):
                             True,
                             0,
                             0.0,
-                            "skipped (Node.js app)",
+                            f"skipped ({_noir_skip})",
                         )
                     )
                     total_skipped += 1

@@ -1,8 +1,13 @@
 """Docker wrapper for npm-audit Node.js dependency vulnerability scanning."""
 
+import logging
+
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.wrappers.base.npm_audit import BaseNpmAuditTool
 from infrastructure.tools.wrappers.docker._docker_exec import build_docker_exec
+from infrastructure.tools.wrappers.utils.install_fallback import ensure_lockfile
+
+logger = logging.getLogger(__name__)
 
 
 class NpmAuditDockerTool(BaseNpmAuditTool):
@@ -44,6 +49,16 @@ class NpmAuditDockerTool(BaseNpmAuditTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
+
+        if not ensure_lockfile(
+            "npm-audit",
+            repo_path,
+            "package-lock.json",
+            ["npm", "install", "--package-lock-only"],
+            container_name=self._container_name,
+        ):
+            return []
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,

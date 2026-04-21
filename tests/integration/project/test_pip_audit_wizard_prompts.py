@@ -189,14 +189,12 @@ class TestEditRepositoryDependenciesFile:
         repo = _make_repo(name="my-repo")
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults except dependencies_file.
-        # Index 5 is "N" for the node_app prompt (JS detected in tally root).
         inputs = [
             "",
             "",
             "",
             "",
             "",
-            "N",
             "requirements/prod.txt",
             "",
             "",
@@ -215,8 +213,7 @@ class TestEditRepositoryDependenciesFile:
         repo = _make_repo(name="my-repo", dependencies_file="requirements.txt")
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults (including dependencies_file).
-        # Index 5 is "N" for the node_app prompt (JS detected in tally root).
-        inputs = ["", "", "", "", "", "N", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"
@@ -233,8 +230,7 @@ class TestEditRepositoryDependenciesFile:
         # enforced. Since _prompt returns default on empty input, and default is
         # "requirements.txt", clearing requires a non-default value.
         # This test confirms that supplying "" uses the existing default unchanged.
-        # Index 5 is "N" for the node_app prompt (JS detected in tally root).
-        inputs = ["", "", "", "", "", "N", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"

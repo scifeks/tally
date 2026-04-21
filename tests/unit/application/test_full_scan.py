@@ -121,7 +121,7 @@ class TestFullScan:
                 mock_config, mock_resources
             )
 
-        mock_repo.assert_called_once_with(["semgrep"])
+        mock_repo.assert_called_once_with(["semgrep"], segment_name="sast")
 
     def test_aggregates_sub_summary_totals(
         self,

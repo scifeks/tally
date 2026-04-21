@@ -8,12 +8,15 @@ pytestmark = pytest.mark.integration
 
 _EXPECTED_TOOLS = {
     "composer-audit",
+    "dalfox",
     "gitleaks",
+    "katana",
     "noir",
     "npm-audit",
     "osv-scanner",
     "pip-audit",
     "semgrep",
+    "xsstrike",
     "zap",
 }
 

@@ -1,0 +1,12 @@
+2026-04-12 19:30:11,491 xsstrike - RUN - Crawling the target
+2026-04-12 19:30:11,491 xsstrike - DEBUG - Target scheme: http
+2026-04-12 19:30:11,491 core.photon - RUN - Parsing
+2026-04-12 19:30:11,565 xsstrike - INFO - Progress: 3/3
+------------------------------------------------------------
+2026-04-12 19:30:11,523 plugins.retireJs - GOOD - Vulnerable component: jquery v3.2.1
+2026-04-12 19:30:11,523 plugins.retireJs - INFO - Component location: http://localhost:8080/static/js/jquery-3.2.1.min.js
+2026-04-12 19:30:11,523 plugins.retireJs - INFO - Total vulnerabilities: 1
+2026-04-12 19:30:11,523 plugins.retireJs - INFO - Summary: jQuery before 3.4.0, as used in Drupal, Backdrop CMS, and other products, mishandles jQuery.extend(true, {}, ...) because of Object.prototype pollution
+2026-04-12 19:30:11,523 plugins.retireJs - INFO - Severity: low
+2026-04-12 19:30:11,523 plugins.retireJs - INFO - CVE: CVE-2019-11358
+------------------------------------------------------------

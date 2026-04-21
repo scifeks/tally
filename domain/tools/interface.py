@@ -134,6 +134,15 @@ class ToolInterface(ABC):
         ...
 
     @property
+    def is_discovery_tool(self) -> bool:
+        """True if this tool discovers endpoints/attack-surface (not vulnerabilities).
+
+        Discovery tools run before scanner tools within the same segment.
+        Override to ``True`` on endpoint-discovery wrappers (Noir, Katana).
+        """
+        return False
+
+    @property
     def timeout(self) -> int | None:
         """Per-tool subprocess timeout in seconds.
 

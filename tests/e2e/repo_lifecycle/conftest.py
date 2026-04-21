@@ -26,9 +26,7 @@ def add_repo(
     """Drive the minimal repo-add wizard and return the repo name.
 
     Uses *repo_path* as the local path (must exist on disk).
-    Sends empty input for all optional fields.  Does not include
-    Python or Node.js — sends an explicit empty string for languages
-    so those conditional prompts are skipped.
+    Sends empty input for all optional fields.
     """
     h.send("repo add")
     h.expect("Name")

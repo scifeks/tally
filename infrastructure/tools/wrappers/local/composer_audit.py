@@ -1,11 +1,15 @@
 """composer-audit wrapper for PHP dependency vulnerability scanning (SCA)."""
 
+import logging
 import shutil
 from pathlib import Path
 
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.composer_audit import BaseComposerAuditTool
+from infrastructure.tools.wrappers.utils.install_fallback import ensure_lockfile
+
+logger = logging.getLogger(__name__)
 
 
 class ComposerAuditLocalTool(BaseComposerAuditTool):
@@ -50,6 +54,23 @@ class ComposerAuditLocalTool(BaseComposerAuditTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
+
+        if not (Path(repo_path) / "composer.json").exists():
+            logger.info(
+                "composer-audit: composer.json not found in %r — skipping",
+                repo_path,
+            )
+            return []
+
+        if not ensure_lockfile(
+            "composer-audit",
+            repo_path,
+            "composer.lock",
+            ["composer", "install", "--no-scripts"],
+            timeout=180,
+        ):
+            return []
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,

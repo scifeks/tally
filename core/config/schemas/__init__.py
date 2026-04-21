@@ -13,7 +13,7 @@ from .global_config import (
 from .ollama_config import OllamaConfig
 from .ollama_embedding_config import OllamaEmbeddingConfig
 from .project_config import ProjectConfig
-from .repository import _VALID_REPO_TYPES, Repository, build_excluded_dirs
+from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_dirs
 
 __all__ = [
     "ClaudeConfig",
@@ -27,6 +27,7 @@ __all__ = [
     "OllamaConfig",
     "OllamaEmbeddingConfig",
     "ProjectConfig",
+    "RepoAuth",
     "Repository",
     "_VALID_REPO_TYPES",
     "build_excluded_dirs",

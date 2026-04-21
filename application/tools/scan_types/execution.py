@@ -10,9 +10,37 @@ from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
+from infrastructure.tools.wrappers.utils.manifest_check import (
+    has_manifests_for_language,
+)
 
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
+
+
+def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
+    """Return (skip, reason) for an SCA tool that has no matching manifests.
+
+    Returns (False, "") when the tool should proceed.  Returns (True, reason)
+    when it should be skipped because no dependency manifest was found.
+    """
+    if not getattr(tool, "language_gates", None):
+        return False, ""
+    if getattr(tool, "scan_segment", "") != "sca":
+        return False, ""
+    if repo.path:
+        mpath, mcontainer = repo.path, ""
+    elif repo.docker_path and repo.container_name:
+        mpath, mcontainer = repo.docker_path, repo.container_name
+    else:
+        return True, f"no manifest found for {repo.name}"
+    has = any(
+        has_manifests_for_language(mpath, lang, mcontainer)
+        for lang in tool.language_gates
+    )
+    if not has:
+        return True, f"no manifest found for {repo.name}"
+    return False, ""
 
 
 def make_context(
@@ -79,9 +107,17 @@ def normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
 
 
 def tools_for_segment(segment: str, registry: ToolRegistry) -> list[str]:
-    """Return tool names registered under the given scan segment."""
+    """Return tool names registered under the given scan segment.
+
+    Discovery tools (``is_discovery_tool=True``, e.g. Katana, Noir) are
+    sorted before scanners so their output is available when downstream
+    tools (DalFox, XSStrike, ZAP) start.  Matches the ordering applied
+    by ``ordered_repo_tools``.
+    """
     tools: list[Any] = registry.get_all_tools()
-    return [t.name for t in tools if t.scan_segment == segment]
+    segment_tools = [t for t in tools if t.scan_segment == segment]
+    segment_tools.sort(key=lambda t: (not cast(Any, t).is_discovery_tool, t.name))
+    return [t.name for t in segment_tools]
 
 
 def dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
@@ -103,14 +139,28 @@ def dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
 
 
 def ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
-    """Order tool_set by SEGMENT_ORDER, then alphabetically within each segment."""
+    """Order tool_set by SEGMENT_ORDER; within each segment, discovery tools
+    run before scanners, then alphabetically within each group.
+
+    Discovery tools (``is_discovery_tool=True``, e.g. Katana, Noir) must
+    produce OAS3/JSONL output before scanners (DalFox, XSStrike, ZAP) can
+    consume it.  A plain alphabetical sort is insufficient because
+    ``dalfox < katana``, which would run DalFox before Katana on first scan.
+    See ADR-00014.
+    """
     result: list[str] = []
     for segment in SEGMENT_ORDER:
-        tools_in_seg = sorted(
+        tools_in_seg = [
             name
             for name in tool_set
             if registry.get_tool(name) is not None
             and cast(Any, registry.get_tool(name)).scan_segment == segment
+        ]
+        tools_in_seg.sort(
+            key=lambda n: (
+                not cast(Any, registry.get_tool(n)).is_discovery_tool,
+                n,
+            )
         )
         result.extend(tools_in_seg)
     return result

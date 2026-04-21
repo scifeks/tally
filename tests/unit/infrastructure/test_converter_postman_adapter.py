@@ -14,10 +14,24 @@ from infrastructure.endpoints.converters.postman import PostmanAdapter
 _POSTMAN_DOC = {
     "info": {
         "name": "My API",
-        "schema": ("https://schema.getpostman.com/postman/collection/v2.1.0"),
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     },
     "item": [],
 }
+
+_MINIMAL_OAS3_YAML = (
+    "openapi: '3.0.0'\ninfo:\n  title: API\n  version: '1.0.0'\npaths: {}\n"
+)
+
+
+def _npm_root_mock(tmp_path: Path) -> tuple[Path, MagicMock]:
+    """Create a fake npm global root with postman-to-openapi installed."""
+    npm_root = tmp_path / "npm_root"
+    (npm_root / "postman-to-openapi").mkdir(parents=True)
+    result = MagicMock()
+    result.returncode = 0
+    result.stdout = str(npm_root) + "\n"
+    return npm_root, result
 
 
 class TestPostmanAdapter:
@@ -33,7 +47,7 @@ class TestPostmanAdapter:
         with pytest.raises(ConverterError):
             PostmanAdapter().validate(f)
 
-    def test_convert_raises_when_npx_missing(self, tmp_path: Path) -> None:
+    def test_convert_raises_when_node_missing(self, tmp_path: Path) -> None:
         src = tmp_path / "col.json"
         src.write_text(json.dumps(_POSTMAN_DOC), encoding="utf-8")
         out_dir = tmp_path / "out"
@@ -50,16 +64,17 @@ class TestPostmanAdapter:
         src.write_text(json.dumps(_POSTMAN_DOC), encoding="utf-8")
         out_dir = tmp_path / "out"
         out_dir.mkdir()
-        mock_result = MagicMock()
-        mock_result.returncode = 1
-        mock_result.stderr = "postman error"
+        _, npm_root_result = _npm_root_mock(tmp_path)
+        node_result = MagicMock()
+        node_result.returncode = 1
+        node_result.stderr = "postman error"
         with patch(
             "infrastructure.endpoints.converters.postman.shutil.which",
-            return_value="/usr/bin/npx",
+            return_value="/usr/bin/node",
         ):
             with patch(
                 "infrastructure.endpoints.converters.postman.subprocess.run",
-                return_value=mock_result,
+                side_effect=[npm_root_result, node_result],
             ):
                 with pytest.raises(ConverterError, match="postman error"):
                     PostmanAdapter().convert(src, out_dir)
@@ -69,15 +84,18 @@ class TestPostmanAdapter:
         src.write_text(json.dumps(_POSTMAN_DOC), encoding="utf-8")
         out_dir = tmp_path / "out"
         out_dir.mkdir()
-        mock_result = MagicMock()
-        mock_result.returncode = 0
+        _, npm_root_result = _npm_root_mock(tmp_path)
+        node_result = MagicMock()
+        node_result.returncode = 0
+        node_result.stdout = _MINIMAL_OAS3_YAML
         with patch(
             "infrastructure.endpoints.converters.postman.shutil.which",
-            return_value="/usr/bin/npx",
+            return_value="/usr/bin/node",
         ):
             with patch(
                 "infrastructure.endpoints.converters.postman.subprocess.run",
-                return_value=mock_result,
+                side_effect=[npm_root_result, node_result],
             ):
                 result = PostmanAdapter().convert(src, out_dir)
-        assert result == out_dir / "endpoints.json"
+        assert result == out_dir / "seed.json"
+        assert result.exists()

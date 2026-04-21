@@ -37,7 +37,7 @@ ENV/
 # Project-specific
 projects/*
 !projects/.gitkeep
-*.log
+logs/*.log
 config/global.json
 
 # OS

@@ -15,7 +15,9 @@ from application.tools.scan_types.execution import (
     make_context,
     normalize_success,
     ordered_repo_tools,
+    should_skip_sca_tool,
 )
+from core.detection.noir import noir_skip_reason
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -53,14 +55,22 @@ class RepoScan(ScanType):
             if registered_tool.always_run:
                 tool_set.add(registered_tool.name)
             elif registered_tool.language_gates:
-                gates = [g.lower() for g in registered_tool.language_gates]
-                for lang in repo.languages or []:
-                    if lang.lower() in gates:
+                if getattr(registered_tool, "scan_segment", "") == "sca":
+                    # SCA tools: gate on manifest presence, not language
+                    # detection.  Language auto-detection (e.g. 3 .py files
+                    # in a Node repo's test/files/) must not trigger pip-audit.
+                    skip, _ = should_skip_sca_tool(registered_tool, repo)
+                    if not skip:
                         tool_set.add(registered_tool.name)
-                        break
+                else:
+                    gates = [g.lower() for g in registered_tool.language_gates]
+                    for lang in repo.languages or []:
+                        if lang.lower() in gates:
+                            tool_set.add(registered_tool.name)
+                            break
 
-        # Noir's JS parser crashes on complex Node apps — skip it entirely.
-        if repo.node_app:
+        # Skip Noir when the repo uses a framework it doesn't support.
+        if noir_skip_reason(repo) is not None:
             tool_set.discard("noir")
 
         ordered_tools = ordered_repo_tools(tool_set, registry)

@@ -8,6 +8,7 @@ from pathlib import Path
 from .base import ConverterError
 from .detector import FormatDetector
 from .har import HARAdapter
+from .katana import KatanaAdapter
 from .oas2 import OAS2Adapter
 from .oas3 import OAS3PassthroughAdapter
 from .postman import PostmanAdapter
@@ -17,6 +18,7 @@ _ADAPTER_MAP = {
     "oas2": OAS2Adapter,
     "postman": PostmanAdapter,
     "har": HARAdapter,
+    "katana": KatanaAdapter,
 }
 
 

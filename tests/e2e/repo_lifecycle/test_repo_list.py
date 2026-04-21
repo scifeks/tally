@@ -47,7 +47,5 @@ def test_repo_list_live_dvpa(tally_harness_live: TallyHarness) -> None:
 
     output = h.run("repo list")
 
-    assert "php-goof" in output
     assert "dvwa" in output
-    assert "dvna2" in output
     assert "dvpwa" in output

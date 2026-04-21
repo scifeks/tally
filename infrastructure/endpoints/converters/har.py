@@ -82,6 +82,6 @@ class HARAdapter(ConverterAdapter):
             "paths": paths,
         }
 
-        output_file = output_dir / "endpoints.json"
+        output_file = output_dir / "seed.json"
         output_file.write_text(json.dumps(oas3_doc, indent=2), encoding="utf-8")
         return output_file

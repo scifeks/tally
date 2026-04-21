@@ -15,11 +15,19 @@ def _make_mock_repo(
     name: str = "my-repo",
     languages: list[str] | None = None,
     base_urls: list[str] | None = None,
+    path: str = "",
+    docker_path: str = "",
+    container_name: str = "",
+    oas3_path: str = "",
 ) -> MagicMock:
     repo = MagicMock()
     repo.name = name
     repo.languages = languages if languages is not None else ["python"]
     repo.base_urls = base_urls
+    repo.path = path
+    repo.docker_path = docker_path
+    repo.container_name = container_name
+    repo.oas3_path = oas3_path
     return repo
 
 
@@ -113,6 +121,154 @@ class TestRepoScan:
 
         summary = RepoScan("my-repo").execute(mock_config, mock_resources)
 
+        assert summary.total_tools_skipped == 1
+
+    def test_sca_tool_skipped_when_no_manifests(self, tmp_path: Any) -> None:
+        from application.tools.scan_types.repo import RepoScan
+
+        # tmp_path is empty — no Python manifests present.
+        repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
+        cm = MagicMock()
+        cm.load_repositories.return_value = [repo]
+        config = ScanTypeConfig(
+            project_name="test",
+            base_path="/tmp",
+            config_manager=cm,
+            run_id=1,
+            auto_approve=True,
+        )
+        pip_audit = MagicMock()
+        pip_audit.name = "pip-audit"
+        pip_audit.scan_segment = "sca"
+        pip_audit.always_run = False
+        pip_audit.language_gates = ["python"]
+        registry = MagicMock()
+        registry.get_all_tools.return_value = [pip_audit]
+        registry.get_tool.return_value = pip_audit
+        registry.get_tool_config.return_value = None
+        resources = ExecutionResources(
+            executor=MagicMock(),
+            registry=registry,
+            factory=MagicMock(),
+            event_bus=MagicMock(),
+            display=MagicMock(),
+        )
+
+        summary = RepoScan("my-repo").execute(config, resources)
+
+        # pip-audit must not appear in the tool_set — manifest gate blocks it.
+        assert summary.total_tools_run == 0
+
+    def test_sca_tool_included_when_manifests_present(self, tmp_path: Any) -> None:
+        from application.tools.scan_types.repo import RepoScan
+
+        (tmp_path / "requirements.txt").write_text("requests==2.28.0\n")
+        repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
+        cm = MagicMock()
+        cm.load_repositories.return_value = [repo]
+        config = ScanTypeConfig(
+            project_name="test",
+            base_path="/tmp",
+            config_manager=cm,
+            run_id=1,
+            auto_approve=True,
+        )
+        pip_audit = MagicMock()
+        pip_audit.name = "pip-audit"
+        pip_audit.scan_segment = "sca"
+        pip_audit.always_run = False
+        pip_audit.language_gates = ["python"]
+        registry = MagicMock()
+        registry.get_all_tools.return_value = [pip_audit]
+        registry.get_tool.return_value = pip_audit
+        # tool_config is None so it will be skipped via "not registered",
+        # but it must NOT be filtered out at the manifest-gate stage.
+        registry.get_tool_config.return_value = None
+        resources = ExecutionResources(
+            executor=MagicMock(),
+            registry=registry,
+            factory=MagicMock(),
+            event_bus=MagicMock(),
+            display=MagicMock(),
+        )
+
+        summary = RepoScan("my-repo").execute(config, resources)
+
+        # Skipped due to "not registered", not manifest gate.
+        assert summary.total_tools_skipped == 1
+
+    def test_non_sca_tool_still_uses_language_gate(self, tmp_path: Any) -> None:
+        from application.tools.scan_types.repo import RepoScan
+
+        # empty dir — no manifests — but semgrep is sast so manifest gate
+        # must not apply.
+        repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
+        cm = MagicMock()
+        cm.load_repositories.return_value = [repo]
+        config = ScanTypeConfig(
+            project_name="test",
+            base_path="/tmp",
+            config_manager=cm,
+            run_id=1,
+            auto_approve=True,
+        )
+        semgrep = MagicMock()
+        semgrep.name = "semgrep"
+        semgrep.scan_segment = "sast"
+        semgrep.always_run = False
+        semgrep.language_gates = ["python"]
+        registry = MagicMock()
+        registry.get_all_tools.return_value = [semgrep]
+        registry.get_tool.return_value = semgrep
+        registry.get_tool_config.return_value = None
+        resources = ExecutionResources(
+            executor=MagicMock(),
+            registry=registry,
+            factory=MagicMock(),
+            event_bus=MagicMock(),
+            display=MagicMock(),
+        )
+
+        summary = RepoScan("my-repo").execute(config, resources)
+
+        # semgrep matched via language gate, skipped only because not
+        # registered — not because of a manifest check.
+        assert summary.total_tools_skipped == 1
+
+    def test_always_run_tool_ignores_manifest_gate(self, tmp_path: Any) -> None:
+        from application.tools.scan_types.repo import RepoScan
+
+        # empty dir — no manifests.
+        repo = _make_mock_repo(name="my-repo", languages=[], path=str(tmp_path))
+        cm = MagicMock()
+        cm.load_repositories.return_value = [repo]
+        config = ScanTypeConfig(
+            project_name="test",
+            base_path="/tmp",
+            config_manager=cm,
+            run_id=1,
+            auto_approve=True,
+        )
+        osv = MagicMock()
+        osv.name = "osv-scanner"
+        osv.scan_segment = "sca"
+        osv.always_run = True
+        osv.language_gates = []
+        registry = MagicMock()
+        registry.get_all_tools.return_value = [osv]
+        registry.get_tool.return_value = osv
+        registry.get_tool_config.return_value = None
+        resources = ExecutionResources(
+            executor=MagicMock(),
+            registry=registry,
+            factory=MagicMock(),
+            event_bus=MagicMock(),
+            display=MagicMock(),
+        )
+
+        summary = RepoScan("my-repo").execute(config, resources)
+
+        # always_run bypasses all gates; skipped only because not registered.
         assert summary.total_tools_skipped == 1
 
     def test_tool_not_available_is_skipped(

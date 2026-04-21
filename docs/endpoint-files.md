@@ -18,6 +18,7 @@ gives more accurate and complete ZAP coverage than static analysis.
 | OAS2 / Swagger 2.0 | `.json`, `.yaml` | Yes — via `swagger2openapi` (npm) |
 | Postman Collection v2.0 / v2.1 | `.json` | Yes — via `postman-to-openapi` (npm) |
 | HAR (HTTP Archive) | `.har` | Yes — built-in Python converter |
+| Katana JSONL | `.jsonl` | Yes — built-in Python converter |
 
 ---
 
@@ -39,7 +40,7 @@ Enter the absolute or relative path to the file, or press Enter to skip.
 directory, and `oas3_path` is saved in `repositories.json`:
 
 ```
-  ✓ Endpoint file converted: /path/to/projects/<project>/endpoints/endpoints.json
+  ✓ Endpoint file converted: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
 ✓ Repository '<name>' added to project '<project>'
 ```
 
@@ -57,7 +58,7 @@ endpoint file. You can configure one later with `repo edit`:
 When editing a repository that already has an endpoint file configured:
 
 ```
-  Current endpoint file: /path/to/projects/<project>/endpoints/endpoints.json
+  Current endpoint file: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
   Replace endpoint file? [y/N]:
 ```
 
@@ -74,7 +75,7 @@ When no endpoint file is configured, the prompt is identical to `repo add`.
 **On success:**
 
 ```
-  ✓ Endpoint file converted: /path/to/projects/<project>/endpoints/endpoints.json
+  ✓ Endpoint file converted: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
 ✓ Repository '<name>' updated
 ```
 
@@ -86,10 +87,9 @@ unchanged.
 ## What happens during conversion
 
 1. The original file is copied to
-   `projects/<project>/endpoints/original/<filename>`.
+   `projects/<project>/config/endpoints/<repo>/original/<filename>`.
 2. The file is converted to OAS3 and written to
-   `projects/<project>/endpoints/endpoints.json` — or `endpoints.yaml` /
-   `endpoints.yml` for OAS3 YAML inputs, which are validated and copied as-is.
+   `projects/<project>/config/endpoints/<repo>/seed.json`.
 3. `oas3_path` is saved in `repositories.json` pointing to the output file.
    Scans read this field to locate the spec.
 

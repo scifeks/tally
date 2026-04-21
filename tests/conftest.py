@@ -34,10 +34,13 @@ def _ollama_url() -> str | None:
 
 
 _OLLAMA_URL = _ollama_url()
-# todo: write remaining tool test checkers
 requires_gitleaks = pytest.mark.skipif(
     shutil.which("gitleaks") is None,
     reason="gitleaks binary not installed",
+)
+requires_xsstrike = pytest.mark.skipif(
+    shutil.which("xsstrike") is None,
+    reason="xsstrike binary not installed",
 )
 requires_ollama = pytest.mark.skipif(
     _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),

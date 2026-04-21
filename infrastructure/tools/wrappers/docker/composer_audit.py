@@ -1,8 +1,13 @@
 """Docker wrapper for composer-audit PHP dependency vulnerability scanning."""
 
+import logging
+
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.wrappers.base.composer_audit import BaseComposerAuditTool
 from infrastructure.tools.wrappers.docker._docker_exec import build_docker_exec
+from infrastructure.tools.wrappers.utils.install_fallback import ensure_lockfile
+
+logger = logging.getLogger(__name__)
 
 
 class ComposerAuditDockerTool(BaseComposerAuditTool):
@@ -44,6 +49,17 @@ class ComposerAuditDockerTool(BaseComposerAuditTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
+
+        if not ensure_lockfile(
+            "composer-audit",
+            repo_path,
+            "composer.lock",
+            ["composer", "install", "--no-scripts"],
+            container_name=self._container_name,
+            timeout=180,
+        ):
+            return []
+
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,

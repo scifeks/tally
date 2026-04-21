@@ -18,12 +18,15 @@ _LOCAL = {"type": "repo", "location": "local", "path": "/fake/tool"}
 ALL_TOOL_NAMES: list[str] = sorted(
     [
         "composer-audit",
+        "dalfox",
         "gitleaks",
+        "katana",
         "noir",
         "npm-audit",
         "osv-scanner",
         "pip-audit",
         "semgrep",
+        "xsstrike",
         "zap",
     ]
 )
