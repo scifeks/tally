@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
-import { Play, Square, RotateCcw, ChevronDown, ChevronRight, Terminal, Settings2, X, Check } from "lucide-react"
+import { Play, Square, RotateCcw, Settings2, Terminal, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Panel, Bar } from "@/components/tty"
+import { Panel } from "@/components/tty"
 import { useUI } from "@/lib/store"
 import { useProjects, useProjectMeta, useScanHistory, useProjectScanConfig, useStartScan, useCancelScan } from "@/lib/api"
 import type { Domain, ScanLogEvent, ScanLogEventType, ScanRunStatus, ScanOptions } from "@/lib/types"
-
-// ─── Constants ──────────────────────────────────────────────────────────────
+import { RadarSweep } from "./RadarSweep"
+import { LogRow } from "./LogRow"
+import { HistoryTable } from "./HistoryTable"
 
 const SEGMENT_LABEL: Record<Domain, string> = {
   sast: "SAST",
@@ -14,178 +15,6 @@ const SEGMENT_LABEL: Record<Domain, string> = {
   web: "WEB",
   secrets: "SECRETS",
 }
-
-// ─── Radar SVG Component ────────────────────────────────────────────────────
-
-function RadarSweep({ active, size = 200 }: { active: boolean; size?: number }) {
-  const r = size / 2 - 10
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      className="shrink-0"
-      aria-hidden
-    >
-      {/* Background circles */}
-      {[0.25, 0.5, 0.75, 1].map((frac) => (
-        <circle
-          key={frac}
-          cx={size / 2}
-          cy={size / 2}
-          r={r * frac}
-          fill="none"
-          stroke="var(--color-border)"
-          strokeWidth={1}
-        />
-      ))}
-      {/* Cross-hairs */}
-      <line x1={size / 2} y1={10} x2={size / 2} y2={size - 10} stroke="var(--color-border)" strokeWidth={1} />
-      <line x1={10} y1={size / 2} x2={size - 10} y2={size / 2} stroke="var(--color-border)" strokeWidth={1} />
-      {/* Corner brackets */}
-      <g stroke="var(--color-accent)" strokeWidth={2} fill="none">
-        <path d={`M 15 5 L 5 5 L 5 15`} />
-        <path d={`M ${size - 15} 5 L ${size - 5} 5 L ${size - 5} 15`} />
-        <path d={`M 15 ${size - 5} L 5 ${size - 5} L 5 ${size - 15}`} />
-        <path d={`M ${size - 15} ${size - 5} L ${size - 5} ${size - 5} L ${size - 5} ${size - 15}`} />
-      </g>
-      {/* Sweep arm + glow */}
-      {active && (
-        <g className="origin-center" style={{ transformOrigin: `${size / 2}px ${size / 2}px` }}>
-          <defs>
-            <linearGradient id="sweepGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0" />
-              <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.7" />
-            </linearGradient>
-          </defs>
-          <g className="animate-radar-sweep">
-            {/* Sweep wedge */}
-            <path
-              d={`M ${size / 2} ${size / 2} L ${size / 2} ${10} A ${r} ${r} 0 0 1 ${size / 2 + r * Math.sin(Math.PI / 6)} ${size / 2 - r * Math.cos(Math.PI / 6)} Z`}
-              fill="url(#sweepGrad)"
-            />
-            {/* Line */}
-            <line
-              x1={size / 2}
-              y1={size / 2}
-              x2={size / 2}
-              y2={10}
-              stroke="var(--color-accent)"
-              strokeWidth={2}
-              className="tty-glow"
-            />
-          </g>
-        </g>
-      )}
-      {/* Center dot */}
-      <circle cx={size / 2} cy={size / 2} r={3} fill="var(--color-accent)" className={active ? "tty-glow" : ""} />
-    </svg>
-  )
-}
-
-// ─── Log Event Row ──────────────────────────────────────────────────────────
-
-function LogRow({ event }: { event: ScanLogEvent }) {
-  const iconCls = "shrink-0"
-  const time = new Date(event.timestamp).toLocaleTimeString("en-US", { hour12: false })
-
-  const typeStyle: Record<ScanLogEventType, { color: string; prefix: string }> = {
-    run_started: { color: "text-accent", prefix: ">>>" },
-    segment_started: { color: "text-accent", prefix: "===" },
-    tool_started: { color: "text-muted-foreground", prefix: "[*]" },
-    tool_skipped: { color: "text-dim", prefix: "[-]" },
-    tool_completed: { color: "text-low", prefix: "[+]" },
-    tool_failed: { color: "text-crit", prefix: "[!]" },
-    enrichment_progress: { color: "text-muted-foreground", prefix: "   " },
-    enrichment_complete: { color: "text-low", prefix: "   " },
-    segment_completed: { color: "text-accent", prefix: "===" },
-    run_completed: { color: "text-accent", prefix: ">>>" },
-    run_cancelled: { color: "text-high", prefix: "XXX" },
-  }
-
-  const style = typeStyle[event.type]
-
-  return (
-    <div className="flex items-start gap-3 text-xs font-mono leading-relaxed py-0.5 px-3 hover:bg-muted/30">
-      <span className="text-dim shrink-0 tabular-nums">{time}</span>
-      <span className={cn("shrink-0 font-bold", style.color)}>{style.prefix}</span>
-      <span className={cn("flex-1", style.color)}>{event.message}</span>
-      {event.findingsCount !== undefined && (
-        <span className="text-accent tabular-nums">{event.findingsCount} findings</span>
-      )}
-      {event.duration !== undefined && (
-        <span className="text-dim tabular-nums">{event.duration.toFixed(1)}s</span>
-      )}
-    </div>
-  )
-}
-
-// ─── History Table ──────────────────────────────────────────────────────────
-
-function HistoryTable({ projectId }: { projectId: string }) {
-  // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
-  // GET /api/v1/projects/:id/scans
-  const { data: scans = [] } = useScanHistory(projectId)
-
-  const history = useMemo(
-    () =>
-      scans
-        .filter((s) => s.projectId === projectId && s.status !== "running")
-        .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
-    [scans, projectId],
-  )
-
-  if (history.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8 text-muted-foreground text-sm">
-        No scan history for this project yet.
-      </div>
-    )
-  }
-
-  return (
-    <div className="overflow-auto flex-1">
-      <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted text-muted-foreground uppercase tracking-wider">
-          <tr>
-            <th className="text-left px-3 py-2 font-medium">ID</th>
-            <th className="text-left px-3 py-2 font-medium">Segment</th>
-            <th className="text-left px-3 py-2 font-medium">Tool</th>
-            <th className="text-left px-3 py-2 font-medium">Status</th>
-            <th className="text-right px-3 py-2 font-medium">Findings</th>
-            <th className="text-left px-3 py-2 font-medium">Started</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {history.map((scan) => (
-            <tr key={scan.id} className="hover:bg-muted/30">
-              <td className="px-3 py-2 font-mono text-accent">{scan.id}</td>
-              <td className="px-3 py-2 uppercase">{scan.domain}</td>
-              <td className="px-3 py-2">{scan.tool}</td>
-              <td className="px-3 py-2">
-                <span
-                  className={cn(
-                    "uppercase",
-                    scan.status === "done" && "text-low",
-                    scan.status === "failed" && "text-crit",
-                  )}
-                >
-                  {scan.status}
-                </span>
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">{scan.findingsCount ?? "-"}</td>
-              <td className="px-3 py-2 text-muted-foreground">
-                {new Date(scan.startedAt).toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ─── Main Page Component ────────────────────────────────────────────────────
 
 export default function Scans() {
   const activeProjectId = useUI((s) => s.activeProjectId)
@@ -196,7 +25,7 @@ export default function Scans() {
   // GET /api/v1/projects/:id/meta
   const { data: projectMetaData } = useProjectMeta(activeProjectId)
   // GET /api/v1/projects/:id/scans (history)
-  const { data: scanHistory = [] } = useScanHistory(activeProjectId)
+  void useScanHistory(activeProjectId)
 
   // TODO [BACKEND]: Scan configuration (repos, tools, domains) from server.
   // GET /api/v1/projects/:id/scans/config
@@ -207,6 +36,9 @@ export default function Scans() {
   const { mutate: startScanMutation } = useStartScan()
   // POST /api/v1/scans/:id/cancel
   const { mutate: cancelScanMutation } = useCancelScan()
+
+  void startScanMutation
+  void cancelScanMutation
 
   const project = projects.find((p) => p.id === activeProjectId)
   const meta = projectMetaData
@@ -238,6 +70,9 @@ export default function Scans() {
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [skipTools, setSkipTools] = useState<Set<string>>(new Set())
   const [skipEnrichment, setSkipEnrichment] = useState(false)
+
+  void expandedSegments
+  void setExpandedSegments
 
   // Reset advanced options when config changes
   useEffect(() => {
@@ -446,15 +281,6 @@ export default function Scans() {
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
-
-  const toggleSegment = (seg: Domain) => {
-    setExpandedSegments((prev) => {
-      const next = new Set(prev)
-      if (next.has(seg)) next.delete(seg)
-      else next.add(seg)
-      return next
-    })
-  }
 
   const formatElapsed = (sec: number) => {
     const m = Math.floor(sec / 60)
