@@ -261,7 +261,7 @@ Supported language values for SCA tool selection:
     },
     {
       "name": "frontend",
-      "type": ["ui"],
+      "type": ["ui-old"],
       "path": "/home/user/projects/acme/frontend",
       "languages": ["javascript", "typescript"],
       "base_urls": []

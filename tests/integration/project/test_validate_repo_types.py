@@ -21,16 +21,16 @@ class TestValidateRepoTypes:
         assert _validate_repo_types(["api"]) is None
 
     def test_valid_ui(self) -> None:
-        assert _validate_repo_types(["ui"]) is None
+        assert _validate_repo_types(["ui-old"]) is None
 
     def test_valid_library(self) -> None:
         assert _validate_repo_types(["library"]) is None
 
     def test_valid_api_ui(self) -> None:
-        assert _validate_repo_types(["api", "ui"]) is None
+        assert _validate_repo_types(["api", "ui-old"]) is None
 
     def test_valid_ui_api(self) -> None:
-        assert _validate_repo_types(["ui", "api"]) is None
+        assert _validate_repo_types(["ui-old", "api"]) is None
 
     def test_empty_returns_error(self) -> None:
         result = _validate_repo_types([])
@@ -49,10 +49,10 @@ class TestValidateRepoTypes:
         assert "exclusive" in result.lower() or "cannot" in result.lower()
 
     def test_library_with_ui_returns_error(self) -> None:
-        result = _validate_repo_types(["library", "ui"])
+        result = _validate_repo_types(["library", "ui-old"])
         assert result is not None
         assert "library" in result.lower()
 
     def test_library_with_api_and_ui_returns_error(self) -> None:
-        result = _validate_repo_types(["library", "api", "ui"])
+        result = _validate_repo_types(["library", "api", "ui-old"])
         assert result is not None

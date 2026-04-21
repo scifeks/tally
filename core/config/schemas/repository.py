@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-_VALID_REPO_TYPES: frozenset[str] = frozenset({"library", "api", "ui"})
+_VALID_REPO_TYPES: frozenset[str] = frozenset({"library", "api", "ui-old"})
 
 
 class RepoAuth(BaseModel):
@@ -41,7 +41,7 @@ class Repository(BaseModel):
     """Repository configuration."""
 
     name: str = Field(..., description="Repository name")
-    type: list[str] = Field(..., description="Repository types (library, api, ui)")
+    type: list[str] = Field(..., description="Repository types (library, api, ui-old)")
     path: str = Field(default="", description="Filesystem path to repository")
     docker_path: str = Field(
         default="", description="Container mount path for Docker tools"
@@ -177,7 +177,7 @@ class Repository(BaseModel):
         if invalid:
             sorted_invalid = ", ".join(sorted(invalid))
             raise ValueError(
-                f"Invalid type(s): {sorted_invalid}. Valid: library, api, ui"
+                f"Invalid type(s): {sorted_invalid}. Valid: library, api, ui-old"
             )
         if "library" in v and len(v) > 1:
             raise ValueError("'library' cannot be combined with other types")

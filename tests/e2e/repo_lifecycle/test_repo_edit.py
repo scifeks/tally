@@ -50,7 +50,7 @@ def test_repo_edit_updates_type(
     h.expect("Name")
     h.send("")
     h.expect(r"Type \[")
-    h.send("api,ui")
+    h.send("api,ui-old")
     h.expect("Mode")
     h.send("")
     h.expect("Local path")
@@ -76,4 +76,4 @@ def test_repo_edit_updates_type(
     config_path = h.project_dir("TestProj") / "config" / "project.json"
     data = json.loads(config_path.read_text())
     repo = next(r for r in data["repositories"] if r["name"] == "test-repo")
-    assert sorted(repo["type"]) == ["api", "ui"]
+    assert sorted(repo["type"]) == ["api", "ui-old"]

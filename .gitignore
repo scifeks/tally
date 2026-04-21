@@ -67,4 +67,6 @@ tmp/
 
 # Frontend
 ui/node_modules/
+ui/docs/roadmap
+ui-old/
 web/static/

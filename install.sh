@@ -52,7 +52,7 @@ if ! command -v npm >/dev/null 2>&1; then
     exit 1
 fi
 
-# Save current directory and switch to ui/
+# Save current directory and switch to ui-old/
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/ui"
 
