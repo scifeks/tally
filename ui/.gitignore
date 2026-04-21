@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env*.local
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Local docs (not committed)
+docs/

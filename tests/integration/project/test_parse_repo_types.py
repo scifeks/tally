@@ -21,13 +21,13 @@ class TestParseRepoTypes:
         assert _parse_repo_types("api") == ["api"]
 
     def test_multiple_types(self) -> None:
-        assert _parse_repo_types("api,ui") == ["api", "ui"]
+        assert _parse_repo_types("api,ui-old") == ["api", "ui-old"]
 
     def test_strips_spaces(self) -> None:
-        assert _parse_repo_types("api, ui") == ["api", "ui"]
+        assert _parse_repo_types("api, ui-old") == ["api", "ui-old"]
 
     def test_leading_trailing_spaces(self) -> None:
-        assert _parse_repo_types(" ui ") == ["ui"]
+        assert _parse_repo_types(" ui-old ") == ["ui-old"]
 
     def test_empty_string_returns_empty(self) -> None:
         assert _parse_repo_types("") == []

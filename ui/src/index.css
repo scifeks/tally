@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "JetBrains Mono", "IBM Plex Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  --font-serif: ui-serif, Georgia, serif;
+
+  /* Phosphor TTY palette: black terminal, muted phosphor green, amber warn, red crit */
+  --color-background: #000000;
+  --color-foreground: #c4f0c4;
+
+  --color-muted: #0a140a;
+  --color-muted-foreground: #4a7a4a;
+
+  --color-border: #1f3a1f;
+  --color-border-strong: #2f5a2f;
+
+  --color-primary: #6bd36b;
+  --color-primary-foreground: #000000;
+
+  --color-accent: #39ff14;
+  --color-accent-foreground: #000000;
+
+  --color-dim: #2d5a2d;
+
+  /* Severity tokens */
+  --color-crit: #ff4d4d;
+  --color-high: #ff8c42;
+  --color-med: #ffd84d;
+  --color-low: #6bd36b;
+  --color-info: #6ac7ff;
+
+  --radius: 0rem;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("https://fonts.gstatic.com/s/jetbrainsmono/v20/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPVmUsaaDhw.woff2") format("woff2");
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  body {
+    font-family: var(--font-mono);
+    font-feature-settings: "ss02" on, "cv01" on;
+    font-variant-ligatures: none;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+  }
+
+  /* Subtle phosphor scanline backdrop on the whole app.
+     IMPORTANT: keep z-index low (0) so dropdowns, modals, and tooltips render
+     above it. The `screen` blend mode would otherwise smear any content that
+     sits below the overlay and make it unreadable (e.g. the Config dropdown).
+     Overlay is pointer-events:none so it never blocks interaction. */
+  #root::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(107, 211, 107, 0.025) 0px,
+      rgba(107, 211, 107, 0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: screen;
+  }
+
+  /* Custom scrollbars to match the aesthetic */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: #000000;
+    border-left: 1px solid var(--color-border);
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border: 2px solid #000000;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-dim);
+  }
+}
+
+@layer utilities {
+  .text-crit { color: var(--color-crit); }
+  .text-high { color: var(--color-high); }
+  .text-med { color: var(--color-med); }
+  .text-low { color: var(--color-low); }
+  .text-info { color: var(--color-info); }
+  .text-dim { color: var(--color-dim); }
+
+  .bg-crit\/10 { background-color: rgba(255, 77, 77, 0.1); }
+  .bg-high\/10 { background-color: rgba(255, 140, 66, 0.1); }
+  .bg-med\/10 { background-color: rgba(255, 216, 77, 0.1); }
+
+  /* TTY blinking cursor */
+  .tty-cursor::after {
+    content: "█";
+    margin-left: 2px;
+    animation: tty-blink 1s steps(1) infinite;
+    color: var(--color-primary);
+  }
+  @keyframes tty-blink {
+    50% { opacity: 0; }
+  }
+
+  .tty-glow {
+    text-shadow: 0 0 1px currentColor, 0 0 8px rgba(107, 211, 107, 0.25);
+  }
+
+  /* Radar sweep animation for Scans page */
+  @keyframes radar-sweep {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .animate-radar-sweep {
+    animation: radar-sweep 3s linear infinite;
+    transform-origin: center center;
+  }
+
+  /* Inline variant: blinks the current glyph (use on a prompt caret). */
+  .tty-cursor-inline {
+    animation: tty-blink 1s steps(1) infinite;
+  }
+
+  /* Editable text hover affordance — subtle dotted underline so the user
+     knows this field is clickable/editable before they click. */
+  .editable:hover,
+  .editable:focus-visible {
+    outline: none;
+    text-decoration: underline dotted var(--color-accent);
+    text-underline-offset: 3px;
+  }
+}
