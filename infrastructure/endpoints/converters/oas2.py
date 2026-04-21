@@ -51,7 +51,7 @@ class OAS2Adapter(ConverterAdapter):
         """Convert Swagger 2.0 source to OAS3 using swagger2openapi."""
         if not shutil.which("node") or not shutil.which("npx"):
             raise ConverterError(_NODE_MISSING_MSG)
-        output_file = output_dir / "endpoints.json"
+        output_file = output_dir / "seed.json"
         result = subprocess.run(
             ["npx", "swagger2openapi", str(source), "-o", str(output_file)],
             capture_output=True,

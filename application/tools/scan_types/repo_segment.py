@@ -136,8 +136,8 @@ class RepoSegmentScan(ScanType):
                     total_skipped += 1
                     continue
 
-                # Skip Noir when an endpoint file is already configured.
-                if tool_name == "noir" and repo.oas3_path:
+                # Skip live crawlers when the user opted out of crawling.
+                if tool_name in ("noir", "katana") and not repo.crawl_enabled:
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -145,7 +145,7 @@ class RepoSegmentScan(ScanType):
                             True,
                             0,
                             0.0,
-                            "skipped (endpoint file configured)",
+                            "skipped (live crawling disabled)",
                         )
                     )
                     total_skipped += 1

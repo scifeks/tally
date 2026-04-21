@@ -17,7 +17,14 @@ _OAS3_DOC = {
 }
 _OAS2_DOC = {"swagger": "2.0", "info": {"title": "T", "version": "1"}}
 _POSTMAN_DOC = {
-    "info": {"schema": ("https://schema.getpostman.com/postman/collection/v2.1.0")}
+    "info": {
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    }
+}
+_POSTMAN_V20_DOC = {
+    "info": {
+        "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json"
+    }
 }
 
 
@@ -40,6 +47,11 @@ class TestFormatDetector:
     def test_postman_json_detected(self, tmp_path: Path) -> None:
         f = tmp_path / "collection.json"
         f.write_text(json.dumps(_POSTMAN_DOC), encoding="utf-8")
+        assert FormatDetector().detect(f) == "postman"
+
+    def test_postman_v20_json_detected(self, tmp_path: Path) -> None:
+        f = tmp_path / "collection_v20.json"
+        f.write_text(json.dumps(_POSTMAN_V20_DOC), encoding="utf-8")
         assert FormatDetector().detect(f) == "postman"
 
     def test_unrecognized_json_raises(self, tmp_path: Path) -> None:

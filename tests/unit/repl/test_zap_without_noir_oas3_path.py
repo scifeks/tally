@@ -13,12 +13,16 @@ from unittest.mock import MagicMock, patch
 from application.repl.commands.scan_commands import ScanCommands
 
 
-def _make_repo(name: str, node_app: bool = False, oas3_path: str = "") -> MagicMock:
+def _make_repo(
+    name: str,
+    oas3_path: str = "",
+    crawl_enabled: bool = True,
+) -> MagicMock:
     r = MagicMock()
     r.name = name
-    r.node_app = node_app
     r.oas3_path = oas3_path
     r.merged_oas3_path = ""
+    r.crawl_enabled = crawl_enabled
     return r
 
 
@@ -67,3 +71,15 @@ class TestMaybeWarnDastWithoutDiscoveryOas3Path:
         assert result is not None
         assert "katana" in result
         assert "zap" in result
+
+    def test_repo_with_crawl_disabled_not_in_missing(self) -> None:
+        """crawl_enabled=False — repo excluded from missing, no warning."""
+        repo = _make_repo("api", crawl_enabled=False)
+        sc = _make_sc([repo])
+        mock_input = MagicMock()
+        with patch("builtins.input", mock_input):
+            result = sc._maybe_warn_dast_without_discovery(
+                ["zap"], None, False, MagicMock()
+            )
+        assert result == ["zap"]
+        mock_input.assert_not_called()

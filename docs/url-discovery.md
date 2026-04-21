@@ -202,7 +202,7 @@ Noir is skipped automatically in any of the following cases:
 
 | Condition | Skip message |
 |-----------|-------------|
-| Repository has `node_app: true` | `skipped (Node.js app)` |
+| `package.json` present at repo root (Node.js app) | `skipped (Node.js app)` |
 | `dependencies_file` lists an unsupported framework (see below) | `skipped (unsupported framework (<name>))` |
 | `oas3_path` is configured (user-provided endpoint file) | `skipped (endpoint file configured)` |
 
@@ -216,12 +216,9 @@ the repository's `dependencies_file` and skips Noir if an unsupported package
 is found.
 
 **Node.js limitation:** Noir's JavaScript parser has a known defect that causes
-it to loop indefinitely on complex Node.js codebases. Mark a repository as a
-Node.js app during `repo add` / `repo edit` to skip Noir for it:
-
-```
-Is this a Node.js app? (Noir will be skipped) [y/N]: y
-```
+it to loop indefinitely on complex Node.js codebases. Tally detects Node.js
+apps automatically by the presence of `package.json` at the repo root and
+skips Noir for them.
 
 ### Vendor / dependency directory filtering
 
@@ -277,9 +274,9 @@ After each Katana or Noir run, the URL discovery pipeline fires automatically:
    strip trailing slashes, scheme-insensitive) and deduplicated in order:
    Katana first, then Noir, then user file.
 5. **Write outputs:**
-   - `projects/<project>/config/urls/<repo>_seeds.txt` — one URL per line,
+   - `projects/<project>/endpoints/<repo>/merged_urls.txt` — one URL per line,
      consumed by XSStrike and DalFox.
-   - `projects/<project>/config/urls/<repo>_merged_oas3.json` — minimal OAS3
+   - `projects/<project>/endpoints/<repo>/merged_oas3.json` — minimal OAS3
      document with one GET operation per unique path, consumed by ZAP via
      `-openapifile`.
 6. **Persist** — `merged_seeds_path` and `merged_oas3_path` are written back to
@@ -312,8 +309,8 @@ If DAST tools are testing fewer URLs than expected:
    `skipped (unsupported framework (aiohttp))` explain why Noir produced nothing.
 
 3. **Check the merged output** — inspect
-   `projects/<project>/config/urls/<repo>_seeds.txt` to see exactly what URLs
-   are being passed to scanners.
+   `projects/<project>/endpoints/<repo>/merged_urls.txt` to see exactly what
+   URLs are being passed to scanners.
 
 4. **Try a user-provided endpoint file** — if both Katana and Noir produce
    sparse results, supply an OAS3/Postman/HAR file directly. See

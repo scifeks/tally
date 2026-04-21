@@ -27,6 +27,9 @@ _HELP_TEXT = (
     "\n"
     "  With no arguments, deletes ALL findings, clears all tool output files,\n"
     "  and deletes all generated reports in the project reports/ directory.\n"
+    "  A second prompt asks whether to also delete merged endpoint URL files\n"
+    "  (endpoints/<repo>/merged_oas3.json and merged_urls.txt). User-provided\n"
+    "  seed files under config/endpoints/ are never deleted by purge.\n"
     "\n"
     "  Examples:\n"
     "    purge\n"
@@ -127,6 +130,16 @@ class PurgeCommand:
             self.repl.console.print("[dim]Aborted.[/dim]")
             return
 
+        delete_merged = False
+        if tools is None:
+            self.repl.console.print(
+                "Also delete merged endpoint URL files"
+                " (endpoints/<repo>/merged_oas3.json, merged_urls.txt)"
+                f" and clear merged path config? {escape('[y/N]')} ",
+                end="",
+            )
+            delete_merged = input().strip().lower() == "y"
+
         total_deleted = 0
         if tools is not None:
             for t in tools:
@@ -137,6 +150,8 @@ class PurgeCommand:
         self._purge_sqlite(tools=tools)
         if tools is None and not keep_reports:
             self._delete_reports()
+        if delete_merged:
+            self._delete_merged_endpoints()
         self.repl.console.print(f"[green]Deleted {total_deleted} document(s).[/green]")
 
     # ------------------------------------------------------------------
@@ -189,6 +204,40 @@ class PurgeCommand:
                 item.unlink()
             elif item.is_dir():
                 shutil.rmtree(item)
+
+    def _delete_merged_endpoints(self) -> None:
+        """Empty each repo's merged-URL dir and clear merged path keys in config."""
+        assert self.repl.active_project is not None
+        endpoints_dir = (
+            Path(self.repl.base_path)
+            / "projects"
+            / self.repl.active_project
+            / "endpoints"
+        )
+        if endpoints_dir.exists():
+            for repo_dir in endpoints_dir.iterdir():
+                if not repo_dir.is_dir():
+                    continue
+                for item in repo_dir.iterdir():
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        shutil.rmtree(item)
+
+        try:
+            from core.config.manager import ConfigManager
+
+            manager = ConfigManager(self.repl.base_path)
+            repos = manager.load_repositories(self.repl.active_project)
+            updated = [
+                r.model_copy(update={"merged_seeds_path": "", "merged_oas3_path": ""})
+                for r in repos
+            ]
+            manager.save_repositories(self.repl.active_project, updated)
+        except Exception as exc:
+            self.repl.console.print(
+                f"[yellow]Warning: could not clear merged path config: {exc}[/yellow]"
+            )
 
     def _has_tool_output_files(self, tools: list[str] | None) -> bool:
         """Return True if any files exist in the relevant tool_outputs dirs."""

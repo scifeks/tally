@@ -207,8 +207,9 @@ Tools can run locally or inside a Docker container. The execution mode is config
 Noir does not support every web framework. It is skipped automatically for:
 
 - **Node.js apps** — Noir's JavaScript parser has a known defect that causes it
-  to loop indefinitely on complex Node.js codebases. Mark a repository as a
-  Node.js app during `repo add` / `repo edit` to skip Noir for it.
+  to loop indefinitely on complex Node.js codebases. Tally detects Node.js apps
+  automatically by the presence of `package.json` at the repo root and skips
+  Noir for them.
 - **Unsupported Python frameworks** — aiohttp, bottle, cherrypy, falcon, and
   pyramid are not recognised by Noir v0.25.1. Tally detects them via the
   repository's `dependencies_file` and skips Noir automatically.

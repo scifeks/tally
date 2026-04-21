@@ -208,7 +208,7 @@ class KatanaLocalTool(BaseKatanaTool):
         1. Resolve JSONL path from ``self._last_jsonl_path`` (fallback: files).
         2. Parse JSONL into structured endpoint data.
         3. Convert JSONL → OAS3 via ``KatanaAdapter``.
-        4. Move ``endpoints.json`` to the timestamped ``_oas3.json`` target.
+        4. Move ``seed.json`` to the timestamped ``_oas3.json`` target.
         5. Delete the OAS3 file if it contains zero paths (mirrors Noir).
         """
         try:

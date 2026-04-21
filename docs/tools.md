@@ -43,20 +43,11 @@ Noir's JavaScript parser has a known defect that causes it to enter an
 effectively infinite loop on complex Node.js codebases. When this happens,
 Noir exits without writing any output and makes no AI inference calls.
 
-To avoid wasting scan time, Tally lets you mark a repository as a Node.js
-app during `repo add` / `repo edit`. When JavaScript or TypeScript is
-detected in the repository, Tally asks:
-
-```
-  Is this a Node.js app? (Noir will be skipped) [y/N]:
-```
-
-Answering `y` sets `node_app: true` in `repositories.json`. Noir is then
-skipped for that repository across all scan types — full scans, targeted
-tool scans, and when ZAP requests a Noir pre-scan. ZAP falls back to
-quickscan mode for Node.js repositories.
-
-This flag can be set or cleared at any time with `repo edit <name>`.
+To avoid wasting scan time, Tally automatically detects Node.js repositories
+by the presence of `package.json` at the repo root and skips Noir for them
+across all scan types — full scans, targeted tool scans, and when ZAP
+requests a Noir pre-scan. ZAP falls back to quickscan mode for Node.js
+repositories.
 
 #### Endpoint file support
 

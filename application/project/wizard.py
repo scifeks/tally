@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -38,10 +39,6 @@ _TEST_DIR_NAMES: frozenset[str] = frozenset(
     {"test", "tests", "spec", "__tests__", "e2e"}
 )
 
-_JS_LANGS: frozenset[str] = frozenset(
-    {"javascript", "javascript/typescript", "node", "typescript"}
-)
-
 
 def _sca_manifest_notification(repo: Repository) -> None:
     """Print a notice when no SCA-relevant dependency manifests are found."""
@@ -61,11 +58,6 @@ def _sca_manifest_notification(repo: Repository) -> None:
             "  SCA scanning (npm-audit, pip-audit, composer-audit, osv-scanner)\n"
             "  will be skipped for this repository."
         )
-
-
-def _has_js(langs: list[str]) -> bool:
-    """Return True if any entry in langs indicates a JavaScript/Node codebase."""
-    return any(lang.lower() in _JS_LANGS for lang in langs)
 
 
 def _parse_repo_types(raw: str) -> list[str]:
@@ -195,7 +187,6 @@ def _interview_auth(
 
 def _interview_katana(
     base_urls: list[str],
-    node_app: bool = False,
     current_headless: bool = False,
     current_depth: int = 10,
     detected_spa: bool = False,
@@ -204,13 +195,12 @@ def _interview_katana(
     """Prompt for Katana crawler options; returns (headless, depth).
 
     Skipped (returns current values) when base_urls is empty.
-    headless defaults to True when node_app, current_headless, or
-    detected_spa is True.
+    headless defaults to True when current_headless or detected_spa is True.
     """
     if not base_urls:
         return current_headless, current_depth
 
-    headless_default = "y" if (node_app or current_headless or detected_spa) else "N"
+    headless_default = "y" if (current_headless or detected_spa) else "N"
 
     if detected_spa and spa_reason:
         print(f"\n  SPA detected: {spa_reason}.")
@@ -407,19 +397,6 @@ class InteractiveProjectWizard:
             lang_input = _prompt(prompt_label, default=default_langs)
             langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-            # Node.js app flag — Noir and Noir-based URL seeding skipped for
-            # Node apps (Noir JS parser limitation).
-            if _has_js(langs):
-                current_node = "y" if existing.node_app else "N"
-                ans = _prompt(
-                    "  Is this a Node.js app? "
-                    "(Noir scan and Noir-based URL seeding will be skipped)",
-                    default=current_node,
-                ).lower()
-                node_app = ans in ("y", "yes")
-            else:
-                node_app = False
-
             dependencies_file = existing.dependencies_file
 
             # Base URLs
@@ -461,36 +438,72 @@ class InteractiveProjectWizard:
             ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
             # Endpoint definition file
+            from infrastructure.endpoints.converters import (
+                ConverterError,
+                convert_endpoint_file,
+            )
+
             oas3_path = existing.oas3_path
+            endpoints_dir = (
+                self._manager.base_path
+                / "projects"
+                / project_name
+                / "config"
+                / "endpoints"
+                / name
+            )
+            originals_dir = endpoints_dir / "original"
+
             if existing.oas3_path:
                 print(f"  Current endpoint file: {existing.oas3_path}")
                 replace_ans = _prompt(
                     "  Replace endpoint file? [y/N]", default="N"
                 ).lower()
                 if replace_ans in ("y", "yes"):
-                    _old = Path(existing.oas3_path)
-                    _old.unlink(missing_ok=True)
-                    _orig_dir = (
-                        self._manager.base_path
-                        / "projects"
-                        / project_name
-                        / "endpoints"
-                        / "original"
-                    )
-                    for _f in _orig_dir.glob("*"):
-                        _f.unlink(missing_ok=True)
-                    oas3_path = ""
                     print(
                         "  Warning: when an endpoint file is configured, Noir"
                         " is skipped and ZAP relies entirely on that file."
                         " ZAP results will be less accurate if the file is"
                         " incomplete."
                     )
-                    endpoint_input = _prompt(
-                        "  New endpoint definition file path (optional)"
-                    )
-                else:
-                    endpoint_input = ""
+                    while True:
+                        endpoint_input = _prompt(
+                            "  New endpoint definition file path (optional)"
+                        )
+                        if not endpoint_input:
+                            break
+                        try:
+                            src = Path(endpoint_input).expanduser().resolve()
+                            if not src.exists():
+                                raise FileNotFoundError(str(src))
+                            shutil.rmtree(endpoints_dir, ignore_errors=True)
+                            oas3_file = convert_endpoint_file(
+                                src, endpoints_dir, originals_dir
+                            )
+                            oas3_path = str(oas3_file)
+                            print(f"\n  ✓ Endpoint file converted: {oas3_file}")
+                            break
+                        except (ConverterError, FileNotFoundError) as exc:
+                            _err = (
+                                exc
+                                if isinstance(exc, ConverterError)
+                                else f"File not found: {endpoint_input}"
+                            )
+                            print(f"\n  Endpoint file error: {_err}")
+                            choice = (
+                                _prompt(
+                                    "  [r]etry / [s]kip / [k]eep existing? [r/s/k]",
+                                    default="k",
+                                )
+                                .strip()
+                                .lower()
+                            )
+                            if choice in ("k", "keep", ""):
+                                oas3_path = existing.oas3_path
+                                break
+                            if choice in ("s", "skip"):
+                                oas3_path = ""
+                                break
             else:
                 print(
                     "  Supported endpoint file formats:"
@@ -504,36 +517,36 @@ class InteractiveProjectWizard:
                     " ZAP results will be less accurate if the file is"
                     " incomplete."
                 )
-                endpoint_input = _prompt("  Endpoint definition file path (optional)")
-
-            if endpoint_input:
-                from infrastructure.endpoints.converters import (
-                    ConverterError,
-                    convert_endpoint_file,
-                )
-
-                try:
-                    src = Path(endpoint_input).expanduser().resolve()
-                    if not src.exists():
-                        raise FileNotFoundError(str(src))
-                    endpoints_dir = (
-                        self._manager.base_path
-                        / "projects"
-                        / project_name
-                        / "endpoints"
+                while True:
+                    endpoint_input = _prompt(
+                        "  Endpoint definition file path (optional)"
                     )
-                    originals_dir = endpoints_dir / "original"
-                    oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
-                    oas3_path = str(oas3_file)
-                    print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-                except ConverterError as exc:
-                    print(f"\n  Endpoint file error: {exc}")
-                    print("  Keeping existing endpoint file configuration.")
-                    oas3_path = existing.oas3_path
-                except FileNotFoundError:
-                    print(f"\n  File not found: {endpoint_input}")
-                    print("  Keeping existing endpoint file configuration.")
-                    oas3_path = existing.oas3_path
+                    if not endpoint_input:
+                        break
+                    try:
+                        src = Path(endpoint_input).expanduser().resolve()
+                        if not src.exists():
+                            raise FileNotFoundError(str(src))
+                        oas3_file = convert_endpoint_file(
+                            src, endpoints_dir, originals_dir
+                        )
+                        oas3_path = str(oas3_file)
+                        print(f"\n  ✓ Endpoint file converted: {oas3_file}")
+                        break
+                    except (ConverterError, FileNotFoundError) as exc:
+                        _err = (
+                            exc
+                            if isinstance(exc, ConverterError)
+                            else f"File not found: {endpoint_input}"
+                        )
+                        print(f"\n  Endpoint file error: {_err}")
+                        choice = (
+                            _prompt("  [r]etry / [s]kip? [r/s]", default="s")
+                            .strip()
+                            .lower()
+                        )
+                        if choice in ("s", "skip", ""):
+                            break
 
             # crawl_enabled — only asked when base URLs and endpoint file
             # are both configured
@@ -551,7 +564,6 @@ class InteractiveProjectWizard:
                 )
                 katana_headless, katana_depth = _interview_katana(
                     base_urls=base_urls,
-                    node_app=node_app,
                     current_headless=existing.katana_headless,
                     current_depth=existing.katana_depth,
                     detected_spa=_spa_detected,
@@ -570,7 +582,6 @@ class InteractiveProjectWizard:
                 docker_path=docker_path,
                 container_name=container_name,
                 languages=langs,
-                node_app=node_app,
                 base_urls=base_urls,
                 test_dirs=test_dirs,
                 ignore_dirs=ignore_dirs,
@@ -638,7 +649,12 @@ class InteractiveProjectWizard:
 
         src = Path(repo.oas3_path)
         endpoints_dir = (
-            self._manager.base_path / "projects" / project_name / "endpoints"
+            self._manager.base_path
+            / "projects"
+            / project_name
+            / "config"
+            / "endpoints"
+            / repo.name
         )
         originals_dir = endpoints_dir / "original"
         try:
@@ -892,17 +908,6 @@ class InteractiveProjectWizard:
         lang_input = _prompt(prompt_label, default=default_langs)
         langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-        # Node.js app flag — Noir and Noir-based URL seeding skipped for
-        # Node apps (Noir JS parser limitation).
-        node_app = False
-        if _has_js(langs):
-            ans = _prompt(
-                "  Is this a Node.js app? "
-                "(Noir scan and Noir-based URL seeding will be skipped) [y/N]",
-                default="N",
-            ).lower()
-            node_app = ans in ("y", "yes")
-
         dependencies_file = ""
 
         # Base URLs
@@ -942,25 +947,32 @@ class InteractiveProjectWizard:
             " ZAP results will be less accurate if the file is"
             " incomplete."
         )
-        endpoint_input = _prompt("  Endpoint definition file path (optional)")
-        if endpoint_input:
-            from infrastructure.endpoints.converters import ConverterError
-            from infrastructure.endpoints.converters.detector import (
-                FormatDetector,
-            )
+        from infrastructure.endpoints.converters import ConverterError
+        from infrastructure.endpoints.converters.detector import FormatDetector
 
+        while True:
+            endpoint_input = _prompt("  Endpoint definition file path (optional)")
+            if not endpoint_input:
+                break
             try:
                 src = Path(endpoint_input).expanduser().resolve()
                 if not src.exists():
                     raise FileNotFoundError(str(src))
                 FormatDetector().detect(src)
                 oas3_path = str(src)
-            except ConverterError as exc:
-                print(f"  Endpoint file error: {exc}")
-                print("  Skipping endpoint file — repository will be added without it.")
-            except FileNotFoundError:
-                print(f"  File not found: {endpoint_input}")
-                print("  Skipping endpoint file — repository will be added without it.")
+                break
+            except (ConverterError, FileNotFoundError) as exc:
+                _err = (
+                    exc
+                    if isinstance(exc, ConverterError)
+                    else f"File not found: {endpoint_input}"
+                )
+                print(f"  Endpoint file error: {_err}")
+                choice = (
+                    _prompt("  [r]etry / [s]kip? [r/s]", default="s").strip().lower()
+                )
+                if choice in ("s", "skip", ""):
+                    break
 
         # crawl_enabled — only asked when base URLs and endpoint file are
         # both configured
@@ -977,7 +989,6 @@ class InteractiveProjectWizard:
             )
             katana_headless, katana_depth = _interview_katana(
                 base_urls=base_urls,
-                node_app=node_app,
                 detected_spa=_spa_detected,
                 spa_reason=_spa_reason,
             )
@@ -993,7 +1004,6 @@ class InteractiveProjectWizard:
             docker_path=docker_path,
             container_name=container_name,
             languages=langs,
-            node_app=node_app,
             base_urls=base_urls,
             test_dirs=test_dirs,
             ignore_dirs=ignore_dirs,

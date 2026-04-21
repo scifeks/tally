@@ -74,4 +74,4 @@ class TestOAS2Adapter:
                 return_value=mock_result,
             ):
                 result = OAS2Adapter().convert(src, out_dir)
-        assert result == out_dir / "endpoints.json"
+        assert result == out_dir / "seed.json"

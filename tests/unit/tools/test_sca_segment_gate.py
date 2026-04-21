@@ -23,7 +23,6 @@ def _make_repo(
     repo.languages = languages if languages is not None else ["python"]
     repo.base_urls = []
     repo.oas3_path = None
-    repo.node_app = False
     return repo
 
 

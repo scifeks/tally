@@ -30,9 +30,9 @@ def _make_repl(
     for name in names:
         r = MagicMock()
         r.name = name
-        r.node_app = False
         r.oas3_path = ""
         r.merged_oas3_path = merged_oas3_path
+        r.crawl_enabled = True
         repos.append(r)
     repl.config.load_repositories.return_value = repos
     return repl
@@ -91,6 +91,20 @@ class TestMaybeWarnDastWithoutDiscovery:
     def test_no_warning_when_noir_oas3_exists(self) -> None:
         result = self._call(["zap"], merged_oas3_exists=True)
         assert result == ["zap"]
+
+    def test_no_warning_when_crawl_disabled(self) -> None:
+        """Repos with crawl_enabled=False are excluded from missing."""
+        repl = _make_repl()
+        r = repl.config.load_repositories.return_value[0]
+        r.crawl_enabled = False
+        sc = ScanCommands(repl)
+        mock_input = MagicMock()
+        with patch("builtins.input", mock_input):
+            result = sc._maybe_warn_dast_without_discovery(
+                ["zap"], None, False, MagicMock()
+            )
+        assert result == ["zap"]
+        mock_input.assert_not_called()
 
     def test_option1_prepends_katana_and_noir_for_non_node_repo(self) -> None:
         result = self._call(["zap"], user_input="1")
@@ -171,9 +185,9 @@ class TestCmdScanInnerWarning:
         )
         _repo = MagicMock()
         _repo.name = "dvna"
-        _repo.node_app = False
         _repo.oas3_path = ""
         _repo.merged_oas3_path = "/tmp/k_oas3.json" if merged_oas3_exists else ""
+        _repo.crawl_enabled = True
         repl.config.load_repositories.return_value = [_repo]
 
         sc = ScanCommands(repl)

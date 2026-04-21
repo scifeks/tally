@@ -21,6 +21,16 @@ _NOIR_UNSUPPORTED_PACKAGES: frozenset[str] = frozenset(
 )
 
 
+def _is_node_app(repo_path: str) -> bool:
+    """Return True when *repo_path* contains a package.json at its root."""
+    if not repo_path:
+        return False
+    try:
+        return (Path(repo_path) / "package.json").is_file()
+    except OSError:
+        return False
+
+
 def _first_unsupported_package(deps_file: str) -> str:
     """Return the first unsupported package name found in *deps_file*, or ''."""
     if not deps_file:
@@ -45,11 +55,12 @@ def noir_skip_reason(repo: Repository) -> str | None:
     """Return ``None`` if Noir should run, or a human-readable skip reason.
 
     Two conditions cause a skip:
-    - ``repo.node_app`` is True (Noir's JS parser crashes on complex Node apps).
+    - The repo root contains a ``package.json`` (Noir's JS parser crashes
+      on complex Node apps).
     - The repo's dependencies file contains a package that Noir does not
       support, causing it to fall back to full-repo scanning and emit garbage.
     """
-    if repo.node_app:
+    if _is_node_app(repo.path):
         return "Node.js app"
     bad_pkg = _first_unsupported_package(repo.dependencies_file)
     if bad_pkg:

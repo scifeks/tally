@@ -13,7 +13,7 @@ _SUPPORTED_FORMATS = (
     "oas3  — OpenAPI 3.x JSON/YAML (contains 'openapi' key starting with '3.')\n"
     "oas2  — Swagger 2.0 JSON/YAML (contains 'swagger: 2.0' key)\n"
     "postman — Postman collection JSON "
-    "(contains 'info.schema' with 'postman/collection')\n"
+    "(contains 'info.schema' with 'getpostman.com')\n"
     "har   — HTTP Archive JSON (file extension .har)\n"
     "katana — Katana crawler JSONL output (file extension .jsonl)"
 )
@@ -51,7 +51,7 @@ class FormatDetector:
         2. Parse as JSON or YAML
         3. 'openapi' key starting with '3.' → 'oas3'
         4. 'swagger' key equal to '2.0' → 'oas2'
-        5. 'info.schema' containing 'postman/collection' → 'postman'
+        5. 'info.schema' containing 'getpostman.com' → 'postman'
         6. None matched → ConverterError listing supported formats
         """
         if path.suffix == ".har":
@@ -70,7 +70,7 @@ class FormatDetector:
 
         info = doc.get("info", {})
         schema = info.get("schema", "") if isinstance(info, dict) else ""
-        if isinstance(schema, str) and "postman/collection" in schema:
+        if isinstance(schema, str) and "getpostman.com" in schema:
             return "postman"
 
         raise ConverterError(

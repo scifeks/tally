@@ -42,7 +42,7 @@ class TestConvertEndpointFile:
         adapter = MagicMock()
         adapter.validate.side_effect = lambda _: calls.append("validate")
         adapter.convert.side_effect = lambda s, o: (
-            calls.append("convert") or (o / "endpoints.json")
+            calls.append("convert") or (o / "seed.json")
         )
         with patch(
             "infrastructure.endpoints.converters.service.FormatDetector"
@@ -58,7 +58,7 @@ class TestConvertEndpointFile:
     def test_returns_path_from_convert(self, tmp_path: Path) -> None:
         src = tmp_path / "spec.json"
         src.write_text(json.dumps(_MINIMAL_OAS3), encoding="utf-8")
-        expected = tmp_path / "out" / "endpoints.json"
+        expected = tmp_path / "out" / "seed.json"
         adapter = MagicMock()
         adapter.validate.return_value = None
         adapter.convert.return_value = expected

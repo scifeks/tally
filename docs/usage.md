@@ -109,7 +109,6 @@ Tally first asks for the execution mode, then collects the appropriate paths.
 - **Mode** — `local` (default) or `docker`
 - **Local path** — absolute filesystem path on the host (required in all modes)
 - **Languages** — comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
-- **Node.js app** — shown when JavaScript or TypeScript is detected; see below
 - **Dependencies file** — for Python repos, path to a dependencies file for pip-audit (optional; if omitted, pip-audit is skipped in local mode)
 - **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
 - **Endpoint definition file** — an optional path to an existing API spec (OAS3,
@@ -153,31 +152,19 @@ Repository #1:
 
 ### Node.js repositories and Noir
 
-When Tally detects JavaScript or TypeScript in a repository it asks:
+Tally automatically detects Node.js repositories by the presence of
+`package.json` at the repo root and skips Noir for them in all scan types.
+ZAP falls back to quickscan mode for those repositories.
 
-```
-  Is this a Node.js app? (Noir will be skipped) [y/N]:
-```
-
-Answering `y` marks the repository as a Node.js app (`node_app: true` in
-`repositories.json`). This causes Noir to be skipped for that repository in
-all scan types. ZAP will fall back to quickscan mode for those repositories.
-
-The reason for this flag is a known defect in Noir's JavaScript parser that
-causes it to loop indefinitely on complex Node.js codebases and produce no
-output. Skipping Noir avoids a silent, wasted scan step.
+The reason is a known defect in Noir's JavaScript parser that causes it to
+loop indefinitely on complex Node.js codebases and produce no output. Skipping
+Noir avoids a silent, wasted scan step.
 
 **Workaround available:** Configure a path to an existing endpoint definition
 file (OAS3, OAS2/Swagger, Postman collection, or HAR) using `repo add` or
 `repo edit`. When set, Tally converts the file to OAS3 and passes it directly
 to ZAP, bypassing Noir entirely. See [docs/endpoint-files.md](endpoint-files.md)
 for supported formats and setup instructions.
-
-To set or clear the `node_app` flag after a repository has been created:
-
-```
-[acme-security-audit]> repo edit api-server
-```
 
 View configured repositories:
 

@@ -77,13 +77,6 @@ class Repository(BaseModel):
             "for local repos; docker repos fall back to a full environment scan."
         ),
     )
-    node_app: bool = Field(
-        default=False,
-        description=(
-            "True when this repository is a Node.js application. "
-            "Noir is skipped for Node apps due to JS parser limitations."
-        ),
-    )
     oas3_path: str = Field(
         default="",
         description=(

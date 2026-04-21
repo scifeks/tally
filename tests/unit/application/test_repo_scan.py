@@ -18,7 +18,6 @@ def _make_mock_repo(
     path: str = "",
     docker_path: str = "",
     container_name: str = "",
-    node_app: bool = False,
     oas3_path: str = "",
 ) -> MagicMock:
     repo = MagicMock()
@@ -28,7 +27,6 @@ def _make_mock_repo(
     repo.path = path
     repo.docker_path = docker_path
     repo.container_name = container_name
-    repo.node_app = node_app
     repo.oas3_path = oas3_path
     return repo
 

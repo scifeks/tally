@@ -31,7 +31,6 @@ def _make_repo(
         test_dirs=[],
         ignore_dirs=[],
         oas3_path="",
-        node_app=False,
         katana_depth=katana_depth,
         katana_headless=katana_headless,
         katana_headers=katana_headers or {},

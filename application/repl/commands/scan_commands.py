@@ -412,7 +412,9 @@ class ScanCommands:
         )
 
         missing = [
-            r for r in target_repos if not r.oas3_path and not r.merged_oas3_path
+            r
+            for r in target_repos
+            if r.crawl_enabled and not r.oas3_path and not r.merged_oas3_path
         ]
         if not missing:
             return tools

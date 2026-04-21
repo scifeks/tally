@@ -17,10 +17,10 @@ Event chain
           ▼
     URLsDeduped (carries ConversionOutputs bag)
           │
-          ├─► URLSeedsHandler.handle()  →  writes seeds.txt
+          ├─► URLSeedsHandler.handle()  →  writes endpoints/<repo>/merged_urls.txt
           │                                outputs.seeds_path set
           │
-          └─► URLOS3Handler.handle()   →  writes merged_oas3.json
+          └─► URLOS3Handler.handle()   →  writes endpoints/<repo>/merged_oas3.json
                                           outputs.oas3_path set
           │
     (bus.dispatch returns — both handlers have run)
@@ -164,16 +164,20 @@ class URLDedupeHandler:
 class URLSeedsHandler:
     """Subscribes to URLsDeduped; writes plain-text seeds file (one URL/line).
 
-    Output: ``projects/<project>/config/urls/<repo>_seeds.txt``
+    Output: ``projects/<project>/endpoints/<repo>/merged_urls.txt``
     Consumed by: XSStrike (``--seeds``), DalFox (``file`` subcommand).
     """
 
     def handle(self, event: URLsDeduped) -> None:
         output_dir = (
-            Path(event.base_path) / "projects" / event.project_name / "config" / "urls"
+            Path(event.base_path)
+            / "projects"
+            / event.project_name
+            / "endpoints"
+            / event.repo_name
         )
         output_dir.mkdir(parents=True, exist_ok=True)
-        seeds_path = output_dir / f"{event.repo_name}_seeds.txt"
+        seeds_path = output_dir / "merged_urls.txt"
 
         try:
             seeds_path.write_text("\n".join(event.urls) + "\n", encoding="utf-8")
@@ -190,7 +194,7 @@ class URLSeedsHandler:
 class URLOS3Handler:
     """Subscribes to URLsDeduped; writes a merged OAS3 JSON document.
 
-    Output: ``projects/<project>/config/urls/<repo>_merged_oas3.json``
+    Output: ``projects/<project>/endpoints/<repo>/merged_oas3.json``
     Consumed by: ZAP (``-openapifile``).
 
     The generated spec is minimal — one ``get`` operation per unique path —
@@ -199,10 +203,14 @@ class URLOS3Handler:
 
     def handle(self, event: URLsDeduped) -> None:
         output_dir = (
-            Path(event.base_path) / "projects" / event.project_name / "config" / "urls"
+            Path(event.base_path)
+            / "projects"
+            / event.project_name
+            / "endpoints"
+            / event.repo_name
         )
         output_dir.mkdir(parents=True, exist_ok=True)
-        oas3_file = output_dir / f"{event.repo_name}_merged_oas3.json"
+        oas3_file = output_dir / "merged_oas3.json"
 
         paths: dict[str, dict] = {}
         base_url = ""
