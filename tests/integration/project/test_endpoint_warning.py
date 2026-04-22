@@ -78,6 +78,7 @@ class TestEndpointWarning:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             wizard._interview_single_repo(1)
@@ -100,7 +101,7 @@ class TestEndpointWarning:
             ),
         )
         # press Enter for everything (no endpoint file provided)
-        inputs = ["", "", "", "", "", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             InteractiveProjectWizard(pm).edit_repository("test-project", "my-repo")
         out = capsys.readouterr().out
@@ -124,8 +125,8 @@ class TestEndpointWarning:
             ),
         )
         # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs,
-        # "y" to replace, then Enter to leave new path empty
-        inputs = ["", "", "", "", "", "", "", "", "", "y", ""]
+        # "y" to replace, then Enter to leave new path empty, then auth
+        inputs = ["", "", "", "", "", "", "", "", "", "y", "", ""]
         with patch("builtins.input", side_effect=inputs):
             InteractiveProjectWizard(pm).edit_repository("test-project", "my-repo")
         out = capsys.readouterr().out
@@ -148,8 +149,8 @@ class TestEndpointWarning:
                 repositories=[repo],
             ),
         )
-        # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs, "n"
-        inputs = ["", "", "", "", "", "", "", "", "", "n"]
+        # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs, "n", auth
+        inputs = ["", "", "", "", "", "", "", "", "", "n", ""]
         with patch("builtins.input", side_effect=inputs):
             InteractiveProjectWizard(pm).edit_repository("test-project", "my-repo")
         out = capsys.readouterr().out

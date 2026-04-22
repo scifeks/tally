@@ -97,7 +97,7 @@ class FindingsCommands:
             print(f"Port {port} is already in use or server failed to start.")
             return
 
-        url = f"http://localhost:{port}/?token={token}"
+        url = f"http://127.0.0.1:{port}/?h={token}"
         print(f"\nTally Web UI is running at:\n  {url}\n")
         # webbrowser.open() can block on Linux — run in its own daemon thread.
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()

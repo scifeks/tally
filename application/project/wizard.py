@@ -397,7 +397,29 @@ class InteractiveProjectWizard:
             lang_input = _prompt(prompt_label, default=default_langs)
             langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
-            dependencies_file = existing.dependencies_file
+            if "python" in [lang.lower() for lang in langs]:
+                if mode == "docker":
+                    print(
+                        "  Note: if no dependencies file is provided, pip-audit will"
+                        " scan all packages installed in the container environment."
+                    )
+                    dependencies_file = _prompt(
+                        "  Python dependencies file"
+                        " (container path, e.g. /app/requirements.txt, optional)",
+                        default=existing.dependencies_file,
+                    )
+                else:
+                    print(
+                        "  Note: without a dependencies file, pip-audit will be"
+                        " skipped for this repository."
+                    )
+                    dependencies_file = _prompt(
+                        "  Python dependencies file"
+                        " (local path, e.g. requirements.txt, optional)",
+                        default=existing.dependencies_file,
+                    )
+            else:
+                dependencies_file = existing.dependencies_file
 
             # Base URLs
             current_urls = ", ".join(existing.base_urls) if existing.base_urls else ""
@@ -909,6 +931,25 @@ class InteractiveProjectWizard:
         langs = [lang.strip() for lang in lang_input.split(",") if lang.strip()]
 
         dependencies_file = ""
+        if "python" in [lang.lower() for lang in langs]:
+            if mode == "docker":
+                print(
+                    "  Note: if no dependencies file is provided, pip-audit will"
+                    " scan all packages installed in the container environment."
+                )
+                dependencies_file = _prompt(
+                    "  Python dependencies file"
+                    " (container path, e.g. /app/requirements.txt, optional)"
+                )
+            else:
+                print(
+                    "  Note: without a dependencies file, pip-audit will be"
+                    " skipped for this repository."
+                )
+                dependencies_file = _prompt(
+                    "  Python dependencies file"
+                    " (local path, e.g. requirements.txt, optional)"
+                )
 
         # Base URLs
         url_input = _prompt("  Base URLs (comma-separated, optional)")

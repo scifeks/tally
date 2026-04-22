@@ -1,0 +1,57 @@
+"""Middleware: Origin/Referer check on state-mutating /api/* requests."""
+
+from __future__ import annotations
+
+import json
+from urllib.parse import urlparse
+
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.types import ASGIApp
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+_ERR = json.dumps(
+    {
+        "error": {
+            "code": "FORBIDDEN",
+            "message": "Cross-origin request rejected",
+            "details": {},
+        }
+    }
+)
+
+
+class OriginCheckMiddleware(BaseHTTPMiddleware):
+    """Reject cross-origin mutating requests to /api/* paths."""
+
+    def __init__(self, app: ASGIApp, port: int) -> None:
+        super().__init__(app)
+        self._allowed = {
+            f"http://localhost:{port}",
+            f"http://127.0.0.1:{port}",
+        }
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+        if request.method in _SAFE_METHODS:
+            return await call_next(request)
+
+        origin = request.headers.get("origin", "")
+        if not origin:
+            referer = request.headers.get("referer", "")
+            if referer:
+                parsed = urlparse(referer)
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        if origin not in self._allowed:
+            return Response(
+                content=_ERR,
+                status_code=403,
+                media_type="application/json",
+            )
+        return await call_next(request)

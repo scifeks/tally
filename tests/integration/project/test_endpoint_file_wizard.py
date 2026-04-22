@@ -72,7 +72,7 @@ class TestEndpointFileWizard:
         wizard = InteractiveProjectWizard(pm)
 
         # name, type, mode, path, langs, deps_file, base_urls,
-        # test_dirs, ignore_dirs, endpoint_file
+        # test_dirs, ignore_dirs, endpoint_file, auth
         inputs = [
             "my-repo",
             "api",
@@ -84,6 +84,7 @@ class TestEndpointFileWizard:
             "",
             "",
             str(oas3_src),
+            "",  # auth
         ]
         with (
             patch("builtins.input", side_effect=inputs),
@@ -123,6 +124,7 @@ class TestEndpointFileWizard:
             "",
             "",
             str(oas3_src),
+            "",  # auth
         ]
         with (
             patch("builtins.input", side_effect=inputs),
