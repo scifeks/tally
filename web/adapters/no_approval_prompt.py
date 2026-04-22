@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 
+# todo: This is an Interface Segregation Principle violation.
+# this is totally irrelevant for web. This is a REPL concern.
 class NoApprovalPromptAdapter:
     """Satisfies UserPromptPort; always returns True without prompting."""
 
