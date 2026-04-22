@@ -69,8 +69,8 @@ class TestEditRepository:
             container_name="my-container",
         )
         pm = self._setup_project(tmp_path / "pm", repo)
-        # Switch from docker to local; "" for deps file; "" for endpoint file
-        inputs = ["", "", "local", "", "", "", "", "", "", ""]
+        # Switch from docker to local; "" for deps file; "" for endpoint file; "" auth
+        inputs = ["", "", "local", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"
@@ -86,8 +86,8 @@ class TestEditRepository:
         repo = _make_repo(name="my-repo", path=str(repo_dir))
         pm = self._setup_project(tmp_path / "pm", repo)
         # Press Enter for everything — keep existing values
-        # (extra "" for the endpoint file prompt)
-        inputs = ["", "", "", "", "", "", "", "", "", ""]
+        # (extra "" for endpoint file prompt, then auth)
+        inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"

@@ -293,8 +293,17 @@ def test_zero_docs_skips_prompt(tmp_path: Path) -> None:
 
 
 def test_purge_no_args_triggers_confirmation_once(tmp_path: Path) -> None:
-    _, engine, mock_input = _run_purge([], tmp_path=tmp_path)
-    assert mock_input.call_count == 1
+    repl = _make_repl(tmp_path)
+    cmd = PurgeCommand(repl)
+    engine = _make_rag_engine(5)
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", side_effect=["y", "n"]) as mock_input,
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", [])
+    assert mock_input.call_count == 2
     engine.delete_findings.assert_called_once_with(tool=None)
 
 
@@ -442,12 +451,12 @@ def test_purge_proceeds_when_only_reports_exist(tmp_path: Path) -> None:
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
         patch("application.repl.commands.purge.tool_registry") as mock_reg,
-        patch("builtins.input", return_value="y") as mock_input,
+        patch("builtins.input", side_effect=["y", "n"]) as mock_input,
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
         cmd.cmd_purge("purge", [])
 
-    mock_input.assert_called_once()
+    assert mock_input.call_count == 2
     assert not pdf.exists()
     printed = " ".join(str(c) for c in repl.console.print.call_args_list)
     assert "Nothing to purge" not in printed
@@ -490,12 +499,12 @@ def test_purge_proceeds_when_only_tool_outputs_exist(tmp_path: Path) -> None:
     with (
         patch.object(cmd, "_get_rag_engine", return_value=engine),
         patch("application.repl.commands.purge.tool_registry") as mock_reg,
-        patch("builtins.input", return_value="y") as mock_input,
+        patch("builtins.input", side_effect=["y", "n"]) as mock_input,
     ):
         mock_reg.list_tool_names.return_value = MOCK_TOOLS
         cmd.cmd_purge("purge", [])
 
-    mock_input.assert_called_once()
+    assert mock_input.call_count == 2
     assert not scan_file.exists()
     printed = " ".join(str(c) for c in repl.console.print.call_args_list)
     assert "Nothing to purge" not in printed

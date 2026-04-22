@@ -69,6 +69,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -92,6 +93,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -117,6 +119,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -142,6 +145,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -165,6 +169,7 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -200,6 +205,7 @@ class TestEditRepositoryDependenciesFile:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
@@ -213,7 +219,7 @@ class TestEditRepositoryDependenciesFile:
         repo = _make_repo(name="my-repo", dependencies_file="requirements.txt")
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults (including dependencies_file).
-        inputs = ["", "", "", "", "", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"
@@ -230,7 +236,7 @@ class TestEditRepositoryDependenciesFile:
         # enforced. Since _prompt returns default on empty input, and default is
         # "requirements.txt", clearing requires a non-default value.
         # This test confirms that supplying "" uses the existing default unchanged.
-        inputs = ["", "", "", "", "", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"

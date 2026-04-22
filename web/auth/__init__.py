@@ -1,0 +1,1 @@
+"""Session-based authentication layer."""

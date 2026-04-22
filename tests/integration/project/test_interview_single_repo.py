@@ -41,13 +41,14 @@ class TestInterviewSingleRepo:
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
         # inputs: name, type, mode, path, languages, dependencies_file, base_urls,
-        #         test_dirs, ignore_dirs
+        #         test_dirs, ignore_dirs, endpoint_file, auth
         inputs = [
             "my-repo",
             "api",
             "local",
             str(repo_dir),
             "python",
+            "",
             "",
             "",
             "",
@@ -79,6 +80,7 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -104,6 +106,7 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -127,6 +130,7 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -151,6 +155,7 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -176,6 +181,7 @@ class TestInterviewSingleRepo:
             "spec, e2e",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -199,6 +205,7 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -222,6 +229,7 @@ class TestInterviewSingleRepo:
             "",
             "vendor, node_modules",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)
@@ -245,6 +253,7 @@ class TestInterviewSingleRepo:
             "tests",
             "vendor, mocks",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             repo = wizard._interview_single_repo(1)

@@ -8,67 +8,54 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Request, Response
-from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.types import ASGIApp
+from fastapi import FastAPI
 
 from application.rag.engine import RAGEngine
 from infrastructure.store.connection import ConnectionFactory
+from web.api.auth import router as auth_router
 from web.api.config import router as config_router
 from web.api.findings import router as findings_router
 from web.api.projects import router as projects_router
+from web.auth.handshake import HandshakeRegistry
+from web.auth.sessions import SessionStore
+from web.middleware.csrf import CSRFMiddleware
+from web.middleware.host_header import HostHeaderMiddleware
+from web.middleware.origin import OriginCheckMiddleware
+from web.middleware.session_auth import SessionAuthMiddleware
 
 logger = logging.getLogger(__name__)
 
 
-class _BearerTokenMiddleware(BaseHTTPMiddleware):
-    """Require Authorization: Bearer <token> on /api/* routes only.
-
-    Non-API paths (the SPA root, static assets) pass through unauthenticated
-    so that the browser can load index.html and extract the token from the
-    ``?token=`` query parameter before making any API calls.
-    """
-
-    def __init__(self, app: ASGIApp, token: str) -> None:
-        super().__init__(app)
-        self._token = token
-
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        if request.url.path.startswith("/api/"):
-            auth = request.headers.get("Authorization", "")
-            if auth != f"Bearer {self._token}":
-                return Response(
-                    content='{"detail": "Unauthorized"}',
-                    status_code=401,
-                    media_type="application/json",
-                )
-        return await call_next(request)
-
-
-def create_app(base_path: str, project_name: str, token: str) -> FastAPI:
+def create_app(
+    base_path: str,
+    project_name: str,
+    handshake_token: str,
+    *,
+    port: int,
+) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
         base_path: Tally base directory (same as ``ConfigManager.base_path``).
         project_name: Active project name.
-        token: Per-session bearer token for request authentication.
+        handshake_token: One-time token; SPA exchanges it for session cookies.
+        port: Bound port — used by Host/Origin middleware allowlists.
 
     Returns:
         Configured ``FastAPI`` instance.
     """
     app = FastAPI(title="Tally Web UI")
 
-    app.add_middleware(_BearerTokenMiddleware, token=token)
+    registry = HandshakeRegistry()
+    registry.register(handshake_token)
 
-    app.include_router(config_router, prefix="/api/config")
-    app.include_router(findings_router, prefix="/api/findings")
-    app.include_router(projects_router, prefix="/api/projects")
+    app.state.base_path = base_path
+    app.state.project_name = project_name
+    app.state.handshake_registry = registry
+    app.state.session_store = SessionStore()
 
     db_path = Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
-    factory = ConnectionFactory(db_path)
+    app.state.connection_factory = ConnectionFactory(db_path)
 
     rag_engine: RAGEngine | None
     try:
@@ -76,15 +63,24 @@ def create_app(base_path: str, project_name: str, token: str) -> FastAPI:
     except Exception as exc:
         logger.warning("RAGEngine init failed — Chroma sync will be disabled: %s", exc)
         rag_engine = None
-
-    app.state.base_path = base_path
-    app.state.project_name = project_name
-    app.state.token = token
-    app.state.connection_factory = factory
     app.state.rag_engine = rag_engine
+
+    app.include_router(auth_router, prefix="/api/auth")
+    app.include_router(config_router, prefix="/api/config")
+    app.include_router(findings_router, prefix="/api/findings")
+    app.include_router(projects_router, prefix="/api/projects")
+
+    # Middleware added in reverse execution order (Starlette LIFO).
+    # Execution order: Host → Origin → SessionAuth → CSRF → route handler.
+    app.add_middleware(CSRFMiddleware)
+    app.add_middleware(SessionAuthMiddleware)
+    app.add_middleware(OriginCheckMiddleware, port=port)
+    app.add_middleware(HostHeaderMiddleware, port=port)
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists():
+        from fastapi.staticfiles import StaticFiles
+
         app.mount(
             "/",
             StaticFiles(directory=str(static_dir), html=True),
@@ -121,37 +117,34 @@ def _attach_file_logging(base_path: str) -> None:
 
 
 def create_server(
-    base_path: str, project_name: str, port: int, token: str
+    base_path: str,
+    project_name: str,
+    port: int,
+    handshake_token: str,
 ) -> uvicorn.Server:
-    """Create a uvicorn Server ready to be served in a daemon thread.
+    """Create a uvicorn Server ready to run in a daemon thread.
 
-    Signal handling is disabled by replacing ``capture_signals`` with
-    ``contextlib.nullcontext``.  Python only allows signal handlers to be
-    installed on the main thread; without this the server would raise when
-    started from a daemon thread.
-
-    Call ``asyncio.run(server.serve())`` in the daemon thread to start it.
-    Set ``server.should_exit = True`` to stop it gracefully.
+    Signal handling is disabled (``capture_signals`` replaced with
+    ``contextlib.nullcontext``) so the server can start from a non-main thread.
 
     Args:
         base_path: Tally base directory.
         project_name: Active project name.
         port: TCP port to bind (localhost only).
-        token: Per-session bearer token for request authentication.
+        handshake_token: One-time URL token; SPA exchanges it for session cookies.
 
     Returns:
         A configured ``uvicorn.Server`` instance (not yet started).
     """
     _attach_file_logging(base_path)
-    app = create_app(base_path, project_name, token)
+    app = create_app(base_path, project_name, handshake_token, port=port)
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
-    # Disable signal handler installation — only allowed on the main thread.
     server.capture_signals = contextlib.nullcontext  # type: ignore[method-assign]
     return server
 
 
-def start(base_path: str, project_name: str, port: int, token: str) -> None:
+def start(base_path: str, project_name: str, port: int, handshake_token: str) -> None:
     """Launch the web UI server (blocking).
 
     Thin wrapper around ``create_server()`` + ``asyncio.run()``.  Intended for
@@ -160,5 +153,5 @@ def start(base_path: str, project_name: str, port: int, token: str) -> None:
     """
     import asyncio
 
-    server = create_server(base_path, project_name, port, token)
+    server = create_server(base_path, project_name, port, handshake_token)
     asyncio.run(server.serve())

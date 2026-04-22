@@ -14,12 +14,9 @@ from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
 from web.server import create_app
 
-TOKEN = "test-token-abc123"
-AUTH: dict[str, str] = {"Authorization": f"Bearer {TOKEN}"}
+TEST_PORT = 12345
+HANDSHAKE = "test-handshake-abc123xyz"
 
-# Finding used to seed the test database before each test.
-# Named columns (tool, domain, severity, file_path→file, ip_address→host, etc.)
-# map to SQLite columns; all other keys go to the meta JSON blob.
 _BASE_FINDING: dict[str, Any] = {
     "tool": "semgrep",
     "domain": "code",
@@ -30,7 +27,6 @@ _BASE_FINDING: dict[str, Any] = {
     "description": "SQL injection risk",
     "segment": "sast",
     "repo": "test-repo",
-    # -- meta blob keys --
     "type_secret": True,
     "type_vulnerability": False,
     "profile": "test_project",
@@ -40,12 +36,34 @@ _BASE_FINDING: dict[str, Any] = {
 }
 
 
+async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
+    """Exchange handshake for session cookies. Returns mutating-request headers."""
+    resp = await client.post(
+        "/api/auth/exchange",
+        json={"token": HANDSHAKE},
+        headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+    )
+    assert resp.status_code == 200, f"exchange failed: {resp.text}"
+    csrf_token = resp.json()["csrf_token"]
+    # httpx stores Secure cookies in the jar but won't send them over plain
+    # HTTP. Delete the auto-stored domain-specific entry, then inject a
+    # domain-less copy that bypasses the Secure-flag enforcement.
+    for name, value in resp.cookies.items():
+        client.cookies.delete(name, domain="127.0.0.1")
+        client.cookies.set(name, value)
+    return {
+        "X-CSRF-Token": csrf_token,
+        "Origin": f"http://127.0.0.1:{TEST_PORT}",
+    }
+
+
 @pytest_asyncio.fixture()
 async def app_client(tmp_path: Path):
-    """Yield (client, finding_id, rag_mock, factory) for web API tests.
+    """Yield (client, finding_id, rag_mock, factory, mut_headers).
 
     Sets up a real SQLite database, seeds one finding, wires a mock
-    RAGEngine, and returns an httpx.AsyncClient backed by the FastAPI app.
+    RAGEngine, authenticates via the handshake exchange, and returns an
+    httpx.AsyncClient backed by the FastAPI app.
     """
     db_path = tmp_path / "findings.db"
     factory = ConnectionFactory(db_path)
@@ -65,10 +83,14 @@ async def app_client(tmp_path: Path):
         return_value={"ids": ["doc-1"], "metadatas": [{}]}
     )
 
-    app = create_app(str(tmp_path), "testproject", token=TOKEN)
+    app = create_app(str(tmp_path), "testproject", HANDSHAKE, port=TEST_PORT)
     app.state.connection_factory = factory
     app.state.rag_engine = rag_mock
 
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client, finding_id, rag_mock, factory
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url=f"http://127.0.0.1:{TEST_PORT}",
+    ) as client:
+        mut_headers = await _authenticate(client)
+        yield client, finding_id, rag_mock, factory, mut_headers
