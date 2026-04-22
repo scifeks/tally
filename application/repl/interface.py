@@ -28,9 +28,11 @@ from application.repl.commands import (
     TriageCommands,
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
+from application.runtime import RuntimeDependencyService
 from application.startup.checker import print_installed_system_tools
 from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
+from infrastructure.runtime import ClaudeCodeProbe
 from web.server import create_server as _create_web_server
 
 _log = logging.getLogger(__name__)
@@ -211,21 +213,28 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
 class REPL:
     """Interactive REPL shell with Rich UI and prompt_toolkit input."""
 
-    def __init__(self, base_path: str = "."):
+    def __init__(
+        self,
+        base_path: str = ".",
+        runtime_service: RuntimeDependencyService | None = None,
+    ):
         self.base_path = base_path
         self.console = Console()
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
         self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
-        self.help_renderer = HelpRenderer(self.console)
+        if runtime_service is None:
+            runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
+        self._runtime_service = runtime_service
+        self.help_renderer = HelpRenderer(self.console, runtime_service=runtime_service)
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
-        self.triage_commands = TriageCommands(self)
+        self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
         self.findings_commands = FindingsCommands(
             self, server_factory=_create_web_server
         )
@@ -243,7 +252,9 @@ class REPL:
             "[dim]Run 'tally --check' to see full dependency status at any time.[/dim]"
         )
         self._print_banner()
-        print_installed_system_tools(self.console)
+        print_installed_system_tools(
+            self.console, runtime_deps=self._runtime_service.statuses()
+        )
         print_discovery_summary(self.console)
 
         history_path = Path.home() / ".tally-repl-history"
@@ -290,7 +301,9 @@ class REPL:
         prompt boundary.
         """
         self._print_banner()
-        print_installed_system_tools(self.console)
+        print_installed_system_tools(
+            self.console, runtime_deps=self._runtime_service.statuses()
+        )
         print_discovery_summary(self.console)
 
         while True:
