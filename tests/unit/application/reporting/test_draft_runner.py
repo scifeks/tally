@@ -12,6 +12,35 @@ from application.reporting.draft_runner import (
 )
 from application.reporting.risk_level import RiskCounts, RiskLevel
 
+
+class _AlwaysConfirm:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
+class _AlwaysDecline:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return False
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
+class _SpyPrompt:
+    def __init__(self) -> None:
+        self.confirm_calls: list[str] = []
+
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        self.confirm_calls.append(question)
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
 _ZERO_RISK_COUNTS = RiskCounts(
     confirmed_critical=0,
     confirmed_high=0,
@@ -43,6 +72,7 @@ class TestGenerateDraftPrompt:
         section = "executive-summary"
         existing = _seed_draft(tmp_path, project, section)
 
+        spy = _SpyPrompt()
         with (
             patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
             patch("application.reporting.draft_runner.make_store") as mock_store,
@@ -51,7 +81,6 @@ class TestGenerateDraftPrompt:
             patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
             patch("application.reporting.draft_runner.RAGEngine"),
             patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
-            patch("builtins.input") as mock_input,
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_generator = MagicMock()
@@ -77,10 +106,11 @@ class TestGenerateDraftPrompt:
                 project=project,
                 base_path=tmp_path,
                 console=_make_console(),
+                prompt=spy,
                 force=True,
             )
 
-        mock_input.assert_not_called()
+        assert spy.confirm_calls == [], "confirm() must not be called when force=True"
         assert existing.read_text(encoding="utf-8") == "new content"
 
     def test_no_force_user_confirms_overwrites(self, tmp_path: Path) -> None:
@@ -97,7 +127,6 @@ class TestGenerateDraftPrompt:
             patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
             patch("application.reporting.draft_runner.RAGEngine"),
             patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
-            patch("builtins.input", return_value="y"),
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_generator = MagicMock()
@@ -123,6 +152,7 @@ class TestGenerateDraftPrompt:
                 project=project,
                 base_path=tmp_path,
                 console=_make_console(),
+                prompt=_AlwaysConfirm(),
                 force=False,
             )
 
@@ -137,7 +167,6 @@ class TestGenerateDraftPrompt:
         with (
             patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
             patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("builtins.input", return_value="n"),
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_generator = MagicMock()
@@ -151,6 +180,7 @@ class TestGenerateDraftPrompt:
                 project=project,
                 base_path=tmp_path,
                 console=console,
+                prompt=_AlwaysDecline(),
                 force=False,
             )
 
@@ -166,6 +196,7 @@ class TestGenerateDraftPrompt:
             project="acme",
             base_path=tmp_path,
             console=console,
+            prompt=_AlwaysConfirm(),
             force=False,
         )
         printed = " ".join(str(c) for c in console.print.call_args_list)
@@ -212,6 +243,7 @@ class TestGenerateDraftPrompt:
                 project=project,
                 base_path=tmp_path,
                 console=_make_console(),
+                prompt=_AlwaysConfirm(),
                 force=True,
                 skip_triage=True,
             )
@@ -257,6 +289,7 @@ class TestGenerateDraftPrompt:
                 project=project,
                 base_path=tmp_path,
                 console=console,
+                prompt=_AlwaysConfirm(),
                 force=True,
                 skip_triage=True,
             )

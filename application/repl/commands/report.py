@@ -91,15 +91,18 @@ class ReportCommand:
                 self.repl.console.print("[yellow]Assembly cancelled.[/yellow]")
                 return
 
+        from application.repl.adapters.rich_console_prompt import (
+            RichConsolePromptAdapter,
+        )
+
         assembler = ReportAssembler(
             project=self.repl.active_project,
             base_path=self.repl.base_path,
+            prompt=RichConsolePromptAdapter(),
             testing_type=testing_type,
             engagement_date=engagement_date,
         )
 
-        # build_context() may call input() for draft confirmations — run
-        # outside the spinner so prompts are visible.
         logger.info("Assembling report for project %r", self.repl.active_project)
         try:
             context = assembler.build_context()
@@ -225,12 +228,18 @@ class ReportCommand:
 
         sections = [args[0]] if args else get_all_sections()
 
+        from application.repl.adapters.rich_console_prompt import (
+            RichConsolePromptAdapter,
+        )
+
+        prompt = RichConsolePromptAdapter()
         for section in sections:
             generate_draft(
                 section=section,
                 project=self.repl.active_project,
                 base_path=self.repl.base_path,
                 console=self.repl.console,
+                prompt=prompt,
                 force=force,
                 skip_triage=skip_triage,
             )
@@ -270,15 +279,18 @@ class ReportCommand:
             )
             return
 
+        from application.repl.adapters.rich_console_prompt import (
+            RichConsolePromptAdapter,
+        )
+
         assembler = ReportAssembler(
             project=self.repl.active_project,
             base_path=self.repl.base_path,
+            prompt=RichConsolePromptAdapter(),
             testing_type=testing_type,
             engagement_date=engagement_date,
         )
 
-        # build_context() calls input() for any section that has no reviewed
-        # copy — those prompts must be visible, so run it outside the spinner.
         try:
             context = assembler.build_context()
         except SectionMissingError as exc:

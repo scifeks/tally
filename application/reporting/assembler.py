@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import jinja2
 
@@ -18,6 +19,9 @@ from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from domain.reporting.context import ReportContext
 from infrastructure.store import make_store
+
+if TYPE_CHECKING:
+    from application.ports.user_prompt import UserPromptPort
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +90,13 @@ class ReportAssembler:
         self,
         project: str,
         base_path: str | Path,
+        prompt: UserPromptPort,
         testing_type: str = "white_box",
         engagement_date: str | None = None,
     ) -> None:
         self._project = project
         self._base_path = Path(base_path)
+        self._prompt = prompt
         self._testing_type = testing_type
         self._engagement_date = engagement_date
 
@@ -129,7 +135,7 @@ class ReportAssembler:
             config.abbreviation, manager.global_config.report_finding_prefix
         )
 
-        resolver = DraftResolver(self._project, self._base_path)
+        resolver = DraftResolver(self._project, self._base_path, self._prompt)
 
         # -- LLM-drafted sections ----------------------------------------
         draft_html: dict[str, str] = {}

@@ -30,7 +30,9 @@ class ConnectionFactory:
         """Context manager yielding an open SQLite connection, closed on exit."""
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA foreign_keys=ON")
         try:
             yield conn

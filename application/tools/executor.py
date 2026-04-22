@@ -7,6 +7,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, NamedTuple
 
+from application.ports.user_prompt import UserPromptPort
 from domain.tools.base import ToolResult, ToolWrapper
 from domain.tools.interface import ExecutionPass
 
@@ -55,11 +56,11 @@ class ToolExecutor:
         self,
         project_name: str,
         base_path: Path,
-        auto_approve: bool = False,
+        prompt: UserPromptPort,
     ) -> None:
         self.project_name = project_name
         self.base_path = Path(base_path)
-        self.auto_approve = auto_approve
+        self._prompt = prompt
         self._sudo_approved = False
 
     # ------------------------------------------------------------------
@@ -80,7 +81,9 @@ class ToolExecutor:
 
         Args:
             tool:         The ToolWrapper to run.
-            auto_approve: Override instance-level auto_approve for this call.
+            auto_approve: Pass True to bypass the approval prompt (used by
+                          run() after execute_tool_passes has already obtained
+                          per-tool consent).
             timeout:      Seconds before the subprocess is killed (default 300).
             label:        Prefix for saved output filenames (e.g. "webservers").
             cwd:          Working directory for the subprocess. Required for
@@ -89,7 +92,6 @@ class ToolExecutor:
             **kwargs:     Passed verbatim to tool.build_command().
         """
         timestamp = ToolResult.now_iso()
-        effective_auto = self.auto_approve if auto_approve is None else auto_approve
 
         # 1. Build command argv
         try:
@@ -106,7 +108,7 @@ class ToolExecutor:
             return self._failure(tool.name, timestamp, str(exc))
 
         # 3. Human approval gate
-        if not effective_auto:
+        if not auto_approve:
             if not self._prompt_approval(tool.name, cmd):
                 return self._failure(tool.name, timestamp, "Execution denied by user.")
 
@@ -207,30 +209,18 @@ class ToolExecutor:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    @staticmethod
-    def _prompt_approval(tool_name: str, cmd: list[str]) -> bool:
+    def _prompt_approval(self, tool_name: str, cmd: list[str]) -> bool:
         print()
         print("!!HUMAN APPROVAL REQUIRED!!")
         print(f"Tool:    {tool_name}")
         print(f"Command: {' '.join(cmd)}")
-        try:
-            answer = input("Approve execution? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return False
-        return answer in ("y", "yes")
+        return self._prompt.confirm("Approve execution?")
 
-    @staticmethod
-    def _prompt_sudo(tool_name: str, sudo_cmd: list[str]) -> bool:
+    def _prompt_sudo(self, tool_name: str, sudo_cmd: list[str]) -> bool:
         print()
         print(f"[{tool_name}] This scan type requires root privileges.")
         print(f"Command: {' '.join(sudo_cmd)}")
-        try:
-            answer = input("Retry with sudo? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return False
-        return answer in ("y", "yes")
+        return self._prompt.confirm("Retry with sudo?")
 
     @staticmethod
     def _failure(tool_name: str, timestamp: str, message: str) -> ToolResult:

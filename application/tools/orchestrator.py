@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from application.ports.user_prompt import UserPromptPort
 from application.tools.display import OrchestratorDisplay
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
@@ -46,6 +47,7 @@ class ScanOrchestrator:
         tool_registry:  Registry of available tool wrappers.
         tool_executor:  Configured executor (carries base_path and project_name).
         event_bus:      EventBus for dispatching ToolCompleted events.
+        prompt:         UserPromptPort adapter (REPL or API).
         run_id:         Optional run ID forwarded through events.
         factory:        Optional ToolWrapperFactory; defaults to a fresh instance.
         console:        Optional Rich console for display output.
@@ -57,18 +59,18 @@ class ScanOrchestrator:
         tool_registry: ToolRegistry,
         tool_executor: ToolExecutor,
         event_bus: EventBus,
+        prompt: UserPromptPort,
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
         console: Console | None = None,
-        auto_approve: bool = False,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
         self.executor = tool_executor
         self._event_bus = event_bus
+        self._prompt = prompt
         self._run_id = run_id
         self.display = OrchestratorDisplay(console=console)
-        self._auto_approve: bool = auto_approve
         self._factory = factory or ToolWrapperFactory()
 
         from core.config.manager import ConfigManager
@@ -79,21 +81,14 @@ class ScanOrchestrator:
     # Internal helper
     # ------------------------------------------------------------------
 
-    def _on_auto_approve_set(self) -> None:
-        """Callback invoked when the user approves all remaining tools."""
-        self._auto_approve = True
-
-    def _make_config(
-        self, auto_approve: bool = False, remaining_peers: int = 0
-    ) -> ScanTypeConfig:
+    def _make_config(self, remaining_peers: int = 0) -> ScanTypeConfig:
         """Build a ScanTypeConfig from current orchestrator state."""
         return ScanTypeConfig(
             project_name=self.project_name,
             base_path=str(self.executor.base_path),
             config_manager=self._config,
             run_id=self._run_id,
-            auto_approve=auto_approve or self._auto_approve,
-            on_auto_approve=self._on_auto_approve_set,
+            prompt=self._prompt,
             remaining_peers=remaining_peers,
         )
 
@@ -113,45 +108,41 @@ class ScanOrchestrator:
 
     def run_full_scan(
         self,
-        auto_approve: bool = False,
         exclude_segments: list[str] | None = None,
         exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
         return FullScan(exclude_segments or [], exclude_tools or set()).execute(
-            self._make_config(auto_approve), self._make_resources()
+            self._make_config(), self._make_resources()
         )
 
     def run_segment(
         self,
         segment_name: str,
-        auto_approve: bool = False,
         remaining_peers: int = 0,
     ) -> ScanSummary:
         return SegmentScan(segment_name).execute(
-            self._make_config(auto_approve, remaining_peers=remaining_peers),
+            self._make_config(remaining_peers=remaining_peers),
             self._make_resources(),
         )
 
     def run_repo_scan(
         self,
         repo_name: str,
-        auto_approve: bool = False,
         exclude_dirs: list[str] | None = None,
         severity_filter: str | None = None,
         exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
         return RepoScan(repo_name, exclude_tools or set()).execute(
-            self._make_config(auto_approve), self._make_resources()
+            self._make_config(), self._make_resources()
         )
 
     def run_tool_on_all_repos(
         self,
         tool_name: str,
-        auto_approve: bool = False,
         remaining_peers: int = 0,
     ) -> ScanSummary:
         return ToolOnAllReposScan(tool_name).execute(
-            self._make_config(auto_approve, remaining_peers=remaining_peers),
+            self._make_config(remaining_peers=remaining_peers),
             self._make_resources(),
         )
 
@@ -159,10 +150,9 @@ class ScanOrchestrator:
         self,
         tool_name: str,
         repo_name: str,
-        auto_approve: bool = False,
         remaining_peers: int = 0,
     ) -> ScanSummary:
         return ToolOnRepoScan(tool_name, repo_name).execute(
-            self._make_config(auto_approve, remaining_peers=remaining_peers),
+            self._make_config(remaining_peers=remaining_peers),
             self._make_resources(),
         )

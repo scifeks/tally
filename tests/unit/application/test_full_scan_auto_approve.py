@@ -14,11 +14,15 @@ from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
 
 
 def _make_config(**overrides) -> ScanTypeConfig:
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     defaults: dict = dict(
         project_name="proj",
         base_path="/tmp/proj",
         config_manager=MagicMock(),
         run_id=None,
+        prompt=prompt,
     )
     defaults.update(overrides)
     return ScanTypeConfig(**defaults)

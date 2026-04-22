@@ -23,6 +23,19 @@ from application.reporting.resolver import SectionMissingError  # noqa: E402
 from domain.reporting.context import ReportContext  # noqa: E402
 
 # ---------------------------------------------------------------------------
+# Stubs
+# ---------------------------------------------------------------------------
+
+
+class _AlwaysConfirm:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -44,6 +57,7 @@ def _make_assembler(tmp_path: Path) -> ReportAssembler:
     return ReportAssembler(
         project="acme",
         base_path=tmp_path,
+        prompt=_AlwaysConfirm(),
         testing_type="white_box",
         engagement_date="2026-03-22",
     )
@@ -217,6 +231,7 @@ class TestBuildContext:
             assembler = ReportAssembler(
                 project="acme",
                 base_path=tmp_path,
+                prompt=_AlwaysConfirm(),
                 # engagement_date deliberately omitted
             )
             ctx = assembler.build_context()
