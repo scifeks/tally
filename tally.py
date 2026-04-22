@@ -8,8 +8,10 @@ from datetime import date
 from pathlib import Path
 
 from application.repl import REPL
+from application.runtime import RuntimeDependencyService
 from application.startup.checker import DependencyChecker
 from application.tools.registry import discover_tools
+from infrastructure.runtime import ClaudeCodeProbe
 
 _BASE_PATH = "."
 
@@ -94,18 +96,18 @@ if __name__ == "__main__":
     # registry.py ran at import time before setup completed).
     discover_tools(_BASE_PATH)
 
-    checker = DependencyChecker()
+    runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
 
     if args.check:
-        result = checker.run()
+        result = DependencyChecker(runtime_service=runtime_service).run()
         sys.exit(0 if result.all_required_present else 1)
 
     if not args.skip_checks:
-        result = checker.run(silent=True)
+        result = DependencyChecker().run(silent=True)
         if not result.all_required_present:
             sys.exit(1)
 
     try:
-        REPL(base_path=_BASE_PATH).run()
+        REPL(base_path=_BASE_PATH, runtime_service=runtime_service).run()
     except KeyboardInterrupt:
         pass

@@ -12,13 +12,24 @@ from application.triage.orchestrator import (
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
+    from application.runtime import RuntimeDependencyService
 
 
 class TriageCommands:
-    def __init__(self, repl: REPL) -> None:
+    def __init__(
+        self,
+        repl: REPL,
+        runtime_service: RuntimeDependencyService | None = None,
+    ) -> None:
         self._repl = repl
+        self._runtime_service = runtime_service
 
     def cmd_triage(self, _cmd: str, args: list[str]) -> None:
+        if self._runtime_service is not None and not self._runtime_service.is_installed(
+            "claude"
+        ):
+            self._repl.console.print("[red]Claude Code is required for Triage[/red]")
+            return
         if not self._repl.active_project:
             self._repl.console.print("[red]Error:[/red] No active project set.")
             return

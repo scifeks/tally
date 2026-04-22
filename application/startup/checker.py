@@ -1,14 +1,23 @@
 """Dependency checker for tally startup validation."""
 
+from __future__ import annotations
+
 import importlib
 import importlib.metadata
 import inspect
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.table import Table
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from application.runtime import RuntimeDependencyService
+    from domain.runtime.models import RuntimeDependencyStatus
 
 _INSTALL_HINTS = {
     "semgrep": "pip install semgrep",
@@ -42,7 +51,7 @@ def _parse_version(version_str: str) -> tuple[int, ...] | None:
 @dataclass
 class DepCheck:
     name: str
-    type: str  # 'python', 'package', 'system_tool'
+    type: str  # 'python', 'package', 'system_tool', 'runtime_dep'
     required: bool
     installed: bool
     version: str | None = None
@@ -59,8 +68,9 @@ class CheckResult:
 
 
 class DependencyChecker:
-    def __init__(self) -> None:
+    def __init__(self, runtime_service: RuntimeDependencyService | None = None) -> None:
         self._console = Console()
+        self._runtime_service = runtime_service
 
     def run(self, auto_fix: bool = False, silent: bool = False) -> CheckResult:
         checks: list[DepCheck] = []
@@ -68,6 +78,18 @@ class DependencyChecker:
         checks.append(self.check_python_version())
         checks.extend(self.check_python_packages())
         checks.extend(self.check_system_tools())
+        if self._runtime_service is not None:
+            for status in self._runtime_service.statuses():
+                checks.append(
+                    DepCheck(
+                        name=status.name,
+                        type="runtime_dep",
+                        required=True,
+                        installed=status.installed,
+                        version=status.version,
+                        install_hint=status.install_hint,
+                    )
+                )
 
         missing_required = [c for c in checks if c.required and not c.installed]
         missing_optional = [c for c in checks if not c.required and not c.installed]
@@ -239,7 +261,10 @@ class DependencyChecker:
             )
 
 
-def print_installed_system_tools(console: Console) -> None:
+def print_installed_system_tools(
+    console: Console,
+    runtime_deps: Sequence[RuntimeDependencyStatus] | None = None,
+) -> None:
     """Print just the system tools table with 'Installed System Tools' header."""
     checker = DependencyChecker()
     tool_checks = checker.check_system_tools()
@@ -269,5 +294,15 @@ def print_installed_system_tools(console: Console) -> None:
             status = "[yellow]! NOT FOUND[/yellow]"
         hint = check.install_hint or ""
         table.add_row(check.name, check.type, status, hint)
+
+    if runtime_deps is not None:
+        for dep in runtime_deps:
+            if dep.installed:
+                safe = _esc(dep.version) if dep.version else "installed"
+                status = f"[green]v {safe}[/green]"
+            else:
+                status = "[yellow]! NOT FOUND[/yellow]"
+            hint = dep.install_hint or ""
+            table.add_row(dep.name, "runtime_dep", status, hint)
 
     console.print(table)
