@@ -7,6 +7,13 @@ from unittest.mock import MagicMock
 from domain.tools.scan_types.models import ScanTypeConfig
 
 
+def _make_prompt() -> MagicMock:
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
+    return prompt
+
+
 class TestScanTypeConfig:
     def _make(self, **overrides) -> ScanTypeConfig:
         defaults: dict = dict(
@@ -14,6 +21,7 @@ class TestScanTypeConfig:
             base_path="/tmp/proj",
             config_manager=MagicMock(),
             run_id=42,
+            prompt=_make_prompt(),
         )
         defaults.update(overrides)
         return ScanTypeConfig(**defaults)
@@ -24,26 +32,14 @@ class TestScanTypeConfig:
         assert cfg.base_path == "/tmp/proj"
         assert cfg.run_id == 42
 
-    def test_auto_approve_defaults_to_false(self) -> None:
-        cfg = self._make()
-        assert cfg.auto_approve is False
-
-    def test_auto_approve_can_be_set_true(self) -> None:
-        cfg = self._make(auto_approve=True)
-        assert cfg.auto_approve is True
+    def test_prompt_is_stored(self) -> None:
+        prompt = _make_prompt()
+        cfg = self._make(prompt=prompt)
+        assert cfg.prompt is prompt
 
     def test_run_id_can_be_none(self) -> None:
         cfg = self._make(run_id=None)
         assert cfg.run_id is None
-
-    def test_on_auto_approve_defaults_to_none(self) -> None:
-        cfg = self._make()
-        assert cfg.on_auto_approve is None
-
-    def test_on_auto_approve_can_be_set(self) -> None:
-        callback = lambda: None  # noqa: E731
-        cfg = self._make(on_auto_approve=callback)
-        assert cfg.on_auto_approve is callback
 
     def test_remaining_peers_defaults_to_zero(self) -> None:
         cfg = self._make()

@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\s\-]*$")
 
 _REPO_TYPE_HELP = (
-    "  Type  valid: library | api | ui-old\n"
-    "        allowed combos: library  |  api  |  ui-old  |  api,ui-old\n"
+    "  Type  valid: library | api | ui\n"
+    "        allowed combos: library  |  api  |  ui  |  api,ui\n"
     "        library is mutually exclusive; use commas for multiple types"
 )
 
@@ -69,11 +69,11 @@ def _validate_repo_types(types: list[str]) -> str | None:
     """Return a user-facing error message, or None if types are valid."""
     if not types:
         return "Repository type is required."
-    valid = {"library", "api", "ui-old"}
+    valid = {"library", "api", "ui"}
     invalid = set(types) - valid
     if invalid:
         bad = ", ".join(sorted(invalid))
-        return f"Invalid type(s): {bad}. Valid values: library, api, ui-old"
+        return f"Invalid type(s): {bad}. Valid values: library, api, ui"
     if "library" in types and len(types) > 1:
         return (
             "'library' is mutually exclusive and cannot be combined with other types."

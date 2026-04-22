@@ -14,6 +14,7 @@ from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
 from tests.conftest import requires_gitleaks
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 
 pytestmark = pytest.mark.e2e
 
@@ -94,7 +95,9 @@ def _run_scan(
     tool = tool_registry.get_tool("gitleaks")
     assert tool is not None, "gitleaks not registered after discover_tools"
     executor = ToolExecutor(
-        project_name=project_name, base_path=base_path, auto_approve=True
+        project_name=project_name,
+        base_path=base_path,
+        prompt=NoApprovalPromptAdapter(),
     )
     return executor.execute(
         tool,

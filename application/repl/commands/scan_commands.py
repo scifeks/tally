@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.factory import ToolWrapperFactory
@@ -280,6 +281,7 @@ class ScanCommands:
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
+            prompt=RichConsolePromptAdapter(),
         )
         result = executor.execute(
             tool,
@@ -490,9 +492,11 @@ class ScanCommands:
         from application.tools.orchestrator import ScanOrchestrator
 
         assert self.repl.active_project is not None
+        prompt = RichConsolePromptAdapter(auto_approve=auto_approve)
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
+            prompt=prompt,
         )
         bus = PipelineFactory.create(
             console=self.repl.console,
@@ -503,10 +507,10 @@ class ScanCommands:
             tool_registry=tool_registry,
             tool_executor=executor,
             event_bus=bus,
+            prompt=prompt,
             run_id=run_id,
             factory=ToolWrapperFactory(),
             console=self.repl.console,
-            auto_approve=auto_approve,
         )
 
     def _export_summary(self, summary, export_path: str) -> None:

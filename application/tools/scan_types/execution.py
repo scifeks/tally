@@ -70,24 +70,10 @@ def execute_tool_passes(
     remaining_tools: int = 0,
 ) -> ToolResult | None:
     """Prompt approval once, run all ExecutionPasses, return merged result."""
-    if not config.auto_approve:
-        try:
-            answer = input(f"  Run {tool.name}? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return None
-        if answer not in ("y", "yes"):
-            return None
-        if remaining_tools > 0:
-            try:
-                all_ans = input("    Approve all remaining? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-            else:
-                if all_ans in ("y", "yes"):
-                    config.auto_approve = True
-                    if config.on_auto_approve:
-                        config.on_auto_approve()
+    if not config.prompt.confirm(f"  Run {tool.name}?"):
+        return None
+    if remaining_tools > 0:
+        config.prompt.approve_all_remaining()
 
     passes = tool.build_execution_passes(context)
     if not passes:

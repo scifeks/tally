@@ -33,16 +33,16 @@ class TestRepositoryTypeSchema:
         assert repo.type == ["api"]
 
     def test_valid_ui(self) -> None:
-        repo = _make_repo(type=["ui-old"])
-        assert repo.type == ["ui-old"]
+        repo = _make_repo(type=["ui"])
+        assert repo.type == ["ui"]
 
     def test_valid_library(self) -> None:
         repo = _make_repo(type=["library"])
         assert repo.type == ["library"]
 
     def test_valid_api_ui(self) -> None:
-        repo = _make_repo(type=["api", "ui-old"])
-        assert repo.type == ["api", "ui-old"]
+        repo = _make_repo(type=["api", "ui"])
+        assert repo.type == ["api", "ui"]
 
     def test_missing_type_raises(self) -> None:
         with pytest.raises(Exception):
@@ -66,7 +66,7 @@ class TestRepositoryTypeSchema:
 
     def test_library_with_ui_raises(self) -> None:
         with pytest.raises(Exception, match="library"):
-            _make_repo(type=["library", "ui-old"])
+            _make_repo(type=["library", "ui"])
 
     def test_no_paths_raises(self) -> None:
         with pytest.raises(Exception, match="path"):

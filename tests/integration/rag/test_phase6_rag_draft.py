@@ -17,6 +17,15 @@ from application.reporting.risk_level import RiskCounts
 
 pytestmark = pytest.mark.integration
 
+
+class _AlwaysConfirm:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 
 _ZERO_RISK_COUNTS = RiskCounts(
@@ -141,6 +150,7 @@ class TestPhase6RagDraft:
                 project=project,
                 base_path=base_path,
                 console=_make_console(),
+                prompt=_AlwaysConfirm(),
                 force=True,
             )
 
@@ -200,6 +210,7 @@ class TestPhase6RagDraft:
                 project=project,
                 base_path=base_path,
                 console=_make_console(),
+                prompt=_AlwaysConfirm(),
                 force=True,
             )
 
@@ -255,6 +266,7 @@ class TestPhase6RagDraft:
                 project=project,
                 base_path=base_path,
                 console=_make_console(),
+                prompt=_AlwaysConfirm(),
                 force=True,
             )
 

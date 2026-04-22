@@ -12,11 +12,12 @@ import pytest
 
 from application.tools.executor import ToolExecutor, _needs_root
 from domain.tools.base import ToolResult
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 
 
 @pytest.fixture()
 def executor(tmp_path: Path) -> ToolExecutor:
-    return ToolExecutor("test-project", tmp_path, auto_approve=True)
+    return ToolExecutor("test-project", tmp_path, NoApprovalPromptAdapter())
 
 
 class TestExecutorErrorPaths:

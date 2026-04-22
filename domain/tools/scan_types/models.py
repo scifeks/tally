@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from domain.tools.base import ToolResult
 
 if TYPE_CHECKING:
+    from application.ports.user_prompt import UserPromptPort
     from core.config.manager import ConfigManager
 
 SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web"]
@@ -31,8 +31,7 @@ class ScanTypeConfig:
     base_path: str
     config_manager: ConfigManager
     run_id: int | None
-    auto_approve: bool = False
-    on_auto_approve: Callable[[], None] | None = field(default=None, repr=False)
+    prompt: UserPromptPort
     remaining_peers: int = 0
 
 

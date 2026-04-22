@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from application.reporting.blurbs import load_blurb
+
+if TYPE_CHECKING:
+    from application.ports.user_prompt import UserPromptPort
 
 
 class SectionMissingError(Exception):
@@ -23,10 +27,13 @@ class DraftResolver:
     :meth:`_md_to_html` before being returned.
     """
 
-    def __init__(self, project: str, base_path: str | Path) -> None:
+    def __init__(
+        self, project: str, base_path: str | Path, prompt: UserPromptPort
+    ) -> None:
         root = Path(base_path) / "projects" / project / "reports"
         self._draft_dir = root / "draft"
         self._reviewed_dir = root / "reviewed"
+        self._prompt = prompt
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -57,10 +64,9 @@ class DraftResolver:
                 f"Run 'report draft {section}' to generate a draft."
             )
 
-        answer = input(
-            f"Section {section!r} has no reviewed copy. Proceed with draft? [y/N] "
-        )
-        if answer.strip().lower() not in ("y", "yes"):
+        if not self._prompt.confirm(
+            f"Section {section!r} has no reviewed copy. Proceed with draft?"
+        ):
             raise SectionMissingError(
                 f"Assembly halted: section {section!r} has no reviewed copy."
             )

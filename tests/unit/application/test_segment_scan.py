@@ -59,12 +59,15 @@ def _make_mock_repo(
 def mock_config() -> Any:
     cm = MagicMock()
     cm.load_repositories.return_value = [_make_mock_repo()]
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
         config_manager=cm,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
     )
 
 

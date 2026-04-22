@@ -54,12 +54,15 @@ def _make_mock_tool_obj(
 def mock_config() -> Any:
     cm = MagicMock()
     cm.load_repositories.return_value = [_make_mock_repo()]
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
         config_manager=cm,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
     )
 
 
@@ -130,12 +133,15 @@ class TestRepoScan:
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
         cm = MagicMock()
         cm.load_repositories.return_value = [repo]
+        _prompt = MagicMock()
+        _prompt.confirm.return_value = True
+        _prompt.approve_all_remaining.return_value = None
         config = ScanTypeConfig(
             project_name="test",
             base_path="/tmp",
             config_manager=cm,
             run_id=1,
-            auto_approve=True,
+            prompt=_prompt,
         )
         pip_audit = MagicMock()
         pip_audit.name = "pip-audit"
@@ -166,12 +172,15 @@ class TestRepoScan:
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
         cm = MagicMock()
         cm.load_repositories.return_value = [repo]
+        _prompt = MagicMock()
+        _prompt.confirm.return_value = True
+        _prompt.approve_all_remaining.return_value = None
         config = ScanTypeConfig(
             project_name="test",
             base_path="/tmp",
             config_manager=cm,
             run_id=1,
-            auto_approve=True,
+            prompt=_prompt,
         )
         pip_audit = MagicMock()
         pip_audit.name = "pip-audit"
@@ -205,12 +214,15 @@ class TestRepoScan:
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
         cm = MagicMock()
         cm.load_repositories.return_value = [repo]
+        _prompt = MagicMock()
+        _prompt.confirm.return_value = True
+        _prompt.approve_all_remaining.return_value = None
         config = ScanTypeConfig(
             project_name="test",
             base_path="/tmp",
             config_manager=cm,
             run_id=1,
-            auto_approve=True,
+            prompt=_prompt,
         )
         semgrep = MagicMock()
         semgrep.name = "semgrep"
@@ -242,12 +254,15 @@ class TestRepoScan:
         repo = _make_mock_repo(name="my-repo", languages=[], path=str(tmp_path))
         cm = MagicMock()
         cm.load_repositories.return_value = [repo]
+        _prompt = MagicMock()
+        _prompt.confirm.return_value = True
+        _prompt.approve_all_remaining.return_value = None
         config = ScanTypeConfig(
             project_name="test",
             base_path="/tmp",
             config_manager=cm,
             run_id=1,
-            auto_approve=True,
+            prompt=_prompt,
         )
         osv = MagicMock()
         osv.name = "osv-scanner"

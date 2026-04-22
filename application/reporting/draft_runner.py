@@ -20,6 +20,9 @@ from infrastructure.store import make_store
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from application.ports.user_prompt import UserPromptPort
+
+
 logger = logging.getLogger(__name__)
 
 _SECTION_RAG_N_RESULTS: dict[str, int] = {
@@ -82,6 +85,7 @@ def generate_draft(
     project: str,
     base_path: str | Path,
     console: Console,
+    prompt: UserPromptPort,
     force: bool = False,
     skip_triage: bool = False,
 ) -> None:
@@ -92,6 +96,7 @@ def generate_draft(
         project:      Active project name.
         base_path:    Application root path.
         console:      Rich Console for user output.
+        prompt:       UserPromptPort for overwrite confirmation.
         force:        Skip overwrite confirmation if True.
         skip_triage:  If True, include all findings regardless of triage status.
     """
@@ -118,12 +123,8 @@ def generate_draft(
     draft_path = generator.draft_path
 
     if draft_path.exists() and not force:
-        console.print(
-            f"Draft already exists: [bold]{draft_path}[/bold]\nOverwrite? [y/N] ",
-            end="",
-        )
-        answer = input().strip().lower()
-        if answer != "y":
+        console.print(f"Draft already exists: [bold]{draft_path}[/bold]")
+        if not prompt.confirm("Overwrite?"):
             console.print("[dim]Aborted.[/dim]")
             return
 

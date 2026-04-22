@@ -173,7 +173,7 @@ def test_repo_add_library_with_ui_rejected(
     h.expect("Name")
     h.send("test-repo")
     h.expect("Type:")
-    h.send("library,ui-old")
+    h.send("library,ui")
     h.expect("mutually exclusive")
     h.send("library")
     h.expect("Mode")
