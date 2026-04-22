@@ -38,9 +38,11 @@ export default function Dashboard() {
   const runningScans = projectScans.filter(s => s.status === 'running').length
 
   const openCrit = projectFindings.filter(
-    f => f.status === 'open' && f.severity === 'critical'
+    f => f.status === 'active' && f.severity === 'critical'
   ).length
-  const openHigh = projectFindings.filter(f => f.status === 'open' && f.severity === 'high').length
+  const openHigh = projectFindings.filter(
+    f => f.status === 'active' && f.severity === 'high'
+  ).length
 
   return (
     <div className="h-full overflow-auto">
@@ -138,7 +140,7 @@ export default function Dashboard() {
                       className="grid grid-cols-[90px_70px_90px_1fr_80px_110px] items-center px-3 h-8 border-b border-border last:border-b-0 hover:bg-muted/50"
                     >
                       <div className="text-dim tabular-nums">{s.id}</div>
-                      <div className="uppercase text-muted-foreground text-[11px]">{s.domain}</div>
+                      <div className="uppercase text-muted-foreground text-[11px]">{s.segment}</div>
                       <div className="text-foreground">{s.tool}</div>
                       <div>
                         <ScanStatus status={s.status} />
@@ -212,7 +214,8 @@ export default function Dashboard() {
                   {projectFindings
                     .filter(
                       f =>
-                        f.status === 'open' && (f.severity === 'critical' || f.severity === 'high')
+                        f.status === 'active' &&
+                        (f.severity === 'critical' || f.severity === 'high')
                     )
                     .slice(0, 8)
                     .map(f => (

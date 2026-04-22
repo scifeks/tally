@@ -79,44 +79,44 @@ describe('EditableText', () => {
 
 describe('EditableSelect', () => {
   const options = [
-    { value: 'open' as const, label: 'open' },
-    { value: 'triaged' as const, label: 'triaged' },
+    { value: 'active' as const, label: 'active' },
+    { value: 'wont_fix' as const, label: 'wont fix' },
     { value: 'fixed' as const, label: 'fixed' },
   ]
 
   it('displays current value in viewing mode', () => {
-    render(<EditableSelect value="open" options={options} onChange={vi.fn()} />)
-    expect(screen.getByText('open')).toBeInTheDocument()
+    render(<EditableSelect value="active" options={options} onChange={vi.fn()} />)
+    expect(screen.getByText('active')).toBeInTheDocument()
     expect(screen.queryByRole('option')).toBeNull()
   })
 
   it('opens dropdown with all options when clicked', async () => {
     const user = userEvent.setup()
-    render(<EditableSelect value="open" options={options} onChange={vi.fn()} />)
+    render(<EditableSelect value="active" options={options} onChange={vi.fn()} />)
     await user.click(screen.getByRole('button'))
-    expect(screen.getByText('triaged')).toBeInTheDocument()
+    expect(screen.getByText('wont fix')).toBeInTheDocument()
     expect(screen.getByText('fixed')).toBeInTheDocument()
   })
 
   it('calls onChange with the new value and closes dropdown when an option is clicked', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<EditableSelect value="open" options={options} onChange={onChange} />)
+    render(<EditableSelect value="active" options={options} onChange={onChange} />)
     await user.click(screen.getByRole('button'))
     const fixedBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('fixed'))!
     await user.click(fixedBtn)
     expect(onChange).toHaveBeenCalledWith('fixed')
-    expect(screen.queryByText('triaged')).toBeNull()
+    expect(screen.queryByText('wont fix')).toBeNull()
   })
 
   it('closes dropdown without calling onChange on Escape', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<EditableSelect value="open" options={options} onChange={onChange} />)
+    render(<EditableSelect value="active" options={options} onChange={onChange} />)
     await user.click(screen.getByRole('button'))
-    expect(screen.getByText('triaged')).toBeInTheDocument()
+    expect(screen.getByText('wont fix')).toBeInTheDocument()
     await user.keyboard('{Escape}')
     expect(onChange).not.toHaveBeenCalled()
-    expect(screen.queryByText('triaged')).toBeNull()
+    expect(screen.queryByText('wont fix')).toBeNull()
   })
 })

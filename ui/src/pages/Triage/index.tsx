@@ -10,14 +10,14 @@ import {
   useStartTriage,
   useCancelTriage,
 } from '@/lib/api'
-import type { Domain, TriageLogEvent, TriageLogEventType, TriageRunStatus } from '@/lib/types'
+import type { Segment, TriageLogEvent, TriageLogEventType, TriageRunStatus } from '@/lib/types'
 import { NeuralGrid } from './NeuralGrid'
 import { BatchRow } from './BatchRow'
 import type { BatchDisplay } from './BatchRow'
 import { LogRow } from './LogRow'
 
-const SEGMENTS: Domain[] = ['sast', 'sca', 'web', 'secrets']
-const SEGMENT_LABEL: Record<Domain, string> = {
+const SEGMENTS: Segment[] = ['sast', 'sca', 'web', 'secrets']
+const SEGMENT_LABEL: Record<Segment, string> = {
   sast: 'SAST',
   sca: 'SCA',
   web: 'WEB',
@@ -51,7 +51,7 @@ export default function Triage() {
 
   // Count findings eligible for triage (open status, no existing triage)
   const eligibleFindings = useMemo(
-    () => findings.filter(f => f.projectId === activeProjectId && f.status === 'open'),
+    () => findings.filter(f => f.projectId === activeProjectId && f.status === 'active'),
     [findings, activeProjectId]
   )
 
@@ -100,7 +100,7 @@ export default function Triage() {
 
     // Group by segment and create batches
     for (const segment of SEGMENTS) {
-      const segmentFindings = eligibleFindings.filter(f => f.domain === segment)
+      const segmentFindings = eligibleFindings.filter(f => f.segment === segment)
       if (segmentFindings.length === 0) continue
 
       // Split into batches

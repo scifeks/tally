@@ -125,7 +125,7 @@ export function FindingDetailPanel({
           />
         </div>
 
-        <Field label="domain" value={finding.domain.toUpperCase()} />
+        <Field label="segment" value={finding.segment.toUpperCase()} />
         <Field label="tool" value={finding.tool} />
         <Field label="target" value={finding.target} mono />
         {finding.file && (
@@ -164,7 +164,7 @@ export function FindingDetailPanel({
 
         <div className="grid grid-cols-2 gap-2 pt-2">
           <button
-            onClick={() => onUpdate({ status: 'triaged' })}
+            onClick={() => onUpdate({ triagedBy: 'analyst_web' })}
             className="text-[11px] uppercase tracking-wider py-1.5 border border-accent text-accent hover:bg-muted"
           >
             &gt; triage
@@ -182,7 +182,7 @@ export function FindingDetailPanel({
             false-pos
           </button>
           <button
-            onClick={() => onUpdate({ status: 'wontfix' })}
+            onClick={() => onUpdate({ status: 'wont_fix' })}
             className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:bg-muted"
           >
             wontfix

@@ -1,19 +1,19 @@
 /**
  * useFindings Hook
  * ================
- * Fetches findings for a project, optionally filtered by domain.
+ * Fetches findings for a project, optionally filtered by segment.
  *
  * TODO [BACKEND]: Replace mock data with actual API call.
  *
- * Expected API response (GET /api/v1/projects/:id/findings?domain=sast):
+ * Expected API response (GET /api/v1/projects/:id/findings?segment=sast):
  * ```json
  * {
  *   "findings": [
  *     {
  *       "id": "F-1000",
- *       "domain": "sast",
+ *       "segment": "sast",
  *       "severity": "critical",
- *       "status": "open",
+ *       "status": "active",
  *       "title": "SQL injection via unparameterized query",
  *       "tool": "semgrep",
  *       "target": "acme-platform",
@@ -33,25 +33,25 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Finding, Domain } from '../types'
+import type { Finding, Segment } from '../types'
 
 // TODO [BACKEND]: Remove this mock import once API is connected.
 import { findings as mockFindings } from '../mock-data'
 
 interface UseFindingsOptions {
   projectId: string
-  domain?: Domain
+  segment?: Segment
 }
 
-export function useFindings({ projectId, domain }: UseFindingsOptions) {
+export function useFindings({ projectId, segment }: UseFindingsOptions) {
   return useQuery({
-    queryKey: ['findings', projectId, domain],
+    queryKey: ['findings', projectId, segment],
     queryFn: async (): Promise<Finding[]> => {
       // ┌────────────────────────────────────────────────────────────────────┐
       // │ TODO [BACKEND]: Replace mock with fetch()                         │
       // │                                                                    │
       // │ const params = new URLSearchParams()                              │
-      // │ if (domain) params.set("domain", domain)                          │
+      // │ if (segment) params.set("segment", segment)                       │
       // │ const url = `${REST_ENDPOINTS.findings(projectId)}?${params}`     │
       // │ const res = await fetch(url)                                      │
       // │ if (!res.ok) throw new Error("Failed to fetch findings")          │
@@ -61,8 +61,8 @@ export function useFindings({ projectId, domain }: UseFindingsOptions) {
 
       await new Promise(r => setTimeout(r, 150))
       let result = mockFindings.filter(f => f.projectId === projectId)
-      if (domain) {
-        result = result.filter(f => f.domain === domain)
+      if (segment) {
+        result = result.filter(f => f.segment === segment)
       }
       return result
     },
@@ -81,7 +81,7 @@ export function useFindings({ projectId, domain }: UseFindingsOptions) {
  * Expected API request (PATCH /api/v1/findings/:id):
  * ```json
  * {
- *   "status": "triaged",
+ *   "status": "active",
  *   "notes": "Analyst notes here..."
  * }
  * ```
@@ -90,7 +90,7 @@ export function useFindings({ projectId, domain }: UseFindingsOptions) {
  * ```json
  * {
  *   "id": "F-1000",
- *   "status": "triaged",
+ *   "status": "active",
  *   ... (full updated finding)
  * }
  * ```

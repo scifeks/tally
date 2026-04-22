@@ -32,13 +32,13 @@ describe('useRunningScans', () => {
 })
 
 describe('useProjectScanConfig', () => {
-  it('resolves with repos, domains, and tools arrays for p-01', async () => {
+  it('resolves with repos, segments, and tools arrays for p-01', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useProjectScanConfig('p-01'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     const config = result.current.data!
     expect(Array.isArray(config.repos)).toBe(true)
-    expect(Array.isArray(config.domains)).toBe(true)
+    expect(Array.isArray(config.segments)).toBe(true)
     expect(Array.isArray(config.tools)).toBe(true)
     expect(config.repos.length).toBeGreaterThan(0)
     expect(config.tools.length).toBeGreaterThan(0)

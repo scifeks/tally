@@ -5,7 +5,7 @@ import type {
   Scan,
   Severity,
   Status,
-  Domain,
+  Segment,
   UrlEntry,
   UrlProtocol,
 } from './types'
@@ -64,23 +64,15 @@ const scaTitles = [
   'pillow < 10.2.0: arbitrary file read',
 ]
 
-const tools: Record<Domain, string[]> = {
+const tools: Record<Segment, string[]> = {
   sast: ['semgrep', 'codeql', 'bandit'],
   web: ['zap', 'nuclei', 'burp'],
   secrets: ['gitleaks', 'trufflehog'],
   sca: ['osv-scanner', 'trivy', 'grype'],
 }
 
-const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'info']
-const statusPool: Status[] = [
-  'open',
-  'open',
-  'open',
-  'triaged',
-  'fixed',
-  'wontfix',
-  'false_positive',
-]
+const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'informational']
+const statusPool: Status[] = ['active', 'active', 'active', 'fixed', 'wont_fix', 'false_positive']
 
 function seeded(seed: number) {
   let s = seed
@@ -92,7 +84,7 @@ function seeded(seed: number) {
 const rand = seeded(42)
 const pick = <T>(a: T[]) => a[Math.floor(rand() * a.length)]
 
-const titleMap: Record<Domain, string[]> = {
+const titleMap: Record<Segment, string[]> = {
   sast: sastTitles,
   web: webTitles,
   secrets: secretsTitles,
@@ -110,7 +102,7 @@ const files = [
   'backend/routes/admin.js',
 ]
 
-const domains: Domain[] = ['sast', 'web', 'secrets', 'sca']
+const segments: Segment[] = ['sast', 'web', 'secrets', 'sca']
 
 // 7-char git short hash (lowercase hex).
 function commitHash(): string {
@@ -128,32 +120,39 @@ function buildFindings(): Finding[] {
   const out: Finding[] = []
   const counts: Record<string, number> = { 'p-01': 220, 'p-02': 35, 'p-03': 0 }
   let idCounter = 1000
+  const triageActors: Array<'claude-code' | 'analyst_web'> = ['claude-code', 'analyst_web']
   for (const project of projects) {
     const n = counts[project.id]
     for (let i = 0; i < n; i++) {
-      const domain = pick(domains)
+      const segment = pick(segments)
       const severity = pick(severities)
       const status = pick(statusPool)
-      const tool = pick(tools[domain])
-      const title = pick(titleMap[domain])
+      const tool = pick(tools[segment])
+      const title = pick(titleMap[segment])
       const discovered = new Date(Date.now() - Math.floor(rand() * 1000 * 60 * 60 * 24 * 30))
       // Web findings don't typically have a commit — they're runtime targets.
-      const hasCommit = domain !== 'web'
+      const hasCommit = segment !== 'web'
+      const isTriaged = rand() < 0.3
       out.push({
         id: `F-${idCounter++}`,
-        domain,
+        segment,
         severity,
         status,
         title,
         tool,
-        target: domain === 'web' ? `https://${project.name}.example.com` : project.name,
-        file: domain === 'sast' || domain === 'secrets' ? pick(files) : undefined,
-        line: domain === 'sast' || domain === 'secrets' ? Math.floor(rand() * 500) + 1 : undefined,
-        cwe: domain === 'sast' ? `CWE-${Math.floor(rand() * 900) + 20}` : undefined,
+        target: segment === 'web' ? `https://${project.name}.example.com` : project.name,
+        file: segment === 'sast' || segment === 'secrets' ? pick(files) : undefined,
+        line:
+          segment === 'sast' || segment === 'secrets' ? Math.floor(rand() * 500) + 1 : undefined,
+        cwe: segment === 'sast' ? `CWE-${Math.floor(rand() * 900) + 20}` : undefined,
         commitHash: hasCommit ? commitHash() : undefined,
         projectId: project.id,
         discoveredAt: discovered.toISOString(),
         notes: undefined,
+        triagedAt: isTriaged
+          ? new Date(discovered.getTime() + Math.floor(rand() * 1000 * 60 * 60 * 24)).toISOString()
+          : undefined,
+        triagedBy: isTriaged ? pick(triageActors) : undefined,
       })
     }
   }
@@ -187,15 +186,15 @@ function buildScans(): Scan[] {
   let runningIdx = 0
   for (const { projectId, count } of dist) {
     for (let j = 0; j < count; j++) {
-      const domain = pick(domains)
+      const segment = pick(segments)
       const isRunning = projectId === 'p-01' && j < 2
       const startedAt = new Date(Date.now() - (i + 1) * 1000 * 60 * 37).toISOString()
       const seg = isRunning ? runningSegments[runningIdx++] : undefined
       out.push({
         id: `S-${idCounter++}`,
         projectId,
-        domain,
-        tool: pick(tools[domain]),
+        segment,
+        tool: pick(tools[segment]),
         status: isRunning ? 'running' : j === 2 ? 'failed' : 'done',
         startedAt,
         finishedAt: isRunning

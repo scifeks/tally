@@ -8,7 +8,7 @@ import type { Finding } from '@/lib/types'
 
 const baseFinding: Omit<Finding, 'id' | 'severity' | 'status' | 'title' | 'tool'> = {
   projectId: 'p-01',
-  domain: 'sast',
+  segment: 'sast',
   target: 'acme',
   discoveredAt: '2024-01-01T00:00:00Z',
 }
@@ -18,7 +18,7 @@ const FINDINGS: Finding[] = [
     ...baseFinding,
     id: 'f-1',
     severity: 'critical',
-    status: 'open',
+    status: 'active',
     title: 'SQL injection',
     tool: 'semgrep',
   },
@@ -26,7 +26,7 @@ const FINDINGS: Finding[] = [
     ...baseFinding,
     id: 'f-2',
     severity: 'high',
-    status: 'open',
+    status: 'active',
     title: 'XSS vulnerability',
     tool: 'bandit',
   },
@@ -34,7 +34,7 @@ const FINDINGS: Finding[] = [
     ...baseFinding,
     id: 'f-3',
     severity: 'medium',
-    status: 'triaged',
+    status: 'fixed',
     title: 'Path traversal',
     tool: 'semgrep',
   },
@@ -42,7 +42,7 @@ const FINDINGS: Finding[] = [
     ...baseFinding,
     id: 'f-4',
     severity: 'critical',
-    status: 'triaged',
+    status: 'fixed',
     title: 'Remote code execution',
     tool: 'bandit',
   },
@@ -74,7 +74,7 @@ function renderPage(qc = makeQC()) {
 beforeEach(() => {
   useUI.setState({
     activeProjectId: 'p-01',
-    findingsDomain: 'sast',
+    findingsSegment: 'sast',
     selectedFindingIds: new Set<string>(),
     findingOverrides: {},
     triageRunStatus: 'idle',
@@ -113,8 +113,8 @@ describe('Findings page — applyFilters', () => {
     await user.click(screen.getByTitle('filter CRIT'))
     await screen.findByText(byResultCount(2))
     await user.click(screen.getByRole('button', { name: 'Filter status' }))
-    await user.click(screen.getByRole('checkbox', { name: /^open/ }))
-    // critical AND open = only f-1
+    await user.click(screen.getByRole('checkbox', { name: /^active/ }))
+    // critical AND active = only f-1
     await screen.findByText(byResultCount(1))
   })
 

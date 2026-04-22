@@ -3,7 +3,7 @@ import { useUI } from '@/lib/store'
 const reset = () =>
   useUI.setState({
     activeProjectId: 'p-01',
-    findingsDomain: 'sast',
+    findingsSegment: 'sast',
     selectedFindingIds: new Set<string>(),
     findingOverrides: {},
     triageRunStatus: 'idle',
@@ -16,8 +16,8 @@ describe('useUI — initial state', () => {
     expect(useUI.getState().activeProjectId).toBe('p-01')
   })
 
-  it('findingsDomain defaults to "sast"', () => {
-    expect(useUI.getState().findingsDomain).toBe('sast')
+  it('findingsSegment defaults to "sast"', () => {
+    expect(useUI.getState().findingsSegment).toBe('sast')
   })
 
   it('selectedFindingIds is an empty Set', () => {
@@ -46,15 +46,15 @@ describe('setActiveProject', () => {
   })
 })
 
-describe('setFindingsDomain', () => {
-  it('updates findingsDomain', () => {
-    useUI.getState().setFindingsDomain('dast')
-    expect(useUI.getState().findingsDomain).toBe('dast')
+describe('setFindingsSegment', () => {
+  it('updates findingsSegment', () => {
+    useUI.getState().setFindingsSegment('web')
+    expect(useUI.getState().findingsSegment).toBe('web')
   })
 
   it('clears selectedFindingIds', () => {
     useUI.setState({ selectedFindingIds: new Set(['f-1']) })
-    useUI.getState().setFindingsDomain('dast')
+    useUI.getState().setFindingsSegment('web')
     expect(useUI.getState().selectedFindingIds.size).toBe(0)
   })
 })
@@ -114,9 +114,9 @@ describe('updateFinding', () => {
 
   it('keeps other finding overrides untouched', () => {
     useUI.getState().updateFinding('f-1', { status: 'fixed' })
-    useUI.getState().updateFinding('f-2', { status: 'open' })
+    useUI.getState().updateFinding('f-2', { status: 'active' })
     expect(useUI.getState().findingOverrides['f-1']).toEqual({ status: 'fixed' })
-    expect(useUI.getState().findingOverrides['f-2']).toEqual({ status: 'open' })
+    expect(useUI.getState().findingOverrides['f-2']).toEqual({ status: 'active' })
   })
 })
 

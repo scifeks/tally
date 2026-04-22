@@ -39,7 +39,7 @@ export function SeverityChip({ severity }: { severity: Severity }) {
     high: { label: 'HIGH', cls: 'text-high border-high' },
     medium: { label: 'MED', cls: 'text-med border-med' },
     low: { label: 'LOW', cls: 'text-low border-low' },
-    info: { label: 'INFO', cls: 'text-info border-info' },
+    informational: { label: 'INFO', cls: 'text-info border-info' },
   }
   const s = map[severity]
   return (
@@ -57,10 +57,9 @@ export function SeverityChip({ severity }: { severity: Severity }) {
 
 export function StatusChip({ status }: { status: Status }) {
   const map: Record<Status, { label: string; cls: string }> = {
-    open: { label: 'open', cls: 'text-high' },
-    triaged: { label: 'triaged', cls: 'text-info' },
+    active: { label: 'active', cls: 'text-high' },
     fixed: { label: 'fixed', cls: 'text-low' },
-    wontfix: { label: 'wontfix', cls: 'text-muted-foreground' },
+    wont_fix: { label: 'wont fix', cls: 'text-muted-foreground' },
     false_positive: { label: 'false-pos', cls: 'text-muted-foreground' },
   }
   const s = map[status]
