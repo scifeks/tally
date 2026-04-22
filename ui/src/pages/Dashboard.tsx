@@ -97,7 +97,7 @@ export default function Dashboard() {
                   icon={<GitBranch className="h-4 w-4" />}
                   label="repositories"
                   desc="add or edit source repos"
-                  to="/config/repositories"
+                  to="/config"
                 />
                 <ActionTile
                   icon={<Link2 className="h-4 w-4" />}
@@ -109,13 +109,13 @@ export default function Dashboard() {
                   icon={<Wrench className="h-4 w-4" />}
                   label="tool config"
                   desc="enable/disable scanners"
-                  to="/config/tools"
+                  to="/config"
                 />
                 <ActionTile
                   icon={<ScrollText className="h-4 w-4" />}
-                  label="audit log"
-                  desc="review system activity"
-                  to="/audit"
+                  label="findings"
+                  desc="review findings"
+                  to="/findings"
                 />
               </div>
             </section>
