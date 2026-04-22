@@ -1,4 +1,4 @@
-import { useUI } from "@/lib/store"
+import { useUI } from '@/lib/store'
 import {
   useProjects,
   useProjectInfo,
@@ -10,16 +10,16 @@ import {
   useToolOverrides,
   useSaveToolOverride,
   useDeleteToolOverride,
-} from "@/lib/api"
-import { ConfigPanel } from "./ConfigPanel"
-import { ProjectInfoSection } from "./ProjectInfoSection"
-import { RepositorySection } from "./RepositorySection"
-import { ToolOverridesSection } from "./ToolOverridesSection"
+} from '@/lib/api'
+import { ConfigPanel } from './ConfigPanel'
+import { ProjectInfoSection } from './ProjectInfoSection'
+import { RepositorySection } from './RepositorySection'
+import { ToolOverridesSection } from './ToolOverridesSection'
 
 // ─── Main Config Page ─────────────────────────────────────────────────────────
 
 export default function Config() {
-  const activeProjectId = useUI((s) => s.activeProjectId)
+  const activeProjectId = useUI(s => s.activeProjectId)
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
@@ -34,7 +34,7 @@ export default function Config() {
   const saveToolOverride = useSaveToolOverride()
   const deleteToolOverride = useDeleteToolOverride()
 
-  const project = projects.find((p) => p.id === activeProjectId)
+  const project = projects.find(p => p.id === activeProjectId)
 
   return (
     <div className="h-full flex flex-col min-h-0 p-4 gap-4">
@@ -47,11 +47,13 @@ export default function Config() {
             <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
               <span className="text-accent">[</span> PROJECT <span className="text-accent">]</span>
             </span>
-            <span className="text-sm text-primary font-bold">{project?.code} / {project?.name}</span>
+            <span className="text-sm text-primary font-bold">
+              {project?.code} / {project?.name}
+            </span>
           </div>
           <div className="text-xs text-dim max-w-xl">
-            Configure project settings, manage repositories, and set up tool overrides.
-            Changes to repositories and tools apply to future scans only.
+            Configure project settings, manage repositories, and set up tool overrides. Changes to
+            repositories and tools apply to future scans only.
           </div>
         </div>
       </div>
@@ -61,7 +63,7 @@ export default function Config() {
         {/* Project Info - full width row */}
         <ProjectInfoSection
           projectInfo={projectInfo ?? null}
-          onSave={(updates) => updateProjectInfo.mutate({ projectId: activeProjectId, updates })}
+          onSave={updates => updateProjectInfo.mutate({ projectId: activeProjectId, updates })}
           isSaving={updateProjectInfo.isPending}
         />
 
@@ -71,7 +73,7 @@ export default function Config() {
             repositories={repositories}
             projectId={activeProjectId}
             onSave={(repo, isNew) => saveRepository.mutate({ repo, isNew })}
-            onDelete={(repoId) => deleteRepository.mutate({ repoId, projectId: activeProjectId })}
+            onDelete={repoId => deleteRepository.mutate({ repoId, projectId: activeProjectId })}
             isSaving={saveRepository.isPending}
           />
 
@@ -79,8 +81,10 @@ export default function Config() {
             catalog={toolCatalog}
             overrides={toolOverrides}
             projectId={activeProjectId}
-            onSave={(override, isNew) => saveToolOverride.mutate({ projectId: activeProjectId, override, isNew })}
-            onDelete={(toolId) => deleteToolOverride.mutate({ projectId: activeProjectId, toolId })}
+            onSave={(override, isNew) =>
+              saveToolOverride.mutate({ projectId: activeProjectId, override, isNew })
+            }
+            onDelete={toolId => deleteToolOverride.mutate({ projectId: activeProjectId, toolId })}
             isSaving={saveToolOverride.isPending}
           />
         </div>

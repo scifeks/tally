@@ -1,28 +1,62 @@
-import { useEffect, useMemo, useState } from "react"
-import { Search, X } from "lucide-react"
-import { useFindings as useFindingsHook } from "@/lib/api"
-import { useUI } from "@/lib/store"
-import { cn } from "@/lib/utils"
-import type { Domain, Finding, Severity } from "@/lib/types"
-import { DOMAINS, SEV_ORDER, SEV_LABEL, SEV_COLOR } from "./constants"
-import { emptyFilters } from "./types"
-import type { Filters, FilterKey, SortKey, SortState } from "./types"
-import { EmptyFindingsState } from "./EmptyFindingsState"
-import { FindingsList } from "./FindingsList"
-import { FindingDetailPanel } from "./FindingDetailPanel"
+import { useEffect, useMemo, useState } from 'react'
+import { Search, X } from 'lucide-react'
+import { useFindings as useFindingsHook } from '@/lib/api'
+import { useUI } from '@/lib/store'
+import { cn } from '@/lib/utils'
+import type { Domain, Finding, Severity } from '@/lib/types'
+import { DOMAINS, SEV_ORDER, SEV_LABEL, SEV_COLOR } from './constants'
+import { emptyFilters } from './types'
+import type { Filters, FilterKey, SortKey, SortState } from './types'
+import { EmptyFindingsState } from './EmptyFindingsState'
+import { FindingsList } from './FindingsList'
+import { FindingDetailPanel } from './FindingDetailPanel'
+
+// ─── Pure helpers (module scope — no component state captured) ────────────────
+
+/**
+ * Apply subset of filters. `skip` excludes one filter so that facet
+ * counts for that filter are computed against ALL-OTHER filters — this
+ * keeps filter options live and in sync with each other.
+ */
+function applyFilters(rows: Finding[], f: Filters, skip?: FilterKey): Finding[] {
+  return rows.filter(r => {
+    if (skip !== 'severity' && f.severity.size > 0 && !f.severity.has(r.severity)) return false
+    if (skip !== 'status' && f.status.size > 0 && !f.status.has(r.status)) return false
+    if (skip !== 'tool' && f.tool.size > 0 && !f.tool.has(r.tool)) return false
+    if (skip !== 'search' && f.search) {
+      const q = f.search.toLowerCase()
+      const hay =
+        r.title +
+        ' ' +
+        r.id +
+        ' ' +
+        r.tool +
+        ' ' +
+        (r.file ?? '') +
+        ' ' +
+        (r.target ?? '') +
+        ' ' +
+        (r.commitHash ?? '') +
+        ' ' +
+        (r.cwe ?? '')
+      if (!hay.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+}
 
 // ─── Findings Page ────────────────────────────────────────────────────────────
 
 export default function Findings() {
-  const domain = useUI((s) => s.findingsDomain)
-  const setDomain = useUI((s) => s.setFindingsDomain)
-  const activeProjectId = useUI((s) => s.activeProjectId)
-  const selectedFindingIds = useUI((s) => s.selectedFindingIds)
-  const toggleSelected = useUI((s) => s.toggleSelected)
-  const setSelected = useUI((s) => s.setSelected)
-  const clearSelected = useUI((s) => s.clearSelected)
-  const overrides = useUI((s) => s.findingOverrides)
-  const updateFinding = useUI((s) => s.updateFinding)
+  const domain = useUI(s => s.findingsDomain)
+  const setDomain = useUI(s => s.setFindingsDomain)
+  const activeProjectId = useUI(s => s.activeProjectId)
+  const selectedFindingIds = useUI(s => s.selectedFindingIds)
+  const toggleSelected = useUI(s => s.toggleSelected)
+  const setSelected = useUI(s => s.setSelected)
+  const clearSelected = useUI(s => s.clearSelected)
+  const overrides = useUI(s => s.findingOverrides)
+  const updateFinding = useUI(s => s.updateFinding)
 
   const [filters, setFilters] = useState<Filters>(emptyFilters)
   const [sort, setSort] = useState<SortState>(null)
@@ -34,8 +68,7 @@ export default function Findings() {
     setSort(null)
     setSelectedRow(null)
     clearSelected()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjectId, domain])
+  }, [activeProjectId, domain, clearSelected])
 
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
   // GET /api/v1/projects/:id/findings
@@ -46,91 +79,55 @@ export default function Findings() {
   // PATCH /api/v1/findings/:id and invalidate the query cache instead of
   // maintaining a separate overrides map.
   const allFindings = useMemo<Finding[]>(
-    () =>
-      baseFindings.map((f) =>
-        overrides[f.id] ? { ...f, ...overrides[f.id] } : f,
-      ),
-    [baseFindings, overrides],
+    () => baseFindings.map(f => (overrides[f.id] ? { ...f, ...overrides[f.id] } : f)),
+    [baseFindings, overrides]
   )
 
   const projectFindings = useMemo(
-    () => allFindings.filter((f) => f.projectId === activeProjectId),
-    [allFindings, activeProjectId],
+    () => allFindings.filter(f => f.projectId === activeProjectId),
+    [allFindings, activeProjectId]
   )
 
   const domainCounts = useMemo(() => {
     const m: Record<Domain, number> = { sast: 0, web: 0, secrets: 0, sca: 0 }
-    projectFindings.forEach((f) => {
+    projectFindings.forEach(f => {
       m[f.domain]++
     })
     return m
   }, [projectFindings])
 
   const domainFindings = useMemo(
-    () => projectFindings.filter((f) => f.domain === domain),
-    [projectFindings, domain],
+    () => projectFindings.filter(f => f.domain === domain),
+    [projectFindings, domain]
   )
-
-  /**
-   * Apply subset of filters. `skip` excludes one filter so that facet
-   * counts for that filter are computed against ALL-OTHER filters — this
-   * keeps filter options live and in sync with each other.
-   */
-  const applyFilters = (rows: Finding[], f: Filters, skip?: FilterKey) =>
-    rows.filter((r) => {
-      if (skip !== "severity" && f.severity.size > 0 && !f.severity.has(r.severity))
-        return false
-      if (skip !== "status" && f.status.size > 0 && !f.status.has(r.status))
-        return false
-      if (skip !== "tool" && f.tool.size > 0 && !f.tool.has(r.tool)) return false
-      if (skip !== "search" && f.search) {
-        const q = f.search.toLowerCase()
-        const hay =
-          r.title +
-          " " +
-          r.id +
-          " " +
-          r.tool +
-          " " +
-          (r.file ?? "") +
-          " " +
-          (r.target ?? "") +
-          " " +
-          (r.commitHash ?? "") +
-          " " +
-          (r.cwe ?? "")
-        if (!hay.toLowerCase().includes(q)) return false
-      }
-      return true
-    })
 
   const filteredUnsorted = useMemo(
     () => applyFilters(domainFindings, filters),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [domainFindings, filters],
+
+    [domainFindings, filters]
   )
 
   const filtered = useMemo(() => {
     if (!sort) return filteredUnsorted
     const { key, dir } = sort
-    const mul = dir === "asc" ? 1 : -1
+    const mul = dir === 'asc' ? 1 : -1
     const get = (f: Finding): string | number => {
       switch (key) {
-        case "id":
+        case 'id':
           return f.id
-        case "severity":
+        case 'severity':
           return f.severity
-        case "title":
+        case 'title':
           return f.title.toLowerCase()
-        case "tool":
+        case 'tool':
           return f.tool
-        case "location":
-          return (f.file ? `${f.file}:${f.line ?? ""}` : f.target).toLowerCase()
-        case "commit":
-          return f.commitHash ?? "￿"
-        case "status":
+        case 'location':
+          return (f.file ? `${f.file}:${f.line ?? ''}` : f.target).toLowerCase()
+        case 'commit':
+          return f.commitHash ?? '￿'
+        case 'status':
           return f.status
-        case "found":
+        case 'found':
           return new Date(f.discoveredAt).getTime()
       }
     }
@@ -144,7 +141,7 @@ export default function Findings() {
   }, [filteredUnsorted, sort])
 
   const sevFacets = useMemo(() => {
-    const base = applyFilters(domainFindings, filters, "severity")
+    const base = applyFilters(domainFindings, filters, 'severity')
     const counts: Record<Severity, number> = {
       critical: 0,
       high: 0,
@@ -152,32 +149,29 @@ export default function Findings() {
       low: 0,
       info: 0,
     }
-    base.forEach((r) => counts[r.severity]++)
+    base.forEach(r => counts[r.severity]++)
     return counts
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domainFindings, filters])
 
   const statusFacets = useMemo(() => {
-    const base = applyFilters(domainFindings, filters, "status")
+    const base = applyFilters(domainFindings, filters, 'status')
     const counts: Record<string, number> = {}
-    base.forEach((r) => {
+    base.forEach(r => {
       counts[r.status] = (counts[r.status] ?? 0) + 1
     })
     return counts
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domainFindings, filters])
 
   const toolFacets = useMemo(() => {
-    const base = applyFilters(domainFindings, filters, "tool")
+    const base = applyFilters(domainFindings, filters, 'tool')
     const counts: Record<string, number> = {}
-    base.forEach((r) => {
+    base.forEach(r => {
       counts[r.tool] = (counts[r.tool] ?? 0) + 1
     })
     return counts
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domainFindings, filters])
 
-  const detail = filtered.find((f) => f.id === selectedRow) ?? null
+  const detail = filtered.find(f => f.id === selectedRow) ?? null
 
   const hasAnyFilter =
     filters.severity.size > 0 ||
@@ -190,14 +184,14 @@ export default function Findings() {
   const showEmptyState = domainFindings.length === 0
 
   const cycleSort = (key: SortKey) =>
-    setSort((prev) => {
-      if (!prev || prev.key !== key) return { key, dir: "asc" }
-      if (prev.dir === "asc") return { key, dir: "desc" }
+    setSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' }
+      if (prev.dir === 'asc') return { key, dir: 'desc' }
       return null
     })
 
   const toggleSev = (sev: Severity) =>
-    setFilters((f) => {
+    setFilters(f => {
       const next = new Set(f.severity)
       if (next.has(sev)) next.delete(sev)
       else next.add(sev)
@@ -218,29 +212,23 @@ export default function Findings() {
             </span>
           </div>
           <div className="flex items-stretch divide-x divide-border">
-            {DOMAINS.map((d) => {
+            {DOMAINS.map(d => {
               const active = d.key === domain
               return (
                 <button
                   key={d.key}
                   onClick={() => setDomain(d.key)}
                   className={cn(
-                    "relative flex items-center gap-2 px-3 h-9 transition-colors",
+                    'relative flex items-center gap-2 px-3 h-9 transition-colors',
                     active
-                      ? "text-accent bg-muted"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                      ? 'text-accent bg-muted'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
                   aria-pressed={active}
                 >
-                  <span className="text-xs font-bold uppercase tracking-[0.2em]">
-                    {d.label}
-                  </span>
-                  <span className="text-[10px] text-dim tabular-nums">
-                    ({domainCounts[d.key]})
-                  </span>
-                  {active && (
-                    <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent" />
-                  )}
+                  <span className="text-xs font-bold uppercase tracking-[0.2em]">{d.label}</span>
+                  <span className="text-[10px] text-dim tabular-nums">({domainCounts[d.key]})</span>
+                  {active && <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent" />}
                 </button>
               )
             })}
@@ -258,7 +246,7 @@ export default function Findings() {
               </span>
             </div>
             <div className="flex items-stretch divide-x divide-border">
-              {SEV_ORDER.map((sev) => {
+              {SEV_ORDER.map(sev => {
                 const count = sevFacets[sev] ?? 0
                 const on = filters.severity.has(sev)
                 const disabled = count === 0 && !on
@@ -269,9 +257,11 @@ export default function Findings() {
                     onClick={() => toggleSev(sev)}
                     title={on ? `filtering ${SEV_LABEL[sev]}` : `filter ${SEV_LABEL[sev]}`}
                     className={cn(
-                      "flex items-center gap-2 px-3 h-9 transition-opacity border-l-2",
-                      on ? "bg-muted opacity-100" : "opacity-60 hover:opacity-100 hover:bg-muted/50",
-                      disabled && "opacity-20 cursor-not-allowed hover:bg-transparent",
+                      'flex items-center gap-2 px-3 h-9 transition-opacity border-l-2',
+                      on
+                        ? 'bg-muted opacity-100'
+                        : 'opacity-60 hover:opacity-100 hover:bg-muted/50',
+                      disabled && 'opacity-20 cursor-not-allowed hover:bg-transparent'
                     )}
                     style={{ borderLeftColor: SEV_COLOR[sev] }}
                     aria-pressed={on}
@@ -307,16 +297,14 @@ export default function Findings() {
             <span className="text-dim shrink-0">/</span>
             <input
               value={filters.search}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, search: e.target.value }))
-              }
+              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
               placeholder="title, id, tool, location, commit, cwe..."
               className="bg-transparent outline-none text-sm flex-1 min-w-0 placeholder:text-dim text-foreground"
               aria-label="Search findings"
             />
             {filters.search && (
               <button
-                onClick={() => setFilters((f) => ({ ...f, search: "" }))}
+                onClick={() => setFilters(f => ({ ...f, search: '' }))}
                 className="text-dim hover:text-foreground shrink-0"
                 aria-label="Clear search"
               >
@@ -324,7 +312,7 @@ export default function Findings() {
               </button>
             )}
             <span className="text-[10px] text-dim uppercase tracking-wider hidden xl:inline shrink-0">
-              {filters.search ? `matches: ${filteredUnsorted.length}` : "press / to focus"}
+              {filters.search ? `matches: ${filteredUnsorted.length}` : 'press / to focus'}
             </span>
           </div>
         )}
@@ -344,9 +332,7 @@ export default function Findings() {
       {/* Bulk action bar when selection exists */}
       {selectedFindingIds.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-1.5 bg-muted border-b border-accent shrink-0">
-          <span className="text-xs text-accent font-bold">
-            {selectedFindingIds.size} selected
-          </span>
+          <span className="text-xs text-accent font-bold">{selectedFindingIds.size} selected</span>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
             of {filtered.length} filtered
           </span>
@@ -381,7 +367,7 @@ export default function Findings() {
               selectedRowId={selectedRow}
               selectedIds={selectedFindingIds}
               onToggle={toggleSelected}
-              onSelectAllFiltered={() => setSelected(filtered.map((r) => r.id))}
+              onSelectAllFiltered={() => setSelected(filtered.map(r => r.id))}
               onClearAll={clearSelected}
               filters={filters}
               setFilters={setFilters}
@@ -397,7 +383,7 @@ export default function Findings() {
         <aside className="hidden xl:flex w-[420px] border-l border-border flex-col shrink-0">
           <FindingDetailPanel
             finding={detail}
-            onUpdate={(patch) => detail && updateFinding(detail.id, patch)}
+            onUpdate={patch => detail && updateFinding(detail.id, patch)}
           />
         </aside>
       </div>

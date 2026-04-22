@@ -1,40 +1,38 @@
-import { NavLink } from "react-router-dom"
-import { ChevronDown, Activity } from "lucide-react"
-import { useUI } from "@/lib/store"
-import { useProjects, useScanHistory } from "@/lib/api"
-import { cn } from "@/lib/utils"
-import { useRef, useState, useEffect } from "react"
-import { ScansRunningModal } from "./ScansRunningModal"
-import { ProjectSwitchModal } from "./ProjectSwitchModal"
+import { NavLink } from 'react-router-dom'
+import { ChevronDown, Activity } from 'lucide-react'
+import { useUI } from '@/lib/store'
+import { useProjects, useScanHistory } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { useRef, useState, useEffect } from 'react'
+import { ScansRunningModal } from './ScansRunningModal'
+import { ProjectSwitchModal } from './ProjectSwitchModal'
 
 const primaryNav = [
-  { to: "/", label: "DASHBOARD", end: true },
-  { to: "/findings", label: "FINDINGS" },
-  { to: "/urls", label: "URL LISTS" },
-  { to: "/scans", label: "SCANS" },
-  { to: "/triage", label: "TRIAGE" },
-  { to: "/reports", label: "REPORTS" },
-  { to: "/chat", label: "CHAT" },
+  { to: '/', label: 'DASHBOARD', end: true },
+  { to: '/findings', label: 'FINDINGS' },
+  { to: '/urls', label: 'URL LISTS' },
+  { to: '/scans', label: 'SCANS' },
+  { to: '/triage', label: 'TRIAGE' },
+  { to: '/reports', label: 'REPORTS' },
+  { to: '/chat', label: 'CHAT' },
 ]
 
-
-
 export function TopBar() {
-  const activeProjectId = useUI((s) => s.activeProjectId)
-  const setActiveProject = useUI((s) => s.setActiveProject)
-  const triageRunStatus = useUI((s) => s.triageRunStatus)
+  const activeProjectId = useUI(s => s.activeProjectId)
+  const setActiveProject = useUI(s => s.setActiveProject)
+  const triageRunStatus = useUI(s => s.triageRunStatus)
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
   const { data: scans = [] } = useScanHistory(activeProjectId)
 
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? projects[0]
+  const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0]
 
   const runningScans = scans.filter(
-    (s) => s.status === "running" && s.projectId === activeProjectId,
+    s => s.status === 'running' && s.projectId === activeProjectId
   ).length
-  const runningAny = scans.filter((s) => s.status === "running").length
-  const triageRunning = triageRunStatus === "running"
+  const runningAny = scans.filter(s => s.status === 'running').length
+  const triageRunning = triageRunStatus === 'running'
 
   const [projectOpen, setProjectOpen] = useState(false)
   const [scansModalOpen, setScansModalOpen] = useState(false)
@@ -47,12 +45,12 @@ export function TopBar() {
       if (projectRef.current && !projectRef.current.contains(e.target as Node))
         setProjectOpen(false)
     }
-    document.addEventListener("mousedown", onClick)
-    return () => document.removeEventListener("mousedown", onClick)
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
   // TODO [BACKEND]: pendingProject lookup uses projects from useProjects hook
-  const pendingProject = projects.find((p) => p.id === pendingProjectId) ?? null
+  const pendingProject = projects.find(p => p.id === pendingProjectId) ?? null
 
   const requestSwitch = (id: string) => {
     setProjectOpen(false)
@@ -86,8 +84,7 @@ export function TopBar() {
           <div className="flex-1 flex items-center gap-4 px-4 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
             <span className="text-dim">tally://console</span>
             <span className="hidden lg:inline text-dim">
-              session:{" "}
-              <span className="text-muted-foreground tabular-nums">0x7f3a</span>
+              session: <span className="text-muted-foreground tabular-nums">0x7f3a</span>
             </span>
           </div>
 
@@ -96,42 +93,32 @@ export function TopBar() {
             type="button"
             onClick={() => setScansModalOpen(true)}
             className={cn(
-              "flex items-center gap-2 px-4 border-l border-border hover:bg-muted transition-colors",
-              runningAny > 0 ? "text-accent" : "text-muted-foreground",
+              'flex items-center gap-2 px-4 border-l border-border hover:bg-muted transition-colors',
+              runningAny > 0 ? 'text-accent' : 'text-muted-foreground'
             )}
             aria-label="Open running scans"
           >
             <Activity
               className={cn(
-                "h-3.5 w-3.5",
-                runningAny > 0 ? "text-accent animate-pulse" : "text-dim",
+                'h-3.5 w-3.5',
+                runningAny > 0 ? 'text-accent animate-pulse' : 'text-dim'
               )}
             />
             <span className="text-[11px] uppercase tracking-wider">
-              {runningAny > 0
-                ? `${runningAny} scan${runningAny > 1 ? "s" : ""} running`
-                : "idle"}
+              {runningAny > 0 ? `${runningAny} scan${runningAny > 1 ? 's' : ''} running` : 'idle'}
             </span>
-            {runningAny > 0 && (
-              <span className="text-[10px] text-dim">[ click to view ]</span>
-            )}
+            {runningAny > 0 && <span className="text-[10px] text-dim">[ click to view ]</span>}
           </button>
 
           {/* Project switcher */}
           <div ref={projectRef} className="relative flex items-stretch border-l border-border">
             <button
-              onClick={() => setProjectOpen((v) => !v)}
+              onClick={() => setProjectOpen(v => !v)}
               className="flex items-center gap-2 px-4 min-w-[260px] hover:bg-muted"
             >
-              <span className="text-[10px] uppercase tracking-[0.2em] text-dim">
-                project:
-              </span>
-              <span className="text-xs text-primary font-bold tty-glow">
-                {activeProject.code}
-              </span>
-              <span className="text-xs text-foreground truncate">
-                {activeProject.name}
-              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-dim">project:</span>
+              <span className="text-xs text-primary font-bold tty-glow">{activeProject.code}</span>
+              <span className="text-xs text-foreground truncate">{activeProject.name}</span>
               <ChevronDown className="h-3 w-3 text-muted-foreground ml-auto" />
             </button>
             {projectOpen && (
@@ -139,25 +126,25 @@ export function TopBar() {
                 <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-dim border-b border-border">
                   [ switch project ]
                 </div>
-                {projects.map((p) => {
+                {projects.map(p => {
                   const active = p.id === activeProjectId
                   return (
                     <button
                       key={p.id}
                       onClick={() => requestSwitch(p.id)}
                       className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2 text-xs border-b border-border last:border-b-0 hover:bg-muted text-left",
-                        active ? "bg-muted text-accent" : "text-foreground",
+                        'w-full flex items-center gap-2 px-3 py-2 text-xs border-b border-border last:border-b-0 hover:bg-muted text-left',
+                        active ? 'bg-muted text-accent' : 'text-foreground'
                       )}
                     >
-                      <span className="text-dim">{active ? ">" : " "}</span>
+                      <span className="text-dim">{active ? '>' : ' '}</span>
                       <span className="text-primary font-bold w-10">{p.code}</span>
                       <span>{p.name}</span>
                     </button>
                   )
                 })}
                 <div className="px-3 py-1.5 text-[10px] text-dim border-t border-border">
-                  <span className="text-dim">//</span> switching clears selections
+                  <span className="text-dim">{'//'}</span> switching clears selections
                 </div>
               </div>
             )}
@@ -170,24 +157,24 @@ export function TopBar() {
             which was rendering the panel as a sliver peeking from the clipped
             edge. Dropdown content must be allowed to escape this row. */}
         <nav className="flex items-stretch">
-          {primaryNav.map((item) => (
+          {primaryNav.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
                 cn(
-                  "group relative flex items-center px-4 text-xs font-bold uppercase tracking-[0.2em] border-r border-border transition-colors h-11",
+                  'group relative flex items-center px-4 text-xs font-bold uppercase tracking-[0.2em] border-r border-border transition-colors h-11',
                   isActive
-                    ? "text-primary bg-muted tty-glow"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+                    ? 'text-primary bg-muted tty-glow'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <span className={cn("mr-2", isActive ? "text-accent" : "text-dim")}>
-                    {isActive ? ">" : " "}
+                  <span className={cn('mr-2', isActive ? 'text-accent' : 'text-dim')}>
+                    {isActive ? '>' : ' '}
                   </span>
                   {item.label}
                   {isActive && (
@@ -203,17 +190,17 @@ export function TopBar() {
             to="/config"
             className={({ isActive }) =>
               cn(
-                "group relative flex items-center px-4 text-xs font-bold uppercase tracking-[0.2em] border-r border-border transition-colors h-11",
+                'group relative flex items-center px-4 text-xs font-bold uppercase tracking-[0.2em] border-r border-border transition-colors h-11',
                 isActive
-                  ? "text-primary bg-muted tty-glow"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+                  ? 'text-primary bg-muted tty-glow'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               )
             }
           >
             {({ isActive }) => (
               <>
-                <span className={cn("mr-2", isActive ? "text-accent" : "text-dim")}>
-                  {isActive ? ">" : " "}
+                <span className={cn('mr-2', isActive ? 'text-accent' : 'text-dim')}>
+                  {isActive ? '>' : ' '}
                 </span>
                 CONFIG
                 {isActive && (
@@ -226,10 +213,7 @@ export function TopBar() {
       </div>
 
       {/* Modals */}
-      <ScansRunningModal
-        open={scansModalOpen}
-        onClose={() => setScansModalOpen(false)}
-      />
+      <ScansRunningModal open={scansModalOpen} onClose={() => setScansModalOpen(false)} />
       <ProjectSwitchModal
         open={pendingProjectId !== null}
         from={activeProject}

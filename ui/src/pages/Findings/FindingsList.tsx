@@ -1,35 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { useVirtualizer } from "@tanstack/react-virtual"
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from "lucide-react"
-import { SeverityChip } from "@/components/tty"
-import { cn, formatRelative } from "@/lib/utils"
-import type { Finding, Severity, Status } from "@/lib/types"
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from 'lucide-react'
+import { SeverityChip } from '@/components/tty'
+import { cn, formatRelative } from '@/lib/utils'
+import type { Finding, Severity, Status } from '@/lib/types'
 import {
   GRID_COLS,
   SEV_ORDER,
   SEV_LABEL,
-  SEV_COLOR,
-  SEV_RANK,
   STATUS_ORDER,
   STATUS_LABEL,
   STATUS_COLOR,
-} from "./constants"
-import type { Filters, FilterKey, FilterOption, SortKey, SortState } from "./types"
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-export function locationOf(f: Finding): string {
-  return f.file ? `${f.file}:${f.line ?? ""}` : f.target
-}
+  locationOf,
+} from './constants'
+import type { Filters, FilterOption, SortKey, SortState } from './types'
 
 // ─── StatusCell ───────────────────────────────────────────────────────────────
 
 function StatusCell({ status }: { status: Status }) {
   return (
-    <span
-      className="text-[11px] uppercase tracking-wider"
-      style={{ color: STATUS_COLOR[status] }}
-    >
+    <span className="text-[11px] uppercase tracking-wider" style={{ color: STATUS_COLOR[status] }}>
       {STATUS_LABEL[status]}
     </span>
   )
@@ -37,9 +27,9 @@ function StatusCell({ status }: { status: Status }) {
 
 // ─── SortIndicator ────────────────────────────────────────────────────────────
 
-function SortIndicator({ state }: { state: "asc" | "desc" | null }) {
-  if (state === "asc") return <ArrowUp className="h-3 w-3 text-accent" />
-  if (state === "desc") return <ArrowDown className="h-3 w-3 text-accent" />
+function SortIndicator({ state }: { state: 'asc' | 'desc' | null }) {
+  if (state === 'asc') return <ArrowUp className="h-3 w-3 text-accent" />
+  if (state === 'desc') return <ArrowDown className="h-3 w-3 text-accent" />
   return <ArrowUpDown className="h-3 w-3 text-dim opacity-0 group-hover:opacity-100" />
 }
 
@@ -56,18 +46,18 @@ function SortHeader({
   sortKey: SortKey
   sort: SortState
   onSort: (key: SortKey) => void
-  align?: "right"
+  align?: 'right'
 }) {
   const active = sort?.key === sortKey
-  const dir = active ? sort!.dir : null
+  const dir = active ? (sort?.dir ?? null) : null
   return (
     <button
       type="button"
       onClick={() => onSort(sortKey)}
       className={cn(
-        "group flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] transition-colors h-full",
-        align === "right" && "justify-end",
-        active ? "text-accent" : "text-muted-foreground hover:text-foreground",
+        'group flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] transition-colors h-full',
+        align === 'right' && 'justify-end',
+        active ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
       )}
     >
       <span>{label}</span>
@@ -106,13 +96,13 @@ function FilterHeader({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false)
+      if (e.key === 'Escape') setOpen(false)
     }
-    document.addEventListener("mousedown", onDocClick)
-    document.addEventListener("keydown", onKey)
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener("mousedown", onDocClick)
-      document.removeEventListener("keydown", onKey)
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
     }
   }, [open])
 
@@ -124,7 +114,7 @@ function FilterHeader({
   }
 
   const sortActive = sort?.key === sortKey
-  const sortDir = sortActive ? sort!.dir : null
+  const sortDir = sortActive ? (sort?.dir ?? null) : null
   const hasFilter = activeCount > 0
 
   return (
@@ -133,10 +123,8 @@ function FilterHeader({
         type="button"
         onClick={() => onSort(sortKey)}
         className={cn(
-          "group flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] transition-colors h-full",
-          sortActive || hasFilter
-            ? "text-accent"
-            : "text-muted-foreground hover:text-foreground",
+          'group flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] transition-colors h-full',
+          sortActive || hasFilter ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
         )}
       >
         <span>{label}</span>
@@ -144,22 +132,20 @@ function FilterHeader({
       </button>
       <button
         type="button"
-        onClick={(e) => {
+        onClick={e => {
           e.stopPropagation()
-          setOpen((v) => !v)
+          setOpen(v => !v)
         }}
         aria-label={`Filter ${label}`}
         className={cn(
-          "flex items-center h-5 px-1 border",
+          'flex items-center h-5 px-1 border',
           hasFilter
-            ? "border-accent text-accent bg-muted"
-            : "border-border text-muted-foreground hover:text-foreground hover:border-border-strong",
+            ? 'border-accent text-accent bg-muted'
+            : 'border-border text-muted-foreground hover:text-foreground hover:border-border-strong'
         )}
       >
         <ChevronDown className="h-3 w-3" />
-        {hasFilter && (
-          <span className="ml-0.5 text-[9px] tabular-nums">{activeCount}</span>
-        )}
+        {hasFilter && <span className="ml-0.5 text-[9px] tabular-nums">{activeCount}</span>}
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 min-w-[200px] max-h-[320px] border border-border-strong bg-background z-30">
@@ -180,7 +166,7 @@ function FilterHeader({
                 no options available for current filters
               </div>
             )}
-            {options.map((opt) => {
+            {options.map(opt => {
               const on = selected.has(opt.value)
               return (
                 <label
@@ -193,7 +179,7 @@ function FilterHeader({
                     onChange={() => toggle(opt.value)}
                     className="accent-[var(--color-accent)]"
                   />
-                  <span className={cn("flex-1", on ? "text-accent" : "text-foreground")}>
+                  <span className={cn('flex-1', on ? 'text-accent' : 'text-foreground')}>
                     {opt.label}
                   </span>
                   <span className="text-[10px] tabular-nums text-muted-foreground">
@@ -250,18 +236,18 @@ export function FindingsList({
     overscan: 12,
   })
 
-  const allFilteredSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
+  const allFilteredSelected = rows.length > 0 && rows.every(r => selectedIds.has(r.id))
 
   const toolOptions = useMemo(() => {
     const keys = new Set<string>([...Object.keys(toolFacets), ...filters.tool])
     return Array.from(keys)
-      .map((k) => ({ value: k, label: k, count: toolFacets[k] ?? 0 }))
+      .map(k => ({ value: k, label: k, count: toolFacets[k] ?? 0 }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
   }, [toolFacets, filters.tool])
 
   const statusOptions = useMemo(() => {
     const keys = new Set<string>([...Object.keys(statusFacets), ...filters.status])
-    return STATUS_ORDER.filter((s) => keys.has(s)).map((s) => ({
+    return STATUS_ORDER.filter(s => keys.has(s)).map(s => ({
       value: s,
       label: STATUS_LABEL[s],
       count: statusFacets[s] ?? 0,
@@ -270,12 +256,12 @@ export function FindingsList({
 
   const sevOptions = useMemo(
     () =>
-      SEV_ORDER.map((s) => ({
+      SEV_ORDER.map(s => ({
         value: s,
         label: SEV_LABEL[s],
         count: sevFacets[s] ?? 0,
       })),
-    [sevFacets],
+    [sevFacets]
   )
 
   return (
@@ -283,8 +269,8 @@ export function FindingsList({
       {/* Header row */}
       <div
         className={cn(
-          "grid items-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground border-b border-border-strong bg-background px-3 h-9 shrink-0",
-          GRID_COLS,
+          'grid items-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground border-b border-border-strong bg-background px-3 h-9 shrink-0',
+          GRID_COLS
         )}
       >
         <div>
@@ -292,7 +278,7 @@ export function FindingsList({
             type="checkbox"
             aria-label={`Select all ${rows.length} filtered findings`}
             checked={allFilteredSelected}
-            onChange={(e) => {
+            onChange={e => {
               if (e.target.checked) onSelectAllFiltered()
               else onClearAll()
             }}
@@ -308,9 +294,7 @@ export function FindingsList({
           activeCount={filters.severity.size}
           options={sevOptions as unknown as FilterOption[]}
           selected={filters.severity as unknown as Set<string>}
-          onChange={(next) =>
-            setFilters((f) => ({ ...f, severity: next as unknown as Set<Severity> }))
-          }
+          onChange={next => setFilters(f => ({ ...f, severity: next as unknown as Set<Severity> }))}
         />
         <SortHeader label="title" sortKey="title" sort={sort} onSort={onSort} />
         <FilterHeader
@@ -321,7 +305,7 @@ export function FindingsList({
           activeCount={filters.tool.size}
           options={toolOptions}
           selected={filters.tool as Set<string>}
-          onChange={(next) => setFilters((f) => ({ ...f, tool: next }))}
+          onChange={next => setFilters(f => ({ ...f, tool: next }))}
         />
         <SortHeader label="location" sortKey="location" sort={sort} onSort={onSort} />
         <SortHeader label="commit" sortKey="commit" sort={sort} onSort={onSort} />
@@ -333,60 +317,55 @@ export function FindingsList({
           activeCount={filters.status.size}
           options={statusOptions}
           selected={filters.status as unknown as Set<string>}
-          onChange={(next) =>
-            setFilters((f) => ({ ...f, status: next as unknown as Set<Status> }))
-          }
+          onChange={next => setFilters(f => ({ ...f, status: next as unknown as Set<Status> }))}
         />
-        <SortHeader
-          label="found"
-          sortKey="found"
-          sort={sort}
-          onSort={onSort}
-          align="right"
-        />
+        <SortHeader label="found" sortKey="found" sort={sort} onSort={onSort} align="right" />
       </div>
 
       {/* Body */}
       <div ref={parentRef} className="flex-1 min-h-0 overflow-auto">
         {rows.length === 0 ? (
           <div className="p-8 text-center text-xs">
-            <div className="text-dim mb-1">// no findings match current filters</div>
-            <div className="text-muted-foreground">
-              try clearing filters or switching domains.
-            </div>
+            <div className="text-dim mb-1">{'// no findings match current filters'}</div>
+            <div className="text-muted-foreground">try clearing filters or switching domains.</div>
           </div>
         ) : (
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,
-              position: "relative",
-              width: "100%",
+              position: 'relative',
+              width: '100%',
             }}
           >
-            {virtualizer.getVirtualItems().map((v) => {
+            {virtualizer.getVirtualItems().map(v => {
               const f = rows[v.index]
               const isSelected = selectedIds.has(f.id)
               const isFocused = selectedRowId === f.id
               return (
                 <div
                   key={f.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelect(f.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') onSelect(f.id)
+                  }}
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: "100%",
+                    width: '100%',
                     height: `${v.size}px`,
                     transform: `translateY(${v.start}px)`,
                   }}
                   className={cn(
-                    "grid items-center text-xs px-3 border-b border-border cursor-pointer",
+                    'grid items-center text-xs px-3 border-b border-border cursor-pointer',
                     GRID_COLS,
-                    isFocused ? "bg-muted" : "hover:bg-muted/60",
-                    isSelected && "bg-muted/80",
+                    isFocused ? 'bg-muted' : 'hover:bg-muted/60',
+                    isSelected && 'bg-muted/80'
                   )}
                 >
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div role="presentation" onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       aria-label={`Select ${f.id}`}
@@ -401,9 +380,7 @@ export function FindingsList({
                   </div>
                   <div className="text-foreground truncate pr-3">{f.title}</div>
                   <div className="text-muted-foreground truncate">{f.tool}</div>
-                  <div className="text-muted-foreground truncate tabular-nums">
-                    {locationOf(f)}
-                  </div>
+                  <div className="text-muted-foreground truncate tabular-nums">{locationOf(f)}</div>
                   <div className="tabular-nums">
                     {f.commitHash ? (
                       <span className="text-primary">{f.commitHash}</span>
@@ -428,19 +405,17 @@ export function FindingsList({
       <div className="flex items-center justify-between px-3 h-7 border-t border-border text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
         <span>
           <span className="text-primary tabular-nums">{rows.length}</span> result
-          {rows.length !== 1 ? "s" : ""}
+          {rows.length !== 1 ? 's' : ''}
           {selectedIds.size > 0 && (
             <>
-              {" "}
-              · <span className="text-accent tabular-nums">{selectedIds.size}</span>{" "}
-              selected
+              {' '}
+              · <span className="text-accent tabular-nums">{selectedIds.size}</span> selected
             </>
           )}
           {sort && (
             <>
-              {" "}
-              · sorted by{" "}
-              <span className="text-foreground">{sort.key}</span>{" "}
+              {' '}
+              · sorted by <span className="text-foreground">{sort.key}</span>{' '}
               <span className="text-dim">{sort.dir}</span>
             </>
           )}

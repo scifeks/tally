@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -11,10 +11,10 @@ import {
   Loader2,
   RefreshCw,
   Upload,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import type { ReportDraft } from "@/lib/types"
-import { SECTION_LABELS } from "./constants"
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { ReportDraft } from '@/lib/types'
+import { SECTION_LABELS } from './constants'
 
 export function DraftCard({
   draft,
@@ -31,25 +31,32 @@ export function DraftCard({
 }) {
   const [expanded, setExpanded] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const hasDraft = draft.status === "draft" || draft.status === "reviewed"
-  const isReviewed = draft.status === "reviewed"
+  const hasDraft = draft.status === 'draft' || draft.status === 'reviewed'
+  const isReviewed = draft.status === 'reviewed'
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       onUpload(file)
     }
-    e.target.value = ""
+    e.target.value = ''
   }
 
   return (
-    <div className={cn(
-      "border bg-muted/20 transition-colors",
-      isReviewed ? "border-good/50" : "border-border"
-    )}>
+    <div
+      className={cn(
+        'border bg-muted/20 transition-colors',
+        isReviewed ? 'border-good/50' : 'border-border'
+      )}
+    >
       <div
+        role="button"
+        tabIndex={0}
         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') setExpanded(v => !v)
+        }}
       >
         <button className="shrink-0 text-dim hover:text-foreground">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -61,36 +68,34 @@ export function DraftCard({
           <FileText className="h-4 w-4 text-accent shrink-0" />
         )}
 
-        <span className="flex-1 text-sm font-medium">
-          {SECTION_LABELS[draft.section]}
-        </span>
+        <span className="flex-1 text-sm font-medium">{SECTION_LABELS[draft.section]}</span>
 
         {/* Status badge */}
-        {draft.status === "reviewed" && (
+        {draft.status === 'reviewed' && (
           <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-good">
             <Check className="h-3 w-3" />
             Reviewed
           </span>
         )}
-        {draft.status === "draft" && (
+        {draft.status === 'draft' && (
           <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-accent">
             <FileText className="h-3 w-3" />
             Draft Ready
           </span>
         )}
-        {draft.status === "generating" && (
+        {draft.status === 'generating' && (
           <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-warn">
             <Loader2 className="h-3 w-3 animate-spin" />
             Generating
           </span>
         )}
-        {draft.status === "not_generated" && (
+        {draft.status === 'not_generated' && (
           <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-dim">
             <Clock className="h-3 w-3" />
             Not Generated
           </span>
         )}
-        {draft.status === "failed" && (
+        {draft.status === 'failed' && (
           <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-crit">
             <X className="h-3 w-3" />
             Failed
@@ -98,14 +103,18 @@ export function DraftCard({
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          role="presentation"
+          className="flex items-center gap-2"
+          onClick={e => e.stopPropagation()}
+        >
           {!hasDraft ? (
             <button
               onClick={() => onGenerate(false)}
               disabled={isGenerating}
               className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Generate"}
+              {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Generate'}
             </button>
           ) : (
             <button
@@ -128,26 +137,26 @@ export function DraftCard({
           <button
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              "p-1.5 text-[10px] border transition-colors",
+              'p-1.5 text-[10px] border transition-colors',
               hasDraft
-                ? "border-border text-muted-foreground hover:border-good hover:text-good"
-                : "border-border/50 text-dim cursor-not-allowed"
+                ? 'border-border text-muted-foreground hover:border-good hover:text-good'
+                : 'border-border/50 text-dim cursor-not-allowed'
             )}
             disabled={!hasDraft}
-            title={hasDraft ? "Upload reviewed version" : "Generate draft first"}
+            title={hasDraft ? 'Upload reviewed version' : 'Generate draft first'}
           >
             <Upload className="h-3 w-3" />
           </button>
 
           <button
             className={cn(
-              "p-1.5 text-[10px] border transition-colors",
+              'p-1.5 text-[10px] border transition-colors',
               hasDraft
-                ? "border-border text-muted-foreground hover:border-accent hover:text-accent"
-                : "border-border/50 text-dim cursor-not-allowed"
+                ? 'border-border text-muted-foreground hover:border-accent hover:text-accent'
+                : 'border-border/50 text-dim cursor-not-allowed'
             )}
             disabled={!hasDraft}
-            title={hasDraft ? "Download draft" : "No draft to download"}
+            title={hasDraft ? 'Download draft' : 'No draft to download'}
           >
             <Download className="h-3 w-3" />
           </button>
@@ -181,7 +190,9 @@ export function DraftCard({
           ) : (
             <p className="text-sm text-dim italic">
               No content yet. Click &quot;Generate&quot; to create this section using AI.
-              {skipTriage ? " (skip-triage mode: includes all findings)" : " (only triaged findings will be included)"}
+              {skipTriage
+                ? ' (skip-triage mode: includes all findings)'
+                : ' (only triaged findings will be included)'}
             </p>
           )}
         </div>

@@ -1,12 +1,12 @@
-import { ChevronDown, ChevronRight } from "lucide-react"
-import { cn } from "@/lib/utils"
-import type { Domain, TriageBatchStatus } from "@/lib/types"
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { Domain, TriageBatchStatus } from '@/lib/types'
 
 const SEGMENT_LABEL: Record<Domain, string> = {
-  sast: "SAST",
-  sca: "SCA",
-  web: "WEB",
-  secrets: "SECRETS",
+  sast: 'SAST',
+  sca: 'SCA',
+  web: 'WEB',
+  secrets: 'SECRETS',
 }
 
 export interface BatchDisplay {
@@ -29,10 +29,10 @@ export function BatchRow({
   onToggle: () => void
 }) {
   const statusColor: Record<TriageBatchStatus, string> = {
-    pending: "text-dim",
-    in_progress: "text-high animate-pulse",
-    completed: "text-low",
-    failed: "text-crit",
+    pending: 'text-dim',
+    in_progress: 'text-high animate-pulse',
+    completed: 'text-low',
+    failed: 'text-crit',
   }
 
   return (
@@ -49,8 +49,8 @@ export function BatchRow({
         <span className="text-accent font-mono w-20">{batch.id}</span>
         <span className="uppercase text-muted-foreground w-16">{SEGMENT_LABEL[batch.segment]}</span>
         <span className="tabular-nums w-20">{batch.findingCount} findings</span>
-        <span className={cn("uppercase font-bold w-24", statusColor[batch.status])}>
-          {batch.status.replace("_", " ")}
+        <span className={cn('uppercase font-bold w-24', statusColor[batch.status])}>
+          {batch.status.replace('_', ' ')}
         </span>
         {batch.attempt > 1 && (
           <span className="text-high text-[10px]">attempt #{batch.attempt}</span>
@@ -58,16 +58,21 @@ export function BatchRow({
         <span className="flex-1" />
         {batch.finishedAt && (
           <span className="text-muted-foreground">
-            {new Date(batch.finishedAt).toLocaleTimeString("en-US", { hour12: false })}
+            {new Date(batch.finishedAt).toLocaleTimeString('en-US', { hour12: false })}
           </span>
         )}
       </button>
       {expanded && (
         <div className="px-6 py-2 bg-muted/20 text-[11px] text-muted-foreground border-t border-border">
           <div className="font-mono">
-            // Claude analysis for {batch.findingCount} findings in {SEGMENT_LABEL[batch.segment]}
+            {'// Claude analysis for '}
+            {batch.findingCount}
+            {' findings in '}
+            {SEGMENT_LABEL[batch.segment]}
             <br />
-            // Prompt: Analyze security findings, provide severity assessment, recommend actions...
+            {
+              '// Prompt: Analyze security findings, provide severity assessment, recommend actions...'
+            }
           </div>
         </div>
       )}

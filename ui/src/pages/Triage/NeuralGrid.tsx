@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react"
-import { cn } from "@/lib/utils"
+import { useState, useEffect, useMemo } from 'react'
+import { cn } from '@/lib/utils'
 
 export function NeuralGrid({
   active,
@@ -70,7 +70,7 @@ export function NeuralGrid({
   useEffect(() => {
     if (!active) return
     const interval = setInterval(() => {
-      setPulseIdx((i) => (i + 1) % totalNodes)
+      setPulseIdx(i => (i + 1) % totalNodes)
     }, 150)
     return () => clearInterval(interval)
   }, [active, totalNodes])
@@ -98,14 +98,16 @@ export function NeuralGrid({
         <path d={`M 12 4 L 4 4 L 4 12`} />
         <path d={`M ${size - 12} 4 L ${size - 4} 4 L ${size - 4} 12`} />
         <path d={`M 12 ${size - 4} L 4 ${size - 4} L 4 ${size - 12}`} />
-        <path d={`M ${size - 12} ${size - 4} L ${size - 4} ${size - 4} L ${size - 4} ${size - 12}`} />
+        <path
+          d={`M ${size - 12} ${size - 4} L ${size - 4} ${size - 4} L ${size - 4} ${size - 12}`}
+        />
       </g>
 
       {/* Connecting lines */}
-      {lines.map((line) => {
+      {lines.map(line => {
         // Line is "active" if both endpoints are processed
-        const startIdx = nodes.findIndex((n) => n.x === line.x1 && n.y === line.y1)
-        const endIdx = nodes.findIndex((n) => n.x === line.x2 && n.y === line.y2)
+        const startIdx = nodes.findIndex(n => n.x === line.x1 && n.y === line.y1)
+        const endIdx = nodes.findIndex(n => n.x === line.x2 && n.y === line.y2)
         const lineActive = startIdx < processedCount && endIdx < processedCount
         return (
           <line
@@ -114,16 +116,16 @@ export function NeuralGrid({
             y1={line.y1}
             x2={line.x2}
             y2={line.y2}
-            stroke={lineActive ? "var(--color-accent)" : "var(--color-border)"}
+            stroke={lineActive ? 'var(--color-accent)' : 'var(--color-border)'}
             strokeWidth={lineActive ? 1.5 : 0.5}
             opacity={lineActive ? 0.8 : 0.3}
-            className={lineActive ? "transition-all duration-300" : ""}
+            className={lineActive ? 'transition-all duration-300' : ''}
           />
         )
       })}
 
       {/* Nodes */}
-      {nodes.map((node) => {
+      {nodes.map(node => {
         const isProcessed = node.id < processedCount
         const isPulse = active && node.id === pulseIdx && !isProcessed
         return (
@@ -144,13 +146,10 @@ export function NeuralGrid({
               cx={node.x}
               cy={node.y}
               r={nodeRadius}
-              fill={isProcessed ? "var(--color-accent)" : "var(--color-background)"}
-              stroke={isProcessed || isPulse ? "var(--color-accent)" : "var(--color-border)"}
+              fill={isProcessed ? 'var(--color-accent)' : 'var(--color-background)'}
+              stroke={isProcessed || isPulse ? 'var(--color-accent)' : 'var(--color-border)'}
               strokeWidth={isPulse ? 2 : 1}
-              className={cn(
-                "transition-all duration-200",
-                isProcessed && "tty-glow",
-              )}
+              className={cn('transition-all duration-200', isProcessed && 'tty-glow')}
             />
             {/* Checkmark for processed */}
             {isProcessed && (

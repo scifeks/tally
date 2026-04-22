@@ -1,18 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from "react"
-import { Send, Square, Plus, Trash2, MessageSquare, AlertTriangle, X, Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useUI } from "@/lib/store"
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Send, Square, Plus, Trash2, MessageSquare, AlertTriangle, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useUI } from '@/lib/store'
 import {
   useChatSessions,
-  useChatMessages,
   useCreateSession,
   useSendMessage,
   useDeleteSession,
   useProjects,
-} from "@/lib/api"
-import type { ChatMessage, ChatSession } from "@/lib/types"
-import { Panel } from "@/components/tty"
-import { Modal, ModalButton } from "@/components/Modal"
+} from '@/lib/api'
+import type { ChatMessage, ChatSession } from '@/lib/types'
+import { Modal, ModalButton } from '@/components/Modal'
 
 // ─── Error Modal ────────────────────────────────────────────────────────────
 
@@ -49,40 +47,34 @@ function ErrorModal({
 
 // ─── Message Bubble ─────────────────────────────────────────────────────────
 
-function MessageBubble({
-  message,
-  isLast,
-}: {
-  message: ChatMessage
-  isLast?: boolean
-}) {
-  const isUser = message.role === "user"
-  const time = new Date(message.timestamp).toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
+function MessageBubble({ message, isLast }: { message: ChatMessage; isLast?: boolean }) {
+  const isUser = message.role === 'user'
+  const time = new Date(message.timestamp).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
     hour12: false,
   })
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-1 max-w-[85%]",
-        isUser ? "self-end items-end" : "self-start items-start"
+        'flex flex-col gap-1 max-w-[85%]',
+        isUser ? 'self-end items-end' : 'self-start items-start'
       )}
     >
       {/* Header */}
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-        <span>{isUser ? "YOU" : "TALLY"}</span>
+        <span>{isUser ? 'YOU' : 'TALLY'}</span>
         <span className="text-dim">{time}</span>
       </div>
 
       {/* Content */}
       <div
         className={cn(
-          "px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap",
+          'px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap',
           isUser
-            ? "bg-primary/20 border border-primary/40 text-primary"
-            : "bg-muted/50 border border-border text-foreground"
+            ? 'bg-primary/20 border border-primary/40 text-primary'
+            : 'bg-muted/50 border border-border text-foreground'
         )}
       >
         {message.content}
@@ -108,25 +100,32 @@ function SessionItem({
   onDelete: () => void
 }) {
   const date = new Date(session.lastMessageAt ?? session.createdAt)
-  const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        "group flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-colors border-l-2",
+        'group flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-colors border-l-2',
         isActive
-          ? "border-accent bg-accent/10 text-accent"
-          : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+          ? 'border-accent bg-accent/10 text-accent'
+          : 'border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground'
       )}
       onClick={onClick}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') onClick()
+      }}
     >
       <MessageSquare className="h-3 w-3 shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="truncate text-[11px]">{session.title ?? "Untitled"}</div>
-        <div className="text-[9px] text-dim">{dateStr} · {session.messageCount} msgs</div>
+        <div className="truncate text-[11px]">{session.title ?? 'Untitled'}</div>
+        <div className="text-[9px] text-dim">
+          {dateStr} · {session.messageCount} msgs
+        </div>
       </div>
       <button
-        onClick={(e) => {
+        onClick={e => {
           e.stopPropagation()
           onDelete()
         }}
@@ -142,13 +141,13 @@ function SessionItem({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function Chat() {
-  const activeProjectId = useUI((s) => s.activeProjectId)
+  const activeProjectId = useUI(s => s.activeProjectId)
 
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
 
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? projects[0]
+  const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0]
 
   // TODO [BACKEND]: These hooks manage chat sessions and messages via API.
   // See useChat.ts for endpoint documentation.
@@ -160,7 +159,7 @@ export default function Chat() {
   // Local state
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [inputValue, setInputValue] = useState("")
+  const [inputValue, setInputValue] = useState('')
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -196,36 +195,38 @@ export default function Chat() {
 
     // Mock: load from mock data
     const MOCK_MESSAGES: Record<string, ChatMessage[]> = {
-      "chat-001": [
+      'chat-001': [
         {
-          id: "msg-001",
-          sessionId: "chat-001",
-          role: "user",
-          content: "Can you explain the SQL injection vulnerability in TAL-001?",
-          timestamp: "2025-03-15T10:00:00Z",
+          id: 'msg-001',
+          sessionId: 'chat-001',
+          role: 'user',
+          content: 'Can you explain the SQL injection vulnerability in TAL-001?',
+          timestamp: '2025-03-15T10:00:00Z',
         },
         {
-          id: "msg-002",
-          sessionId: "chat-001",
-          role: "assistant",
-          content: "Based on the finding TAL-001, there's a SQL injection vulnerability in the user authentication module. The issue occurs in `auth/login.py` at line 42 where user input is concatenated directly into the SQL query without proper parameterization.\n\n**Vulnerable code:**\n```python\nquery = f\"SELECT * FROM users WHERE username = '{username}'\"\n```\n\n**Recommended fix:**\n```python\nquery = \"SELECT * FROM users WHERE username = ?\"\ncursor.execute(query, (username,))\n```\n\nThis vulnerability allows attackers to bypass authentication or extract sensitive data from the database.",
-          timestamp: "2025-03-15T10:00:30Z",
+          id: 'msg-002',
+          sessionId: 'chat-001',
+          role: 'assistant',
+          content:
+            'Based on the finding TAL-001, there\'s a SQL injection vulnerability in the user authentication module. The issue occurs in `auth/login.py` at line 42 where user input is concatenated directly into the SQL query without proper parameterization.\n\n**Vulnerable code:**\n```python\nquery = f"SELECT * FROM users WHERE username = \'{username}\'"\n```\n\n**Recommended fix:**\n```python\nquery = "SELECT * FROM users WHERE username = ?"\ncursor.execute(query, (username,))\n```\n\nThis vulnerability allows attackers to bypass authentication or extract sensitive data from the database.',
+          timestamp: '2025-03-15T10:00:30Z',
         },
       ],
-      "chat-002": [
+      'chat-002': [
         {
-          id: "msg-005",
-          sessionId: "chat-002",
-          role: "user",
-          content: "How many XSS findings do we have?",
-          timestamp: "2025-03-14T14:00:00Z",
+          id: 'msg-005',
+          sessionId: 'chat-002',
+          role: 'user',
+          content: 'How many XSS findings do we have?',
+          timestamp: '2025-03-14T14:00:00Z',
         },
         {
-          id: "msg-006",
-          sessionId: "chat-002",
-          role: "assistant",
-          content: "Based on my analysis of the ACME Platform findings, you currently have **7 XSS (Cross-Site Scripting) vulnerabilities**:\n\n- **2 Critical** - Stored XSS in user profile and comment sections\n- **3 High** - Reflected XSS in search and URL parameters\n- **2 Medium** - DOM-based XSS with limited exploitation vectors",
-          timestamp: "2025-03-14T14:00:30Z",
+          id: 'msg-006',
+          sessionId: 'chat-002',
+          role: 'assistant',
+          content:
+            'Based on my analysis of the ACME Platform findings, you currently have **7 XSS (Cross-Site Scripting) vulnerabilities**:\n\n- **2 Critical** - Stored XSS in user profile and comment sections\n- **3 High** - Reflected XSS in search and URL parameters\n- **2 Medium** - DOM-based XSS with limited exploitation vectors',
+          timestamp: '2025-03-14T14:00:30Z',
         },
       ],
     }
@@ -238,19 +239,19 @@ export default function Chat() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   // Create new session
   const handleNewSession = useCallback(async () => {
     try {
-      const session = await createSession(activeProjectId, "New conversation")
-      setSessions((prev) => [session, ...prev])
+      const session = await createSession(activeProjectId, 'New conversation')
+      setSessions(prev => [session, ...prev])
       setActiveSessionId(session.id)
       setMessages([])
       inputRef.current?.focus()
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to create session")
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to create session')
     }
   }, [activeProjectId, createSession, setSessions])
 
@@ -259,12 +260,12 @@ export default function Chat() {
     async (sessionId: string) => {
       try {
         await deleteSession(sessionId)
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+        setSessions(prev => prev.filter(s => s.id !== sessionId))
         if (activeSessionId === sessionId) {
           setActiveSessionId(null)
         }
       } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : "Failed to delete session")
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to delete session')
       }
     },
     [activeSessionId, deleteSession, setSessions]
@@ -277,61 +278,55 @@ export default function Chat() {
     const userMessage: ChatMessage = {
       id: `msg-${Date.now()}`,
       sessionId: activeSessionId,
-      role: "user",
+      role: 'user',
       content: inputValue.trim(),
       timestamp: new Date().toISOString(),
     }
 
     // Add user message immediately
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
+    setMessages(prev => [...prev, userMessage])
+    setInputValue('')
 
     // Create placeholder for assistant response
     const assistantMessageId = `msg-${Date.now() + 1}`
     const assistantMessage: ChatMessage = {
       id: assistantMessageId,
       sessionId: activeSessionId,
-      role: "assistant",
-      content: "",
+      role: 'assistant',
+      content: '',
       timestamp: new Date().toISOString(),
       isStreaming: true,
     }
-    setMessages((prev) => [...prev, assistantMessage])
+    setMessages(prev => [...prev, assistantMessage])
 
     try {
       await sendMessage(
         activeSessionId,
         userMessage.content,
         // onToken
-        (token) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessageId
-                ? { ...m, content: m.content + token }
-                : m
-            )
+        token => {
+          setMessages(prev =>
+            prev.map(m => (m.id === assistantMessageId ? { ...m, content: m.content + token } : m))
           )
         },
         // onComplete
-        (fullContent) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessageId
-                ? { ...m, content: fullContent, isStreaming: false }
-                : m
+        fullContent => {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId ? { ...m, content: fullContent, isStreaming: false } : m
             )
           )
         },
         // onError
-        (error) => {
+        error => {
           setErrorMessage(error)
           // Remove the failed assistant message
-          setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId))
+          setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
         }
       )
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to send message")
-      setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId))
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to send message')
+      setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
     }
   }, [activeSessionId, inputValue, isStreaming, sendMessage])
 
@@ -340,17 +335,15 @@ export default function Chat() {
     if (activeSessionId) {
       cancelMessage(activeSessionId)
       // Mark last message as not streaming
-      setMessages((prev) =>
-        prev.map((m, i) =>
-          i === prev.length - 1 ? { ...m, isStreaming: false } : m
-        )
+      setMessages(prev =>
+        prev.map((m, i) => (i === prev.length - 1 ? { ...m, isStreaming: false } : m))
       )
     }
   }, [activeSessionId, cancelMessage])
 
   // Handle enter key
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
@@ -380,10 +373,10 @@ export default function Chat() {
               onClick={handleNewSession}
               disabled={isCreating}
               className={cn(
-                "w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-colors",
+                'w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-colors',
                 isCreating
-                  ? "opacity-50 cursor-not-allowed border-muted text-muted-foreground"
-                  : "border-accent text-accent hover:bg-accent/10"
+                  ? 'opacity-50 cursor-not-allowed border-muted text-muted-foreground'
+                  : 'border-accent text-accent hover:bg-accent/10'
               )}
             >
               {isCreating ? (
@@ -403,7 +396,7 @@ export default function Chat() {
                 Start a new chat to begin.
               </div>
             ) : (
-              sessions.map((session) => (
+              sessions.map(session => (
                 <SessionItem
                   key={session.id}
                   session={session}
@@ -469,7 +462,7 @@ export default function Chat() {
                     ) : hasNoMessages ? (
                       <div className="flex items-center justify-center h-full text-center">
                         <div className="text-muted-foreground text-[11px]">
-                          <div className="text-dim mb-2">// no messages yet</div>
+                          <div className="text-dim mb-2">{'// no messages yet'}</div>
                           Ask a question about your security findings
                         </div>
                       </div>
@@ -496,20 +489,20 @@ export default function Chat() {
                   <textarea
                     ref={inputRef}
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={e => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Ask about your security findings..."
                     disabled={isStreaming}
                     rows={1}
                     className={cn(
-                      "flex-1 bg-transparent text-foreground text-[12px] placeholder:text-muted-foreground resize-none outline-none",
-                      "min-h-[24px] max-h-[120px]",
-                      isStreaming && "opacity-50"
+                      'flex-1 bg-transparent text-foreground text-[12px] placeholder:text-muted-foreground resize-none outline-none',
+                      'min-h-[24px] max-h-[120px]',
+                      isStreaming && 'opacity-50'
                     )}
-                    style={{ height: "auto" }}
-                    onInput={(e) => {
+                    style={{ height: 'auto' }}
+                    onInput={e => {
                       const target = e.target as HTMLTextAreaElement
-                      target.style.height = "auto"
+                      target.style.height = 'auto'
                       target.style.height = `${Math.min(target.scrollHeight, 120)}px`
                     }}
                   />
@@ -526,10 +519,10 @@ export default function Chat() {
                       onClick={handleSend}
                       disabled={!inputValue.trim()}
                       className={cn(
-                        "shrink-0 p-2 border transition-colors",
+                        'shrink-0 p-2 border transition-colors',
                         inputValue.trim()
-                          ? "bg-accent/20 border-accent text-accent hover:bg-accent/30"
-                          : "bg-muted border-border text-muted-foreground cursor-not-allowed"
+                          ? 'bg-accent/20 border-accent text-accent hover:bg-accent/30'
+                          : 'bg-muted border-border text-muted-foreground cursor-not-allowed'
                       )}
                       title="Send message"
                     >
@@ -549,7 +542,7 @@ export default function Chat() {
       {/* Error Modal */}
       <ErrorModal
         open={errorMessage !== null}
-        message={errorMessage ?? ""}
+        message={errorMessage ?? ''}
         onClose={() => setErrorMessage(null)}
       />
     </div>

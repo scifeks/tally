@@ -1,8 +1,8 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme inline {
-  --font-sans: "JetBrains Mono", "IBM Plex Mono", "Menlo", "Consolas", ui-monospace, monospace;
-  --font-mono: "JetBrains Mono", "IBM Plex Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  --font-sans: 'JetBrains Mono', 'IBM Plex Mono', 'Menlo', 'Consolas', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'Menlo', 'Consolas', ui-monospace, monospace;
   --font-serif: ui-serif, Georgia, serif;
 
   /* Phosphor TTY palette: black terminal, muted phosphor green, amber warn, red crit */
@@ -34,11 +34,12 @@
 }
 
 @font-face {
-  font-family: "JetBrains Mono";
+  font-family: 'JetBrains Mono';
   font-style: normal;
   font-weight: 100 800;
   font-display: swap;
-  src: url("https://fonts.gstatic.com/s/jetbrainsmono/v20/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPVmUsaaDhw.woff2") format("woff2");
+  src: url('https://fonts.gstatic.com/s/jetbrainsmono/v20/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPVmUsaaDhw.woff2')
+    format('woff2');
 }
 
 @layer base {
@@ -55,7 +56,9 @@
 
   body {
     font-family: var(--font-mono);
-    font-feature-settings: "ss02" on, "cv01" on;
+    font-feature-settings:
+      'ss02' on,
+      'cv01' on;
     font-variant-ligatures: none;
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
@@ -73,7 +76,7 @@
      sits below the overlay and make it unreadable (e.g. the Config dropdown).
      Overlay is pointer-events:none so it never blocks interaction. */
   #root::before {
-    content: "";
+    content: '';
     position: fixed;
     inset: 0;
     pointer-events: none;
@@ -107,36 +110,62 @@
 }
 
 @layer utilities {
-  .text-crit { color: var(--color-crit); }
-  .text-high { color: var(--color-high); }
-  .text-med { color: var(--color-med); }
-  .text-low { color: var(--color-low); }
-  .text-info { color: var(--color-info); }
-  .text-dim { color: var(--color-dim); }
+  .text-crit {
+    color: var(--color-crit);
+  }
+  .text-high {
+    color: var(--color-high);
+  }
+  .text-med {
+    color: var(--color-med);
+  }
+  .text-low {
+    color: var(--color-low);
+  }
+  .text-info {
+    color: var(--color-info);
+  }
+  .text-dim {
+    color: var(--color-dim);
+  }
 
-  .bg-crit\/10 { background-color: rgba(255, 77, 77, 0.1); }
-  .bg-high\/10 { background-color: rgba(255, 140, 66, 0.1); }
-  .bg-med\/10 { background-color: rgba(255, 216, 77, 0.1); }
+  .bg-crit\/10 {
+    background-color: rgba(255, 77, 77, 0.1);
+  }
+  .bg-high\/10 {
+    background-color: rgba(255, 140, 66, 0.1);
+  }
+  .bg-med\/10 {
+    background-color: rgba(255, 216, 77, 0.1);
+  }
 
   /* TTY blinking cursor */
   .tty-cursor::after {
-    content: "█";
+    content: '█';
     margin-left: 2px;
     animation: tty-blink 1s steps(1) infinite;
     color: var(--color-primary);
   }
   @keyframes tty-blink {
-    50% { opacity: 0; }
+    50% {
+      opacity: 0;
+    }
   }
 
   .tty-glow {
-    text-shadow: 0 0 1px currentColor, 0 0 8px rgba(107, 211, 107, 0.25);
+    text-shadow:
+      0 0 1px currentColor,
+      0 0 8px rgba(107, 211, 107, 0.25);
   }
 
   /* Radar sweep animation for Scans page */
   @keyframes radar-sweep {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
   .animate-radar-sweep {
     animation: radar-sweep 3s linear infinite;
