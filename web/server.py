@@ -54,6 +54,7 @@ def create_app(
     app.state.handshake_registry = registry
     app.state.session_store = SessionStore()
 
+    # todo: This doesn't belong here
     db_path = Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
     app.state.connection_factory = ConnectionFactory(db_path)
 
@@ -65,6 +66,7 @@ def create_app(
         rag_engine = None
     app.state.rag_engine = rag_engine
 
+    # todo: Extract these endpoint definitions to their own file.
     app.include_router(auth_router, prefix="/api/auth")
     app.include_router(config_router, prefix="/api/config")
     app.include_router(findings_router, prefix="/api/findings")
@@ -95,6 +97,7 @@ def create_app(
     return app
 
 
+# todo: Logging does not need to be duplicated and it is not the concern of the server.
 def _attach_file_logging(base_path: str) -> None:
     """Attach a dated FileHandler to uvicorn loggers.
 
