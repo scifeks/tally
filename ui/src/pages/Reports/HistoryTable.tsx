@@ -1,5 +1,5 @@
-import { Download, FileText } from "lucide-react"
-import type { ReportHistoryEntry } from "@/lib/types"
+import { Download, FileText } from 'lucide-react'
+import type { ReportHistoryEntry } from '@/lib/types'
 
 export function HistoryTable({ entries }: { entries: ReportHistoryEntry[] }) {
   if (entries.length === 0) {
@@ -20,7 +20,7 @@ export function HistoryTable({ entries }: { entries: ReportHistoryEntry[] }) {
         <span>Size</span>
         <span></span>
       </div>
-      {entries.map((entry) => (
+      {entries.map(entry => (
         <div
           key={entry.id}
           className="grid grid-cols-[1fr_80px_140px_80px_60px] gap-4 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"

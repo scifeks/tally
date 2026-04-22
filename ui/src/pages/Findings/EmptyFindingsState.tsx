@@ -1,10 +1,10 @@
-import { Link } from "react-router-dom"
-import { Play, Wrench } from "lucide-react"
-import type { Domain } from "@/lib/types"
-import { DOMAINS } from "./constants"
+import { Link } from 'react-router-dom'
+import { Play, Wrench } from 'lucide-react'
+import type { Domain } from '@/lib/types'
+import { DOMAINS } from './constants'
 
 export function EmptyFindingsState({ domain }: { domain: Domain }) {
-  const domainLabel = DOMAINS.find((d) => d.key === domain)?.label ?? domain
+  const domainLabel = DOMAINS.find(d => d.key === domain)?.label ?? domain
   return (
     <div className="flex-1 min-h-0 overflow-auto flex items-start justify-center p-8">
       <div className="w-full max-w-xl border border-border bg-background">
@@ -14,9 +14,8 @@ export function EmptyFindingsState({ domain }: { domain: Domain }) {
         </div>
         <div className="p-6 space-y-5 text-xs">
           <div className="text-sm text-foreground leading-relaxed">
-            <span className="text-dim">$</span> no{" "}
-            <span className="text-accent">{domainLabel}</span> findings for the active
-            project.
+            <span className="text-dim">$</span> no{' '}
+            <span className="text-accent">{domainLabel}</span> findings for the active project.
           </div>
           <div className="text-muted-foreground leading-relaxed">
             this can mean one of a few things:
@@ -26,12 +25,11 @@ export function EmptyFindingsState({ domain }: { domain: Domain }) {
               <span className="text-dim">•</span> no scans have been run yet
             </li>
             <li>
-              <span className="text-dim">•</span> scans are still running (enrichment
-              can take a while)
+              <span className="text-dim">•</span> scans are still running (enrichment can take a
+              while)
             </li>
             <li>
-              <span className="text-dim">•</span> scans ran clean — nothing to report
-              in this domain
+              <span className="text-dim">•</span> scans ran clean — nothing to report in this domain
             </li>
           </ul>
           <div className="grid grid-cols-2 gap-2 pt-2">

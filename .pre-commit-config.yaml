@@ -21,3 +21,10 @@ repos:
         entry: .venv/bin/pyright
         types: [python]
         pass_filenames: false
+
+      - id: ui-lint-staged
+        name: ui lint-staged (eslint + prettier on staged ts/tsx/json/css)
+        language: system
+        entry: bash -c 'cd ui && npx lint-staged'
+        files: ^ui/src/.*\.(ts|tsx|json|css)$
+        pass_filenames: false

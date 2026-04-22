@@ -1,11 +1,11 @@
-import { Outlet, useLocation } from "react-router-dom"
-import { TopBar } from "./TopBar"
+import { Outlet, useLocation } from 'react-router-dom'
+import { TopBar } from './TopBar'
 
 export function Layout() {
   const loc = useLocation()
-  const path = loc.pathname === "/" ? "/dashboard" : loc.pathname
+  const path = loc.pathname === '/' ? '/dashboard' : loc.pathname
   const now = new Date()
-  const stamp = now.toLocaleString("en-US", { hour12: false })
+  const stamp = now.toLocaleString('en-US', { hour12: false })
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
@@ -21,7 +21,9 @@ export function Layout() {
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden md:inline">tty/1</span>
-            <span>status: <span className="text-low">ok</span></span>
+            <span>
+              status: <span className="text-low">ok</span>
+            </span>
             <span className="tabular-nums">{stamp}</span>
           </div>
         </div>

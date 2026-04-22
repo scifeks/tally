@@ -1,15 +1,15 @@
-import type { Severity, Status } from "@/lib/types"
+import type { Severity, Status } from '@/lib/types'
 
 export type SortKey =
-  | "id"
-  | "severity"
-  | "title"
-  | "tool"
-  | "location"
-  | "commit"
-  | "status"
-  | "found"
-export type SortDir = "asc" | "desc"
+  | 'id'
+  | 'severity'
+  | 'title'
+  | 'tool'
+  | 'location'
+  | 'commit'
+  | 'status'
+  | 'found'
+export type SortDir = 'asc' | 'desc'
 export type SortState = { key: SortKey; dir: SortDir } | null
 
 export type Filters = {
@@ -24,7 +24,7 @@ export const emptyFilters = (): Filters => ({
   severity: new Set(),
   status: new Set(),
   tool: new Set(),
-  search: "",
+  search: '',
 })
 
 export type FilterOption = { value: string; label: string; count: number }

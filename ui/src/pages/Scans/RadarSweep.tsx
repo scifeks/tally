@@ -9,7 +9,7 @@ export function RadarSweep({ active, size = 200 }: { active: boolean; size?: num
       aria-hidden
     >
       {/* Background circles */}
-      {[0.25, 0.5, 0.75, 1].map((frac) => (
+      {[0.25, 0.5, 0.75, 1].map(frac => (
         <circle
           key={frac}
           cx={size / 2}
@@ -21,14 +21,30 @@ export function RadarSweep({ active, size = 200 }: { active: boolean; size?: num
         />
       ))}
       {/* Cross-hairs */}
-      <line x1={size / 2} y1={10} x2={size / 2} y2={size - 10} stroke="var(--color-border)" strokeWidth={1} />
-      <line x1={10} y1={size / 2} x2={size - 10} y2={size / 2} stroke="var(--color-border)" strokeWidth={1} />
+      <line
+        x1={size / 2}
+        y1={10}
+        x2={size / 2}
+        y2={size - 10}
+        stroke="var(--color-border)"
+        strokeWidth={1}
+      />
+      <line
+        x1={10}
+        y1={size / 2}
+        x2={size - 10}
+        y2={size / 2}
+        stroke="var(--color-border)"
+        strokeWidth={1}
+      />
       {/* Corner brackets */}
       <g stroke="var(--color-accent)" strokeWidth={2} fill="none">
         <path d={`M 15 5 L 5 5 L 5 15`} />
         <path d={`M ${size - 15} 5 L ${size - 5} 5 L ${size - 5} 15`} />
         <path d={`M 15 ${size - 5} L 5 ${size - 5} L 5 ${size - 15}`} />
-        <path d={`M ${size - 15} ${size - 5} L ${size - 5} ${size - 5} L ${size - 5} ${size - 15}`} />
+        <path
+          d={`M ${size - 15} ${size - 5} L ${size - 5} ${size - 5} L ${size - 5} ${size - 15}`}
+        />
       </g>
       {/* Sweep arm + glow */}
       {active && (
@@ -59,7 +75,13 @@ export function RadarSweep({ active, size = 200 }: { active: boolean; size?: num
         </g>
       )}
       {/* Center dot */}
-      <circle cx={size / 2} cy={size / 2} r={3} fill="var(--color-accent)" className={active ? "tty-glow" : ""} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={3}
+        fill="var(--color-accent)"
+        className={active ? 'tty-glow' : ''}
+      />
     </svg>
   )
 }

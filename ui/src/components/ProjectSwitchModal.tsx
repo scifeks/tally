@@ -1,6 +1,6 @@
-import { Modal, ModalButton } from "./Modal"
-import type { Project } from "@/lib/types"
-import { AlertTriangle } from "lucide-react"
+import { Modal, ModalButton } from './Modal'
+import type { Project } from '@/lib/types'
+import { AlertTriangle } from 'lucide-react'
 
 /**
  * Three forms:
@@ -31,16 +31,10 @@ export function ProjectSwitchModal({
 
   if (blocked) {
     const blockReason = blockedByScans
-      ? `${runningScansCount} scan${runningScansCount > 1 ? "s" : ""}`
-      : "AI triage"
-    const blockVerb = blockedByScans
-      ? runningScansCount > 1
-        ? "are"
-        : "is"
-      : "is"
-    const cancelHint = blockedByScans
-      ? `cancel running scans on`
-      : `stop the triage process on`
+      ? `${runningScansCount} scan${runningScansCount > 1 ? 's' : ''}`
+      : 'AI triage'
+    const blockVerb = blockedByScans ? (runningScansCount > 1 ? 'are' : 'is') : 'is'
+    const cancelHint = blockedByScans ? `cancel running scans on` : `stop the triage process on`
 
     return (
       <Modal
@@ -55,16 +49,14 @@ export function ProjectSwitchModal({
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-crit mt-0.5 shrink-0" />
             <div className="text-foreground leading-relaxed">
-              cannot switch projects while{" "}
-              <span className="text-crit font-bold">{blockReason}</span>{" "}
-              {blockVerb} running on{" "}
+              cannot switch projects while{' '}
+              <span className="text-crit font-bold">{blockReason}</span> {blockVerb} running on{' '}
               <span className="text-primary tty-glow">{from?.code}</span>.
             </div>
           </div>
           <div className="border border-border bg-muted/30 p-2 text-[11px] text-muted-foreground leading-relaxed">
-            <span className="text-dim">//</span> concurrent projects aren&apos;t
-            supported. {cancelHint}{" "}
-            <span className="text-primary">{from?.name}</span> before switching to{" "}
+            <span className="text-dim">{'//'}</span> concurrent projects aren&apos;t supported.{' '}
+            {cancelHint} <span className="text-primary">{from?.name}</span> before switching to{' '}
             <span className="text-primary">{to?.name}</span>.
           </div>
         </div>
@@ -89,17 +81,15 @@ export function ProjectSwitchModal({
     >
       <div className="space-y-3">
         <div className="text-foreground leading-relaxed">
-          switch active project from{" "}
-          <span className="text-primary tty-glow">{from?.code}</span>{" "}
+          switch active project from <span className="text-primary tty-glow">{from?.code}</span>{' '}
           <span className="text-muted-foreground">({from?.name})</span>
           <br />
-          to{" "}
-          <span className="text-accent tty-glow">{to?.code}</span>{" "}
+          to <span className="text-accent tty-glow">{to?.code}</span>{' '}
           <span className="text-muted-foreground">({to?.name})</span>?
         </div>
         <div className="border border-border bg-muted/30 p-2 text-[11px] text-muted-foreground leading-relaxed">
-          <span className="text-dim">//</span> selections and filters on the
-          current project will be cleared.
+          <span className="text-dim">{'//'}</span> selections and filters on the current project
+          will be cleared.
         </div>
       </div>
     </Modal>

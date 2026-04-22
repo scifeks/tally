@@ -1,6 +1,6 @@
-import { useState } from "react"
-import type { ComponentType, ReactNode } from "react"
-import { cn } from "@/lib/utils"
+import { useState } from 'react'
+import type { ComponentType, ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
@@ -39,24 +39,24 @@ export function TagInput({
   placeholder?: string
   disabled?: boolean
 }) {
-  const [input, setInput] = useState("")
+  const [input, setInput] = useState('')
 
   const addTag = () => {
     const tag = input.trim()
     if (tag && !value.includes(tag)) {
       onChange([...value, tag])
     }
-    setInput("")
+    setInput('')
   }
 
   const removeTag = (tag: string) => {
-    onChange(value.filter((t) => t !== tag))
+    onChange(value.filter(t => t !== tag))
   }
 
   return (
-    <div className={cn("border border-border bg-background", disabled && "opacity-50")}>
+    <div className={cn('border border-border bg-background', disabled && 'opacity-50')}>
       <div className="flex flex-wrap gap-1 p-2 min-h-[36px]">
-        {value.map((tag) => (
+        {value.map(tag => (
           <span
             key={tag}
             className="flex items-center gap-1 px-2 h-6 bg-muted text-xs text-foreground"
@@ -77,15 +77,15 @@ export function TagInput({
           <input
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === ",") {
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ',') {
                 e.preventDefault()
                 addTag()
               }
             }}
             onBlur={addTag}
-            placeholder={value.length === 0 ? placeholder : ""}
+            placeholder={value.length === 0 ? placeholder : ''}
             className="flex-1 min-w-[100px] bg-transparent text-xs text-foreground outline-none placeholder:text-dim"
           />
         )}

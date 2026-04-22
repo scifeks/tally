@@ -11,13 +11,7 @@ export function PrinterAnimation({
   const pagesComplete = Math.floor((progress / 100) * pageCount)
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 220 220"
-      className="shrink-0"
-      aria-hidden
-    >
+    <svg width={size} height={size} viewBox="0 0 220 220" className="shrink-0" aria-hidden>
       {/* Corner brackets */}
       <g stroke="var(--color-accent)" strokeWidth={2} fill="none">
         <path d="M 15 5 L 5 5 L 5 15" />
@@ -51,7 +45,7 @@ export function PrinterAnimation({
       />
 
       {/* Document stack in tray */}
-      {[0, 1, 2].map((i) => (
+      {[0, 1, 2].map(i => (
         <rect
           key={i}
           x={65 + i * 2}
@@ -81,15 +75,15 @@ export function PrinterAnimation({
         cx="60"
         cy="75"
         r="4"
-        fill={active ? "var(--color-accent)" : "var(--color-dim)"}
-        className={active ? "tty-glow" : ""}
+        fill={active ? 'var(--color-accent)' : 'var(--color-dim)'}
+        className={active ? 'tty-glow' : ''}
       />
       <circle
         cx="75"
         cy="75"
         r="4"
-        fill={active ? "var(--color-warn)" : "var(--color-dim)"}
-        className={active ? "animate-pulse" : ""}
+        fill={active ? 'var(--color-warn)' : 'var(--color-dim)'}
+        className={active ? 'animate-pulse' : ''}
       />
 
       {/* LCD display area */}
@@ -109,9 +103,9 @@ export function PrinterAnimation({
         fill="var(--color-accent)"
         fontSize="8"
         fontFamily="monospace"
-        className={active ? "tty-glow" : ""}
+        className={active ? 'tty-glow' : ''}
       >
-        {active ? `PRINTING ${progress}%` : "READY"}
+        {active ? `PRINTING ${progress}%` : 'READY'}
       </text>
 
       {/* Paper output slot */}
@@ -146,7 +140,7 @@ export function PrinterAnimation({
             strokeWidth="0.5"
             className="tty-glow"
           />
-          {[0, 1, 2].map((line) => (
+          {[0, 1, 2].map(line => (
             <line
               key={line}
               x1={70 + i * 1.5}

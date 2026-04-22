@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react"
-import { Settings, RotateCcw, Save } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Panel } from "@/components/tty"
-import type { ProjectInfo } from "@/lib/types"
-import { SectionHeader } from "./shared"
+import { useState, useEffect } from 'react'
+import { Settings, RotateCcw, Save } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Panel } from '@/components/tty'
+import type { ProjectInfo } from '@/lib/types'
+import { SectionHeader } from './shared'
 
 // ─── Project Info Section ─────────────────────────────────────────────────────
 
@@ -24,16 +24,16 @@ export function ProjectInfoSection({
       setForm({
         name: projectInfo.name,
         code: projectInfo.code,
-        company: projectInfo.company ?? "",
-        department: projectInfo.department ?? "",
-        abbreviation: projectInfo.abbreviation ?? "",
+        company: projectInfo.company ?? '',
+        department: projectInfo.department ?? '',
+        abbreviation: projectInfo.abbreviation ?? '',
       })
       setIsDirty(false)
     }
   }, [projectInfo])
 
   const updateField = (field: keyof ProjectInfo, value: string) => {
-    setForm((f) => ({ ...f, [field]: value }))
+    setForm(f => ({ ...f, [field]: value }))
     setIsDirty(true)
   }
 
@@ -47,9 +47,9 @@ export function ProjectInfoSection({
       setForm({
         name: projectInfo.name,
         code: projectInfo.code,
-        company: projectInfo.company ?? "",
-        department: projectInfo.department ?? "",
-        abbreviation: projectInfo.abbreviation ?? "",
+        company: projectInfo.company ?? '',
+        department: projectInfo.department ?? '',
+        abbreviation: projectInfo.abbreviation ?? '',
       })
       setIsDirty(false)
     }
@@ -72,10 +72,10 @@ export function ProjectInfoSection({
             onClick={handleReset}
             disabled={!isDirty}
             className={cn(
-              "flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider border transition-colors",
+              'flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider border transition-colors',
               isDirty
-                ? "border-border text-muted-foreground hover:bg-muted/30"
-                : "border-border/50 text-dim cursor-not-allowed",
+                ? 'border-border text-muted-foreground hover:bg-muted/30'
+                : 'border-border/50 text-dim cursor-not-allowed'
             )}
           >
             <RotateCcw className="h-3 w-3" />
@@ -85,14 +85,14 @@ export function ProjectInfoSection({
             onClick={handleSave}
             disabled={!isDirty || isSaving}
             className={cn(
-              "flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider transition-colors",
+              'flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider transition-colors',
               isDirty
-                ? "bg-accent text-background hover:bg-accent/80"
-                : "bg-muted text-dim cursor-not-allowed",
+                ? 'bg-accent text-background hover:bg-accent/80'
+                : 'bg-muted text-dim cursor-not-allowed'
             )}
           >
             <Save className="h-3 w-3" />
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </SectionHeader>
@@ -101,47 +101,63 @@ export function ProjectInfoSection({
         {/* Editable fields */}
         <div className="space-y-3">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+            <label
+              htmlFor="proj-name"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+            >
               Project Name
             </label>
             <input
+              id="proj-name"
               type="text"
-              value={form.name ?? ""}
-              onChange={(e) => updateField("name", e.target.value)}
+              value={form.name ?? ''}
+              onChange={e => updateField('name', e.target.value)}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+            <label
+              htmlFor="proj-code"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+            >
               Code
             </label>
             <input
+              id="proj-code"
               type="text"
-              value={form.code ?? ""}
-              onChange={(e) => updateField("code", e.target.value.toUpperCase())}
+              value={form.code ?? ''}
+              onChange={e => updateField('code', e.target.value.toUpperCase())}
               maxLength={4}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+            <label
+              htmlFor="proj-company"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+            >
               Company
             </label>
             <input
+              id="proj-company"
               type="text"
-              value={form.company ?? ""}
-              onChange={(e) => updateField("company", e.target.value)}
+              value={form.company ?? ''}
+              onChange={e => updateField('company', e.target.value)}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+            <label
+              htmlFor="proj-dept"
+              className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+            >
               Department
             </label>
             <input
+              id="proj-dept"
               type="text"
-              value={form.department ?? ""}
-              onChange={(e) => updateField("department", e.target.value)}
+              value={form.department ?? ''}
+              onChange={e => updateField('department', e.target.value)}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
@@ -150,34 +166,32 @@ export function ProjectInfoSection({
         {/* Read-only info */}
         <div className="space-y-3">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+            <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">
               Path (read-only)
-            </label>
+            </div>
             <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim font-mono">
               {projectInfo.path}
             </div>
           </div>
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
-              Created
-            </label>
+            <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">Created</div>
             <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim">
               {new Date(projectInfo.createdAt).toLocaleDateString()}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+              <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">
                 Repositories
-              </label>
+              </div>
               <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim tabular-nums">
                 {projectInfo.repoCount}
               </div>
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+              <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">
                 Findings
-              </label>
+              </div>
               <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim tabular-nums">
                 {projectInfo.findingCount}
               </div>

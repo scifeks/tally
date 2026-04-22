@@ -1,6 +1,6 @@
-import { useMemo } from "react"
-import { cn } from "@/lib/utils"
-import { useScanHistory } from "@/lib/api"
+import { useMemo } from 'react'
+import { cn } from '@/lib/utils'
+import { useScanHistory } from '@/lib/api'
 
 export function HistoryTable({ projectId }: { projectId: string }) {
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
@@ -10,9 +10,9 @@ export function HistoryTable({ projectId }: { projectId: string }) {
   const history = useMemo(
     () =>
       scans
-        .filter((s) => s.projectId === projectId && s.status !== "running")
+        .filter(s => s.projectId === projectId && s.status !== 'running')
         .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
-    [scans, projectId],
+    [scans, projectId]
   )
 
   if (history.length === 0) {
@@ -37,7 +37,7 @@ export function HistoryTable({ projectId }: { projectId: string }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {history.map((scan) => (
+          {history.map(scan => (
             <tr key={scan.id} className="hover:bg-muted/30">
               <td className="px-3 py-2 font-mono text-accent">{scan.id}</td>
               <td className="px-3 py-2 uppercase">{scan.domain}</td>
@@ -45,15 +45,15 @@ export function HistoryTable({ projectId }: { projectId: string }) {
               <td className="px-3 py-2">
                 <span
                   className={cn(
-                    "uppercase",
-                    scan.status === "done" && "text-low",
-                    scan.status === "failed" && "text-crit",
+                    'uppercase',
+                    scan.status === 'done' && 'text-low',
+                    scan.status === 'failed' && 'text-crit'
                   )}
                 >
                   {scan.status}
                 </span>
               </td>
-              <td className="px-3 py-2 text-right tabular-nums">{scan.findingsCount ?? "-"}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{scan.findingsCount ?? '-'}</td>
               <td className="px-3 py-2 text-muted-foreground">
                 {new Date(scan.startedAt).toLocaleString()}
               </td>

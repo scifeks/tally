@@ -1,14 +1,14 @@
-import { useMemo } from "react"
-import { Link } from "react-router-dom"
-import { useUI } from "@/lib/store"
-import { useProjects, useProjectMeta, useFindings, useScanHistory } from "@/lib/api"
-import { Panel, SeverityChip } from "@/components/tty"
-import { cn, formatRelative } from "@/lib/utils"
-import { Play, GitBranch, Wrench, Link2, ScrollText, ArrowRight } from "lucide-react"
-import type { ReactNode } from "react"
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { useUI } from '@/lib/store'
+import { useProjects, useProjectMeta, useFindings, useScanHistory } from '@/lib/api'
+import { Panel, SeverityChip } from '@/components/tty'
+import { cn, formatRelative } from '@/lib/utils'
+import { Play, GitBranch, Wrench, Link2, ScrollText, ArrowRight } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 export default function Dashboard() {
-  const activeProjectId = useUI((s) => s.activeProjectId)
+  const activeProjectId = useUI(s => s.activeProjectId)
 
   // TODO [BACKEND]: All these hooks return mock data. Replace with real API calls.
   // GET /api/v1/projects
@@ -20,29 +20,27 @@ export default function Dashboard() {
   // GET /api/v1/projects/:id/scans
   const { data: scans = [] } = useScanHistory(activeProjectId)
 
-  const project = projects.find((p) => p.id === activeProjectId) ?? projects[0]
+  const project = projects.find(p => p.id === activeProjectId) ?? projects[0]
   const meta = projectMetaData ?? { repositories: 0, urlLists: 0, enabledTools: 0 }
 
   const projectFindings = useMemo(
-    () => findings.filter((f) => f.projectId === project?.id),
-    [findings, project?.id],
+    () => findings.filter(f => f.projectId === project?.id),
+    [findings, project?.id]
   )
   const projectScans = useMemo(
-    () => scans.filter((s) => s.projectId === project?.id),
-    [scans, project?.id],
+    () => scans.filter(s => s.projectId === project?.id),
+    [scans, project?.id]
   )
 
   const hasScans = projectScans.length > 0
   const hasFindings = projectFindings.length > 0
   const lastScan = projectScans[0]
-  const runningScans = projectScans.filter((s) => s.status === "running").length
+  const runningScans = projectScans.filter(s => s.status === 'running').length
 
   const openCrit = projectFindings.filter(
-    (f) => f.status === "open" && f.severity === "critical",
+    f => f.status === 'open' && f.severity === 'critical'
   ).length
-  const openHigh = projectFindings.filter(
-    (f) => f.status === "open" && f.severity === "high",
-  ).length
+  const openHigh = projectFindings.filter(f => f.status === 'open' && f.severity === 'high').length
 
   return (
     <div className="h-full overflow-auto">
@@ -68,16 +66,12 @@ export default function Dashboard() {
                 href="/config/repositories"
               />
               <SummaryStat label="url lists" value={meta.urlLists} href="/urls" />
-              <SummaryStat
-                label="tools enabled"
-                value={meta.enabledTools}
-                href="/config/tools"
-              />
+              <SummaryStat label="tools enabled" value={meta.enabledTools} href="/config/tools" />
               <SummaryStat
                 label="scans"
                 value={projectScans.length}
                 href="/scans"
-                accent={runningScans > 0 ? "accent" : undefined}
+                accent={runningScans > 0 ? 'accent' : undefined}
                 hint={runningScans > 0 ? `${runningScans} running` : undefined}
               />
             </div>
@@ -138,21 +132,19 @@ export default function Dashboard() {
                     <div className="text-right">findings</div>
                     <div className="text-right">when</div>
                   </div>
-                  {projectScans.slice(0, 8).map((s) => (
+                  {projectScans.slice(0, 8).map(s => (
                     <div
                       key={s.id}
                       className="grid grid-cols-[90px_70px_90px_1fr_80px_110px] items-center px-3 h-8 border-b border-border last:border-b-0 hover:bg-muted/50"
                     >
                       <div className="text-dim tabular-nums">{s.id}</div>
-                      <div className="uppercase text-muted-foreground text-[11px]">
-                        {s.domain}
-                      </div>
+                      <div className="uppercase text-muted-foreground text-[11px]">{s.domain}</div>
                       <div className="text-foreground">{s.tool}</div>
                       <div>
                         <ScanStatus status={s.status} />
                       </div>
                       <div className="text-right tabular-nums text-muted-foreground">
-                        {s.findingsCount ?? "—"}
+                        {s.findingsCount ?? '—'}
                       </div>
                       <div className="text-right text-muted-foreground tabular-nums">
                         {formatRelative(s.startedAt)}
@@ -174,26 +166,23 @@ export default function Dashboard() {
                 <div className="divide-y divide-border text-xs">
                   <GlanceRow
                     label="last scan"
-                    value={lastScan ? formatRelative(lastScan.startedAt) : "never"}
+                    value={lastScan ? formatRelative(lastScan.startedAt) : 'never'}
                   />
-                  <GlanceRow
-                    label="total findings"
-                    value={projectFindings.length.toString()}
-                  />
+                  <GlanceRow label="total findings" value={projectFindings.length.toString()} />
                   <GlanceRow
                     label="open critical"
                     value={openCrit.toString()}
-                    highlight={openCrit > 0 ? "crit" : undefined}
+                    highlight={openCrit > 0 ? 'crit' : undefined}
                   />
                   <GlanceRow
                     label="open high"
                     value={openHigh.toString()}
-                    highlight={openHigh > 0 ? "high" : undefined}
+                    highlight={openHigh > 0 ? 'high' : undefined}
                   />
                   <GlanceRow
                     label="scans running"
                     value={runningScans.toString()}
-                    highlight={runningScans > 0 ? "accent" : undefined}
+                    highlight={runningScans > 0 ? 'accent' : undefined}
                   />
                 </div>
                 {hasFindings && (
@@ -222,12 +211,11 @@ export default function Dashboard() {
                   </div>
                   {projectFindings
                     .filter(
-                      (f) =>
-                        f.status === "open" &&
-                        (f.severity === "critical" || f.severity === "high"),
+                      f =>
+                        f.status === 'open' && (f.severity === 'critical' || f.severity === 'high')
                     )
                     .slice(0, 8)
-                    .map((f) => (
+                    .map(f => (
                       <Link
                         to="/findings"
                         key={f.id}
@@ -276,21 +264,19 @@ function SummaryStat({
   value: number
   href: string
   hint?: string
-  accent?: "accent"
+  accent?: 'accent'
 }) {
   return (
     <Link
       to={href}
       className="flex flex-col justify-center px-5 py-4 hover:bg-muted/50 transition-colors group"
     >
-      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</div>
       <div className="flex items-baseline gap-2 mt-1">
         <span
           className={cn(
-            "text-2xl font-bold tabular-nums",
-            accent === "accent" ? "text-accent" : "text-foreground",
+            'text-2xl font-bold tabular-nums',
+            accent === 'accent' ? 'text-accent' : 'text-foreground'
           )}
         >
           {value}
@@ -321,18 +307,18 @@ function ActionTile({
     <Link
       to={to}
       className={cn(
-        "group flex flex-col gap-2 border p-4 transition-colors bg-background",
+        'group flex flex-col gap-2 border p-4 transition-colors bg-background',
         primary
-          ? "border-accent hover:bg-muted"
-          : "border-border hover:border-border-strong hover:bg-muted/50",
+          ? 'border-accent hover:bg-muted'
+          : 'border-border hover:border-border-strong hover:bg-muted/50'
       )}
     >
       <div className="flex items-center gap-2">
-        <span className={primary ? "text-accent" : "text-muted-foreground"}>{icon}</span>
+        <span className={primary ? 'text-accent' : 'text-muted-foreground'}>{icon}</span>
         <span
           className={cn(
-            "text-xs uppercase tracking-[0.18em] font-bold",
-            primary ? "text-accent tty-glow" : "text-foreground",
+            'text-xs uppercase tracking-[0.18em] font-bold',
+            primary ? 'text-accent tty-glow' : 'text-foreground'
           )}
         >
           &gt; {label}
@@ -350,41 +336,36 @@ function GlanceRow({
 }: {
   label: string
   value: string
-  highlight?: "crit" | "high" | "accent"
+  highlight?: 'crit' | 'high' | 'accent'
 }) {
   const cls =
-    highlight === "crit"
-      ? "text-crit"
-      : highlight === "high"
-        ? "text-high"
-        : highlight === "accent"
-          ? "text-accent"
-          : "text-foreground"
+    highlight === 'crit'
+      ? 'text-crit'
+      : highlight === 'high'
+        ? 'text-high'
+        : highlight === 'accent'
+          ? 'text-accent'
+          : 'text-foreground'
   return (
     <div className="flex items-center justify-between px-3 h-9">
-      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      <span className={cn("tabular-nums font-bold", cls)}>{value}</span>
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className={cn('tabular-nums font-bold', cls)}>{value}</span>
     </div>
   )
 }
 
 function ScanStatus({ status }: { status: string }) {
   const map: Record<string, string> = {
-    running: "text-accent",
-    done: "text-low",
-    failed: "text-crit",
-    queued: "text-muted-foreground",
+    running: 'text-accent',
+    done: 'text-low',
+    failed: 'text-crit',
+    queued: 'text-muted-foreground',
   }
   return (
     <span
-      className={cn(
-        "text-[11px] uppercase tracking-wider",
-        map[status] ?? "text-muted-foreground",
-      )}
+      className={cn('text-[11px] uppercase tracking-wider', map[status] ?? 'text-muted-foreground')}
     >
-      {status === "running" ? <span className="tty-cursor">running</span> : status}
+      {status === 'running' ? <span className="tty-cursor">running</span> : status}
     </span>
   )
 }
@@ -399,23 +380,23 @@ function EmptyProjectState({
   const steps = [
     {
       done: hasMeta,
-      label: "add a repository or URL list",
-      desc: "define what to scan",
-      to: "/config/repositories",
+      label: 'add a repository or URL list',
+      desc: 'define what to scan',
+      to: '/config/repositories',
       icon: <GitBranch className="h-4 w-4" />,
     },
     {
       done: false,
-      label: "enable tools",
-      desc: "pick your SAST / WEB / SECRETS / SCA scanners",
-      to: "/config/tools",
+      label: 'enable tools',
+      desc: 'pick your SAST / WEB / SECRETS / SCA scanners',
+      to: '/config/tools',
       icon: <Wrench className="h-4 w-4" />,
     },
     {
       done: false,
-      label: "start your first scan",
+      label: 'start your first scan',
       desc: "ingestion + enrichment can take a while — that's normal",
-      to: "/scans",
+      to: '/scans',
       icon: <Play className="h-4 w-4" />,
     },
   ]
@@ -424,10 +405,9 @@ function EmptyProjectState({
     <Panel title={`welcome :: ${project.code}`}>
       <div className="p-6 space-y-6">
         <div className="text-sm text-foreground max-w-[640px] leading-relaxed">
-          <span className="text-dim">$</span> no scans have been run against{" "}
-          <span className="text-primary tty-glow">{project.name}</span>. once a scan
-          completes, the dashboard will populate with findings, severity breakdowns,
-          and triage state.
+          <span className="text-dim">$</span> no scans have been run against{' '}
+          <span className="text-primary tty-glow">{project.name}</span>. once a scan completes, the
+          dashboard will populate with findings, severity breakdowns, and triage state.
         </div>
 
         <div>
@@ -438,35 +418,28 @@ function EmptyProjectState({
                 <Link
                   to={s.to}
                   className={cn(
-                    "flex items-center gap-4 border px-4 py-3 transition-colors",
+                    'flex items-center gap-4 border px-4 py-3 transition-colors',
                     s.done
-                      ? "border-border text-muted-foreground"
-                      : "border-border hover:border-accent hover:bg-muted/50",
+                      ? 'border-border text-muted-foreground'
+                      : 'border-border hover:border-accent hover:bg-muted/50'
                   )}
                 >
                   <span
-                    className={cn(
-                      "w-8 text-center font-bold",
-                      s.done ? "text-low" : "text-accent",
-                    )}
+                    className={cn('w-8 text-center font-bold', s.done ? 'text-low' : 'text-accent')}
                   >
-                    {s.done ? "[x]" : `[${i + 1}]`}
+                    {s.done ? '[x]' : `[${i + 1}]`}
                   </span>
-                  <span className={s.done ? "text-muted-foreground" : "text-accent"}>
-                    {s.icon}
-                  </span>
+                  <span className={s.done ? 'text-muted-foreground' : 'text-accent'}>{s.icon}</span>
                   <div className="flex-1">
                     <div
                       className={cn(
-                        "text-xs uppercase tracking-[0.18em] font-bold",
-                        s.done ? "text-muted-foreground line-through" : "text-foreground",
+                        'text-xs uppercase tracking-[0.18em] font-bold',
+                        s.done ? 'text-muted-foreground line-through' : 'text-foreground'
                       )}
                     >
                       {s.label}
                     </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      {s.desc}
-                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">{s.desc}</div>
                   </div>
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </Link>
@@ -476,10 +449,10 @@ function EmptyProjectState({
         </div>
 
         <div className="border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground leading-relaxed">
-          <span className="text-dim">// </span>
-          scans can take significant time on first run — repositories are cloned,
-          targets are crawled, and results are enriched before findings appear.
-          you can leave this page; results stream in live.
+          <span className="text-dim">{'// '}</span>
+          scans can take significant time on first run — repositories are cloned, targets are
+          crawled, and results are enriched before findings appear. you can leave this page; results
+          stream in live.
         </div>
       </div>
     </Panel>

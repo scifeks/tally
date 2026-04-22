@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState } from "react"
-import { Search, X, ChevronUp, ChevronDown } from "lucide-react"
-import { useVirtualizer } from "@tanstack/react-virtual"
-import { cn } from "@/lib/utils"
-import { useUI } from "@/lib/store"
-import { useUrlLists, useUrlListEntries } from "@/lib/api"
-import type { UrlEntry } from "@/lib/types"
-import { Panel } from "@/components/tty"
+import { useMemo, useRef, useState } from 'react'
+import { Search, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { cn } from '@/lib/utils'
+import { useUI } from '@/lib/store'
+import { useUrlLists, useUrlListEntries } from '@/lib/api'
+import type { UrlEntry } from '@/lib/types'
+import { Panel } from '@/components/tty'
 
 // ─── Column config ──────────────────────────────────────────────────────────
 // Add a column later by pushing another entry here. `cellClass` controls the
@@ -13,8 +13,8 @@ import { Panel } from "@/components/tty"
 // `sortValue` lets a column sort on something different from what's displayed
 // (e.g. numeric port even though we format it).
 
-type SortDir = "asc" | "desc" | null
-type ColumnKey = "method" | "protocol" | "host" | "port" | "path"
+type SortDir = 'asc' | 'desc' | null
+type ColumnKey = 'method' | 'protocol' | 'host' | 'port' | 'path'
 
 interface ColumnDef {
   key: ColumnKey
@@ -28,101 +28,102 @@ interface ColumnDef {
 }
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: "var(--color-low)",
-  POST: "var(--color-info)",
-  PUT: "var(--color-med)",
-  PATCH: "var(--color-med)",
-  DELETE: "var(--color-crit)",
-  HEAD: "var(--color-muted-foreground)",
-  OPTIONS: "var(--color-muted-foreground)",
+  GET: 'var(--color-low)',
+  POST: 'var(--color-info)',
+  PUT: 'var(--color-med)',
+  PATCH: 'var(--color-med)',
+  DELETE: 'var(--color-crit)',
+  HEAD: 'var(--color-muted-foreground)',
+  OPTIONS: 'var(--color-muted-foreground)',
 }
 
 const COLUMNS: ColumnDef[] = [
   {
-    key: "method",
-    label: "METHOD",
-    cellClass: "w-[90px] shrink-0",
-    sortValue: (u) => u.method,
-    render: (u) => (
+    key: 'method',
+    label: 'METHOD',
+    cellClass: 'w-[90px] shrink-0',
+    sortValue: u => u.method,
+    render: u => (
       <span
         className="inline-flex items-center justify-center h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider border"
-        style={{ color: METHOD_COLORS[u.method] ?? "var(--color-foreground)", borderColor: "currentColor" }}
+        style={{
+          color: METHOD_COLORS[u.method] ?? 'var(--color-foreground)',
+          borderColor: 'currentColor',
+        }}
       >
         {u.method}
       </span>
     ),
   },
   {
-    key: "protocol",
-    label: "PROTO",
-    cellClass: "w-[70px] shrink-0 text-muted-foreground uppercase",
-    sortValue: (u) => u.protocol,
+    key: 'protocol',
+    label: 'PROTO',
+    cellClass: 'w-[70px] shrink-0 text-muted-foreground uppercase',
+    sortValue: u => u.protocol,
   },
   {
-    key: "host",
-    label: "HOST",
-    cellClass: "flex-1 min-w-[180px] truncate",
-    sortValue: (u) => u.host,
+    key: 'host',
+    label: 'HOST',
+    cellClass: 'flex-1 min-w-[180px] truncate',
+    sortValue: u => u.host,
   },
   {
-    key: "port",
-    label: "PORT",
-    cellClass: "w-[70px] shrink-0 text-muted-foreground tabular-nums",
-    sortValue: (u) => u.port,
+    key: 'port',
+    label: 'PORT',
+    cellClass: 'w-[70px] shrink-0 text-muted-foreground tabular-nums',
+    sortValue: u => u.port,
   },
   {
-    key: "path",
-    label: "PATH",
-    cellClass: "flex-[2] min-w-[240px] truncate text-primary",
-    sortValue: (u) => u.path,
+    key: 'path',
+    label: 'PATH',
+    cellClass: 'flex-[2] min-w-[240px] truncate text-primary',
+    sortValue: u => u.path,
   },
 ]
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function UrlLists() {
-  const activeProjectId = useUI((s) => s.activeProjectId)
+  const activeProjectId = useUI(s => s.activeProjectId)
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   // GET /api/v1/projects/:id/url-lists
   const { data: urlLists = [] } = useUrlLists(activeProjectId)
 
   const projectLists = useMemo(
-    () => urlLists.filter((l) => l.projectId === activeProjectId),
-    [urlLists, activeProjectId],
+    () => urlLists.filter(l => l.projectId === activeProjectId),
+    [urlLists, activeProjectId]
   )
 
-  const [activeListId, setActiveListId] = useState<string | null>(
-    projectLists[0]?.id ?? null,
-  )
+  const [activeListId, setActiveListId] = useState<string | null>(projectLists[0]?.id ?? null)
 
   // If project changes and current list no longer belongs to it, reset.
   useMemo(() => {
-    if (activeListId && !projectLists.some((l) => l.id === activeListId)) {
+    if (activeListId && !projectLists.some(l => l.id === activeListId)) {
       setActiveListId(projectLists[0]?.id ?? null)
     }
   }, [activeListId, projectLists])
 
-  const activeList = projectLists.find((l) => l.id === activeListId) ?? null
+  const activeList = projectLists.find(l => l.id === activeListId) ?? null
 
   // TODO [BACKEND]: Get URL entries for the active list.
   // GET /api/v1/url-lists/:id/entries
-  const { data: urls = [] } = useUrlListEntries(activeListId ?? "")
+  const { data: urls = [] } = useUrlListEntries(activeListId ?? '')
 
-  const [search, setSearch] = useState("")
+  const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<ColumnKey | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>(null)
 
   // URLs in the active list, filtered by search.
   const listUrls = useMemo(
-    () => (activeList ? urls.filter((u) => u.urlListId === activeList.id) : []),
-    [activeList, urls],
+    () => (activeList ? urls.filter(u => u.urlListId === activeList.id) : []),
+    [activeList, urls]
   )
 
   const filtered = useMemo(() => {
     if (!search.trim()) return listUrls
     const q = search.toLowerCase()
-    return listUrls.filter((u) => {
+    return listUrls.filter(u => {
       return (
         u.method.toLowerCase().includes(q) ||
         u.protocol.toLowerCase().includes(q) ||
@@ -138,13 +139,13 @@ export default function UrlLists() {
   // order (i.e. whatever the API returned).
   const sorted = useMemo(() => {
     if (!sortKey || !sortDir) return filtered
-    const col = COLUMNS.find((c) => c.key === sortKey)
+    const col = COLUMNS.find(c => c.key === sortKey)
     if (!col) return filtered
-    const mul = sortDir === "asc" ? 1 : -1
+    const mul = sortDir === 'asc' ? 1 : -1
     return [...filtered].sort((a, b) => {
       const va = col.sortValue(a)
       const vb = col.sortValue(b)
-      if (typeof va === "number" && typeof vb === "number") return (va - vb) * mul
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul
       return String(va).localeCompare(String(vb)) * mul
     })
   }, [filtered, sortKey, sortDir])
@@ -152,16 +153,16 @@ export default function UrlLists() {
   function cycleSort(key: ColumnKey) {
     if (sortKey !== key) {
       setSortKey(key)
-      setSortDir("asc")
+      setSortDir('asc')
       return
     }
     // same column — cycle asc → desc → off
-    if (sortDir === "asc") setSortDir("desc")
-    else if (sortDir === "desc") {
+    if (sortDir === 'asc') setSortDir('desc')
+    else if (sortDir === 'desc') {
       setSortKey(null)
       setSortDir(null)
     } else {
-      setSortDir("asc")
+      setSortDir('asc')
     }
   }
 
@@ -197,27 +198,23 @@ export default function UrlLists() {
             </div>
           ) : (
             <div className="flex items-stretch divide-x divide-border">
-              {projectLists.map((l) => {
+              {projectLists.map(l => {
                 const active = l.id === activeListId
-                const count = urls.filter((u) => u.urlListId === l.id).length
+                const count = urls.filter(u => u.urlListId === l.id).length
                 return (
                   <button
                     key={l.id}
                     onClick={() => setActiveListId(l.id)}
                     className={cn(
-                      "relative flex items-center gap-2 px-3 h-9 transition-colors",
+                      'relative flex items-center gap-2 px-3 h-9 transition-colors',
                       active
-                        ? "text-accent bg-muted"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                        ? 'text-accent bg-muted'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                     )}
                     aria-pressed={active}
                   >
-                    <span className="text-xs font-bold uppercase tracking-[0.2em]">
-                      {l.name}
-                    </span>
-                    <span className="text-[10px] text-dim tabular-nums">
-                      ({count})
-                    </span>
+                    <span className="text-xs font-bold uppercase tracking-[0.2em]">{l.name}</span>
+                    <span className="text-[10px] text-dim tabular-nums">({count})</span>
                     {active && (
                       <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent" />
                     )}
@@ -243,14 +240,14 @@ export default function UrlLists() {
             <span className="text-dim shrink-0">/</span>
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               placeholder="method, host, path, port, protocol..."
               className="bg-transparent outline-none text-sm flex-1 min-w-0 placeholder:text-dim text-foreground"
               aria-label="Search URLs"
             />
             {search && (
               <button
-                onClick={() => setSearch("")}
+                onClick={() => setSearch('')}
                 className="text-dim hover:text-foreground shrink-0"
                 aria-label="Clear search"
               >
@@ -293,30 +290,30 @@ export default function UrlLists() {
           <div className="flex flex-col h-full min-h-0">
             {/* Header row */}
             <div className="flex items-center gap-3 px-3 h-8 border-b border-border bg-muted/30 shrink-0 text-[10px] uppercase tracking-[0.25em] text-muted-foreground font-bold">
-              {COLUMNS.map((col) => {
+              {COLUMNS.map(col => {
                 const active = sortKey === col.key
                 const dir = active ? sortDir : null
                 // Preview direction shown on hover for inactive columns.
                 // First click on an unsorted column sorts ascending (see
                 // cycleSort), so we hint with an ascending chevron.
-                const previewDir: SortDir = active ? null : "asc"
+                const previewDir: SortDir = active ? null : 'asc'
                 return (
                   <button
                     key={col.key}
                     onClick={() => cycleSort(col.key)}
                     className={cn(
-                      "group flex items-center gap-1 text-left hover:text-foreground transition-colors",
-                      active && "text-accent",
-                      col.cellClass,
+                      'group flex items-center gap-1 text-left hover:text-foreground transition-colors',
+                      active && 'text-accent',
+                      col.cellClass
                     )}
                     title={`Sort by ${col.label.toLowerCase()}`}
                   >
                     <span>{col.label}</span>
                     {/* Active-sort indicator (always visible) */}
-                    {dir === "asc" && <ChevronUp className="h-3 w-3" />}
-                    {dir === "desc" && <ChevronDown className="h-3 w-3" />}
+                    {dir === 'asc' && <ChevronUp className="h-3 w-3" />}
+                    {dir === 'desc' && <ChevronDown className="h-3 w-3" />}
                     {/* Hover preview for inactive columns (dimmed) */}
-                    {!active && previewDir === "asc" && (
+                    {!active && previewDir === 'asc' && (
                       <ChevronUp
                         className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity text-dim"
                         aria-hidden
@@ -337,10 +334,10 @@ export default function UrlLists() {
                 <div
                   style={{
                     height: `${rowVirtualizer.getTotalSize()}px`,
-                    position: "relative",
+                    position: 'relative',
                   }}
                 >
-                  {rowVirtualizer.getVirtualItems().map((v) => {
+                  {rowVirtualizer.getVirtualItems().map(v => {
                     const u = sorted[v.index]
                     return (
                       <div
@@ -348,9 +345,11 @@ export default function UrlLists() {
                         className="absolute left-0 right-0 flex items-center gap-3 px-3 h-8 border-b border-border/50 hover:bg-muted/40 text-xs font-mono"
                         style={{ transform: `translateY(${v.start}px)` }}
                       >
-                        {COLUMNS.map((col) => (
-                          <div key={col.key} className={cn("truncate", col.cellClass)}>
-                            {col.render ? col.render(u) : String(u[col.key as keyof UrlEntry] ?? "")}
+                        {COLUMNS.map(col => (
+                          <div key={col.key} className={cn('truncate', col.cellClass)}>
+                            {col.render
+                              ? col.render(u)
+                              : String(u[col.key as keyof UrlEntry] ?? '')}
                           </div>
                         ))}
                       </div>
@@ -366,7 +365,8 @@ export default function UrlLists() {
                 {sorted.length} of {listUrls.length} urls
                 {sortKey && sortDir && (
                   <span className="text-muted-foreground ml-2">
-                    // sorted by {sortKey} {sortDir}
+                    {'// sorted by '}
+                    {sortKey} {sortDir}
                   </span>
                 )}
               </span>
@@ -390,9 +390,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
           <span className="px-1.5">empty</span>
           <span className="text-accent">]</span>
         </div>
-        <div className="text-lg text-primary tty-glow mb-2 uppercase tracking-wider">
-          {title}
-        </div>
+        <div className="text-lg text-primary tty-glow mb-2 uppercase tracking-wider">{title}</div>
         <div className="text-xs text-muted-foreground leading-relaxed">{body}</div>
       </div>
     </div>

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Pencil } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Pencil } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 /**
  * Text / textarea editable field. Affords editability via dotted underline +
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 export function EditableText({
   value,
   onChange,
-  placeholder = "click to edit",
+  placeholder = 'click to edit',
   multiline = false,
   className,
   valueClassName,
@@ -34,7 +34,7 @@ export function EditableText({
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus()
-      if ("select" in inputRef.current) inputRef.current.select()
+      if ('select' in inputRef.current) inputRef.current.select()
     }
   }, [editing])
 
@@ -52,9 +52,9 @@ export function EditableText({
   }
 
   if (editing) {
-    const Tag = multiline ? "textarea" : "input"
+    const Tag = multiline ? 'textarea' : 'input'
     return (
-      <div className={cn("editable-input flex items-start gap-1", className)}>
+      <div className={cn('editable-input flex items-start gap-1', className)}>
         <span className="text-accent mt-0.5 tty-cursor-inline" aria-hidden>
           &gt;
         </span>
@@ -63,27 +63,27 @@ export function EditableText({
           ref={inputRef}
           aria-label={ariaLabel}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={e => setDraft(e.target.value)}
           onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
               e.preventDefault()
               cancel()
             }
-            if (e.key === "Enter" && !multiline) {
+            if (e.key === 'Enter' && !multiline) {
               e.preventDefault()
               commit()
             }
-            if (e.key === "Enter" && multiline && (e.metaKey || e.ctrlKey)) {
+            if (e.key === 'Enter' && multiline && (e.metaKey || e.ctrlKey)) {
               e.preventDefault()
               commit()
             }
           }}
           rows={multiline ? 3 : undefined}
           className={cn(
-            "flex-1 bg-transparent outline-none border border-accent px-2 py-1 text-foreground font-mono resize-none",
-            multiline && "min-h-[72px]",
-            inputClassName ?? "text-xs",
+            'flex-1 bg-transparent outline-none border border-accent px-2 py-1 text-foreground font-mono resize-none',
+            multiline && 'min-h-[72px]',
+            inputClassName ?? 'text-xs'
           )}
         />
       </div>
@@ -95,19 +95,19 @@ export function EditableText({
     <button
       type="button"
       onClick={() => setEditing(true)}
-      aria-label={ariaLabel ?? "Edit"}
+      aria-label={ariaLabel ?? 'Edit'}
       className={cn(
-        "group relative w-full text-left px-2 py-1 border border-transparent",
-        "hover:border-dashed hover:border-accent/60 hover:bg-muted/40",
-        "focus:outline-none focus:border-dashed focus:border-accent",
-        className,
+        'group relative w-full text-left px-2 py-1 border border-transparent',
+        'hover:border-dashed hover:border-accent/60 hover:bg-muted/40',
+        'focus:outline-none focus:border-dashed focus:border-accent',
+        className
       )}
     >
       <span
         className={cn(
-          "block whitespace-pre-wrap",
-          empty ? "text-dim italic" : "text-foreground",
-          valueClassName ?? "text-xs",
+          'block whitespace-pre-wrap',
+          empty ? 'text-dim italic' : 'text-foreground',
+          valueClassName ?? 'text-xs'
         )}
       >
         {empty ? placeholder : value}
@@ -148,27 +148,27 @@ export function EditableSelect<T extends string>({
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false)
+      if (e.key === 'Escape') setOpen(false)
     }
-    document.addEventListener("mousedown", onDoc)
-    document.addEventListener("keydown", onKey)
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
     return () => {
-      document.removeEventListener("mousedown", onDoc)
-      document.removeEventListener("keydown", onKey)
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
     }
   }, [open])
 
   return (
-    <div ref={ref} className={cn("relative inline-block", className)}>
+    <div ref={ref} className={cn('relative inline-block', className)}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={ariaLabel ?? "Edit"}
+        onClick={() => setOpen(v => !v)}
+        aria-label={ariaLabel ?? 'Edit'}
         className={cn(
-          "group inline-flex items-center gap-1.5 px-2 py-1 border text-left",
+          'group inline-flex items-center gap-1.5 px-2 py-1 border text-left',
           open
-            ? "border-accent bg-muted"
-            : "border-transparent hover:border-dashed hover:border-accent/60 hover:bg-muted/40",
+            ? 'border-accent bg-muted'
+            : 'border-transparent hover:border-dashed hover:border-accent/60 hover:bg-muted/40'
         )}
       >
         {open && (
@@ -176,20 +176,18 @@ export function EditableSelect<T extends string>({
             &gt;
           </span>
         )}
-        <span className="text-xs">
-          {renderValue ? renderValue(value) : value}
-        </span>
+        <span className="text-xs">{renderValue ? renderValue(value) : value}</span>
         <Pencil
           aria-hidden
           className={cn(
-            "h-3 w-3 text-dim transition-opacity",
-            open ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            'h-3 w-3 text-dim transition-opacity',
+            open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
           )}
         />
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-1 min-w-[160px] border border-border-strong bg-background z-40">
-          {options.map((o) => {
+          {options.map(o => {
             const active = o.value === value
             return (
               <button
@@ -199,12 +197,12 @@ export function EditableSelect<T extends string>({
                   setOpen(false)
                 }}
                 className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 text-xs border-b border-border last:border-b-0 hover:bg-muted text-left",
-                  active && "bg-muted",
+                  'w-full flex items-center gap-2 px-2 py-1.5 text-xs border-b border-border last:border-b-0 hover:bg-muted text-left',
+                  active && 'bg-muted'
                 )}
               >
-                <span className={cn("text-dim", active && "text-accent")}>
-                  {active ? ">" : " "}
+                <span className={cn('text-dim', active && 'text-accent')}>
+                  {active ? '>' : ' '}
                 </span>
                 <span style={o.color ? { color: o.color } : undefined}>{o.label}</span>
               </button>
