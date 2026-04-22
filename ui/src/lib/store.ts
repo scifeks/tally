@@ -1,12 +1,12 @@
 import { create } from 'zustand'
-import type { Domain, Finding, TriageRunStatus } from './types'
+import type { Segment, Finding, TriageRunStatus } from './types'
 
 interface UIState {
   activeProjectId: string
   setActiveProject: (id: string) => void
 
-  findingsDomain: Domain
-  setFindingsDomain: (d: Domain) => void
+  findingsSegment: Segment
+  setFindingsSegment: (d: Segment) => void
 
   selectedFindingIds: Set<string>
   toggleSelected: (id: string) => void
@@ -29,8 +29,8 @@ export const useUI = create<UIState>(set => ({
   activeProjectId: 'p-01',
   setActiveProject: id => set({ activeProjectId: id, selectedFindingIds: new Set() }),
 
-  findingsDomain: 'sast',
-  setFindingsDomain: d => set({ findingsDomain: d, selectedFindingIds: new Set() }),
+  findingsSegment: 'sast',
+  setFindingsSegment: d => set({ findingsSegment: d, selectedFindingIds: new Set() }),
 
   selectedFindingIds: new Set<string>(),
   toggleSelected: id =>

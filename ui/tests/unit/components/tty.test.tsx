@@ -7,7 +7,7 @@ describe('SeverityChip', () => {
     ['high', 'HIGH'],
     ['medium', 'MED'],
     ['low', 'LOW'],
-    ['info', 'INFO'],
+    ['informational', 'INFO'],
   ] as const)('%s renders label "%s"', (severity, label) => {
     render(<SeverityChip severity={severity} />)
     expect(screen.getByText(label)).toBeInTheDocument()
@@ -16,10 +16,9 @@ describe('SeverityChip', () => {
 
 describe('StatusChip', () => {
   it.each([
-    ['open', 'open'],
-    ['triaged', 'triaged'],
+    ['active', 'active'],
     ['fixed', 'fixed'],
-    ['wontfix', 'wontfix'],
+    ['wont_fix', 'wont fix'],
     ['false_positive', 'false-pos'],
   ] as const)('%s renders label "%s"', (status, label) => {
     render(<StatusChip status={status} />)

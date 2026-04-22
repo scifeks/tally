@@ -1,8 +1,8 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Domain, TriageBatchStatus } from '@/lib/types'
+import type { Segment, TriageBatchStatus } from '@/lib/types'
 
-const SEGMENT_LABEL: Record<Domain, string> = {
+const SEGMENT_LABEL: Record<Segment, string> = {
   sast: 'SAST',
   sca: 'SCA',
   web: 'WEB',
@@ -11,7 +11,7 @@ const SEGMENT_LABEL: Record<Domain, string> = {
 
 export interface BatchDisplay {
   id: string
-  segment: Domain
+  segment: Segment
   findingCount: number
   status: TriageBatchStatus
   attempt: number

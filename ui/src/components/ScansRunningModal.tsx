@@ -76,7 +76,7 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
                   </span>
                   <span className="text-[11px] text-foreground truncate">{project?.name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {s.domain} · {s.tool}
+                    {s.segment} · {s.tool}
                   </span>
                   <span className="ml-auto text-[10px] text-dim tabular-nums">
                     started {formatRelative(s.startedAt)}

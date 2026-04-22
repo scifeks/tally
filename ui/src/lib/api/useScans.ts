@@ -33,20 +33,20 @@ const mockScanConfig: Record<string, ProjectScanConfig> = {
       { id: 'r-05', name: 'vuln-nodejs', source: 'local', location: '/opt/repos/vuln-nodejs' },
     ],
     tools: [
-      { id: 't-01', name: 'semgrep', domain: 'sast', enabled: true },
-      { id: 't-02', name: 'codeql', domain: 'sast', enabled: true },
-      { id: 't-03', name: 'bandit', domain: 'sast', enabled: false },
-      { id: 't-04', name: 'osv-scanner', domain: 'sca', enabled: true },
-      { id: 't-05', name: 'npm-audit', domain: 'sca', enabled: true },
-      { id: 't-06', name: 'pip-audit', domain: 'sca', enabled: true },
-      { id: 't-07', name: 'composer-audit', domain: 'sca', enabled: false },
-      { id: 't-08', name: 'zap', domain: 'web', enabled: true },
-      { id: 't-09', name: 'nuclei', domain: 'web', enabled: true },
-      { id: 't-10', name: 'nikto', domain: 'web', enabled: false },
-      { id: 't-11', name: 'gitleaks', domain: 'secrets', enabled: true },
-      { id: 't-12', name: 'trufflehog', domain: 'secrets', enabled: true },
+      { id: 't-01', name: 'semgrep', segment: 'sast', enabled: true },
+      { id: 't-02', name: 'codeql', segment: 'sast', enabled: true },
+      { id: 't-03', name: 'bandit', segment: 'sast', enabled: false },
+      { id: 't-04', name: 'osv-scanner', segment: 'sca', enabled: true },
+      { id: 't-05', name: 'npm-audit', segment: 'sca', enabled: true },
+      { id: 't-06', name: 'pip-audit', segment: 'sca', enabled: true },
+      { id: 't-07', name: 'composer-audit', segment: 'sca', enabled: false },
+      { id: 't-08', name: 'zap', segment: 'web', enabled: true },
+      { id: 't-09', name: 'nuclei', segment: 'web', enabled: true },
+      { id: 't-10', name: 'nikto', segment: 'web', enabled: false },
+      { id: 't-11', name: 'gitleaks', segment: 'secrets', enabled: true },
+      { id: 't-12', name: 'trufflehog', segment: 'secrets', enabled: true },
     ],
-    domains: ['sast', 'sca', 'web', 'secrets'],
+    segments: ['sast', 'sca', 'web', 'secrets'],
   },
   'p-02': {
     repos: [
@@ -54,17 +54,17 @@ const mockScanConfig: Record<string, ProjectScanConfig> = {
       { id: 'r-11', name: 'atl-web', source: 'github', location: 'github.com/atl/web' },
     ],
     tools: [
-      { id: 't-01', name: 'semgrep', domain: 'sast', enabled: true },
-      { id: 't-04', name: 'osv-scanner', domain: 'sca', enabled: true },
-      { id: 't-08', name: 'zap', domain: 'web', enabled: true },
-      { id: 't-11', name: 'gitleaks', domain: 'secrets', enabled: true },
+      { id: 't-01', name: 'semgrep', segment: 'sast', enabled: true },
+      { id: 't-04', name: 'osv-scanner', segment: 'sca', enabled: true },
+      { id: 't-08', name: 'zap', segment: 'web', enabled: true },
+      { id: 't-11', name: 'gitleaks', segment: 'secrets', enabled: true },
     ],
-    domains: ['sast', 'sca', 'web', 'secrets'],
+    segments: ['sast', 'sca', 'web', 'secrets'],
   },
   'p-03': {
     repos: [],
     tools: [],
-    domains: ['sast', 'sca', 'web', 'secrets'],
+    segments: ['sast', 'sca', 'web', 'secrets'],
   },
 }
 
@@ -83,9 +83,9 @@ const mockScanConfig: Record<string, ProjectScanConfig> = {
  *     { "id": "r-01", "name": "dvwa", "source": "github", "location": "github.com/..." }
  *   ],
  *   "tools": [
- *     { "id": "t-01", "name": "semgrep", "domain": "sast", "enabled": true }
+ *     { "id": "t-01", "name": "semgrep", "segment": "sast", "enabled": true }
  *   ],
- *   "domains": ["sast", "sca", "web", "secrets"]
+ *   "segments": ["sast", "sca", "web", "secrets"]
  * }
  * ```
  */
@@ -101,7 +101,7 @@ export function useProjectScanConfig(projectId: string) {
       // │ return res.json()                                                 │
       // └────────────────────────────────────────────────────────────────────┘
 
-      return mockScanConfig[projectId] ?? { repos: [], tools: [], domains: [] }
+      return mockScanConfig[projectId] ?? { repos: [], tools: [], segments: [] }
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId),
@@ -120,7 +120,7 @@ export function useProjectScanConfig(projectId: string) {
  *     {
  *       "id": "S-2000",
  *       "projectId": "p-01",
- *       "domain": "sast",
+ *       "segment": "sast",
  *       "tool": "semgrep",
  *       "status": "done",
  *       "startedAt": "2024-01-15T10:00:00Z",
@@ -172,7 +172,7 @@ export function useRunningScans(projectId: string) {
  * Expected API request (POST /api/v1/projects/:id/scans):
  * ```json
  * {
- *   "domains": ["sast", "web"],  // optional, default = all
+ *   "segments": ["sast", "web"], // optional, default = all
  *   "tools": ["semgrep"],        // optional, default = all enabled
  *   "repos": ["repo-name"]       // optional, default = all
  * }
@@ -197,7 +197,7 @@ export function useStartScan() {
     }: {
       projectId: string
       options?: {
-        domains?: string[]
+        segments?: string[]
         tools?: string[]
         repos?: string[]
       }

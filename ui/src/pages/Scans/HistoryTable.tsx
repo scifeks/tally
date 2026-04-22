@@ -40,7 +40,7 @@ export function HistoryTable({ projectId }: { projectId: string }) {
           {history.map(scan => (
             <tr key={scan.id} className="hover:bg-muted/30">
               <td className="px-3 py-2 font-mono text-accent">{scan.id}</td>
-              <td className="px-3 py-2 uppercase">{scan.domain}</td>
+              <td className="px-3 py-2 uppercase">{scan.segment}</td>
               <td className="px-3 py-2">{scan.tool}</td>
               <td className="px-3 py-2">
                 <span

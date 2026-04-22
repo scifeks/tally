@@ -1,6 +1,6 @@
-export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info'
-export type Status = 'open' | 'triaged' | 'fixed' | 'wontfix' | 'false_positive'
-export type Domain = 'sast' | 'web' | 'secrets' | 'sca'
+export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational'
+export type Status = 'active' | 'false_positive' | 'fixed' | 'wont_fix'
+export type Segment = 'sast' | 'web' | 'secrets' | 'sca'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
@@ -32,7 +32,7 @@ export interface UrlEntry {
 
 export interface Finding {
   id: string
-  domain: Domain
+  segment: Segment
   severity: Severity
   status: Status
   title: string
@@ -47,6 +47,8 @@ export interface Finding {
   notes?: string
   projectId: string
   discoveredAt: string
+  triagedAt?: string
+  triagedBy?: 'claude-code' | 'analyst_web'
 }
 
 export interface Project {
@@ -58,7 +60,7 @@ export interface Project {
 export interface Scan {
   id: string
   projectId: string
-  domain: Domain
+  segment: Segment
   tool: string
   status: 'queued' | 'running' | 'done' | 'failed'
   startedAt: string
@@ -94,7 +96,7 @@ export interface ConfiguredRepo {
 export interface ConfiguredTool {
   id: string
   name: string
-  domain: Domain
+  segment: Segment
   /** Whether this tool is enabled by default for scans */
   enabled: boolean
 }
@@ -105,8 +107,8 @@ export interface ScanOptions {
   repoIds?: string[]
   /** Run only these tools (ids). If omitted, run all enabled tools. */
   toolIds?: string[]
-  /** Filter by domain(s). If omitted, run all domains. */
-  domains?: Domain[]
+  /** Filter by segment(s). If omitted, run all segments. */
+  segments?: Segment[]
   /** Exclude these tools (ids) from an otherwise full scan. */
   skipToolIds?: string[]
   /** Skip LLM enrichment step. */
@@ -117,7 +119,7 @@ export interface ScanOptions {
 export interface ProjectScanConfig {
   repos: ConfiguredRepo[]
   tools: ConfiguredTool[]
-  domains: Domain[]
+  segments: Segment[]
 }
 
 export interface ToolRun {
@@ -125,7 +127,7 @@ export interface ToolRun {
   runId: string
   tool: string
   repo: string
-  segment: Domain
+  segment: Segment
   status: 'queued' | 'running' | 'skipped' | 'done' | 'failed'
   startedAt?: string
   finishedAt?: string
@@ -146,7 +148,7 @@ export interface ScanRun {
   /** Repos being scanned (empty = all). */
   repos: string[]
   /** Segments being scanned (empty = all). */
-  segments: Domain[]
+  segments: Segment[]
   /** Tools explicitly selected (empty = all enabled). */
   tools: string[]
   /** Live log of tool runs, updated via simulated WS. */
@@ -171,7 +173,7 @@ export interface ScanLogEvent {
   runId: string
   type: ScanLogEventType
   timestamp: string
-  segment?: Domain
+  segment?: Segment
   repo?: string
   tool?: string
   message: string
@@ -192,7 +194,7 @@ export type TriageBatchStatus = 'pending' | 'in_progress' | 'completed' | 'faile
 export interface TriageBatch {
   id: string
   runId: string
-  segment: Domain
+  segment: Segment
   findingIds: string[]
   status: TriageBatchStatus
   attempts: number
@@ -233,7 +235,7 @@ export interface TriageLogEvent {
   type: TriageLogEventType
   timestamp: string
   batchId?: string
-  segment?: Domain
+  segment?: Segment
   message: string
   findingsCount?: number
   processedCount?: number

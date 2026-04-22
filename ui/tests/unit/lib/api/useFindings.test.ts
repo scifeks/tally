@@ -40,19 +40,19 @@ describe('useFindings', () => {
     expect(result.current.data).toHaveLength(0)
   })
 
-  it('filters by domain when domain option is provided', async () => {
+  it('filters by segment when segment option is provided', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(
-      () => useFindings({ projectId: 'p-01', domain: 'sast' }),
+      () => useFindings({ projectId: 'p-01', segment: 'sast' }),
       { wrapper },
     )
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     const findings = result.current.data!
     expect(findings.length).toBeGreaterThan(0)
-    expect(findings.every(f => f.domain === 'sast')).toBe(true)
+    expect(findings.every(f => f.segment === 'sast')).toBe(true)
   })
 
-  it('each finding has id, severity, status, domain, and tool fields', async () => {
+  it('each finding has id, severity, status, segment, and tool fields', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useFindings({ projectId: 'p-01' }), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
@@ -60,7 +60,7 @@ describe('useFindings', () => {
     expect(typeof first.id).toBe('string')
     expect(typeof first.severity).toBe('string')
     expect(typeof first.status).toBe('string')
-    expect(typeof first.domain).toBe('string')
+    expect(typeof first.segment).toBe('string')
     expect(typeof first.tool).toBe('string')
   })
 })

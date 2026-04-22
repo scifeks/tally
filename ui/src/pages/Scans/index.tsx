@@ -12,7 +12,7 @@ import {
   useCancelScan,
 } from '@/lib/api'
 import type {
-  Domain,
+  Segment,
   ScanLogEvent,
   ScanLogEventType,
   ScanRunStatus,
@@ -22,7 +22,7 @@ import { RadarSweep } from './RadarSweep'
 import { LogRow } from './LogRow'
 import { HistoryTable } from './HistoryTable'
 
-const SEGMENT_LABEL: Record<Domain, string> = {
+const SEGMENT_LABEL: Record<Segment, string> = {
   sast: 'SAST',
   sca: 'SCA',
   web: 'WEB',
@@ -59,13 +59,13 @@ export default function Scans() {
   // Derived config data — memoized to avoid new array refs on every render
   const configuredRepos = useMemo(() => scanConfig?.repos ?? [], [scanConfig])
   const configuredTools = useMemo(() => scanConfig?.tools ?? [], [scanConfig])
-  const configuredDomains = useMemo(() => scanConfig?.domains ?? [], [scanConfig])
+  const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
 
   // Group tools by domain for display
   const toolsByDomain = useMemo(() => {
-    const map: Record<Domain, typeof configuredTools> = { sast: [], sca: [], web: [], secrets: [] }
+    const map: Record<Segment, typeof configuredTools> = { sast: [], sca: [], web: [], secrets: [] }
     configuredTools.forEach(t => {
-      if (map[t.domain]) map[t.domain].push(t)
+      if (map[t.segment]) map[t.segment].push(t)
     })
     return map
   }, [configuredTools])
@@ -74,12 +74,12 @@ export default function Scans() {
   const [runStatus, setRunStatus] = useState<ScanRunStatus>('idle')
   const [logs, setLogs] = useState<ScanLogEvent[]>([])
   const [elapsedSec, setElapsedSec] = useState(0)
-  const [expandedSegments, setExpandedSegments] = useState<Set<Domain>>(new Set(configuredDomains))
+  const [expandedSegments, setExpandedSegments] = useState<Set<Segment>>(new Set(configuredDomains))
 
   // Advanced options state
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set()) // empty = all repos
-  const [selectedDomains, setSelectedDomains] = useState<Set<Domain>>(new Set())
+  const [selectedDomains, setSelectedDomains] = useState<Set<Segment>>(new Set())
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [skipTools, setSkipTools] = useState<Set<string>>(new Set())
   const [skipEnrichment, setSkipEnrichment] = useState(false)
@@ -100,7 +100,7 @@ export default function Scans() {
   const buildScanOptions = useCallback((): ScanOptions => {
     const opts: ScanOptions = {}
     if (selectedRepos.size > 0) opts.repoIds = Array.from(selectedRepos)
-    if (selectedDomains.size > 0) opts.domains = Array.from(selectedDomains)
+    if (selectedDomains.size > 0) opts.segments = Array.from(selectedDomains)
     if (selectedTools.size > 0) opts.toolIds = Array.from(selectedTools)
     if (skipTools.size > 0) opts.skipToolIds = Array.from(skipTools)
     if (skipEnrichment) opts.skipEnrichment = true
@@ -146,7 +146,8 @@ export default function Scans() {
     const repoIdsSet = new Set(opts.repoIds ?? [])
     const reposToScan =
       repoIdsSet.size > 0 ? configuredRepos.filter(r => repoIdsSet.has(r.id)) : configuredRepos
-    const domainsToScan = opts.domains && opts.domains.length > 0 ? opts.domains : configuredDomains
+    const domainsToScan =
+      opts.segments && opts.segments.length > 0 ? opts.segments : configuredDomains
     const toolIdsToRun = opts.toolIds && opts.toolIds.length > 0 ? new Set(opts.toolIds) : null // null = all tools
     const toolIdsToSkip = new Set(opts.skipToolIds ?? [])
 
@@ -621,7 +622,7 @@ export default function Scans() {
                             />
                             {t.name}
                           </span>
-                          <span className="uppercase text-[9px] text-dim">{t.domain}</span>
+                          <span className="uppercase text-[9px] text-dim">{t.segment}</span>
                         </button>
                       )
                     })
@@ -662,7 +663,7 @@ export default function Scans() {
                             )}
                           >
                             <span>{t.name}</span>
-                            <span className="uppercase text-[9px] text-dim">{t.domain}</span>
+                            <span className="uppercase text-[9px] text-dim">{t.segment}</span>
                           </button>
                         )
                       })

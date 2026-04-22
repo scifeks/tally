@@ -3,8 +3,8 @@ import { Search, X } from 'lucide-react'
 import { useFindings as useFindingsHook } from '@/lib/api'
 import { useUI } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import type { Domain, Finding, Severity } from '@/lib/types'
-import { DOMAINS, SEV_ORDER, SEV_LABEL, SEV_COLOR } from './constants'
+import type { Segment, Finding, Severity } from '@/lib/types'
+import { SEGMENTS, SEV_ORDER, SEV_LABEL, SEV_COLOR } from './constants'
 import { emptyFilters } from './types'
 import type { Filters, FilterKey, SortKey, SortState } from './types'
 import { EmptyFindingsState } from './EmptyFindingsState'
@@ -48,8 +48,8 @@ function applyFilters(rows: Finding[], f: Filters, skip?: FilterKey): Finding[] 
 // ─── Findings Page ────────────────────────────────────────────────────────────
 
 export default function Findings() {
-  const domain = useUI(s => s.findingsDomain)
-  const setDomain = useUI(s => s.setFindingsDomain)
+  const domain = useUI(s => s.findingsSegment)
+  const setDomain = useUI(s => s.setFindingsSegment)
   const activeProjectId = useUI(s => s.activeProjectId)
   const selectedFindingIds = useUI(s => s.selectedFindingIds)
   const toggleSelected = useUI(s => s.toggleSelected)
@@ -89,15 +89,15 @@ export default function Findings() {
   )
 
   const domainCounts = useMemo(() => {
-    const m: Record<Domain, number> = { sast: 0, web: 0, secrets: 0, sca: 0 }
+    const m: Record<Segment, number> = { sast: 0, web: 0, secrets: 0, sca: 0 }
     projectFindings.forEach(f => {
-      m[f.domain]++
+      m[f.segment]++
     })
     return m
   }, [projectFindings])
 
   const domainFindings = useMemo(
-    () => projectFindings.filter(f => f.domain === domain),
+    () => projectFindings.filter(f => f.segment === domain),
     [projectFindings, domain]
   )
 
@@ -147,7 +147,7 @@ export default function Findings() {
       high: 0,
       medium: 0,
       low: 0,
-      info: 0,
+      informational: 0,
     }
     base.forEach(r => counts[r.severity]++)
     return counts
@@ -212,7 +212,7 @@ export default function Findings() {
             </span>
           </div>
           <div className="flex items-stretch divide-x divide-border">
-            {DOMAINS.map(d => {
+            {SEGMENTS.map(d => {
               const active = d.key === domain
               return (
                 <button
@@ -359,7 +359,7 @@ export default function Findings() {
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-w-0 flex flex-col">
           {showEmptyState ? (
-            <EmptyFindingsState domain={domain} />
+            <EmptyFindingsState segment={domain} />
           ) : (
             <FindingsList
               rows={filtered}
