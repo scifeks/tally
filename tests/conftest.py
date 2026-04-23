@@ -59,3 +59,17 @@ def _restore_tool_registry():
         tool_registry.restore(saved)
     except ImportError:
         yield
+
+
+@pytest.fixture(autouse=True)
+def _restore_lock_registry():
+    """Isolate lock_registry singleton state across all test scopes."""
+    try:
+        from application.locking.registry import get_registry
+
+        reg = get_registry()
+        saved = reg.snapshot()
+        yield
+        reg.restore(saved)
+    except ImportError:
+        yield
