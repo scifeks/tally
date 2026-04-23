@@ -135,7 +135,7 @@ def _make_runner_real(
 def test_mcp_json_server_type_is_stdio(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     _seed(run_repo, finding_repo)
-    mcp_path = runner._write_mcp_config()
+    mcp_path = runner._write_mcp_config(42)
     import json
 
     payload = json.loads(mcp_path.read_text())
@@ -144,7 +144,7 @@ def test_mcp_json_server_type_is_stdio(tmp_path: Path) -> None:
 
 def test_mcp_json_command_is_venv_python(tmp_path: Path) -> None:
     runner, _, _, _ = _make_runner_real(tmp_path)
-    mcp_path = runner._write_mcp_config()
+    mcp_path = runner._write_mcp_config(42)
     import json
 
     payload = json.loads(mcp_path.read_text())
@@ -154,7 +154,7 @@ def test_mcp_json_command_is_venv_python(tmp_path: Path) -> None:
 
 def test_mcp_json_args_contain_project(tmp_path: Path) -> None:
     runner, _, _, _ = _make_runner_real(tmp_path, project="myproject")
-    mcp_path = runner._write_mcp_config()
+    mcp_path = runner._write_mcp_config(42)
     import json
 
     payload = json.loads(mcp_path.read_text())
@@ -165,7 +165,7 @@ def test_mcp_json_args_contain_project(tmp_path: Path) -> None:
 
 def test_mcp_json_only_triage_tools_allowed(tmp_path: Path) -> None:
     runner, _, _, _ = _make_runner_real(tmp_path)
-    mcp_path = runner._write_mcp_config()
+    mcp_path = runner._write_mcp_config(42)
     import json
 
     payload = json.loads(mcp_path.read_text())
@@ -175,7 +175,7 @@ def test_mcp_json_only_triage_tools_allowed(tmp_path: Path) -> None:
 
 def test_mcp_json_deny_star(tmp_path: Path) -> None:
     runner, _, _, _ = _make_runner_real(tmp_path)
-    mcp_path = runner._write_mcp_config()
+    mcp_path = runner._write_mcp_config(42)
     import json
 
     payload = json.loads(mcp_path.read_text())

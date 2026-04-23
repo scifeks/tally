@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
 from application.findings.analyst_service import FindingAnalystService
+from application.locking import FindingsBusy, get_registry
 from infrastructure.store import FindingRepository
-from web.api._errors import NotFound
+from web.api._errors import FindingsLocked, NotFound
 from web.api.chroma_sync import sync_finding_to_chroma
 from web.api.schemas import (
     BatchFindingPatchRequest,
+    BatchPatchResponse,
     FindingPatchRequest,
     FindingResponse,
 )
+
+logger = logging.getLogger("tally.web.findings")
 
 router = APIRouter()
 
@@ -32,6 +38,7 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
     - Parse ``finding_type`` and ``cwe`` JSON array strings to lists.
     - Expose the named ``fingerprint`` column as ``id_fingerprint`` to avoid
       collision with semgrep's scanner fingerprint stored in ``meta``.
+    - Annotate ``is_locked`` and ``lock_holder`` from the live registry.
     """
     result: dict[str, Any] = dict(row)
 
@@ -67,6 +74,16 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
 
     # Rename named fingerprint column to id_fingerprint.
     result["id_fingerprint"] = result.pop("fingerprint", None)
+
+    # Annotate live lock state from the registry.
+    finding_id: int | None = result.get("id")
+    if finding_id is not None:
+        registry = get_registry()
+        result["is_locked"] = registry.is_finding_locked(finding_id)
+        result["lock_holder"] = registry.finding_lock_holder(finding_id)
+    else:
+        result["is_locked"] = False
+        result["lock_holder"] = None
 
     return result
 
@@ -114,23 +131,22 @@ def get_finding(request: Request, finding_id: int) -> dict:
     return _serialise_finding(row)
 
 
-@router.patch("/batch")
+@router.patch("/batch", response_model=BatchPatchResponse)
 async def batch_patch_findings(
     request: Request,
     body: BatchFindingPatchRequest,
-) -> dict:
-    """Apply analyst field updates to multiple findings in one transaction.
+) -> BatchPatchResponse:
+    """Apply analyst field updates to multiple findings in one request.
 
-    Accepts the same patchable fields as the single-finding PATCH.
-    Sets ``triaged_by = 'analyst_web'`` and ``triaged_at = now()`` for
-    every row in the batch.
-
-    Returns ``{"updated": N}`` where N is the count of rows actually updated.
-    Does not sync to ChromaDB — should_report is a UI annotation only.
+    Locked findings are skipped (not errored). Returns three disjoint id
+    buckets: updated, skipped_locked, not_found.
     """
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
     service = FindingAnalystService(repo)
+
+    session_id: str = request.state.session_id
+    holder = f"analyst-patch:web:{session_id[:8]}"
 
     raw = body.model_dump(exclude={"ids"}, exclude_none=True)
     fields: dict[str, Any] = {}
@@ -140,8 +156,15 @@ async def batch_patch_findings(
         else:
             fields[k] = v
 
-    updated = service.bulk_update_fields(body.ids, fields)
-    return {"updated": updated}
+    result = await asyncio.to_thread(
+        service.bulk_update_fields, body.ids, fields, holder_token=holder
+    )
+    return BatchPatchResponse(
+        updated=result.updated,
+        skipped_locked=result.skipped_locked,
+        not_found=result.not_found,
+        skip_reasons=result.skip_reasons,
+    )
 
 
 @router.patch("/{finding_id}", response_model=FindingResponse)
@@ -153,17 +176,16 @@ async def patch_finding(
     """Apply analyst corrections to a finding's editable fields.
 
     Only fields explicitly included in the request body are written.
-    Locked fields sent by the client are silently ignored.
-    Sets ``triaged_by = 'analyst_web'`` and ``triaged_at = now()`` on
-    every successful write.
-
-    Returns the updated finding on success, or 404 if not found.
-    After the SQLite write, performs a best-effort ChromaDB metadata
-    sync — the response is 200 regardless of sync outcome.
+    Returns 409 FINDING_LOCKED if the finding is held by another job.
+    Returns 404 if the finding does not exist.
+    After the SQLite write, performs a best-effort ChromaDB metadata sync.
     """
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
     service = FindingAnalystService(repo)
+
+    session_id: str = request.state.session_id
+    holder = f"analyst-patch:web:{session_id[:8]}"
 
     raw = body.model_dump(exclude_none=True)
     fields: dict[str, Any] = {}
@@ -179,7 +201,13 @@ async def patch_finding(
         else:
             fields[k] = v
 
-    updated = service.update_fields(finding_id, fields)
+    try:
+        updated = await asyncio.to_thread(
+            service.update_fields, finding_id, fields, holder_token=holder
+        )
+    except FindingsBusy as exc:
+        raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
+
     if not updated:
         raise NotFound("Finding not found")
 

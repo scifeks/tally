@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.locking import LockRegistry, get_registry
 from application.tools.registry import tool_registry
 from core.config.manager import ConfigManager as _ConfigManager
 from core.config.schemas.global_config import MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
@@ -50,12 +51,14 @@ class TriageRunner:
         triage_repo: TriageBatchRepository,
         audit_repo: AuditRepository,
         app_root: Path,
+        registry: LockRegistry | None = None,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
         self._triage_repo = triage_repo
         self._audit_repo = audit_repo
         self._app_root = app_root
+        self._registry = registry if registry is not None else get_registry()
 
     @classmethod
     def for_project(cls, project: str, app_root: Path | None = None) -> TriageRunner:
@@ -114,16 +117,19 @@ class TriageRunner:
     def run(self) -> TriageResult:
         """Run full triage pipeline (batch → MCP setup → Claude sessions)."""
         run_id, _total = self.batch()
-        mcp_json_path = self._write_mcp_config()
-        try:
-            return self._run_batch_loop(
-                run_id,
-                lambda batch_id, render_fn, finding_ids: self._run_session(
-                    render_fn, finding_ids
-                ),
-            )
-        finally:
-            mcp_json_path.unlink(missing_ok=True)
+        holder = f"triage-run:{run_id}"
+        with self._registry.job("triage", holder):
+            mcp_json_path = self._write_mcp_config(run_id)
+            try:
+                return self._run_batch_loop(
+                    run_id,
+                    lambda batch_id, render_fn, finding_ids: self._run_session(
+                        render_fn, finding_ids
+                    ),
+                    holder_token=holder,
+                )
+            finally:
+                mcp_json_path.unlink(missing_ok=True)
 
     def run_dry_run(self) -> int:
         """Batch phase + render prompts to DEBUG log. No MCP server, no Claude.
@@ -159,11 +165,16 @@ class TriageRunner:
         self,
         run_id: int,
         handler: Callable[[int, Callable[..., str], list[int]], str],
+        *,
+        holder_token: str | None = None,
     ) -> TriageResult:
         """Claim and process every pending batch for run_id.
 
         handler(batch_id, render_fn, finding_ids) -> outcome string.
         Skip-flagged tools are auto-completed without calling handler.
+        When holder_token is set, finding-id locks are acquired per batch
+        so that analyst PATCH requests are blocked for the duration of the
+        Claude session writing those findings.
         """
         sessions_run = success = failed = incomplete = 0
         while True:
@@ -189,7 +200,11 @@ class TriageRunner:
             render_fn: Callable[..., str] = module.render
 
             sessions_run += 1
-            outcome = handler(batch_id, render_fn, finding_ids)
+            if holder_token:
+                with self._registry.findings(finding_ids, holder_token):
+                    outcome = handler(batch_id, render_fn, finding_ids)
+            else:
+                outcome = handler(batch_id, render_fn, finding_ids)
             self._triage_repo.complete_batch(batch_id, outcome)
 
             if outcome == "success":
@@ -289,7 +304,7 @@ class TriageRunner:
         )
         return "incomplete"
 
-    def _write_mcp_config(self) -> Path:
+    def _write_mcp_config(self, run_id: int) -> Path:
         """Write .mcp.json for Claude's MCP server and return its path."""
         mcp_json_path = self._app_root / ".mcp.json"
         venv_python = self._app_root / ".venv" / "bin" / "python"
@@ -308,6 +323,7 @@ class TriageRunner:
                         "--project",
                         self._project,
                     ],
+                    "env": {"TALLY_TRIAGE_RUN_ID": str(run_id)},
                     "permissions": {
                         "allow": ["get_findings_batch", "update_findings_batch"],
                         "deny": ["*"],

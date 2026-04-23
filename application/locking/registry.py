@@ -116,6 +116,20 @@ class LockRegistry:
         with self._guard:
             return self._findings.get(finding_id)
 
+    def assert_held_by(self, finding_id: int, holder_token: str) -> None:
+        """Assert that *finding_id* is currently held by *holder_token*.
+
+        Raises :exc:`HolderMismatch` if held by a different token or not held.
+        """
+        with self._guard:
+            actual = self._findings.get(finding_id)
+        if actual != holder_token:
+            raise HolderMismatch(
+                f"finding:{finding_id}",
+                expected=holder_token,
+                actual=actual or "<not held>",
+            )
+
     # ── Context managers ─────────────────────────────────────────────────────
 
     @contextmanager

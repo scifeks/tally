@@ -96,7 +96,7 @@ class TestBatchPatchFindings:
             headers=mut_headers,
         )
         assert response.status_code == 200
-        assert response.json() == {"updated": 2}
+        assert len(response.json()["updated"]) == 2
         with factory.connect() as conn:
             rows = conn.execute(
                 "SELECT should_report FROM findings ORDER BY id"
@@ -144,4 +144,4 @@ class TestBatchPatchFindings:
             headers=mut_headers,
         )
         assert response.status_code == 200
-        assert response.json()["updated"] == 1
+        assert len(response.json()["updated"]) == 1
