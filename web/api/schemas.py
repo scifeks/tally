@@ -150,3 +150,23 @@ class FindingResponse(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
+
+    is_locked: bool = False
+    lock_holder: str | None = None
+
+
+class BatchPatchResponse(BaseModel):
+    """Response for PATCH /api/v1/findings/batch.
+
+    Three disjoint id buckets:
+    - ``updated``: ids successfully written.
+    - ``skipped_locked``: ids held by another job at request time.
+    - ``not_found``: ids that do not exist.
+    ``skip_reasons`` maps skipped-locked ids to the string
+    ``"FINDING_LOCKED"``.
+    """
+
+    updated: list[int]
+    skipped_locked: list[int]
+    not_found: list[int]
+    skip_reasons: dict[int, str]

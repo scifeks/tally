@@ -51,6 +51,35 @@ class Conflict(APIError):
     default_code = "CONFLICT"
 
 
+class FindingsLocked(Conflict):
+    default_code = "FINDING_LOCKED"
+
+    def __init__(
+        self,
+        conflicting_ids: list[int],
+        holders: dict[int, str],
+    ) -> None:
+        first_id = conflicting_ids[0]
+        holder = holders.get(first_id, "unknown")
+        super().__init__(
+            f"Finding {first_id} is currently held by job {holder}",
+            details={
+                "conflicting_ids": conflicting_ids,
+                "holders": {str(k): v for k, v in holders.items()},
+            },
+        )
+
+
+class JobBusyError(Conflict):
+    default_code = "JOB_ALREADY_RUNNING"
+
+    def __init__(self, kind: str, current_holder: str) -> None:
+        super().__init__(
+            f"Job {kind!r} is already running: held by {current_holder}",
+            details={"kind": kind, "current_holder": current_holder},
+        )
+
+
 class ValidationError(APIError):
     status = 422
     default_code = "VALIDATION_ERROR"

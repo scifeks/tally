@@ -1,14 +1,27 @@
 """Triage application service — entry points delegating to TriageRunner."""
 
 import dataclasses
+import time
+from collections.abc import Callable
+
+from application.locking import FindingsBusy
 
 from .runner import TriageRunner
+
+
+def _retry_once[T](fn: Callable[[], T]) -> T:
+    """Call fn; on FindingsBusy sleep 5 s and retry once, then re-raise."""
+    try:
+        return fn()
+    except FindingsBusy:
+        time.sleep(5)
+        return fn()
 
 
 def run_triage(project: str) -> dict[str, int]:
     """Run AI triage sessions for untriaged findings."""
     runner = TriageRunner.for_project(project)
-    return dataclasses.asdict(runner.run())
+    return dataclasses.asdict(_retry_once(runner.run))
 
 
 def run_triage_batch_only(project: str) -> int:
@@ -21,7 +34,7 @@ def run_triage_batch_only(project: str) -> int:
 def run_triage_dry_run(project: str) -> int:
     """Batch phase + render prompts to DEBUG log. No MCP server, no Claude."""
     runner = TriageRunner.for_project(project)
-    return runner.run_dry_run()
+    return _retry_once(runner.run_dry_run)
 
 
 if __name__ == "__main__":

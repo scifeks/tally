@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
+from application.locking import LockRegistry, get_registry
 from application.ports.user_prompt import UserPromptPort
 from application.tools.display import OrchestratorDisplay
 from application.tools.executor import ToolExecutor
@@ -51,6 +53,7 @@ class ScanOrchestrator:
         run_id:         Optional run ID forwarded through events.
         factory:        Optional ToolWrapperFactory; defaults to a fresh instance.
         console:        Optional Rich console for display output.
+        lock_registry:  Optional LockRegistry; defaults to the process singleton.
     """
 
     def __init__(
@@ -63,6 +66,7 @@ class ScanOrchestrator:
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
         console: Console | None = None,
+        lock_registry: LockRegistry | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -72,13 +76,16 @@ class ScanOrchestrator:
         self._run_id = run_id
         self.display = OrchestratorDisplay(console=console)
         self._factory = factory or ToolWrapperFactory()
+        self._lock_registry = (
+            lock_registry if lock_registry is not None else get_registry()
+        )
 
         from core.config.manager import ConfigManager
 
         self._config = ConfigManager(str(tool_executor.base_path))
 
     # ------------------------------------------------------------------
-    # Internal helper
+    # Internal helpers
     # ------------------------------------------------------------------
 
     def _make_config(self, remaining_peers: int = 0) -> ScanTypeConfig:
@@ -102,6 +109,13 @@ class ScanOrchestrator:
             display=self.display,
         )
 
+    def _scan_lock(self) -> AbstractContextManager[None]:
+        """Return a job-slot context manager, or nullcontext if run_id is None."""
+        if self._run_id is None:
+            return nullcontext()
+        holder = f"scan-run:{self._run_id}"
+        return self._lock_registry.job("scan", holder)
+
     # ------------------------------------------------------------------
     # Public API — adapter shims
     # ------------------------------------------------------------------
@@ -111,19 +125,21 @@ class ScanOrchestrator:
         exclude_segments: list[str] | None = None,
         exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
-        return FullScan(exclude_segments or [], exclude_tools or set()).execute(
-            self._make_config(), self._make_resources()
-        )
+        with self._scan_lock():
+            return FullScan(exclude_segments or [], exclude_tools or set()).execute(
+                self._make_config(), self._make_resources()
+            )
 
     def run_segment(
         self,
         segment_name: str,
         remaining_peers: int = 0,
     ) -> ScanSummary:
-        return SegmentScan(segment_name).execute(
-            self._make_config(remaining_peers=remaining_peers),
-            self._make_resources(),
-        )
+        with self._scan_lock():
+            return SegmentScan(segment_name).execute(
+                self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )
 
     def run_repo_scan(
         self,
@@ -132,19 +148,21 @@ class ScanOrchestrator:
         severity_filter: str | None = None,
         exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
-        return RepoScan(repo_name, exclude_tools or set()).execute(
-            self._make_config(), self._make_resources()
-        )
+        with self._scan_lock():
+            return RepoScan(repo_name, exclude_tools or set()).execute(
+                self._make_config(), self._make_resources()
+            )
 
     def run_tool_on_all_repos(
         self,
         tool_name: str,
         remaining_peers: int = 0,
     ) -> ScanSummary:
-        return ToolOnAllReposScan(tool_name).execute(
-            self._make_config(remaining_peers=remaining_peers),
-            self._make_resources(),
-        )
+        with self._scan_lock():
+            return ToolOnAllReposScan(tool_name).execute(
+                self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )
 
     def run_tool_on_repo(
         self,
@@ -152,7 +170,8 @@ class ScanOrchestrator:
         repo_name: str,
         remaining_peers: int = 0,
     ) -> ScanSummary:
-        return ToolOnRepoScan(tool_name, repo_name).execute(
-            self._make_config(remaining_peers=remaining_peers),
-            self._make_resources(),
-        )
+        with self._scan_lock():
+            return ToolOnRepoScan(tool_name, repo_name).execute(
+                self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )

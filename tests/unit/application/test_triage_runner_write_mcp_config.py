@@ -33,7 +33,7 @@ class TestTriageRunnerWriteMcpConfig:
         runner = _make_runner(tmp_path)
         _create_venv_python(tmp_path)
 
-        runner._write_mcp_config()
+        runner._write_mcp_config(42)
 
         assert (tmp_path / ".mcp.json").exists()
 
@@ -41,7 +41,7 @@ class TestTriageRunnerWriteMcpConfig:
         runner = _make_runner(tmp_path)
         _create_venv_python(tmp_path)
 
-        result = runner._write_mcp_config()
+        result = runner._write_mcp_config(42)
 
         assert result == tmp_path / ".mcp.json"
 
@@ -49,7 +49,7 @@ class TestTriageRunnerWriteMcpConfig:
         runner = _make_runner(tmp_path)
         _create_venv_python(tmp_path)
 
-        runner._write_mcp_config()
+        runner._write_mcp_config(42)
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "test-project" in data["mcpServers"]["tally-mcp"]["args"]
@@ -58,14 +58,24 @@ class TestTriageRunnerWriteMcpConfig:
         runner = _make_runner(tmp_path)
         venv_python = _create_venv_python(tmp_path)
 
-        runner._write_mcp_config()
+        runner._write_mcp_config(42)
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert data["mcpServers"]["tally-mcp"]["type"] == "stdio"
         assert data["mcpServers"]["tally-mcp"]["command"] == str(venv_python)
 
+    def test_mcp_json_contains_run_id_env(self, tmp_path: Path) -> None:
+        runner = _make_runner(tmp_path)
+        _create_venv_python(tmp_path)
+
+        runner._write_mcp_config(42)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        env = data["mcpServers"]["tally-mcp"]["env"]
+        assert env["TALLY_TRIAGE_RUN_ID"] == "42"
+
     def test_raises_runtime_error_if_venv_python_missing(self, tmp_path: Path) -> None:
         runner = _make_runner(tmp_path)
 
         with pytest.raises(RuntimeError, match="Venv Python not found"):
-            runner._write_mcp_config()
+            runner._write_mcp_config(42)
