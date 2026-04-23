@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 
 from application.findings.analyst_service import FindingAnalystService
-from application.locking import FindingsBusy, get_registry
+from application.locking import FindingsBusy, LockQueryService
 from infrastructure.store import FindingRepository
 from web.api._errors import FindingsLocked, NotFound
 from web.api.chroma_sync import sync_finding_to_chroma
@@ -78,9 +78,9 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
     # Annotate live lock state from the registry.
     finding_id: int | None = result.get("id")
     if finding_id is not None:
-        registry = get_registry()
-        result["is_locked"] = registry.is_finding_locked(finding_id)
-        result["lock_holder"] = registry.finding_lock_holder(finding_id)
+        svc = LockQueryService()
+        result["is_locked"] = svc.is_finding_locked(finding_id)
+        result["lock_holder"] = svc.finding_lock_holder(finding_id)
     else:
         result["is_locked"] = False
         result["lock_holder"] = None
