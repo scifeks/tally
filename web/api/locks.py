@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from application.locking import get_registry
+from application.locking import LockQueryService
 
 router = APIRouter()
 
@@ -17,8 +17,8 @@ def list_project_locks(project_id: str) -> dict:
     forward-compatibility with endpoints.md §4 but echoed in the response body
     until per-project filtering is implemented.
     """
-    registry = get_registry()
-    jobs_snap, findings_snap = registry.snapshot()
+    svc = LockQueryService()
+    jobs_snap, findings_snap = svc.snapshot()
 
     finding_locks = [
         {"id": fid, "holder": holder} for fid, holder in sorted(findings_snap.items())
