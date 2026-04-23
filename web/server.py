@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from application.rag.engine import RAGEngine
 from infrastructure.store.connection import ConnectionFactory
+from web.api._errors import install_error_handlers
 from web.api.auth import router as auth_router
 from web.api.config import router as config_router
 from web.api.findings import router as findings_router
@@ -45,6 +46,7 @@ def create_app(
         Configured ``FastAPI`` instance.
     """
     app = FastAPI(title="Tally Web UI")
+    install_error_handlers(app)
 
     registry = HandshakeRegistry()
     registry.register(handshake_token)
@@ -66,10 +68,9 @@ def create_app(
         rag_engine = None
     app.state.rag_engine = rag_engine
 
-    # todo: Extract these endpoint definitions to their own file.
     app.include_router(auth_router, prefix="/api/auth")
     app.include_router(config_router, prefix="/api/config")
-    app.include_router(findings_router, prefix="/api/findings")
+    app.include_router(findings_router, prefix="/api/v1/findings")
     app.include_router(projects_router, prefix="/api/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).

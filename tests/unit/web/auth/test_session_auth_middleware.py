@@ -74,6 +74,7 @@ async def test_missing_cookie_returns_401() -> None:
     ) as c:
         resp = await c.get("/api/protected")
     assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
 async def test_invalid_session_id_returns_401() -> None:
@@ -85,6 +86,7 @@ async def test_invalid_session_id_returns_401() -> None:
         c.cookies.set("tally_session", "not-a-real-session")
         resp = await c.get("/api/protected")
     assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
 async def test_valid_session_passes_and_sets_state() -> None:

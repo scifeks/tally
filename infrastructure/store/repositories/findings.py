@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _ENRICHMENT_META_FIELDS: frozenset[str] = frozenset(
-    {"risk_type", "remediation", "owasp_name", "title", "tags"}
+    {"risk_type", "remediation", "owasp_name", "title", "tags", "notes"}
 )
 _ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
     {"severity", "confidence", "description"}
@@ -395,7 +395,7 @@ class FindingRepository:
             existing_meta = {}
 
         _META_KEYS: frozenset[str] = frozenset(
-            {"remediation", "risk_type", "owasp_name", "title", "tags"}
+            {"remediation", "risk_type", "owasp_name", "title", "tags", "notes"}
         )
 
         column_updates: dict[str, Any] = {}

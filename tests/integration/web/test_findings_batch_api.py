@@ -1,4 +1,4 @@
-"""Tests for PATCH /api/findings/batch endpoint."""
+"""Tests for PATCH /api/v1/findings/batch endpoint."""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class TestBatchPatchFindings:
     async def test_batch_approve_updates_all_rows(self, batch_client) -> None:
         client, ids, factory, mut_headers = batch_client
         response = await client.patch(
-            "/api/findings/batch",
+            "/api/v1/findings/batch",
             json={"ids": ids, "should_report": True},
             headers=mut_headers,
         )
@@ -106,7 +106,7 @@ class TestBatchPatchFindings:
     async def test_batch_sets_triaged_by_analyst_web(self, batch_client) -> None:
         client, ids, factory, mut_headers = batch_client
         await client.patch(
-            "/api/findings/batch",
+            "/api/v1/findings/batch",
             json={"ids": ids, "should_report": True},
             headers=mut_headers,
         )
@@ -121,7 +121,7 @@ class TestBatchPatchFindings:
     async def test_empty_ids_returns_422(self, batch_client) -> None:
         client, _, _, mut_headers = batch_client
         response = await client.patch(
-            "/api/findings/batch",
+            "/api/v1/findings/batch",
             json={"ids": [], "should_report": True},
             headers=mut_headers,
         )
@@ -130,7 +130,7 @@ class TestBatchPatchFindings:
     async def test_no_fields_returns_422(self, batch_client) -> None:
         client, ids, _, mut_headers = batch_client
         response = await client.patch(
-            "/api/findings/batch",
+            "/api/v1/findings/batch",
             json={"ids": ids},
             headers=mut_headers,
         )
@@ -139,7 +139,7 @@ class TestBatchPatchFindings:
     async def test_partial_ids_returns_correct_count(self, batch_client) -> None:
         client, ids, _, mut_headers = batch_client
         response = await client.patch(
-            "/api/findings/batch",
+            "/api/v1/findings/batch",
             json={"ids": [ids[0]], "should_report": True},
             headers=mut_headers,
         )

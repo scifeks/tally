@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from domain.tools.constants import CONFIDENCE_LEVELS, FINDING_TYPES, SEVERITY_LEVELS
 
+# todo: This clase
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
     from infrastructure.store.repositories.audit import AuditRepository

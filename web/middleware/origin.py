@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from urllib.parse import urlparse
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -10,17 +9,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
-_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+from web.api._errors import error_response
 
-_ERR = json.dumps(
-    {
-        "error": {
-            "code": "FORBIDDEN",
-            "message": "Cross-origin request rejected",
-            "details": {},
-        }
-    }
-)
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class OriginCheckMiddleware(BaseHTTPMiddleware):
@@ -49,9 +40,5 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
                 origin = f"{parsed.scheme}://{parsed.netloc}"
 
         if origin not in self._allowed:
-            return Response(
-                content=_ERR,
-                status_code=403,
-                media_type="application/json",
-            )
+            return error_response(403, "FORBIDDEN", "Cross-origin request rejected")
         return await call_next(request)

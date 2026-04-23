@@ -3,23 +3,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from web.api._errors import Unauthenticated
+
 router = APIRouter()
-
-
-def _unauthenticated(message: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=401,
-        content={
-            "error": {
-                "code": "UNAUTHENTICATED",
-                "message": message,
-                "details": {},
-            }
-        },
-    )
 
 
 class ExchangeBody(BaseModel):
@@ -33,8 +21,7 @@ async def exchange(
     registry = request.app.state.handshake_registry
     store = request.app.state.session_store
     if not registry.consume(body.token):
-        # TODO 1.3: replace with global error handler
-        return _unauthenticated("Invalid or expired token")  # type: ignore[return-value]
+        raise Unauthenticated("Invalid or expired token")
     session_id, csrf_token = store.create()
     response.set_cookie(
         "tally_session",
@@ -70,6 +57,5 @@ async def me(request: Request) -> dict[str, object]:
     store = request.app.state.session_store
     session_id = request.cookies.get("tally_session", "")
     if not session_id or not store.verify(session_id):
-        # TODO 1.3: replace with global error handler
-        return _unauthenticated("Not authenticated")  # type: ignore[return-value]
+        raise Unauthenticated("Not authenticated")
     return {"authenticated": True, "session_id": session_id}

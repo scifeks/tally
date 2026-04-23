@@ -46,6 +46,7 @@ async def test_unknown_host_rejected() -> None:
     ) as c:
         resp = await c.get("/ping", headers={"host": "evil.com"})
     assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_HOST"
 
 
 async def test_wrong_port_rejected() -> None:
@@ -55,6 +56,7 @@ async def test_wrong_port_rejected() -> None:
     ) as c:
         resp = await c.get("/ping", headers={"host": f"127.0.0.1:{_PORT + 1}"})
     assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_HOST"
 
 
 async def test_empty_host_rejected() -> None:
@@ -64,3 +66,4 @@ async def test_empty_host_rejected() -> None:
     ) as c:
         resp = await c.get("/ping", headers={"host": ""})
     assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_HOST"

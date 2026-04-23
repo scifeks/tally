@@ -55,6 +55,7 @@ async def test_post_without_origin_returns_403() -> None:
     ) as c:
         resp = await c.post("/api/action")
     assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "FORBIDDEN"
 
 
 async def test_post_with_cross_origin_returns_403() -> None:
@@ -64,6 +65,7 @@ async def test_post_with_cross_origin_returns_403() -> None:
     ) as c:
         resp = await c.post("/api/action", headers={"origin": "http://evil.com"})
     assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "FORBIDDEN"
 
 
 async def test_post_with_referer_fallback_passes() -> None:
