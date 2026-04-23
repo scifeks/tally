@@ -2,24 +2,14 @@
 
 from __future__ import annotations
 
-import json
-
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
+from web.api._errors import error_response
+
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _EXEMPT = frozenset({"/api/auth/exchange", "/api/auth/me"})
-
-_ERR = json.dumps(
-    {
-        "error": {
-            "code": "CSRF_VALIDATION_FAILED",
-            "message": "CSRF token missing or invalid",
-            "details": {},
-        }
-    }
-)
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -39,9 +29,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         store = request.app.state.session_store
         csrf_header = request.headers.get("x-csrf-token", "")
         if not session_id or not store.verify_csrf(session_id, csrf_header):
-            return Response(
-                content=_ERR,
-                status_code=403,
-                media_type="application/json",
+            return error_response(
+                403,
+                "CSRF_VALIDATION_FAILED",
+                "CSRF token missing or invalid",
             )
         return await call_next(request)

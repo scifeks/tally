@@ -6,11 +6,17 @@ import json
 import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
 
+from application.findings.analyst_service import FindingAnalystService
 from infrastructure.store import FindingRepository
+from web.api._errors import NotFound
 from web.api.chroma_sync import sync_finding_to_chroma
-from web.api.schemas import BatchFindingPatchRequest, FindingPatchRequest
+from web.api.schemas import (
+    BatchFindingPatchRequest,
+    FindingPatchRequest,
+    FindingResponse,
+)
 
 router = APIRouter()
 
@@ -77,7 +83,8 @@ def list_findings(
     """Return findings, optionally filtered by tool, domain, status, or segment."""
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
-    rows = repo.get_findings(
+    service = FindingAnalystService(repo)
+    rows = service.get_findings(
         tools=[tool] if tool else None,
         domain=domain,
         status=status,
@@ -95,25 +102,16 @@ def list_findings(
     return [_serialise_finding(r) for r in rows]
 
 
-@router.get("/{finding_id}")
+@router.get("/{finding_id}", response_model=FindingResponse)
 def get_finding(request: Request, finding_id: int) -> dict:
     """Return a single finding by integer primary key."""
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
-    row = repo.get_finding(finding_id)
+    service = FindingAnalystService(repo)
+    row = service.get_finding(finding_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise NotFound("Finding not found")
     return _serialise_finding(row)
-
-
-# Maps FindingPatchRequest field names for meta keys to their blob keys.
-_META_FIELD_MAP: dict[str, str] = {
-    "meta_remediation": "remediation",
-    "meta_risk_type": "risk_type",
-    "meta_owasp_name": "owasp_name",
-    "meta_title": "title",
-    "meta_tags": "tags",
-}
 
 
 @router.patch("/batch")
@@ -132,6 +130,7 @@ async def batch_patch_findings(
     """
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
+    service = FindingAnalystService(repo)
 
     raw = body.model_dump(exclude={"ids"}, exclude_none=True)
     fields: dict[str, Any] = {}
@@ -141,11 +140,11 @@ async def batch_patch_findings(
         else:
             fields[k] = v
 
-    updated = repo.batch_update_analyst_fields(body.ids, fields)
+    updated = service.bulk_update_fields(body.ids, fields)
     return {"updated": updated}
 
 
-@router.patch("/{finding_id}")
+@router.patch("/{finding_id}", response_model=FindingResponse)
 async def patch_finding(
     request: Request,
     finding_id: int,
@@ -164,16 +163,13 @@ async def patch_finding(
     """
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
+    service = FindingAnalystService(repo)
 
     raw = body.model_dump(exclude_none=True)
-    changed_fields: set[str] = set(raw.keys())
-    # triaged_by is set automatically on every analyst write — always sync it.
-    changed_fields.add("triaged_by")
-
     fields: dict[str, Any] = {}
     for k, v in raw.items():
-        if k in _META_FIELD_MAP:
-            fields[_META_FIELD_MAP[k]] = v
+        if k.startswith("meta_"):
+            fields[k.removeprefix("meta_")] = v
         elif k == "finding_type":
             fields["finding_type"] = json.dumps(v)
         elif k == "cwe":
@@ -183,13 +179,13 @@ async def patch_finding(
         else:
             fields[k] = v
 
-    updated = repo.update_analyst_fields(finding_id, fields)
+    updated = service.update_fields(finding_id, fields)
     if not updated:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise NotFound("Finding not found")
 
-    row = repo.get_finding(finding_id)
+    row = service.get_finding(finding_id)
     if row is None:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise NotFound("Finding not found")
 
     serialised = _serialise_finding(row)
     sync_finding_to_chroma(

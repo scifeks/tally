@@ -2,23 +2,13 @@
 
 from __future__ import annotations
 
-import json
-
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
-_EXEMPT = frozenset({"/api/auth/exchange", "/api/auth/me"})
+from web.api._errors import error_response
 
-_ERR = json.dumps(
-    {
-        "error": {
-            "code": "UNAUTHENTICATED",
-            "message": "Authentication required",
-            "details": {},
-        }
-    }
-)
+_EXEMPT = frozenset({"/api/auth/exchange", "/api/auth/me"})
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):
@@ -35,10 +25,6 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         store = request.app.state.session_store
         session_id = request.cookies.get("tally_session", "")
         if not session_id or not store.verify(session_id):
-            return Response(
-                content=_ERR,
-                status_code=401,
-                media_type="application/json",
-            )
+            return error_response(401, "UNAUTHENTICATED", "Authentication required")
         request.state.session_id = session_id
         return await call_next(request)

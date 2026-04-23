@@ -85,6 +85,7 @@ async def test_post_without_csrf_header_returns_403() -> None:
     async with client as c:
         resp = await c.post("/api/action")
     assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "CSRF_VALIDATION_FAILED"
 
 
 async def test_post_with_wrong_csrf_returns_403() -> None:
@@ -93,6 +94,7 @@ async def test_post_with_wrong_csrf_returns_403() -> None:
     async with client as c:
         resp = await c.post("/api/action", headers={"x-csrf-token": "wrong-token"})
     assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "CSRF_VALIDATION_FAILED"
 
 
 async def test_post_with_correct_csrf_passes() -> None:

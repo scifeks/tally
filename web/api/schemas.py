@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
@@ -39,8 +46,12 @@ class FindingPatchRequest(BaseModel):
     meta_remediation: str | None = None
     meta_risk_type: str | None = None
     meta_owasp_name: str | None = None
-    meta_title: str | None = None
+    title: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("title", "meta_title"),
+    )
     meta_tags: list[str] | None = None
+    notes: str | None = None
 
     @field_validator("severity")
     @classmethod
