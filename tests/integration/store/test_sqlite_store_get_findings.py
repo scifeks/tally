@@ -38,6 +38,9 @@ class _TestStore:
     def get_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.get_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
+    def count_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        return self._finding_repo.count_findings(*args, **kwargs)  # type: ignore[attr-defined]
+
     def delete_findings(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         return self._finding_repo.delete_findings(*args, **kwargs)  # type: ignore[attr-defined]
 
@@ -208,3 +211,83 @@ class TestGetFindings:
         assert all(r["tool"] == "semgrep" for r in rows)
         assert all(r["segment"] in ("sast", "sca", "api") for r in rows)
         assert all(r["file"] for r in rows)
+
+
+class TestPagination:
+    def test_limit_caps_rows(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.insert_findings(
+            run_id,
+            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(5)],
+        )
+        rows = store.get_findings(limit=3)
+        assert len(rows) == 3
+
+    def test_offset_skips_rows(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.insert_findings(
+            run_id,
+            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(5)],
+        )
+        all_rows = store.get_findings(limit=100, offset=0)
+        offset_rows = store.get_findings(limit=100, offset=2)
+        assert len(offset_rows) == len(all_rows) - 2
+        assert [r["id"] for r in offset_rows] == [r["id"] for r in all_rows[2:]]
+
+    def test_order_is_stable_id_desc(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.insert_findings(
+            run_id,
+            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(4)],
+        )
+        rows_a = store.get_findings(limit=100)
+        rows_b = store.get_findings(limit=100)
+        assert [r["id"] for r in rows_a] == [r["id"] for r in rows_b]
+        ids = [r["id"] for r in rows_a]
+        assert ids == sorted(ids, reverse=True)
+
+    def test_count_findings_matches_total(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        total = store.count_findings()
+        rows = store.get_findings(limit=1000)
+        assert total == len(rows)
+
+    def test_count_findings_with_filter(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        total_sast = store.count_findings(segments=["sast"])
+        rows_sast = store.get_findings(segments=["sast"], limit=1000)
+        assert total_sast == len(rows_sast)
+
+    def test_count_findings_ignores_pagination(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        run_id = store.create_run({})
+        store.insert_findings(
+            run_id,
+            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(6)],
+        )
+        total = store.count_findings()
+        page1 = store.get_findings(limit=2, offset=0)
+        page2 = store.get_findings(limit=2, offset=2)
+        page3 = store.get_findings(limit=2, offset=4)
+        assert len(page1) + len(page2) + len(page3) == total
+
+    def test_paginated_slices_sum_to_total(self, tmp_path: Path) -> None:
+        store = _make_store(tmp_path)
+        _seed_gf(store)
+        total = store.count_findings()
+        collected: list[int] = []
+        offset = 0
+        page_size = 2
+        while True:
+            rows = store.get_findings(limit=page_size, offset=offset)
+            if not rows:
+                break
+            collected.extend(r["id"] for r in rows)
+            offset += page_size
+        assert len(collected) == total
+        assert len(set(collected)) == total

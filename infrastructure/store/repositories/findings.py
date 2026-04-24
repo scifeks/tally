@@ -254,7 +254,7 @@ class FindingRepository:
             result["severity"] = Severity.from_rank(int(result["severity"])).label
         return result
 
-    def get_findings(
+    def _build_findings_filter(
         self,
         tools: list[str] | None = None,
         domain: str | None = None,
@@ -262,9 +262,7 @@ class FindingRepository:
         repo: str | None = None,
         segments: list[str] | None = None,
         require_file: bool = False,
-        limit: int = 10,
-    ) -> list[dict]:
-        """Return findings matching optional filters, capped at *limit* rows."""
+    ) -> tuple[str, list[object]]:
         clauses: list[str] = []
         params: list[object] = []
         if segments:
@@ -287,11 +285,59 @@ class FindingRepository:
             clauses.append("repo = ?")
             params.append(repo)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        params.append(limit)
-        sql = f"SELECT * FROM findings {where} LIMIT ?"
+        return where, params
+
+    def get_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        repo: str | None = None,
+        segments: list[str] | None = None,
+        require_file: bool = False,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Return findings matching optional filters, capped at *limit* rows."""
+        where, base_params = self._build_findings_filter(
+            tools=tools,
+            domain=domain,
+            status=status,
+            repo=repo,
+            segments=segments,
+            require_file=require_file,
+        )
+        params: list[object] = list(base_params) + [limit, offset]
+        sql = (
+            f"SELECT * FROM findings {where}"
+            " ORDER BY first_seen DESC, id DESC"
+            " LIMIT ? OFFSET ?"
+        )
         with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
+
+    def count_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        repo: str | None = None,
+        segments: list[str] | None = None,
+        require_file: bool = False,
+    ) -> int:
+        """Return total count of findings matching the given filters."""
+        where, params = self._build_findings_filter(
+            tools=tools,
+            domain=domain,
+            status=status,
+            repo=repo,
+            segments=segments,
+            require_file=require_file,
+        )
+        sql = f"SELECT COUNT(*) FROM findings {where}"
+        with self._factory.connect() as conn:
+            return conn.execute(sql, params).fetchone()[0]
 
     def update_finding(
         self,
