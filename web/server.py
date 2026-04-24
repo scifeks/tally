@@ -22,6 +22,7 @@ from web.api.locks import router as locks_router
 from web.api.projects import router as projects_router
 from web.auth.handshake import HandshakeRegistry
 from web.auth.sessions import SessionStore
+from web.middleware.access_log import AccessLogMiddleware
 from web.middleware.csrf import CSRFMiddleware
 from web.middleware.host_header import HostHeaderMiddleware
 from web.middleware.origin import OriginCheckMiddleware
@@ -80,7 +81,8 @@ def create_app(
     app.include_router(projects_router, prefix="/api/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
-    # Execution: CORS → Host → Origin → SessionAuth → CSRF → Redaction → handler.
+    # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF
+    #            → Redaction → handler.
     install_redaction_middleware(app)
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(SessionAuthMiddleware)
@@ -105,6 +107,10 @@ def create_app(
             max_age=600,
         )
         logger.info("CORS allow-list installed for origins: %s", allowed_origins)
+
+    # Outermost: access log wraps every other layer so latency covers the
+    # full request and CORS preflight rejections are still logged.
+    app.add_middleware(AccessLogMiddleware)
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists():
@@ -146,6 +152,27 @@ def _attach_file_logging(base_path: str) -> None:
         log_instance.propagate = False
 
 
+def _attach_access_logging(base_path: str) -> None:
+    """Attach a dated FileHandler to the access logger.
+
+    Writes one JSON record per request to ``<base_path>/logs/web-YYYY-MM-DD.log``.
+    The ``tally.web.access`` logger is isolated (``propagate=False``) so its
+    records do not duplicate into uvicorn or root handlers.
+    """
+    log_dir = Path(base_path) / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_filename = "web-" + datetime.now().strftime("%Y-%m-%d") + ".log"
+    log_path = log_dir / log_filename
+
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setFormatter(logging.Formatter("%(message)s"))
+
+    access_logger = logging.getLogger("tally.web.access")
+    access_logger.addHandler(file_handler)
+    access_logger.setLevel(logging.INFO)
+    access_logger.propagate = False
+
+
 def create_server(
     base_path: str,
     project_name: str,
@@ -171,6 +198,7 @@ def create_server(
         A configured ``uvicorn.Server`` instance (not yet started).
     """
     _attach_file_logging(base_path)
+    _attach_access_logging(base_path)
     app = create_app(
         base_path,
         project_name,
