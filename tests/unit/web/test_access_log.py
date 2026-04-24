@@ -177,7 +177,8 @@ class TestHeaderAndBodySafety:
         assert "SECRET_CSRF_VALUE" not in log_file.read_text()
 
     def test_cookie_never_logged(self, client: TestClient, log_file: Path) -> None:
-        client.get("/ping", cookies={"session": "SECRET_COOKIE_VALUE"})
+        client.cookies.set("session", "SECRET_COOKIE_VALUE")
+        client.get("/ping")
         assert "SECRET_COOKIE_VALUE" not in log_file.read_text()
 
 
