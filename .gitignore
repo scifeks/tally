@@ -68,3 +68,5 @@ ui/node_modules/
 ui/docs/roadmap
 ui-old/
 web/static/
+ui/.env.local
+ui/.env.*.local

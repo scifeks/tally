@@ -41,6 +41,10 @@ that references it.
 | `report_finding_prefix` | string | `"TAL"` | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. |
 | `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
 | `enrichment_max_concurrency` | int | `4` | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). |
+| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected — use an explicit loopback or LAN IP. |
+| `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
+| `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
+| `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
 
 ### `ollama` Block Fields
 

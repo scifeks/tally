@@ -9,6 +9,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from application.rag.engine import RAGEngine
 from infrastructure.store.connection import ConnectionFactory
@@ -35,6 +36,7 @@ def create_app(
     handshake_token: str,
     *,
     port: int,
+    allowed_origins: list[str] | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -43,6 +45,7 @@ def create_app(
         project_name: Active project name.
         handshake_token: One-time token; SPA exchanges it for session cookies.
         port: Bound port — used by Host/Origin middleware allowlists.
+        allowed_origins: CORS allow-list. Empty or None disables CORS entirely.
 
     Returns:
         Configured ``FastAPI`` instance.
@@ -77,12 +80,31 @@ def create_app(
     app.include_router(projects_router, prefix="/api/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
-    # Execution order: Host → Origin → SessionAuth → CSRF → Redaction → handler.
+    # Execution: CORS → Host → Origin → SessionAuth → CSRF → Redaction → handler.
     install_redaction_middleware(app)
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(SessionAuthMiddleware)
-    app.add_middleware(OriginCheckMiddleware, port=port)
+    app.add_middleware(
+        OriginCheckMiddleware,
+        port=port,
+        extra_origins=allowed_origins or [],
+    )
     app.add_middleware(HostHeaderMiddleware, port=port)
+
+    # CORS dev-only escape hatch for the Vite dev server.
+    # Production posture: same-origin only (SPA served from web/static/).
+    # Never allow "*" — explicit literal origins from config only.
+    if allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "X-CSRF-Token"],
+            expose_headers=[],
+            max_age=600,
+        )
+        logger.info("CORS allow-list installed for origins: %s", allowed_origins)
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists():
@@ -129,6 +151,8 @@ def create_server(
     project_name: str,
     port: int,
     handshake_token: str,
+    host: str = "127.0.0.1",
+    allowed_origins: list[str] | None = None,
 ) -> uvicorn.Server:
     """Create a uvicorn Server ready to run in a daemon thread.
 
@@ -138,21 +162,36 @@ def create_server(
     Args:
         base_path: Tally base directory.
         project_name: Active project name.
-        port: TCP port to bind (localhost only).
+        port: TCP port to bind.
         handshake_token: One-time URL token; SPA exchanges it for session cookies.
+        host: Bind host (default ``"127.0.0.1"``).
+        allowed_origins: CORS allow-list passed to ``create_app``.
 
     Returns:
         A configured ``uvicorn.Server`` instance (not yet started).
     """
     _attach_file_logging(base_path)
-    app = create_app(base_path, project_name, handshake_token, port=port)
-    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    app = create_app(
+        base_path,
+        project_name,
+        handshake_token,
+        port=port,
+        allowed_origins=allowed_origins,
+    )
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     server.capture_signals = contextlib.nullcontext  # type: ignore[method-assign]
     return server
 
 
-def start(base_path: str, project_name: str, port: int, handshake_token: str) -> None:
+def start(
+    base_path: str,
+    project_name: str,
+    port: int,
+    handshake_token: str,
+    host: str = "127.0.0.1",
+    allowed_origins: list[str] | None = None,
+) -> None:
     """Launch the web UI server (blocking).
 
     Thin wrapper around ``create_server()`` + ``asyncio.run()``.  Intended for
@@ -161,5 +200,7 @@ def start(base_path: str, project_name: str, port: int, handshake_token: str) ->
     """
     import asyncio
 
-    server = create_server(base_path, project_name, port, handshake_token)
+    server = create_server(
+        base_path, project_name, port, handshake_token, host, allowed_origins
+    )
     asyncio.run(server.serve())

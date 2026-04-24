@@ -1,6 +1,6 @@
 """GlobalConfig schema."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
 from .ollama_config import OllamaConfig
@@ -10,9 +10,13 @@ MCP_BATCH_SIZE_DEFAULT: int = 10
 MCP_BATCH_TIMEOUT_SECONDS_DEFAULT: int = 30
 MCP_SESSION_TIMEOUT_SECONDS_DEFAULT: int = 300
 
+_BANNED_HOSTS = {"0.0.0.0", "::", ""}
+
 
 class GlobalConfig(BaseModel):
     """Global application configuration."""
+
+    model_config = ConfigDict(extra="ignore")
 
     chat_llm_provider: str = "ollama"
     enrichment_llm_provider: str = "ollama"
@@ -36,3 +40,26 @@ class GlobalConfig(BaseModel):
         description="Max seconds for a single Claude triage session",
     )
     report_finding_prefix: str = Field(default="TAL")
+
+    # Web UI / dev server
+    web_ui_host: str = Field(default="127.0.0.1")
+    web_ui_port: int = Field(default=8080)
+    web_ui_vite_port: int = Field(default=3000)
+    web_ui_allowed_origins: list[str] | None = None
+
+    @field_validator("web_ui_host")
+    @classmethod
+    def _reject_wildcard_host(cls, v: str) -> str:
+        if v in _BANNED_HOSTS:
+            raise ValueError(
+                f"web_ui_host {v!r} would bind to all interfaces; "
+                "use an explicit IP or hostname (e.g. '127.0.0.1')"
+            )
+        return v
+
+    @property
+    def effective_allowed_origins(self) -> list[str]:
+        """Allowed CORS origins: explicit list or derived from host + vite port."""
+        if self.web_ui_allowed_origins:
+            return list(self.web_ui_allowed_origins)
+        return [f"http://{self.web_ui_host}:{self.web_ui_vite_port}"]
