@@ -18,7 +18,6 @@ from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
 from application.rag.ingestor import get_tool_domain
 from application.repl.commands import (
-    FindingsCommands,
     KnowledgeCommands,
     ProjectCommands,
     PurgeCommand,
@@ -26,6 +25,7 @@ from application.repl.commands import (
     ScanCommands,
     ToolCommands,
     TriageCommands,
+    UiCommands,
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
 from application.runtime import RuntimeDependencyService
@@ -61,7 +61,7 @@ _COMPLETIONS = [
     "purge",
     "report",
     "triage",
-    "findings",
+    "ui",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -235,9 +235,7 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
-        self.findings_commands = FindingsCommands(
-            self, server_factory=_create_web_server
-        )
+        self.ui_commands = UiCommands(self, server_factory=_create_web_server)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -359,7 +357,7 @@ class REPL:
             "purge": self.purge_commands.cmd_purge,
             "report": self.report_commands.execute,
             "triage": self.triage_commands.cmd_triage,
-            "findings": self.findings_commands.cmd_findings,
+            "ui": self.ui_commands.cmd_ui,
         }
         handler = handlers.get(cmd)
         if handler is None:

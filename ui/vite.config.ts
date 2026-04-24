@@ -11,9 +11,8 @@ export default defineConfig({
     },
   },
   server: {
-    host: '0.0.0.0',
-    port: 3000,
-    allowedHosts: true,
+    host: process.env.TALLY_HOST ?? '127.0.0.1',
+    port: Number(process.env.TALLY_VITE_PORT ?? 3000),
   },
   test: {
     environment: 'jsdom',
