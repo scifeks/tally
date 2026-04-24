@@ -7,7 +7,12 @@ from urllib.parse import parse_qsl, urlsplit
 
 import pytest
 
-from web.api._redact import REDACTED, redact_config, redact_exempt
+from web.api._redact import (
+    REDACTED,
+    redact_config,
+    redact_exempt,
+    redact_query_string,
+)
 
 
 def test_top_level_api_key_redacted() -> None:
@@ -112,3 +117,28 @@ def test_redact_exempt_sets_attribute_and_preserves_identity() -> None:
     decorated = redact_exempt(handler)
     assert getattr(decorated, "__redact_exempt__", False) is True
     assert decorated is handler
+
+
+class TestRedactQueryString:
+    def test_empty_input_returns_empty_string(self) -> None:
+        assert redact_query_string("") == ""
+
+    def test_non_sensitive_params_preserved(self) -> None:
+        result = redact_query_string("page=2&limit=50")
+        parsed = dict(parse_qsl(result, keep_blank_values=True))
+        assert parsed == {"page": "2", "limit": "50"}
+
+    def test_sensitive_param_value_redacted_order_preserved(self) -> None:
+        result = redact_query_string("token=secret&page=2")
+        parsed = parse_qsl(result, keep_blank_values=True)
+        assert parsed == [("token", REDACTED), ("page", "2")]
+
+    def test_case_insensitive_param_name_match(self) -> None:
+        result = redact_query_string("TOKEN=abc")
+        parsed = dict(parse_qsl(result, keep_blank_values=True))
+        assert parsed == {"TOKEN": REDACTED}
+
+    def test_blank_value_preserved_for_non_sensitive_param(self) -> None:
+        result = redact_query_string("flag=")
+        parsed = parse_qsl(result, keep_blank_values=True)
+        assert parsed == [("flag", "")]

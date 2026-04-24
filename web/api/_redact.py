@@ -174,16 +174,28 @@ async def _flush(
         )
 
 
-def _redact_url(url: str) -> str:
-    parts = urlsplit(url)
-    if not parts.query:
-        return url
-    params = parse_qsl(parts.query, keep_blank_values=True)
-    redacted = [
+def redact_query_string(query: str) -> str:
+    """Redact sensitive params from a raw URL query string.
+
+    Preserves order, encoding, and blank values. Single source of truth
+    for query-string scrubbing; reused by `_redact_url` and by the
+    access-log middleware.
+    """
+    if not query:
+        return ""
+    params = parse_qsl(query, keep_blank_values=True)
+    scrubbed = [
         (
             name,
             REDACTED if any(s in name.lower() for s in URL_PARAM_BLACKLIST) else value,
         )
         for name, value in params
     ]
-    return urlunsplit(parts._replace(query=urlencode(redacted)))
+    return urlencode(scrubbed)
+
+
+def _redact_url(url: str) -> str:
+    parts = urlsplit(url)
+    if not parts.query:
+        return url
+    return urlunsplit(parts._replace(query=redact_query_string(parts.query)))
