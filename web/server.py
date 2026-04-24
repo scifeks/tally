@@ -20,6 +20,7 @@ from web.api.config import router as config_router
 from web.api.findings import router as findings_router
 from web.api.locks import router as locks_router
 from web.api.projects import router as projects_router
+from web.api.projects import v1_router as projects_v1_router
 from web.auth.handshake import HandshakeRegistry
 from web.auth.sessions import SessionStore
 from web.middleware.access_log import AccessLogMiddleware
@@ -79,6 +80,7 @@ def create_app(
     app.include_router(findings_router, prefix="/api/v1/findings")
     app.include_router(locks_router, prefix="/api/v1/projects")
     app.include_router(projects_router, prefix="/api/projects")
+    app.include_router(projects_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF

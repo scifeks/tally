@@ -177,3 +177,59 @@ class BatchPatchResponse(BaseModel):
     skipped_locked: list[int]
     not_found: list[int]
     skip_reasons: dict[int, str]
+
+
+class ProjectListItem(BaseModel):
+    id: str
+    name: str
+    code: str
+    created_at: str
+    is_active: bool
+
+
+class ProjectListResponse(BaseModel):
+    items: list[ProjectListItem]
+    total: int
+    offset: int
+    limit: int
+
+
+class ProjectMetaResponse(BaseModel):
+    id: str
+    name: str
+    code: str
+    repo_count: int
+    url_list_count: int
+    finding_count: int
+
+
+class ProjectInfoResponse(BaseModel):
+    id: str
+    name: str
+    code: str
+    company: str
+    department: str
+    abbreviation: str
+    created_at: str
+    path: str
+    repo_count: int
+    finding_count: int
+
+
+class RepositoryItem(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    type: list[str]
+    path: str | None = None
+    docker_path: str | None = None
+    container_name: str | None = None
+    languages: list[str]
+    base_urls: list[str]
+
+
+class RepositoryListResponse(BaseModel):
+    items: list[RepositoryItem]
+    total: int
+    offset: int
+    limit: int
