@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from application.rag.engine import RAGEngine
+from application.runtime.dependency_service import RuntimeDependencyService
+from infrastructure.runtime.claude_probe import ClaudeCodeProbe
 from infrastructure.store.connection import ConnectionFactory
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
@@ -21,6 +23,7 @@ from web.api.findings import router as findings_router
 from web.api.locks import router as locks_router
 from web.api.projects import router as projects_router
 from web.api.projects import v1_router as projects_v1_router
+from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
 from web.auth.handshake import HandshakeRegistry
 from web.auth.sessions import SessionStore
 from web.middleware.access_log import AccessLogMiddleware
@@ -75,12 +78,17 @@ def create_app(
         rag_engine = None
     app.state.rag_engine = rag_engine
 
+    app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
+
     app.include_router(auth_router, prefix="/api/auth")
     app.include_router(config_router, prefix="/api/config")
     app.include_router(findings_router, prefix="/api/v1/findings")
     app.include_router(locks_router, prefix="/api/v1/projects")
     app.include_router(projects_router, prefix="/api/projects")
     app.include_router(projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(tools_v1_router, prefix="/api/v1/tools")
+    app.include_router(projects_tools_v1_router, prefix="/api/v1/projects")
+    app.include_router(runtime_v1_router, prefix="/api/v1")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF

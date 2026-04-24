@@ -233,3 +233,49 @@ class RepositoryListResponse(BaseModel):
     total: int
     offset: int
     limit: int
+
+
+class DockerContainerResponse(BaseModel):
+    name: str
+    tool_path: str
+
+
+class ToolCatalogItem(BaseModel):
+    id: str
+    name: str
+    domain: str
+    supports_local: bool
+    supports_docker: bool
+    description: str
+
+
+class ToolCatalogResponse(BaseModel):
+    items: list[ToolCatalogItem]
+    total: int
+
+
+class ToolOverrideItem(BaseModel):
+    tool_id: str
+    type: str
+    location: str
+    path: str | None = None
+    container: DockerContainerResponse | None = None
+
+
+class ToolOverrideResponse(BaseModel):
+    items: list[ToolOverrideItem]
+    total: int
+
+
+class RuntimeDependencyItem(BaseModel):
+    name: str
+    installed: bool
+    binary_path: str | None
+    version: str | None
+    install_hint: str
+    required_for: list[str]
+    error: str | None
+
+
+class RuntimeDependenciesResponse(BaseModel):
+    dependencies: list[RuntimeDependencyItem]
