@@ -25,11 +25,68 @@ class TestGetFindings:
         client, _, _, _, _ = app_client
         response = await client.get("/api/v1/findings/")
         assert response.status_code == 200
-        findings = response.json()
+        data = response.json()
+        findings = data["items"]
         assert len(findings) >= 1
         meta = findings[0]["meta"]
         assert not any(k.startswith("type_") for k in meta)
         assert "profile" in meta
+
+    async def test_list_returns_envelope(self, app_client) -> None:
+        client, _, _, _, _ = app_client
+        response = await client.get("/api/v1/findings/")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert "total" in data
+        assert "offset" in data
+        assert "limit" in data
+        assert data["offset"] == 0
+        assert data["limit"] == 50
+        assert data["total"] >= 1
+        assert len(data["items"]) == data["total"]
+
+    async def test_pagination_limit(self, app_client) -> None:
+        client, _, _, _, _ = app_client
+        response = await client.get("/api/v1/findings/?offset=0&limit=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["total"] >= 1
+        assert data["offset"] == 0
+        assert data["limit"] == 1
+
+    async def test_offset_beyond_total_returns_empty_items(self, app_client) -> None:
+        client, _, _, _, _ = app_client
+        response = await client.get("/api/v1/findings/?offset=9999&limit=50")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["items"] == []
+        assert data["total"] >= 1
+
+    async def test_limit_exceeds_max_returns_422(self, app_client) -> None:
+        client, _, _, _, _ = app_client
+        response = await client.get("/api/v1/findings/?limit=501")
+        assert response.status_code == 422
+
+    async def test_negative_offset_returns_422(self, app_client) -> None:
+        client, _, _, _, _ = app_client
+        response = await client.get("/api/v1/findings/?offset=-1")
+        assert response.status_code == 422
+
+    async def test_filter_total_reflects_filtered_set(self, app_client) -> None:
+        client, _, _, _, _ = app_client
+        response = await client.get("/api/v1/findings/?tool=semgrep")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] >= 1
+        assert all(item["tool"] == "semgrep" for item in data["items"])
+
+        response_no_match = await client.get("/api/v1/findings/?tool=nonexistent_tool")
+        assert response_no_match.status_code == 200
+        no_match = response_no_match.json()
+        assert no_match["total"] == 0
+        assert no_match["items"] == []
 
     async def test_get_by_id_returns_404_for_unknown(self, app_client) -> None:
         client, _, _, _, _ = app_client

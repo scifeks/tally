@@ -40,6 +40,7 @@ class FindingAnalystService:
         status: str | None = None,
         segments: list[str] | None = None,
         limit: int = 10_000,
+        offset: int = 0,
     ) -> list[dict]:
         return self._repo.get_findings(
             tools=tools,
@@ -47,6 +48,21 @@ class FindingAnalystService:
             status=status,
             segments=segments,
             limit=limit,
+            offset=offset,
+        )
+
+    def count_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        segments: list[str] | None = None,
+    ) -> int:
+        return self._repo.count_findings(
+            tools=tools,
+            domain=domain,
+            status=status,
+            segments=segments,
         )
 
     def update_fields(

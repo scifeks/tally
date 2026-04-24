@@ -20,6 +20,7 @@ from web.api.schemas import (
     BatchPatchResponse,
     FindingPatchRequest,
     FindingResponse,
+    FindingsListResponse,
 )
 
 logger = logging.getLogger("tally.web.findings")
@@ -88,35 +89,42 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-@router.get("/")
+@router.get("/", response_model=FindingsListResponse)
 def list_findings(
     request: Request,
     tool: str | None = Query(default=None),
     domain: str | None = Query(default=None),
     status: str | None = Query(default=None),
     segment: str | None = Query(default=None),
-    visualize_only: bool = Query(default=False),
-) -> list[dict]:
-    """Return findings, optionally filtered by tool, domain, status, or segment."""
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> FindingsListResponse:
+    """Return findings with pagination envelope."""
     factory = request.app.state.connection_factory
     repo = FindingRepository(factory)
     service = FindingAnalystService(repo)
-    rows = service.get_findings(
-        tools=[tool] if tool else None,
+    tools = [tool] if tool else None
+    segments = [segment] if segment else None
+    total = service.count_findings(
+        tools=tools,
         domain=domain,
         status=status,
-        segments=[segment] if segment else None,
-        limit=10_000,
+        segments=segments,
     )
-    if visualize_only:
-        from application.rag.ingestor import ToolHandlerFactory
-
-        rows = [
-            r
-            for r in rows
-            if getattr(ToolHandlerFactory.load(r["tool"]), "should_visualize", True)
-        ]
-    return [_serialise_finding(r) for r in rows]
+    rows = service.get_findings(
+        tools=tools,
+        domain=domain,
+        status=status,
+        segments=segments,
+        offset=offset,
+        limit=limit,
+    )
+    return FindingsListResponse(
+        items=[FindingResponse.model_validate(_serialise_finding(r)) for r in rows],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @router.get("/{finding_id}", response_model=FindingResponse)

@@ -155,6 +155,13 @@ class FindingResponse(BaseModel):
     lock_holder: str | None = None
 
 
+class FindingsListResponse(BaseModel):
+    items: list[FindingResponse]
+    total: int
+    offset: int
+    limit: int
+
+
 class BatchPatchResponse(BaseModel):
     """Response for PATCH /api/v1/findings/batch.
 
