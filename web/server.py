@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from application.rag.engine import RAGEngine
 from infrastructure.store.connection import ConnectionFactory
 from web.api._errors import install_error_handlers
+from web.api._redact import install_redaction_middleware
 from web.api.auth import router as auth_router
 from web.api.config import router as config_router
 from web.api.findings import router as findings_router
@@ -76,7 +77,8 @@ def create_app(
     app.include_router(projects_router, prefix="/api/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
-    # Execution order: Host → Origin → SessionAuth → CSRF → route handler.
+    # Execution order: Host → Origin → SessionAuth → CSRF → Redaction → handler.
+    install_redaction_middleware(app)
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(SessionAuthMiddleware)
     app.add_middleware(OriginCheckMiddleware, port=port)
