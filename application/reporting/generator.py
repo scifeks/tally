@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from domain.findings.severity import Severity
 from infrastructure.store import FindingRepository
 
 logger = logging.getLogger(__name__)
 
 _SCA_TOOLS = ("osv-scanner", "pip-audit", "npm-audit", "composer-audit")
-_SEVERITY_LEVELS = ["critical", "high", "medium", "low"]
 
 
 class ReportGenerator:
@@ -66,7 +66,7 @@ class ReportGenerator:
         """
         generated_at = datetime.now(UTC).isoformat()
         findings_by_tool: dict[str, list[dict[str, Any]]] = {}
-        by_severity = {level: 0 for level in _SEVERITY_LEVELS}
+        by_severity = {s.label: 0 for s in Severity.all_ordered()}
 
         try:
             findings_list = self._finding_repo.get_all_findings_deserialized()

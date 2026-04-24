@@ -63,7 +63,7 @@ class TestPatchFinding:
                 "SELECT severity FROM findings WHERE id = ?",
                 (finding_id,),
             ).fetchone()
-        assert row["severity"] == "critical"
+        assert row["severity"] == 0
 
     async def test_patch_sets_triaged_by_analyst_web(self, app_client) -> None:
         client, finding_id, _, factory, mut_headers = app_client

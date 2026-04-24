@@ -8,15 +8,9 @@ import logging
 from collections import defaultdict
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from domain.findings.severity import Severity
 
-_SEVERITY_ORDER: dict[str, int] = {
-    "critical": 0,
-    "high": 1,
-    "medium": 2,
-    "low": 3,
-    "informational": 4,
-}
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +107,10 @@ def _badge(css_class: str, value: str) -> str:
 
 def _severity_key(finding: dict[str, Any]) -> int:
     """Numeric sort key for severity (lower = more severe)."""
-    return _SEVERITY_ORDER.get((finding.get("severity") or "").lower(), 99)
+    try:
+        return Severity.from_label((finding.get("severity") or "").lower()).rank
+    except ValueError:
+        return 99
 
 
 def _line_number(meta: dict[str, Any]) -> str | None:

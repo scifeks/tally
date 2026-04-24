@@ -12,16 +12,10 @@ if TYPE_CHECKING:
     from infrastructure.store.repositories.findings import FindingRepository
 
 from application.reporting.risk_level import RiskCounts
+from domain.findings.severity import Severity
 
 logger = logging.getLogger(__name__)
 
-_SEVERITY_ORDER: dict[str, int] = {
-    "critical": 0,
-    "high": 1,
-    "medium": 2,
-    "low": 3,
-    "informational": 4,
-}
 _CONFIDENCE_ORDER: dict[str, int] = {
     "confirmed": 0,
     "probable": 1,
@@ -114,7 +108,10 @@ class DraftQueryService:
         """
 
         def _sort_key(f: dict[str, Any]) -> tuple[int, int]:
-            sev = _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 99)
+            try:
+                sev = Severity.from_label((f.get("severity") or "").lower()).rank
+            except ValueError:
+                sev = 99
             conf = _CONFIDENCE_ORDER.get((f.get("confidence") or "").lower(), 99)
             return (sev, conf)
 
