@@ -11,19 +11,13 @@ if TYPE_CHECKING:
     from core.llm.base import LLMProvider
 
 from application.reporting.risk_level import RiskLevel
+from domain.findings.severity import Severity
 
 logger = logging.getLogger(__name__)
 
 # Maps section name → generator class; populated by @_register.
 SECTION_REGISTRY: dict[str, type[SectionDraftGenerator]] = {}
 
-_SEVERITY_DISPLAY = (
-    "critical",
-    "high",
-    "medium",
-    "low",
-    "informational",
-)
 _CONFIDENCE_DISPLAY = ("confirmed", "probable", "potential")
 
 
@@ -36,9 +30,9 @@ def _register(
 
 def _fmt_sev(dist: dict[str, int]) -> str:
     parts = [
-        f"{s.capitalize()}: {dist.get(s, 0)}"
-        for s in _SEVERITY_DISPLAY
-        if dist.get(s, 0) > 0
+        f"{s.label.capitalize()}: {dist.get(s.label, 0)}"
+        for s in Severity.all_ordered()
+        if dist.get(s.label, 0) > 0
     ]
     return ", ".join(parts) if parts else "None"
 

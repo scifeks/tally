@@ -53,7 +53,7 @@ class ConnectionFactory:
                     segment          TEXT,
                     repo             TEXT,
                     finding_type     TEXT,
-                    severity         TEXT,
+                    severity         INTEGER,
                     confidence       TEXT,
                     file             TEXT,
                     rule_id          TEXT,

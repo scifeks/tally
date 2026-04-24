@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any
 
+from domain.findings.severity import Severity
 from domain.tools.constants import FINDING_TYPES
 
 logger = logging.getLogger(__name__)
@@ -19,13 +20,14 @@ logger = logging.getLogger(__name__)
 # Column mappings
 # ---------------------------------------------------------------------------
 
-# Named column names that map directly (field name == SQLite column name)
+# Named column names that map directly (field name == SQLite column name).
+# "severity" is intentionally excluded — it is stored as INTEGER and requires
+# int→label translation via Severity.from_rank() before exposure.
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
     "segment",
     "repo",
-    "severity",
     "confidence",
     "rule_id",
     "url",
@@ -108,6 +110,14 @@ def deserialise_row(row: Any) -> dict[str, Any]:
         val = row[col]
         if val is not None:
             metadata[col] = val
+
+    # severity: stored as INTEGER rank; translate back to label string.
+    sev_val = row["severity"]
+    if sev_val is not None:
+        try:
+            metadata["severity"] = Severity.from_rank(int(sev_val)).label
+        except (ValueError, TypeError):
+            metadata["severity"] = sev_val
 
     # Renamed + aliased columns: expose under BOTH the SQLite name
     # and the ChromaDB-compatible name so --fields works with either.

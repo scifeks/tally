@@ -6,6 +6,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from domain.findings.severity import Severity
 from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
@@ -84,6 +85,14 @@ class FindingRepository:
                     continue
                 if key in _DIRECT_COLUMNS:
                     named[key] = str(val) if val is not None else None
+                elif key == "severity":
+                    if val is not None:
+                        try:
+                            named["severity"] = Severity.from_label(str(val)).rank
+                        except ValueError:
+                            named["severity"] = None
+                    else:
+                        named["severity"] = None
                 elif key == "file_path":
                     named["file"] = str(val) if val is not None else None
                 elif key == "lockfile":
@@ -238,7 +247,12 @@ class FindingRepository:
             row = conn.execute(
                 "SELECT * FROM findings WHERE id = ?", (finding_id,)
             ).fetchone()
-            return dict(row) if row is not None else None
+        if row is None:
+            return None
+        result = dict(row)
+        if result.get("severity") is not None:
+            result["severity"] = Severity.from_rank(int(result["severity"])).label
+        return result
 
     def get_findings(
         self,
@@ -331,7 +345,7 @@ class FindingRepository:
                 (
                     confidence,
                     finding_type_db,
-                    severity,
+                    Severity.from_label(severity).rank,
                     now_iso,
                     now_iso,
                     updated_meta,
@@ -415,7 +429,10 @@ class FindingRepository:
 
         for col, val in column_updates.items():
             set_parts.append(f"{col} = ?")
-            params.append(val)
+            if col == "severity" and val is not None:
+                params.append(Severity.from_label(str(val)).rank)
+            else:
+                params.append(val)
 
         set_parts.extend(["meta = ?", "triaged_by = 'analyst_web'", "triaged_at = ?"])
         params.extend([updated_meta, now_iso])
@@ -448,7 +465,10 @@ class FindingRepository:
         params: list[Any] = []
         for col, val in fields.items():
             set_parts.append(f"{col} = ?")
-            params.append(val)
+            if col == "severity" and val is not None:
+                params.append(Severity.from_label(str(val)).rank)
+            else:
+                params.append(val)
         set_parts.extend(["triaged_by = 'analyst_web'", "triaged_at = ?"])
         params.append(now_iso)
 
@@ -559,7 +579,10 @@ class FindingRepository:
 
         for col, val in column_updates.items():
             set_parts.append(f"{col} = ?")
-            params.append(val)
+            if col == "severity" and val is not None:
+                params.append(Severity.from_label(str(val)).rank)
+            else:
+                params.append(val)
 
         params.append(finding_id)
         sql_upd = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"

@@ -2,14 +2,6 @@
 
 from __future__ import annotations
 
-_SEVERITY_ORDER: tuple[str, ...] = (
-    "critical",
-    "high",
-    "medium",
-    "low",
-    "informational",
-)
-
 
 def resolve_prefix(abbreviation: str, global_prefix: str) -> str:
     """Resolve the effective finding ID prefix.

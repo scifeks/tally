@@ -4,13 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-_SEVERITY_ORDER: tuple[str, ...] = (
-    "critical",
-    "high",
-    "medium",
-    "low",
-    "informational",
-)
+from domain.findings.severity import Severity
 
 _SEVERITY_COLORS: dict[str, str] = {
     "critical": "#c0392b",
@@ -49,12 +43,12 @@ class CSSChartRenderer(ChartRenderer):
     """
 
     def severity_distribution(self, counts: dict[str, int]) -> str:
-        total = sum(counts.get(s, 0) for s in _SEVERITY_ORDER)
+        total = sum(counts.get(s.label, 0) for s in Severity.all_ordered())
 
         rows: list[str] = []
-        for severity in _SEVERITY_ORDER:
-            count = counts.get(severity, 0)
-            color = _SEVERITY_COLORS[severity]
+        for sev in Severity.all_ordered():
+            count = counts.get(sev.label, 0)
+            color = _SEVERITY_COLORS[sev.label]
             if total > 0:
                 raw_pct = count / total * 100
                 bar_pct = max(_MIN_BAR_PCT, raw_pct)
@@ -63,7 +57,7 @@ class CSSChartRenderer(ChartRenderer):
 
             rows.append(
                 f'<div class="tally-chart-row">'
-                f'<span class="tally-chart-label">{severity.capitalize()}</span>'
+                f'<span class="tally-chart-label">{sev.label.capitalize()}</span>'
                 f'<div class="tally-chart-track">'
                 f'<div class="tally-chart-bar" style="width:{bar_pct:.1f}%;'
                 f'background:{color};"></div>'

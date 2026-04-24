@@ -88,7 +88,7 @@ class TestUpdateFinding:
                 (fid,),
             ).fetchone()
         assert row["confidence"] == "probable"
-        assert row["severity"] == "high"
+        assert row["severity"] == 1
         assert row["triaged_by"] == "claude-code"
 
     def test_raises_for_missing_id(self, repo: FindingRepository) -> None:

@@ -27,7 +27,7 @@ async def test_valid_update_returns_true_and_persists(
         db_row = conn.execute("SELECT * FROM findings WHERE id = ?", (fid,)).fetchone()
 
     assert db_row["confidence"] == "probable"
-    assert db_row["severity"] == "high"
+    assert db_row["severity"] == 1
     assert db_row["enriched"] == 1
     assert db_row["triaged_by"] == "claude-code"
     assert db_row["triaged_at"] is not None

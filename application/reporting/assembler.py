@@ -12,11 +12,12 @@ import jinja2
 from application.reporting.attack_surface import AttackSurfaceBuilder
 from application.reporting.charts import get_chart_renderer
 from application.reporting.draft_query import DraftQueryService, _parse_meta
-from application.reporting.findings_builder import _SEVERITY_ORDER, FindingsBuilder
+from application.reporting.findings_builder import FindingsBuilder
 from application.reporting.pdf import get_pdf_renderer
 from application.reporting.resolver import DraftResolver
 from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
+from domain.findings.severity import Severity
 from domain.reporting.context import ReportContext
 from infrastructure.store import make_store
 
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
+_SEVERITY_RANKS = {s.label: s.rank for s in Severity.all_ordered()}
 
 # Human-readable labels for the confidentiality blurb's {{engagement_type}}.
 _TESTING_TYPE_LABELS: dict[str, str] = {
@@ -174,7 +176,7 @@ class ReportAssembler:
         code_sorted = sorted(
             code_findings_raw,
             key=lambda f: (
-                _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 99),
+                _SEVERITY_RANKS.get((f.get("severity") or "").lower(), 99),
                 (_parse_meta(f).get("title") or f.get("rule_id") or "").lower(),
             ),
         )

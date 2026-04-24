@@ -36,7 +36,7 @@ class TriageBatchRepository:
                     json_extract(meta, '$.alert_name') AS alert_name
                 FROM findings
                 WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
-                ORDER BY severity DESC, url, json_extract(meta, '$.risk_type')
+                ORDER BY severity ASC, url, json_extract(meta, '$.risk_type')
             """
         elif segment == "sast":
             sql = """
@@ -50,7 +50,7 @@ class TriageBatchRepository:
                 FROM findings
                 WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
                 ORDER BY
-                    severity DESC,
+                    severity ASC,
                     file,
                     CAST(json_extract(meta, '$.line_start') AS INTEGER)
             """
