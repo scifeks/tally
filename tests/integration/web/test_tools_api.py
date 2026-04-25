@@ -79,13 +79,17 @@ async def tools_v1_client(tmp_path: Path):
     app.state.connection_factory = factory
     app.state.rag_engine = rag_mock
 
+    row = app.state.project_registry.resolve_by_name("testproject")
+    assert row is not None
+    project_id = int(row["id"])
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
         base_url=f"http://127.0.0.1:{TEST_PORT}",
     ) as client:
         mut_headers = await _authenticate(client)
-        yield client, mut_headers, tmp_path
+        yield client, mut_headers, tmp_path, project_id
 
 
 def _make_unauthed_app(tmp_path: Path) -> Any:
@@ -151,15 +155,15 @@ class TestToolsCatalog:
 
 class TestToolOverrides:
     async def test_overrides_empty_when_no_file(self, tools_v1_client) -> None:
-        client, _, _ = tools_v1_client
-        resp = await client.get("/api/v1/projects/testproject/tools/overrides")
+        client, _, _, project_id = tools_v1_client
+        resp = await client.get(f"/api/v1/projects/{project_id}/tools/overrides")
         assert resp.status_code == 200
         data = resp.json()
         assert data["items"] == []
         assert data["total"] == 0
 
     async def test_overrides_returns_project_entries(self, tools_v1_client) -> None:
-        client, _, tmp_path = tools_v1_client
+        client, _, tmp_path, project_id = tools_v1_client
         overrides = {
             "bandit": {
                 "type": "repo",
@@ -180,7 +184,7 @@ class TestToolOverrides:
         )
         commands_path.write_text(json.dumps(overrides))
 
-        resp = await client.get("/api/v1/projects/testproject/tools/overrides")
+        resp = await client.get(f"/api/v1/projects/{project_id}/tools/overrides")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 2
@@ -197,7 +201,7 @@ class TestToolOverrides:
         assert nuclei["container"]["tool_path"] == "/usr/bin/nuclei"
 
     async def test_overrides_strips_empty_path(self, tools_v1_client) -> None:
-        client, _, tmp_path = tools_v1_client
+        client, _, tmp_path, project_id = tools_v1_client
         overrides = {
             "nuclei": {
                 "type": "api",
@@ -213,14 +217,14 @@ class TestToolOverrides:
         )
         commands_path.write_text(json.dumps(overrides))
 
-        resp = await client.get("/api/v1/projects/testproject/tools/overrides")
+        resp = await client.get(f"/api/v1/projects/{project_id}/tools/overrides")
         assert resp.status_code == 200
         item = resp.json()["items"][0]
         assert item["path"] is None
 
     async def test_overrides_404_unknown_project(self, tools_v1_client) -> None:
-        client, _, _ = tools_v1_client
-        resp = await client.get("/api/v1/projects/nonexistent/tools/overrides")
+        client, _, _, _ = tools_v1_client
+        resp = await client.get("/api/v1/projects/9999/tools/overrides")
         assert resp.status_code == 404
         assert "error" in resp.json()
 
@@ -233,7 +237,7 @@ class TestToolOverrides:
             transport=transport,
             base_url=f"http://127.0.0.1:{TEST_PORT}",
         ) as client:
-            resp = await client.get("/api/v1/projects/testproject/tools/overrides")
+            resp = await client.get("/api/v1/projects/9999/tools/overrides")
         assert resp.status_code in (401, 403)
 
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.reporting.blurbs import load_blurb
+from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from application.ports.user_prompt import UserPromptPort
@@ -30,9 +31,9 @@ class DraftResolver:
     def __init__(
         self, project: str, base_path: str | Path, prompt: UserPromptPort
     ) -> None:
-        root = Path(base_path) / "projects" / project / "reports"
-        self._draft_dir = root / "draft"
-        self._reviewed_dir = root / "reviewed"
+        paths = ProjectPaths.from_canonical(base_path, project)
+        self._draft_dir = paths.reports_draft_dir
+        self._reviewed_dir = paths.reports_dir / "reviewed"
         self._prompt = prompt
 
     # ------------------------------------------------------------------ #

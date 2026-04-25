@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.zap import (
     parse_zap_json,
@@ -174,13 +175,9 @@ class ZAPLocalTool(BaseZapTool):
         assert context.repo is not None
         repo = context.repo
 
-        output_dir = (
-            Path(context.base_path)
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "zap"
-        )
+        output_dir = ProjectPaths.from_canonical(
+            context.base_path, context.project_name
+        ).tool_output_dir("zap")
         output_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{repo.name}_{ts}_report.json")

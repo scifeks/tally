@@ -15,6 +15,7 @@ from application.reporting.risk_level import compute_risk_level
 from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from core.llm.factory import get_llm_provider
+from core.project_paths import ProjectPaths
 from infrastructure.store import make_store
 
 if TYPE_CHECKING:
@@ -107,7 +108,7 @@ def generate_draft(
         )
         return
 
-    draft_dir = Path(base_path) / "projects" / project / "reports" / "draft"
+    draft_dir = ProjectPaths.from_canonical(base_path, project).reports_draft_dir
     draft_dir.mkdir(parents=True, exist_ok=True)
 
     llm = get_llm_provider("report", base_path)

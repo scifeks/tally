@@ -16,6 +16,7 @@ from application.locking import LockRegistry, get_registry
 from application.tools.registry import tool_registry
 from core.config.manager import ConfigManager as _ConfigManager
 from core.config.schemas.global_config import MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
+from core.project_paths import ProjectPaths
 
 try:
     _cfg = _ConfigManager(str(Path(__file__).parent.parent.parent)).global_config
@@ -63,9 +64,9 @@ class TriageRunner:
     @classmethod
     def for_project(cls, project: str, app_root: Path | None = None) -> TriageRunner:
         root = app_root or _APP_ROOT
-        db = root / "projects" / project / "sqlite" / "findings.db"
-        if not db.exists():
-            raise FileNotFoundError(f"Project database not found: {db}")
+        paths = ProjectPaths.from_canonical(root, project)
+        if not paths.findings_db.exists():
+            raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
         from infrastructure.store import make_store
 
         run_repo, _, triage_repo, audit_repo = make_store(root, project)

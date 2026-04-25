@@ -7,11 +7,13 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from application.project.registry_service import ProjectRegistryService
 from application.repl import REPL
 from application.runtime import RuntimeDependencyService
 from application.startup.checker import DependencyChecker
 from application.tools.registry import discover_tools
 from infrastructure.runtime import ClaudeCodeProbe
+from infrastructure.store.project_registry import ProjectRegistryRepository
 
 _BASE_PATH = "."
 
@@ -35,6 +37,24 @@ def check_location_attestation(base_path: str) -> None:
         sys.exit(0)
     config_manager.global_config.location_attestation_confirmed = True
     config_manager.save_global_config(config_manager.global_config)
+
+
+def _build_project_registry(base_path: str) -> ProjectRegistryService:
+    repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
+    repo.init_schema()
+    svc = ProjectRegistryService(repo)
+    svc.sync(base_path)
+    return svc
+
+
+def _clear_active_project_file(base_path: str) -> None:
+    """Remove projects/.active so unclean shutdowns don't leak active state."""
+    from core.project_paths import ProjectPaths
+
+    try:
+        ProjectPaths.active_file(base_path).unlink(missing_ok=True)
+    except OSError as exc:
+        logging.getLogger(__name__).warning("Could not clear .active: %s", exc)
 
 
 if __name__ == "__main__":
@@ -107,7 +127,17 @@ if __name__ == "__main__":
         if not result.all_required_present:
             sys.exit(1)
 
+    # Build the project registry (creates tally.db on first run, syncs from disk).
+    project_registry = _build_project_registry(_BASE_PATH)
+
+    # Clean-slate guarantee against unclean shutdown.
+    _clear_active_project_file(_BASE_PATH)
+
     try:
-        REPL(base_path=_BASE_PATH, runtime_service=runtime_service).run()
+        REPL(
+            base_path=_BASE_PATH,
+            runtime_service=runtime_service,
+            project_registry=project_registry,
+        ).run()
     except KeyboardInterrupt:
         pass

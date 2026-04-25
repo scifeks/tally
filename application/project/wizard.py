@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from core.config import Repository
 from core.config.schemas.repository import RepoAuth
+from core.project_paths import ProjectPaths
 from infrastructure.tools.wrappers.utils.manifest_check import (
     LANGUAGE_MANIFESTS,
     has_dependency_manifests,
@@ -254,6 +255,7 @@ class InteractiveProjectWizard:
             self._manager.save_project(
                 name, repositories, company_name, department_name, abbreviation
             )
+            self._manager.registry.register(name, str(self._manager.base_path))
 
             count = len(repositories)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
@@ -466,14 +468,8 @@ class InteractiveProjectWizard:
             )
 
             oas3_path = existing.oas3_path
-            endpoints_dir = (
-                self._manager.base_path
-                / "projects"
-                / project_name
-                / "config"
-                / "endpoints"
-                / name
-            )
+            paths = ProjectPaths.from_canonical(self._manager.base_path, project_name)
+            endpoints_dir = paths.endpoints_config_dir / name
             originals_dir = endpoints_dir / "original"
 
             if existing.oas3_path:
@@ -670,14 +666,8 @@ class InteractiveProjectWizard:
         )
 
         src = Path(repo.oas3_path)
-        endpoints_dir = (
-            self._manager.base_path
-            / "projects"
-            / project_name
-            / "config"
-            / "endpoints"
-            / repo.name
-        )
+        paths = ProjectPaths.from_canonical(self._manager.base_path, project_name)
+        endpoints_dir = paths.endpoints_config_dir / repo.name
         originals_dir = endpoints_dir / "original"
         try:
             oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)

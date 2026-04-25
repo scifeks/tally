@@ -48,6 +48,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.xsstrike import (
     parse_xsstrike_log,
@@ -168,13 +169,9 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         assert context.repo is not None
         repo = context.repo
 
-        output_dir = (
-            Path(context.base_path).resolve()
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "xsstrike"
-        )
+        output_dir = ProjectPaths.from_canonical(
+            Path(context.base_path).resolve(), context.project_name
+        ).tool_output_dir("xsstrike")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")

@@ -73,20 +73,22 @@ class ProjectCommands:
 
     def cmd_projects(self, _cmd: str, _args: list[str]) -> None:
         """List all projects in a Rich table."""
-        projects = self.repl.projects.list_projects()
+        rows = self.repl.project_registry.list_active()
         active = self.repl.active_project
 
-        if not projects:
+        if not rows:
             self.repl.console.print("[yellow]No projects found.[/yellow]")
             return
 
         table = Table(show_header=True, header_style="bold")
+        table.add_column("Id", style="white", justify="right")
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Created", style="white")
         table.add_column("Repositories", style="white", justify="right")
         table.add_column("Active", style="green", justify="center")
 
-        for name in projects:
+        for row in rows:
+            name = row["name"]
             info = self.repl.projects.get_project_info(name)
             created = ""
             repo_count = "0"
@@ -96,7 +98,9 @@ class ProjectCommands:
 
             display_name = f"→ {name}" if name == active else name
             active_marker = "✓" if name == active else ""
-            table.add_row(display_name, created, repo_count, active_marker)
+            table.add_row(
+                str(row["id"]), display_name, created, repo_count, active_marker
+            )
 
         self.repl.console.print(table)
 
