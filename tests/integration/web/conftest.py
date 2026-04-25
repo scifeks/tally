@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest_asyncio
 
+from infrastructure.events.bus import EventBus
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
@@ -83,6 +84,10 @@ async def app_client(tmp_path: Path):
     app = create_app(str(tmp_path), "testproject", HANDSHAKE, port=TEST_PORT)
     app.state.connection_factory = factory
     app.state.rag_engine = rag_mock
+
+    _bus = EventBus()
+    await _bus.register_job("finding", "finding")
+    app.state.event_bus = _bus
 
     # Seed the registry so project-scoped endpoints can resolve "testproject".
     project_id = app.state.project_registry.register("testproject", str(tmp_path))

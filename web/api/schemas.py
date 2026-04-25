@@ -281,6 +281,23 @@ class RuntimeDependenciesResponse(BaseModel):
     dependencies: list[RuntimeDependencyItem]
 
 
+class FindingHistoryItem(BaseModel):
+    id: int
+    finding_id: int
+    timestamp: str
+    before_values: dict
+    after_values: dict
+    inference_context: dict | None = None
+    source: str
+
+
+class FindingHistoryResponse(BaseModel):
+    items: list[FindingHistoryItem]
+    total: int
+    offset: int
+    limit: int
+
+
 class FindingsCountsResponse(BaseModel):
     by_severity: dict[str, int]
     by_domain: dict[str, int]
