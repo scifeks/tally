@@ -81,10 +81,18 @@ class TestStopCommand:
 
 
 class TestServeCommand:
-    def test_no_active_project_prints_error(self, capsys) -> None:
-        cmds = _make_cmds(active_project=None)
+    @patch("application.repl.commands.ui_commands.threading.Thread")
+    def test_no_active_project_does_not_block_serve(
+        self, _mock_thread, tmp_path, capsys
+    ) -> None:
+        """ui serve must work without an active REPL project — the SPA picks one."""
+        ui_dir = tmp_path / "ui"
+        ui_dir.mkdir()
+        cmds = _make_cmds(active_project=None, base_path=str(tmp_path))
+        cmds._server_factory = MagicMock(return_value=MagicMock(started=False))
         cmds.cmd_serve([])
-        assert "No active project" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "No active project" not in out
 
     def test_already_running_prints_error(self, capsys) -> None:
         cmds = _make_cmds()

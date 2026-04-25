@@ -1,9 +1,7 @@
 """Project management for tally Security Auditing REPL."""
 
 import datetime
-import os
 import shutil
-import tempfile
 from pathlib import Path
 
 from application.project.registry_service import ProjectRegistryService
@@ -21,7 +19,6 @@ class ProjectManager:
     ):
         self.base_path = Path(base_path)
         self.projects_dir = ProjectPaths.projects_dir(self.base_path)
-        self.active_file = ProjectPaths.active_file(self.base_path)
         if registry is None:
             registry = _build_default_registry(base_path)
         self.registry = registry
@@ -35,20 +32,16 @@ class ProjectManager:
         """Return sorted list of active project names from the registry."""
         return [row["name"] for row in self.registry.list_active()]
 
-    def get_active_project(self) -> str | None:
-        """Return the currently active project name, or None."""
-        if not self.active_file.exists():
-            return None
-        name = self.active_file.read_text().strip()
-        return name if name else None
-
     def switch_project(self, project_name: str) -> None:
-        """Set project_name as the active project."""
+        """Validate that project_name exists in the registry and is not archived.
+
+        Raises ValueError if the project is unknown. Callers update their own
+        in-memory active-project state after this returns successfully.
+        """
         row = self.registry.resolve_by_name(project_name)
         if row is None or row.get("archived_at"):
             raise ValueError(f"Project '{project_name}' does not exist.")
         self.projects_dir.mkdir(parents=True, exist_ok=True)
-        _atomic_write(self.active_file, project_name)
 
     def get_project_info(self, project_name: str) -> ProjectConfig | None:
         """Load and return ProjectConfig for project_name."""
@@ -63,14 +56,6 @@ class ProjectManager:
         if project_dir.exists():
             shutil.rmtree(project_dir)
         self.registry.deregister(project_name)
-
-        if self.active_file.exists():
-            try:
-                current = self.active_file.read_text().strip()
-                if current == project_name:
-                    self.active_file.unlink()
-            except OSError:
-                pass
 
     def delete_repository(self, project_name: str, repo_name: str) -> None:
         """Remove a repository from project_name by name."""
@@ -136,19 +121,3 @@ def _build_default_registry(base_path: str) -> ProjectRegistryService:
     svc = ProjectRegistryService(repo)
     svc.sync(base_path)
     return svc
-
-
-def _atomic_write(target: Path, content: str) -> None:
-    """Write content atomically via a sibling temp file + rename."""
-    target.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(prefix=target.name + ".", dir=str(target.parent))
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(content)
-        os.replace(tmp_path, str(target))
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise

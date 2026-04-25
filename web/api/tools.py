@@ -15,6 +15,7 @@ from core.project_paths import ProjectPaths
 from web.api._errors import NotFound
 from web.api.schemas import (
     DockerContainerResponse,
+    InstalledToolsResponse,
     RuntimeDependenciesResponse,
     RuntimeDependencyItem,
     ToolCatalogItem,
@@ -80,6 +81,19 @@ def get_tools_catalog() -> ToolCatalogResponse:
         for tool in tools
     ]
     return ToolCatalogResponse(items=items, total=len(items))
+
+
+@tools_v1_router.get("/installed", response_model=InstalledToolsResponse)
+def get_installed_tools(request: Request) -> InstalledToolsResponse:
+    """Return the set of tool wrappers whose binary was found at process start.
+
+    The probe runs once per process lifetime; the result is cached. The
+    SPA uses this to gate UI affordances (e.g. hide tools from the scan
+    picker when their binary isn't installed) before any project is
+    selected. Auth-only — no project context required.
+    """
+    port = request.app.state.installed_tools
+    return InstalledToolsResponse(installed=sorted(port.installed()))
 
 
 @projects_tools_v1_router.get(

@@ -270,7 +270,7 @@ async def test_detail_returns_tool_runs(app_client) -> None:
     repo = RunRepository(factory)
     run_id = _seed_run(factory, project_id=project_id)
     repo.add_tool_run(run_id=run_id, tool="gitleaks", repo="test-repo", domain="code")
-    resp = await client.get(f"/api/v1/scans/{run_id}")
+    resp = await client.get(f"/api/v1/projects/{project_id}/scans/{run_id}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == run_id
@@ -280,13 +280,13 @@ async def test_detail_returns_tool_runs(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_detail_404_for_missing_run(app_client) -> None:
-    client, *_ = app_client
-    resp = await client.get("/api/v1/scans/9999")
+    client, *_, _muth, project_id = app_client
+    resp = await client.get(f"/api/v1/projects/{project_id}/scans/9999")
     assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# POST /scans/{run_id}/cancel
+# POST /projects/{project_id}/scans/{run_id}/cancel
 # ---------------------------------------------------------------------------
 
 
@@ -299,7 +299,9 @@ async def test_cancel_active_run(app_client) -> None:
         run_id=run_id, project_id=project_id, cancel_token=token
     )
 
-    resp = await client.post(f"/api/v1/scans/{run_id}/cancel", headers=muth)
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/scans/{run_id}/cancel", headers=muth
+    )
     assert resp.status_code == 202
     assert resp.json()["status"] == "cancelling"
     assert token.is_set() is True
@@ -307,8 +309,10 @@ async def test_cancel_active_run(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_unknown_run_404(app_client) -> None:
-    client, *_, muth, _project_id = app_client
-    resp = await client.post("/api/v1/scans/9999/cancel", headers=muth)
+    client, *_, muth, project_id = app_client
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/scans/9999/cancel", headers=muth
+    )
     assert resp.status_code == 404
 
 
@@ -316,14 +320,31 @@ async def test_cancel_unknown_run_404(app_client) -> None:
 async def test_cancel_finished_run_409(app_client) -> None:
     client, _fid, _rag, factory, muth, project_id = app_client
     run_id = _seed_run(factory, project_id=project_id, status="done")
-    # Not registered in scan_run_registry, but row exists with status=done.
-    resp = await client.post(f"/api/v1/scans/{run_id}/cancel", headers=muth)
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/scans/{run_id}/cancel", headers=muth
+    )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "SCAN_NOT_CANCELLABLE"
 
 
+@pytest.mark.asyncio
+async def test_cancel_run_from_different_project_404(app_client) -> None:
+    """Cross-project run id must 404 even if the run exists in another project."""
+    client, _fid, _rag, factory, muth, project_id = app_client
+    other_run = _seed_run(factory, project_id=999, status="running")
+    token = CancellationToken()
+    get_scan_run_registry().register(
+        run_id=other_run, project_id=999, cancel_token=token
+    )
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/scans/{other_run}/cancel", headers=muth
+    )
+    assert resp.status_code == 404
+    assert not token.is_set()
+
+
 # ---------------------------------------------------------------------------
-# POST /scans/cancel-all
+# POST /projects/{project_id}/scans/cancel-all
 # ---------------------------------------------------------------------------
 
 
@@ -343,8 +364,7 @@ async def test_cancel_all_cancels_active_runs_for_project(
     reg.register(run_id=other_run, project_id=99, cancel_token=t3)
 
     resp = await client.post(
-        "/api/v1/scans/cancel-all",
-        json={"project_id": project_id},
+        f"/api/v1/projects/{project_id}/scans/cancel-all",
         headers=muth,
     )
     assert resp.status_code == 200
@@ -369,7 +389,7 @@ async def test_progress_endpoint(app_client) -> None:
     repo.update_tool_run(tr1, status="done")
     repo.update_tool_run(tr2, status="running")
 
-    resp = await client.get(f"/api/v1/scans/{run_id}/progress")
+    resp = await client.get(f"/api/v1/projects/{project_id}/scans/{run_id}/progress")
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == run_id
@@ -380,8 +400,8 @@ async def test_progress_endpoint(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_progress_404_for_missing_run(app_client) -> None:
-    client, *_ = app_client
-    resp = await client.get("/api/v1/scans/9999/progress")
+    client, *_, _muth, project_id = app_client
+    resp = await client.get(f"/api/v1/projects/{project_id}/scans/9999/progress")
     assert resp.status_code == 404
 
 
@@ -443,10 +463,10 @@ async def test_sse_filters_events_by_project_id(app_client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_sse_requires_project_or_run(app_client) -> None:
-    client, *_ = app_client
-    resp = await client.get("/api/v1/scans/events")
-    assert resp.status_code == 422
+async def test_sse_unknown_project_404(app_client) -> None:
+    client, *_, _muth, _project_id = app_client
+    resp = await client.get("/api/v1/projects/9999/scans/events")
+    assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------

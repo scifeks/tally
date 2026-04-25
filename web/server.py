@@ -16,20 +16,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from application.project.registry_service import ProjectRegistryService
 from application.rag.engine import RAGEngine
 from application.runtime.dependency_service import RuntimeDependencyService
-from core.project_paths import ProjectPaths
 from infrastructure.events.bus import EventBus
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
-from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.project_registry import ProjectRegistryRepository
+from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
 from web.api.auth import router as auth_router
 from web.api.config import router as config_router
 from web.api.findings import v1_router as findings_v1_router
 from web.api.locks import router as locks_router
-from web.api.projects import router as projects_router
 from web.api.projects import v1_router as projects_v1_router
-from web.api.scans import scans_v1_router
 from web.api.scans import v1_router as scans_projects_v1_router
 from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
 from web.api.triage import v1_router as triage_projects_v1_router
@@ -63,7 +60,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app(
     base_path: str,
-    project_name: str,
     handshake_token: str,
     *,
     port: int,
@@ -71,9 +67,13 @@ def create_app(
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
+    The server is project-agnostic: every domain endpoint takes
+    ``:project_id`` in the path and resolves it against the project
+    registry per request. RAGEngine instances are lazily built and
+    cached per project.
+
     Args:
         base_path: Tally base directory (same as ``ConfigManager.base_path``).
-        project_name: Active project name.
         handshake_token: One-time token; SPA exchanges it for session cookies.
         port: Bound port — used by Host/Origin middleware allowlists.
         allowed_origins: CORS allow-list. Empty or None disables CORS entirely.
@@ -88,7 +88,6 @@ def create_app(
     registry.register(handshake_token)
 
     app.state.base_path = base_path
-    app.state.project_name = project_name
     app.state.handshake_registry = registry
     app.state.session_store = SessionStore()
 
@@ -98,21 +97,9 @@ def create_app(
     project_registry.sync(base_path)
     app.state.project_registry = project_registry
 
-    row = project_registry.resolve_by_name(project_name)
-    if row is None:
-        paths = ProjectPaths.from_canonical(base_path, project_name)
-    else:
-        paths = ProjectPaths.from_registry_row(row)
-    app.state.project_paths = paths
-    app.state.connection_factory = ConnectionFactory(paths.findings_db)
+    app.state.rag_engine_cache = {}
 
-    rag_engine: RAGEngine | None
-    try:
-        rag_engine = RAGEngine(project_name=project_name, base_path=base_path)
-    except Exception as exc:
-        logger.warning("RAGEngine init failed — Chroma sync will be disabled: %s", exc)
-        rag_engine = None
-    app.state.rag_engine = rag_engine
+    app.state.installed_tools = InstalledToolsProbe()
 
     app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
 
@@ -120,13 +107,11 @@ def create_app(
     app.include_router(config_router, prefix="/api/config")
     app.include_router(findings_v1_router, prefix="/api/v1/projects")
     app.include_router(locks_router, prefix="/api/v1/projects")
-    app.include_router(projects_router, prefix="/api/projects")
     app.include_router(projects_v1_router, prefix="/api/v1/projects")
     app.include_router(tools_v1_router, prefix="/api/v1/tools")
     app.include_router(projects_tools_v1_router, prefix="/api/v1/projects")
     app.include_router(runtime_v1_router, prefix="/api/v1")
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
-    app.include_router(scans_v1_router, prefix="/api/v1/scans")
     app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
@@ -142,9 +127,6 @@ def create_app(
     )
     app.add_middleware(HostHeaderMiddleware, port=port)
 
-    # CORS dev-only escape hatch for the Vite dev server.
-    # Production posture: same-origin only (SPA served from web/static/).
-    # Never allow "*" — explicit literal origins from config only.
     if allowed_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -157,8 +139,6 @@ def create_app(
         )
         logger.info("CORS allow-list installed for origins: %s", allowed_origins)
 
-    # Outermost: access log wraps every other layer so latency covers the
-    # full request and CORS preflight rejections are still logged.
     app.add_middleware(AccessLogMiddleware)
 
     static_dir = Path(__file__).parent / "static"
@@ -177,6 +157,30 @@ def create_app(
         )
 
     return app
+
+
+def get_rag_engine(app: FastAPI, project_name: str, base_path: str) -> RAGEngine | None:
+    """Lazily build and cache a RAGEngine per project_name.
+
+    Returns None if construction fails (e.g. ChromaDB or Ollama
+    unavailable); callers must handle that as 'sync skipped'.
+    """
+    cache: dict[str, RAGEngine | None] = app.state.rag_engine_cache
+    if project_name in cache:
+        return cache[project_name]
+    try:
+        engine: RAGEngine | None = RAGEngine(
+            project_name=project_name, base_path=base_path
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "RAGEngine init failed for %s — Chroma sync disabled: %s",
+            project_name,
+            exc,
+        )
+        engine = None
+    cache[project_name] = engine
+    return engine
 
 
 # todo: Add cross-midnight rollover, rquest-ID inner layer correlation
@@ -228,7 +232,6 @@ def _attach_access_logging(base_path: str) -> None:
 
 def create_server(
     base_path: str,
-    project_name: str,
     port: int,
     handshake_token: str,
     host: str = "127.0.0.1",
@@ -238,23 +241,11 @@ def create_server(
 
     Signal handling is disabled (``capture_signals`` replaced with
     ``contextlib.nullcontext``) so the server can start from a non-main thread.
-
-    Args:
-        base_path: Tally base directory.
-        project_name: Active project name.
-        port: TCP port to bind.
-        handshake_token: One-time URL token; SPA exchanges it for session cookies.
-        host: Bind host (default ``"127.0.0.1"``).
-        allowed_origins: CORS allow-list passed to ``create_app``.
-
-    Returns:
-        A configured ``uvicorn.Server`` instance (not yet started).
     """
     _attach_file_logging(base_path)
     _attach_access_logging(base_path)
     app = create_app(
         base_path,
-        project_name,
         handshake_token,
         port=port,
         allowed_origins=allowed_origins,
@@ -267,21 +258,13 @@ def create_server(
 
 def start(
     base_path: str,
-    project_name: str,
     port: int,
     handshake_token: str,
     host: str = "127.0.0.1",
     allowed_origins: list[str] | None = None,
 ) -> None:
-    """Launch the web UI server (blocking).
-
-    Thin wrapper around ``create_server()`` + ``asyncio.run()``.  Intended for
-    use in a daemon thread.  Prefer ``create_server()`` when you need a handle
-    to the server for graceful shutdown via ``server.should_exit = True``.
-    """
+    """Launch the web UI server (blocking)."""
     import asyncio
 
-    server = create_server(
-        base_path, project_name, port, handshake_token, host, allowed_origins
-    )
+    server = create_server(base_path, port, handshake_token, host, allowed_origins)
     asyncio.run(server.serve())

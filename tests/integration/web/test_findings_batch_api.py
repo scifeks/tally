@@ -63,9 +63,8 @@ async def batch_client(tmp_path: Path):
         ]
 
     rag_mock = MagicMock()
-    app = create_app(str(tmp_path), "testproject", HANDSHAKE, port=TEST_PORT)
-    app.state.connection_factory = factory
-    app.state.rag_engine = rag_mock
+    app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    app.state.rag_engine_cache = {"testproject": rag_mock}
 
     _bus = EventBus()
     await _bus.register_job("finding", "finding")

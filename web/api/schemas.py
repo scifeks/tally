@@ -184,7 +184,6 @@ class ProjectListItem(BaseModel):
     name: str
     code: str
     created_at: str
-    is_active: bool
 
 
 class ProjectListResponse(BaseModel):
@@ -252,6 +251,12 @@ class ToolCatalogItem(BaseModel):
 class ToolCatalogResponse(BaseModel):
     items: list[ToolCatalogItem]
     total: int
+
+
+class InstalledToolsResponse(BaseModel):
+    """Names of tool wrappers whose binary was probed at process startup."""
+
+    installed: list[str]
 
 
 class ToolOverrideItem(BaseModel):
@@ -425,14 +430,6 @@ class ScanDetailResponse(BaseModel):
 class ScanCancelResponse(BaseModel):
     id: int
     status: str
-
-
-class ScanCancelAllRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    project_id: int = Field(
-        validation_alias=AliasChoices("project_id", "projectId"),
-    )
 
 
 class ScanCancelAllResponse(BaseModel):
