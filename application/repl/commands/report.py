@@ -63,7 +63,14 @@ class ReportCommand:
         Testing types: white_box, grey_box, black_box (default: white_box).
         Default output: projects/<project>/report/<project>-report.pdf.
         """
-        from application.reporting.assembler import ReportAssembler
+        from application.repl.adapters.rich_console_prompt import (
+            RichConsolePromptAdapter,
+        )
+        from application.reporting.orchestrator import (
+            ReportOverwriteDenied,
+            ReportRequest,
+            run_report,
+        )
         from application.reporting.pdf import PDFRenderError
         from application.reporting.resolver import SectionMissingError
 
@@ -85,42 +92,38 @@ class ReportCommand:
             report_dir.mkdir(parents=True, exist_ok=True)
             output_path = str(report_dir / f"{self.repl.active_project}-report.pdf")
 
+        force_overwrite = False
         if Path(output_path).exists():
-            answer = input(
-                f"Report already exists at {output_path!r}. Overwrite? [y/N] "
-            )
-            if answer.strip().lower() not in ("y", "yes"):
+            prompt = RichConsolePromptAdapter()
+            self.repl.console.print(f"Report already exists at {output_path!r}.")
+            if not prompt.confirm("Overwrite?"):
                 self.repl.console.print("[yellow]Assembly cancelled.[/yellow]")
                 return
-
-        from application.repl.adapters.rich_console_prompt import (
-            RichConsolePromptAdapter,
-        )
-
-        assembler = ReportAssembler(
-            project=self.repl.active_project,
-            base_path=self.repl.base_path,
-            prompt=RichConsolePromptAdapter(),
-            testing_type=testing_type,
-            engagement_date=engagement_date,
-        )
+            force_overwrite = True
 
         logger.info("Assembling report for project %r", self.repl.active_project)
+        request = ReportRequest(
+            project=self.repl.active_project,
+            base_path=Path(self.repl.base_path),
+            format="pdf",
+            output_path=Path(output_path),
+            testing_type=testing_type,
+            engagement_date=engagement_date,
+            force_overwrite=force_overwrite,
+        )
         try:
-            context = assembler.build_context()
+            with self.repl.console.status("Rendering PDF..."):
+                run_report(request, prompt=RichConsolePromptAdapter())
         except SectionMissingError as exc:
             self.repl.console.print(f"[red]Section missing:[/red] {exc}")
             return
-
-        logger.info("Rendering PDF to %r", output_path)
-        try:
-            with self.repl.console.status("Rendering PDF..."):
-                pdf_bytes = assembler.render_pdf(context)
         except PDFRenderError as exc:
             self.repl.console.print(f"[red]PDF render error:[/red] {exc}")
             return
+        except ReportOverwriteDenied as exc:
+            self.repl.console.print(f"[yellow]{exc}[/yellow]")
+            return
 
-        Path(output_path).write_bytes(pdf_bytes)
         logger.info("PDF written: %s", output_path)
         self.repl.console.print(f"[green]Report saved:[/green] {output_path}")
 

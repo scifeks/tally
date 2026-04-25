@@ -527,3 +527,76 @@ class TriageDetailResponse(BaseModel):
 class TriageCancelResponse(BaseModel):
     scan_run_id: int
     status: str
+
+
+# ---------------------------------------------------------------------------
+# Reports (Phase 7) — endpoints.md §11
+# ---------------------------------------------------------------------------
+
+
+class ReportGenerateRequest(BaseModel):
+    """POST body for /api/v1/projects/{id}/reports/generate."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    format: str = Field(default="pdf")
+    testing_type: str = Field(
+        default="white_box",
+        validation_alias=AliasChoices("testing_type", "testingType"),
+    )
+    engagement_date: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("engagement_date", "engagementDate"),
+    )
+    output_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("output_path", "outputPath"),
+    )
+    force_overwrite: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("force_overwrite", "forceOverwrite"),
+    )
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, v: str) -> str:
+        valid = {"pdf", "markdown", "html", "json"}
+        if v not in valid:
+            raise ValueError(f"format must be one of {sorted(valid)}")
+        return v
+
+    @field_validator("testing_type")
+    @classmethod
+    def validate_testing_type(cls, v: str) -> str:
+        valid = {"white_box", "grey_box", "black_box"}
+        if v not in valid:
+            raise ValueError(f"testing_type must be one of {sorted(valid)}")
+        return v
+
+
+class ReportSummary(BaseModel):
+    id: int
+    project_id: int | None
+    scan_run_id: int | None
+    format: str
+    filename: str
+    status: str
+    pinned: bool
+    file_size_bytes: int | None
+    error: str | None
+    created_at: str | None
+    started_at: str | None
+    finished_at: str | None
+    download_url: str | None
+
+
+class ReportsListResponse(BaseModel):
+    items: list[ReportSummary]
+    total: int
+    offset: int
+    limit: int
+
+
+class ReportCancelResponse(BaseModel):
+    id: int
+    status: str

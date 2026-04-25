@@ -40,6 +40,15 @@ class GlobalConfig(BaseModel):
         description="Max seconds for a single Claude triage session",
     )
     report_finding_prefix: str = Field(default="TAL")
+    report_retention_count: int = Field(
+        default=10,
+        ge=0,
+        description=(
+            "Maximum non-pinned reports retained per project; "
+            "older artifacts are deleted after each successful generation. "
+            "Set to 0 to disable retention sweeping."
+        ),
+    )
 
     # Web UI / dev server
     web_ui_host: str = Field(default="127.0.0.1")

@@ -27,6 +27,7 @@ from web.api.config import router as config_router
 from web.api.findings import v1_router as findings_v1_router
 from web.api.locks import router as locks_router
 from web.api.projects import v1_router as projects_v1_router
+from web.api.reports import v1_router as reports_projects_v1_router
 from web.api.scans import v1_router as scans_projects_v1_router
 from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
 from web.api.triage import v1_router as triage_projects_v1_router
@@ -49,6 +50,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await bus.register_job("finding", "finding")
     await bus.register_job("scan", "scan")
     await bus.register_job("triage", "triage")
+    await bus.register_job("report", "report")
     yield
     with contextlib.suppress(Exception):
         await bus.close_job("finding")
@@ -56,6 +58,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await bus.close_job("scan")
     with contextlib.suppress(Exception):
         await bus.close_job("triage")
+    with contextlib.suppress(Exception):
+        await bus.close_job("report")
 
 
 def create_app(
@@ -113,6 +117,7 @@ def create_app(
     app.include_router(runtime_v1_router, prefix="/api/v1")
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(reports_projects_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF
