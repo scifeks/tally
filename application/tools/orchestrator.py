@@ -127,6 +127,7 @@ class ScanOrchestrator:
             run_id=self._run_id,
             prompt=self._prompt,
             remaining_peers=remaining_peers,
+            project_id=self._project_id,
         )
 
     def _make_resources(self) -> ExecutionResources:
@@ -136,6 +137,7 @@ class ScanOrchestrator:
             factory=self._factory,
             event_bus=self._event_bus,
             display=self.display,
+            event_sink=self._event_sink,
         )
 
     def _scan_lock(self) -> AbstractContextManager[None]:
@@ -292,10 +294,100 @@ class ScanOrchestrator:
             )
         )
 
+    def run_scoped_scan(
+        self,
+        repo_names: list[str] | None = None,
+        tool_names: list[str] | None = None,
+        domains: list[str] | None = None,
+        skip_tools: set[str] | None = None,
+    ) -> ScanSummary:
+        """Unified scoped-scan dispatch shared by REPL and HTTP API.
+
+        Mirrors the REPL's adapter-level loop semantics inside the core so
+        both adapters share one use case. Resolves ``effective_tools`` by
+        intersecting ``tool_names`` (default: all configured) with tools
+        whose domain is in ``domains`` (when given), then routes to the
+        existing scan-type strategies:
+
+        - repos given AND effective_tools given → nested loop of
+          ``ToolOnRepoScan`` over each (repo, tool) pair.
+        - repos given alone → loop of ``RepoScan`` per repo.
+        - effective_tools given alone → loop of ``ToolOnAllReposScan``
+          per tool.
+        - neither given → ``FullScan`` with ``skip_tools`` exclusion.
+
+        Emits a single ``RunStarted``/``RunCompleted`` pair around the
+        whole scoped scan via the wrapping ``_run()`` shell.
+        """
+        from application.rag.ingestor import get_tool_domain
+
+        effective_tools: list[str] | None = None
+        if tool_names is not None or domains is not None:
+            all_configured = list(self.registry.list_tool_names())
+            candidates = list(tool_names) if tool_names is not None else all_configured
+            if domains is not None:
+                candidates = [t for t in candidates if get_tool_domain(t) in domains]
+            effective_tools = candidates
+
+        def _body() -> ScanSummary:
+            return self._scoped_body(repo_names, effective_tools, skip_tools)
+
+        return self._run(_body)
+
+    def _scoped_body(
+        self,
+        repo_names: list[str] | None,
+        effective_tools: list[str] | None,
+        skip_tools: set[str] | None,
+    ) -> ScanSummary:
+        """Run the scoped-scan matrix and aggregate per-pair summaries."""
+        if repo_names is not None and effective_tools is not None:
+            summary = _empty_summary()
+            total_pairs = len(repo_names) * len(effective_tools)
+            pair_idx = 0
+            for repo_name in repo_names:
+                for tool_name in effective_tools:
+                    remaining = total_pairs - pair_idx - 1
+                    pair_idx += 1
+                    addition = ToolOnRepoScan(tool_name, repo_name).execute(
+                        self._make_config(remaining_peers=remaining),
+                        self._make_resources(),
+                    )
+                    summary = _merge_summary(summary, addition)
+            return summary
+        if repo_names is not None:
+            summary = _empty_summary()
+            for repo_name in repo_names:
+                addition = RepoScan(repo_name, skip_tools or set()).execute(
+                    self._make_config(),
+                    self._make_resources(),
+                )
+                summary = _merge_summary(summary, addition)
+            return summary
+        if effective_tools is not None:
+            summary = _empty_summary()
+            for i, tool_name in enumerate(effective_tools):
+                remaining = len(effective_tools) - i - 1
+                addition = ToolOnAllReposScan(tool_name).execute(
+                    self._make_config(remaining_peers=remaining),
+                    self._make_resources(),
+                )
+                summary = _merge_summary(summary, addition)
+            return summary
+        return FullScan([], skip_tools or set()).execute(
+            self._make_config(),
+            self._make_resources(),
+        )
+
 
 def _summary_findings_count(summary: ScanSummary) -> int:
     """Best-effort total findings extracted from a ScanSummary."""
-    for attr in ("ingested_total", "total_findings", "findings_count"):
+    for attr in (
+        "findings_ingested",
+        "ingested_total",
+        "total_findings",
+        "findings_count",
+    ):
         val = getattr(summary, attr, None)
         if isinstance(val, int):
             return val
@@ -306,3 +398,34 @@ def _summary_findings_count(summary: ScanSummary) -> int:
         except Exception:
             return 0
     return 0
+
+
+def _empty_summary() -> ScanSummary:
+    """Zero-valued ScanSummary used as the fold seed in scoped scans."""
+    return ScanSummary(
+        total_tools_run=0,
+        total_tools_skipped=0,
+        total_tools_failed=0,
+        results=[],
+        duration_seconds=0.0,
+        findings_ingested=0,
+        findings_by_tool={},
+    )
+
+
+def _merge_summary(running: ScanSummary, addition: ScanSummary) -> ScanSummary:
+    """Combine two ScanSummary instances; merges findings_by_tool counts."""
+    merged_fbt = dict(running.findings_by_tool)
+    for tool, count in addition.findings_by_tool.items():
+        merged_fbt[tool] = merged_fbt.get(tool, 0) + count
+    return ScanSummary(
+        total_tools_run=running.total_tools_run + addition.total_tools_run,
+        total_tools_skipped=(
+            running.total_tools_skipped + addition.total_tools_skipped
+        ),
+        total_tools_failed=running.total_tools_failed + addition.total_tools_failed,
+        results=running.results + addition.results,
+        duration_seconds=running.duration_seconds + addition.duration_seconds,
+        findings_ingested=running.findings_ingested + addition.findings_ingested,
+        findings_by_tool=merged_fbt,
+    )
