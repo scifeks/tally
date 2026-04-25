@@ -33,8 +33,23 @@ def _init_store(db_path: Path) -> None:
     factory.init_schema()
 
 
+def _seed_scan_run(db_path: Path) -> None:
+    """Insert a minimal scan_runs row so triage has something to operate on.
+
+    Phase 6: triage runs against the latest scan_run; the runner raises
+    NoScanRunError if no scan_runs exist. These integration tests don't
+    care which scan_run id is used — they just need the lookup to
+    return something non-None.
+    """
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("INSERT INTO scan_runs (args) VALUES ('{}')")
+    conn.commit()
+    conn.close()
+
+
 def _make_db(db_path: Path, rows: list[tuple[str]]) -> None:
     _init_store(db_path)
+    _seed_scan_run(db_path)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     for (tool,) in rows:
@@ -51,6 +66,7 @@ def _make_db_active(
 ) -> None:
     """Seed active findings with (tool, repo, segment) tuples."""
     _init_store(db_path)
+    _seed_scan_run(db_path)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     for tool, repo, segment in rows:
@@ -318,7 +334,7 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "infrastructure.store.repositories.runs.RunRepository.create_run",
+            "infrastructure.store.repositories.runs.RunRepository.latest_run_id",
             return_value=run_id_a,
         ),
         patch("subprocess.run", return_value=mock_result),
@@ -358,10 +374,6 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
             return_value=1,
         ) as mock_create,
         patch(
-            "infrastructure.store.repositories.runs.RunRepository.create_run",
-            return_value=1,
-        ),
-        patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
@@ -385,10 +397,6 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
         patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             side_effect=RuntimeError("db locked"),
-        ),
-        patch(
-            "infrastructure.store.repositories.runs.RunRepository.create_run",
-            return_value=1,
         ),
         patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
@@ -416,10 +424,6 @@ def test_batch_count_reported(project_db, capsys) -> None:
         patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=3,
-        ),
-        patch(
-            "infrastructure.store.repositories.runs.RunRepository.create_run",
-            return_value=1,
         ),
         patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
