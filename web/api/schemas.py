@@ -315,3 +315,142 @@ class FindingsFacetsResponse(BaseModel):
     tools: list[str]
     repos: list[str]
     segments: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — Scans
+# ---------------------------------------------------------------------------
+
+
+class ScanConfigRepo(BaseModel):
+    id: str
+    name: str
+    source: str
+    location: str | None = None
+
+
+class ScanConfigTool(BaseModel):
+    id: str
+    name: str
+    domain: str
+    enabled: bool = True
+
+
+class ScanConfigResponse(BaseModel):
+    repos: list[ScanConfigRepo]
+    tools: list[ScanConfigTool]
+    domains: list[str]
+
+
+class ScanStartRequest(BaseModel):
+    """POST body for /api/v1/projects/{id}/scans.
+
+    All fields optional; empty arrays mean "scan everything" per
+    endpoints.md §9. Field names are camelCase to match the SSE/HTTP
+    contract; aliases accept snake_case for REPL/tooling parity.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    repoIds: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("repoIds", "repo_ids"),
+    )
+    toolIds: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("toolIds", "tool_ids"),
+    )
+    domains: list[str] = Field(default_factory=list)
+    skipToolIds: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("skipToolIds", "skip_tool_ids"),
+    )
+    skipEnrichment: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("skipEnrichment", "skip_enrichment"),
+    )
+
+
+class ScanRunSummary(BaseModel):
+    id: int
+    project_id: int | None
+    status: str | None
+    started_at: str | None
+    finished_at: str | None
+    repo_ids: list[str]
+    tool_ids: list[str]
+    domains: list[str]
+    findings_count: int | None
+    skip_enrichment: bool
+
+
+class ScansListResponse(BaseModel):
+    items: list[ScanRunSummary]
+    total: int
+    offset: int
+    limit: int
+
+
+class ToolRunItem(BaseModel):
+    id: int
+    run_id: int
+    tool: str | None
+    repo: str | None
+    domain: str | None
+    status: str | None
+    started_at: str | None
+    finished_at: str | None
+    duration: float | None
+    findings_count: int
+    enriched_count: int | None
+    total_to_enrich: int | None
+    exit_code: int | None
+    skip_reason: str | None
+
+
+class ScanDetailResponse(BaseModel):
+    id: int
+    project_id: int | None
+    status: str | None
+    started_at: str | None
+    finished_at: str | None
+    repo_ids: list[str]
+    tool_ids: list[str]
+    domains: list[str]
+    findings_count: int | None
+    skip_enrichment: bool
+    tool_runs: list[ToolRunItem]
+
+
+class ScanCancelResponse(BaseModel):
+    id: int
+    status: str
+
+
+class ScanCancelAllRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    project_id: int = Field(
+        validation_alias=AliasChoices("project_id", "projectId"),
+    )
+
+
+class ScanCancelAllResponse(BaseModel):
+    cancelled: list[int]
+
+
+class ToolRunsSummary(BaseModel):
+    queued: int
+    running: int
+    done: int
+    failed: int
+    skipped: int
+
+
+class ScanProgressResponse(BaseModel):
+    id: int
+    status: str | None
+    progress: int
+    current_segment: str | None
+    segment_label: str | None
+    tool_runs_summary: ToolRunsSummary
