@@ -1,6 +1,7 @@
 """Dependency checker for tally startup validation."""
 
 import importlib
+import importlib.metadata
 import inspect
 import sys
 from dataclasses import dataclass
@@ -36,18 +37,6 @@ def _parse_version(version_str: str) -> tuple[int, ...] | None:
         return tuple(int(p) for p in cleaned.split("."))
     except ValueError:
         return None
-
-
-# Map package names in requirements.txt to importable module names
-_PACKAGE_IMPORT_MAP = {
-    "pydantic": "pydantic",
-    "rich": "rich",
-    "prompt_toolkit": "prompt_toolkit",
-    "chromadb": "chromadb",
-    "ollama": "ollama",
-    "pytest": "pytest",
-    "pytest-timeout": "pytest_timeout",
-}
 
 
 @dataclass
@@ -128,13 +117,10 @@ class DependencyChecker:
             if not pkg_name:
                 continue
 
-            module_name = _PACKAGE_IMPORT_MAP.get(pkg_name, pkg_name.replace("-", "_"))
-
             try:
-                mod = importlib.import_module(module_name)
-                version = getattr(mod, "__version__", None)
+                version = importlib.metadata.version(pkg_name)
                 installed = True
-            except ImportError:
+            except importlib.metadata.PackageNotFoundError:
                 version = None
                 installed = False
 
