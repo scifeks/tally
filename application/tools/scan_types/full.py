@@ -8,6 +8,7 @@ from typing import cast
 from application.tools.registry import ToolRegistry
 from application.tools.scan_types.execution import tools_for_segment
 from application.tools.scan_types.repo_segment import RepoSegmentScan
+from domain.pipeline import scan_events as se
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.base import ScanType
@@ -57,6 +58,14 @@ class FullScan(ScanType):
             config.remaining_peers = len(active_segments) - seg_idx - 1
             seg_idx += 1
             resources.display.print_segment_header(segment)
+            resources.event_sink.emit(
+                se.SegmentStarted(
+                    run_id=config.run_id or 0,
+                    project_id=config.project_id,
+                    segment=segment,
+                    message=f"segment {segment} started",
+                )
+            )
 
             seg_summary = RepoSegmentScan(seg_tools, segment_name=segment).execute(
                 config, resources
@@ -69,6 +78,15 @@ class FullScan(ScanType):
             total_ingested += seg_summary.findings_ingested
             for tool_name, count in seg_summary.findings_by_tool.items():
                 merged_fbt[tool_name] = merged_fbt.get(tool_name, 0) + count
+            resources.event_sink.emit(
+                se.SegmentCompleted(
+                    run_id=config.run_id or 0,
+                    project_id=config.project_id,
+                    segment=segment,
+                    message=f"segment {segment} complete",
+                    findings_count=seg_summary.findings_ingested,
+                )
+            )
 
         duration = round(perf_counter() - start, 1)
         rows = [

@@ -17,6 +17,7 @@ from application.tools.scan_types.execution import (
     should_skip_sca_tool,
 )
 from core.detection.noir import noir_skip_reason
+from domain.pipeline import scan_events as se
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -25,6 +26,27 @@ from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
 from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_skipped(
+    resources: IExecutionResources,
+    config: ScanTypeConfig,
+    segment: str,
+    repo_name: str,
+    tool_name: str,
+    skip_reason: str,
+) -> None:
+    resources.event_sink.emit(
+        se.ToolSkipped(
+            run_id=config.run_id or 0,
+            project_id=config.project_id,
+            segment=segment,
+            repo=repo_name,
+            tool=tool_name,
+            message=f"{tool_name} skipped: {skip_reason}",
+            skip_reason=skip_reason,
+        )
+    )
 
 
 class RepoSegmentScan(ScanType):
@@ -93,6 +115,14 @@ class RepoSegmentScan(ScanType):
                                 skip_reason,
                             )
                         )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            skip_reason,
+                        )
                         total_skipped += 1
                         continue
                 elif tool_name in _lang_specific:
@@ -105,6 +135,7 @@ class RepoSegmentScan(ScanType):
                         else []
                     )
                     if not any(lang in gates for lang in repo_langs):
+                        skip_reason = f"not applicable for {repo.name} languages"
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name,
@@ -112,8 +143,16 @@ class RepoSegmentScan(ScanType):
                                 True,
                                 0,
                                 0.0,
-                                f"not applicable for {repo.name} languages",
+                                skip_reason,
                             )
+                        )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            skip_reason,
                         )
                         total_skipped += 1
                         continue
@@ -122,6 +161,14 @@ class RepoSegmentScan(ScanType):
                 if tool_config is None:
                     resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        "not registered",
                     )
                     total_skipped += 1
                     continue
@@ -133,11 +180,20 @@ class RepoSegmentScan(ScanType):
                     resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
                     )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        "factory error",
+                    )
                     total_skipped += 1
                     continue
 
                 # Skip live crawlers when the user opted out of crawling.
                 if tool_name in ("noir", "katana") and not repo.crawl_enabled:
+                    skip_reason = "skipped (live crawling disabled)"
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -145,8 +201,16 @@ class RepoSegmentScan(ScanType):
                             True,
                             0,
                             0.0,
-                            "skipped (live crawling disabled)",
+                            skip_reason,
                         )
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        skip_reason,
                     )
                     total_skipped += 1
                     continue
@@ -154,6 +218,7 @@ class RepoSegmentScan(ScanType):
                 # Skip Noir when the repo uses a framework it doesn't support.
                 _noir_skip = noir_skip_reason(repo)
                 if tool_name == "noir" and _noir_skip is not None:
+                    skip_reason = f"skipped ({_noir_skip})"
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             tool_name,
@@ -161,8 +226,16 @@ class RepoSegmentScan(ScanType):
                             True,
                             0,
                             0.0,
-                            f"skipped ({_noir_skip})",
+                            skip_reason,
                         )
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        skip_reason,
                     )
                     total_skipped += 1
                     continue
@@ -171,6 +244,14 @@ class RepoSegmentScan(ScanType):
                     resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "no base_urls")
                     )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        "no base_urls",
+                    )
                     total_skipped += 1
                     continue
 
@@ -178,10 +259,28 @@ class RepoSegmentScan(ScanType):
                     resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
                     )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        "not installed",
+                    )
                     total_skipped += 1
                     continue
 
                 resources.display.print_running(tool_name, repo.name)
+                resources.event_sink.emit(
+                    se.ToolStarted(
+                        run_id=config.run_id or 0,
+                        project_id=config.project_id,
+                        segment=self.segment_name,
+                        repo=repo.name,
+                        tool=tool_name,
+                        message=f"{tool_name} on {repo.name} started",
+                    )
+                )
                 context = make_context(
                     config.config_manager,
                     config.project_name,
@@ -202,6 +301,14 @@ class RepoSegmentScan(ScanType):
                 if result is None:
                     resources.display.print_tool_line(
                         ToolDisplayRow(f"{tool_name}/{repo.name}", False, True, 0, 0.0)
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.segment_name,
+                        repo.name,
+                        tool_name,
+                        "no result",
                     )
                     total_skipped += 1
                 else:
@@ -235,6 +342,19 @@ class RepoSegmentScan(ScanType):
                                 result.duration_seconds,
                             )
                         )
+                        resources.event_sink.emit(
+                            se.ToolCompleted(
+                                run_id=config.run_id or 0,
+                                project_id=config.project_id,
+                                segment=self.segment_name,
+                                repo=repo.name,
+                                tool=tool_name,
+                                message=f"{tool_name} on {repo.name} complete",
+                                findings_count=findings,
+                                duration=result.duration_seconds,
+                                exit_code=0,
+                            )
+                        )
                         if tool_name == "noir" and findings == 0:
                             resources.display.print_status(
                                 "    [yellow]⚠ noir found 0 endpoints. "
@@ -264,6 +384,18 @@ class RepoSegmentScan(ScanType):
                                 False,
                                 0,
                                 result.duration_seconds,
+                            )
+                        )
+                        resources.event_sink.emit(
+                            se.ToolFailed(
+                                run_id=config.run_id or 0,
+                                project_id=config.project_id,
+                                segment=self.segment_name,
+                                repo=repo.name,
+                                tool=tool_name,
+                                message=f"{tool_name} on {repo.name} failed",
+                                exit_code=1,
+                                duration=result.duration_seconds,
                             )
                         )
 

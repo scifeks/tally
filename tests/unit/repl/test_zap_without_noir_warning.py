@@ -213,12 +213,12 @@ class TestCmdScanInnerWarning:
 
     def test_zap_scan_with_option2_runs_zap_only(self) -> None:
         orchestrator = self._run_scan(["--tool=zap"], user_input="2")
-        calls = [c.args[0] for c in orchestrator.run_tool_on_all_repos.call_args_list]
-        assert "zap" in calls
-        assert "noir" not in calls
-        assert "katana" not in calls
+        kwargs = orchestrator.run_scoped_scan.call_args.kwargs
+        tools = kwargs.get("tool_names") or []
+        assert "zap" in tools
+        assert "noir" not in tools
+        assert "katana" not in tools
 
     def test_zap_scan_cancelled_does_not_run(self) -> None:
         orchestrator = self._run_scan(["--tool=zap"], user_input="3")
-        orchestrator.run_tool_on_all_repos.assert_not_called()
-        orchestrator.run_full_scan.assert_not_called()
+        orchestrator.run_scoped_scan.assert_not_called()

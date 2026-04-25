@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from application.pipeline.handlers import BaseHandler
+from application.ports.scan_event_sink import NullScanEventSink, ScanEventSink
 from application.rag.enrichment import EnrichmentPipeline
 from infrastructure.store import make_store
 
@@ -36,9 +37,16 @@ class PostIngestStrategy(Protocol):
 class EnrichThenPersistStrategy(BaseHandler):
     """Run LLM enrichment on ingested findings, then persist to ChromaDB."""
 
-    def __init__(self, console: Console | None = None) -> None:
+    def __init__(
+        self,
+        console: Console | None = None,
+        project_id: int | None = None,
+        event_sink: ScanEventSink | None = None,
+    ) -> None:
         super().__init__()
         self._console = console
+        self._project_id = project_id
+        self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
 
     def handle(self, event: IngestCompleted) -> None:
         if not event.ids:
@@ -50,6 +58,8 @@ class EnrichThenPersistStrategy(BaseHandler):
             console=self._console,
             base_path=event.base_path,
             run_id=event.run_id,
+            project_id=self._project_id,
+            event_sink=self._event_sink,
         )
         pipeline.enrich(event.ids)
         self._persist_to_chromadb(event.ids, event.project_name, event.base_path)

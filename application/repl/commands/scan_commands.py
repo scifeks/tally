@@ -166,68 +166,37 @@ class ScanCommands:
         if orchestrator is None:
             return
 
-        accumulated_fbt: dict[str, int] = {}
-
-        def _merge_fbt(summary) -> None:  # type: ignore[no-untyped-def]
-            for tool, count in summary.findings_by_tool.items():
-                accumulated_fbt[tool] = accumulated_fbt.get(tool, 0) + count
+        # DAST-without-discovery prompt remains an adapter-level concern: it
+        # asks the user a question and may rewrite effective_tools before
+        # dispatch. Apply it here so the orchestrator sees the final tool set.
+        if effective_tools is not None:
+            effective_tools = self._maybe_warn_dast_without_discovery(
+                effective_tools,
+                repo_names,
+                auto_approve,
+                orchestrator,
+            )
+            if effective_tools is None:
+                return
 
         try:
-            if repo_names is not None:
-                if effective_tools is not None:
-                    effective_tools = self._maybe_warn_dast_without_discovery(
-                        effective_tools,
-                        repo_names,
-                        auto_approve,
-                        orchestrator,
-                    )
-                    if effective_tools is None:
-                        return
-                    for repo_name in repo_names:
-                        for _i, tool_name in enumerate(effective_tools):
-                            _merge_fbt(
-                                orchestrator.run_tool_on_repo(
-                                    tool_name,
-                                    repo_name,
-                                    remaining_peers=len(effective_tools) - _i - 1,
-                                )
-                            )
-                else:
-                    for repo_name in repo_names:
-                        _merge_fbt(
-                            orchestrator.run_repo_scan(
-                                repo_name=repo_name,
-                                exclude_tools=skip_tools or None,
-                            )
-                        )
-            else:
-                if effective_tools is not None:
-                    effective_tools = self._maybe_warn_dast_without_discovery(
-                        effective_tools,
-                        None,
-                        auto_approve,
-                        orchestrator,
-                    )
-                    if effective_tools is None:
-                        return
-                    for _i, tool_name in enumerate(effective_tools):
-                        _merge_fbt(
-                            orchestrator.run_tool_on_all_repos(
-                                tool_name,
-                                remaining_peers=len(effective_tools) - _i - 1,
-                            )
-                        )
-                else:
-                    _merge_fbt(
-                        orchestrator.run_full_scan(exclude_tools=skip_tools or None)
-                    )
+            summary = orchestrator.run_scoped_scan(
+                repo_names=repo_names,
+                tool_names=effective_tools,
+                domains=None,
+                skip_tools=skip_tools or None,
+            )
         except ValueError as exc:
             self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
 
-        if run_id is not None and run_repo is not None and accumulated_fbt:
+        if run_id is not None and run_repo is not None and summary.findings_by_tool:
             run_repo.add_run_tools(  # type: ignore[union-attr]
                 run_id,
-                [{"tool": t, "findings_count": c} for t, c in accumulated_fbt.items()],
+                [
+                    {"tool": t, "findings_count": c}
+                    for t, c in summary.findings_by_tool.items()
+                ],
             )
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
@@ -498,9 +467,14 @@ class ScanCommands:
             base_path=Path(self.repl.base_path),
             prompt=prompt,
         )
+        project_id: int | None = None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is not None:
+            project_id = int(row["id"])
         bus = PipelineFactory.create(
             console=self.repl.console,
             skip_enrichment=skip_enrichment,
+            project_id=project_id,
         )
         return ScanOrchestrator(
             project=self.repl.active_project,
@@ -511,6 +485,7 @@ class ScanCommands:
             run_id=run_id,
             factory=ToolWrapperFactory(),
             console=self.repl.console,
+            project_id=project_id,
         )
 
     def _export_summary(self, summary, export_path: str) -> None:

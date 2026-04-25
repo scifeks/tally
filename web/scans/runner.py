@@ -31,7 +31,6 @@ from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
 from application.tools.executor import ToolExecutor
 from application.tools.orchestrator import ScanCancelled, ScanOrchestrator
-from domain.tools.scan_types import SEGMENT_ORDER
 from infrastructure.events.bus import EventBus
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
@@ -129,12 +128,14 @@ def _run_scan(
             base_path=Path(base_path),
             prompt=prompt,
         )
+        sink = EventBusScanSink(bus)
         pipeline_bus = PipelineFactory.create(
             console=None,
             skip_enrichment=request.skip_enrichment,
+            project_id=project_id,
+            event_sink=sink,
         )
         run_repo = RunRepository(factory)
-        sink = EventBusScanSink(bus)
 
         orchestrator = ScanOrchestrator(
             project=project_name,
@@ -167,37 +168,14 @@ def _run_scan(
 
 
 def _dispatch(orchestrator: ScanOrchestrator, request: ScanRequest) -> None:
-    """Pick the right run_*() method based on the parsed request shape."""
-    repos = list(request.repo_ids)
-    tools = list(request.tool_ids)
-    domains = list(request.domains)
-    excluded_segments = (
-        [s for s in SEGMENT_ORDER if s not in domains] if domains else []
-    )
-    excluded_tools = set(request.skip_tool_ids)
+    """Delegate to the unified ``run_scoped_scan`` use case.
 
-    # Single tool on a single repo
-    if len(tools) == 1 and len(repos) == 1:
-        orchestrator.run_tool_on_repo(tools[0], repos[0])
-        return
-
-    # Single tool across all repos
-    if len(tools) == 1 and not repos:
-        orchestrator.run_tool_on_all_repos(tools[0])
-        return
-
-    # Single repo (multi-tool) — exclude_tools applies
-    if len(repos) == 1 and not tools:
-        orchestrator.run_repo_scan(repos[0], exclude_tools=excluded_tools)
-        return
-
-    # Single segment across all repos and tools
-    if len(domains) == 1 and not repos and not tools:
-        orchestrator.run_segment(domains[0])
-        return
-
-    # General case: full scan with segment / tool exclusions
-    orchestrator.run_full_scan(
-        exclude_segments=excluded_segments,
-        exclude_tools=excluded_tools,
+    Mirrors REPL semantics: empty request fields mean "scan all" in that
+    dimension; populated fields scope the run.
+    """
+    orchestrator.run_scoped_scan(
+        repo_names=list(request.repo_ids) or None,
+        tool_names=list(request.tool_ids) or None,
+        domains=list(request.domains) or None,
+        skip_tools=set(request.skip_tool_ids) or None,
     )

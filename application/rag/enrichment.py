@@ -23,6 +23,7 @@ from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt
 
 if TYPE_CHECKING:
+    from application.ports.scan_event_sink import ScanEventSink
     from infrastructure.store.repositories.findings import FindingRepository
 
 logger = logging.getLogger(__name__)
@@ -234,7 +235,11 @@ class EnrichmentPipeline:
         run_id: int | None = None,
         llm_provider: LLMProvider | None = None,
         max_workers: int = 4,
+        project_id: int | None = None,
+        event_sink: ScanEventSink | None = None,
     ) -> None:
+        from application.ports.scan_event_sink import NullScanEventSink
+
         self._finding_repo = finding_repo
         self._console = console
         self._base_path = base_path
@@ -242,6 +247,8 @@ class EnrichmentPipeline:
         self._llm_provider = llm_provider  # resolved lazily on first _call_llm
         self._max_workers = max_workers
         self._had_errors: bool = False
+        self._project_id = project_id
+        self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
 
     @property
     def had_errors(self) -> bool:
@@ -273,6 +280,8 @@ class EnrichmentPipeline:
         Phase 3 (sequential): Write validated fields back to SQLite.
         Failures on individual findings are logged but do not stop the pipeline.
         """
+        from domain.pipeline import scan_events as se
+
         if not ids:
             return
 
@@ -335,6 +344,15 @@ class EnrichmentPipeline:
                         f"[dim]    Enriching findings... {completed}/{n_work}[/dim]",
                         end="\r",
                     )
+                self._event_sink.emit(
+                    se.EnrichmentProgress(
+                        run_id=self._run_id or 0,
+                        project_id=self._project_id,
+                        message=f"Enriching findings... {completed}/{n_work}",
+                        enriched_count=completed,
+                        total_to_enrich=n_work,
+                    )
+                )
                 try:
                     validated = future.result()
                     updates.append((row, validated))
@@ -356,6 +374,16 @@ class EnrichmentPipeline:
                 f" {enriched_count}/{total} findings enriched.[/dim]"
             )
             self._console.print(msg)
+        self._event_sink.emit(
+            se.EnrichmentComplete(
+                run_id=self._run_id or 0,
+                project_id=self._project_id,
+                message=(
+                    f"Enrichment complete. {enriched_count}/{total} findings enriched."
+                ),
+                enriched_count=enriched_count,
+            )
+        )
 
     def _call_llm_worker(
         self,

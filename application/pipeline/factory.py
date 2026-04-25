@@ -23,6 +23,8 @@ from domain.pipeline.url_events import URLsConverted, URLsDeduped, URLSourceChan
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from application.ports.scan_event_sink import ScanEventSink
+
 
 class PipelineFactory:
     """Creates a fully-wired EventBus for a single scan run.
@@ -36,6 +38,8 @@ class PipelineFactory:
     def create(
         console: Console | None = None,
         skip_enrichment: bool = False,
+        project_id: int | None = None,
+        event_sink: ScanEventSink | None = None,
     ) -> EventBus:
         """Return an EventBus wired with the appropriate post-ingest strategy.
 
@@ -45,6 +49,9 @@ class PipelineFactory:
                               immediately after ingest — no LLM enrichment calls
                               are made.  When ``False`` (default), the full
                               enrich-then-persist path is used.
+            project_id:       Numeric project id stamped on enrichment events.
+            event_sink:       ``ScanEventSink`` for ``EnrichmentProgress`` /
+                              ``EnrichmentComplete`` emission. Defaults to no-op.
         """
         bus = EventBus()
 
@@ -56,7 +63,11 @@ class PipelineFactory:
         if skip_enrichment:
             strategy = PersistOnlyStrategy(console=console)
         else:
-            strategy = EnrichThenPersistStrategy(console=console)
+            strategy = EnrichThenPersistStrategy(
+                console=console,
+                project_id=project_id,
+                event_sink=event_sink,
+            )
 
         bus.subscribe(IngestCompleted, strategy.handle)
 

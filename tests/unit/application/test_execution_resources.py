@@ -53,6 +53,18 @@ class TestExecutionResources:
             MagicMock(),
             MagicMock(),
         )
-        assert ExecutionResources(ex, reg, fac, eb, disp) == ExecutionResources(
-            ex, reg, fac, eb, disp
+        sink = MagicMock()
+        assert ExecutionResources(ex, reg, fac, eb, disp, sink) == ExecutionResources(
+            ex, reg, fac, eb, disp, sink
         )
+
+    def test_event_sink_default_is_null_sink(self) -> None:
+        from application.ports.scan_event_sink import NullScanEventSink
+
+        res = _make_resources()
+        assert isinstance(res.event_sink, NullScanEventSink)
+
+    def test_event_sink_attribute(self) -> None:
+        mock_sink = MagicMock()
+        res = _make_resources(event_sink=mock_sink)
+        assert res.event_sink is mock_sink

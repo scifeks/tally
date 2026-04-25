@@ -33,6 +33,7 @@ class ScanTypeConfig:
     run_id: int | None
     prompt: UserPromptPort
     remaining_peers: int = 0
+    project_id: int | None = None
 
 
 @dataclass

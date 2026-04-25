@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+from application.ports.scan_event_sink import NullScanEventSink, ScanEventSink
 
 if TYPE_CHECKING:
     from application.tools.executor import ToolExecutor
@@ -20,3 +22,4 @@ class ExecutionResources:
     factory: ToolWrapperFactory
     event_bus: EventBus
     display: DisplayProtocol
+    event_sink: ScanEventSink = field(default_factory=NullScanEventSink)

@@ -17,6 +17,7 @@ from application.tools.scan_types.execution import (
     should_skip_sca_tool,
 )
 from core.detection.noir import noir_skip_reason
+from domain.pipeline import scan_events as se
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
@@ -85,8 +86,20 @@ class ToolOnRepoScan(ScanType):
                 skip_reason,
             )
 
+        seg = getattr(tool, "scan_segment", "") or ""
+
         resources.display.print_scan_header(
             f"Repo Tool Scan: {repo.name} — {self.tool_name}"
+        )
+        resources.event_sink.emit(
+            se.ToolStarted(
+                run_id=config.run_id or 0,
+                project_id=config.project_id,
+                segment=seg,
+                repo=repo.name,
+                tool=self.tool_name,
+                message=f"{self.tool_name} on {repo.name} started",
+            )
         )
 
         start = perf_counter()
@@ -113,6 +126,17 @@ class ToolOnRepoScan(ScanType):
         if result is None:
             resources.display.print_tool_line(
                 ToolDisplayRow(self.tool_name, False, True, 0, 0.0)
+            )
+            resources.event_sink.emit(
+                se.ToolSkipped(
+                    run_id=config.run_id or 0,
+                    project_id=config.project_id,
+                    segment=seg,
+                    repo=repo.name,
+                    tool=self.tool_name,
+                    message=f"{self.tool_name} skipped: no result",
+                    skip_reason="no result",
+                )
             )
             total_skipped += 1
         else:
@@ -144,6 +168,19 @@ class ToolOnRepoScan(ScanType):
                         result.duration_seconds,
                     )
                 )
+                resources.event_sink.emit(
+                    se.ToolCompleted(
+                        run_id=config.run_id or 0,
+                        project_id=config.project_id,
+                        segment=seg,
+                        repo=repo.name,
+                        tool=self.tool_name,
+                        message=f"{self.tool_name} on {repo.name} complete",
+                        findings_count=findings,
+                        duration=result.duration_seconds,
+                        exit_code=0,
+                    )
+                )
                 if self.tool_name == "noir" and findings == 0:
                     resources.display.print_status(
                         "    [yellow]⚠ noir found 0 endpoints. "
@@ -169,6 +206,18 @@ class ToolOnRepoScan(ScanType):
                 resources.display.print_tool_line(
                     ToolDisplayRow(
                         self.tool_name, False, False, 0, result.duration_seconds
+                    )
+                )
+                resources.event_sink.emit(
+                    se.ToolFailed(
+                        run_id=config.run_id or 0,
+                        project_id=config.project_id,
+                        segment=seg,
+                        repo=repo.name,
+                        tool=self.tool_name,
+                        message=f"{self.tool_name} on {repo.name} failed",
+                        exit_code=1,
+                        duration=result.duration_seconds,
                     )
                 )
 
