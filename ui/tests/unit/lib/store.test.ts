@@ -2,7 +2,7 @@ import { useUI } from '@/lib/store'
 
 const reset = () =>
   useUI.setState({
-    activeProjectId: 'p-01',
+    activeProjectId: null,
     findingsSegment: 'sast',
     selectedFindingIds: new Set<string>(),
     findingOverrides: {},
@@ -12,8 +12,8 @@ const reset = () =>
 beforeEach(reset)
 
 describe('useUI — initial state', () => {
-  it('activeProjectId defaults to "p-01"', () => {
-    expect(useUI.getState().activeProjectId).toBe('p-01')
+  it('activeProjectId defaults to null (no project selected)', () => {
+    expect(useUI.getState().activeProjectId).toBeNull()
   })
 
   it('findingsSegment defaults to "sast"', () => {
@@ -35,13 +35,13 @@ describe('useUI — initial state', () => {
 
 describe('setActiveProject', () => {
   it('updates activeProjectId', () => {
-    useUI.getState().setActiveProject('p-02')
-    expect(useUI.getState().activeProjectId).toBe('p-02')
+    useUI.getState().setActiveProject('2')
+    expect(useUI.getState().activeProjectId).toBe('2')
   })
 
   it('clears selectedFindingIds', () => {
     useUI.setState({ selectedFindingIds: new Set(['f-1', 'f-2']) })
-    useUI.getState().setActiveProject('p-02')
+    useUI.getState().setActiveProject('2')
     expect(useUI.getState().selectedFindingIds.size).toBe(0)
   })
 })

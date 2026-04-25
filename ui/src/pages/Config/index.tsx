@@ -23,10 +23,10 @@ export default function Config() {
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: projectInfo } = useProjectInfo(activeProjectId)
-  const { data: repositories = [] } = useRepositories(activeProjectId)
+  const { data: projectInfo } = useProjectInfo(activeProjectId ?? '')
+  const { data: repositories = [] } = useRepositories(activeProjectId ?? '')
   const { data: toolCatalog = [] } = useToolCatalog()
-  const { data: toolOverrides = [] } = useToolOverrides(activeProjectId)
+  const { data: toolOverrides = [] } = useToolOverrides(activeProjectId ?? '')
 
   const updateProjectInfo = useUpdateProjectInfo()
   const saveRepository = useSaveRepository()
@@ -63,7 +63,9 @@ export default function Config() {
         {/* Project Info - full width row */}
         <ProjectInfoSection
           projectInfo={projectInfo ?? null}
-          onSave={updates => updateProjectInfo.mutate({ projectId: activeProjectId, updates })}
+          onSave={updates =>
+            updateProjectInfo.mutate({ projectId: activeProjectId ?? '', updates })
+          }
           isSaving={updateProjectInfo.isPending}
         />
 
@@ -71,20 +73,24 @@ export default function Config() {
         <div className="grid grid-cols-2 gap-4">
           <RepositorySection
             repositories={repositories}
-            projectId={activeProjectId}
+            projectId={activeProjectId ?? ''}
             onSave={(repo, isNew) => saveRepository.mutate({ repo, isNew })}
-            onDelete={repoId => deleteRepository.mutate({ repoId, projectId: activeProjectId })}
+            onDelete={repoId =>
+              deleteRepository.mutate({ repoId, projectId: activeProjectId ?? '' })
+            }
             isSaving={saveRepository.isPending}
           />
 
           <ToolOverridesSection
             catalog={toolCatalog}
             overrides={toolOverrides}
-            projectId={activeProjectId}
+            projectId={activeProjectId ?? ''}
             onSave={(override, isNew) =>
-              saveToolOverride.mutate({ projectId: activeProjectId, override, isNew })
+              saveToolOverride.mutate({ projectId: activeProjectId ?? '', override, isNew })
             }
-            onDelete={toolId => deleteToolOverride.mutate({ projectId: activeProjectId, toolId })}
+            onDelete={toolId =>
+              deleteToolOverride.mutate({ projectId: activeProjectId ?? '', toolId })
+            }
             isSaving={saveToolOverride.isPending}
           />
         </div>

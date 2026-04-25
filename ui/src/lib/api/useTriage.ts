@@ -23,7 +23,7 @@ import { SSE_ENDPOINTS } from './config'
  *   "runs": [
  *     {
  *       "id": "TR-100",
- *       "projectId": "p-01",
+ *       "projectId": "1",
  *       "status": "completed",
  *       "startedAt": "2024-01-15T10:00:00Z",
  *       "finishedAt": "2024-01-15T10:15:00Z",

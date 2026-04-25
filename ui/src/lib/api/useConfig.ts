@@ -14,8 +14,8 @@ import type { ProjectInfo, RepositoryConfig, ToolOverrideConfig, ToolCatalogEntr
 // TODO [BACKEND]: Remove these mocks once API is connected.
 
 const mockProjectInfo: Record<string, ProjectInfo> = {
-  'p-01': {
-    id: 'p-01',
+  '1': {
+    id: '1',
     name: 'acme-platform',
     code: 'ACM',
     company: 'ACME Corporation',
@@ -26,8 +26,8 @@ const mockProjectInfo: Record<string, ProjectInfo> = {
     repoCount: 14,
     findingCount: 220,
   },
-  'p-02': {
-    id: 'p-02',
+  '2': {
+    id: '2',
     name: 'atlas-api',
     code: 'ATL',
     company: 'Atlas Inc',
@@ -38,8 +38,8 @@ const mockProjectInfo: Record<string, ProjectInfo> = {
     repoCount: 4,
     findingCount: 35,
   },
-  'p-03': {
-    id: 'p-03',
+  '3': {
+    id: '3',
     name: 'northwind-web',
     code: 'NWD',
     company: 'Northwind',
@@ -53,10 +53,10 @@ const mockProjectInfo: Record<string, ProjectInfo> = {
 }
 
 const mockRepositories: Record<string, RepositoryConfig[]> = {
-  'p-01': [
+  '1': [
     {
       id: 'r-01',
-      projectId: 'p-01',
+      projectId: '1',
       name: 'dvwa',
       types: ['api', 'ui'],
       locationMode: 'local',
@@ -70,7 +70,7 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
     },
     {
       id: 'r-02',
-      projectId: 'p-01',
+      projectId: '1',
       name: 'dvpwa',
       types: ['api'],
       locationMode: 'docker',
@@ -85,7 +85,7 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
     },
     {
       id: 'r-03',
-      projectId: 'p-01',
+      projectId: '1',
       name: 'juice-shop',
       types: ['api', 'ui'],
       locationMode: 'local',
@@ -100,7 +100,7 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
     },
     {
       id: 'r-04',
-      projectId: 'p-01',
+      projectId: '1',
       name: 'common-utils',
       types: ['library'],
       locationMode: 'local',
@@ -114,7 +114,7 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
     },
     {
       id: 'r-05',
-      projectId: 'p-01',
+      projectId: '1',
       name: 'php-goof',
       types: ['api'],
       locationMode: 'local',
@@ -129,10 +129,10 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
       katana: { headless: false, crawlDepth: 10 },
     },
   ],
-  'p-02': [
+  '2': [
     {
       id: 'r-10',
-      projectId: 'p-02',
+      projectId: '2',
       name: 'atl-api',
       types: ['api'],
       locationMode: 'local',
@@ -146,7 +146,7 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
     },
     {
       id: 'r-11',
-      projectId: 'p-02',
+      projectId: '2',
       name: 'atl-web',
       types: ['ui'],
       locationMode: 'local',
@@ -160,7 +160,7 @@ const mockRepositories: Record<string, RepositoryConfig[]> = {
       detected: { isSpa: true, languages: ['typescript'], testDirectories: ['__tests__'] },
     },
   ],
-  'p-03': [],
+  '3': [],
 }
 
 const mockToolCatalog: ToolCatalogEntry[] = [
@@ -178,7 +178,7 @@ const mockToolCatalog: ToolCatalogEntry[] = [
 ]
 
 const mockToolOverrides: Record<string, ToolOverrideConfig[]> = {
-  'p-01': [
+  '1': [
     {
       toolId: 'semgrep',
       type: 'repo',
@@ -187,7 +187,7 @@ const mockToolOverrides: Record<string, ToolOverrideConfig[]> = {
     },
     { toolId: 'gitleaks', type: 'repo', location: 'local', path: '/opt/tools/gitleaks-custom' },
   ],
-  'p-02': [
+  '2': [
     {
       toolId: 'zap',
       type: 'api',
@@ -195,7 +195,7 @@ const mockToolOverrides: Record<string, ToolOverrideConfig[]> = {
       container: { name: 'zap-container', toolPath: '/zap/zap.sh' },
     },
   ],
-  'p-03': [],
+  '3': [],
 }
 
 // ─── Project Info Hook ────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ const mockToolOverrides: Record<string, ToolOverrideConfig[]> = {
  * Expected API response (GET /api/v1/projects/:id/info):
  * ```json
  * {
- *   "id": "p-01",
+ *   "id": "1",
  *   "name": "acme-platform",
  *   "code": "ACM",
  *   "company": "ACME Corporation",

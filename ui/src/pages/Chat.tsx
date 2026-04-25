@@ -245,7 +245,7 @@ export default function Chat() {
   // Create new session
   const handleNewSession = useCallback(async () => {
     try {
-      const session = await createSession(activeProjectId, 'New conversation')
+      const session = await createSession(activeProjectId ?? '', 'New conversation')
       setSessions(prev => [session, ...prev])
       setActiveSessionId(session.id)
       setMessages([])

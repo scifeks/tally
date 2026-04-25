@@ -20,7 +20,7 @@ import { urls as mockUrls } from '../mock-data'
  * [
  *   {
  *     "id": "U-5000",
- *     "projectId": "p-01",
+ *     "projectId": "1",
  *     "method": "GET",
  *     "protocol": "https",
  *     "host": "api.acme-platform.com",

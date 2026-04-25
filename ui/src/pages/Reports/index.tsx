@@ -81,21 +81,21 @@ export default function Reports() {
     SECTION_ORDER.map(section => ({
       section,
       status:
-        activeProjectId === 'p-01'
+        activeProjectId === '1'
           ? section === 'executive_summary' || section === 'risk_level'
             ? 'draft'
             : 'not_generated'
           : 'not_generated',
       generatedAt:
-        activeProjectId === 'p-01' && (section === 'executive_summary' || section === 'risk_level')
+        activeProjectId === '1' && (section === 'executive_summary' || section === 'risk_level')
           ? new Date(Date.now() - 86400000).toISOString()
           : undefined,
       preview:
-        activeProjectId === 'p-01' && (section === 'executive_summary' || section === 'risk_level')
+        activeProjectId === '1' && (section === 'executive_summary' || section === 'risk_level')
           ? `# ${SECTION_LABELS[section]}\n\nThis is a preview of the generated content for the ${SECTION_LABELS[section].toLowerCase()} section. The full document contains detailed analysis based on the security findings from this engagement...`
           : undefined,
       wordCount:
-        activeProjectId === 'p-01' && (section === 'executive_summary' || section === 'risk_level')
+        activeProjectId === '1' && (section === 'executive_summary' || section === 'risk_level')
           ? 450 + Math.floor(Math.random() * 200)
           : undefined,
     }))
@@ -103,11 +103,11 @@ export default function Reports() {
 
   // Mock history data
   const [history] = useState<ReportHistoryEntry[]>(() =>
-    activeProjectId === 'p-01'
+    activeProjectId === '1'
       ? [
           {
             id: 'rpt-001',
-            projectId: 'p-01',
+            projectId: '1',
             filename: 'ACME_Platform_Security_Assessment_2024-03-15.pdf',
             format: 'pdf',
             generatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
@@ -116,7 +116,7 @@ export default function Reports() {
           },
           {
             id: 'rpt-002',
-            projectId: 'p-01',
+            projectId: '1',
             filename: 'ACME_Platform_Findings_Export.json',
             format: 'json',
             generatedAt: new Date(Date.now() - 14 * 86400000).toISOString(),

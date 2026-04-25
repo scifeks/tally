@@ -21,7 +21,7 @@ describe('useTriageHistory', () => {
 
   it('resolves with an array when projectId is provided', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useTriageHistory('p-01'), { wrapper })
+    const { result } = renderHook(() => useTriageHistory('1'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     expect(Array.isArray(result.current.data)).toBe(true)
   })

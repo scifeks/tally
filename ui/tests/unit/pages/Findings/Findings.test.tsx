@@ -7,7 +7,7 @@ import { useUI } from '@/lib/store'
 import type { Finding } from '@/lib/types'
 
 const baseFinding: Omit<Finding, 'id' | 'severity' | 'status' | 'title' | 'tool'> = {
-  projectId: 'p-01',
+  projectId: '1',
   segment: 'sast',
   target: 'acme',
   discoveredAt: '2024-01-01T00:00:00Z',
@@ -57,7 +57,7 @@ function byResultCount(n: number) {
 
 function makeQC() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  qc.setQueryData(['findings', 'p-01', undefined], FINDINGS)
+  qc.setQueryData(['findings', '1', undefined], FINDINGS)
   return qc
 }
 
@@ -73,7 +73,7 @@ function renderPage(qc = makeQC()) {
 
 beforeEach(() => {
   useUI.setState({
-    activeProjectId: 'p-01',
+    activeProjectId: '1',
     findingsSegment: 'sast',
     selectedFindingIds: new Set<string>(),
     findingOverrides: {},

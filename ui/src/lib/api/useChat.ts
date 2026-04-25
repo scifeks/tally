@@ -36,10 +36,10 @@ import type { ChatMessage, ChatSession } from '../types'
 // TODO [BACKEND]: Remove mock data once connected to real API.
 
 const MOCK_SESSIONS: Record<string, ChatSession[]> = {
-  'p-01': [
+  '1': [
     {
       id: 'chat-001',
-      projectId: 'p-01',
+      projectId: '1',
       title: 'SQL Injection remediation',
       createdAt: '2025-03-15T10:00:00Z',
       lastMessageAt: '2025-03-15T10:15:00Z',
@@ -47,24 +47,24 @@ const MOCK_SESSIONS: Record<string, ChatSession[]> = {
     },
     {
       id: 'chat-002',
-      projectId: 'p-01',
+      projectId: '1',
       title: 'Understanding XSS findings',
       createdAt: '2025-03-14T14:00:00Z',
       lastMessageAt: '2025-03-14T14:30:00Z',
       messageCount: 4,
     },
   ],
-  'p-02': [
+  '2': [
     {
       id: 'chat-003',
-      projectId: 'p-02',
+      projectId: '2',
       title: 'Dependency vulnerabilities',
       createdAt: '2025-03-13T09:00:00Z',
       lastMessageAt: '2025-03-13T09:20:00Z',
       messageCount: 3,
     },
   ],
-  'p-03': [],
+  '3': [],
 }
 
 const MOCK_MESSAGES: Record<string, ChatMessage[]> = {
