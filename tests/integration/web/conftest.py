@@ -81,9 +81,9 @@ async def app_client(tmp_path: Path):
         return_value={"ids": ["doc-1"], "metadatas": [{}]}
     )
 
-    app = create_app(str(tmp_path), "testproject", HANDSHAKE, port=TEST_PORT)
-    app.state.connection_factory = factory
-    app.state.rag_engine = rag_mock
+    app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    # Seed the per-project RAG cache directly so chroma sync uses the mock.
+    app.state.rag_engine_cache = {"testproject": rag_mock}
 
     _bus = EventBus()
     await _bus.register_job("finding", "finding")

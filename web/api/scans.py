@@ -1,20 +1,16 @@
 """Phase 5 — Scan endpoints (config, start, history, detail, cancel, SSE,
 progress).
 
-Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §9``:
+Endpoint surface (all project-scoped after Phase 6.8):
 
 - ``GET    /api/v1/projects/{project_id}/scans/config``
 - ``GET    /api/v1/projects/{project_id}/scans``               (history list)
 - ``POST   /api/v1/projects/{project_id}/scans``               (start scan)
-- ``GET    /api/v1/scans/events``                              (SSE)
-- ``POST   /api/v1/scans/cancel-all``
-- ``GET    /api/v1/scans/{run_id}``                            (detail)
-- ``GET    /api/v1/scans/{run_id}/progress``                   (snapshot)
-- ``POST   /api/v1/scans/{run_id}/cancel``
-
-The two routers are split because endpoints.md splits the routes between
-project-scoped (``/api/v1/projects/.../scans...``) and run-scoped
-(``/api/v1/scans/...``).
+- ``GET    /api/v1/projects/{project_id}/scans/events``        (SSE)
+- ``POST   /api/v1/projects/{project_id}/scans/cancel-all``
+- ``GET    /api/v1/projects/{project_id}/scans/{run_id}``      (detail)
+- ``GET    /api/v1/projects/{project_id}/scans/{run_id}/progress``
+- ``POST   /api/v1/projects/{project_id}/scans/{run_id}/cancel``
 
 Route ordering (Phase 4 lesson): literal-segment routes are decorated
 **before** parameterised routes so Starlette doesn't shadow them.
@@ -49,7 +45,6 @@ from web.adapters.scan_run_registry import get_scan_run_registry
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
-    ScanCancelAllRequest,
     ScanCancelAllResponse,
     ScanCancelResponse,
     ScanConfigRepo,
@@ -68,11 +63,8 @@ from web.scans.runner import ScanRequest, start_scan_thread
 logger = logging.getLogger("tally.web.scans")
 
 
-# Two routers because the endpoint paths are split by scope:
-#   v1_router          — /api/v1/projects/...
-#   scans_v1_router    — /api/v1/scans/...
+# All routes are project-scoped under /api/v1/projects/...
 v1_router = APIRouter()
-scans_v1_router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
@@ -166,14 +158,10 @@ def _build_progress(
 
 
 # ---------------------------------------------------------------------------
-# Project-scoped: /api/v1/projects/{project_id}/scans...
+# Project-scoped routes — literal segments first, then parameterised
 # ---------------------------------------------------------------------------
 
 
-# Literal segment "scans/config" registered before "/{project_id}/scans" so
-# that GET .../scans/config doesn't get matched by the parameter-only list
-# route. (The list route's path differs anyway, but FastAPI evaluates routes
-# in registration order — keep literal-first as a defensive habit.)
 @v1_router.get(
     "/{project_id}/scans/config",
     response_model=ScanConfigResponse,
@@ -229,6 +217,81 @@ async def get_scans_config(
     )
 
 
+@v1_router.get("/{project_id}/scans/events")
+async def scans_events(
+    project_id: int,
+    request: Request,
+    run_id: int | None = Query(default=None),
+) -> StreamingResponse:
+    """SSE stream emitting scan lifecycle events for this project.
+
+    Filters live events by ``project_id`` (always, from the path) and
+    optionally ``run_id``. On connect emits a ``snapshot`` event built
+    from the current ``scan_runs`` row(s) so the SPA can sync without
+    waiting for the next live tick.
+    """
+    row = _resolve_project(request, project_id)
+    bus = request.app.state.event_bus
+    sub_id, queue = await bus.subscribe("scan")
+
+    snapshot_event = await _build_snapshot(row, project_id, run_id)
+
+    async def stream() -> AsyncIterator[str]:
+        try:
+            yield format_sse_frame(snapshot_event)
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                if item is EOS:
+                    break
+                payload = item.payload
+                if payload.get("project_id") != project_id:
+                    continue
+                if run_id is not None and payload.get("run_id") != run_id:
+                    continue
+                yield format_sse_frame(item)
+        finally:
+            await bus.unsubscribe("scan", sub_id)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@v1_router.post(
+    "/{project_id}/scans/cancel-all",
+    response_model=ScanCancelAllResponse,
+)
+async def cancel_all_scans(
+    project_id: int,
+    request: Request,
+) -> ScanCancelAllResponse:
+    """Cancel every active scan for this project."""
+    row = _resolve_project(request, project_id)
+    registry = get_scan_run_registry()
+    cancelled: list[int] = []
+    for handle in registry.list_for_project(project_id):
+        handle.cancel_token.set()
+        cancelled.append(handle.run_id)
+
+    if cancelled:
+        repo = _make_run_repo(row)
+        for run_id in cancelled:
+            try:
+                await asyncio.to_thread(repo.set_status, run_id, "cancelling")
+            except Exception:  # noqa: BLE001
+                logger.exception("failed to mark scan %d cancelling", run_id)
+
+    return ScanCancelAllResponse(cancelled=cancelled)
+
+
 @v1_router.get(
     "/{project_id}/scans",
     response_model=ScansListResponse,
@@ -277,7 +340,6 @@ async def start_scan(
     project_name: str = row["name"]
     base_path: str = request.app.state.base_path
 
-    # Validate inputs against the live project / tool registry
     discover_tools(base_path, project_name=project_name)
     _validate_repo_ids(request, project_name, body.repoIds)
     _validate_tool_ids(body.toolIds + body.skipToolIds)
@@ -285,10 +347,6 @@ async def start_scan(
 
     repo = _make_run_repo(row)
 
-    # Acquire the LockRegistry slot synchronously so 409 returns now,
-    # before the worker thread starts. Holder includes a placeholder id;
-    # the actual run id is appended once the row is created so the lock
-    # context is unambiguous.
     lock_registry = get_registry()
     holder = f"scan-web:{new_event_id()[:8]}"
     try:
@@ -306,7 +364,6 @@ async def start_scan(
             skip_enrichment=body.skipEnrichment,
         )
     except Exception:
-        # Roll the lock back if the row insert failed.
         try:
             lock_registry.release_job("scan", holder)
         except Exception:  # noqa: BLE001
@@ -338,124 +395,39 @@ async def start_scan(
 
     fresh = await asyncio.to_thread(repo.get, run_id)
     if fresh is None:
-        # Should never happen — the row was just inserted.
         raise NotFound(f"scan run {run_id} not found after creation")
     return _scan_run_to_summary(fresh)
 
 
-# ---------------------------------------------------------------------------
-# Run-scoped: /api/v1/scans/...
-# ---------------------------------------------------------------------------
-
-
-# Literal-before-parameter: GET /scans/events must be registered before
-# GET /scans/{run_id}, else Starlette will route /events as a run_id.
-@scans_v1_router.get("/events")
-async def scans_events(
-    request: Request,
-    project_id: int | None = Query(default=None),
-    run_id: int | None = Query(default=None),
-) -> StreamingResponse:
-    """SSE stream emitting scan lifecycle events.
-
-    Filters live events by ``project_id`` (and optionally ``run_id``).
-    On connect emits a ``snapshot`` event built from the current
-    ``scan_runs`` row(s) so the SPA can sync without waiting for the
-    next live tick.
-    """
-    if project_id is None and run_id is None:
-        raise ValidationError(
-            "scan SSE requires project_id or run_id query parameter",
-        )
-    bus = request.app.state.event_bus
-    sub_id, queue = await bus.subscribe("scan")
-
-    snapshot_event = await _build_snapshot(request, project_id, run_id)
-
-    async def stream() -> AsyncIterator[str]:
-        try:
-            yield format_sse_frame(snapshot_event)
-            while True:
-                if await request.is_disconnected():
-                    break
-                try:
-                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
-                except TimeoutError:
-                    yield ": heartbeat\n\n"
-                    continue
-                if item is EOS:
-                    break
-                payload = item.payload
-                if project_id is not None and payload.get("project_id") != project_id:
-                    continue
-                if run_id is not None and payload.get("run_id") != run_id:
-                    continue
-                yield format_sse_frame(item)
-        finally:
-            await bus.unsubscribe("scan", sub_id)
-
-    return StreamingResponse(
-        stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@scans_v1_router.post(
-    "/cancel-all",
-    response_model=ScanCancelAllResponse,
-)
-async def cancel_all_scans(
-    request: Request,
-    body: ScanCancelAllRequest,
-) -> ScanCancelAllResponse:
-    """Cancel every active scan for a project."""
-    _resolve_project(request, body.project_id)
-    registry = get_scan_run_registry()
-    cancelled: list[int] = []
-    for handle in registry.list_for_project(body.project_id):
-        handle.cancel_token.set()
-        cancelled.append(handle.run_id)
-
-    # Persist scan_runs.status='cancelling' for each.
-    if cancelled:
-        row = _resolve_project(request, body.project_id)
-        repo = _make_run_repo(row)
-        for run_id in cancelled:
-            try:
-                await asyncio.to_thread(repo.set_status, run_id, "cancelling")
-            except Exception:  # noqa: BLE001
-                logger.exception("failed to mark scan %d cancelling", run_id)
-
-    return ScanCancelAllResponse(cancelled=cancelled)
-
-
-@scans_v1_router.post(
-    "/{run_id}/cancel",
+@v1_router.post(
+    "/{project_id}/scans/{run_id}/cancel",
     response_model=ScanCancelResponse,
     status_code=202,
 )
 async def cancel_scan(
+    project_id: int,
     run_id: int,
     request: Request,
 ) -> ScanCancelResponse:
     """Request cancellation of a specific scan run."""
+    row = _resolve_project(request, project_id)
+    repo = _make_run_repo(row)
+
     handle = get_scan_run_registry().get(run_id)
     if handle is None:
-        # Either it never existed, or it already finished — fetch the row
-        # to distinguish.
-        repo = _run_repo_for_run(request, run_id)
-        row = await asyncio.to_thread(repo.get, run_id)
-        if row is None:
+        scan_row = await asyncio.to_thread(repo.get, run_id)
+        if scan_row is None or scan_row.project_id != project_id:
             raise NotFound(f"scan run {run_id} not found")
         raise Conflict(
             f"scan run {run_id} is not in a cancellable state",
             code="SCAN_NOT_CANCELLABLE",
-            details={"status": row.status or "unknown"},
+            details={"status": scan_row.status or "unknown"},
         )
 
+    if handle.project_id != project_id:
+        raise NotFound(f"scan run {run_id} not found")
+
     handle.cancel_token.set()
-    repo = _run_repo_for_run(request, run_id)
     try:
         await asyncio.to_thread(repo.set_status, run_id, "cancelling")
     except Exception:  # noqa: BLE001
@@ -464,37 +436,45 @@ async def cancel_scan(
     return ScanCancelResponse(id=run_id, status="cancelling")
 
 
-@scans_v1_router.get(
-    "/{run_id}/progress",
+@v1_router.get(
+    "/{project_id}/scans/{run_id}/progress",
     response_model=ScanProgressResponse,
 )
 async def scan_progress(
+    project_id: int,
     run_id: int,
     request: Request,
 ) -> ScanProgressResponse:
     """Point-in-time progress snapshot for a single scan run."""
-    repo = _run_repo_for_run(request, run_id)
+    row = _resolve_project(request, project_id)
+    repo = _make_run_repo(row)
     bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
     if bundle is None:
         raise NotFound(f"scan run {run_id} not found")
     scan_row, tool_rows = bundle
+    if scan_row.project_id != project_id:
+        raise NotFound(f"scan run {run_id} not found")
     return _build_progress(scan_row, tool_rows)
 
 
-@scans_v1_router.get(
-    "/{run_id}",
+@v1_router.get(
+    "/{project_id}/scans/{run_id}",
     response_model=ScanDetailResponse,
 )
 async def get_scan(
+    project_id: int,
     run_id: int,
     request: Request,
 ) -> ScanDetailResponse:
     """Full scan run with the per-tool execution records."""
-    repo = _run_repo_for_run(request, run_id)
+    row = _resolve_project(request, project_id)
+    repo = _make_run_repo(row)
     bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
     if bundle is None:
         raise NotFound(f"scan run {run_id} not found")
     scan_row, tool_rows = bundle
+    if scan_row.project_id != project_id:
+        raise NotFound(f"scan run {run_id} not found")
     return ScanDetailResponse(
         id=scan_row.id,
         project_id=scan_row.project_id,
@@ -513,24 +493,6 @@ async def get_scan(
 # ---------------------------------------------------------------------------
 # More helpers (after route declarations to keep the public surface visible)
 # ---------------------------------------------------------------------------
-
-
-def _run_repo_for_run(request: Request, run_id: int) -> RunRepository:
-    """Look up the project for *run_id* and return its RunRepository.
-
-    For run-scoped endpoints we don't have a path ``project_id`` — we
-    must locate the project by joining through the active project,
-    since each project's findings.db has its own scan_runs table.
-
-    Tally is single-project-active per server instance (see
-    ``decisions.md``), so we use the active project's database.
-    """
-    project_name: str = request.app.state.project_name
-    registry = request.app.state.project_registry
-    row = registry.resolve_by_name(project_name)
-    if row is None:
-        raise NotFound(f"active project {project_name!r} not registered")
-    return _make_run_repo(row)
 
 
 def _validate_repo_ids(
@@ -580,8 +542,8 @@ def _validate_domains(domains: list[str]) -> None:
 
 
 async def _build_snapshot(
-    request: Request,
-    project_id: int | None,
+    row: dict,
+    project_id: int,
     run_id: int | None,
 ) -> BusEvent:
     """Build a 'snapshot' BusEvent for the SSE on-connect frame."""
@@ -590,21 +552,21 @@ async def _build_snapshot(
         "project_id": project_id,
     }
     if run_id is not None:
-        repo = _run_repo_for_run(request, run_id)
+        repo = _make_run_repo(row)
         bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
         if bundle is not None:
             scan_row, tool_rows = bundle
-            progress = _build_progress(scan_row, tool_rows)
-            payload.update(
-                status=scan_row.status,
-                progress=progress.progress,
-                current_segment=None,
-                segment_label=None,
-                tool_runs=[_tool_run_to_item(r).model_dump() for r in tool_rows],
-                project_id=scan_row.project_id,
-            )
-    elif project_id is not None:
-        # Project-scoped snapshot: list active runs from the registry.
+            if scan_row.project_id == project_id:
+                progress = _build_progress(scan_row, tool_rows)
+                payload.update(
+                    status=scan_row.status,
+                    progress=progress.progress,
+                    current_segment=None,
+                    segment_label=None,
+                    tool_runs=[_tool_run_to_item(r).model_dump() for r in tool_rows],
+                    project_id=scan_row.project_id,
+                )
+    else:
         active_handles = get_scan_run_registry().list_for_project(project_id)
         payload["active_run_ids"] = [h.run_id for h in active_handles]
 

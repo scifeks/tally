@@ -50,10 +50,20 @@ _PROJECT_CONFIG: dict[str, Any] = {
 class _FakeTool:
     """Minimal duck-typed stand-in for ToolWrapper used in catalog tests."""
 
-    def __init__(self, name: str, category: str, description: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        category: str,
+        description: str,
+        installed: bool = True,
+    ) -> None:
         self.name = name
         self.category = category
         self.description = description
+        self._installed = installed
+
+    def check_available(self) -> bool:
+        return self._installed
 
 
 @pytest_asyncio.fixture()
@@ -75,9 +85,8 @@ async def tools_v1_client(tmp_path: Path):
     rag_mock = MagicMock()
     rag_mock.get_documents = MagicMock(return_value={"ids": [], "metadatas": []})
 
-    app = create_app(str(tmp_path), "testproject", HANDSHAKE, port=TEST_PORT)
-    app.state.connection_factory = factory
-    app.state.rag_engine = rag_mock
+    app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    app.state.rag_engine_cache = {"testproject": rag_mock}
 
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None
@@ -99,9 +108,7 @@ def _make_unauthed_app(tmp_path: Path) -> Any:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     factory = ConnectionFactory(db_path)
     factory.init_schema()
-    app = create_app(str(tmp_path), "testproject", "tok", port=TEST_PORT)
-    app.state.connection_factory = factory
-    app.state.rag_engine = None
+    app = create_app(str(tmp_path), "tok", port=TEST_PORT)
     return app
 
 
@@ -150,6 +157,44 @@ class TestToolsCatalog:
             base_url=f"http://127.0.0.1:{TEST_PORT}",
         ) as client:
             resp = await client.get("/api/v1/tools/catalog")
+        assert resp.status_code in (401, 403)
+
+
+class TestInstalledTools:
+    async def test_returns_only_available_tools(self, app_client) -> None:
+        from infrastructure.system.installed_tools_probe import InstalledToolsProbe
+
+        client, *_ = app_client
+        tool_registry.clear()
+        tool_registry.register(
+            _FakeTool("bandit", "sast", "Python linter", installed=True)
+        )
+        tool_registry.register(
+            _FakeTool("nuclei", "dast", "Web scanner", installed=False)
+        )
+        tool_registry.register(
+            _FakeTool("gitleaks", "secrets", "Secret scanner", installed=True)
+        )
+        # Re-probe after the registry was rewritten by the fixture.
+        client._transport.app.state.installed_tools = (  # type: ignore[attr-defined]
+            InstalledToolsProbe()
+        )
+
+        resp = await client.get("/api/v1/tools/installed")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"installed": ["bandit", "gitleaks"]}
+
+    async def test_requires_auth(self, tmp_path: Path) -> None:
+        (tmp_path / "config").mkdir(parents=True)
+        (tmp_path / "config" / "global.json").write_text("{}")
+        app = _make_unauthed_app(tmp_path)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url=f"http://127.0.0.1:{TEST_PORT}",
+        ) as client:
+            resp = await client.get("/api/v1/tools/installed")
         assert resp.status_code in (401, 403)
 
 

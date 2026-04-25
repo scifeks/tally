@@ -16,7 +16,6 @@ _EVIL_ORIGIN = "http://evil.example.com"
 def _client(allowed_origins: list[str] | None = None) -> TestClient:
     app = create_app(
         base_path="/tmp/tally_cors_test",
-        project_name="testproj",
         handshake_token=_TOKEN,
         port=_PORT,
         allowed_origins=allowed_origins,

@@ -47,16 +47,6 @@ def _build_project_registry(base_path: str) -> ProjectRegistryService:
     return svc
 
 
-def _clear_active_project_file(base_path: str) -> None:
-    """Remove projects/.active so unclean shutdowns don't leak active state."""
-    from core.project_paths import ProjectPaths
-
-    try:
-        ProjectPaths.active_file(base_path).unlink(missing_ok=True)
-    except OSError as exc:
-        logging.getLogger(__name__).warning("Could not clear .active: %s", exc)
-
-
 if __name__ == "__main__":
     # Parse args first so --base-path is available for attestation and setup.
     parser = argparse.ArgumentParser(description="Tally security auditing REPL")
@@ -129,9 +119,6 @@ if __name__ == "__main__":
 
     # Build the project registry (creates tally.db on first run, syncs from disk).
     project_registry = _build_project_registry(_BASE_PATH)
-
-    # Clean-slate guarantee against unclean shutdown.
-    _clear_active_project_file(_BASE_PATH)
 
     try:
         REPL(

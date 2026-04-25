@@ -86,11 +86,6 @@ class ProjectPaths:
         return Path(base_path) / "projects"
 
     @classmethod
-    def active_file(cls, base_path: Path | str) -> Path:
-        """Return the active-project marker file `<base_path>/projects/.active`."""
-        return cls.projects_dir(base_path) / ".active"
-
-    @classmethod
     def from_canonical(cls, base_path: Path | str, name: str) -> ProjectPaths:
         """Build a ProjectPaths at the canonical `<base_path>/projects/<name>/`.
 

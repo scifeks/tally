@@ -18,7 +18,7 @@ import uvicorn
 if TYPE_CHECKING:
     from application.repl.interface import REPL
 
-ServerFactory = Callable[[str, str, int, str, str, list[str]], uvicorn.Server]
+ServerFactory = Callable[[str, int, str, str, list[str]], uvicorn.Server]
 
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 
@@ -58,16 +58,13 @@ class UiCommands:
     # ------------------------------------------------------------------
 
     def cmd_serve(self, args: list[str]) -> None:
-        """Start (or stop) the FastAPI API server and Vite dev server."""
+        """Start (or stop) the FastAPI API server and Vite dev server.
+
+        The web UI is multi-project: the user picks a project in the SPA
+        after the server is up. No active REPL project is required.
+        """
         if "--stop" in args:
             self._cmd_stop()
-            return
-
-        if not (project_name := self._repl.active_project):
-            print(
-                "No active project. Run `project add <name>` or "
-                "`project select <name>` first."
-            )
             return
 
         if self._server is not None:
@@ -97,9 +94,7 @@ class UiCommands:
         self._write_env_local(ui_dir, host, api_port, vite_port)
 
         token = secrets.token_hex(16)
-        server = self._server_factory(
-            base_path, project_name, api_port, token, host, allowed_origins
-        )
+        server = self._server_factory(base_path, api_port, token, host, allowed_origins)
         self._server = server
 
         api_thread = threading.Thread(

@@ -446,9 +446,12 @@ async def patch_finding(
         raise NotFound("Finding not found")
 
     serialised = _serialise_finding(finding)
+    from web.server import get_rag_engine
+
+    rag_engine = get_rag_engine(request.app, row["name"], request.app.state.base_path)
     sync_finding_to_chroma(
         finding_id=finding_id,
-        rag_engine=request.app.state.rag_engine,
+        rag_engine=rag_engine,
         finding_repo=repo,
     )
 

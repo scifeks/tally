@@ -1,4 +1,9 @@
-"""Project API endpoints — stub and v1 versioned routes."""
+"""Project API endpoints — v1 versioned routes.
+
+The server is project-agnostic: ``/api/v1/projects`` returns the full
+project list (auth-only); per-project routes resolve their target via
+the path ``:project_id`` and the project registry.
+"""
 
 from __future__ import annotations
 
@@ -20,34 +25,14 @@ from web.api.schemas import (
     RepositoryListResponse,
 )
 
-router = APIRouter()
-
-
-@router.get("/")
-def get_project(request: Request) -> dict:
-    """Return the active project name and SQLite database path."""
-    project_name: str = request.app.state.project_name
-    base_path: str = request.app.state.base_path
-    paths = ProjectPaths.from_canonical(base_path, project_name)
-    return {"project_name": project_name, "sqlite_path": str(paths.findings_db)}
-
-
-# ---------------------------------------------------------------------------
 # v1 router
-# ---------------------------------------------------------------------------
-
 v1_router = APIRouter()
 
 
-async def _count_findings(
-    request: Request, project_name: str, paths: ProjectPaths
-) -> int:
-    if project_name == request.app.state.project_name:
-        factory = request.app.state.connection_factory
-    elif not paths.findings_db.exists():
+async def _count_findings(paths: ProjectPaths) -> int:
+    if not paths.findings_db.exists():
         return 0
-    else:
-        factory = ConnectionFactory(paths.findings_db)
+    factory = ConnectionFactory(paths.findings_db)
 
     def _query(f: ConnectionFactory) -> int:
         try:
@@ -66,8 +51,12 @@ async def list_projects(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
 ) -> ProjectListResponse:
+    """Return the full project list (auth-only).
+
+    The SPA uses this to populate the project picker before any
+    project is selected. No project context required.
+    """
     base_path: str = request.app.state.base_path
-    active: str = request.app.state.project_name
     registry = request.app.state.project_registry
     manager = ProjectManager(base_path, registry=registry)
     items: list[ProjectListItem] = []
@@ -81,7 +70,6 @@ async def list_projects(
                 name=config.project_name,
                 code=config.abbreviation,
                 created_at=config.created,
-                is_active=(row["name"] == active),
             )
         )
     total = len(items)
@@ -106,7 +94,7 @@ async def get_project_meta(
     if config is None:
         raise NotFound(f"Project {project_id} not found")
     paths = ProjectPaths.from_registry_row(row)
-    finding_count = await _count_findings(request, row["name"], paths)
+    finding_count = await _count_findings(paths)
     return ProjectMetaResponse(
         id=int(row["id"]),
         name=config.project_name,
@@ -130,7 +118,7 @@ async def get_project_info_endpoint(
     if config is None:
         raise NotFound(f"Project {project_id} not found")
     paths = ProjectPaths.from_registry_row(row)
-    finding_count = await _count_findings(request, row["name"], paths)
+    finding_count = await _count_findings(paths)
     return ProjectInfoResponse(
         id=int(row["id"]),
         name=config.project_name,

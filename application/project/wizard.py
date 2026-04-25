@@ -260,7 +260,6 @@ class InteractiveProjectWizard:
             count = len(repositories)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
             print(f"\n✓ Project '{name}' created with {repo_str}")
-            self._manager.switch_project(name)
 
             return name
 
