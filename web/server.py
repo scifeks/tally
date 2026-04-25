@@ -29,6 +29,8 @@ from web.api.findings import v1_router as findings_v1_router
 from web.api.locks import router as locks_router
 from web.api.projects import router as projects_router
 from web.api.projects import v1_router as projects_v1_router
+from web.api.scans import scans_v1_router
+from web.api.scans import v1_router as scans_projects_v1_router
 from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
 from web.auth.handshake import HandshakeRegistry
 from web.auth.sessions import SessionStore
@@ -43,13 +45,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Start the finding-stream event bus job; close it on shutdown."""
+    """Start the streaming event-bus jobs; close them on shutdown."""
     bus = EventBus()
     app.state.event_bus = bus
     await bus.register_job("finding", "finding")
+    await bus.register_job("scan", "scan")
     yield
     with contextlib.suppress(Exception):
         await bus.close_job("finding")
+    with contextlib.suppress(Exception):
+        await bus.close_job("scan")
 
 
 def create_app(
@@ -116,6 +121,8 @@ def create_app(
     app.include_router(tools_v1_router, prefix="/api/v1/tools")
     app.include_router(projects_tools_v1_router, prefix="/api/v1/projects")
     app.include_router(runtime_v1_router, prefix="/api/v1")
+    app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(scans_v1_router, prefix="/api/v1/scans")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF
