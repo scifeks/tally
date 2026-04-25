@@ -161,6 +161,27 @@ class ConnectionFactory:
                     completed_at TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS reports (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id      INTEGER,
+                    scan_run_id     INTEGER,
+                    format          TEXT NOT NULL,
+                    filename        TEXT NOT NULL,
+                    filepath        TEXT NOT NULL,
+                    status          TEXT NOT NULL DEFAULT 'queued',
+                    retention_tier  TEXT NOT NULL DEFAULT 'auto',
+                    file_size_bytes INTEGER,
+                    error           TEXT,
+                    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                    started_at      TEXT,
+                    finished_at     TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_reports_project_created
+                    ON reports (project_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_reports_status
+                    ON reports (status);
+
                 CREATE TABLE IF NOT EXISTS finding_history (
                     id                INTEGER PRIMARY KEY AUTOINCREMENT,
                     finding_id        INTEGER NOT NULL
