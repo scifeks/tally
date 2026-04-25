@@ -180,7 +180,7 @@ class BatchPatchResponse(BaseModel):
 
 
 class ProjectListItem(BaseModel):
-    id: str
+    id: int
     name: str
     code: str
     created_at: str
@@ -195,7 +195,7 @@ class ProjectListResponse(BaseModel):
 
 
 class ProjectMetaResponse(BaseModel):
-    id: str
+    id: int
     name: str
     code: str
     repo_count: int
@@ -204,7 +204,7 @@ class ProjectMetaResponse(BaseModel):
 
 
 class ProjectInfoResponse(BaseModel):
-    id: str
+    id: int
     name: str
     code: str
     company: str

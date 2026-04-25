@@ -11,10 +11,13 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from application.project.registry_service import ProjectRegistryService
 from application.rag.engine import RAGEngine
 from application.runtime.dependency_service import RuntimeDependencyService
+from core.project_paths import ProjectPaths
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
 from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.project_registry import ProjectRegistryRepository
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
 from web.api.auth import router as auth_router
@@ -66,9 +69,19 @@ def create_app(
     app.state.handshake_registry = registry
     app.state.session_store = SessionStore()
 
-    # todo: This doesn't belong here
-    db_path = Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
-    app.state.connection_factory = ConnectionFactory(db_path)
+    registry_repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
+    registry_repo.init_schema()
+    project_registry = ProjectRegistryService(registry_repo)
+    project_registry.sync(base_path)
+    app.state.project_registry = project_registry
+
+    row = project_registry.resolve_by_name(project_name)
+    if row is None:
+        paths = ProjectPaths.from_canonical(base_path, project_name)
+    else:
+        paths = ProjectPaths.from_registry_row(row)
+    app.state.project_paths = paths
+    app.state.connection_factory = ConnectionFactory(paths.findings_db)
 
     rag_engine: RAGEngine | None
     try:

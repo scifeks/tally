@@ -43,6 +43,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from core.config.manager import ConfigManager
+from core.project_paths import ProjectPaths
 from domain.pipeline.events import EventBus, ToolCompleted
 from domain.pipeline.url_events import (
     ConversionOutputs,
@@ -51,6 +52,13 @@ from domain.pipeline.url_events import (
     URLSourceChanged,
 )
 from infrastructure.tools.wrappers.utils.url_merge import URLMerger
+
+
+def _endpoint_dir(event: URLsDeduped) -> Path:
+    return ProjectPaths.from_canonical(
+        event.base_path, event.project_name
+    ).endpoint_dir(event.repo_name)
+
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +177,7 @@ class URLSeedsHandler:
     """
 
     def handle(self, event: URLsDeduped) -> None:
-        output_dir = (
-            Path(event.base_path)
-            / "projects"
-            / event.project_name
-            / "endpoints"
-            / event.repo_name
-        )
+        output_dir = _endpoint_dir(event)
         output_dir.mkdir(parents=True, exist_ok=True)
         seeds_path = output_dir / "merged_urls.txt"
 
@@ -202,13 +204,7 @@ class URLOS3Handler:
     """
 
     def handle(self, event: URLsDeduped) -> None:
-        output_dir = (
-            Path(event.base_path)
-            / "projects"
-            / event.project_name
-            / "endpoints"
-            / event.repo_name
-        )
+        output_dir = _endpoint_dir(event)
         output_dir.mkdir(parents=True, exist_ok=True)
         oas3_file = output_dir / "merged_oas3.json"
 

@@ -109,31 +109,35 @@ async def projects_v1_client(tmp_path: Path):
     app.state.connection_factory = factory
     app.state.rag_engine = rag_mock
 
+    row = app.state.project_registry.resolve_by_name("testproject")
+    assert row is not None
+    project_id = int(row["id"])
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
         base_url=f"http://127.0.0.1:{_TEST_PORT}",
     ) as client:
         mut_headers = await _auth(client)
-        yield client, mut_headers
+        yield client, mut_headers, project_id
 
 
 class TestGetProject:
     async def test_returns_project_name(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+        client, _, _, _, _, _ = app_client
         response = await client.get("/api/projects/")
         assert response.status_code == 200
         assert response.json()["project_name"] == "testproject"
 
     async def test_returns_sqlite_path(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+        client, _, _, _, _, _ = app_client
         response = await client.get("/api/projects/")
         assert response.status_code == 200
         sqlite_path = response.json()["sqlite_path"]
         assert sqlite_path.endswith("projects/testproject/sqlite/findings.db")
 
     async def test_sqlite_path_uses_base_path(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+        client, _, _, _, _, _ = app_client
         response = await client.get("/api/projects/")
         assert response.status_code == 200
         sqlite_path = response.json()["sqlite_path"]
@@ -142,17 +146,17 @@ class TestGetProject:
 
 class TestListProjectsV1:
     async def test_list_projects_returns_active(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
+        client, _, project_id = projects_v1_client
         resp = await client.get("/api/v1/projects/")
         assert resp.status_code == 200
         items = resp.json()["items"]
-        names = [i["id"] for i in items]
-        assert "testproject" in names
-        active = next(i for i in items if i["id"] == "testproject")
+        ids = [i["id"] for i in items]
+        assert project_id in ids
+        active = next(i for i in items if i["id"] == project_id)
         assert active["is_active"] is True
 
     async def test_list_projects_pagination(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
+        client, _, _ = projects_v1_client
         resp = await client.get("/api/v1/projects/?limit=1&offset=0")
         assert resp.status_code == 200
         data = resp.json()
@@ -162,11 +166,12 @@ class TestListProjectsV1:
     async def test_list_projects_returns_expected_fields(
         self, projects_v1_client
     ) -> None:
-        client, _ = projects_v1_client
+        client, _, _ = projects_v1_client
         resp = await client.get("/api/v1/projects/")
         assert resp.status_code == 200
         for item in resp.json()["items"]:
             assert "id" in item
+            assert isinstance(item["id"], int)
             assert "name" in item
             assert "code" in item
             assert "created_at" in item
@@ -175,25 +180,27 @@ class TestListProjectsV1:
 
 class TestProjectMetaV1:
     async def test_project_meta_returns_counts(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/testproject/meta")
+        client, _, project_id = projects_v1_client
+        resp = await client.get(f"/api/v1/projects/{project_id}/meta")
         assert resp.status_code == 200
         data = resp.json()
+        assert data["id"] == project_id
         assert data["repo_count"] >= 1
         assert data["finding_count"] >= 1
 
     async def test_project_meta_unknown_returns_404(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/nonexistent/meta")
+        client, _, _ = projects_v1_client
+        resp = await client.get("/api/v1/projects/9999/meta")
         assert resp.status_code == 404
 
 
 class TestProjectInfoV1:
     async def test_project_info_returns_full_fields(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/testproject/info")
+        client, _, project_id = projects_v1_client
+        resp = await client.get(f"/api/v1/projects/{project_id}/info")
         assert resp.status_code == 200
         data = resp.json()
+        assert data["id"] == project_id
         for field in (
             "company",
             "department",
@@ -205,15 +212,15 @@ class TestProjectInfoV1:
             assert field in data
 
     async def test_project_info_unknown_returns_404(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/nonexistent/info")
+        client, _, _ = projects_v1_client
+        resp = await client.get("/api/v1/projects/9999/info")
         assert resp.status_code == 404
 
 
 class TestRepositoriesV1:
     async def test_repositories_list_omits_auth(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/testproject/repositories")
+        client, _, project_id = projects_v1_client
+        resp = await client.get(f"/api/v1/projects/{project_id}/repositories")
         assert resp.status_code == 200
         raw = resp.text
         assert "auth" not in raw
@@ -221,8 +228,8 @@ class TestRepositoriesV1:
         assert len(resp.json()["items"]) >= 1
 
     async def test_repositories_list_pagination(self, projects_v1_client) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/testproject/repositories?limit=1")
+        client, _, project_id = projects_v1_client
+        resp = await client.get(f"/api/v1/projects/{project_id}/repositories?limit=1")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] >= 1
@@ -231,6 +238,6 @@ class TestRepositoriesV1:
     async def test_repositories_list_unknown_project_returns_404(
         self, projects_v1_client
     ) -> None:
-        client, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/nonexistent/repositories")
+        client, _, _ = projects_v1_client
+        resp = await client.get("/api/v1/projects/9999/repositories")
         assert resp.status_code == 404

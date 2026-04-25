@@ -11,13 +11,13 @@ pytestmark = pytest.mark.integration
 
 class TestGetProjectLocks:
     async def test_returns_empty_locks_by_default(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+        client, _, _, _, _, project_id = app_client
 
-        response = await client.get("/api/v1/projects/testproject/locks")
+        response = await client.get(f"/api/v1/projects/{project_id}/locks")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["project_id"] == "testproject"
+        assert data["project_id"] == project_id
         assert data["finding_locks"] == []
         assert data["job_locks"] == {
             "scan": None,
@@ -26,11 +26,11 @@ class TestGetProjectLocks:
         }
 
     async def test_returns_held_finding_locks(self, app_client) -> None:
-        client, finding_id, _, _, _ = app_client
+        client, finding_id, _, _, _, project_id = app_client
         registry = get_registry()
         registry.acquire_findings([finding_id], "triage-run:42")
 
-        response = await client.get("/api/v1/projects/testproject/locks")
+        response = await client.get(f"/api/v1/projects/{project_id}/locks")
 
         assert response.status_code == 200
         data = response.json()
@@ -41,11 +41,11 @@ class TestGetProjectLocks:
         )
 
     async def test_returns_held_job_locks(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+        client, _, _, _, _, project_id = app_client
         registry = get_registry()
         registry.acquire_job("triage", "triage-run:42")
 
-        response = await client.get("/api/v1/projects/testproject/locks")
+        response = await client.get(f"/api/v1/projects/{project_id}/locks")
 
         assert response.status_code == 200
         data = response.json()
@@ -53,16 +53,15 @@ class TestGetProjectLocks:
         assert data["job_locks"]["scan"] is None
         assert data["job_locks"]["report"] is None
 
-    async def test_project_id_echoed_in_response(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+    async def test_unknown_project_returns_404(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
 
-        response = await client.get("/api/v1/projects/myproject/locks")
+        response = await client.get("/api/v1/projects/9999/locks")
 
-        assert response.status_code == 200
-        assert response.json()["project_id"] == "myproject"
+        assert response.status_code == 404
 
     async def test_requires_authentication(self, app_client) -> None:
-        client, _, _, _, _ = app_client
+        client, _, _, _, _, project_id = app_client
         import httpx
 
         transport = client._transport
@@ -70,6 +69,6 @@ class TestGetProjectLocks:
             transport=transport,
             base_url=str(client.base_url),
         ) as unauthed_client:
-            response = await unauthed_client.get("/api/v1/projects/testproject/locks")
+            response = await unauthed_client.get(f"/api/v1/projects/{project_id}/locks")
 
         assert response.status_code == 401

@@ -16,6 +16,7 @@ from rich.table import Table
 
 from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
+from application.project.registry_service import ProjectRegistryService
 from application.rag.ingestor import get_tool_domain
 from application.repl.commands import (
     KnowledgeCommands,
@@ -217,9 +218,20 @@ class REPL:
         self,
         base_path: str = ".",
         runtime_service: RuntimeDependencyService | None = None,
+        project_registry: ProjectRegistryService | None = None,
     ):
         self.base_path = base_path
         self.console = Console()
+        if project_registry is None:
+            from infrastructure.store.project_registry import (
+                ProjectRegistryRepository,
+            )
+
+            repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
+            repo.init_schema()
+            project_registry = ProjectRegistryService(repo)
+            project_registry.sync(base_path)
+        self.project_registry = project_registry
         self.config = ConfigManager(base_path)
         self.projects = ProjectManager(base_path)
         self.wizard = InteractiveProjectWizard(self.projects)

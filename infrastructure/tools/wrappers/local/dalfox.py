@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.dalfox import (
     parse_dalfox_json,
@@ -156,13 +157,9 @@ class DalFoxLocalTool(BaseDalFoxTool):
         assert context.repo is not None
         repo = context.repo
 
-        output_dir = (
-            Path(context.base_path).resolve()
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "dalfox"
-        )
+        output_dir = ProjectPaths.from_canonical(
+            Path(context.base_path).resolve(), context.project_name
+        ).tool_output_dir("dalfox")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")

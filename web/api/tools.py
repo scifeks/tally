@@ -8,10 +8,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 
-from application.project.manager import ProjectManager
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import tool_registry
 from core.config.schemas import CommandEntry
+from core.project_paths import ProjectPaths
 from web.api._errors import NotFound
 from web.api.schemas import (
     DockerContainerResponse,
@@ -83,22 +83,21 @@ def get_tools_catalog() -> ToolCatalogResponse:
 
 
 @projects_tools_v1_router.get(
-    "/{project_name}/tools/overrides",
+    "/{project_id}/tools/overrides",
     response_model=ToolOverrideResponse,
 )
 async def get_tool_overrides(
-    project_name: str,
+    project_id: int,
     request: Request,
 ) -> ToolOverrideResponse:
     """Return project-level tool config overrides from commands.json."""
-    base_path: str = request.app.state.base_path
-    manager = ProjectManager(base_path)
-    if manager.get_project_info(project_name) is None:
-        raise NotFound(f"Project '{project_name}' not found")
+    registry = request.app.state.project_registry
+    row = registry.resolve_by_id(project_id)
+    if row is None or row.get("archived_at"):
+        raise NotFound(f"Project {project_id} not found")
 
-    override_path = (
-        Path(base_path) / "projects" / project_name / "config" / "commands.json"
-    )
+    paths = ProjectPaths.from_registry_row(row)
+    override_path = paths.commands_json
 
     if not override_path.exists():
         return ToolOverrideResponse(items=[], total=0)

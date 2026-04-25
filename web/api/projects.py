@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from application.project.manager import ProjectManager
+from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from web.api._errors import NotFound
 from web.api.schemas import (
@@ -27,10 +27,8 @@ def get_project(request: Request) -> dict:
     """Return the active project name and SQLite database path."""
     project_name: str = request.app.state.project_name
     base_path: str = request.app.state.base_path
-    sqlite_path = str(
-        Path(base_path) / "projects" / project_name / "sqlite" / "findings.db"
-    )
-    return {"project_name": project_name, "sqlite_path": sqlite_path}
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    return {"project_name": project_name, "sqlite_path": str(paths.findings_db)}
 
 
 # ---------------------------------------------------------------------------
@@ -40,20 +38,24 @@ def get_project(request: Request) -> dict:
 v1_router = APIRouter()
 
 
-async def _count_findings(request: Request, project_name: str) -> int:
+def _resolve_project(request: Request, project_id: int) -> dict:
+    """Resolve a project_id via registry; raise NotFound if missing/archived."""
+    registry = request.app.state.project_registry
+    row = registry.resolve_by_id(project_id)
+    if row is None or row.get("archived_at"):
+        raise NotFound(f"Project {project_id} not found")
+    return row
+
+
+async def _count_findings(
+    request: Request, project_name: str, paths: ProjectPaths
+) -> int:
     if project_name == request.app.state.project_name:
         factory = request.app.state.connection_factory
+    elif not paths.findings_db.exists():
+        return 0
     else:
-        db_path = (
-            Path(request.app.state.base_path)
-            / "projects"
-            / project_name
-            / "sqlite"
-            / "findings.db"
-        )
-        if not db_path.exists():
-            return 0
-        factory = ConnectionFactory(db_path)
+        factory = ConnectionFactory(paths.findings_db)
 
     def _query(f: ConnectionFactory) -> int:
         try:
@@ -74,20 +76,20 @@ async def list_projects(
 ) -> ProjectListResponse:
     base_path: str = request.app.state.base_path
     active: str = request.app.state.project_name
-    manager = ProjectManager(base_path)
-    all_names = manager.list_projects()
+    registry = request.app.state.project_registry
+    manager = ProjectManager(base_path, registry=registry)
     items: list[ProjectListItem] = []
-    for name in all_names:
-        config = manager.get_project_info(name)
+    for row in registry.list_active():
+        config = manager.get_project_info(row["name"])
         if config is None:
             continue
         items.append(
             ProjectListItem(
-                id=name,
+                id=int(row["id"]),
                 name=config.project_name,
                 code=config.abbreviation,
                 created_at=config.created,
-                is_active=(name == active),
+                is_active=(row["name"] == active),
             )
         )
     total = len(items)
@@ -99,19 +101,22 @@ async def list_projects(
     )
 
 
-@v1_router.get("/{project_name}/meta", response_model=ProjectMetaResponse)
+@v1_router.get("/{project_id}/meta", response_model=ProjectMetaResponse)
 async def get_project_meta(
-    project_name: str,
+    project_id: int,
     request: Request,
 ) -> ProjectMetaResponse:
+    row = _resolve_project(request, project_id)
     base_path: str = request.app.state.base_path
-    manager = ProjectManager(base_path)
-    config = manager.get_project_info(project_name)
+    registry = request.app.state.project_registry
+    manager = ProjectManager(base_path, registry=registry)
+    config = manager.get_project_info(row["name"])
     if config is None:
-        raise NotFound(f"Project '{project_name}' not found")
-    finding_count = await _count_findings(request, project_name)
+        raise NotFound(f"Project {project_id} not found")
+    paths = ProjectPaths.from_registry_row(row)
+    finding_count = await _count_findings(request, row["name"], paths)
     return ProjectMetaResponse(
-        id=project_name,
+        id=int(row["id"]),
         name=config.project_name,
         code=config.abbreviation,
         repo_count=len(config.repositories),
@@ -120,46 +125,51 @@ async def get_project_meta(
     )
 
 
-@v1_router.get("/{project_name}/info", response_model=ProjectInfoResponse)
+@v1_router.get("/{project_id}/info", response_model=ProjectInfoResponse)
 async def get_project_info_endpoint(
-    project_name: str,
+    project_id: int,
     request: Request,
 ) -> ProjectInfoResponse:
+    row = _resolve_project(request, project_id)
     base_path: str = request.app.state.base_path
-    manager = ProjectManager(base_path)
-    config = manager.get_project_info(project_name)
+    registry = request.app.state.project_registry
+    manager = ProjectManager(base_path, registry=registry)
+    config = manager.get_project_info(row["name"])
     if config is None:
-        raise NotFound(f"Project '{project_name}' not found")
-    finding_count = await _count_findings(request, project_name)
+        raise NotFound(f"Project {project_id} not found")
+    paths = ProjectPaths.from_registry_row(row)
+    finding_count = await _count_findings(request, row["name"], paths)
     return ProjectInfoResponse(
-        id=project_name,
+        id=int(row["id"]),
         name=config.project_name,
         code=config.abbreviation,
         company=config.company_name,
         department=config.department_name,
         abbreviation=config.abbreviation,
         created_at=config.created,
-        path=str(Path(base_path) / "projects" / project_name),
+        path=str(paths.root),
         repo_count=len(config.repositories),
         finding_count=finding_count,
     )
 
 
 @v1_router.get(
-    "/{project_name}/repositories",
+    "/{project_id}/repositories",
     response_model=RepositoryListResponse,
 )
 async def list_repositories(
-    project_name: str,
+    project_id: int,
     request: Request,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
 ) -> JSONResponse:
+    row = _resolve_project(request, project_id)
     base_path: str = request.app.state.base_path
-    manager = ProjectManager(base_path)
-    config = manager.get_project_info(project_name)
+    registry = request.app.state.project_registry
+    manager = ProjectManager(base_path, registry=registry)
+    config = manager.get_project_info(row["name"])
     if config is None:
-        raise NotFound(f"Project '{project_name}' not found")
+        raise NotFound(f"Project {project_id} not found")
     repos = config.repositories
     total = len(repos)
     page = repos[offset : offset + limit]

@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.endpoints.converters.katana import KatanaAdapter
 from infrastructure.tools.parsers.katana import parse_katana_jsonl
@@ -285,13 +286,9 @@ class KatanaLocalTool(BaseKatanaTool):
         base_url = repo.base_urls[0]
         self._last_base_url = base_url
 
-        output_dir = (
-            Path(context.base_path).resolve()
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "katana"
-        )
+        output_dir = ProjectPaths.from_canonical(
+            Path(context.base_path).resolve(), context.project_name
+        ).tool_output_dir("katana")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")

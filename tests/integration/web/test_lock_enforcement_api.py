@@ -11,7 +11,7 @@ pytestmark = pytest.mark.integration
 
 class TestPatchFindingLocked:
     async def test_patch_unlocked_finding_returns_200(self, app_client) -> None:
-        client, finding_id, _, _, mut_headers = app_client
+        client, finding_id, _, _, mut_headers, _ = app_client
         response = await client.patch(
             f"/api/v1/findings/{finding_id}",
             json={"severity": "low"},
@@ -20,7 +20,7 @@ class TestPatchFindingLocked:
         assert response.status_code == 200
 
     async def test_patch_locked_finding_returns_409(self, app_client) -> None:
-        client, finding_id, _, _, mut_headers = app_client
+        client, finding_id, _, _, mut_headers, _ = app_client
         registry = get_registry()
         registry.acquire_findings([finding_id], "triage-run:999")
 
@@ -36,7 +36,7 @@ class TestPatchFindingLocked:
         assert str(finding_id) in error["details"]["holders"]
 
     async def test_patch_locked_finding_error_envelope(self, app_client) -> None:
-        client, finding_id, _, _, mut_headers = app_client
+        client, finding_id, _, _, mut_headers, _ = app_client
         registry = get_registry()
         registry.acquire_findings([finding_id], "triage-run:999")
 
@@ -53,7 +53,7 @@ class TestPatchFindingLocked:
 
 class TestGetFindingLockFields:
     async def test_get_locked_finding_shows_is_locked_true(self, app_client) -> None:
-        client, finding_id, _, _, _ = app_client
+        client, finding_id, _, _, _, _ = app_client
         registry = get_registry()
         registry.acquire_findings([finding_id], "triage-run:999")
 
@@ -65,7 +65,7 @@ class TestGetFindingLockFields:
         assert data["lock_holder"] == "triage-run:999"
 
     async def test_get_unlocked_finding_shows_is_locked_false(self, app_client) -> None:
-        client, finding_id, _, _, _ = app_client
+        client, finding_id, _, _, _, _ = app_client
 
         response = await client.get(f"/api/v1/findings/{finding_id}")
 
@@ -77,7 +77,7 @@ class TestGetFindingLockFields:
 
 class TestBatchPatchPartition:
     async def test_batch_returns_three_bucket_partition(self, app_client) -> None:
-        client, finding_id, _, _, mut_headers = app_client
+        client, finding_id, _, _, mut_headers, _ = app_client
         registry = get_registry()
         registry.acquire_findings([finding_id], "triage-run:999")
 
@@ -97,7 +97,7 @@ class TestBatchPatchPartition:
         assert data["skip_reasons"][str(finding_id)] == "FINDING_LOCKED"
 
     async def test_batch_all_unlocked_all_updated(self, app_client) -> None:
-        client, finding_id, _, _, mut_headers = app_client
+        client, finding_id, _, _, mut_headers, _ = app_client
 
         response = await client.patch(
             "/api/v1/findings/batch",

@@ -11,6 +11,7 @@ class TestProjectCommands(unittest.TestCase):
         self.repl = MagicMock()
         self.repl.console = MagicMock()
         self.repl.projects = MagicMock()
+        self.repl.project_registry = MagicMock()
         self.repl.wizard = MagicMock()
         self.repl.active_project = "test-project"
         self.help_renderer = MagicMock()
@@ -33,10 +34,10 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_project("project", ["switch", "other"])
         self.repl.projects.switch_project.assert_called_once_with("other")
 
-    def test_cmd_project_list_calls_list_projects(self) -> None:
-        self.repl.projects.list_projects.return_value = []
+    def test_cmd_project_list_calls_registry_list_active(self) -> None:
+        self.repl.project_registry.list_active.return_value = []
         self.cmds.cmd_project("project", ["list"])
-        self.repl.projects.list_projects.assert_called_once()
+        self.repl.project_registry.list_active.assert_called_once()
 
     def test_cmd_project_info_calls_get_project_info(self) -> None:
         info = MagicMock()
@@ -90,13 +91,16 @@ class TestProjectCommands(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_cmd_projects_no_projects_prints_warning(self) -> None:
-        self.repl.projects.list_projects.return_value = []
+        self.repl.project_registry.list_active.return_value = []
         self.cmds.cmd_projects("projects", [])
         args, _ = self.repl.console.print.call_args
         self.assertIn("No projects found", args[0])
 
     def test_cmd_projects_with_projects_prints_table(self) -> None:
-        self.repl.projects.list_projects.return_value = ["proj-a", "proj-b"]
+        self.repl.project_registry.list_active.return_value = [
+            {"id": 1, "name": "proj-a", "path": "/p/a", "archived_at": None},
+            {"id": 2, "name": "proj-b", "path": "/p/b", "archived_at": None},
+        ]
         info = MagicMock()
         info.created = "2026-01-01T00:00:00"
         info.repositories = []

@@ -8,6 +8,7 @@ from time import perf_counter
 from typing import Any, NamedTuple
 
 from application.ports.user_prompt import UserPromptPort
+from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
 from domain.tools.interface import ExecutionPass
 
@@ -203,9 +204,8 @@ class ToolExecutor:
     # ------------------------------------------------------------------
 
     def _ensure_output_dir(self, tool_name: str) -> Path:
-        path = (
-            self.base_path / "projects" / self.project_name / "tool_outputs" / tool_name
-        )
+        paths = ProjectPaths.from_canonical(self.base_path, self.project_name)
+        path = paths.tool_output_dir(tool_name)
         path.mkdir(parents=True, exist_ok=True)
         return path
 

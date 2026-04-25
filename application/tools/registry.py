@@ -10,6 +10,7 @@ from rich.markup import escape as markup_escape
 from rich.table import Table
 
 from application.tools.factory import ToolWrapperFactory
+from core.project_paths import ProjectPaths
 from domain.tools.base import ToolWrapper
 from domain.tools.interface import ToolInterface
 
@@ -120,9 +121,9 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
             )
 
     if commands_config is not None and project_name is not None:
-        project_path = (
-            Path(base_path) / "projects" / project_name / "config" / "commands.json"
-        )
+        project_path = ProjectPaths.from_canonical(
+            base_path, project_name
+        ).commands_json
         if project_path.exists():
             try:
                 with open(project_path) as f:

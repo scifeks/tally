@@ -16,7 +16,7 @@ pytestmark = pytest.mark.integration
 
 class TestLockedFields:
     async def test_url_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers = app_client
+        client, finding_id, _, factory, mut_headers, _ = app_client
         response = await client.patch(
             f"/api/v1/findings/{finding_id}",
             json={"url": "https://attacker.com"},
@@ -30,7 +30,7 @@ class TestLockedFields:
         assert row["url"] == "https://original.com/path"
 
     async def test_tool_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers = app_client
+        client, finding_id, _, factory, mut_headers, _ = app_client
         response = await client.patch(
             f"/api/v1/findings/{finding_id}",
             json={"tool": "gitleaks"},
@@ -44,7 +44,7 @@ class TestLockedFields:
         assert row["tool"] == "semgrep"
 
     async def test_fingerprint_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers = app_client
+        client, finding_id, _, factory, mut_headers, _ = app_client
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT fingerprint FROM findings WHERE id = ?",
@@ -67,7 +67,7 @@ class TestLockedFields:
 
 class TestMetaPreservation:
     async def test_type_flags_preserved_on_meta_update(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers = app_client
+        client, finding_id, _, factory, mut_headers, _ = app_client
         response = await client.patch(
             f"/api/v1/findings/{finding_id}",
             json={"meta_remediation": "new remediation"},
@@ -85,7 +85,7 @@ class TestMetaPreservation:
         assert "profile" in meta
 
     async def test_meta_update_merges_not_replaces(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers = app_client
+        client, finding_id, _, factory, mut_headers, _ = app_client
         response = await client.patch(
             f"/api/v1/findings/{finding_id}",
             json={"meta_risk_type": "injection"},
@@ -104,7 +104,7 @@ class TestMetaPreservation:
         assert meta["type_secret"] is True
 
     async def test_patch_unknown_id_returns_404(self, app_client) -> None:
-        client, _, _, _, mut_headers = app_client
+        client, _, _, _, mut_headers, _ = app_client
         response = await client.patch(
             "/api/v1/findings/99999",
             json={"severity": "low"},

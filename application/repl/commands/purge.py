@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
 
 from application.tools.registry import tool_registry
+from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from application.rag.engine import RAGEngine
     from application.repl.interface import REPL
+
+
+def _project_paths(repl: REPL) -> ProjectPaths:
+    assert repl.active_project is not None
+    return ProjectPaths.from_canonical(repl.base_path, repl.active_project)
+
 
 # Help text exposed as a class attribute so smoke tests can find it.
 _HELP_TEXT = (
@@ -164,13 +170,7 @@ class PurgeCommand:
         If tools is given, delete all files in tool_outputs/<tool>/ for each tool.
         If tools is None, delete files in all tool_outputs subdirs (keep dirs).
         """
-        assert self.repl.active_project is not None
-        tool_outputs_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "tool_outputs"
-        )
+        tool_outputs_dir = _project_paths(self.repl).tool_outputs_dir
         if not tool_outputs_dir.exists():
             return
 
@@ -190,13 +190,7 @@ class PurgeCommand:
 
     def _delete_reports(self) -> None:
         """Delete all files and subdirectories inside the project reports/ dir."""
-        assert self.repl.active_project is not None
-        reports_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "reports"
-        )
+        reports_dir = _project_paths(self.repl).reports_dir
         if not reports_dir.exists():
             return
         for item in reports_dir.iterdir():
@@ -208,12 +202,7 @@ class PurgeCommand:
     def _delete_merged_endpoints(self) -> None:
         """Empty each repo's merged-URL dir and clear merged path keys in config."""
         assert self.repl.active_project is not None
-        endpoints_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "endpoints"
-        )
+        endpoints_dir = _project_paths(self.repl).endpoints_dir
         if endpoints_dir.exists():
             for repo_dir in endpoints_dir.iterdir():
                 if not repo_dir.is_dir():
@@ -241,13 +230,7 @@ class PurgeCommand:
 
     def _has_tool_output_files(self, tools: list[str] | None) -> bool:
         """Return True if any files exist in the relevant tool_outputs dirs."""
-        assert self.repl.active_project is not None
-        tool_outputs_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "tool_outputs"
-        )
+        tool_outputs_dir = _project_paths(self.repl).tool_outputs_dir
         if not tool_outputs_dir.exists():
             return False
         if tools is not None:
@@ -258,30 +241,17 @@ class PurgeCommand:
 
     def _has_report_files(self) -> bool:
         """Return True if the reports/ directory has any content."""
-        assert self.repl.active_project is not None
-        reports_dir = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "reports"
-        )
+        reports_dir = _project_paths(self.repl).reports_dir
         if not reports_dir.exists():
             return False
         return any(reports_dir.iterdir())
 
     def _count_sqlite_findings(self, tools: list[str] | None) -> int:
         """Count SQLite findings matching the given tools, or total if None."""
-        assert self.repl.active_project is not None
         try:
             from infrastructure.store.connection import ConnectionFactory
 
-            db_path = (
-                Path(self.repl.base_path)
-                / "projects"
-                / self.repl.active_project
-                / "sqlite"
-                / "findings.db"
-            )
+            db_path = _project_paths(self.repl).findings_db
             if not db_path.exists():
                 return 0
             factory = ConnectionFactory(db_path)
@@ -319,20 +289,11 @@ class PurgeCommand:
 
     def _purge_sqlite(self, tools: list[str] | None) -> None:
         """Delete SQLite findings for the given tools, or full wipe if None."""
-        assert self.repl.active_project is not None
         try:
-            from pathlib import Path
-
             from infrastructure.store.connection import ConnectionFactory
             from infrastructure.store.repositories.findings import FindingRepository
 
-            db_path = (
-                Path(self.repl.base_path)
-                / "projects"
-                / self.repl.active_project
-                / "sqlite"
-                / "findings.db"
-            )
+            db_path = _project_paths(self.repl).findings_db
             factory = ConnectionFactory(db_path)
             if tools is None:
                 # Full wipe: delete and recreate the database file

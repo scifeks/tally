@@ -6,9 +6,15 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.project_paths import ProjectPaths
+
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
     from application.repl.interface import REPL
+
+
+def _project_paths(repl: REPL, project_name: str) -> ProjectPaths:
+    return ProjectPaths.from_canonical(repl.base_path, project_name)
 
 
 class ToolCommands:
@@ -270,13 +276,7 @@ class ToolCommands:
                 "before using --project."
             )
             return False
-        config_path = (
-            Path(self.repl.base_path)
-            / "projects"
-            / project_name
-            / "config"
-            / "project.json"
-        )
+        config_path = _project_paths(self.repl, project_name).config_json
         if not config_path.exists():
             self.repl.console.print(f"[red]Project not found:[/red] {project_name}")
             return False
@@ -287,13 +287,7 @@ class ToolCommands:
     # ------------------------------------------------------------------
 
     def _project_commands_json_path(self, project_name: str) -> Path:
-        return (
-            Path(self.repl.base_path)
-            / "projects"
-            / project_name
-            / "config"
-            / "commands.json"
-        )
+        return _project_paths(self.repl, project_name).commands_json
 
     def _load_project_commands_json(self, project_name: str) -> dict:
         path = self._project_commands_json_path(project_name)

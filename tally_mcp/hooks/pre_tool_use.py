@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -11,6 +12,22 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.audit import AuditRepository
 
 _DEFAULT_APP_ROOT = Path(__file__).parent.parent.parent
+
+
+def _project_root_from_registry(app_root: Path, name: str) -> Path | None:
+    """Look up project's on-disk root via tally.db; None if registry absent."""
+    tally_db = app_root / "tally.db"
+    if not tally_db.exists():
+        return None
+    try:
+        with sqlite3.connect(str(tally_db)) as conn:
+            row = conn.execute(
+                "SELECT path FROM projects WHERE name = ? AND archived_at IS NULL",
+                (name,),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    return Path(row[0]) if row else None
 
 
 def _resolve_db(app_root: Path) -> Path | None:
@@ -26,7 +43,12 @@ def _resolve_db(app_root: Path) -> Path | None:
     except (KeyError, ValueError, json.JSONDecodeError) as exc:
         print(f"pre_tool_use: malformed .mcp.json: {exc}", file=sys.stderr)
         return None
-    return app_root / "projects" / project / "sqlite" / "findings.db"
+    project_root = _project_root_from_registry(app_root, project)
+    if project_root is None:
+        from core.project_paths import ProjectPaths
+
+        project_root = ProjectPaths.from_canonical(app_root, project).root
+    return project_root / "sqlite" / "findings.db"
 
 
 def main(app_root: Path | None = None) -> int:

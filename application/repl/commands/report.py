@@ -7,11 +7,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.project_paths import ProjectPaths
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from application.rag.engine import RAGEngine
     from application.repl.interface import REPL
+
+
+def _project_paths(repl: REPL) -> ProjectPaths:
+    assert repl.active_project is not None
+    return ProjectPaths.from_canonical(repl.base_path, repl.active_project)
 
 
 class ReportCommand:
@@ -74,12 +81,7 @@ class ReportCommand:
             return
 
         if output_path is None:
-            report_dir = (
-                Path(self.repl.base_path)
-                / "projects"
-                / self.repl.active_project
-                / "reports"
-            )
+            report_dir = _project_paths(self.repl).reports_dir
             report_dir.mkdir(parents=True, exist_ok=True)
             output_path = str(report_dir / f"{self.repl.active_project}-report.pdf")
 
@@ -171,12 +173,7 @@ class ReportCommand:
         if output_path is None:
             ts = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
             ext = "md" if fmt == "markdown" else fmt
-            reports_dir = (
-                Path(self.repl.base_path)
-                / "projects"
-                / self.repl.active_project
-                / "reports"
-            )
+            reports_dir = _project_paths(self.repl).reports_dir
             reports_dir.mkdir(parents=True, exist_ok=True)
             output_path = str(reports_dir / f"report_{ts}.{ext}")
 
@@ -318,17 +315,12 @@ class ReportCommand:
         """
         from application.reporting.draft_runner import get_all_sections
 
-        assert self.repl.active_project is not None
-        base = (
-            Path(self.repl.base_path)
-            / "projects"
-            / self.repl.active_project
-            / "reports"
-        )
+        paths = _project_paths(self.repl)
+        base = paths.reports_dir
         missing = [
             section
             for section in get_all_sections()
-            if not (base / "draft" / f"{section}.md").exists()
+            if not (paths.reports_draft_dir / f"{section}.md").exists()
             and not (base / "reviewed" / f"{section}.md").exists()
         ]
         if missing:

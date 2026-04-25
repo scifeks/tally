@@ -14,6 +14,7 @@ from chromadb.api.types import Documents, Embeddable, EmbeddingFunction, Embeddi
 from core.config.manager import ConfigManager
 from core.embedding import EmbeddingProvider, get_embedding_provider
 from core.llm import LLMProvider, get_llm_provider
+from core.project_paths import ProjectPaths
 from infrastructure.llm.ollama_utils import (
     get_ollama_models as get_ollama_models,
 )  # re-export
@@ -97,7 +98,8 @@ class RAGEngine:
         )
 
         # Validate project directory
-        self._project_dir = self.base_path / "projects" / project_name
+        self._paths = ProjectPaths.from_canonical(self.base_path, project_name)
+        self._project_dir = self._paths.root
         if not self._project_dir.exists():
             raise ValueError(
                 f"Project directory does not exist: {self._project_dir}. "
@@ -105,7 +107,7 @@ class RAGEngine:
             )
 
         # Isolated ChromaDB path for this project
-        self._chroma_path = self._project_dir / "chroma_db"
+        self._chroma_path = self._paths.chroma_db
         self._chroma_path.mkdir(parents=True, exist_ok=True)
 
         self._collection_name = f"findings_{project_name}"

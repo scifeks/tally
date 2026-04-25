@@ -1,36 +1,39 @@
 """Project management for tally Security Auditing REPL."""
 
 import datetime
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
+from application.project.registry_service import ProjectRegistryService
 from core.config import ConfigManager, ProjectConfig, Repository
+from core.project_paths import ProjectPaths
 
 
 class ProjectManager:
     """Manages tally projects: creation, listing, switching, and repositories."""
 
-    def __init__(self, base_path: str = "."):
+    def __init__(
+        self,
+        base_path: str = ".",
+        registry: ProjectRegistryService | None = None,
+    ):
         self.base_path = Path(base_path)
-        self.projects_dir = self.base_path / "projects"
-        self.active_file = self.projects_dir / ".active"
-        self.config = ConfigManager(base_path)
+        self.projects_dir = ProjectPaths.projects_dir(self.base_path)
+        self.active_file = ProjectPaths.active_file(self.base_path)
+        if registry is None:
+            registry = _build_default_registry(base_path)
+        self.registry = registry
+        self.config = ConfigManager(base_path, registry=registry)
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def list_projects(self) -> list[str]:
-        """Return sorted list of project names found in projects/."""
-        if not self.projects_dir.exists():
-            return []
-        return sorted(
-            d.name
-            for d in self.projects_dir.iterdir()
-            if d.is_dir()
-            and not d.name.startswith(".")
-            and (d / "config" / "project.json").exists()
-        )
+        """Return sorted list of active project names from the registry."""
+        return [row["name"] for row in self.registry.list_active()]
 
     def get_active_project(self) -> str | None:
         """Return the currently active project name, or None."""
@@ -40,48 +43,39 @@ class ProjectManager:
         return name if name else None
 
     def switch_project(self, project_name: str) -> None:
-        """Set project_name as the active project.
-
-        Raises:
-            ValueError: if the project does not exist.
-        """
-        if project_name not in self.list_projects():
+        """Set project_name as the active project."""
+        row = self.registry.resolve_by_name(project_name)
+        if row is None or row.get("archived_at"):
             raise ValueError(f"Project '{project_name}' does not exist.")
         self.projects_dir.mkdir(parents=True, exist_ok=True)
-        self.active_file.write_text(project_name)
+        _atomic_write(self.active_file, project_name)
 
     def get_project_info(self, project_name: str) -> ProjectConfig | None:
         """Load and return ProjectConfig for project_name."""
         return self.config.load_project_config(project_name)
 
     def delete_project(self, project_name: str) -> None:
-        """Delete a project and all its data from disk.
-
-        Raises:
-            ValueError: If the project does not exist.
-        """
-        project_dir = self.projects_dir / project_name
-        if not project_dir.exists():
+        """Delete a project and all its data from disk + registry."""
+        row = self.registry.resolve_by_name(project_name)
+        if row is None or row.get("archived_at"):
             raise ValueError(f"Project '{project_name}' not found.")
-        shutil.rmtree(project_dir)
+        project_dir = Path(row["path"])
+        if project_dir.exists():
+            shutil.rmtree(project_dir)
+        self.registry.deregister(project_name)
 
-        # Clear .active file if it points to the deleted project
-        active_file = self.projects_dir / ".active"
-        if active_file.exists():
+        if self.active_file.exists():
             try:
-                current = active_file.read_text().strip()
+                current = self.active_file.read_text().strip()
                 if current == project_name:
-                    active_file.unlink()
+                    self.active_file.unlink()
             except OSError:
                 pass
 
     def delete_repository(self, project_name: str, repo_name: str) -> None:
-        """Remove a repository from project_name by name.
-
-        Raises:
-            ValueError: if the project or repository does not exist.
-        """
-        if project_name not in self.list_projects():
+        """Remove a repository from project_name by name."""
+        row = self.registry.resolve_by_name(project_name)
+        if row is None or row.get("archived_at"):
             raise ValueError(f"Project '{project_name}' does not exist.")
         repos = self.config.load_repositories(project_name)
         new_repos = [r for r in repos if r.name != repo_name]
@@ -94,20 +88,21 @@ class ProjectManager:
     # ------------------------------------------------------------------
 
     def create_project_dirs(self, name: str) -> None:
-        project_root = self.projects_dir / name
+        """Create the standard subdirectory tree for a new project."""
+        paths = ProjectPaths(self.projects_dir / name)
         dirs = [
-            project_root / "config" / "endpoints",
-            project_root / "chroma_db",
-            project_root / "sqlite",
-            project_root / "tool_outputs" / "semgrep",
-            project_root / "tool_outputs" / "osv-scanner",
-            project_root / "tool_outputs" / "pip-audit",
-            project_root / "tool_outputs" / "npm-audit",
-            project_root / "tool_outputs" / "composer-audit",
-            project_root / "tool_outputs" / "gitleaks",
-            project_root / "tool_outputs" / "zap",
-            project_root / "sessions",
-            project_root / "endpoints" / "original",
+            paths.endpoints_config_dir,
+            paths.chroma_db,
+            paths.sqlite_dir,
+            paths.tool_output_dir("semgrep"),
+            paths.tool_output_dir("osv-scanner"),
+            paths.tool_output_dir("pip-audit"),
+            paths.tool_output_dir("npm-audit"),
+            paths.tool_output_dir("composer-audit"),
+            paths.tool_output_dir("gitleaks"),
+            paths.tool_output_dir("zap"),
+            paths.sessions_dir,
+            paths.endpoints_original_dir,
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
@@ -129,3 +124,31 @@ class ProjectManager:
             abbreviation=abbreviation,
         )
         self.config.save_project_config(name, project_cfg)
+        self.registry.register(name, str(self.base_path))
+
+
+def _build_default_registry(base_path: str) -> ProjectRegistryService:
+    """Lazy-build a registry rooted at base_path/tally.db (sync from disk)."""
+    from infrastructure.store.project_registry import ProjectRegistryRepository
+
+    repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
+    repo.init_schema()
+    svc = ProjectRegistryService(repo)
+    svc.sync(base_path)
+    return svc
+
+
+def _atomic_write(target: Path, content: str) -> None:
+    """Write content atomically via a sibling temp file + rename."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=target.name + ".", dir=str(target.parent))
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp_path, str(target))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise

@@ -24,6 +24,7 @@ import logging
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from core.project_paths import ProjectPaths
 from infrastructure.tools.wrappers.utils.scope import in_scope
 
 logger = logging.getLogger(__name__)
@@ -120,23 +121,14 @@ class URLMerger:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _project_paths(self) -> ProjectPaths:
+        return ProjectPaths.from_canonical(self._base_path, self._project_name)
+
     def _katana_dir(self) -> Path:
-        return (
-            Path(self._base_path)
-            / "projects"
-            / self._project_name
-            / "tool_outputs"
-            / "katana"
-        )
+        return self._project_paths().tool_output_dir("katana")
 
     def _noir_dir(self) -> Path:
-        return (
-            Path(self._base_path)
-            / "projects"
-            / self._project_name
-            / "tool_outputs"
-            / "noir"
-        )
+        return self._project_paths().tool_output_dir("noir")
 
     def _load_latest_oas3(self, tool_dir: Path) -> list[str]:
         """Return OAS3 path keys from the most recent matching file in *tool_dir*."""
