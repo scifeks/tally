@@ -1,5 +1,9 @@
 """Tests for core/startup/checker.py — no external binaries required."""
 
+from __future__ import annotations
+
+import importlib
+
 import pytest
 
 from application.startup.checker import DependencyChecker
@@ -34,3 +38,19 @@ def test_check_system_tools_discovers_all_tools() -> None:
     assert found == _EXPECTED_TOOLS, (
         f"Missing: {_EXPECTED_TOOLS - found}, Unexpected: {found - _EXPECTED_TOOLS}"
     )
+
+
+def test_check_python_packages_uses_distribution_metadata_not_module_imports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checker = DependencyChecker()
+
+    def _unexpected_import(name: str):
+        raise AssertionError(f"unexpected module import: {name}")
+
+    monkeypatch.setattr(importlib, "import_module", _unexpected_import)
+
+    checks = checker.check_python_packages()
+
+    assert checks
+    assert any(c.name == "onnxruntime" for c in checks)
