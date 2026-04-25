@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from domain.findings.severity import Severity
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
+    DOMAINS,
     FINDING_TYPES,
     STATUS_LEVELS,
 )
@@ -25,6 +27,8 @@ def get_config() -> dict:
     - ``editor``: ``"select"`` | ``"text"`` | ``"boolean"`` | ``"tags"``
     - ``options``: present only for ``"select"`` and ``"tags"`` editors;
       lists the allowed values in display order.
+    ``enums`` contains the canonical allowed-value sets sourced from
+    ``domain.tools.constants`` and ``domain.findings.severity``.
     """
     return {
         "editable_fields": {
@@ -53,5 +57,12 @@ def get_config() -> dict:
             "meta_risk_type": {"editor": "text"},
             "meta_owasp_name": {"editor": "text"},
             "meta_tags": {"editor": "tags"},
-        }
+        },
+        "enums": {
+            "severities": [s.label for s in Severity.all_ordered()],
+            "confidence_levels": sorted(CONFIDENCE_LEVELS),
+            "statuses": sorted(STATUS_LEVELS),
+            "finding_types": sorted(FINDING_TYPES),
+            "domains": sorted(DOMAINS),
+        },
     }

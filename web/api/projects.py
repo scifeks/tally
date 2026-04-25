@@ -11,6 +11,7 @@ from application.project.manager import ProjectManager
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from web.api._errors import NotFound
+from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
     ProjectInfoResponse,
     ProjectListItem,
@@ -36,15 +37,6 @@ def get_project(request: Request) -> dict:
 # ---------------------------------------------------------------------------
 
 v1_router = APIRouter()
-
-
-def _resolve_project(request: Request, project_id: int) -> dict:
-    """Resolve a project_id via registry; raise NotFound if missing/archived."""
-    registry = request.app.state.project_registry
-    row = registry.resolve_by_id(project_id)
-    if row is None or row.get("archived_at"):
-        raise NotFound(f"Project {project_id} not found")
-    return row
 
 
 async def _count_findings(

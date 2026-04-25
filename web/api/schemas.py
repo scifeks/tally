@@ -279,3 +279,22 @@ class RuntimeDependencyItem(BaseModel):
 
 class RuntimeDependenciesResponse(BaseModel):
     dependencies: list[RuntimeDependencyItem]
+
+
+class FindingsCountsResponse(BaseModel):
+    by_severity: dict[str, int]
+    by_domain: dict[str, int]
+    by_segment: dict[str, int]
+    by_repo: dict[str, int]
+    by_status: dict[str, int]
+
+
+class FindingsFacetsResponse(BaseModel):
+    domains: list[str]
+    severities: list[str]
+    statuses: list[str]
+    confidence_levels: list[str]
+    finding_types: list[str]
+    tools: list[str]
+    repos: list[str]
+    segments: list[str]

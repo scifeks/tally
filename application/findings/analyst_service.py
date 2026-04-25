@@ -137,3 +137,15 @@ class FindingAnalystService:
             self._repo.update_analyst_fields(finding_id, fields)
             result.updated.append(finding_id)
         return result
+
+    def search_raw(self, filters: dict) -> list[dict]:
+        return self._repo.search_raw(filters)
+
+    def search_count(self, filters: dict) -> int:
+        return self._repo.search_count(filters)
+
+    def count_aggregates(self) -> dict:
+        return self._repo.count_aggregates()
+
+    def distinct_facet_values(self) -> dict:
+        return self._repo.distinct_facet_values()

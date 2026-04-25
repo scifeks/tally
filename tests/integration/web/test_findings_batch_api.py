@@ -1,4 +1,4 @@
-"""Tests for PATCH /api/v1/findings/batch endpoint."""
+"""Tests for PATCH /api/v1/projects/{project_id}/findings/batch endpoint."""
 
 from __future__ import annotations
 
@@ -44,8 +44,9 @@ _FINDING_B: dict[str, Any] = {
 
 @pytest_asyncio.fixture()
 async def batch_client(tmp_path: Path):
-    """Yield (client, [id_a, id_b], factory, mut_headers) for batch tests."""
-    db_path = tmp_path / "findings.db"
+    """Yield (client, [id_a, id_b], factory, mut_headers, project_id)."""
+    db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     factory = ConnectionFactory(db_path)
     factory.init_schema()
 
@@ -64,6 +65,8 @@ async def batch_client(tmp_path: Path):
     app = create_app(str(tmp_path), "testproject", HANDSHAKE, port=TEST_PORT)
     app.state.connection_factory = factory
     app.state.rag_engine = rag_mock
+
+    project_id = app.state.project_registry.register("testproject", str(tmp_path))
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
@@ -84,14 +87,14 @@ async def batch_client(tmp_path: Path):
             "X-CSRF-Token": csrf_token,
             "Origin": f"http://127.0.0.1:{TEST_PORT}",
         }
-        yield client, ids, factory, mut_headers
+        yield client, ids, factory, mut_headers, project_id
 
 
 class TestBatchPatchFindings:
     async def test_batch_approve_updates_all_rows(self, batch_client) -> None:
-        client, ids, factory, mut_headers = batch_client
+        client, ids, factory, mut_headers, project_id = batch_client
         response = await client.patch(
-            "/api/v1/findings/batch",
+            f"/api/v1/projects/{project_id}/findings/batch",
             json={"ids": ids, "should_report": True},
             headers=mut_headers,
         )
@@ -104,9 +107,9 @@ class TestBatchPatchFindings:
         assert all(r["should_report"] == 1 for r in rows)
 
     async def test_batch_sets_triaged_by_analyst_web(self, batch_client) -> None:
-        client, ids, factory, mut_headers = batch_client
+        client, ids, factory, mut_headers, project_id = batch_client
         await client.patch(
-            "/api/v1/findings/batch",
+            f"/api/v1/projects/{project_id}/findings/batch",
             json={"ids": ids, "should_report": True},
             headers=mut_headers,
         )
@@ -119,27 +122,27 @@ class TestBatchPatchFindings:
             assert row["triaged_at"] is not None
 
     async def test_empty_ids_returns_422(self, batch_client) -> None:
-        client, _, _, mut_headers = batch_client
+        client, _, _, mut_headers, project_id = batch_client
         response = await client.patch(
-            "/api/v1/findings/batch",
+            f"/api/v1/projects/{project_id}/findings/batch",
             json={"ids": [], "should_report": True},
             headers=mut_headers,
         )
         assert response.status_code == 422
 
     async def test_no_fields_returns_422(self, batch_client) -> None:
-        client, ids, _, mut_headers = batch_client
+        client, ids, _, mut_headers, project_id = batch_client
         response = await client.patch(
-            "/api/v1/findings/batch",
+            f"/api/v1/projects/{project_id}/findings/batch",
             json={"ids": ids},
             headers=mut_headers,
         )
         assert response.status_code == 422
 
     async def test_partial_ids_returns_correct_count(self, batch_client) -> None:
-        client, ids, _, mut_headers = batch_client
+        client, ids, _, mut_headers, project_id = batch_client
         response = await client.patch(
-            "/api/v1/findings/batch",
+            f"/api/v1/projects/{project_id}/findings/batch",
             json={"ids": [ids[0]], "should_report": True},
             headers=mut_headers,
         )
