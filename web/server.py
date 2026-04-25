@@ -22,7 +22,7 @@ from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
 from web.api.auth import router as auth_router
 from web.api.config import router as config_router
-from web.api.findings import router as findings_router
+from web.api.findings import v1_router as findings_v1_router
 from web.api.locks import router as locks_router
 from web.api.projects import router as projects_router
 from web.api.projects import v1_router as projects_v1_router
@@ -95,7 +95,7 @@ def create_app(
 
     app.include_router(auth_router, prefix="/api/auth")
     app.include_router(config_router, prefix="/api/config")
-    app.include_router(findings_router, prefix="/api/v1/findings")
+    app.include_router(findings_v1_router, prefix="/api/v1/projects")
     app.include_router(locks_router, prefix="/api/v1/projects")
     app.include_router(projects_router, prefix="/api/projects")
     app.include_router(projects_v1_router, prefix="/api/v1/projects")

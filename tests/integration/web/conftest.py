@@ -60,7 +60,9 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
 @pytest_asyncio.fixture()
 async def app_client(tmp_path: Path):
     """Yield (client, finding_id, rag_mock, factory, mut_headers, project_id)."""
-    db_path = tmp_path / "findings.db"
+    # DB must live at the canonical path the registry resolves to.
+    db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     factory = ConnectionFactory(db_path)
     factory.init_schema()
 
@@ -83,8 +85,6 @@ async def app_client(tmp_path: Path):
     app.state.rag_engine = rag_mock
 
     # Seed the registry so project-scoped endpoints can resolve "testproject".
-    project_path = tmp_path / "projects" / "testproject"
-    project_path.mkdir(parents=True, exist_ok=True)
     project_id = app.state.project_registry.register("testproject", str(tmp_path))
 
     transport = httpx.ASGITransport(app=app)

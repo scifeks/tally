@@ -1,4 +1,4 @@
-"""GET and PATCH /api/findings endpoints."""
+"""Project-scoped findings endpoints (GET, PATCH)."""
 
 from __future__ import annotations
 
@@ -12,19 +12,27 @@ from fastapi import APIRouter, Query, Request
 
 from application.findings.analyst_service import FindingAnalystService
 from application.locking import FindingsBusy, LockQueryService
+from core.project_paths import ProjectPaths
+from domain.findings.severity import Severity
+from domain.findings.sort import FindingSortColumn, SortDirection
 from infrastructure.store import FindingRepository
+from infrastructure.store.connection import ConnectionFactory
 from web.api._errors import FindingsLocked, NotFound
+from web.api._project_resolver import _resolve_project
 from web.api.chroma_sync import sync_finding_to_chroma
 from web.api.schemas import (
     BatchFindingPatchRequest,
     BatchPatchResponse,
     FindingPatchRequest,
     FindingResponse,
+    FindingsCountsResponse,
+    FindingsFacetsResponse,
     FindingsListResponse,
 )
 
 logger = logging.getLogger("tally.web.findings")
 
+# Kept empty for backward-compat imports — routes are on v1_router.
 router = APIRouter()
 
 # Matches type_secret, type_vulnerability, type_weakness, etc.
@@ -37,6 +45,7 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
     Steps applied:
     - Parse the ``meta`` JSON blob to a dict; strip all ``type_*`` flags.
     - Parse ``finding_type`` and ``cwe`` JSON array strings to lists.
+    - Translate severity integer rank to label.
     - Expose the named ``fingerprint`` column as ``id_fingerprint`` to avoid
       collision with semgrep's scanner fingerprint stored in ``meta``.
     - Annotate ``is_locked`` and ``lock_holder`` from the live registry.
@@ -73,6 +82,11 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
     else:
         result["cwe"] = []
 
+    # Translate severity integer rank to label (search_raw returns raw ranks).
+    sev_raw = result.get("severity")
+    if isinstance(sev_raw, int):
+        result["severity"] = Severity.from_rank(sev_raw).label
+
     # Rename named fingerprint column to id_fingerprint.
     result["id_fingerprint"] = result.pop("fingerprint", None)
 
@@ -89,58 +103,145 @@ def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-@router.get("/", response_model=FindingsListResponse)
-def list_findings(
+def _make_repo(row: dict) -> FindingRepository:
+    """Build a FindingRepository for the project described by *row*."""
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    return FindingRepository(factory)
+
+
+v1_router = APIRouter()
+
+
+@v1_router.get(
+    "/{project_id}/findings/counts",
+    response_model=FindingsCountsResponse,
+)
+async def get_findings_counts(
+    project_id: int,
     request: Request,
-    tool: str | None = Query(default=None),
-    domain: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    segment: str | None = Query(default=None),
+) -> FindingsCountsResponse:
+    """Return aggregate finding counts bucketed by five dimensions."""
+    row = _resolve_project(request, project_id)
+    repo = _make_repo(row)
+    service = FindingAnalystService(repo)
+    data = await asyncio.to_thread(service.count_aggregates)
+    return FindingsCountsResponse(**data)
+
+
+@v1_router.get(
+    "/{project_id}/findings/facets",
+    response_model=FindingsFacetsResponse,
+)
+async def get_findings_facets(
+    project_id: int,
+    request: Request,
+) -> FindingsFacetsResponse:
+    """Return distinct filter values present in this project's findings."""
+    row = _resolve_project(request, project_id)
+    repo = _make_repo(row)
+    service = FindingAnalystService(repo)
+    data = await asyncio.to_thread(service.distinct_facet_values)
+    return FindingsFacetsResponse(**data)
+
+
+@v1_router.get(
+    "/{project_id}/findings",
+    response_model=FindingsListResponse,
+)
+async def list_findings(
+    project_id: int,
+    request: Request,
+    severity: list[str] | None = Query(default=None),
+    confidence: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    domain: list[str] | None = Query(default=None),
+    tool: list[str] | None = Query(default=None),
+    repo: list[str] | None = Query(default=None),
+    segment: list[str] | None = Query(default=None),
+    finding_type: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    order: str | None = Query(default=None, pattern="^(asc|desc)$"),
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> FindingsListResponse:
-    """Return findings with pagination envelope."""
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
-    service = FindingAnalystService(repo)
-    tools = [tool] if tool else None
-    segments = [segment] if segment else None
-    total = service.count_findings(
-        tools=tools,
-        domain=domain,
-        status=status,
-        segments=segments,
-    )
-    rows = service.get_findings(
-        tools=tools,
-        domain=domain,
-        status=status,
-        segments=segments,
-        offset=offset,
-        limit=limit,
-    )
+    """Return a paginated, filtered, sorted list of findings."""
+    row = _resolve_project(request, project_id)
+
+    # Validate severity labels — ValueError → 422 via global handler.
+    if severity:
+        for s in severity:
+            Severity.from_label(s)
+
+    sort_col: FindingSortColumn | None = None
+    if sort:
+        sort_col = FindingSortColumn.from_label(sort)
+    sort_dir: SortDirection | None = None
+    if order:
+        sort_dir = SortDirection.from_label(order)
+
+    conditions: list[tuple[str, str, list[str]]] = []
+    for col, values in [
+        ("severity", severity),
+        ("confidence", confidence),
+        ("status", status),
+        ("domain", domain),
+        ("tool", tool),
+        ("repo", repo),
+        ("segment", segment),
+        ("finding_type", finding_type),
+    ]:
+        if values:
+            conditions.append((col, "=", list(values)))
+
+    filters: dict = {
+        "conditions": conditions,
+        "sort_by": sort_col,
+        "sort_dir": sort_dir,
+        "offset": offset,
+        "limit": limit,
+        "search": search,
+    }
+
+    repo_obj = _make_repo(row)
+    service = FindingAnalystService(repo_obj)
+    total = await asyncio.to_thread(service.search_count, filters)
+    rows = await asyncio.to_thread(service.search_raw, filters)
+    items = [FindingResponse.model_validate(_serialise_finding(r)) for r in rows]
     return FindingsListResponse(
-        items=[FindingResponse.model_validate(_serialise_finding(r)) for r in rows],
+        items=items,
         total=total,
         offset=offset,
         limit=limit,
     )
 
 
-@router.get("/{finding_id}", response_model=FindingResponse)
-def get_finding(request: Request, finding_id: int) -> dict:
+@v1_router.get(
+    "/{project_id}/findings/{finding_id}",
+    response_model=FindingResponse,
+)
+async def get_finding(
+    project_id: int,
+    finding_id: int,
+    request: Request,
+) -> dict:
     """Return a single finding by integer primary key."""
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
+    row = _resolve_project(request, project_id)
+    repo = _make_repo(row)
     service = FindingAnalystService(repo)
-    row = service.get_finding(finding_id)
-    if row is None:
+    finding = await asyncio.to_thread(service.get_finding, finding_id)
+    if finding is None:
         raise NotFound("Finding not found")
-    return _serialise_finding(row)
+    return _serialise_finding(finding)
 
 
-@router.patch("/batch", response_model=BatchPatchResponse)
+@v1_router.patch(
+    "/{project_id}/findings/batch",
+    response_model=BatchPatchResponse,
+)
 async def batch_patch_findings(
+    project_id: int,
     request: Request,
     body: BatchFindingPatchRequest,
 ) -> BatchPatchResponse:
@@ -149,8 +250,8 @@ async def batch_patch_findings(
     Locked findings are skipped (not errored). Returns three disjoint id
     buckets: updated, skipped_locked, not_found.
     """
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
+    row = _resolve_project(request, project_id)
+    repo = _make_repo(row)
     service = FindingAnalystService(repo)
 
     session_id: str = request.state.session_id
@@ -175,10 +276,14 @@ async def batch_patch_findings(
     )
 
 
-@router.patch("/{finding_id}", response_model=FindingResponse)
+@v1_router.patch(
+    "/{project_id}/findings/{finding_id}",
+    response_model=FindingResponse,
+)
 async def patch_finding(
-    request: Request,
+    project_id: int,
     finding_id: int,
+    request: Request,
     body: FindingPatchRequest,
 ) -> dict:
     """Apply analyst corrections to a finding's editable fields.
@@ -188,8 +293,8 @@ async def patch_finding(
     Returns 404 if the finding does not exist.
     After the SQLite write, performs a best-effort ChromaDB metadata sync.
     """
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
+    row = _resolve_project(request, project_id)
+    repo = _make_repo(row)
     service = FindingAnalystService(repo)
 
     session_id: str = request.state.session_id
@@ -219,11 +324,11 @@ async def patch_finding(
     if not updated:
         raise NotFound("Finding not found")
 
-    row = service.get_finding(finding_id)
-    if row is None:
+    finding = await asyncio.to_thread(service.get_finding, finding_id)
+    if finding is None:
         raise NotFound("Finding not found")
 
-    serialised = _serialise_finding(row)
+    serialised = _serialise_finding(finding)
     sync_finding_to_chroma(
         finding_id=finding_id,
         rag_engine=request.app.state.rag_engine,

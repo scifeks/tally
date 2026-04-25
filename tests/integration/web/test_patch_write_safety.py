@@ -1,4 +1,4 @@
-"""Write safety tests for PATCH /api/v1/findings/{id}.
+"""Write safety tests for PATCH /api/v1/projects/{project_id}/findings/{id}.
 
 Verifies that locked fields cannot be overwritten via the PATCH endpoint,
 and that the meta blob is merged (not replaced) while preserving type_*
@@ -16,9 +16,9 @@ pytestmark = pytest.mark.integration
 
 class TestLockedFields:
     async def test_url_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers, _ = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/v1/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"url": "https://attacker.com"},
             headers=mut_headers,
         )
@@ -30,9 +30,9 @@ class TestLockedFields:
         assert row["url"] == "https://original.com/path"
 
     async def test_tool_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers, _ = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/v1/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"tool": "gitleaks"},
             headers=mut_headers,
         )
@@ -44,7 +44,7 @@ class TestLockedFields:
         assert row["tool"] == "semgrep"
 
     async def test_fingerprint_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers, _ = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT fingerprint FROM findings WHERE id = ?",
@@ -52,7 +52,7 @@ class TestLockedFields:
             ).fetchone()
         original_fp = row["fingerprint"]
         response = await client.patch(
-            f"/api/v1/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"fingerprint": "tampered"},
             headers=mut_headers,
         )
@@ -67,9 +67,9 @@ class TestLockedFields:
 
 class TestMetaPreservation:
     async def test_type_flags_preserved_on_meta_update(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers, _ = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/v1/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"meta_remediation": "new remediation"},
             headers=mut_headers,
         )
@@ -85,9 +85,9 @@ class TestMetaPreservation:
         assert "profile" in meta
 
     async def test_meta_update_merges_not_replaces(self, app_client) -> None:
-        client, finding_id, _, factory, mut_headers, _ = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/v1/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"meta_risk_type": "injection"},
             headers=mut_headers,
         )
@@ -104,9 +104,9 @@ class TestMetaPreservation:
         assert meta["type_secret"] is True
 
     async def test_patch_unknown_id_returns_404(self, app_client) -> None:
-        client, _, _, _, mut_headers, _ = app_client
+        client, _, _, _, mut_headers, project_id = app_client
         response = await client.patch(
-            "/api/v1/findings/99999",
+            f"/api/v1/projects/{project_id}/findings/99999",
             json={"severity": "low"},
             headers=mut_headers,
         )

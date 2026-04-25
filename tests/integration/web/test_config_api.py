@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from domain.findings.severity import Severity
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
+    DOMAINS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
     STATUS_LEVELS,
@@ -55,3 +57,41 @@ class TestGetConfig:
             assert spec["editor"] in ("select", "text", "boolean", "tags"), (
                 f"field '{key}' has unknown editor '{spec['editor']}'"
             )
+
+
+class TestEnumsBlock:
+    async def test_enums_key_present(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/config/")
+        assert "enums" in response.json()
+
+    async def test_severities_match_domain_order(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/config/")
+        enums = response.json()["enums"]
+        expected = [s.label for s in Severity.all_ordered()]
+        assert enums["severities"] == expected
+
+    async def test_domains_match_constants(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/config/")
+        enums = response.json()["enums"]
+        assert set(enums["domains"]) == DOMAINS
+
+    async def test_confidence_levels_match_constants(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/config/")
+        enums = response.json()["enums"]
+        assert set(enums["confidence_levels"]) == CONFIDENCE_LEVELS
+
+    async def test_statuses_match_constants(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/config/")
+        enums = response.json()["enums"]
+        assert set(enums["statuses"]) == STATUS_LEVELS
+
+    async def test_finding_types_match_constants(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/config/")
+        enums = response.json()["enums"]
+        assert set(enums["finding_types"]) == FINDING_TYPES

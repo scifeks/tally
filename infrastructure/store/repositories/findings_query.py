@@ -23,7 +23,14 @@ class FindingQueryBuilder:
             "sort_dir":   SortDirection | None,
             "page":       1,
             "page_size":  200,
+            "offset":     int | None,
+            "limit":      int | None,
+            "search":     str | None,
         }
+
+    When ``offset`` and ``limit`` are both present they take precedence over
+    ``page`` / ``page_size`` for pagination.  ``search`` performs a
+    substring match across ``description``, ``url``, and ``file``.
     """
 
     _BASE_SELECT = """
@@ -45,9 +52,12 @@ class FindingQueryBuilder:
         self._sort_dir: SortDirection | None = filters.get("sort_dir")
         self._page: int = filters.get("page", 1)
         self._page_size: int = filters.get("page_size", 200)
+        self._offset: int | None = filters.get("offset")
+        self._limit: int | None = filters.get("limit")
+        self._search: str | None = filters.get("search")
 
-    def build(self) -> tuple[str, list[Any]]:
-        """Return ``(sql, params)`` ready for ``conn.execute``."""
+    def _build_where(self) -> tuple[list[str], list[Any]]:
+        """Return (where_parts, params) without ORDER BY / LIMIT."""
         where_parts: list[str] = []
         params: list[Any] = []
 
@@ -67,14 +77,14 @@ class FindingQueryBuilder:
                     else:
                         phs = ",".join("?" * len(values))
                         where_parts.append(
-                            f"EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
+                            "EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
                             f" WHERE json_each.value IN ({phs}))"
                         )
                         params.extend(values)
                 elif op == "~=":
                     like_clauses = " OR ".join("json_each.value LIKE ?" for _ in values)
                     where_parts.append(
-                        f"EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
+                        "EXISTS (SELECT 1 FROM json_each(findings.finding_type)"
                         f" WHERE {like_clauses})"
                     )
                     params.extend(f"%{v}%" for v in values)
@@ -113,6 +123,17 @@ class FindingQueryBuilder:
                 where_parts.append(f"({'  OR  '.join(like_parts)})")
                 params.extend(f"%{v}%" for v in values)
 
+        if self._search:
+            term = f"%{self._search}%"
+            where_parts.append("(description LIKE ? OR url LIKE ? OR file LIKE ?)")
+            params.extend([term, term, term])
+
+        return where_parts, params
+
+    def build(self) -> tuple[str, list[Any]]:
+        """Return ``(sql, params)`` ready for ``conn.execute``."""
+        where_parts, params = self._build_where()
+
         sql = self._BASE_SELECT
         if where_parts:
             sql += " WHERE " + " AND ".join(where_parts)
@@ -121,8 +142,20 @@ class FindingQueryBuilder:
         sort_dir = self._sort_dir or SortDirection.DESC
         sql += f" ORDER BY {sort_col.sql_expr} {sort_dir.value}, id {sort_dir.value}"
 
-        offset = (self._page - 1) * self._page_size
-        sql += " LIMIT ? OFFSET ?"
-        params.extend([self._page_size, offset])
+        if self._offset is not None and self._limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([self._limit, self._offset])
+        else:
+            offset = (self._page - 1) * self._page_size
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([self._page_size, offset])
 
+        return sql, params
+
+    def build_count(self) -> tuple[str, list[Any]]:
+        """Return ``(sql, params)`` for a COUNT(*) query with the same filters."""
+        where_parts, params = self._build_where()
+        sql = "SELECT COUNT(*) FROM findings"
+        if where_parts:
+            sql += " WHERE " + " AND ".join(where_parts)
         return sql, params

@@ -657,3 +657,135 @@ class FindingRepository:
             {"metadata": deserialise_row(row), "distance": None, "document": ""}
             for row in rows
         ]
+
+    def search_raw(self, filters: dict) -> list[dict]:
+        """Execute a structured SQL search; return raw row dicts.
+
+        Unlike ``search()``, rows are not deserialised — callers receive
+        plain ``dict(row)`` values with severity as an integer rank.
+        """
+        sql, params = FindingQueryBuilder(filters).build()
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def search_count(self, filters: dict) -> int:
+        """Return the total row count matching *filters* (no pagination)."""
+        sql, params = FindingQueryBuilder(filters).build_count()
+        with self._factory.connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return row[0] if row else 0
+
+    def count_aggregates(self) -> dict:
+        """Return finding counts bucketed by severity, domain, segment,
+        repo, and status.
+        """
+        with self._factory.connect() as conn:
+            by_severity: dict[str, int] = {}
+            for rank, count in conn.execute(
+                "SELECT severity, COUNT(*) FROM findings"
+                " WHERE severity IS NOT NULL GROUP BY severity"
+            ).fetchall():
+                by_severity[Severity.from_rank(rank).label] = count
+
+            by_domain: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT domain, COUNT(*) FROM findings"
+                    " WHERE domain IS NOT NULL GROUP BY domain"
+                ).fetchall()
+            }
+            by_segment: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT segment, COUNT(*) FROM findings"
+                    " WHERE segment IS NOT NULL GROUP BY segment"
+                ).fetchall()
+            }
+            by_repo: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT repo, COUNT(*) FROM findings"
+                    " WHERE repo IS NOT NULL GROUP BY repo"
+                ).fetchall()
+            }
+            by_status: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT status, COUNT(*) FROM findings"
+                    " WHERE status IS NOT NULL GROUP BY status"
+                ).fetchall()
+            }
+        return {
+            "by_severity": by_severity,
+            "by_domain": by_domain,
+            "by_segment": by_segment,
+            "by_repo": by_repo,
+            "by_status": by_status,
+        }
+
+    def distinct_facet_values(self) -> dict:
+        """Return distinct values per filter dimension for UI dropdowns."""
+        with self._factory.connect() as conn:
+            domains = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT domain FROM findings WHERE domain IS NOT NULL"
+                ).fetchall()
+            )
+            severity_ranks = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT severity FROM findings WHERE severity IS NOT NULL"
+                ).fetchall()
+            )
+            severities = [Severity.from_rank(r).label for r in severity_ranks]
+            statuses = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT status FROM findings WHERE status IS NOT NULL"
+                ).fetchall()
+            )
+            confidence_levels = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT confidence FROM findings"
+                    " WHERE confidence IS NOT NULL"
+                ).fetchall()
+            )
+            finding_types = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT je.value FROM findings,"
+                    " json_each(findings.finding_type) AS je"
+                    " WHERE je.value IS NOT NULL"
+                ).fetchall()
+            )
+            tools = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT tool FROM findings WHERE tool IS NOT NULL"
+                ).fetchall()
+            )
+            repos = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT repo FROM findings WHERE repo IS NOT NULL"
+                ).fetchall()
+            )
+            segments = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT segment FROM findings WHERE segment IS NOT NULL"
+                ).fetchall()
+            )
+        return {
+            "domains": domains,
+            "severities": severities,
+            "statuses": statuses,
+            "confidence_levels": confidence_levels,
+            "finding_types": finding_types,
+            "tools": tools,
+            "repos": repos,
+            "segments": segments,
+        }
