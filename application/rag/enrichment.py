@@ -344,7 +344,9 @@ class EnrichmentPipeline:
 
         # Phase 3: SQLite writes (sequential — avoids write contention)
         for row, validated_fields in updates:
-            self._finding_repo.update_enrichment_fields(row["id"], validated_fields)
+            self._finding_repo.update_enrichment_fields(
+                row["id"], validated_fields, source="llm_inference"
+            )
 
         enriched_count = len(updates) + auto_enriched
         if self._console:

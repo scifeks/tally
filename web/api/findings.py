@@ -1,4 +1,4 @@
-"""Project-scoped findings endpoints (GET, PATCH)."""
+"""Project-scoped findings endpoints (GET, PATCH, SSE)."""
 
 from __future__ import annotations
 
@@ -6,23 +6,32 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import StreamingResponse
 
 from application.findings.analyst_service import FindingAnalystService
 from application.locking import FindingsBusy, LockQueryService
 from core.project_paths import ProjectPaths
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
+from infrastructure.events.ids import new_event_id
+from infrastructure.events.sse import format_sse_frame
+from infrastructure.events.types import BusEvent
 from infrastructure.store import FindingRepository
 from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.finding_history import FindingHistoryRepository
 from web.api._errors import FindingsLocked, NotFound
 from web.api._project_resolver import _resolve_project
 from web.api.chroma_sync import sync_finding_to_chroma
 from web.api.schemas import (
     BatchFindingPatchRequest,
     BatchPatchResponse,
+    FindingHistoryItem,
+    FindingHistoryResponse,
     FindingPatchRequest,
     FindingResponse,
     FindingsCountsResponse,
@@ -108,6 +117,13 @@ def _make_repo(row: dict) -> FindingRepository:
     paths = ProjectPaths.from_registry_row(row)
     factory = ConnectionFactory(paths.findings_db)
     return FindingRepository(factory)
+
+
+def _make_history_repo(row: dict) -> FindingHistoryRepository:
+    """Build a FindingHistoryRepository for the project described by *row*."""
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    return FindingHistoryRepository(factory)
 
 
 v1_router = APIRouter()
@@ -217,6 +233,47 @@ async def list_findings(
     )
 
 
+@v1_router.get("/{project_id}/findings/events")
+async def findings_events(
+    project_id: int,
+    request: Request,
+) -> StreamingResponse:
+    """SSE stream emitting finding_updated events for this project.
+
+    Tail-only — no snapshot on connect. Clients filter by event_type.
+    Each event carries the full serialised finding record plus project_id.
+    """
+    _resolve_project(request, project_id)
+    bus = request.app.state.event_bus
+    sub_id, queue = await bus.subscribe("finding")
+
+    async def event_stream() -> AsyncIterator[str]:
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                from infrastructure.events.types import EOS
+
+                if item is EOS:
+                    break
+                if item.payload.get("project_id") != project_id:
+                    continue
+                yield format_sse_frame(item)
+        finally:
+            await bus.unsubscribe("finding", sub_id)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @v1_router.get(
     "/{project_id}/findings/{finding_id}",
     response_model=FindingResponse,
@@ -234,6 +291,48 @@ async def get_finding(
     if finding is None:
         raise NotFound("Finding not found")
     return _serialise_finding(finding)
+
+
+@v1_router.get(
+    "/{project_id}/findings/{finding_id}/history",
+    response_model=FindingHistoryResponse,
+)
+async def get_finding_history(
+    project_id: int,
+    finding_id: int,
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> FindingHistoryResponse:
+    """Return paginated mutation history for a single finding."""
+    row = _resolve_project(request, project_id)
+    repo = _make_repo(row)
+    service = FindingAnalystService(repo)
+    finding = await asyncio.to_thread(service.get_finding, finding_id)
+    if finding is None:
+        raise NotFound("Finding not found")
+    history_repo = _make_history_repo(row)
+    total = await asyncio.to_thread(history_repo.count_for_finding, finding_id)
+    items = await asyncio.to_thread(
+        history_repo.list_for_finding, finding_id, offset=offset, limit=limit
+    )
+    return FindingHistoryResponse(
+        items=[
+            FindingHistoryItem(
+                id=h.id,
+                finding_id=h.finding_id,
+                timestamp=h.timestamp,
+                before_values=h.before_values,
+                after_values=h.after_values,
+                inference_context=h.inference_context,
+                source=h.source,
+            )
+            for h in items
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @v1_router.patch(
@@ -268,6 +367,24 @@ async def batch_patch_findings(
     result = await asyncio.to_thread(
         service.bulk_update_fields, body.ids, fields, holder_token=holder
     )
+
+    # Emit finding_updated for each successfully updated finding.
+    bus = request.app.state.event_bus
+    for fid in result.updated:
+        updated_row = await asyncio.to_thread(service.get_finding, fid)
+        if updated_row is not None:
+            serialised = _serialise_finding(updated_row)
+            await bus.publish(
+                BusEvent(
+                    event_id=new_event_id(),
+                    job_id="finding",
+                    stream="finding",
+                    event_type="finding_updated",
+                    payload={**serialised, "project_id": project_id},
+                    ts=datetime.now(UTC),
+                )
+            )
+
     return BatchPatchResponse(
         updated=result.updated,
         skipped_locked=result.skipped_locked,
@@ -334,4 +451,17 @@ async def patch_finding(
         rag_engine=request.app.state.rag_engine,
         finding_repo=repo,
     )
+
+    bus = request.app.state.event_bus
+    await bus.publish(
+        BusEvent(
+            event_id=new_event_id(),
+            job_id="finding",
+            stream="finding",
+            event_type="finding_updated",
+            payload={**serialised, "project_id": project_id},
+            ts=datetime.now(UTC),
+        )
+    )
+
     return serialised

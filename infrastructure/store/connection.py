@@ -134,6 +134,25 @@ class ConnectionFactory:
                     started_at   TEXT,
                     completed_at TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS finding_history (
+                    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                    finding_id        INTEGER NOT NULL
+                                        REFERENCES findings(id) ON DELETE CASCADE,
+                    timestamp         TEXT NOT NULL,
+                    before_values     TEXT NOT NULL,
+                    after_values      TEXT NOT NULL,
+                    inference_context TEXT,
+                    source            TEXT NOT NULL CHECK (source IN (
+                                        'llm_inference',
+                                        'auto_triage',
+                                        'web_ui',
+                                        'repl'
+                                      ))
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_finding_history_finding_id
+                    ON finding_history (finding_id, timestamp DESC);
             """)
         self._migrate_fingerprint_unique()
         self._migrate_drop_run_repos()

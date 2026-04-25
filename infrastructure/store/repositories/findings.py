@@ -18,6 +18,8 @@ from infrastructure.store.repositories.findings_serial import (
 )
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from infrastructure.store.connection import ConnectionFactory
 
 logger = logging.getLogger(__name__)
@@ -339,6 +341,34 @@ class FindingRepository:
         with self._factory.connect() as conn:
             return conn.execute(sql, params).fetchone()[0]
 
+    def _insert_history(
+        self,
+        conn: sqlite3.Connection,
+        finding_id: int,
+        before: dict[str, Any],
+        after: dict[str, Any],
+        source: str,
+        inference_context: dict[str, Any] | None = None,
+    ) -> None:
+        from datetime import UTC, datetime
+
+        conn.execute(
+            "INSERT INTO finding_history"
+            " (finding_id, timestamp, before_values, after_values,"
+            "  inference_context, source)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                finding_id,
+                datetime.now(UTC).isoformat(),
+                json.dumps(before),
+                json.dumps(after),
+                json.dumps(inference_context)
+                if inference_context is not None
+                else None,
+                source,
+            ),
+        )
+
     def update_finding(
         self,
         finding_id: int,
@@ -350,6 +380,8 @@ class FindingRepository:
         attack_vector: str | None,
         call_stack: str | None,
         strategy: str,
+        *,
+        source: str = "auto_triage",
     ) -> bool:
         """Update enrichment fields on a finding row.
 
@@ -374,6 +406,7 @@ class FindingRepository:
             "triaged_at": now_iso,
             "strategy": strategy,
         }
+        before = dict(row)
         updated_meta = json.dumps(existing_meta)
         finding_type_db = json.dumps([finding_type])
         with self._factory.connect() as conn:
@@ -397,6 +430,12 @@ class FindingRepository:
                     updated_meta,
                     finding_id,
                 ),
+            )
+            after_row = conn.execute(
+                "SELECT * FROM findings WHERE id = ?", (finding_id,)
+            ).fetchone()
+            self._insert_history(
+                conn, finding_id, before, dict(after_row) if after_row else {}, source
             )
         return True
 
@@ -427,6 +466,8 @@ class FindingRepository:
         self,
         finding_id: int,
         fields: dict[str, Any],
+        *,
+        source: str = "web_ui",
     ) -> bool:
         """Update analyst-writable fields on a finding row.
 
@@ -484,9 +525,21 @@ class FindingRepository:
         params.extend([updated_meta, now_iso])
         params.append(finding_id)
 
+        before = dict(row)
         sql = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
         with self._factory.connect() as conn:
             cursor = conn.execute(sql, params)
+            if cursor.rowcount > 0:
+                after_row = conn.execute(
+                    "SELECT * FROM findings WHERE id = ?", (finding_id,)
+                ).fetchone()
+                self._insert_history(
+                    conn,
+                    finding_id,
+                    before,
+                    dict(after_row) if after_row else {},
+                    source,
+                )
             return cursor.rowcount > 0
 
     def batch_update_analyst_fields(
@@ -592,7 +645,13 @@ class FindingRepository:
             result.append(d)
         return result
 
-    def update_enrichment_fields(self, finding_id: int, fields: dict) -> None:
+    def update_enrichment_fields(
+        self,
+        finding_id: int,
+        fields: dict,
+        *,
+        source: str = "llm_inference",
+    ) -> None:
         """Write LLM-enriched fields back to the SQLite row.
 
         Named columns updated directly: severity, confidence, description.
@@ -617,6 +676,7 @@ class FindingRepository:
             elif key in _ENRICHMENT_COLUMN_FIELDS:
                 column_updates[key] = val
 
+        before = dict(row)
         updated_meta = json.dumps(existing_meta)
         now_iso = datetime.now(UTC).isoformat()
 
@@ -634,6 +694,16 @@ class FindingRepository:
         sql_upd = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
         with self._factory.connect() as conn:
             conn.execute(sql_upd, params)
+            after_row = conn.execute(
+                "SELECT * FROM findings WHERE id = ?", (finding_id,)
+            ).fetchone()
+            self._insert_history(
+                conn,
+                finding_id,
+                before,
+                dict(after_row) if after_row else {},
+                source,
+            )
 
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.

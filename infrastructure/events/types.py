@@ -12,7 +12,7 @@ SubscriberId = NewType("SubscriberId", str)
 class BusEvent:
     event_id: str
     job_id: str
-    stream: Literal["scan", "triage", "report", "chat"]
+    stream: Literal["scan", "triage", "report", "chat", "finding"]
     event_type: str
     payload: Mapping[str, Any]
     ts: datetime

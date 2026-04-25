@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from application.project.registry_service import ProjectRegistryService
 from application.rag.engine import RAGEngine
 from application.runtime.dependency_service import RuntimeDependencyService
 from core.project_paths import ProjectPaths
+from infrastructure.events.bus import EventBus
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.project_registry import ProjectRegistryRepository
@@ -38,6 +41,17 @@ from web.middleware.session_auth import SessionAuthMiddleware
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start the finding-stream event bus job; close it on shutdown."""
+    bus = EventBus()
+    app.state.event_bus = bus
+    await bus.register_job("finding", "finding")
+    yield
+    with contextlib.suppress(Exception):
+        await bus.close_job("finding")
+
+
 def create_app(
     base_path: str,
     project_name: str,
@@ -58,7 +72,7 @@ def create_app(
     Returns:
         Configured ``FastAPI`` instance.
     """
-    app = FastAPI(title="Tally Web UI")
+    app = FastAPI(title="Tally Web UI", lifespan=_lifespan)
     install_error_handlers(app)
 
     registry = HandshakeRegistry()

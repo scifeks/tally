@@ -168,6 +168,7 @@ class FindingUpdateService:
                 attack_vector,
                 call_stack,
                 strategy,
+                source="auto_triage",
             )
         except Exception as exc:
             duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)
