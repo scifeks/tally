@@ -13,10 +13,24 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.locking import LockRegistry, get_registry
+from application.locking.cancellation import CancellationToken, no_op_token
+from application.ports.triage_event_sink import (
+    NullTriageEventSink,
+    TriageEventSink,
+)
 from application.tools.registry import tool_registry
 from core.config.manager import ConfigManager as _ConfigManager
 from core.config.schemas.global_config import MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 from core.project_paths import ProjectPaths
+from domain.pipeline.triage_events import (
+    BatchCompleted,
+    BatchCreated,
+    BatchFailed,
+    BatchStarted,
+    RunCancelled,
+    RunCompleted,
+    RunStarted,
+)
 
 try:
     _cfg = _ConfigManager(str(Path(__file__).parent.parent.parent)).global_config
@@ -36,6 +50,23 @@ _APP_ROOT = Path(__file__).parent.parent.parent
 _AUDIT_WRITE_TOOLS = ("update_finding", "update_findings_batch")
 
 
+class TriageCancelled(Exception):
+    """Raised when triage observes its CancellationToken set mid-run.
+
+    The runner's batch loop catches this, marks remaining batches
+    cancelled, emits a ``run_cancelled`` event, and exits cleanly.
+    """
+
+
+class NoScanRunError(RuntimeError):
+    """Raised when triage is dispatched but the project has no scan_runs.
+
+    Triage operates against the latest scan_run for the project. If no
+    scan has ever run, there is nothing to triage. The API surface
+    translates this into a 404; the REPL surfaces the message.
+    """
+
+
 @dataclass
 class TriageResult:
     sessions_run: int
@@ -53,6 +84,11 @@ class TriageRunner:
         audit_repo: AuditRepository,
         app_root: Path,
         registry: LockRegistry | None = None,
+        *,
+        event_sink: TriageEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
+        project_id: int | None = None,
+        scan_run_id: int | None = None,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -60,6 +96,10 @@ class TriageRunner:
         self._audit_repo = audit_repo
         self._app_root = app_root
         self._registry = registry if registry is not None else get_registry()
+        self._event_sink: TriageEventSink = event_sink or NullTriageEventSink()
+        self._cancel_token: CancellationToken = cancel_token or no_op_token()
+        self._project_id = project_id
+        self._scan_run_id = scan_run_id
 
     @classmethod
     def for_project(cls, project: str, app_root: Path | None = None) -> TriageRunner:
@@ -79,9 +119,13 @@ class TriageRunner:
     def batch(self) -> tuple[int, int]:
         """Run batching phase only.
 
-        Returns (run_id, total_batches_created).
+        Resolves the scan_run_id (constructor arg, else latest in the
+        project DB via ``RunRepository.latest_run_id()``), creates
+        triage_batches rows for that scan_run, and returns
+        ``(scan_run_id, total_batches_created)``. Raises
+        :class:`NoScanRunError` if the project has no scan runs.
         """
-        run_id = self._run_repo.create_run({})
+        run_id = self._resolve_scan_run_id()
 
         reset_count = self._triage_repo.reset_stale_batches(run_id)
         if reset_count:
@@ -108,6 +152,19 @@ class TriageRunner:
                     segment,
                 )
                 print(f"  Batched {count} batch(es) for {tool}/{repo}/{segment}")
+                if count > 0:
+                    self._emit(
+                        BatchCreated(
+                            scan_run_id=run_id,
+                            project_id=self._project_id,
+                            batch_id=0,
+                            segment=segment,
+                            findings_count=count,
+                            message=(
+                                f"Batched {count} batch(es) for {tool}/{repo}/{segment}"
+                            ),
+                        )
+                    )
                 total += count
             except Exception as exc:
                 raise RuntimeError(
@@ -118,19 +175,45 @@ class TriageRunner:
     def run(self) -> TriageResult:
         """Run full triage pipeline (batch → MCP setup → Claude sessions)."""
         run_id, _total = self.batch()
+        self._emit(
+            RunStarted(
+                scan_run_id=run_id,
+                project_id=self._project_id,
+                message=f"Triage starting for scan_run_id={run_id}",
+            )
+        )
         holder = f"triage-run:{run_id}"
         with self._registry.job("triage", holder):
             mcp_json_path = self._write_mcp_config(run_id)
             try:
-                return self._run_batch_loop(
+                result = self._run_batch_loop(
                     run_id,
                     lambda batch_id, render_fn, finding_ids: self._run_session(
                         render_fn, finding_ids
                     ),
                     holder_token=holder,
                 )
+            except TriageCancelled:
+                self._triage_repo.cancel_remaining(run_id)
+                self._emit(
+                    RunCancelled(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        message="Triage cancelled",
+                    )
+                )
+                raise
             finally:
                 mcp_json_path.unlink(missing_ok=True)
+        self._emit(
+            RunCompleted(
+                scan_run_id=run_id,
+                project_id=self._project_id,
+                message="Triage completed",
+                processed_count=result.sessions_run,
+            )
+        )
+        return result
 
     def run_dry_run(self) -> int:
         """Batch phase + render prompts to DEBUG log. No MCP server, no Claude.
@@ -162,6 +245,34 @@ class TriageRunner:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _resolve_scan_run_id(self) -> int:
+        """Return the scan_run_id triage will operate on.
+
+        Constructor arg wins; otherwise the repository reports the
+        latest scan_run in the project's DB. Raises
+        :class:`NoScanRunError` if no scan_runs exist.
+        """
+        if self._scan_run_id is not None:
+            return self._scan_run_id
+        latest = self._run_repo.latest_run_id()
+        if latest is None:
+            raise NoScanRunError(
+                f"No scan runs found for project {self._project!r}; "
+                "run a scan before triage"
+            )
+        return latest
+
+    def _emit(self, event: object) -> None:
+        """Emit *event* through the configured sink, swallowing failures."""
+        try:
+            self._event_sink.emit(event)  # type: ignore[arg-type]
+        except Exception as exc:  # pragma: no cover - defensive
+            _log.debug("Triage event sink raised; swallowing: %s", exc)
+
+    def _check_cancelled(self) -> None:
+        if self._cancel_token.is_set():
+            raise TriageCancelled
+
     def _run_batch_loop(
         self,
         run_id: int,
@@ -179,6 +290,8 @@ class TriageRunner:
         """
         sessions_run = success = failed = incomplete = 0
         while True:
+            self._check_cancelled()
+
             batch = self._triage_repo.claim_batch(run_id)
             if batch is None:
                 break
@@ -201,6 +314,15 @@ class TriageRunner:
             render_fn: Callable[..., str] = module.render
 
             sessions_run += 1
+            self._emit(
+                BatchStarted(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    batch_id=batch_id,
+                    segment=segment,
+                    message=f"Batch {batch_id} started ({len(finding_ids)} findings)",
+                )
+            )
             if holder_token:
                 with self._registry.findings(finding_ids, holder_token):
                     outcome = handler(batch_id, render_fn, finding_ids)
@@ -210,10 +332,40 @@ class TriageRunner:
 
             if outcome == "success":
                 success += 1
+                self._emit(
+                    BatchCompleted(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        segment=segment,
+                        findings_count=len(finding_ids),
+                        message=f"Batch {batch_id} completed",
+                    )
+                )
             elif outcome == "failed":
                 failed += 1
+                self._emit(
+                    BatchFailed(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        segment=segment,
+                        message=f"Batch {batch_id} failed",
+                        error="see logs",
+                    )
+                )
             else:
                 incomplete += 1
+                self._emit(
+                    BatchCompleted(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        segment=segment,
+                        findings_count=len(finding_ids),
+                        message=f"Batch {batch_id} {outcome}",
+                    )
+                )
 
         return TriageResult(
             sessions_run=sessions_run,

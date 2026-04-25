@@ -32,6 +32,7 @@ from web.api.projects import v1_router as projects_v1_router
 from web.api.scans import scans_v1_router
 from web.api.scans import v1_router as scans_projects_v1_router
 from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
+from web.api.triage import v1_router as triage_projects_v1_router
 from web.auth.handshake import HandshakeRegistry
 from web.auth.sessions import SessionStore
 from web.middleware.access_log import AccessLogMiddleware
@@ -50,11 +51,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.event_bus = bus
     await bus.register_job("finding", "finding")
     await bus.register_job("scan", "scan")
+    await bus.register_job("triage", "triage")
     yield
     with contextlib.suppress(Exception):
         await bus.close_job("finding")
     with contextlib.suppress(Exception):
         await bus.close_job("scan")
+    with contextlib.suppress(Exception):
+        await bus.close_job("triage")
 
 
 def create_app(
@@ -123,6 +127,7 @@ def create_app(
     app.include_router(runtime_v1_router, prefix="/api/v1")
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(scans_v1_router, prefix="/api/v1/scans")
+    app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF

@@ -95,6 +95,12 @@ def test_emission_carries_project_and_run_ids() -> None:
     pipeline._get_enrichment_plan = lambda row: (["title"], None)  # type: ignore[method-assign]
     pipeline._call_llm_worker = lambda *a, **kw: {"title": "x"}  # type: ignore[method-assign]
 
+    # Pre-seed the lazy LLM provider so the property short-circuits and
+    # never reads config/global.json. Real provider resolution happens in
+    # integration tests via _seed_global_config; this is a unit test for
+    # event emission.
+    pipeline._llm_provider = MagicMock()
+
     pipeline.enrich([1])
 
     # We expect at least EnrichmentComplete; EnrichmentProgress fires only

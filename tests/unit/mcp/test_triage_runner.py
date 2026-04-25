@@ -29,7 +29,7 @@ def _make_runner(
     venv_python.touch()
 
     store = MagicMock()
-    store.create_run.return_value = 1
+    store.latest_run_id.return_value = 1
     store.reset_stale_batches.return_value = 0
     store.get_active_finding_combos.return_value = []
     store.count_events_since.return_value = 0
@@ -221,7 +221,7 @@ def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
         with patch("subprocess.run", return_value=mock_result):
             result = runner.run()
 
-    store.create_run.assert_called_once()  # from batch()
+    store.latest_run_id.assert_called_once()  # from batch()
     assert isinstance(result, TriageResult)
     assert result.sessions_run == 1
     assert result.success == 1
@@ -285,7 +285,7 @@ def test_run_dry_run_calls_batch(tmp_path: Path) -> None:
     runner, store = _make_runner(tmp_path)
     store.claim_batch.return_value = None
     runner.run_dry_run()
-    store.create_run.assert_called_once()  # batch() is invoked
+    store.latest_run_id.assert_called_once()  # batch() is invoked
 
 
 def test_run_dry_run_marks_all_batches_success(tmp_path: Path) -> None:

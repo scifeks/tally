@@ -454,3 +454,79 @@ class ScanProgressResponse(BaseModel):
     current_segment: str | None
     segment_label: str | None
     tool_runs_summary: ToolRunsSummary
+
+
+# ---------------------------------------------------------------------------
+# Triage (Phase 6) — endpoints.md §6
+# ---------------------------------------------------------------------------
+
+
+class TriageStartRequest(BaseModel):
+    """POST body for /api/v1/projects/{id}/triage.
+
+    ``acknowledge_injection_risk`` MUST be ``true`` — the API replaces
+    the REPL's interactive prompt-injection confirmation
+    (``application/repl/commands/triage_commands.py``) with this
+    explicit field. ``finding_ids`` is reserved for future
+    finding-scoped triage; if omitted or null, the runner queues every
+    untriaged active finding for the latest scan_run.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    acknowledge_injection_risk: bool = Field(
+        validation_alias=AliasChoices(
+            "acknowledge_injection_risk",
+            "acknowledgeInjectionRisk",
+        ),
+    )
+    finding_ids: list[int] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("finding_ids", "findingIds"),
+    )
+
+
+class TriageRunSummary(BaseModel):
+    scan_run_id: int
+    project_id: int | None
+    status: str
+    started_at: str | None
+    finished_at: str | None
+    total_findings: int
+    processed_findings: int
+
+
+class TriagesListResponse(BaseModel):
+    items: list[TriageRunSummary]
+    total: int
+    offset: int
+    limit: int
+
+
+class TriageBatchItem(BaseModel):
+    id: int
+    scan_run_id: int
+    segment: str | None
+    finding_ids: list[int]
+    status: str
+    attempts: int
+    started_at: str | None
+    finished_at: str | None
+    response_preview: str | None
+    error: str | None
+
+
+class TriageDetailResponse(BaseModel):
+    scan_run_id: int
+    project_id: int | None
+    status: str
+    started_at: str | None
+    finished_at: str | None
+    total_findings: int
+    processed_findings: int
+    batches: list[TriageBatchItem]
+
+
+class TriageCancelResponse(BaseModel):
+    scan_run_id: int
+    status: str

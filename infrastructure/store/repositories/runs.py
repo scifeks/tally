@@ -164,6 +164,21 @@ class RunRepository:
             ).fetchone()
         return _row_to_scan_run(row) if row else None
 
+    def latest_run_id(self) -> int | None:
+        """Return the highest scan_runs.id in this project's DB, or None.
+
+        Used by the triage dispatch path: triage operates on the most
+        recent scan run in the project. Choice is made by the
+        application core, never by the API or REPL caller. The
+        repository is already project-scoped via its ConnectionFactory,
+        so no explicit project_id filter is required.
+        """
+        with self._factory.connect() as conn:
+            row = conn.execute("SELECT MAX(id) FROM scan_runs").fetchone()
+        if row is None or row[0] is None:
+            return None
+        return int(row[0])
+
     def list_for_project(
         self,
         project_id: int,
