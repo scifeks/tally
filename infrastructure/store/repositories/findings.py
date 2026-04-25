@@ -155,7 +155,7 @@ class FindingRepository:
         """Delete findings from the store.
 
         ``tools=None``   — DELETE all rows from all tables (findings, run_tools,
-                           runs, triage_batches, tool_audit_log).
+                           scan_runs, triage_batches, tool_audit_log).
         ``tools=[...]``  — DELETE findings, triage_batches, and tool_audit_log
                            records for those tools only.
         """
@@ -167,7 +167,7 @@ class FindingRepository:
             conn.execute("DELETE FROM tool_audit_log")
             conn.execute("DELETE FROM findings")
             conn.execute("DELETE FROM run_tools")
-            conn.execute("DELETE FROM runs")
+            conn.execute("DELETE FROM scan_runs")
 
     def delete_findings_by_tool_name(self, tools: list[str]) -> None:
         """Delete all records related to specific tool(s).
@@ -177,7 +177,7 @@ class FindingRepository:
         - Triage batches whose finding_ids are all from those findings
         - Tool audit log entries for those tools
 
-        Does NOT delete: runs, run_tools.
+        Does NOT delete: scan_runs, run_tools.
         """
         if not tools:
             return
