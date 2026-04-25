@@ -82,11 +82,26 @@ export const REST_ENDPOINTS = {
   /** GET: list triage runs for a project */
   triageRuns: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage`,
   /** GET: single triage run with batches */
-  triageRun: (id: string) => `${API_BASE_URL}/triage/${id}`,
+  triageRun: (projectId: string, scanRunId: string) =>
+    `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}`,
+  /** GET: currently-running triage for a project (or null) */
+  activeTriage: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage/active`,
+  /** GET: most-recent triage run summary for a project */
+  latestTriage: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage/latest`,
   /** POST: start a new triage run (optionally with specific finding IDs) */
   startTriage: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage`,
   /** POST: cancel a running triage */
-  cancelTriage: (id: string) => `${API_BASE_URL}/triage/${id}/cancel`,
+  cancelTriage: (projectId: string, scanRunId: string) =>
+    `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/cancel`,
+  /** POST: resume a failed/stranded triage run */
+  resumeTriage: (projectId: string, scanRunId: string) =>
+    `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/resume`,
+
+  // ─── Runtime / Tools (cross-project) ────────────────────────────────────────
+  /** GET: probe status for each registered runtime dependency */
+  runtimeDependencies: `${API_BASE_URL}/runtime-dependencies`,
+  /** GET: tool wrappers whose binary was probed at process startup */
+  installedTools: `${API_BASE_URL}/tools/installed`,
 
   // ─── URL Lists ──────────────────────────────────────────────────────────────
   /** GET: URL entries for a project's URL list */

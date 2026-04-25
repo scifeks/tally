@@ -11,6 +11,7 @@ const TYPE_STYLE: Record<TriageLogEventType, { color: string; prefix: string }> 
   batch_retry: { color: 'text-high', prefix: '[↻]' },
   run_completed: { color: 'text-accent', prefix: '>>>' },
   run_cancelled: { color: 'text-high', prefix: 'XXX' },
+  triage_failed: { color: 'text-crit', prefix: '[X]' },
 }
 
 export function LogRow({ event }: { event: TriageLogEvent }) {

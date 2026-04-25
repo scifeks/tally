@@ -62,6 +62,9 @@ export {
 // Triage hooks
 export { useTriageHistory, useStartTriage, useCancelTriage, useTriageEvents } from './useTriage'
 
+// Runtime / installed-tools hooks (cross-project)
+export { useRuntimeDependencies, useInstalledTools } from './useRuntime'
+
 // URL List hooks
 export { useUrlLists } from './useUrlLists'
 
