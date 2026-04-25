@@ -9,7 +9,7 @@
  * ```json
  * {
  *   "projects": [
- *     { "id": "p-01", "name": "acme-platform", "code": "ACM" },
+ *     { "id": "1", "name": "acme-platform", "code": "ACM" },
  *     ...
  *   ]
  * }

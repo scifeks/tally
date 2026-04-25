@@ -21,7 +21,7 @@
  *       "line": 42,
  *       "cwe": "CWE-89",
  *       "commitHash": "a1b2c3d",
- *       "projectId": "p-01",
+ *       "projectId": "1",
  *       "discoveredAt": "2024-01-15T10:30:00Z",
  *       "notes": null
  *     },

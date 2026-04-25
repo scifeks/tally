@@ -9,7 +9,7 @@ const base: Finding = {
   segment: 'sast',
   tool: 'semgrep',
   title: 'Example finding',
-  projectId: 'p-01',
+  projectId: '1',
   discoveredAt: '2024-01-01T00:00:00Z',
 }
 

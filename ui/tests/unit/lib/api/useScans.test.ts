@@ -14,7 +14,7 @@ function makeWrapper() {
 describe('useScanHistory', () => {
   it('resolves with 9 scans for p-01', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useScanHistory('p-01'), { wrapper })
+    const { result } = renderHook(() => useScanHistory('1'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     expect(result.current.data).toHaveLength(9)
   })
@@ -23,7 +23,7 @@ describe('useScanHistory', () => {
 describe('useRunningScans', () => {
   it('returns only scans with status running for p-01', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useRunningScans('p-01'), { wrapper })
+    const { result } = renderHook(() => useRunningScans('1'), { wrapper })
     await waitFor(() => {
       expect(result.current).toHaveLength(2)
     }, { timeout: 2000 })
@@ -34,7 +34,7 @@ describe('useRunningScans', () => {
 describe('useProjectScanConfig', () => {
   it('resolves with repos, segments, and tools arrays for p-01', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useProjectScanConfig('p-01'), { wrapper })
+    const { result } = renderHook(() => useProjectScanConfig('1'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     const config = result.current.data!
     expect(Array.isArray(config.repos)).toBe(true)

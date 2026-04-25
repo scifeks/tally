@@ -72,7 +72,7 @@ export default function Findings() {
 
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
   // GET /api/v1/projects/:id/findings
-  const { data: baseFindings = [] } = useFindingsHook({ projectId: activeProjectId })
+  const { data: baseFindings = [] } = useFindingsHook({ projectId: activeProjectId ?? '' })
 
   // Merge in-memory edits (e.g. status, notes) on top of base findings.
   // TODO [BACKEND]: When backend is connected, local overrides should trigger

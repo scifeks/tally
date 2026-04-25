@@ -33,9 +33,9 @@ export default function Triage() {
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
   // GET /api/v1/projects/:id/meta
-  const { data: projectMetaData } = useProjectMeta(activeProjectId)
+  const { data: projectMetaData } = useProjectMeta(activeProjectId ?? '')
   // GET /api/v1/projects/:id/findings
-  const { data: findings = [] } = useFindings({ projectId: activeProjectId })
+  const { data: findings = [] } = useFindings({ projectId: activeProjectId ?? '' })
 
   // TODO [BACKEND]: These mutations trigger server actions.
   // POST /api/v1/projects/:id/triage/start

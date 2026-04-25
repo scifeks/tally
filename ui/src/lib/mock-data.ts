@@ -11,9 +11,9 @@ import type {
 } from './types'
 
 export const projects: Project[] = [
-  { id: 'p-01', name: 'acme-platform', code: 'ACM' },
-  { id: 'p-02', name: 'atlas-api', code: 'ATL' },
-  { id: 'p-03', name: 'northwind-web', code: 'NWD' },
+  { id: '1', name: 'acme-platform', code: 'ACM' },
+  { id: '2', name: 'atlas-api', code: 'ATL' },
+  { id: '3', name: 'northwind-web', code: 'NWD' },
 ]
 
 const sastTitles = [
@@ -118,7 +118,7 @@ function commitHash(): string {
 //   NWD (p-03) — 0 findings, no scans yet (exercises empty states)
 function buildFindings(): Finding[] {
   const out: Finding[] = []
-  const counts: Record<string, number> = { 'p-01': 220, 'p-02': 35, 'p-03': 0 }
+  const counts: Record<string, number> = { '1': 220, '2': 35, '3': 0 }
   let idCounter = 1000
   const triageActors: Array<'claude-code' | 'analyst_web'> = ['claude-code', 'analyst_web']
   for (const project of projects) {
@@ -165,9 +165,9 @@ export const findings: Finding[] = buildFindings()
 function buildScans(): Scan[] {
   const out: Scan[] = []
   const dist: { projectId: string; count: number }[] = [
-    { projectId: 'p-01', count: 9 },
-    { projectId: 'p-02', count: 3 },
-    { projectId: 'p-03', count: 0 },
+    { projectId: '1', count: 9 },
+    { projectId: '2', count: 3 },
+    { projectId: '3', count: 0 },
   ]
   const runningSegments = [
     {
@@ -187,7 +187,7 @@ function buildScans(): Scan[] {
   for (const { projectId, count } of dist) {
     for (let j = 0; j < count; j++) {
       const segment = pick(segments)
-      const isRunning = projectId === 'p-01' && j < 2
+      const isRunning = projectId === '1' && j < 2
       const startedAt = new Date(Date.now() - (i + 1) * 1000 * 60 * 37).toISOString()
       const seg = isRunning ? runningSegments[runningIdx++] : undefined
       out.push({
@@ -219,9 +219,9 @@ export const projectMeta: Record<
   string,
   { repositories: number; urlLists: number; enabledTools: number }
 > = {
-  'p-01': { repositories: 14, urlLists: 180, enabledTools: 9 },
-  'p-02': { repositories: 4, urlLists: 42, enabledTools: 5 },
-  'p-03': { repositories: 0, urlLists: 0, enabledTools: 0 },
+  '1': { repositories: 14, urlLists: 180, enabledTools: 9 },
+  '2': { repositories: 4, urlLists: 42, enabledTools: 5 },
+  '3': { repositories: 0, urlLists: 0, enabledTools: 0 },
 }
 
 // ─── URL Lists ──────────────────────────────────────────────────────────────
@@ -303,14 +303,14 @@ const pathPool = [
 ]
 
 const hostByProject: Record<string, string> = {
-  'p-01': 'api.acme-platform.com',
-  'p-02': 'api.atlas.dev',
+  '1': 'api.acme-platform.com',
+  '2': 'api.atlas.dev',
 }
 
 const countByProject: Record<string, number> = {
-  'p-01': 180,
-  'p-02': 42,
-  'p-03': 0,
+  '1': 180,
+  '2': 42,
+  '3': 0,
 }
 
 function portFor(proto: UrlProtocol): number {

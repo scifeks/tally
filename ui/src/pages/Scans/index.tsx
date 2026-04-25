@@ -36,13 +36,13 @@ export default function Scans() {
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
   // GET /api/v1/projects/:id/meta
-  const { data: projectMetaData } = useProjectMeta(activeProjectId)
+  const { data: projectMetaData } = useProjectMeta(activeProjectId ?? '')
   // GET /api/v1/projects/:id/scans (history)
-  void useScanHistory(activeProjectId)
+  void useScanHistory(activeProjectId ?? '')
 
   // TODO [BACKEND]: Scan configuration (repos, tools, domains) from server.
   // GET /api/v1/projects/:id/scans/config
-  const { data: scanConfig } = useProjectScanConfig(activeProjectId)
+  const { data: scanConfig } = useProjectScanConfig(activeProjectId ?? '')
 
   // TODO [BACKEND]: These mutations trigger server actions.
   // POST /api/v1/projects/:id/scans/start
@@ -726,7 +726,7 @@ export default function Scans() {
         </Panel>
       ) : (
         <Panel title="scan history" className="flex-1 min-h-0" bodyClassName="flex flex-col">
-          <HistoryTable projectId={activeProjectId} />
+          <HistoryTable projectId={activeProjectId ?? ''} />
         </Panel>
       )}
     </div>

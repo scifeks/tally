@@ -41,7 +41,7 @@ describe('useProjectMeta', () => {
 
   it('resolves with numeric repo, urlLists, and tool counts for p-01', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useProjectMeta('p-01'), { wrapper })
+    const { result } = renderHook(() => useProjectMeta('1'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const meta = result.current.data!
     expect(typeof meta.repositories).toBe('number')

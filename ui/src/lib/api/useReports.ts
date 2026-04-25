@@ -47,7 +47,7 @@ import type {
 // ─── Mock Data ──────────────────────────────────────────────────────────────
 
 const MOCK_DRAFTS: Record<string, ReportDraft[]> = {
-  'p-01': [
+  '1': [
     {
       section: 'executive_summary',
       status: 'draft',
@@ -86,7 +86,7 @@ const MOCK_DRAFTS: Record<string, ReportDraft[]> = {
         'To improve the overall security posture of the ACME Platform, we recommend implementing the following measures:\n\n1. Adopt a Secure Development Lifecycle (SDL)...',
     },
   ],
-  'p-02': [
+  '2': [
     { section: 'executive_summary', status: 'not_generated' },
     { section: 'risk_level', status: 'not_generated' },
     { section: 'critical_issues', status: 'not_generated' },
@@ -94,7 +94,7 @@ const MOCK_DRAFTS: Record<string, ReportDraft[]> = {
     { section: 'scope_methodology', status: 'not_generated' },
     { section: 'general_recommendations', status: 'not_generated' },
   ],
-  'p-03': [
+  '3': [
     { section: 'executive_summary', status: 'not_generated' },
     { section: 'risk_level', status: 'not_generated' },
     { section: 'critical_issues', status: 'not_generated' },
@@ -105,10 +105,10 @@ const MOCK_DRAFTS: Record<string, ReportDraft[]> = {
 }
 
 const MOCK_HISTORY: Record<string, ReportHistoryEntry[]> = {
-  'p-01': [
+  '1': [
     {
       id: 'rpt-001',
-      projectId: 'p-01',
+      projectId: '1',
       filename: 'ACME-Platform-Security-Assessment-2025-03-10.pdf',
       format: 'pdf',
       generatedAt: '2025-03-10T14:30:00Z',
@@ -117,7 +117,7 @@ const MOCK_HISTORY: Record<string, ReportHistoryEntry[]> = {
     },
     {
       id: 'rpt-002',
-      projectId: 'p-01',
+      projectId: '1',
       filename: 'ACME-Platform-Security-Assessment-2025-02-15.pdf',
       format: 'pdf',
       generatedAt: '2025-02-15T09:00:00Z',
@@ -126,7 +126,7 @@ const MOCK_HISTORY: Record<string, ReportHistoryEntry[]> = {
     },
     {
       id: 'rpt-003',
-      projectId: 'p-01',
+      projectId: '1',
       filename: 'ACME-Platform-Findings-2025-03-10.json',
       format: 'json',
       generatedAt: '2025-03-10T14:35:00Z',
@@ -134,10 +134,10 @@ const MOCK_HISTORY: Record<string, ReportHistoryEntry[]> = {
       downloadUrl: '#',
     },
   ],
-  'p-02': [
+  '2': [
     {
       id: 'rpt-004',
-      projectId: 'p-02',
+      projectId: '2',
       filename: 'Atlas-API-Assessment-2025-03-01.pdf',
       format: 'pdf',
       generatedAt: '2025-03-01T11:00:00Z',
@@ -145,7 +145,7 @@ const MOCK_HISTORY: Record<string, ReportHistoryEntry[]> = {
       downloadUrl: '#',
     },
   ],
-  'p-03': [],
+  '3': [],
 }
 
 // ─── Draft Hooks ────────────────────────────────────────────────────────────

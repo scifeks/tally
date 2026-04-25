@@ -70,3 +70,7 @@ ui-old/
 web/static/
 ui/.env.local
 ui/.env.*.local
+patches/
+
+#SQLite
+tally.db*

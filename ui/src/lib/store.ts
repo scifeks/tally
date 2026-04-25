@@ -2,8 +2,9 @@ import { create } from 'zustand'
 import type { Segment, Finding, TriageRunStatus } from './types'
 
 interface UIState {
-  activeProjectId: string
-  setActiveProject: (id: string) => void
+  /** null means no project selected yet (initial app load state) */
+  activeProjectId: string | null
+  setActiveProject: (id: string | null) => void
 
   findingsSegment: Segment
   setFindingsSegment: (d: Segment) => void
@@ -26,7 +27,7 @@ interface UIState {
 }
 
 export const useUI = create<UIState>(set => ({
-  activeProjectId: 'p-01',
+  activeProjectId: null,
   setActiveProject: id => set({ activeProjectId: id, selectedFindingIds: new Set() }),
 
   findingsSegment: 'sast',

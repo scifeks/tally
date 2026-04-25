@@ -24,13 +24,15 @@ export function TopBar() {
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: scans = [] } = useScanHistory(activeProjectId)
+  const { data: scans = [] } = useScanHistory(activeProjectId ?? '')
 
-  const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0]
+  const activeProject = activeProjectId
+    ? (projects.find(p => p.id === activeProjectId) ?? null)
+    : null
 
-  const runningScans = scans.filter(
-    s => s.status === 'running' && s.projectId === activeProjectId
-  ).length
+  const runningScans = activeProjectId
+    ? scans.filter(s => s.status === 'running' && s.projectId === activeProjectId).length
+    : 0
   const runningAny = scans.filter(s => s.status === 'running').length
   const triageRunning = triageRunStatus === 'running'
 
@@ -55,6 +57,11 @@ export function TopBar() {
   const requestSwitch = (id: string) => {
     setProjectOpen(false)
     if (id === activeProjectId) return
+    // First-time selection (no project active yet) skips the confirm dialog.
+    if (activeProjectId === null) {
+      setActiveProject(id)
+      return
+    }
     setPendingProjectId(id)
   }
 
@@ -114,11 +121,22 @@ export function TopBar() {
           <div ref={projectRef} className="relative flex items-stretch border-l border-border">
             <button
               onClick={() => setProjectOpen(v => !v)}
-              className="flex items-center gap-2 px-4 min-w-[260px] hover:bg-muted"
+              className={cn(
+                'flex items-center gap-2 px-4 min-w-[260px] hover:bg-muted',
+                !activeProject && 'bg-muted/40'
+              )}
             >
               <span className="text-[10px] uppercase tracking-[0.2em] text-dim">project:</span>
-              <span className="text-xs text-primary font-bold tty-glow">{activeProject.code}</span>
-              <span className="text-xs text-foreground truncate">{activeProject.name}</span>
+              {activeProject ? (
+                <>
+                  <span className="text-xs text-primary font-bold tty-glow">
+                    {activeProject.code}
+                  </span>
+                  <span className="text-xs text-foreground truncate">{activeProject.name}</span>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">-- select project --</span>
+              )}
               <ChevronDown className="h-3 w-3 text-muted-foreground ml-auto" />
             </button>
             {projectOpen && (

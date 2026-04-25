@@ -27,7 +27,7 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: scans = [] } = useScanHistory(activeProjectId)
+  const { data: scans = [] } = useScanHistory(activeProjectId ?? '')
 
   const running = scans.filter(s => s.status === 'running')
   const tick = useSimulatedProgress(running)

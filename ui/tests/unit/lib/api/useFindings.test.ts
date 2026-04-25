@@ -21,21 +21,21 @@ describe('useFindings', () => {
 
   it('resolves with 220 findings for p-01', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useFindings({ projectId: 'p-01' }), { wrapper })
+    const { result } = renderHook(() => useFindings({ projectId: '1' }), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     expect(result.current.data).toHaveLength(220)
   })
 
   it('resolves with 35 findings for p-02', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useFindings({ projectId: 'p-02' }), { wrapper })
+    const { result } = renderHook(() => useFindings({ projectId: '2' }), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     expect(result.current.data).toHaveLength(35)
   })
 
   it('resolves with 0 findings for p-03', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useFindings({ projectId: 'p-03' }), { wrapper })
+    const { result } = renderHook(() => useFindings({ projectId: '3' }), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     expect(result.current.data).toHaveLength(0)
   })
@@ -43,7 +43,7 @@ describe('useFindings', () => {
   it('filters by segment when segment option is provided', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(
-      () => useFindings({ projectId: 'p-01', segment: 'sast' }),
+      () => useFindings({ projectId: '1', segment: 'sast' }),
       { wrapper },
     )
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
@@ -54,7 +54,7 @@ describe('useFindings', () => {
 
   it('each finding has id, severity, status, segment, and tool fields', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useFindings({ projectId: 'p-01' }), { wrapper })
+    const { result } = renderHook(() => useFindings({ projectId: '1' }), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     const first = result.current.data![0]
     expect(typeof first.id).toBe('string')

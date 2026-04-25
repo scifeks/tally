@@ -19,7 +19,7 @@ import { scans as mockScans } from '../mock-data'
 // TODO [BACKEND]: Remove these mocks once API is connected.
 
 const mockScanConfig: Record<string, ProjectScanConfig> = {
-  'p-01': {
+  '1': {
     repos: [
       { id: 'r-01', name: 'dvwa', source: 'github', location: 'github.com/digininja/DVWA' },
       { id: 'r-02', name: 'dvpwa', source: 'github', location: 'github.com/example/dvpwa' },
@@ -48,7 +48,7 @@ const mockScanConfig: Record<string, ProjectScanConfig> = {
     ],
     segments: ['sast', 'sca', 'web', 'secrets'],
   },
-  'p-02': {
+  '2': {
     repos: [
       { id: 'r-10', name: 'atl-api', source: 'github', location: 'github.com/atl/api' },
       { id: 'r-11', name: 'atl-web', source: 'github', location: 'github.com/atl/web' },
@@ -61,7 +61,7 @@ const mockScanConfig: Record<string, ProjectScanConfig> = {
     ],
     segments: ['sast', 'sca', 'web', 'secrets'],
   },
-  'p-03': {
+  '3': {
     repos: [],
     tools: [],
     segments: ['sast', 'sca', 'web', 'secrets'],
@@ -119,7 +119,7 @@ export function useProjectScanConfig(projectId: string) {
  *   "scans": [
  *     {
  *       "id": "S-2000",
- *       "projectId": "p-01",
+ *       "projectId": "1",
  *       "segment": "sast",
  *       "tool": "semgrep",
  *       "status": "done",
