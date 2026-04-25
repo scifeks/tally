@@ -182,7 +182,7 @@ class TestPurge:
         store.delete_findings(tools=None)
 
         conn = store._connect()
-        assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM scan_runs").fetchone()[0] == 0
 
     def test_purge_tool_only_removes_that_tool(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
@@ -203,7 +203,7 @@ class TestPurge:
         store.delete_findings(tools=["gitleaks"])
 
         conn = store._connect()
-        count = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM scan_runs").fetchone()[0]
         assert count >= 1
 
     def test_purge_all_clears_triage_batches(self, tmp_path: Path) -> None:

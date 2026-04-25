@@ -2,17 +2,28 @@ import logging
 import os
 import shlex
 import subprocess
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Any, NamedTuple
 
+from application.locking.cancellation import CancellationToken, no_op_token
 from application.ports.user_prompt import UserPromptPort
 from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
 from domain.tools.interface import ExecutionPass
 
+
+class ToolCancelled(Exception):
+    """Raised when a subprocess is aborted via the cancellation token."""
+
+
 _log = logging.getLogger(__name__)
+# Seconds between cancel-token checks while a subprocess is running.
+_CANCEL_POLL_INTERVAL = 0.5
+# Grace period after SIGTERM before SIGKILL when cancelling a subprocess.
+_CANCEL_GRACE_SECONDS = 3.0
 
 # Tokens that are unambiguously shell operators
 _METACHAR_TOKENS = {"&&", "||", ";", ">", ">>", "<", "<<", "|"}
@@ -63,6 +74,16 @@ class ToolExecutor:
         self.base_path = Path(base_path)
         self._prompt = prompt
         self._sudo_approved = False
+        self._cancel_token: CancellationToken = no_op_token()
+
+    def set_cancel_token(self, token: CancellationToken) -> None:
+        """Install a cooperative cancellation flag for subprocess waits.
+
+        Called by ``ScanOrchestrator`` so cancellation requests reach the
+        running tool and SIGTERM the process group. Default is a shared
+        no-op token that is never set, so REPL behavior is unchanged.
+        """
+        self._cancel_token = token
 
     # ------------------------------------------------------------------
     # Public API
@@ -258,6 +279,13 @@ class ToolExecutor:
         cwd: str | None,
         env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        """Run *cmd* and return its CompletedProcess.
+
+        While the subprocess is running, ``self._cancel_token`` is polled
+        every ``_CANCEL_POLL_INTERVAL`` seconds. If it becomes set, the
+        process group receives SIGTERM, then SIGKILL after a short grace
+        period, and ``ToolCancelled`` is raised so the caller can unwind.
+        """
         import signal as _signal
 
         effective_env = {**os.environ, **env} if env else None
@@ -270,26 +298,60 @@ class ToolExecutor:
             env=effective_env,
             start_new_session=True,
         )
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
+
+        deadline = perf_counter() + timeout
+        while True:
+            if self._cancel_token.is_set():
+                self._abort_proc_group(proc, _signal)
+                raise ToolCancelled
+            remaining = deadline - perf_counter()
+            if remaining <= 0:
+                try:
+                    os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    proc.communicate()
+                except Exception:
+                    pass
+                raise subprocess.TimeoutExpired(cmd, timeout)
             try:
-                os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            # Drain pipes so the OS buffers are freed, then re-raise so the
-            # caller's TimeoutExpired handler fires as before.
-            try:
-                proc.communicate()
-            except Exception:
-                pass
-            raise
+                stdout, stderr = proc.communicate(
+                    timeout=min(_CANCEL_POLL_INTERVAL, remaining)
+                )
+                break
+            except subprocess.TimeoutExpired:
+                # poll cancel token, then continue waiting
+                continue
+
         return subprocess.CompletedProcess(
             args=proc.args,
             returncode=proc.returncode,
             stdout=stdout,
             stderr=stderr,
         )
+
+    @staticmethod
+    def _abort_proc_group(proc: subprocess.Popen, sig_module: Any) -> None:
+        """Send SIGTERM to *proc*'s group, escalate to SIGKILL after grace."""
+        try:
+            os.killpg(os.getpgid(proc.pid), sig_module.SIGTERM)
+        except ProcessLookupError:
+            return
+        deadline = time.monotonic() + _CANCEL_GRACE_SECONDS
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                break
+            time.sleep(0.1)
+        if proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), sig_module.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            proc.communicate()
+        except Exception:
+            pass
 
     def _run_with_escalation(
         self,

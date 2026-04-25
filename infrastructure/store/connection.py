@@ -94,18 +94,44 @@ class ConnectionFactory:
         """Create all tables and indexes if they do not exist."""
         with self.connect() as conn:
             conn.executescript(f"""
-                CREATE TABLE IF NOT EXISTS runs (
-                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    args       TEXT,
-                    created_at TEXT
+                CREATE TABLE IF NOT EXISTS scan_runs (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id      INTEGER,
+                    args            TEXT,
+                    created_at      TEXT,
+                    status          TEXT,
+                    started_at      TEXT,
+                    finished_at     TEXT,
+                    repo_ids        TEXT,
+                    tool_ids        TEXT,
+                    domains         TEXT,
+                    skip_enrichment INTEGER,
+                    findings_count  INTEGER
                 );
 
+                CREATE INDEX IF NOT EXISTS idx_scan_runs_project_id
+                    ON scan_runs (project_id);
+                CREATE INDEX IF NOT EXISTS idx_scan_runs_status
+                    ON scan_runs (status);
+
                 CREATE TABLE IF NOT EXISTS run_tools (
-                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id         INTEGER,
-                    tool           TEXT,
-                    findings_count INTEGER DEFAULT 0
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id          INTEGER,
+                    tool            TEXT,
+                    findings_count  INTEGER DEFAULT 0,
+                    repo            TEXT,
+                    domain          TEXT,
+                    status          TEXT,
+                    started_at      TEXT,
+                    finished_at     TEXT,
+                    exit_code       INTEGER,
+                    skip_reason     TEXT,
+                    enriched_count  INTEGER,
+                    total_to_enrich INTEGER
                 );
+
+                CREATE INDEX IF NOT EXISTS idx_run_tools_run_id
+                    ON run_tools (run_id);
 
                 CREATE TABLE IF NOT EXISTS findings (
                     {self._FINDINGS_COLUMNS}
@@ -156,6 +182,8 @@ class ConnectionFactory:
             """)
         self._migrate_fingerprint_unique()
         self._migrate_drop_run_repos()
+        self._migrate_runs_to_scan_runs()
+        self._migrate_extend_run_tools()
 
     def _migrate_fingerprint_unique(self) -> None:
         """Remove the UNIQUE constraint on findings.fingerprint if present.
@@ -203,3 +231,54 @@ class ConnectionFactory:
                 return
         with self.connect() as conn:
             conn.execute("DROP TABLE run_repos")
+
+    def _migrate_runs_to_scan_runs(self) -> None:
+        """Rename legacy ``runs`` table to ``scan_runs`` (Phase 5.1).
+
+        Idempotent — safe to run on a fresh DB (only ``scan_runs`` exists),
+        on a legacy DB (only ``runs`` exists at entry; ``init_schema`` has
+        just created an empty ``scan_runs`` so both are present), and on
+        an already-migrated DB (only ``scan_runs`` remains).
+        """
+        with self.connect() as conn:
+            runs_exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='runs'"
+            ).fetchone()
+            if not runs_exists:
+                return
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO scan_runs (id, args, created_at) "
+                "SELECT id, args, created_at FROM runs"
+            )
+            conn.execute("DROP TABLE runs")
+
+    def _migrate_extend_run_tools(self) -> None:
+        """Add Phase 5.1 columns to ``run_tools`` if missing.
+
+        Pre-existing databases were created when ``run_tools`` had only
+        ``id``, ``run_id``, ``tool``, and ``findings_count``. Phase 5.1
+        adds per-tool execution metadata (status, timestamps, exit_code,
+        skip_reason, enrichment counters) and the ``repo`` / ``domain``
+        dimensions findings already track.
+        """
+        new_columns = (
+            ("repo", "TEXT"),
+            ("domain", "TEXT"),
+            ("status", "TEXT"),
+            ("started_at", "TEXT"),
+            ("finished_at", "TEXT"),
+            ("exit_code", "INTEGER"),
+            ("skip_reason", "TEXT"),
+            ("enriched_count", "INTEGER"),
+            ("total_to_enrich", "INTEGER"),
+        )
+        with self.connect() as conn:
+            existing = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(run_tools)").fetchall()
+            }
+            for name, sqltype in new_columns:
+                if name in existing:
+                    continue
+                conn.execute(f"ALTER TABLE run_tools ADD COLUMN {name} {sqltype}")
