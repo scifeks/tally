@@ -99,6 +99,16 @@ class RunCancelled(_TriageEventBase):
     message: str = ""
 
 
+@dataclass(frozen=True)
+class RunFailed(_TriageEventBase):
+    error: str = ""
+    failed_at_finding_id: int | None = None
+    completed_count: int = 0
+    total_count: int = 0
+    resumable: bool = True
+    message: str = ""
+
+
 type TriageEvent = (
     RunStarted
     | BatchCreated
@@ -109,6 +119,7 @@ type TriageEvent = (
     | BatchRetry
     | RunCompleted
     | RunCancelled
+    | RunFailed
 )
 
 
@@ -122,6 +133,7 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
     BatchRetry: "batch_retry",
     RunCompleted: "run_completed",
     RunCancelled: "run_cancelled",
+    RunFailed: "triage_failed",
 }
 
 

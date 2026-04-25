@@ -228,6 +228,7 @@ export type TriageLogEventType =
   | 'batch_retry'
   | 'run_completed'
   | 'run_cancelled'
+  | 'triage_failed'
 
 export interface TriageLogEvent {
   id: string
@@ -241,6 +242,32 @@ export interface TriageLogEvent {
   processedCount?: number
   totalCount?: number
   attempt?: number
+  /** Set on `triage_failed`. Human-readable error message. */
+  error?: string
+  /** Set on `triage_failed`. First finding id of the most recent in-progress batch. */
+  failedAtFindingId?: number
+  /** Set on `triage_failed`. True iff the run still has resumable batches. */
+  resumable?: boolean
+}
+
+// ─── Runtime Dependencies / Installed Tools (Phase 2.6, Phase 6.8) ──────────
+
+export interface RuntimeDependency {
+  name: string
+  installed: boolean
+  binaryPath: string | null
+  version: string | null
+  installHint: string
+  requiredFor: string[]
+  error: string | null
+}
+
+export interface RuntimeDependenciesResponse {
+  dependencies: RuntimeDependency[]
+}
+
+export interface InstalledToolsResponse {
+  installed: string[]
 }
 
 // ─── Report Types ───────────────────────────────────────────────────────────

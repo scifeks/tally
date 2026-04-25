@@ -27,7 +27,10 @@ from pathlib import Path
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
-from application.triage.orchestrator import run_triage_for_project
+from application.triage.orchestrator import (
+    resume_triage_for_project,
+    run_triage_for_project,
+)
 from application.triage.runner import NoScanRunError, TriageCancelled
 from infrastructure.events.bus import EventBus
 from web.adapters.event_bus_triage_sink import EventBusTriageSink
@@ -58,12 +61,16 @@ def start_triage_thread(
     bus: EventBus,
     triage_run_registry: TriageRunRegistry,
     lock_registry: LockRegistry | None = None,
+    is_resume: bool = False,
 ) -> threading.Thread:
     """Spawn a daemon worker thread to execute triage.
 
     The caller has ALREADY acquired the LockRegistry "triage" slot
     under *holder_token*. The worker takes ownership and releases it
-    in its ``finally`` block.
+    in its ``finally`` block. When ``is_resume`` is True the worker
+    calls :func:`resume_triage_for_project` (explicit scan_run_id +
+    ``reset_for_resume``); otherwise it calls
+    :func:`run_triage_for_project` (latest-scan_run resolution).
     """
     cancel_token = CancellationToken()
     triage_run_registry.register(
@@ -85,6 +92,7 @@ def start_triage_thread(
             "cancel_token": cancel_token,
             "lock_registry": lock_registry or get_registry(),
             "triage_run_registry": triage_run_registry,
+            "is_resume": is_resume,
         },
         name=f"triage-run-{scan_run_id}",
         daemon=True,
@@ -105,18 +113,29 @@ def _run_triage(
     cancel_token: CancellationToken,
     lock_registry: LockRegistry,
     triage_run_registry: TriageRunRegistry,
+    is_resume: bool = False,
 ) -> None:
     del request  # finding-scoped triage is reserved for a later phase
     try:
         sink = EventBusTriageSink(bus)
         try:
-            run_triage_for_project(
-                project_name,
-                project_id=project_id,
-                event_sink=sink,
-                cancel_token=cancel_token,
-                app_root=Path(base_path),
-            )
+            if is_resume:
+                resume_triage_for_project(
+                    project_name,
+                    project_id=project_id,
+                    scan_run_id=scan_run_id,
+                    event_sink=sink,
+                    cancel_token=cancel_token,
+                    app_root=Path(base_path),
+                )
+            else:
+                run_triage_for_project(
+                    project_name,
+                    project_id=project_id,
+                    event_sink=sink,
+                    cancel_token=cancel_token,
+                    app_root=Path(base_path),
+                )
         except TriageCancelled:
             logger.info("triage scan_run_id=%d cancelled", scan_run_id)
         except NoScanRunError:

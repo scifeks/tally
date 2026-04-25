@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { Square, RotateCcw, Brain } from 'lucide-react'
+import { Square, RotateCcw, Brain, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import { useUI } from '@/lib/store'
@@ -9,6 +9,7 @@ import {
   useFindings,
   useStartTriage,
   useCancelTriage,
+  useRuntimeDependencies,
 } from '@/lib/api'
 import type { Segment, TriageLogEvent, TriageLogEventType, TriageRunStatus } from '@/lib/types'
 import { NeuralGrid } from './NeuralGrid'
@@ -45,6 +46,13 @@ export default function Triage() {
 
   void startTriageMutation
   void cancelTriageMutation
+
+  // GET /api/v1/runtime-dependencies — Phase 6.9 gate.
+  // Disable Start Triage when Claude is missing (the triage worker shells out
+  // to `claude --print`, so a missing binary makes dispatch a no-op).
+  const { data: runtimeDeps } = useRuntimeDependencies()
+  const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
+  const claudeMissing = claudeDep !== undefined && !claudeDep.installed
 
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
@@ -390,15 +398,27 @@ export default function Triage() {
             </div>
           )}
 
+          {/* Claude-missing gate (Phase 6.9). */}
+          {claudeMissing && canStart && (
+            <div className="flex items-start gap-2 border border-crit bg-crit/5 px-3 py-2 max-w-2xl">
+              <AlertTriangle className="h-4 w-4 text-crit mt-0.5 shrink-0" />
+              <div className="text-xs text-foreground leading-relaxed">
+                <span className="text-crit font-bold">Claude CLI not installed.</span> Start Triage
+                requires the <span className="text-primary">claude</span> binary on PATH.{' '}
+                {claudeDep?.installHint ?? ''}
+              </div>
+            </div>
+          )}
+
           {/* Buttons */}
           <div className="flex items-center gap-3">
             {canStart && (
               <button
                 onClick={startTriage}
-                disabled={eligibleFindings.length === 0}
+                disabled={eligibleFindings.length === 0 || claudeMissing}
                 className={cn(
                   'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
-                  eligibleFindings.length === 0
+                  eligibleFindings.length === 0 || claudeMissing
                     ? 'bg-muted text-dim cursor-not-allowed'
                     : 'bg-accent text-background hover:bg-accent/80'
                 )}

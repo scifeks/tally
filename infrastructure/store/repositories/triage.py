@@ -180,6 +180,26 @@ class TriageBatchRepository:
             )
             return cur.rowcount
 
+    def reset_for_resume(self, run_id: int) -> int:
+        """Flip stranded ``in_progress`` and retryable ``failed`` rows back
+        to ``pending`` so an explicit resume can pick them up.
+
+        ``run_attempts`` is preserved — the existing 3-attempt cap in
+        ``claim_batch`` still applies. Returns the number of rows flipped.
+        """
+        with self._factory.connect() as conn:
+            cur = conn.execute(
+                "UPDATE triage_batches"
+                " SET status = 'pending', started_at = NULL"
+                " WHERE run_id = ?"
+                "   AND ("
+                "     status = 'in_progress'"
+                "     OR (status = 'failed' AND run_attempts < 3)"
+                "   )",
+                (run_id,),
+            )
+            return cur.rowcount
+
     def get_active_finding_combos(
         self, skip_tools: frozenset[str]
     ) -> list[tuple[str, str, str]]:

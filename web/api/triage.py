@@ -150,6 +150,77 @@ async def list_triage_runs(
     )
 
 
+@v1_router.get(
+    "/{project_id}/triage/active",
+    response_model=TriageRunSummary | None,
+)
+async def get_active_triage(
+    project_id: int,
+    request: Request,
+) -> TriageRunSummary | None:
+    """Return the currently-running triage for *project_id*, or ``null``.
+
+    Liveness is sourced from :class:`TriageRunRegistry` (process-singleton
+    of in-flight worker handles). The persisted summary is refreshed via
+    ``summarize_for_run``; when the worker has registered but no batches
+    have been written yet, a synthetic ``queued`` placeholder is returned.
+    """
+    row = _resolve_project(request, project_id)
+    handles = get_triage_run_registry().list_for_project(project_id)
+    if not handles:
+        return None
+    if len(handles) > 1:
+        logger.warning(
+            "more than one triage handle for project %d; returning newest",
+            project_id,
+        )
+    handle = handles[-1]
+    _, triage_repo = _make_repos(row)
+    summary = await asyncio.to_thread(triage_repo.summarize_for_run, handle.scan_run_id)
+    if summary is None:
+        return TriageRunSummary(
+            scan_run_id=handle.scan_run_id,
+            project_id=project_id,
+            status="queued",
+            started_at=None,
+            finished_at=None,
+            total_findings=0,
+            processed_findings=0,
+        )
+    return _summary_to_response(summary, project_id)
+
+
+@v1_router.get(
+    "/{project_id}/triage/latest",
+    response_model=TriageRunSummary,
+)
+async def get_latest_triage(
+    project_id: int,
+    request: Request,
+) -> TriageRunSummary:
+    """Return the most recent triage run summary for *project_id*.
+
+    404 when the project has zero triage history.
+    """
+    row = _resolve_project(request, project_id)
+    _, triage_repo = _make_repos(row)
+    run_ids, _total = await asyncio.to_thread(
+        triage_repo.list_run_ids_for_project,
+        offset=0,
+        limit=1,
+    )
+    if not run_ids:
+        raise NotFound(
+            f"project {project_id} has no triage history",
+        )
+    summary = await asyncio.to_thread(triage_repo.summarize_for_run, run_ids[0])
+    if summary is None:  # pragma: no cover - defensive
+        raise NotFound(
+            f"project {project_id} has no triage history",
+        )
+    return _summary_to_response(summary, project_id)
+
+
 @v1_router.get("/{project_id}/triage/events")
 async def triage_events(
     project_id: int,
@@ -322,6 +393,95 @@ async def cancel_triage(
 
     handle.cancel_token.set()
     return TriageCancelResponse(scan_run_id=scan_run_id, status="cancelling")
+
+
+@v1_router.post(
+    "/{project_id}/triage/{scan_run_id}/resume",
+    response_model=TriageRunSummary,
+    status_code=202,
+)
+async def resume_triage(
+    project_id: int,
+    scan_run_id: int,
+    request: Request,
+    body: TriageStartRequest,
+) -> TriageRunSummary:
+    """Resume a previously failed or stranded triage run.
+
+    Resumability rule: status must be ``'failed'`` or ``'running'``
+    (``'running'`` here means a worker crashed leaving stranded
+    pending/in_progress batches). Terminal states (``'done'`` and
+    ``'cancelled'``) return 409 ``TRIAGE_NOT_RESUMABLE``.
+
+    The active-worker case (another live triage holding the lock)
+    returns 409 ``JOB_ALREADY_RUNNING``.
+    """
+    if not body.acknowledge_injection_risk:
+        raise ValidationError(
+            "acknowledge_injection_risk must be true to resume triage",
+            details={"field": "acknowledge_injection_risk"},
+        )
+
+    row = _resolve_project(request, project_id)
+    project_name: str = row["name"]
+    base_path: str = request.app.state.base_path
+
+    _, triage_repo = _make_repos(row)
+    summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+    if summary is None:
+        raise NotFound(
+            f"no triage runs found for scan_run_id {scan_run_id}",
+        )
+    if summary.status not in ("failed", "running"):
+        raise Conflict(
+            f"triage scan_run_id {scan_run_id} is not resumable "
+            f"(status={summary.status!r})",
+            code="TRIAGE_NOT_RESUMABLE",
+            details={"status": summary.status},
+        )
+
+    lock_registry = get_registry()
+    holder = f"triage-resume:{new_event_id()[:8]}"
+    try:
+        lock_registry.acquire_job("triage", holder)
+    except JobBusy as exc:
+        raise JobBusyError("triage", exc.current_holder) from exc
+
+    bus = request.app.state.event_bus
+    triage_request = TriageRequest(finding_ids=None)
+
+    try:
+        start_triage_thread(
+            base_path=base_path,
+            project_name=project_name,
+            project_id=project_id,
+            scan_run_id=scan_run_id,
+            request=triage_request,
+            holder_token=holder,
+            bus=bus,
+            triage_run_registry=get_triage_run_registry(),
+            lock_registry=lock_registry,
+            is_resume=True,
+        )
+    except Exception:
+        try:
+            lock_registry.release_job("triage", holder)
+        except Exception:  # noqa: BLE001
+            pass
+        raise
+
+    refreshed = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+    if refreshed is None:  # pragma: no cover - defensive (we already checked)
+        return TriageRunSummary(
+            scan_run_id=scan_run_id,
+            project_id=project_id,
+            status="queued",
+            started_at=None,
+            finished_at=None,
+            total_findings=0,
+            processed_findings=0,
+        )
+    return _summary_to_response(refreshed, project_id)
 
 
 @v1_router.get(

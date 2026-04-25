@@ -29,6 +29,7 @@ from domain.pipeline.triage_events import (
     BatchStarted,
     RunCancelled,
     RunCompleted,
+    RunFailed,
     RunStarted,
 )
 
@@ -203,6 +204,9 @@ class TriageRunner:
                     )
                 )
                 raise
+            except Exception as exc:
+                self._emit_run_failed(run_id, exc)
+                raise
             finally:
                 mcp_json_path.unlink(missing_ok=True)
         self._emit(
@@ -272,6 +276,51 @@ class TriageRunner:
     def _check_cancelled(self) -> None:
         if self._cancel_token.is_set():
             raise TriageCancelled
+
+    def _emit_run_failed(self, run_id: int, exc: BaseException) -> None:
+        """Emit a ``triage_failed`` event before re-raising *exc*.
+
+        Best-effort: pulls completed/total counts from
+        ``summarize_for_run`` and the first finding id of the most
+        recently in-progress batch for ``failed_at_finding_id``.
+        ``resumable`` is True when at least one batch is still in
+        ``pending`` or ``in_progress`` (i.e. the run can be resumed
+        without re-batching).
+        """
+        completed = total = 0
+        failed_at: int | None = None
+        resumable = False
+        try:
+            summary = self._triage_repo.summarize_for_run(run_id)
+            if summary is not None:
+                completed = summary.processed_findings
+                total = summary.total_findings
+            batches = self._triage_repo.list_for_run(run_id)
+            for batch in batches:
+                if batch.status in ("pending", "in_progress"):
+                    resumable = True
+                    if failed_at is None and batch.status == "in_progress":
+                        finding_ids = batch.finding_ids
+                        if finding_ids:
+                            failed_at = finding_ids[0]
+        except Exception as inner:  # pragma: no cover - defensive
+            _log.debug(
+                "Failed to compute RunFailed payload for run_id=%d: %s",
+                run_id,
+                inner,
+            )
+        self._emit(
+            RunFailed(
+                scan_run_id=run_id,
+                project_id=self._project_id,
+                error=str(exc) or type(exc).__name__,
+                failed_at_finding_id=failed_at,
+                completed_count=completed,
+                total_count=total,
+                resumable=resumable,
+                message="Triage failed",
+            )
+        )
 
     def _run_batch_loop(
         self,

@@ -52,13 +52,16 @@ def run_triage_for_project(
     event_sink: TriageEventSink | None = None,
     cancel_token: CancellationToken | None = None,
     app_root: Path | None = None,
+    scan_run_id: int | None = None,
 ) -> dict[str, int]:
     """Web-path entry: full triage with sink + cancel token wired in.
 
     Resolves the latest scan_run for the project's findings.db and
     triages it. Caller passes the project's integer id (used to stamp
     events with ``project_id``) and the dependencies that turn the
-    runner into an SSE-emitting, cancellable worker.
+    runner into an SSE-emitting, cancellable worker. ``scan_run_id``
+    pins the run to a specific id (e.g. for resume); when ``None``
+    the runner picks the latest scan_run.
     """
     from .runner import _APP_ROOT
 
@@ -80,6 +83,49 @@ def run_triage_for_project(
         event_sink=event_sink,
         cancel_token=cancel_token,
         project_id=project_id,
+        scan_run_id=scan_run_id,
+    )
+    return dataclasses.asdict(_retry_once(runner.run))
+
+
+def resume_triage_for_project(
+    project: str,
+    *,
+    project_id: int,
+    scan_run_id: int,
+    event_sink: TriageEventSink | None = None,
+    cancel_token: CancellationToken | None = None,
+    app_root: Path | None = None,
+) -> dict[str, int]:
+    """Web-path entry: explicit resume of an existing triage run.
+
+    Flips stranded ``in_progress`` and retryable ``failed`` batches
+    back to ``pending`` (via ``TriageBatchRepository.reset_for_resume``)
+    before running, so ``claim_batch`` can pick them up. ``scan_run_id``
+    is mandatory — there is no "resume the latest run" semantic.
+    """
+    from .runner import _APP_ROOT
+
+    root = app_root or _APP_ROOT
+    from core.project_paths import ProjectPaths
+
+    paths = ProjectPaths.from_canonical(root, project)
+    if not paths.findings_db.exists():
+        raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
+    from infrastructure.store import make_store
+
+    run_repo, _, triage_repo, audit_repo = make_store(root, project)
+    triage_repo.reset_for_resume(scan_run_id)
+    runner = TriageRunner(
+        project,
+        run_repo,
+        triage_repo,
+        audit_repo,
+        root,
+        event_sink=event_sink,
+        cancel_token=cancel_token,
+        project_id=project_id,
+        scan_run_id=scan_run_id,
     )
     return dataclasses.asdict(_retry_once(runner.run))
 
