@@ -74,7 +74,7 @@ fail_under = 70
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = ["--ignore=tests/e2e"]
+addopts = ["--ignore=tests/e2e", "-p", "no:inline_snapshot"]
 filterwarnings = [
   "ignore::DeprecationWarning:chromadb",
   "ignore:This process.*is multi-threaded.*forkpty:DeprecationWarning",
