@@ -635,3 +635,65 @@ class ChatSessionCreateRequest(BaseModel):
     """Body for ``POST /chat/sessions``. Reserved for v2 fields; empty in v1."""
 
     model_config = ConfigDict(extra="ignore")
+
+
+class ChatMessageResponse(BaseModel):
+    """Per-message response payload for ``GET .../messages``.
+
+    Shape per ``endpoints.md §12``. The row column ``created_at`` is
+    surfaced as ``timestamp`` because the SPA contract
+    (``ui/src/lib/types.ts::ChatMessage``) names that field
+    ``timestamp``. ``citations`` is always ``None`` in v1
+    (chat-history.md decision 10 — citation UI deferred).
+    """
+
+    id: int
+    session_id: int
+    role: str
+    content: str
+    model: str | None
+    timestamp: str
+    citations: list[dict] | None = None
+
+
+class ChatMessagesListResponse(BaseModel):
+    items: list[ChatMessageResponse]
+    total: int
+    offset: int
+    limit: int
+
+
+class ChatMessageSendRequest(BaseModel):
+    """Body for ``POST .../sessions/{session_id}/messages``.
+
+    The ``content`` field carries the user's chat turn. It must be
+    non-empty after stripping; the upper bound (100k chars) keeps a
+    single user turn well below the 500k prompt-assembly ceiling
+    enforced inside ``application.chat.service``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    content: str = Field(min_length=1, max_length=100_000)
+
+    @field_validator("content")
+    @classmethod
+    def _strip_and_require(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("content must not be empty or whitespace-only")
+        return v
+
+
+class ChatMessageSendResponse(BaseModel):
+    """202 response for ``POST .../sessions/{session_id}/messages``.
+
+    ``assistant_message_id`` is ``None`` here because the assistant row
+    is written write-once on clean stream end (decisions.md B7.7); the
+    final id is delivered via the ``stream_end`` SSE event's
+    ``message_id`` field.
+    """
+
+    user_message_id: int
+    assistant_message_id: int | None
+    session_id: int
+    stream_url: str
