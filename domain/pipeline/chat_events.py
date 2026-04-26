@@ -1,0 +1,85 @@
+"""Chat lifecycle events emitted by the chat application service (Phase 8.2).
+
+Domain-pure events (no transport concerns). The ``ChatStreamSink`` port
+(see ``application/ports/chat_event_sink.py``) projects them into either
+a no-op REPL discard or — once Phase 8.8 lands — an async ``BusEvent``
+publish for SSE fan-out.
+
+A "chat stream" is identified by ``session_id`` (the integer primary key
+of the ``chat_sessions`` row). Field names match the SSE event payload
+catalogue in ``docs/roadmap/ui-planning/API/endpoints.md §15`` so
+adapters can do a straight projection.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from uuid import uuid4
+
+
+def _new_event_id() -> str:
+    return str(uuid4())
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+@dataclass(frozen=True)
+class _ChatEventBase:
+    session_id: int
+    project_id: int
+    user_message_id: int | None = None
+    assistant_message_id: int | None = None
+    id: str = field(default_factory=_new_event_id)
+    timestamp: str = field(default_factory=_utc_now)
+
+
+@dataclass(frozen=True)
+class ChatStreamStarted(_ChatEventBase):
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class ChatToken(_ChatEventBase):
+    text: str = ""
+
+
+@dataclass(frozen=True)
+class ChatStreamCompleted(_ChatEventBase):
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class ChatStreamFailed(_ChatEventBase):
+    error: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class ChatStreamCancelled(_ChatEventBase):
+    message: str = ""
+
+
+type ChatEvent = (
+    ChatStreamStarted
+    | ChatToken
+    | ChatStreamCompleted
+    | ChatStreamFailed
+    | ChatStreamCancelled
+)
+
+
+_EVENT_TYPE_NAMES: dict[type, str] = {
+    ChatStreamStarted: "stream_start",
+    ChatToken: "token",
+    ChatStreamCompleted: "stream_end",
+    ChatStreamFailed: "error",
+    ChatStreamCancelled: "stream_cancelled",
+}
+
+
+def event_type_name(event: ChatEvent) -> str:
+    """Return the SSE event_type string for *event* per endpoints.md §15."""
+    return _EVENT_TYPE_NAMES[type(event)]

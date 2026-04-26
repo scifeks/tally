@@ -120,6 +120,40 @@ class ChatSessionRepository:
         """Return active (non-expired) sessions for *project_id*, newest first."""
         return self.list_for_project(project_id, include_expired=False)
 
+    def list_for_project_paginated(
+        self,
+        project_id: int,
+        *,
+        offset: int,
+        limit: int,
+        include_expired: bool = True,
+    ) -> tuple[list[ChatSessionRow], int]:
+        """Newest-first page of sessions plus total row count.
+
+        Uses SQL ``LIMIT`` / ``OFFSET`` so the page does not require
+        loading every row into memory. Returns ``(rows, total)``.
+        """
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        where = "project_id = ?"
+        params: list[Any] = [project_id]
+        if not include_expired:
+            where += " AND expired_at IS NULL"
+        with self._factory.connect() as conn:
+            total_row = conn.execute(
+                f"SELECT COUNT(*) FROM chat_sessions WHERE {where}",
+                tuple(params),
+            ).fetchone()
+            total = int(total_row[0])
+            rows = conn.execute(
+                f"SELECT * FROM chat_sessions WHERE {where}"
+                " ORDER BY id DESC LIMIT ? OFFSET ?",
+                (*params, limit, offset),
+            ).fetchall()
+        return [_row_to_session(r) for r in rows], total
+
     def list_expired_for_project(self, project_id: int) -> list[ChatSessionRow]:
         """Return expired sessions for *project_id*, newest first."""
         with self._factory.connect() as conn:
