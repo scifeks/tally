@@ -600,3 +600,38 @@ class ReportsListResponse(BaseModel):
 class ReportCancelResponse(BaseModel):
     id: int
     status: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Chat
+# ---------------------------------------------------------------------------
+
+
+class ChatSessionSummary(BaseModel):
+    """Per-session response payload for ``GET/POST /chat/sessions``.
+
+    Shape per ``endpoints.md §12``. ``last_message_at`` and
+    ``message_count`` are derived from ``chat_messages`` at read time;
+    they are 0/null on a freshly-created session.
+    """
+
+    id: int
+    project_id: int
+    title: str
+    created_at: str
+    last_message_at: str | None
+    message_count: int
+    expired_at: str | None
+
+
+class ChatSessionsListResponse(BaseModel):
+    items: list[ChatSessionSummary]
+    total: int
+    offset: int
+    limit: int
+
+
+class ChatSessionCreateRequest(BaseModel):
+    """Body for ``POST /chat/sessions``. Reserved for v2 fields; empty in v1."""
+
+    model_config = ConfigDict(extra="ignore")

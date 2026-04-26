@@ -23,6 +23,7 @@ from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
 from web.api.auth import router as auth_router
+from web.api.chat import v1_router as chat_projects_v1_router
 from web.api.config import router as config_router
 from web.api.findings import v1_router as findings_v1_router
 from web.api.locks import router as locks_router
@@ -121,6 +122,7 @@ def create_app(
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(reports_projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(chat_projects_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF
