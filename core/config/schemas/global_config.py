@@ -49,6 +49,15 @@ class GlobalConfig(BaseModel):
             "Set to 0 to disable retention sweeping."
         ),
     )
+    chat_session_retention_count: int = Field(
+        default=20,
+        ge=0,
+        description=(
+            "Maximum expired chat sessions retained per project; "
+            "older sessions (and their messages) are deleted after each "
+            "scan-triggered sealing. Set to 0 to disable retention sweeping."
+        ),
+    )
 
     # Web UI / dev server
     web_ui_host: str = Field(default="127.0.0.1")

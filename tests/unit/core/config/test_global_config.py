@@ -71,3 +71,18 @@ class TestExtraFieldsIgnored:
     def test_unknown_key_silently_ignored(self) -> None:
         cfg = GlobalConfig.model_validate({"subprocess_stream_chunk_bytes": 268435456})
         assert not hasattr(cfg, "subprocess_stream_chunk_bytes")
+
+
+class TestChatSessionRetention:
+    def test_default_is_twenty(self) -> None:
+        assert GlobalConfig().chat_session_retention_count == 20
+
+    def test_zero_disables_sweeping(self) -> None:
+        assert (
+            GlobalConfig(chat_session_retention_count=0).chat_session_retention_count
+            == 0
+        )
+
+    def test_negative_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            GlobalConfig(chat_session_retention_count=-1)

@@ -208,6 +208,33 @@ class ConnectionFactory:
                     generated_at      TEXT,
                     reviewed_at       TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id  INTEGER NOT NULL,
+                    title       TEXT NOT NULL,
+                    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                    expired_at  TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_chat_sessions_project_created
+                    ON chat_sessions (project_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_chat_sessions_project_expired
+                    ON chat_sessions (project_id, expired_at);
+
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id  INTEGER NOT NULL
+                                  REFERENCES chat_sessions(id) ON DELETE CASCADE,
+                    role        TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+                    content     TEXT NOT NULL,
+                    model       TEXT,
+                    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+                    ON chat_messages (session_id, id);
             """)
         self._migrate_fingerprint_unique()
         self._migrate_drop_run_repos()
