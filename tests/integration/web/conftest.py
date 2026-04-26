@@ -90,6 +90,7 @@ async def app_client(tmp_path: Path):
     await _bus.register_job("scan", "scan")
     await _bus.register_job("triage", "triage")
     await _bus.register_job("report", "report")
+    await _bus.register_job("report_draft", "report_draft")
     app.state.event_bus = _bus
 
     # Seed the registry so project-scoped endpoints can resolve "testproject".

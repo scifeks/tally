@@ -26,21 +26,25 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel
 
 from application.locking import JobBusy, get_registry
+from application.reporting.drafts import SECTION_REGISTRY
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
 from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.drafts import DraftRecord, DraftRepository
 from infrastructure.store.repositories.reports import (
     REPORT_STATUSES,
     ReportRepository,
     ReportRow,
 )
+from web.adapters.draft_run_registry import get_draft_run_registry
 from web.adapters.report_run_registry import get_report_run_registry
 from web.api._errors import (
     Conflict,
@@ -56,6 +60,7 @@ from web.api.schemas import (
     ReportsListResponse,
     ReportSummary,
 )
+from web.reports.draft_runner import WebDraftRequest, start_draft_thread
 from web.reports.runner import WebReportRequest, start_report_thread
 
 logger = logging.getLogger("tally.web.reports")
@@ -109,6 +114,31 @@ def _validate_status(status: str | None) -> None:
 def _resolve_reports_dir(row: dict) -> Path:
     paths = ProjectPaths.from_registry_row(row)
     return paths.reports_dir.resolve()
+
+
+def _make_draft_repo(row: dict) -> DraftRepository:
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    return DraftRepository(factory)
+
+
+def _build_draft_snapshot(project_id: int, section: str | None) -> BusEvent:
+    active = get_draft_run_registry().get_for_project(project_id)
+    payload: dict[str, Any] = {
+        "project_id": project_id,
+        "active_sections": [h.section for h in active],
+    }
+    if section is not None:
+        payload["section"] = section
+    return BusEvent(
+        event_id=new_event_id(),
+        job_id="report",
+        stream="report_draft",
+        event_type="snapshot",
+        payload=payload,
+        ts=datetime.now(UTC),
+    )
 
 
 def _ensure_within(base: Path, candidate: Path) -> None:
@@ -323,6 +353,283 @@ async def list_reports(
         offset=offset,
         limit=limit,
     )
+
+
+# ---------------------------------------------------------------------------
+# Draft routes — literal-segment, registered before /{report_id}
+# ---------------------------------------------------------------------------
+
+_DRAFT_MIME_ALLOWLIST = frozenset(
+    {
+        "text/markdown",
+        "text/plain",
+        "application/octet-stream",
+    }
+)
+_DRAFT_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
+
+
+class _DraftStartRequest(BaseModel):
+    section: str
+    force: bool = False
+
+
+def _resolve_drafts_dir(row: dict) -> Path:
+    paths = ProjectPaths.from_registry_row(row)
+    return paths.reports_draft_dir.resolve()
+
+
+def _draft_section_summary(
+    section: str,
+    record: DraftRecord | None,
+    draft_dir: Path,
+) -> dict[str, Any]:
+    status = record.status if record else "not_generated"
+    path = draft_dir / f"{section}.md"
+    word_count: int | None = None
+    preview: str | None = None
+    if path.exists():
+        try:
+            text = path.read_text(encoding="utf-8")
+            word_count = len(text.split())
+            preview = text[:200]
+        except OSError:
+            pass
+    return {
+        "section": section,
+        "status": status,
+        "generated_at": record.generated_at if record else None,
+        "reviewed_at": record.reviewed_at if record else None,
+        "original_filename": record.original_filename if record else None,
+        "word_count": word_count,
+        "preview": preview,
+    }
+
+
+@v1_router.get("/{project_id}/reports/drafts")
+async def list_drafts(
+    project_id: int,
+    request: Request,
+) -> list[dict[str, Any]]:
+    """Return one entry per section; absent rows report as ``not_generated``."""
+    row = _resolve_project(request, project_id)
+    repo = _make_draft_repo(row)
+    records = await asyncio.to_thread(repo.list_all)
+    draft_dir = _resolve_drafts_dir(row)
+    by_section = {r.section: r for r in records}
+    return [
+        _draft_section_summary(s, by_section.get(s), draft_dir)
+        for s in SECTION_REGISTRY
+    ]
+
+
+@v1_router.post(
+    "/{project_id}/reports/drafts",
+    status_code=202,
+)
+async def start_draft(
+    project_id: int,
+    request: Request,
+    body: _DraftStartRequest,
+) -> dict[str, Any]:
+    """Queue draft generation for *section*.
+
+    Returns 409 if any report or draft is already in progress,
+    or 422 if *section* is not in the registry.
+    """
+    if body.section not in SECTION_REGISTRY:
+        raise ValidationError(
+            f"unknown section {body.section!r}",
+            details={"allowed": list(SECTION_REGISTRY)},
+        )
+    row = _resolve_project(request, project_id)
+    base_path: str = request.app.state.base_path
+
+    lock_registry = get_registry()
+    holder = f"draft-web:{new_event_id()[:8]}"
+    try:
+        lock_registry.acquire_job("report", holder)
+    except JobBusy as exc:
+        raise JobBusyError("report", exc.current_holder) from exc
+
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    web_req = WebDraftRequest(section=body.section, force_overwrite=body.force)
+    try:
+        start_draft_thread(
+            base_path=base_path,
+            project_name=row["name"],
+            project_id=project_id,
+            request=web_req,
+            holder_token=holder,
+            factory=factory,
+            bus=request.app.state.event_bus,
+            draft_run_registry=get_draft_run_registry(),
+            lock_registry=lock_registry,
+        )
+    except Exception:
+        try:
+            lock_registry.release_job("report", holder)
+        except Exception:  # noqa: BLE001
+            pass
+        raise
+
+    return {"section": body.section, "status": "generating"}
+
+
+@v1_router.get("/{project_id}/reports/drafts/events")
+async def draft_events(
+    project_id: int,
+    request: Request,
+    section: str | None = Query(default=None),
+) -> StreamingResponse:
+    """SSE stream emitting draft lifecycle events for *project_id*."""
+    _resolve_project(request, project_id)
+    bus = request.app.state.event_bus
+    sub_id, queue = await bus.subscribe("report_draft")
+
+    snapshot = _build_draft_snapshot(project_id, section)
+
+    async def stream() -> AsyncIterator[str]:
+        try:
+            yield format_sse_frame(snapshot)
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                if item is EOS:
+                    break
+                payload = item.payload
+                if payload.get("project_id") != project_id:
+                    continue
+                if section is not None and payload.get("section") != section:
+                    continue
+                yield format_sse_frame(item)
+        finally:
+            await bus.unsubscribe("report_draft", sub_id)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@v1_router.post("/{project_id}/reports/drafts/upload")
+async def upload_draft(
+    project_id: int,
+    request: Request,
+    section: str = Form(...),
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Accept a Markdown upload and mark the section ``reviewed``."""
+    if section not in SECTION_REGISTRY:
+        raise ValidationError(
+            f"unknown section {section!r}",
+            details={"allowed": list(SECTION_REGISTRY)},
+        )
+    mime = file.content_type or "application/octet-stream"
+    if mime not in _DRAFT_MIME_ALLOWLIST:
+        raise HTTPException(
+            status_code=415,
+            detail={"code": "UNSUPPORTED_MEDIA_TYPE", "message": mime},
+        )
+    raw = await file.read(_DRAFT_MAX_BYTES + 1)
+    if len(raw) > _DRAFT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="draft file exceeds 1 MiB")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValidationError(
+            "draft file is not valid UTF-8", details={"error": str(exc)}
+        ) from exc
+    if "\x00" in text:
+        raise ValidationError("draft file contains null bytes", details={})
+
+    row = _resolve_project(request, project_id)
+    repo = _make_draft_repo(row)
+    draft_dir = _resolve_drafts_dir(row)
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    out = draft_dir / f"{section}.md"
+    await asyncio.to_thread(out.write_text, text, "utf-8")
+
+    original_filename = file.filename or f"{section}.md"
+    now = datetime.now(UTC).isoformat()
+    await asyncio.to_thread(repo.mark_reviewed, section, original_filename, now)
+
+    return {
+        "section": section,
+        "status": "reviewed",
+        "original_filename": original_filename,
+        "word_count": len(text.split()),
+    }
+
+
+@v1_router.get("/{project_id}/reports/drafts/{section}/download")
+async def download_draft(
+    project_id: int,
+    section: str,
+    request: Request,
+) -> Response:
+    """Return the draft markdown for *section* as an attachment."""
+    if section not in SECTION_REGISTRY:
+        raise ValidationError(
+            f"unknown section {section!r}",
+            details={"allowed": list(SECTION_REGISTRY)},
+        )
+    row = _resolve_project(request, project_id)
+    repo = _make_draft_repo(row)
+    record = await asyncio.to_thread(repo.get, section)
+    if record is None:
+        raise NotFound(f"draft {section!r} not found")
+
+    draft_dir = _resolve_drafts_dir(row)
+    candidate = draft_dir / f"{section}.md"
+    _ensure_within(draft_dir, candidate)
+
+    if not candidate.exists():
+        raise NotFound(f"draft file missing for section {section!r}")
+
+    text = await asyncio.to_thread(candidate.read_text, "utf-8")
+    return Response(
+        content=text,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{section}.md"'},
+    )
+
+
+@v1_router.delete(
+    "/{project_id}/reports/drafts/{section}",
+    status_code=204,
+)
+async def delete_draft(
+    project_id: int,
+    section: str,
+    request: Request,
+) -> None:
+    """Delete a draft section. Idempotent — 204 even if not present."""
+    if section not in SECTION_REGISTRY:
+        raise ValidationError(
+            f"unknown section {section!r}",
+            details={"allowed": list(SECTION_REGISTRY)},
+        )
+    row = _resolve_project(request, project_id)
+    repo = _make_draft_repo(row)
+    draft_dir = _resolve_drafts_dir(row)
+    candidate = draft_dir / f"{section}.md"
+    try:
+        _ensure_within(draft_dir, candidate)
+        candidate.resolve().unlink(missing_ok=True)
+    except PathTraversal:
+        logger.warning("skipping unlink for draft %r: path outside draft dir", section)
+    except OSError:
+        logger.exception("could not unlink draft %s", candidate)
+    await asyncio.to_thread(repo.delete, section)
 
 
 # ---------------------------------------------------------------------------

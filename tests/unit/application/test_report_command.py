@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.repl.commands.report import ReportCommand
+from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.resolver import SectionMissingError
 
 
@@ -81,9 +82,7 @@ class TestReportCommand:
         # Seed all draft sections so _check_drafts_present passes
         draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
         draft_dir.mkdir(parents=True)
-        from application.reporting.draft_runner import get_all_sections
-
-        for section in get_all_sections():
+        for section in SECTION_REGISTRY:
             (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
 
         with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
@@ -134,9 +133,7 @@ class TestReportCommand:
         # Seed all draft sections so _check_drafts_present passes
         draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
         draft_dir.mkdir(parents=True)
-        from application.reporting.draft_runner import get_all_sections
-
-        for section in get_all_sections():
+        for section in SECTION_REGISTRY:
             (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
 
         with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
@@ -177,9 +174,7 @@ class TestReportCommand:
         # Seed all draft sections so _check_drafts_present passes
         draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
         draft_dir.mkdir(parents=True)
-        from application.reporting.draft_runner import get_all_sections
-
-        for section in get_all_sections():
+        for section in SECTION_REGISTRY:
             (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
 
         with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
@@ -222,9 +217,7 @@ class TestReportCommand:
         mock_repl.base_path = str(tmp_path)
         draft_dir = tmp_path / "projects" / "test-project" / "reports" / "draft"
         draft_dir.mkdir(parents=True)
-        from application.reporting.draft_runner import get_all_sections
-
-        for section in get_all_sections():
+        for section in SECTION_REGISTRY:
             (draft_dir / f"{section}.md").write_text("draft", encoding="utf-8")
 
         result = cmd._check_drafts_present()
@@ -236,9 +229,7 @@ class TestReportCommand:
         mock_repl.base_path = str(tmp_path)
         reviewed_dir = tmp_path / "projects" / "test-project" / "reports" / "reviewed"
         reviewed_dir.mkdir(parents=True)
-        from application.reporting.draft_runner import get_all_sections
-
-        for section in get_all_sections():
+        for section in SECTION_REGISTRY:
             (reviewed_dir / f"{section}.md").write_text("reviewed", encoding="utf-8")
 
         result = cmd._check_drafts_present()
@@ -262,53 +253,60 @@ class TestReportCommand:
     def test_draft_no_section_calls_generate_for_every_section(
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
-        from application.reporting.draft_runner import get_all_sections
-
-        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+        with (
+            patch("infrastructure.store.connection.ConnectionFactory"),
+            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
+        ):
             cmd.execute("report", ["draft"])
-
-        all_sections = get_all_sections()
-        assert mock_gen.call_count == len(all_sections)
-        called_sections = [c.kwargs["section"] for c in mock_gen.call_args_list]
-        assert called_sections == all_sections
+        assert mock_run.call_count == len(SECTION_REGISTRY)
+        called_sections = [c.args[0].section for c in mock_run.call_args_list]
+        assert called_sections == list(SECTION_REGISTRY.keys())
 
     def test_draft_with_section_calls_generate_once(
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
-        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+        with (
+            patch("infrastructure.store.connection.ConnectionFactory"),
+            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
+        ):
             cmd.execute("report", ["draft", "risk-level"])
-
-        assert mock_gen.call_count == 1
-        assert mock_gen.call_args.kwargs["section"] == "risk-level"
+        assert mock_run.call_count == 1
+        assert mock_run.call_args.args[0].section == "risk-level"
 
     def test_draft_no_active_project_exits_before_generating(
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
         mock_repl.active_project = None
-        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+        with patch("application.reporting.draft_orchestrator.run_draft") as mock_run:
             cmd.execute("report", ["draft"])
-
-        mock_gen.assert_not_called()
+        mock_run.assert_not_called()
         mock_repl.console.print.assert_called()
 
     def test_draft_skip_triage_passes_flag_to_generate_draft(
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
-        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+        with (
+            patch("infrastructure.store.connection.ConnectionFactory"),
+            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
+        ):
             cmd.execute("report", ["draft", "--skip-triage"])
-
-        from application.reporting.draft_runner import get_all_sections
-
-        assert mock_gen.call_count == len(get_all_sections())
-        for call in mock_gen.call_args_list:
-            assert call.kwargs["skip_triage"] is True
+        assert mock_run.call_count == len(SECTION_REGISTRY)
+        for call in mock_run.call_args_list:
+            assert call.args[0].skip_triage is True
 
     def test_draft_force_and_skip_triage_together(
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
-        with patch("application.reporting.draft_runner.generate_draft") as mock_gen:
+        with (
+            patch("infrastructure.store.connection.ConnectionFactory"),
+            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
+        ):
             cmd.execute("report", ["draft", "risk-level", "--force", "--skip-triage"])
-
-        assert mock_gen.call_count == 1
-        assert mock_gen.call_args.kwargs["force"] is True
-        assert mock_gen.call_args.kwargs["skip_triage"] is True
+        assert mock_run.call_count == 1
+        req = mock_run.call_args.args[0]
+        assert req.force_overwrite is True
+        assert req.skip_triage is True

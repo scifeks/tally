@@ -51,6 +51,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await bus.register_job("scan", "scan")
     await bus.register_job("triage", "triage")
     await bus.register_job("report", "report")
+    await bus.register_job("report_draft", "report_draft")
     yield
     with contextlib.suppress(Exception):
         await bus.close_job("finding")
@@ -60,6 +61,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await bus.close_job("triage")
     with contextlib.suppress(Exception):
         await bus.close_job("report")
+    with contextlib.suppress(Exception):
+        await bus.close_job("report_draft")
 
 
 def create_app(
