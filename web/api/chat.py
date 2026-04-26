@@ -1,4 +1,4 @@
-"""Phase 8.4 / 8.5 / 8.6 / 8.7 / 8.8 — Chat session endpoints.
+"""Phase 8.4 / 8.5 / 8.6 / 8.7 / 8.8 / 8.9 — Chat session endpoints.
 
 Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §12``:
 
@@ -8,9 +8,11 @@ Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §12``:
 - ``GET    /api/v1/projects/{project_id}/chat/sessions/{session_id}/messages`` (8.7)
 - ``POST   /api/v1/projects/{project_id}/chat/sessions/{session_id}/messages`` (8.8)
 - ``GET    /api/v1/projects/{project_id}/chat/stream`` (8.8 — SSE)
+- ``POST   /api/v1/projects/{project_id}/chat/sessions/{session_id}/cancel`` (8.9)
 
-Phase 8.9 (cancel) and 8.10 (scan-triggered sealing + retention sweep)
-are not in this slice.
+Scan-triggered sealing + retention sweep (8.10) live in
+``application/chat/sealing.py`` and are wired into
+``application.tools.orchestrator.ScanOrchestrator._run()``.
 """
 
 from __future__ import annotations
@@ -50,6 +52,7 @@ from web.adapters.event_bus_chat_sink import EventBusChatSink
 from web.api._errors import Conflict, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
+    ChatMessageCancelResponse,
     ChatMessageResponse,
     ChatMessageSendRequest,
     ChatMessageSendResponse,
@@ -462,6 +465,62 @@ async def send_chat_message(
         assistant_message_id=None,
         session_id=session_id,
         stream_url=stream_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8.9 — POST /chat/sessions/{session_id}/cancel
+# ---------------------------------------------------------------------------
+
+
+@v1_router.post(
+    "/{project_id}/chat/sessions/{session_id}/cancel",
+    response_model=ChatMessageCancelResponse,
+    status_code=202,
+)
+async def cancel_chat_stream(
+    project_id: int,
+    session_id: int,
+    request: Request,
+) -> ChatMessageCancelResponse:
+    """Cancel the in-flight assistant stream for *session_id*.
+
+    Looks up the asyncio task in the chat run registry and calls
+    ``task.cancel()``. The chat-service generator's ``GeneratorExit``
+    path emits ``ChatStreamCancelled`` (projected to SSE as
+    ``stream_cancelled`` per ``endpoints.md §15.4``) and does NOT
+    persist the assistant turn (decisions.md B7.7). The driver's
+    ``finally`` unregisters the handle so a follow-up POST is not
+    blocked. Errors:
+
+    - 404 — session not found or wrong project.
+    - 409 ``CHAT_NO_ACTIVE_STREAM`` — no stream is currently in
+      flight for *session_id*.
+
+    ``cancelled_message_id`` is ``None`` in v1: the assistant id is
+    only assigned at ``stream_end``, after which there is nothing
+    left to cancel.
+    """
+    row = _resolve_project(request, project_id)
+    session_repo, _message_repo = _make_repos(row)
+    await asyncio.to_thread(
+        _resolve_session_for_project,
+        session_repo,
+        session_id=session_id,
+        project_id=project_id,
+    )
+
+    handle = get_chat_run_registry().get(session_id)
+    if handle is None:
+        raise Conflict(
+            f"no chat stream is running for session {session_id}",
+            code="CHAT_NO_ACTIVE_STREAM",
+            details={"session_id": session_id},
+        )
+    handle.task.cancel()
+    return ChatMessageCancelResponse(
+        session_id=session_id,
+        cancelled_message_id=None,
     )
 
 

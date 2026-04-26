@@ -697,3 +697,17 @@ class ChatMessageSendResponse(BaseModel):
     assistant_message_id: int | None
     session_id: int
     stream_url: str
+
+
+class ChatMessageCancelResponse(BaseModel):
+    """202 response for ``POST .../sessions/{session_id}/cancel``.
+
+    ``cancelled_message_id`` is ``None`` in v1 because cancellation lands
+    before the ``stream_end`` event where the assistant row would
+    otherwise be written write-once (decisions.md B7.7). The field is
+    typed ``int | None`` so the wire format stays stable if a future
+    iteration assigns the assistant id earlier in the lifecycle.
+    """
+
+    session_id: int
+    cancelled_message_id: int | None
