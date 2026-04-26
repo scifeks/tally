@@ -1,6 +1,7 @@
 """Abstract base class for LLM provider adapters."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from typing import Any
 
 
@@ -28,4 +29,26 @@ class LLMProvider(ABC):
     @abstractmethod
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         """Generate a response from a list of chat messages."""
+        ...
+
+    @abstractmethod
+    def stream_chat(
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Stream the model's reply as already-decoded UTF-8 text chunks.
+
+        Implementations MUST be async generators (``async def`` with
+        ``yield``). Each yielded chunk is a plain UTF-8 string fragment
+        produced by the provider's streaming API; chunks are not
+        word-aligned and may include mid-word fragments. Callers are
+        responsible for any presentation buffering.
+
+        Cancellation flows through standard ``asyncio`` task cancellation:
+        when the consumer calls ``aclose()`` on the iterator (or its
+        owning task is cancelled), implementations MUST close the
+        underlying provider stream. Errors raised by the provider MUST
+        be wrapped in :class:`LLMAdapterError` before propagation.
+        """
         ...

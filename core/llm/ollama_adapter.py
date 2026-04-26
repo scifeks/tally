@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import urllib.error
 import urllib.request
+from collections.abc import AsyncIterator
 from typing import Any
 
 import ollama
@@ -17,7 +18,7 @@ from infrastructure.llm.ollama_utils import (
     verify_ollama_available as verify_ollama_available,
 )
 
-from .base import LLMProvider
+from .base import LLMAdapterError, LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +52,16 @@ class OllamaAdapter(LLMProvider):
         except (urllib.error.URLError, OSError):
             return False
 
-    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
-        """Call ollama.Client.chat and return the response content string."""
-        client = ollama.Client(host=self._base_url)
+    def _build_options(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         options: dict[str, Any] = {**kwargs}
         if self._num_ctx is not None:
             options["num_ctx"] = self._num_ctx
+        return options
+
+    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
+        """Call ollama.Client.chat and return the response content string."""
+        client = ollama.Client(host=self._base_url)
+        options = self._build_options(kwargs)
         response = client.chat(
             model=self._model,
             messages=messages,
@@ -69,3 +74,38 @@ class OllamaAdapter(LLMProvider):
     def complete(self, prompt: str, **kwargs: Any) -> str:
         """Delegate to chat() with a single user message."""
         return self.chat([{"role": "user", "content": prompt}], **kwargs)
+
+    async def stream_chat(
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Stream the Ollama chat response as text chunks.
+
+        Yields each chunk's ``message.content`` delta. Empty deltas are
+        skipped so callers never see no-op events. Cancellation propagates
+        through ``aclose()`` on the generator; the underlying httpx
+        connection used by ``ollama.AsyncClient`` is released when the
+        async iterator is closed.
+
+        Raises:
+            LLMAdapterError: For any error raised by the Ollama SDK,
+                including connection failures and protocol errors. Sync
+                ``chat()`` keeps its existing pass-through behaviour.
+        """
+        async_client = ollama.AsyncClient(host=self._base_url)
+        options = self._build_options(kwargs)
+        try:
+            response = await async_client.chat(
+                model=self._model,
+                messages=messages,
+                stream=True,
+                options=options,
+            )
+            async for chunk in response:
+                msg = chunk.message if hasattr(chunk, "message") else chunk["message"]
+                content = msg.content if hasattr(msg, "content") else msg["content"]
+                if content:
+                    yield content
+        except Exception as exc:
+            raise LLMAdapterError(str(exc)) from exc
