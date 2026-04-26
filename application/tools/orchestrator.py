@@ -72,7 +72,11 @@ class ScanOrchestrator:
                         timestamps, and findings_count. None disables
                         persistence (REPL legacy path).
         project_id:     Optional ``scan_runs.project_id`` carried into event
-                        payloads. None for the REPL path.
+                        payloads and into the Phase 8.10 chat-session
+                        sealing call after a successful run. Both REPL
+                        and web entry points pass it when the project
+                        registry resolves the active project; only legacy
+                        callers that bypass the registry leave it ``None``.
     """
 
     def __init__(
@@ -226,7 +230,33 @@ class ScanOrchestrator:
                     findings_count=_summary_findings_count(summary),
                 )
             )
+            self._seal_chat_sessions()
             return summary
+
+    def _seal_chat_sessions(self) -> None:
+        """Run Phase 8.10 chat-session sealing + retention sweep.
+
+        Best-effort: a chat-DB hiccup must never mask a successful scan
+        result. Skipped when no project_id was provided (legacy entry
+        points that predate the project registry wiring).
+        """
+        if self._project_id is None:
+            return
+        try:
+            from application.chat.sealing import seal_sessions_for_project
+            from core.project_paths import ProjectPaths
+
+            global_config = self._config.load_global_config()
+            paths = ProjectPaths.from_canonical(
+                str(self.executor.base_path), self.project_name
+            )
+            seal_sessions_for_project(
+                self._project_id,
+                paths=paths,
+                retention_count=global_config.chat_session_retention_count,
+            )
+        except Exception:
+            logger.exception("chat session sealing failed; suppressing")
 
     # ------------------------------------------------------------------
     # Public API — adapter shims

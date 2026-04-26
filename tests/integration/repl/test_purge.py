@@ -508,3 +508,116 @@ def test_purge_proceeds_when_only_tool_outputs_exist(tmp_path: Path) -> None:
     assert not scan_file.exists()
     printed = " ".join(str(c) for c in repl.console.print.call_args_list)
     assert "Nothing to purge" not in printed
+
+
+# ---------------------------------------------------------------------------
+# Phase 8.10 / Q15 — chat data is hard-deleted on full purge
+# ---------------------------------------------------------------------------
+
+
+def _seed_chat_data(
+    tmp_path: Path,
+    project_name: str,
+    project_id: int,
+    *,
+    n_sessions: int = 2,
+) -> tuple[list[int], int]:
+    """Create the project DB and seed N chat sessions with one message each.
+
+    Returns ``(session_ids, message_count)``.
+    """
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.chat_messages import (
+        ChatMessageRepository,
+    )
+    from infrastructure.store.repositories.chat_sessions import (
+        ChatSessionRepository,
+    )
+
+    db = tmp_path / "projects" / project_name / "sqlite" / "findings.db"
+    db.parent.mkdir(parents=True, exist_ok=True)
+    factory = ConnectionFactory(db)
+    factory.init_schema()
+    sessions = ChatSessionRepository(factory)
+    messages = ChatMessageRepository(factory)
+    ids: list[int] = []
+    for i in range(n_sessions):
+        sid = sessions.create(project_id=project_id, title=f"chat-{i}")
+        messages.append(session_id=sid, role="user", content=f"msg-{i}")
+        ids.append(sid)
+    return ids, n_sessions
+
+
+def test_full_purge_hard_deletes_chat_sessions_and_messages(
+    tmp_path: Path,
+) -> None:
+    """Full purge (no --tool) must clear every chat session for the project."""
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.chat_messages import (
+        ChatMessageRepository,
+    )
+    from infrastructure.store.repositories.chat_sessions import (
+        ChatSessionRepository,
+    )
+
+    project_id = 7
+    sids, _ = _seed_chat_data(tmp_path, "testproj", project_id=project_id, n_sessions=2)
+
+    repl = _make_repl(tmp_path)
+    repl.project_registry.resolve_by_name = MagicMock(return_value={"id": project_id})
+    cmd = PurgeCommand(repl)
+    engine = _make_rag_engine(0)
+    engine.count_documents.return_value = 0
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", side_effect=["y", "n"]),
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", [])
+
+    db = tmp_path / "projects" / "testproj" / "sqlite" / "findings.db"
+    factory = ConnectionFactory(db)
+    factory.init_schema()
+    assert (
+        ChatSessionRepository(factory).list_for_project(
+            project_id, include_expired=True
+        )
+        == []
+    )
+    for sid in sids:
+        assert ChatMessageRepository(factory).count_for_session(sid) == 0
+
+    printed = " ".join(str(c) for c in repl.console.print.call_args_list)
+    assert "chat session" in printed.lower()
+
+
+def test_tool_filtered_purge_does_not_touch_chat(tmp_path: Path) -> None:
+    """`purge --tool=...` must not delete chat data — Q15 is full-purge only."""
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.chat_sessions import (
+        ChatSessionRepository,
+    )
+
+    project_id = 7
+    sids, _ = _seed_chat_data(tmp_path, "testproj", project_id=project_id, n_sessions=2)
+
+    repl = _make_repl(tmp_path)
+    repl.project_registry.resolve_by_name = MagicMock(return_value={"id": project_id})
+    cmd = PurgeCommand(repl)
+    engine = _make_rag_engine(2)
+    with (
+        patch.object(cmd, "_get_rag_engine", return_value=engine),
+        patch("application.repl.commands.purge.tool_registry") as mock_reg,
+        patch("builtins.input", side_effect=["y"]),
+    ):
+        mock_reg.list_tool_names.return_value = MOCK_TOOLS
+        cmd.cmd_purge("purge", ["--tool=gitleaks"])
+
+    db = tmp_path / "projects" / "testproj" / "sqlite" / "findings.db"
+    factory = ConnectionFactory(db)
+    factory.init_schema()
+    surviving = ChatSessionRepository(factory).list_for_project(
+        project_id, include_expired=True
+    )
+    assert sorted(r.id for r in surviving) == sorted(sids)

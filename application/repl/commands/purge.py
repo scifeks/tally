@@ -113,8 +113,17 @@ class PurgeCommand:
         sqlite_count = self._count_sqlite_findings(tools=tools)
         has_outputs = self._has_tool_output_files(tools=tools)
         has_reports = tools is None and not keep_reports and self._has_report_files()
+        # Chat purge runs only on the full-purge path (no --tool filter),
+        # mirroring decisions.md Q15.
+        chat_count = self._count_chat_sessions() if tools is None else 0
 
-        if count == 0 and sqlite_count == 0 and not has_outputs and not has_reports:
+        if (
+            count == 0
+            and sqlite_count == 0
+            and not has_outputs
+            and not has_reports
+            and chat_count == 0
+        ):
             self.repl.console.print("[yellow]Nothing to purge.[/yellow]")
             return
 
@@ -127,8 +136,12 @@ class PurgeCommand:
         else:
             confirm_msg = "Delete ALL findings and reports?"
 
+        chat_note = ""
+        if chat_count > 0:
+            chat_note = f" Also deletes {chat_count} chat session(s)."
         self.repl.console.print(
-            f"Found [bold]{count}[/bold] document(s). {confirm_msg} {escape('[y/N]')} ",
+            f"Found [bold]{count}[/bold] document(s).{chat_note} "
+            f"{confirm_msg} {escape('[y/N]')} ",
             end="",
         )
         answer = input().strip().lower()
@@ -153,12 +166,21 @@ class PurgeCommand:
         else:
             total_deleted = rag_engine.delete_findings(tool=None)
         self._delete_tool_output_files(tools=tools)
+        # Chat purge runs before _purge_sqlite — full-wipe deletes the
+        # findings.db file outright, so going through the chat helper
+        # first keeps the explicit application-layer semantics
+        # (decisions.md Q15) regardless of how the SQLite wipe is done.
+        chat_deleted = self._purge_chat() if tools is None else 0
         self._purge_sqlite(tools=tools)
         if tools is None and not keep_reports:
             self._delete_reports()
         if delete_merged:
             self._delete_merged_endpoints()
         self.repl.console.print(f"[green]Deleted {total_deleted} document(s).[/green]")
+        if chat_deleted > 0:
+            self.repl.console.print(
+                f"[green]Deleted {chat_deleted} chat session(s).[/green]"
+            )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -286,6 +308,59 @@ class PurgeCommand:
             return total
 
         return rag_engine.count_documents()
+
+    def _resolve_project_id(self) -> int | None:
+        """Resolve the active project's id via the registry, or None on miss."""
+        assert self.repl.active_project is not None
+        try:
+            row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        except Exception:
+            return None
+        if row is None:
+            return None
+        try:
+            return int(row["id"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def _count_chat_sessions(self) -> int:
+        """Return the chat session count for the active project, or 0 on error."""
+        project_id = self._resolve_project_id()
+        if project_id is None:
+            return 0
+        try:
+            from infrastructure.store.connection import ConnectionFactory
+            from infrastructure.store.repositories.chat_sessions import (
+                ChatSessionRepository,
+            )
+
+            db_path = _project_paths(self.repl).findings_db
+            if not db_path.exists():
+                return 0
+            factory = ConnectionFactory(db_path)
+            factory.init_schema()
+            repo = ChatSessionRepository(factory)
+            return len(repo.list_for_project(project_id, include_expired=True))
+        except Exception:
+            return 0
+
+    def _purge_chat(self) -> int:
+        """Hard-delete every chat session for the active project (Q15).
+
+        Returns the number of sessions deleted. Failures are surfaced as
+        a warning; the rest of the purge continues.
+        """
+        project_id = self._resolve_project_id()
+        if project_id is None:
+            return 0
+        try:
+            from application.chat.sealing import purge_chat_for_project
+
+            paths = _project_paths(self.repl)
+            return purge_chat_for_project(project_id, paths=paths)
+        except Exception as exc:
+            self.repl.console.print(f"[yellow]Chat purge warning:[/yellow] {exc}")
+            return 0
 
     def _purge_sqlite(self, tools: list[str] | None) -> None:
         """Delete SQLite findings for the given tools, or full wipe if None."""

@@ -382,7 +382,12 @@ export interface ChatSession {
   messageCount: number
 }
 
-export type ChatStreamEventType = 'stream_start' | 'token' | 'stream_end' | 'error'
+export type ChatStreamEventType =
+  | 'stream_start'
+  | 'token'
+  | 'stream_end'
+  | 'error'
+  | 'stream_cancelled'
 
 export interface ChatStreamEvent {
   type: ChatStreamEventType

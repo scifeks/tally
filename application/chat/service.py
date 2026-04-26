@@ -26,6 +26,7 @@ Responsibilities, per the session prompt and ``decisions.md`` B7:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -222,7 +223,11 @@ async def _stream_tokens(
             )
             yield chunk
         completed = True
-    except GeneratorExit:
+    except (GeneratorExit, asyncio.CancelledError):
+        # Both consumer-driven aclose() (GeneratorExit) and task-level
+        # cancel() (CancelledError) end the stream without persisting
+        # the assistant turn (decisions.md B7.7). Phase 8.9's cancel
+        # endpoint relies on the CancelledError branch.
         sink.emit(
             ChatStreamCancelled(
                 session_id=request.session_id,
