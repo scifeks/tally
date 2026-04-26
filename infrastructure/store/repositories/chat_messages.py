@@ -73,6 +73,37 @@ class ChatMessageRepository:
             ).fetchall()
         return [_row_to_message(r) for r in rows]
 
+    def list_for_session_paginated(
+        self,
+        session_id: int,
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[ChatMessageRow], int]:
+        """Oldest-first page of messages plus total row count.
+
+        Mirrors :meth:`ChatSessionRepository.list_for_project_paginated`:
+        one ``COUNT(*)`` and one ``SELECT ... LIMIT ? OFFSET ?`` so the
+        page does not load every row. Order is ``id ASC`` so the UI
+        renders top-down chronologically.
+        """
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        with self._factory.connect() as conn:
+            total_row = conn.execute(
+                "SELECT COUNT(*) FROM chat_messages WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+            total = int(total_row[0])
+            rows = conn.execute(
+                "SELECT * FROM chat_messages WHERE session_id = ?"
+                " ORDER BY id ASC LIMIT ? OFFSET ?",
+                (session_id, limit, offset),
+            ).fetchall()
+        return [_row_to_message(r) for r in rows], total
+
     def count_for_session(self, session_id: int) -> int:
         with self._factory.connect() as conn:
             row = conn.execute(

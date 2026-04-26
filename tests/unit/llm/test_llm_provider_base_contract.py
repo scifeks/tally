@@ -28,6 +28,10 @@ class _AsyncEmpty:
 class _Complete(LLMProvider):
     """Reference complete implementation used as a baseline."""
 
+    @property
+    def model(self) -> str:
+        return "test-model"
+
     def is_available(self) -> bool:
         return True
 
@@ -51,6 +55,10 @@ def test_complete_subclass_can_instantiate() -> None:
 
 def test_missing_stream_chat_cannot_instantiate() -> None:
     class _NoStream(LLMProvider):
+        @property
+        def model(self) -> str:
+            return "m"
+
         def is_available(self) -> bool:
             return True
 
@@ -66,6 +74,10 @@ def test_missing_stream_chat_cannot_instantiate() -> None:
 
 def test_missing_chat_cannot_instantiate() -> None:
     class _NoChat(LLMProvider):
+        @property
+        def model(self) -> str:
+            return "m"
+
         def is_available(self) -> bool:
             return True
 

@@ -42,6 +42,10 @@ class ClaudeAdapter(LLMProvider):
             timeout=float(timeout_seconds),
         )
 
+    @property
+    def model(self) -> str:
+        return self._model
+
     def is_available(self) -> bool:
         """Return True if an API key is configured.
 

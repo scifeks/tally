@@ -43,12 +43,12 @@ class ChatStreamStarted(_ChatEventBase):
 
 @dataclass(frozen=True)
 class ChatToken(_ChatEventBase):
-    text: str = ""
+    token: str = ""
 
 
 @dataclass(frozen=True)
 class ChatStreamCompleted(_ChatEventBase):
-    message: str = ""
+    content: str = ""
 
 
 @dataclass(frozen=True)

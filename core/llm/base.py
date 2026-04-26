@@ -16,6 +16,12 @@ class LLMAdapterError(Exception):
 class LLMProvider(ABC):
     """Interface all LLM adapters must implement."""
 
+    @property
+    @abstractmethod
+    def model(self) -> str:
+        """The provider's configured model identifier (e.g. ``llama3.1:8b``)."""
+        ...
+
     @abstractmethod
     def is_available(self) -> bool:
         """Return True if the provider is reachable and ready."""

@@ -42,6 +42,10 @@ class OllamaAdapter(LLMProvider):
     # LLMProvider interface
     # ------------------------------------------------------------------
 
+    @property
+    def model(self) -> str:
+        return self._model
+
     def is_available(self) -> bool:
         """Return True if Ollama responds at its /api/tags endpoint."""
         try:

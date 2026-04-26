@@ -217,7 +217,7 @@ async def _stream_tokens(
                     session_id=request.session_id,
                     project_id=request.project_id,
                     user_message_id=user_message_id,
-                    text=chunk,
+                    token=chunk,
                 )
             )
             yield chunk
@@ -261,7 +261,7 @@ async def _stream_tokens(
             project_id=request.project_id,
             user_message_id=user_message_id,
             assistant_message_id=assistant_id,
-            message="stream completed",
+            content=full_response,
         )
     )
 

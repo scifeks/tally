@@ -67,6 +67,10 @@ class FakeProvider(LLMProvider):
         self.received_messages: list[dict[str, str]] | None = None
         self.call_count = 0
 
+    @property
+    def model(self) -> str:
+        return "fake-provider-model"
+
     def is_available(self) -> bool:
         return True
 
