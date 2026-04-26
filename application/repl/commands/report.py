@@ -210,10 +210,20 @@ class ReportCommand:
           scope-and-methodology   What was tested and how
           general-recommendations Actionable recommendations grouped by theme
         """
-        from application.reporting.draft_runner import (
-            generate_draft,
-            get_all_sections,
+        from application.repl.adapters.console_draft_sink import ConsoleDraftEventSink
+        from application.repl.adapters.rich_console_prompt import (
+            RichConsolePromptAdapter,
         )
+        from application.reporting.draft_orchestrator import (
+            DraftCancelled,
+            DraftGenerationError,
+            DraftOverwriteDenied,
+            DraftRequest,
+            run_draft,
+        )
+        from application.reporting.drafts import SECTION_REGISTRY
+        from infrastructure.store.connection import ConnectionFactory
+        from infrastructure.store.repositories.drafts import DraftRepository
 
         force = "--force" in args
         skip_triage = "--skip-triage" in args
@@ -226,23 +236,39 @@ class ReportCommand:
             )
             return
 
-        sections = [args[0]] if args else get_all_sections()
-
-        from application.repl.adapters.rich_console_prompt import (
-            RichConsolePromptAdapter,
-        )
+        sections = [args[0]] if args else list(SECTION_REGISTRY.keys())
 
         prompt = RichConsolePromptAdapter()
+        sink = ConsoleDraftEventSink(self.repl.console)
+        paths = _project_paths(self.repl)
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        draft_repo = DraftRepository(factory)
+
         for section in sections:
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=self.repl.active_project,
-                base_path=self.repl.base_path,
-                console=self.repl.console,
-                prompt=prompt,
-                force=force,
+                base_path=Path(self.repl.base_path),
+                section=section,
+                force_overwrite=force,
                 skip_triage=skip_triage,
             )
+            try:
+                run_draft(
+                    request,
+                    prompt=prompt,
+                    repo=draft_repo,
+                    event_sink=sink,
+                )
+            except DraftOverwriteDenied as exc:
+                self.repl.console.print(f"[yellow]{exc}[/yellow]")
+            except DraftCancelled as exc:
+                self.repl.console.print(f"[yellow]{exc}[/yellow]")
+                break
+            except DraftGenerationError as exc:
+                self.repl.console.print(f"[red]Error:[/red] {exc}")
+            except ValueError as exc:
+                self.repl.console.print(f"[red]Invalid section:[/red] {exc}")
 
     def _cmd_shell(self, args: list[str]) -> None:
         """report shell [--testing-type <type>]
@@ -316,13 +342,13 @@ class ReportCommand:
 
         If any section is missing entirely, print guidance and return False.
         """
-        from application.reporting.draft_runner import get_all_sections
+        from application.reporting.drafts import SECTION_REGISTRY
 
         paths = _project_paths(self.repl)
         base = paths.reports_dir
         missing = [
             section
-            for section in get_all_sections()
+            for section in SECTION_REGISTRY
             if not (paths.reports_draft_dir / f"{section}.md").exists()
             and not (base / "reviewed" / f"{section}.md").exists()
         ]

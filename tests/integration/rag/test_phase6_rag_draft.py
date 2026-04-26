@@ -1,4 +1,4 @@
-"""Phase 6 integration tests: generate_draft() injects rag_context from ChromaDB."""
+"""Phase 6 integration tests: run_draft() injects rag_context from ChromaDB."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 from application.project import ProjectManager
 from application.rag.engine import RAGEngine
 from application.rag.query import QueryEngine
-from application.reporting.draft_runner import generate_draft
+from application.reporting.draft_orchestrator import DraftRequest, run_draft
 from application.reporting.risk_level import RiskCounts
 
 pytestmark = pytest.mark.integration
@@ -52,11 +52,10 @@ def _make_rag_engine(base_path: str, project_name: str) -> RAGEngine:
         return RAGEngine(project_name=project_name, base_path=base_path)
 
 
-def _make_console() -> MagicMock:
-    console = MagicMock()
-    console.status.return_value.__enter__ = MagicMock(return_value=None)
-    console.status.return_value.__exit__ = MagicMock(return_value=False)
-    return console
+def _make_mock_repo() -> MagicMock:
+    repo = MagicMock()
+    repo.get.return_value = None
+    return repo
 
 
 @pytest.fixture()
@@ -87,7 +86,7 @@ class TestPhase6RagDraft:
     def test_rag_context_populated_when_chroma_has_docs(
         self, phase6_env: dict, tmp_path: Path
     ) -> None:
-        """generate_draft() passes non-empty rag_context when ChromaDB has docs."""
+        """run_draft() passes non-empty rag_context when ChromaDB has docs."""
         base_path = phase6_env["base_path"]
         project = phase6_env["project_name"]
         section = "executive-summary"
@@ -99,33 +98,31 @@ class TestPhase6RagDraft:
             return "draft content"
 
         mock_generator = MagicMock()
-        mock_generator.draft_path = (
-            Path(base_path)
-            / "projects"
-            / project
-            / "reports"
-            / "draft"
-            / f"{section}.md"
-        )
         mock_generator.generate.side_effect = _capture_generate
 
         default_fn = ef.DefaultEmbeddingFunction()
         with (
             patch(
-                "application.reporting.draft_runner.RAGEngine",
+                "application.reporting.draft_orchestrator.RAGEngine",
                 side_effect=lambda **kw: _make_rag_engine(
                     kw["base_path"], kw["project_name"]
                 ),
             ),
             patch(
-                "application.reporting.draft_runner.QueryEngine",
+                "application.reporting.draft_orchestrator.QueryEngine",
                 side_effect=lambda engine: QueryEngine(engine),
             ),
-            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
-            patch("application.reporting.draft_runner.make_store") as mock_store,
-            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
-            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch(
+                "application.reporting.draft_orchestrator.get_llm_provider"
+            ) as mock_llm,
+            patch("application.reporting.draft_orchestrator.make_store") as mock_store,
+            patch(
+                "application.reporting.draft_orchestrator.DraftQueryService"
+            ) as mock_qs,
+            patch(
+                "application.reporting.draft_orchestrator.SECTION_REGISTRY"
+            ) as mock_reg,
+            patch("application.reporting.draft_orchestrator.ConfigManager") as mock_cfg,
             patch.object(
                 RAGEngine, "_build_embedding_function", return_value=default_fn
             ),
@@ -145,13 +142,17 @@ class TestPhase6RagDraft:
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
 
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=project,
-                base_path=base_path,
-                console=_make_console(),
+                base_path=Path(base_path),
+                section=section,
+                force_overwrite=True,
+            )
+            run_draft(
+                request,
                 prompt=_AlwaysConfirm(),
-                force=True,
+                repo=_make_mock_repo(),
+                event_sink=None,
             )
 
         assert "rag_context" in captured_context
@@ -170,24 +171,22 @@ class TestPhase6RagDraft:
             return "draft content"
 
         mock_generator = MagicMock()
-        mock_generator.draft_path = (
-            Path(base_path)
-            / "projects"
-            / project
-            / "reports"
-            / "draft"
-            / f"{section}.md"
-        )
         mock_generator.generate.side_effect = _capture_generate
 
         with (
-            patch("application.reporting.draft_runner.RAGEngine"),
-            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
-            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
-            patch("application.reporting.draft_runner.make_store") as mock_store,
-            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
-            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch("application.reporting.draft_orchestrator.RAGEngine"),
+            patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
+            patch(
+                "application.reporting.draft_orchestrator.get_llm_provider"
+            ) as mock_llm,
+            patch("application.reporting.draft_orchestrator.make_store") as mock_store,
+            patch(
+                "application.reporting.draft_orchestrator.DraftQueryService"
+            ) as mock_qs,
+            patch(
+                "application.reporting.draft_orchestrator.SECTION_REGISTRY"
+            ) as mock_reg,
+            patch("application.reporting.draft_orchestrator.ConfigManager") as mock_cfg,
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_qe.return_value.search.return_value = []
@@ -205,13 +204,17 @@ class TestPhase6RagDraft:
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
 
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=project,
-                base_path=base_path,
-                console=_make_console(),
+                base_path=Path(base_path),
+                section=section,
+                force_overwrite=True,
+            )
+            run_draft(
+                request,
                 prompt=_AlwaysConfirm(),
-                force=True,
+                repo=_make_mock_repo(),
+                event_sink=None,
             )
 
         assert captured_context.get("rag_context", "") == ""
@@ -233,17 +236,22 @@ class TestPhase6RagDraft:
         )
 
         mock_generator = MagicMock()
-        mock_generator.draft_path = draft_path
         mock_generator.generate.return_value = "draft despite error"
 
         with (
-            patch("application.reporting.draft_runner.RAGEngine"),
-            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
-            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
-            patch("application.reporting.draft_runner.make_store") as mock_store,
-            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
-            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch("application.reporting.draft_orchestrator.RAGEngine"),
+            patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
+            patch(
+                "application.reporting.draft_orchestrator.get_llm_provider"
+            ) as mock_llm,
+            patch("application.reporting.draft_orchestrator.make_store") as mock_store,
+            patch(
+                "application.reporting.draft_orchestrator.DraftQueryService"
+            ) as mock_qs,
+            patch(
+                "application.reporting.draft_orchestrator.SECTION_REGISTRY"
+            ) as mock_reg,
+            patch("application.reporting.draft_orchestrator.ConfigManager") as mock_cfg,
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_qe.return_value.search.side_effect = RuntimeError("chroma down")
@@ -261,13 +269,17 @@ class TestPhase6RagDraft:
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
 
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=project,
-                base_path=base_path,
-                console=_make_console(),
+                base_path=Path(base_path),
+                section=section,
+                force_overwrite=True,
+            )
+            run_draft(
+                request,
                 prompt=_AlwaysConfirm(),
-                force=True,
+                repo=_make_mock_repo(),
+                event_sink=None,
             )
 
         assert draft_path.exists()

@@ -78,6 +78,28 @@ class GenerationCancelled(_ReportEventBase):
     message: str = ""
 
 
+@dataclass(frozen=True)
+class DraftStarted(_ReportEventBase):
+    section: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class DraftCompleted(_ReportEventBase):
+    section: str = ""
+    output_path: str = ""
+    file_size_bytes: int = 0
+    word_count: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class DraftFailed(_ReportEventBase):
+    section: str = ""
+    error: str = ""
+    message: str = ""
+
+
 type ReportEvent = (
     GenerationStarted
     | StepStarted
@@ -86,7 +108,12 @@ type ReportEvent = (
     | GenerationCompleted
     | GenerationFailed
     | GenerationCancelled
+    | DraftStarted
+    | DraftCompleted
+    | DraftFailed
 )
+
+type DraftEvent = DraftStarted | DraftCompleted | DraftFailed
 
 
 _EVENT_TYPE_NAMES: dict[type, str] = {
@@ -97,6 +124,9 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
     GenerationCompleted: "generation_completed",
     GenerationFailed: "generation_failed",
     GenerationCancelled: "generation_cancelled",
+    DraftStarted: "draft_started",
+    DraftCompleted: "draft_completed",
+    DraftFailed: "draft_failed",
 }
 
 

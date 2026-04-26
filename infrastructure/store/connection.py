@@ -200,6 +200,14 @@ class ConnectionFactory:
 
                 CREATE INDEX IF NOT EXISTS idx_finding_history_finding_id
                     ON finding_history (finding_id, timestamp DESC);
+
+                CREATE TABLE IF NOT EXISTS drafts (
+                    section           TEXT PRIMARY KEY,
+                    status            TEXT NOT NULL,
+                    original_filename TEXT,
+                    generated_at      TEXT,
+                    reviewed_at       TEXT
+                );
             """)
         self._migrate_fingerprint_unique()
         self._migrate_drop_run_repos()
