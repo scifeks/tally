@@ -1,5 +1,5 @@
 {
-  "chat_llm_provider": "ollama",
+  "chat_llm_provider": "",
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama_report",
   "embedding_provider": "ollama_embedding",

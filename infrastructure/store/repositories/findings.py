@@ -748,9 +748,22 @@ class FindingRepository:
         return row[0] if row else 0
 
     def count_aggregates(self) -> dict:
-        """Return finding counts bucketed by severity, domain, segment,
-        repo, and status.
+        """Return finding counts and dashboard aggregates.
+
+        Buckets: severity, domain, segment, repo, status, tool, plus
+        a 2D severity x status crosstab. Also returns ``total``,
+        per-project ``scans_count`` / ``repos_count`` / ``urls_count``,
+        and the ``last_scan_at`` / ``last_triage_at`` timestamps.
         """
+        canonical_statuses = ("active", "false_positive", "fixed", "wont_fix")
+        canonical_severities = (
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "informational",
+        )
+
         with self._factory.connect() as conn:
             by_severity: dict[str, int] = {}
             for rank, count in conn.execute(
@@ -788,12 +801,71 @@ class FindingRepository:
                     " WHERE status IS NOT NULL GROUP BY status"
                 ).fetchall()
             }
+            by_tool: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT tool, COUNT(*) FROM findings"
+                    " WHERE tool IS NOT NULL GROUP BY tool"
+                ).fetchall()
+            }
+
+            # Pre-populate canonical cells at 0 so the crosstab is dense.
+            by_severity_status: dict[str, dict[str, int]] = {
+                sev: dict.fromkeys(canonical_statuses, 0)
+                for sev in canonical_severities
+            }
+            for rank, status, count in conn.execute(
+                "SELECT severity, status, COUNT(*) FROM findings"
+                " WHERE severity IS NOT NULL AND status IS NOT NULL"
+                " GROUP BY severity, status"
+            ).fetchall():
+                sev_label = Severity.from_rank(rank).label
+                row = by_severity_status.setdefault(
+                    sev_label, dict.fromkeys(canonical_statuses, 0)
+                )
+                row[status] = count
+
+            (total_row,) = conn.execute("SELECT COUNT(*) FROM findings").fetchone()
+            total = int(total_row or 0)
+
+            (scans_row,) = conn.execute(
+                "SELECT COUNT(DISTINCT run_id) FROM findings WHERE run_id IS NOT NULL"
+            ).fetchone()
+            scans_count = int(scans_row or 0)
+
+            (repos_row,) = conn.execute(
+                "SELECT COUNT(DISTINCT repo_id) FROM findings WHERE repo_id IS NOT NULL"
+            ).fetchone()
+            repos_count = int(repos_row or 0)
+
+            (urls_row,) = conn.execute("SELECT COUNT(*) FROM url_findings").fetchone()
+            urls_count = int(urls_row or 0)
+
+            (last_scan_row,) = conn.execute(
+                "SELECT MAX(sr.created_at) FROM scan_runs sr"
+                " JOIN findings f ON f.run_id = sr.id"
+            ).fetchone()
+            last_scan_at = last_scan_row
+
+            (last_triage_row,) = conn.execute(
+                "SELECT MAX(triaged_at) FROM findings WHERE triaged_at IS NOT NULL"
+            ).fetchone()
+            last_triage_at = last_triage_row
+
         return {
             "by_severity": by_severity,
             "by_domain": by_domain,
             "by_segment": by_segment,
             "by_repo": by_repo,
             "by_status": by_status,
+            "by_tool": by_tool,
+            "by_severity_status": by_severity_status,
+            "total": total,
+            "scans_count": scans_count,
+            "repos_count": repos_count,
+            "urls_count": urls_count,
+            "last_scan_at": last_scan_at,
+            "last_triage_at": last_triage_at,
         }
 
     def distinct_facet_values(self) -> dict:

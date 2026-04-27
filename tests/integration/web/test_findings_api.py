@@ -228,6 +228,88 @@ class TestFindingsCounts:
         response = await client.get("/api/v1/projects/99999/findings/counts")
         assert response.status_code == 404
 
+    async def test_counts_returns_extended_fields(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        assert response.status_code == 200
+        data = response.json()
+        for key in (
+            "by_tool",
+            "by_severity_status",
+            "total",
+            "scans_count",
+            "repos_count",
+            "urls_count",
+            "last_scan_at",
+            "last_triage_at",
+        ):
+            assert key in data, f"missing field: {key}"
+
+    async def test_counts_total_matches_status_and_severity_sums(
+        self, app_client
+    ) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        assert response.status_code == 200
+        data = response.json()
+        # total == sum of status buckets == sum of severity buckets
+        # (only true when every finding has both fields populated, which
+        # is the case for the fixture).
+        assert data["total"] == sum(data["by_severity"].values())
+        # by_status sum may be lower if any rows lack status — only assert
+        # the sum is consistent with what is bucketed.
+        assert sum(data["by_status"].values()) <= data["total"]
+
+    async def test_counts_severity_status_crosstab_shape(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        assert response.status_code == 200
+        crosstab = response.json()["by_severity_status"]
+        # Five canonical severity rows, each with the four canonical statuses.
+        for sev in ("critical", "high", "medium", "low", "informational"):
+            assert sev in crosstab, f"missing severity row: {sev}"
+            for st in ("active", "false_positive", "fixed", "wont_fix"):
+                assert st in crosstab[sev], (
+                    f"missing status column {st} under severity {sev}"
+                )
+                assert isinstance(crosstab[sev][st], int)
+
+    async def test_counts_severity_status_row_sums(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        data = response.json()
+        # Each crosstab row must sum to its by_severity total (when every
+        # finding in that severity has a status).
+        for sev, total in data["by_severity"].items():
+            row_sum = sum(data["by_severity_status"].get(sev, {}).values())
+            assert row_sum <= total, (
+                f"crosstab row sum for {sev} ({row_sum}) exceeds by_severity"
+                f" total ({total})"
+            )
+
+    async def test_counts_repos_count_matches_by_repo(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        data = response.json()
+        assert data["repos_count"] == len(data["by_repo"])
+
+    async def test_counts_timestamps_are_iso_or_null(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        data = response.json()
+        for key in ("last_scan_at", "last_triage_at"):
+            value = data[key]
+            assert value is None or isinstance(value, str), (
+                f"{key} must be string or null, got {type(value).__name__}"
+            )
+
+    async def test_counts_urls_count_is_non_negative_int(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(f"/api/v1/projects/{project_id}/findings/counts")
+        data = response.json()
+        assert isinstance(data["urls_count"], int)
+        assert data["urls_count"] >= 0
+
 
 class TestFindingsFacets:
     async def test_facets_returns_expected_keys(self, app_client) -> None:

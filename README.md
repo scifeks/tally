@@ -9,7 +9,7 @@ Tally is a CLI REPL for orchestrating web application security auditing. It wrap
 - Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup — skips tools that are not installed
-- RAG-powered search and chat over ingested findings — backed by Ollama or Anthropic Claude
+- RAG-powered search and chat over ingested findings — search runs on Ollama or Anthropic Claude; chat is Ollama-only ([docs/chat.md](docs/chat.md))
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
 - Browser-based findings reviewer with inline editing — launched on demand from the REPL via `ui serve`
 - Human-in-the-loop approval before each tool execution
@@ -192,6 +192,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/report.md](docs/report.md) — Report generation guide: quick reports, PDF assembly, and shell preview
 - [docs/mcp.md](docs/mcp.md) — MCP triage system setup and usage guide
 - [docs/ui.md](docs/ui.md) — Web UI: browser-based findings browser with inline editing, configuration, and security model
+- [docs/chat.md](docs/chat.md) — RAG chat configuration and usage (Ollama-only)
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
 - [docs/url-discovery.md](docs/url-discovery.md) — URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers

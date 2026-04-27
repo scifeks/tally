@@ -13,6 +13,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
 from application.rag.engine import RAGEngine
 from application.runtime.dependency_service import RuntimeDependencyService
@@ -122,6 +123,11 @@ def create_app(
     app.state.installed_tools = InstalledToolsProbe()
 
     app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
+
+    app.state.capabilities_service = CapabilitiesService(
+        base_path=base_path,
+        runtime_service=app.state.runtime_dependency_service,
+    )
 
     app.include_router(auth_router, prefix="/api/v1/auth")
     app.include_router(config_router, prefix="/api/v1/config")
