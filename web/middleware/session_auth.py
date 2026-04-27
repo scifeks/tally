@@ -8,7 +8,13 @@ from starlette.responses import Response
 
 from web.api._errors import error_response
 
-_EXEMPT = frozenset({"/api/auth/exchange", "/api/auth/me"})
+_EXEMPT = frozenset(
+    {
+        "/api/auth/exchange",
+        "/api/auth/me",
+        "/api/v1/health",
+    }
+)
 
 
 class SessionAuthMiddleware(BaseHTTPMiddleware):

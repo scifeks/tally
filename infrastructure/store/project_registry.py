@@ -37,6 +37,15 @@ class ProjectRegistryRepository:
         finally:
             conn.close()
 
+    def ping(self) -> None:
+        """Run a trivial query to verify the registry DB is reachable.
+
+        Raises ``sqlite3.Error`` (or subclasses) if the connection or query
+        fails. Used by the platform health endpoint.
+        """
+        with self._connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+
     def init_schema(self) -> None:
         """Create the projects table and indexes if missing. Idempotent."""
         with self._connect() as conn:

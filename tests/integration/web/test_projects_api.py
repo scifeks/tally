@@ -298,3 +298,59 @@ class TestRepositoriesV1:
         client, _, _ = projects_v1_client
         resp = await client.get("/api/v1/projects/9999/repositories")
         assert resp.status_code == 404
+
+    async def test_repository_detail_returns_repo_and_omits_auth(
+        self, projects_v1_client
+    ) -> None:
+        client, _, project_id = projects_v1_client
+        list_resp = await client.get(f"/api/v1/projects/{project_id}/repositories")
+        assert list_resp.status_code == 200
+        items = list_resp.json()["items"]
+        assert items, "fixture should expose at least one repository"
+        target = items[0]
+        repo_id = target["id"]
+
+        detail_resp = await client.get(
+            f"/api/v1/projects/{project_id}/repositories/{repo_id}"
+        )
+        assert detail_resp.status_code == 200
+        raw = detail_resp.text
+        assert "auth" not in raw
+        assert "super-secret-password" not in raw
+
+        body = detail_resp.json()
+        assert body["id"] == repo_id
+        assert body["uuid"] == target["uuid"]
+        assert body["name"] == target["name"]
+        assert body["type"] == target["type"]
+        assert body["languages"] == target["languages"]
+
+    async def test_repository_detail_unknown_project_returns_404(
+        self, projects_v1_client
+    ) -> None:
+        client, _, _ = projects_v1_client
+        resp = await client.get("/api/v1/projects/9999/repositories/1")
+        assert resp.status_code == 404
+
+    async def test_repository_detail_unknown_repo_returns_404(
+        self, projects_v1_client
+    ) -> None:
+        client, _, project_id = projects_v1_client
+        resp = await client.get(f"/api/v1/projects/{project_id}/repositories/9999")
+        assert resp.status_code == 404
+
+    async def test_repository_detail_soft_deleted_returns_404(
+        self, projects_v1_client
+    ) -> None:
+        client, mut_headers, project_id = projects_v1_client
+        list_resp = await client.get(f"/api/v1/projects/{project_id}/repositories")
+        repo_id = list_resp.json()["items"][0]["id"]
+
+        delete_resp = await client.delete(
+            f"/api/v1/projects/{project_id}/repositories/{repo_id}",
+            headers=mut_headers,
+        )
+        assert delete_resp.status_code == 204
+
+        resp = await client.get(f"/api/v1/projects/{project_id}/repositories/{repo_id}")
+        assert resp.status_code == 404
