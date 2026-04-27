@@ -123,8 +123,8 @@ def create_app(
 
     app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
 
-    app.include_router(auth_router, prefix="/api/auth")
-    app.include_router(config_router, prefix="/api/config")
+    app.include_router(auth_router, prefix="/api/v1/auth")
+    app.include_router(config_router, prefix="/api/v1/config")
     app.include_router(findings_v1_router, prefix="/api/v1/projects")
     app.include_router(locks_router, prefix="/api/v1/projects")
     app.include_router(projects_v1_router, prefix="/api/v1/projects")

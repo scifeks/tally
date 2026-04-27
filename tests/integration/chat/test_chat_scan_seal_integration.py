@@ -194,7 +194,7 @@ HANDSHAKE = "test-handshake-abc123xyz"
 
 async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
     resp = await client.post(
-        "/api/auth/exchange",
+        "/api/v1/auth/exchange",
         json={"token": HANDSHAKE},
         headers={"origin": "http://127.0.0.1:12345"},
     )

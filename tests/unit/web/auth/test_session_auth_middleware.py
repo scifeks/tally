@@ -21,11 +21,11 @@ def _app() -> tuple[FastAPI, SessionStore]:
     async def protected(req: Request) -> dict[str, str]:
         return {"session_id": req.state.session_id}
 
-    @app.post("/api/auth/exchange")
+    @app.post("/api/v1/auth/exchange")
     async def exchange() -> dict[str, bool]:
         return {"ok": True}
 
-    @app.get("/api/auth/me")
+    @app.get("/api/v1/auth/me")
     async def me() -> dict[str, bool]:
         return {"ok": True}
 
@@ -52,7 +52,7 @@ async def test_exchange_path_is_exempt() -> None:
     async with httpx.AsyncClient(
         transport=transport, base_url=f"http://127.0.0.1:{_PORT}"
     ) as c:
-        resp = await c.post("/api/auth/exchange")
+        resp = await c.post("/api/v1/auth/exchange")
     assert resp.status_code == 200
 
 
@@ -62,7 +62,7 @@ async def test_me_path_is_exempt() -> None:
     async with httpx.AsyncClient(
         transport=transport, base_url=f"http://127.0.0.1:{_PORT}"
     ) as c:
-        resp = await c.get("/api/auth/me")
+        resp = await c.get("/api/v1/auth/me")
     assert resp.status_code == 200
 
 

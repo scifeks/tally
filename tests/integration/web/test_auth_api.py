@@ -13,7 +13,7 @@ class TestExchange:
     async def test_bad_token_returns_401(self, app_client) -> None:
         client, _, _, _, _, _ = app_client
         resp = await client.post(
-            "/api/auth/exchange",
+            "/api/v1/auth/exchange",
             json={"token": "not-a-real-token"},
             headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
         )
@@ -23,7 +23,7 @@ class TestExchange:
         # HANDSHAKE was consumed by the fixture's _authenticate call.
         client, _, _, _, _, _ = app_client
         resp = await client.post(
-            "/api/auth/exchange",
+            "/api/v1/auth/exchange",
             json={"token": HANDSHAKE},
             headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
         )
@@ -47,7 +47,7 @@ class TestExchange:
 class TestMe:
     async def test_authenticated_returns_200(self, app_client) -> None:
         client, _, _, _, _, _ = app_client
-        resp = await client.get("/api/auth/me")
+        resp = await client.get("/api/v1/auth/me")
         assert resp.status_code == 200
         data = resp.json()
         assert data["authenticated"] is True
@@ -55,7 +55,7 @@ class TestMe:
 
     async def test_unauthenticated_returns_401(self, app_client) -> None:
         client, _, _, _, _, _ = app_client
-        # /api/auth/me is exempt from SessionAuthMiddleware but handles auth
+        # /api/v1/auth/me is exempt from SessionAuthMiddleware but handles auth
         # itself — a fresh client with no cookies gets 401.
         import httpx
 
@@ -64,25 +64,25 @@ class TestMe:
             transport=transport,
             base_url=f"http://127.0.0.1:{TEST_PORT}",
         ) as fresh:
-            resp = await fresh.get("/api/auth/me")
+            resp = await fresh.get("/api/v1/auth/me")
         assert resp.status_code == 401
 
 
 class TestLogout:
     async def test_logout_returns_204(self, app_client) -> None:
         client, _, _, _, mut_headers, _ = app_client
-        resp = await client.post("/api/auth/logout", headers=mut_headers)
+        resp = await client.post("/api/v1/auth/logout", headers=mut_headers)
         assert resp.status_code == 204
 
     async def test_post_logout_protected_route_returns_401(self, app_client) -> None:
         client, _, _, _, mut_headers, _ = app_client
-        await client.post("/api/auth/logout", headers=mut_headers)
+        await client.post("/api/v1/auth/logout", headers=mut_headers)
         # Session is revoked; subsequent /api/* calls must be rejected.
         resp = await client.get("/api/findings/")
         assert resp.status_code == 401
 
     async def test_post_logout_me_returns_401(self, app_client) -> None:
         client, _, _, _, mut_headers, _ = app_client
-        await client.post("/api/auth/logout", headers=mut_headers)
-        resp = await client.get("/api/auth/me")
+        await client.post("/api/v1/auth/logout", headers=mut_headers)
+        resp = await client.get("/api/v1/auth/me")
         assert resp.status_code == 401

@@ -28,7 +28,7 @@ def _app() -> tuple[FastAPI, SessionStore]:
     async def data() -> dict[str, bool]:
         return {"ok": True}
 
-    @app.post("/api/auth/exchange")
+    @app.post("/api/v1/auth/exchange")
     async def exchange() -> dict[str, bool]:
         return {"ok": True}
 
@@ -75,7 +75,7 @@ async def test_exempt_path_passes_without_csrf() -> None:
     async with httpx.AsyncClient(
         transport=transport, base_url=f"http://127.0.0.1:{_PORT}"
     ) as c:
-        resp = await c.post("/api/auth/exchange")
+        resp = await c.post("/api/v1/auth/exchange")
     assert resp.status_code == 200
 
 

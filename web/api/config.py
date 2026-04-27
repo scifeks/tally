@@ -1,4 +1,4 @@
-"""GET /api/config — field configuration for the SPA."""
+"""GET /api/v1/config/field-specs — field configuration for the SPA."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from domain.tools.constants import (
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/field-specs")
 def get_config() -> dict:
     """Return editable field specifications for the findings SPA.
 
