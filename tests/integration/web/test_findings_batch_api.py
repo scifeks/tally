@@ -78,7 +78,7 @@ async def batch_client(tmp_path: Path):
         base_url=f"http://127.0.0.1:{TEST_PORT}",
     ) as client:
         resp = await client.post(
-            "/api/auth/exchange",
+            "/api/v1/auth/exchange",
             json={"token": HANDSHAKE},
             headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
         )

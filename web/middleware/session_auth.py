@@ -10,8 +10,8 @@ from web.api._errors import error_response
 
 _EXEMPT = frozenset(
     {
-        "/api/auth/exchange",
-        "/api/auth/me",
+        "/api/v1/auth/exchange",
+        "/api/v1/auth/me",
         "/api/v1/health",
     }
 )

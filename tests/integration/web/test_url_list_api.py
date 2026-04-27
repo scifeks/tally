@@ -45,7 +45,7 @@ def _project_config_with_repo(repo_uuid: str, repo_path: str) -> dict[str, Any]:
 
 async def _auth(client: httpx.AsyncClient) -> dict[str, str]:
     resp = await client.post(
-        "/api/auth/exchange",
+        "/api/v1/auth/exchange",
         json={"token": _HANDSHAKE},
         headers={"origin": f"http://127.0.0.1:{_TEST_PORT}"},
     )
