@@ -278,19 +278,13 @@ _HELP_REGISTRY = [
         "--dry-run",
         "Batch + render prompts to DEBUG log — no MCP server, no Claude",
     ),
-    # Findings
-    ("findings", None, None, "Findings"),
+    # Web UI
+    ("ui", None, None, "Web UI"),
     (
-        "findings",
-        "findings visualize",
+        "ui",
+        "ui serve",
         None,
-        "Launch the web UI for reviewing findings in a browser",
-    ),
-    (
-        "findings",
-        "findings visualize",
-        "--stop",
-        "Stop the running web UI server",
+        "Start FastAPI + Vite dev server, open browser. Ctrl+C to stop.",
     ),
     # Utility
     ("utility", None, None, "Utility"),

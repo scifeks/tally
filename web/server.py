@@ -278,6 +278,23 @@ def create_server(
     return server
 
 
+def create_web_app(
+    base_path: str,
+    port: int,
+    handshake_token: str,
+    allowed_origins: list[str] | None = None,
+) -> FastAPI:
+    """Create the FastAPI application for direct ``uvicorn.run`` usage."""
+    _attach_file_logging(base_path)
+    _attach_access_logging(base_path)
+    return create_app(
+        base_path,
+        handshake_token,
+        port=port,
+        allowed_origins=allowed_origins,
+    )
+
+
 def start(
     base_path: str,
     port: int,

@@ -34,7 +34,7 @@ from application.startup.checker import print_installed_system_tools
 from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
 from infrastructure.runtime import ClaudeCodeProbe
-from web.server import create_server as _create_web_server
+from web.server import create_web_app as _create_web_app
 
 _log = logging.getLogger(__name__)
 
@@ -247,7 +247,7 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
-        self.ui_commands = UiCommands(self, server_factory=_create_web_server)
+        self.ui_commands = UiCommands(self, app_factory=_create_web_app)
 
     # ------------------------------------------------------------------
     # Public entry point
