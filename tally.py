@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from application.repl import REPL
+from application.setup.commands_setup import sync_commands_config
 from application.startup.checker import DependencyChecker
 from application.tools.registry import discover_tools
 
@@ -82,12 +83,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, handlers=[_main_handler, _err_handler])
     # ---------------------------------------------------------------
 
-    # First-run setup: generate commands.json if absent.
-    # Runs before --check and --skip-checks so the registry is always current.
-    if not (Path(_BASE_PATH) / "config" / "commands.json").exists():
-        from application.setup.commands_setup import run_commands_setup
-
-        run_commands_setup(_BASE_PATH)
+    # Refresh global commands.json from actual system availability on each boot.
+    # Project-level overrides remain separate and are overlaid at runtime.
+    sync_commands_config(_BASE_PATH)
 
     # Re-run discovery with the confirmed base_path so the registry reflects
     # whatever commands.json now contains (the module-level auto-discovery in

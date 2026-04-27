@@ -68,3 +68,10 @@ tmp/
 # Frontend
 ui/node_modules/
 web/static/
+
+#PoC tests
+application/pre_triage/
+
+#App stuff
+tally.db
+roadmap/

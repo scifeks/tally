@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from application.setup.commands_setup import reconcile_commands_with_system
 from rich.console import Console
 from rich.markup import escape as markup_escape
 from rich.table import Table
@@ -83,18 +84,12 @@ tool_registry = ToolRegistry()
 
 
 def discover_tools(base_path: str = ".", project_name: str | None = None) -> None:
-    """Register tool wrappers, driven by commands.json when present.
+    """Register tool wrappers from reconciled global config plus project overrides.
 
-    When commands.json exists at <base_path>/config/commands.json, only tools
-    listed there are registered, using the wrapper from the configured location
-    subdirectory (local/ or docker/).
-
-    When commands.json is absent (pre-setup / development), all wrappers in
-    wrappers/local/ are registered as a backward-compatible fallback.
-
-    If project_name is provided and
-    projects/<project_name>/config/commands.json exists, its entries overlay the
-    global config (project entries fully replace global entries of the same name).
+    Global local-tool entries are rebuilt from actual host availability on each
+    discovery pass so stale commands.json contents do not control scan
+    eligibility. Project-level overrides are overlaid afterward and may still
+    opt into docker or custom per-project configuration.
     """
     import json as _json
 
@@ -119,6 +114,14 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
                 exc,
             )
 
+    if commands_config is not None:
+        commands_config = {
+            name: CommandEntry(**entry)
+            for name, entry in reconcile_commands_with_system(
+                {name: entry.model_dump() for name, entry in commands_config.items()}
+            ).items()
+        }
+
     if commands_config is not None and project_name is not None:
         project_path = (
             Path(base_path) / "projects" / project_name / "config" / "commands.json"
@@ -139,7 +142,7 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
     else:
         logger.warning(
             "commands.json not found at %s — "
-            "running in fallback mode (all local tools)",
+            "running in fallback mode (available local tools only)",
             commands_path,
         )
         _discover_fallback(wrappers_dir)
@@ -159,7 +162,7 @@ def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
 
 
 def _discover_fallback(wrappers_dir: Path) -> None:
-    """Fallback: register all wrappers found in wrappers/local/."""
+    """Fallback: register only wrappers that are actually available locally."""
     local_dir = wrappers_dir / "local"
     for py_file in sorted(local_dir.glob("*.py")):
         if py_file.name.startswith("_"):
@@ -177,7 +180,9 @@ def _discover_fallback(wrappers_dir: Path) -> None:
                 and not inspect.isabstract(obj)
                 and obj.__module__ == module_name
             ):
-                tool_registry.register(obj())
+                tool = obj()
+                if tool.check_available():
+                    tool_registry.register(tool)
 
 
 def build_tool_table(tools, registry) -> Table:

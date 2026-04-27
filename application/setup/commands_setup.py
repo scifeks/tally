@@ -62,6 +62,94 @@ def find_local_binary(tool_name: str) -> str | None:
     return None
 
 
+def resolve_local_binary(tool_name: str, configured_path: str | None = None) -> str | None:
+    """Resolve a runnable local binary from config and PATH.
+
+    Global ``commands.json`` may contain stale paths or sentinel values such as
+    ``skip``. Prefer a configured path only when it resolves to a real
+    executable, then fall back to wrapper-declared candidate commands on PATH.
+    """
+    preferred = (configured_path or "").strip()
+    if preferred and preferred.lower() != "skip" and not _has_metachar(preferred):
+        found = shutil.which(preferred)
+        if found:
+            return found
+    return find_local_binary(tool_name)
+
+
+def _discover_wrapper_tools(location: str) -> list[str]:
+    wrappers_dir = (
+        Path(__file__).parent.parent.parent / "infrastructure" / "tools" / "wrappers"
+    )
+    location_dir = wrappers_dir / location
+    return sorted(
+        f.stem.replace("_", "-")
+        for f in location_dir.glob("*.py")
+        if not f.name.startswith("_")
+    )
+
+
+def load_commands_json(base_path: str) -> dict[str, dict]:
+    """Load raw global commands.json data from disk."""
+    path = Path(base_path) / "config" / "commands.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        data = json.load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def reconcile_commands_with_system(commands: dict[str, dict] | None) -> dict[str, dict]:
+    """Rebuild global local-tool config from actual system availability.
+
+    Project-level overrides are handled elsewhere and are intentionally not
+    persisted here. Existing docker entries are preserved because they are
+    explicit operator choices rather than host-system detection.
+    """
+    raw = commands or {}
+    reconciled: dict[str, dict] = {}
+
+    for tool_name, entry in raw.items():
+        if isinstance(entry, dict) and entry.get("location") == "docker":
+            reconciled[tool_name] = dict(entry)
+
+    for tool_name in _discover_wrapper_tools("local"):
+        if tool_name in reconciled:
+            continue
+        existing = raw.get(tool_name)
+        configured_path = (
+            existing.get("path")
+            if isinstance(existing, dict) and existing.get("location") == "local"
+            else None
+        )
+        resolved = resolve_local_binary(tool_name, configured_path=configured_path)
+        if not resolved:
+            continue
+        reconciled[tool_name] = {
+            "type": _get_wrapper_meta(tool_name, location="local")["tool_type"],
+            "location": "local",
+            "path": resolved,
+        }
+
+    return {name: reconciled[name] for name in sorted(reconciled)}
+
+
+def sync_commands_config(base_path: str) -> dict[str, dict]:
+    """Persist a global commands.json that matches current system tools."""
+    config_dir = Path(base_path) / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    current = load_commands_json(base_path)
+    reconciled = reconcile_commands_with_system(current)
+
+    path = config_dir / "commands.json"
+    if not path.exists() or current != reconciled:
+        with open(path, "w") as f:
+            json.dump(reconciled, f, indent=2)
+
+    return reconciled
+
+
 def interview_local(tool_name: str, defaults: dict | None = None) -> dict | None:
     """Collect local binary path for tool_name. Returns a raw dict or None to skip.
 
