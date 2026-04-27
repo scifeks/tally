@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import atexit
 import os
 import secrets
 import socket
@@ -14,11 +14,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import uvicorn
+from fastapi import FastAPI
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
 
-ServerFactory = Callable[[str, int, str, str, list[str]], uvicorn.Server]
+AppFactory = Callable[[str, int, str, list[str] | None], FastAPI]
 
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 
@@ -26,11 +27,9 @@ _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 class UiCommands:
     """Handlers for the `ui` REPL command."""
 
-    def __init__(self, repl: REPL, server_factory: ServerFactory) -> None:
+    def __init__(self, repl: REPL, app_factory: AppFactory) -> None:
         self._repl = repl
-        self._server_factory = server_factory
-        self._server: uvicorn.Server | None = None
-        self._api_thread: threading.Thread | None = None
+        self._app_factory = app_factory
         self._vite_proc: subprocess.Popen[bytes] | None = None
 
     # ------------------------------------------------------------------
@@ -50,27 +49,20 @@ class UiCommands:
             self._show_help()
 
     def _show_help(self) -> None:
-        print("ui serve         Start FastAPI + Vite dev server, open browser")
-        print("ui serve --stop  Stop the running servers")
+        print("ui serve   Start FastAPI + Vite dev server, open browser")
 
     # ------------------------------------------------------------------
     # `ui serve`
     # ------------------------------------------------------------------
 
     def cmd_serve(self, args: list[str]) -> None:
-        """Start (or stop) the FastAPI API server and Vite dev server.
+        """Start the FastAPI API server and Vite dev server.
 
         The web UI is multi-project: the user picks a project in the SPA
         after the server is up. No active REPL project is required.
+
+        Press Ctrl+C to stop the server.
         """
-        if "--stop" in args:
-            self._cmd_stop()
-            return
-
-        if self._server is not None:
-            print("UI servers are already running. Use `ui serve --stop` to stop them.")
-            return
-
         cfg = self._repl.config.global_config
         host: str = cfg.web_ui_host
         api_port: int = cfg.web_ui_port
@@ -94,25 +86,7 @@ class UiCommands:
         self._write_env_local(ui_dir, host, api_port, vite_port)
 
         token = secrets.token_hex(16)
-        server = self._server_factory(base_path, api_port, token, host, allowed_origins)
-        self._server = server
-
-        api_thread = threading.Thread(
-            target=lambda: asyncio.run(server.serve()),
-            daemon=True,
-        )
-        self._api_thread = api_thread
-        api_thread.start()
-
-        deadline = time.monotonic() + 2.0
-        while not server.started and time.monotonic() < deadline:
-            time.sleep(0.05)
-
-        if not server.started:
-            self._server = None
-            self._api_thread = None
-            print(f"Port {api_port} is already in use or API server failed to start.")
-            return
+        app = self._app_factory(base_path, api_port, token, allowed_origins)
 
         self._start_vite(ui_dir)
 
@@ -131,28 +105,11 @@ class UiCommands:
                 target=webbrowser.open, args=(browser_url,), daemon=True
             ).start()
 
-        print("Servers running — use `ui serve --stop` to stop.")
-
-    def _cmd_stop(self) -> None:
-        """Stop the running servers."""
-        stopped_any = False
-        if self._server is not None:
-            self._server.should_exit = True
-            self._server = None
-            self._api_thread = None
-            stopped_any = True
-        if self._vite_proc is not None:
-            try:
-                self._vite_proc.terminate()
-                self._vite_proc.wait(timeout=5)
-            except Exception:
-                self._vite_proc.kill()
-            self._vite_proc = None
-            stopped_any = True
-        if stopped_any:
-            print("UI servers stopped.")
-        else:
-            print("No UI servers are currently running.")
+        print("Press Ctrl+C to stop the server.")
+        try:
+            uvicorn.run(app, host=host, port=api_port, log_level="warning")
+        except OSError:
+            print(f"Port {api_port} is already in use or API server failed to start.")
 
     # ------------------------------------------------------------------
     # Helpers
@@ -176,6 +133,16 @@ class UiCommands:
         tmp.write_text(content, encoding="utf-8")
         os.replace(tmp, target)
 
+    def _stop_vite(self) -> None:
+        if self._vite_proc is None:
+            return
+        try:
+            self._vite_proc.terminate()
+            self._vite_proc.wait(timeout=5)
+        except Exception:
+            self._vite_proc.kill()
+        self._vite_proc = None
+
     def _start_vite(self, ui_dir: Path) -> None:
         npm = "npm"
         env = {**os.environ, "FORCE_COLOR": "0"}
@@ -190,6 +157,8 @@ class UiCommands:
         except FileNotFoundError:
             print("npm not found — Vite dev server not started.")
             self._vite_proc = None
+            return
+        atexit.register(self._stop_vite)
 
     @staticmethod
     def _wait_for_port(host: str, port: int, timeout: float) -> bool:
