@@ -94,12 +94,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, handlers=[_main_handler, _err_handler])
     # ---------------------------------------------------------------
 
-    # First-run setup: generate commands.json if absent.
-    # Runs before --check and --skip-checks so the registry is always current.
-    if not (Path(_BASE_PATH) / "config" / "commands.json").exists():
-        from application.setup.commands_setup import run_commands_setup
+    from application.setup.commands_setup import sync_commands_config
 
-        run_commands_setup(_BASE_PATH)
+    sync_commands_config(_BASE_PATH)
 
     # Phase 9.1: clear stale .tmp files left behind by interrupted atomic
     # writes from a prior crash. Idempotent and bounded to config dirs.
