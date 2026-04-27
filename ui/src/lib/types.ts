@@ -68,7 +68,7 @@ export interface Scan {
   findingsCount?: number
   /** Only present when status === 'running'. Describes the current work unit. */
   currentSegment?: string
-  /** 0-100, streamed via WS when running. */
+  /** 0-100, streamed via SSE when running. */
   progress?: number
   /** E.g. "3 / 14 repositories", "1.2k / 5.0k URLs". */
   segmentLabel?: string
@@ -151,7 +151,7 @@ export interface ScanRun {
   segments: Segment[]
   /** Tools explicitly selected (empty = all enabled). */
   tools: string[]
-  /** Live log of tool runs, updated via simulated WS. */
+  /** Live log of tool runs, updated via SSE events. */
   toolRuns: ToolRun[]
 }
 
