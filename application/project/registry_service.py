@@ -15,6 +15,10 @@ class ProjectRegistryService:
     def sync(self, base_path: str) -> None:
         self._repo.sync_from_filesystem(base_path)
 
+    def ping(self) -> None:
+        """Verify the registry DB is reachable. Raises on failure."""
+        self._repo.ping()
+
     def list_active(self) -> list[dict]:
         return self._repo.list_active()
 

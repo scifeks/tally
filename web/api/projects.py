@@ -32,6 +32,7 @@ from web.api.schemas import (
     ProjectListResponse,
     ProjectMetaResponse,
     RepoAuthPatchRequest,
+    RepositoryItem,
     RepositoryListResponse,
 )
 
@@ -264,6 +265,38 @@ async def list_repositories(
             "limit": limit,
         }
     )
+
+
+@v1_router.get(
+    "/{project_id}/repositories/{repo_id}",
+    response_model=RepositoryItem,
+)
+async def get_repository_detail(
+    project_id: int,
+    repo_id: int,
+    request: Request,
+) -> JSONResponse:
+    """Return a single repository. Auth fields are never echoed."""
+    row = _resolve_project(request, project_id)
+    base_path: str = request.app.state.base_path
+    registry = request.app.state.project_registry
+    manager = ProjectManager(base_path, registry=registry)
+    config = manager.get_project_info(row["name"])
+    if config is None:
+        raise NotFound(f"Project {project_id} not found")
+
+    repo_repo = _make_repo_repo(row)
+    db_row = repo_repo.get_by_id(repo_id)
+    if db_row is None or db_row.deleted_at is not None:
+        raise NotFound(f"Repository {repo_id} not found")
+
+    config_repo = next((r for r in config.repositories if r.uuid == db_row.uuid), None)
+    if config_repo is None:
+        raise NotFound(f"Repository {repo_id} not found")
+
+    # DB name is the source of truth (Phase 9 / C4 dual-write rule).
+    display = config_repo.model_copy(update={"name": db_row.name})
+    return JSONResponse(content=_serialize_repo(display, db_row.id))
 
 
 def _parse_payload(payload: str | None) -> dict[str, Any]:
