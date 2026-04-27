@@ -261,6 +261,11 @@ class KatanaLocalTool(BaseKatanaTool):
                 except Exception:
                     pass
 
+            # Expose the OAS3 path through ``output_files`` so the URL
+            # inventory ingest handler can read it from ToolResult.
+            if final_oas3 is not None and final_oas3.exists():
+                files["oas3"] = final_oas3
+
             return parsed
         finally:
             self._last_jsonl_path = None

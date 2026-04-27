@@ -32,6 +32,7 @@ from web.api.reports import v1_router as reports_projects_v1_router
 from web.api.scans import v1_router as scans_projects_v1_router
 from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
 from web.api.triage import v1_router as triage_projects_v1_router
+from web.api.url_list import url_list_v1_router
 from web.auth.handshake import HandshakeRegistry
 from web.auth.sessions import SessionStore
 from web.middleware.access_log import AccessLogMiddleware
@@ -108,6 +109,13 @@ def create_app(
     project_registry.sync(base_path)
     app.state.project_registry = project_registry
 
+    # Phase 9.2: ensure every project's repos have stamped uuids and DB rows.
+    from application.project.repository_sync import (
+        sync_repositories_for_all_projects,
+    )
+
+    sync_repositories_for_all_projects(base_path)
+
     app.state.rag_engine_cache = {}
 
     app.state.installed_tools = InstalledToolsProbe()
@@ -126,6 +134,7 @@ def create_app(
     app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(reports_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(chat_projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(url_list_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF

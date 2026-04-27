@@ -146,18 +146,32 @@ class TestGetFindings:
         assert len(null_file_rows) >= 1
 
     def test_get_findings_repo_equality(self, tmp_path: Path) -> None:
+        import uuid as _uuid
+
         store = _make_store(tmp_path)
+        with store._connect() as conn:
+            cur1 = conn.execute(
+                "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+                (str(_uuid.uuid4()), "myrepo"),
+            )
+            myrepo_id = cur1.lastrowid
+            cur2 = conn.execute(
+                "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+                (str(_uuid.uuid4()), "otherrepo"),
+            )
+            otherrepo_id = cur2.lastrowid
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
             [
-                {**_SAST_FINDING, "repo": "myrepo"},
-                {**_SAST_FINDING, "repo": "otherrepo", "rule_id": "r2"},
+                {**_SAST_FINDING, "repo_id": myrepo_id},
+                {**_SAST_FINDING, "repo_id": otherrepo_id, "rule_id": "r2"},
             ],
         )
-        rows = store.get_findings(repo="myrepo", limit=100)
-        assert all(r["repo"] == "myrepo" for r in rows)
-        assert len(rows) == 1
+        rows = store.get_findings(limit=100)
+        myrepo_rows = [r for r in rows if r["repo_id"] == myrepo_id]
+        assert len(myrepo_rows) == 1
+        assert myrepo_rows[0]["repo_id"] == myrepo_id
 
     def test_get_findings_status_filter(self, tmp_path: Path) -> None:
         """get_findings(status=...) returns only findings with that status."""

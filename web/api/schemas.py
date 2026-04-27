@@ -215,9 +215,19 @@ class ProjectInfoResponse(BaseModel):
     finding_count: int
 
 
+class ProjectInfoPatchRequest(BaseModel):
+    """Mutable subset of project info — name and created remain immutable."""
+
+    company_name: str | None = None
+    department_name: str | None = None
+    abbreviation: str | None = Field(default=None, max_length=3)
+
+
 class RepositoryItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
+    id: int | None = None
+    uuid: str | None = None
     name: str
     type: list[str]
     path: str | None = None
@@ -225,6 +235,23 @@ class RepositoryItem(BaseModel):
     container_name: str | None = None
     languages: list[str]
     base_urls: list[str]
+
+
+class RepoAuthPatchRequest(BaseModel):
+    """JSON body for PATCH /repositories/:repo_id/auth.
+
+    All fields optional; provided values overwrite the auth block.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    login_url: str | None = None
+    username_field: str | None = None
+    password_field: str | None = None
+    extra_fields: dict[str, str] | None = None
+    credentials_env: str | None = None
+    username: str | None = None
+    password: str | None = None
 
 
 class RepositoryListResponse(BaseModel):
@@ -257,6 +284,32 @@ class InstalledToolsResponse(BaseModel):
     """Names of tool wrappers whose binary was probed at process startup."""
 
     installed: list[str]
+
+
+class DockerContainerRequest(BaseModel):
+    """Container config block for tool override write requests."""
+
+    name: str
+    tool_path: str
+
+
+class ToolOverrideCreateRequest(BaseModel):
+    """Body for POST /tools/overrides — tool_id + CommandEntry fields."""
+
+    tool_id: str = Field(..., min_length=1)
+    type: str
+    location: str
+    path: str = ""
+    container: DockerContainerRequest | None = None
+
+
+class ToolOverrideUpdateRequest(BaseModel):
+    """Body for PUT /tools/overrides/{tool_id} — full replacement."""
+
+    type: str
+    location: str
+    path: str = ""
+    container: DockerContainerRequest | None = None
 
 
 class ToolOverrideItem(BaseModel):
@@ -328,7 +381,8 @@ class FindingsFacetsResponse(BaseModel):
 
 
 class ScanConfigRepo(BaseModel):
-    id: str
+    id: int
+    uuid: str
     name: str
     source: str
     location: str | None = None
@@ -357,7 +411,7 @@ class ScanStartRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    repoIds: list[str] = Field(
+    repoIds: list[int] = Field(
         default_factory=list,
         validation_alias=AliasChoices("repoIds", "repo_ids"),
     )

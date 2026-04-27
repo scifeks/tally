@@ -10,15 +10,8 @@ from application.pipeline.strategies import (
     PersistOnlyStrategy,
     PostIngestStrategy,
 )
-from application.pipeline.url_handlers import (
-    ConfigUpdateHandler,
-    URLDedupeHandler,
-    URLOS3Handler,
-    URLSeedsHandler,
-    URLSourceEmitter,
-)
+from application.url_inventory.ingest_handler import UrlInventoryIngestHandler
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
-from domain.pipeline.url_events import URLsConverted, URLsDeduped, URLSourceChanged
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -41,18 +34,7 @@ class PipelineFactory:
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
     ) -> EventBus:
-        """Return an EventBus wired with the appropriate post-ingest strategy.
-
-        Args:
-            console:          Rich console forwarded to handlers for progress output.
-            skip_enrichment:  When ``True``, findings are written to ChromaDB
-                              immediately after ingest — no LLM enrichment calls
-                              are made.  When ``False`` (default), the full
-                              enrich-then-persist path is used.
-            project_id:       Numeric project id stamped on enrichment events.
-            event_sink:       ``ScanEventSink`` for ``EnrichmentProgress`` /
-                              ``EnrichmentComplete`` emission. Defaults to no-op.
-        """
+        """Return an EventBus wired with the appropriate post-ingest strategy."""
         bus = EventBus()
 
         # --- Findings ingest pipeline ---
@@ -71,20 +53,11 @@ class PipelineFactory:
 
         bus.subscribe(IngestCompleted, strategy.handle)
 
-        # --- URL discovery pipeline ---
-        # URLSourceEmitter and IngestHandler both subscribe to ToolCompleted;
-        # they run sequentially (SQLite ingest then URL merge) per the bus
-        # registration order.  Neither depends on the other's output.
-        url_emitter = URLSourceEmitter(bus)
-        url_deduper = URLDedupeHandler(bus)
-        url_seeds = URLSeedsHandler()
-        url_oas3 = URLOS3Handler()
-        config_update = ConfigUpdateHandler()
-
-        bus.subscribe(ToolCompleted, url_emitter.handle)
-        bus.subscribe(URLSourceChanged, url_deduper.handle)
-        bus.subscribe(URLsDeduped, url_seeds.handle)
-        bus.subscribe(URLsDeduped, url_oas3.handle)
-        bus.subscribe(URLsConverted, config_update.handle)
+        # --- URL discovery pipeline (Phase 9) ---
+        # Single handler routes Katana / Noir output through the
+        # ``UrlInventoryService`` (writes ``url_findings`` rows + JIT-rebuilds
+        # the merged seeds / OAS3 artifacts on disk for downstream DAST tools).
+        url_inventory = UrlInventoryIngestHandler()
+        bus.subscribe(ToolCompleted, url_inventory.handle)
 
         return bus

@@ -1,10 +1,14 @@
 """Tests that the ZAP accuracy warning is printed at the endpoint file prompts.
 
 Covers:
-- _interview_single_repo: warning always shown before the endpoint prompt
-- edit_repository, no existing oas3_path: warning shown before the prompt
-- edit_repository, existing oas3_path, user replaces: warning shown
-- edit_repository, existing oas3_path, user keeps: warning NOT shown
+- ``_interview_single_repo``: warning always shown before the endpoint prompt
+- ``edit_repository``, no existing endpoint file: warning shown
+- ``edit_repository``, existing endpoint file, user replaces: warning shown
+- ``edit_repository``, existing endpoint file, user keeps: warning NOT shown
+
+Phase 9: "existing endpoint file" is detected by the presence of any
+file under ``endpoints/<repo.uuid>/user_uploads/`` (not by reading
+``Repository.oas3_path``, which no longer exists).
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
@@ -24,6 +29,7 @@ if str(_TALLY_ROOT) not in sys.path:
 from application.project import ProjectManager  # noqa: E402
 from application.project.wizard import InteractiveProjectWizard  # noqa: E402
 from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.project_paths import ProjectPaths  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -52,12 +58,22 @@ def _make_pm(base_path: Path) -> ProjectManager:
 def _make_repo(**kwargs: object) -> Repository:
     defaults: dict[str, object] = {
         "name": "test-repo",
+        "uuid": str(uuid4()),
         "type": ["api"],
         "path": str(_TALLY_ROOT),
         "languages": ["python"],
     }
     defaults.update(kwargs)
     return Repository(**defaults)  # type: ignore[arg-type]
+
+
+def _seed_existing_upload(pm_base: Path, project_name: str, repo: Repository) -> None:
+    """Drop a stub file under ``endpoints/<uuid>/user_uploads/`` so the wizard
+    treats *repo* as already having an endpoint file."""
+    paths = ProjectPaths.from_canonical(pm_base, project_name)
+    upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    (upload_dir / "api.json").write_text("{}", encoding="utf-8")
 
 
 class TestEndpointWarning:
@@ -90,7 +106,8 @@ class TestEndpointWarning:
     ) -> None:
         """Warning shown when editing a repo that has no current endpoint file."""
         repo = _make_repo(name="my-repo", path=str(tmp_path))
-        pm = _make_pm(tmp_path / "pm")
+        pm_base = tmp_path / "pm"
+        pm = _make_pm(pm_base)
         pm.create_project_dirs("test-project")
         pm.config.save_project_config(
             "test-project",
@@ -111,10 +128,9 @@ class TestEndpointWarning:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Warning shown when user chooses to replace an existing endpoint file."""
-        fake_oas3 = tmp_path / "api.json"
-        fake_oas3.write_text("{}")
-        repo = _make_repo(name="my-repo", path=str(tmp_path), oas3_path=str(fake_oas3))
-        pm = _make_pm(tmp_path / "pm")
+        repo = _make_repo(name="my-repo", path=str(tmp_path))
+        pm_base = tmp_path / "pm"
+        pm = _make_pm(pm_base)
         pm.create_project_dirs("test-project")
         pm.config.save_project_config(
             "test-project",
@@ -124,6 +140,7 @@ class TestEndpointWarning:
                 repositories=[repo],
             ),
         )
+        _seed_existing_upload(pm_base, "test-project", repo)
         # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs,
         # "y" to replace, then Enter to leave new path empty, then auth
         inputs = ["", "", "", "", "", "", "", "", "", "y", "", ""]
@@ -136,10 +153,9 @@ class TestEndpointWarning:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Warning NOT shown when user keeps the existing endpoint file."""
-        fake_oas3 = tmp_path / "api.json"
-        fake_oas3.write_text("{}")
-        repo = _make_repo(name="my-repo", path=str(tmp_path), oas3_path=str(fake_oas3))
-        pm = _make_pm(tmp_path / "pm")
+        repo = _make_repo(name="my-repo", path=str(tmp_path))
+        pm_base = tmp_path / "pm"
+        pm = _make_pm(pm_base)
         pm.create_project_dirs("test-project")
         pm.config.save_project_config(
             "test-project",
@@ -149,6 +165,7 @@ class TestEndpointWarning:
                 repositories=[repo],
             ),
         )
+        _seed_existing_upload(pm_base, "test-project", repo)
         # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs, "n", auth
         inputs = ["", "", "", "", "", "", "", "", "", "n", ""]
         with patch("builtins.input", side_effect=inputs):

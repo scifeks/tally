@@ -36,11 +36,19 @@ def _seed_global_config(base_path: str) -> None:
 
 
 def _seed_project_config(base_path: str, project_name: str) -> None:
-    """Write a minimal project.json so /scans/config can list repos."""
+    """Write a minimal project.json so /scans/config can list repos.
+
+    Also triggers Phase 9 ``sync_repositories_for_project`` to stamp uuid +
+    insert the matching ``repositories`` row, so the repo surfaces with a
+    real DB id from the scan-config endpoint.
+    """
+    from application.project.repository_sync import sync_repositories_for_project
+
     _seed_global_config(base_path)
     repo_path = Path(base_path) / "fake-repo"
     repo_path.mkdir(parents=True, exist_ok=True)
-    config_dir = Path(base_path) / "projects" / project_name / "config"
+    project_dir = Path(base_path) / "projects" / project_name
+    config_dir = project_dir / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     project_json = config_dir / "project.json"
     project_json.write_text(
@@ -60,6 +68,7 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
             }
         )
     )
+    sync_repositories_for_project(str(project_dir))
 
 
 @pytest.fixture(autouse=True)
@@ -235,15 +244,46 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
     _seed_project_config(str(tmp_path), "testproject")
     monkeypatch.setattr("web.api.scans.start_scan_thread", lambda **kw: None)
 
+    # Phase 9: repoIds is list[int]. Send an integer id that doesn't exist
+    # in the active repositories table to trigger _validate_repo_ids.
     resp = await client.post(
         f"/api/v1/projects/{project_id}/scans",
-        json={"repoIds": ["nonexistent-repo"]},
+        json={"repoIds": [99999]},
         headers=muth,
     )
     assert resp.status_code == 422
     body = resp.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
-    assert "nonexistent-repo" in body["error"]["details"]["unknown"]
+    assert 99999 in body["error"]["details"]["unknown"]
+
+
+@pytest.mark.asyncio
+async def test_start_scan_soft_deleted_repo_422(
+    app_client, monkeypatch, tmp_path
+) -> None:
+    """Soft-deleted repos are rejected by _validate_repo_ids with 422 (F4)."""
+    from infrastructure.store.repositories.repositories import RepositoryRepository
+
+    client, _fid, _rag, factory, muth, project_id = app_client
+    _seed_project_config(str(tmp_path), "testproject")
+    monkeypatch.setattr("web.api.scans.start_scan_thread", lambda **kw: None)
+
+    repo_repo = RepositoryRepository(factory)
+    active = repo_repo.list_active()
+    assert active, "Expected at least one repo after seed"
+    repo_id = active[0].id
+
+    repo_repo.soft_delete(repo_id)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/scans",
+        json={"repoIds": [repo_id]},
+        headers=muth,
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert repo_id in body["error"]["details"]["unknown"]
 
 
 @pytest.mark.asyncio

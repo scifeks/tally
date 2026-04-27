@@ -35,11 +35,32 @@ def _make_repos(
     )
 
 
+def _seed_repo(factory: ConnectionFactory, name: str) -> int:
+    import uuid as _uuid
+
+    with factory.connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+            (str(_uuid.uuid4()), name),
+        )
+        return cur.lastrowid  # type: ignore[return-value]
+
+
 def _seed_findings(
     run_repo: RunRepository,
     finding_repo: FindingRepository,
     findings: list[dict],
+    factory: ConnectionFactory | None = None,
 ) -> None:
+    if factory is not None:
+        repo_ids: dict[str, int] = {}
+        for f in findings:
+            name = f.get("repo", "unknown")
+            if name not in repo_ids:
+                repo_ids[name] = _seed_repo(factory, name)
+        findings = [
+            {**f, "repo_id": repo_ids[f.get("repo", "unknown")]} for f in findings
+        ]
     run_id = run_repo.create_run({})
     finding_repo.insert_findings(run_id, findings)
 
@@ -92,7 +113,7 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=1),
             _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=2),
         ]
-        _seed_findings(run_repo, finding_repo, findings)
+        _seed_findings(run_repo, finding_repo, findings, factory)
         count = triage_repo.create_batches(run_id, "semgrep", "myrepo", "sast")
         assert count == 2
         with factory.connect() as conn:
@@ -108,7 +129,7 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/a.py", risk_type="sqli"),
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=20),
         ]
-        _seed_findings(run_repo, finding_repo, findings)
+        _seed_findings(run_repo, finding_repo, findings, factory)
         triage_repo.create_batches(run_id, "semgrep", "myrepo", "sast")
         with factory.connect() as conn:
             row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
@@ -123,7 +144,7 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=i)
             for i in range(1, 4)
         ]
-        _seed_findings(run_repo, finding_repo, findings)
+        _seed_findings(run_repo, finding_repo, findings, factory)
         triage_repo.create_batches(run_id, "semgrep", "myrepo", "sast")
         with factory.connect() as conn:
             row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
@@ -134,7 +155,7 @@ class TestCreateTriageBatches:
     def test_started_at_completed_at_null(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
-        _seed_findings(run_repo, finding_repo, [_make_sast_finding()])
+        _seed_findings(run_repo, finding_repo, [_make_sast_finding()], factory)
         triage_repo.create_batches(run_id, "semgrep", "myrepo", "sast")
         with factory.connect() as conn:
             row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
@@ -148,7 +169,7 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=1),
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=2),
         ]
-        _seed_findings(run_repo, finding_repo, findings)
+        _seed_findings(run_repo, finding_repo, findings, factory)
         triage_repo.create_batches(run_id, "semgrep", "myrepo", "sast")
         triage_repo.create_batches(run_id, "semgrep", "myrepo", "sast")
         with factory.connect() as conn:
@@ -175,6 +196,6 @@ class TestCreateTriageBatches:
             _make_api_finding(url="http://example.com/api/login", risk_type="xss"),
             _make_api_finding(url="http://example.com/api/search", risk_type="sqli"),
         ]
-        _seed_findings(run_repo, finding_repo, findings)
+        _seed_findings(run_repo, finding_repo, findings, factory)
         count = triage_repo.create_batches(run_id, "zap", "myrepo", "api")
         assert count >= 1

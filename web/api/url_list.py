@@ -1,0 +1,239 @@
+"""URL list API endpoints (Phase 9.5).
+
+Read-flavored endpoints over the ``url_findings`` table:
+- ``GET /api/v1/projects/{project_id}/url-list/entries`` — paginated rows.
+- ``GET /api/v1/projects/{project_id}/url-list/export`` — csv/json/txt download.
+- ``POST /api/v1/projects/{project_id}/url-list/regenerate`` — rebuild
+  ``merged_urls.txt`` + ``merged_oas3.json`` on disk for every active repo.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+import json
+
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse, Response
+
+from application.url_inventory.service import UrlInventoryService
+from core.project_paths import ProjectPaths
+from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.repositories import RepositoryRepository
+from infrastructure.store.repositories.url_findings import UrlFindingRepository
+from web.api._errors import NotFound
+from web.api._errors import ValidationError as ApiValidationError
+from web.api._project_resolver import _resolve_project
+from web.api._redact import redact_exempt
+
+url_list_v1_router = APIRouter()
+
+
+def _make_repos(row: dict) -> tuple[UrlFindingRepository, RepositoryRepository]:
+    paths = ProjectPaths.from_registry_row(row)
+    paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    return UrlFindingRepository(factory), RepositoryRepository(factory)
+
+
+def _row_to_dict(
+    f: UrlFinding,
+    project_id: int,
+    repo_name_by_id: dict[int, str],
+) -> dict:
+    return {
+        "id": f.id,
+        "project_id": project_id,
+        "repo_id": f.repo_id,
+        "repo_name": repo_name_by_id.get(f.repo_id, ""),
+        "source": str(f.source),
+        "tool": str(f.tool) if f.tool is not None else None,
+        "run_id": f.run_id,
+        "method": f.method,
+        "protocol": f.protocol,
+        "host": f.host,
+        "port": f.port,
+        "path": f.path,
+        "file_path": f.file_path,
+        "meta": f.meta,
+        "created_at": f.created_at,
+    }
+
+
+def _parse_source(value: str | None) -> UrlSource | None:
+    if value is None:
+        return None
+    try:
+        return UrlSource(value)
+    except ValueError as exc:
+        raise ApiValidationError(f"Invalid source: {value}") from exc
+
+
+def _parse_tool(value: str | None) -> UrlTool | None:
+    if value is None:
+        return None
+    try:
+        return UrlTool(value)
+    except ValueError as exc:
+        raise ApiValidationError(f"Invalid tool: {value}") from exc
+
+
+@url_list_v1_router.get("/{project_id}/url-list/entries")
+async def list_url_entries(
+    project_id: int,
+    request: Request,
+    repo_id: int | None = Query(default=None),
+    source: str | None = Query(default=None),
+    tool: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    method: str | None = Query(default=None),
+    sort: str = Query(default="host"),
+    order: str = Query(default="asc"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> JSONResponse:
+    row = _resolve_project(request, project_id)
+    url_repo, repo_repo = _make_repos(row)
+    rows, total = url_repo.list_paginated(
+        repo_id=repo_id,
+        source=_parse_source(source),
+        tool=_parse_tool(tool),
+        search=search,
+        method=method,
+        sort=sort,
+        order=order,
+        offset=offset,
+        limit=limit,
+    )
+    repo_ids = {r.repo_id for r in rows}
+    repo_name_by_id: dict[int, str] = {}
+    for rid in repo_ids:
+        db_row = repo_repo.get_by_id(rid)
+        if db_row is not None:
+            repo_name_by_id[rid] = db_row.name
+    items = [_row_to_dict(r, project_id, repo_name_by_id) for r in rows]
+    return JSONResponse(
+        content={
+            "items": items,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+        }
+    )
+
+
+@url_list_v1_router.get("/{project_id}/url-list/export")
+@redact_exempt
+async def export_url_list(
+    project_id: int,
+    request: Request,
+    format: str = Query(default="json"),
+) -> Response:
+    if format not in ("json", "csv", "txt"):
+        raise ApiValidationError(f"Unsupported format: {format}")
+
+    row = _resolve_project(request, project_id)
+    url_repo, repo_repo = _make_repos(row)
+    rows, _ = url_repo.list_paginated(offset=0, limit=10_000)
+    repo_name_by_id: dict[int, str] = {}
+    for rid in {r.repo_id for r in rows}:
+        db_row = repo_repo.get_by_id(rid)
+        if db_row is not None:
+            repo_name_by_id[rid] = db_row.name
+
+    project_name = row["name"]
+    filename = f"url-list-{project_name}.{format}"
+
+    if format == "json":
+        body = json.dumps(
+            [_row_to_dict(r, project_id, repo_name_by_id) for r in rows],
+            indent=2,
+        )
+        media = "application/json"
+    elif format == "csv":
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(
+            [
+                "id",
+                "repo_id",
+                "repo_name",
+                "source",
+                "tool",
+                "method",
+                "protocol",
+                "host",
+                "port",
+                "path",
+                "file_path",
+            ]
+        )
+        for r in rows:
+            writer.writerow(
+                [
+                    r.id,
+                    r.repo_id,
+                    repo_name_by_id.get(r.repo_id, ""),
+                    str(r.source),
+                    str(r.tool) if r.tool is not None else "",
+                    r.method,
+                    r.protocol,
+                    r.host,
+                    r.port,
+                    r.path,
+                    r.file_path or "",
+                ]
+            )
+        body = buf.getvalue()
+        media = "text/csv"
+    else:  # txt
+        body = "\n".join(f"{r.protocol}://{r.host}:{r.port}{r.path}" for r in rows)
+        media = "text/plain"
+
+    return Response(
+        content=body,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@url_list_v1_router.post("/{project_id}/url-list/regenerate")
+async def regenerate_url_list(
+    project_id: int,
+    request: Request,
+) -> JSONResponse:
+    """Rebuild merged_urls.txt and merged_oas3.json for every active repo."""
+    from application.project.manager import ProjectManager
+
+    row = _resolve_project(request, project_id)
+    base_path: str = request.app.state.base_path
+    registry = request.app.state.project_registry
+    manager = ProjectManager(base_path, registry=registry)
+    config = manager.get_project_info(row["name"])
+    if config is None:
+        raise NotFound(f"Project {project_id} not found")
+
+    paths = ProjectPaths.from_registry_row(row)
+    url_repo, repo_repo = _make_repos(row)
+    service = UrlInventoryService(url_repo)
+
+    active_repos: list[tuple[int, str]] = []
+    for repo in config.repositories:
+        if not repo.uuid:
+            continue
+        db_row = repo_repo.get_by_uuid(repo.uuid)
+        if db_row is None or db_row.deleted_at is not None:
+            continue
+        active_repos.append((db_row.id, repo.uuid))
+
+    rebuilt = service.regenerate_artifacts_for_project(
+        project_paths=paths,
+        active_repos=active_repos,
+    )
+    regenerated = [
+        {"repo_id": repo_id, "seeds_path": seeds_path, "oas3_path": oas3_path}
+        for repo_id, seeds_path, oas3_path in rebuilt
+    ]
+    return JSONResponse(content={"regenerated": regenerated})

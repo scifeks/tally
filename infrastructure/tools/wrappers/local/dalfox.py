@@ -150,10 +150,12 @@ class DalFoxLocalTool(BaseDalFoxTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for DalFox.
 
-        Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds
-        file produced by the URL discovery pipeline.  Returns an empty list
-        (skipping DalFox) when no seeds file is available.
+        Phase 9: the seeds file is JIT-rebuilt from ``url_findings`` rows
+        right before the scan runs. Returns an empty list (skipping
+        DalFox) when no rows exist for the repo.
         """
+        from application.url_inventory.jit import jit_rebuild_artifacts
+
         assert context.repo is not None
         repo = context.repo
 
@@ -165,10 +167,12 @@ class DalFoxLocalTool(BaseDalFoxTool):
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{repo.name}_{ts}.json")
 
-        seeds_file = repo.merged_seeds_path
+        seeds_file, _oas3_path = jit_rebuild_artifacts(
+            context.base_path, context.project_name, repo
+        )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
-                "DalFox: no merged seeds file for %s — skipping. "
+                "DalFox: no URL inventory for %s — skipping. "
                 "Run Katana, Noir, or configure an endpoint file to "
                 "generate URL discovery output.",
                 repo.name,

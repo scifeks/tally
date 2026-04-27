@@ -107,6 +107,15 @@ class FindingRepository:
                     else:
                         meta[key] = val
 
+            repo_id_raw = finding.get("repo_id")
+            repo_id_val: int | None
+            if isinstance(repo_id_raw, int):
+                repo_id_val = repo_id_raw
+            elif isinstance(repo_id_raw, str) and repo_id_raw.isdigit():
+                repo_id_val = int(repo_id_raw)
+            else:
+                repo_id_val = None
+
             rows.append(
                 (
                     fingerprint,
@@ -114,7 +123,7 @@ class FindingRepository:
                     named.get("tool"),
                     named.get("domain"),
                     named.get("segment"),
-                    named.get("repo"),
+                    repo_id_val,
                     named.get("finding_type"),
                     named.get("severity"),
                     named.get("confidence"),
@@ -139,14 +148,14 @@ class FindingRepository:
 
         sql = """
             INSERT INTO findings (
-                fingerprint, run_id, tool, domain, segment, repo,
+                fingerprint, run_id, tool, domain, segment, repo_id,
                 finding_type, severity,
                 confidence, file, rule_id, url,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
                 first_seen, last_seen, seen_count, status, should_report
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         with self._factory.connect() as conn:
             conn.executemany(sql, rows_with_ts)
@@ -261,7 +270,6 @@ class FindingRepository:
         tools: list[str] | None = None,
         domain: str | None = None,
         status: str | None = None,
-        repo: str | None = None,
         segments: list[str] | None = None,
         require_file: bool = False,
     ) -> tuple[str, list[object]]:
@@ -283,9 +291,6 @@ class FindingRepository:
         if status:
             clauses.append("status = ?")
             params.append(status)
-        if repo:
-            clauses.append("repo = ?")
-            params.append(repo)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return where, params
 
@@ -294,7 +299,6 @@ class FindingRepository:
         tools: list[str] | None = None,
         domain: str | None = None,
         status: str | None = None,
-        repo: str | None = None,
         segments: list[str] | None = None,
         require_file: bool = False,
         limit: int = 10,
@@ -305,7 +309,6 @@ class FindingRepository:
             tools=tools,
             domain=domain,
             status=status,
-            repo=repo,
             segments=segments,
             require_file=require_file,
         )
@@ -324,7 +327,6 @@ class FindingRepository:
         tools: list[str] | None = None,
         domain: str | None = None,
         status: str | None = None,
-        repo: str | None = None,
         segments: list[str] | None = None,
         require_file: bool = False,
     ) -> int:
@@ -333,7 +335,6 @@ class FindingRepository:
             tools=tools,
             domain=domain,
             status=status,
-            repo=repo,
             segments=segments,
             require_file=require_file,
         )
@@ -775,8 +776,9 @@ class FindingRepository:
             by_repo: dict[str, int] = {
                 row[0]: row[1]
                 for row in conn.execute(
-                    "SELECT repo, COUNT(*) FROM findings"
-                    " WHERE repo IS NOT NULL GROUP BY repo"
+                    "SELECT r.name, COUNT(*) FROM findings f"
+                    " JOIN repositories r ON f.repo_id = r.id"
+                    " WHERE f.repo_id IS NOT NULL GROUP BY f.repo_id"
                 ).fetchall()
             }
             by_status: dict[str, int] = {
@@ -840,7 +842,9 @@ class FindingRepository:
             repos = sorted(
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT repo FROM findings WHERE repo IS NOT NULL"
+                    "SELECT DISTINCT r.name FROM findings f"
+                    " JOIN repositories r ON f.repo_id = r.id"
+                    " WHERE f.repo_id IS NOT NULL"
                 ).fetchall()
             )
             segments = sorted(

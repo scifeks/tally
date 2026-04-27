@@ -101,6 +101,12 @@ if __name__ == "__main__":
 
         run_commands_setup(_BASE_PATH)
 
+    # Phase 9.1: clear stale .tmp files left behind by interrupted atomic
+    # writes from a prior crash. Idempotent and bounded to config dirs.
+    from core.config._atomic import sweep_orphans
+
+    sweep_orphans(Path(_BASE_PATH))
+
     # Re-run discovery with the confirmed base_path so the registry reflects
     # whatever commands.json now contains (the module-level auto-discovery in
     # registry.py ran at import time before setup completed).
@@ -119,6 +125,14 @@ if __name__ == "__main__":
 
     # Build the project registry (creates tally.db on first run, syncs from disk).
     project_registry = _build_project_registry(_BASE_PATH)
+
+    # Phase 9.2: stamp uuids into project.json + populate the per-project
+    # ``repositories`` table + backfill ``findings.repo_id``. Idempotent.
+    from application.project.repository_sync import (
+        sync_repositories_for_all_projects,
+    )
+
+    sync_repositories_for_all_projects(_BASE_PATH)
 
     try:
         REPL(

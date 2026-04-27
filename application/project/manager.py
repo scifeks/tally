@@ -62,11 +62,39 @@ class ProjectManager:
         row = self.registry.resolve_by_name(project_name)
         if row is None or row.get("archived_at"):
             raise ValueError(f"Project '{project_name}' does not exist.")
-        repos = self.config.load_repositories(project_name)
-        new_repos = [r for r in repos if r.name != repo_name]
-        if len(new_repos) == len(repos):
-            raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
-        self.config.save_repositories(project_name, new_repos)
+        with self.config.locked_project_config(project_name):
+            config = self.config.load_project_config(project_name)
+            if config is None:
+                raise ValueError(f"Project '{project_name}' not found.")
+            deleted_repo = next(
+                (r for r in config.repositories if r.name == repo_name), None
+            )
+            if deleted_repo is None:
+                raise ValueError(
+                    f"Repository '{repo_name}' not found in '{project_name}'."
+                )
+            if deleted_repo.uuid:
+                try:
+                    from infrastructure.store.connection import ConnectionFactory
+                    from infrastructure.store.repositories.repositories import (
+                        RepositoryRepository,
+                    )
+
+                    paths = ProjectPaths.from_registry_row(row)
+                    if paths.findings_db.exists():
+                        factory = ConnectionFactory(paths.findings_db)
+                        repo_repo = RepositoryRepository(factory)
+                        db_row = repo_repo.get_by_uuid_including_deleted(
+                            deleted_repo.uuid
+                        )
+                        if db_row is not None:
+                            repo_repo.soft_delete(db_row.id)
+                except Exception:
+                    pass
+            config.repositories = [
+                r for r in config.repositories if r.name != repo_name
+            ]
+            self.config.save_project_config(project_name, config)
 
     # ------------------------------------------------------------------
     # Filesystem helpers

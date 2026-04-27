@@ -29,8 +29,6 @@ from urllib.parse import urlparse
 
 from domain.tools.base import ToolResult
 
-from ._shared import _first_output_file, _shared_meta
-
 # HTTP methods recognised as OAS3 path-item operations.
 _OAS3_METHODS: frozenset[str] = frozenset(
     {"get", "post", "put", "delete", "patch", "head", "options", "trace"}
@@ -280,48 +278,15 @@ class NoirHandler:
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        """Convert Noir ToolResult into one SQLite row per endpoint+method."""
-        parsed: dict[str, Any] = result.parsed_data or {}
-        endpoints: list[dict[str, Any]] = parsed.get("endpoints", [])
+        """Noir is URL-discovery only post-Phase-9: emits no findings rows.
 
-        timestamp = result.timestamp
-        source_file = _first_output_file(result.output_files)
-        rows: list[dict] = []
-
-        for endpoint in endpoints:
-            path: str = endpoint.get("path") or ""
-            method: str = (endpoint.get("method") or "").upper()
-
-            all_params: list[dict[str, Any]] = (
-                endpoint.get("path_params", [])
-                + endpoint.get("query_params", [])
-                + endpoint.get("header_params", [])
-                + endpoint.get("cookie_params", [])
-                + endpoint.get("body_params", [])
-            )
-            param_names = [str(p.get("name", "")) for p in all_params if p.get("name")]
-
-            description = f"Endpoint {method} {path}"
-            if param_names:
-                description += f" — params: {', '.join(param_names)}"
-
-            row: dict[str, Any] = {
-                "tool": "noir",
-                "profile": profile,
-                "finding_type": json.dumps(["informational"]),
-                "severity": "informational",
-                "confidence": "confirmed",
-                "risk_type": "endpoint-discovery",
-                "url": _uri_only(path),
-                "method": method,
-                "description": description,
-                "timestamp": timestamp,
-                "source_file": source_file,
-            }
-            row.update(_shared_meta(self, "informational"))
-            rows.append(row)
-
-        return rows
+        Discovered endpoints land in the ``url_findings`` table via the
+        ``UrlInventoryIngestHandler``. The parser still produces
+        ``parsed_data`` and the OAS3 file (consumed by ZAP/XSStrike/DalFox
+        through the URL inventory artifact rebuild).
+        """
+        del result, profile
+        return []
 
     def render(self, row: dict) -> str:
         """Render a normalised endpoint row as ChromaDB document text."""

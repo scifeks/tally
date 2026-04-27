@@ -141,6 +141,11 @@ class NoirLocalTool(BaseNoirTool):
             ):
                 self._last_report_path.unlink()
 
+            # Expose the OAS3 report path through ``output_files`` so the
+            # URL inventory ingest handler can read it from ToolResult.
+            if self._last_report_path is not None and self._last_report_path.exists():
+                files["oas3"] = self._last_report_path
+
             return parsed
         finally:
             self._last_report_path = None

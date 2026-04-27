@@ -1,9 +1,9 @@
-"""Tests for _maybe_warn_dast_without_discovery when oas3_path is set on repos.
+"""Tests for _maybe_warn_dast_without_discovery's URL-finding probe.
 
-Covers:
-- When r.oas3_path is set, repo is NOT in the missing list (no warning)
-- When r.oas3_path is empty and no discovery output, repo IS in the missing list
-- Mixed repos: one with oas3_path, one without — only the second is missing
+Phase 9: the warning no longer reads ``repo.oas3_path`` (that field is
+gone); it queries the ``url_findings`` table via
+``_repo_has_url_findings``. These tests stub that probe to drive the
+warning path.
 """
 
 from __future__ import annotations
@@ -13,15 +13,9 @@ from unittest.mock import MagicMock, patch
 from application.repl.commands.scan_commands import ScanCommands
 
 
-def _make_repo(
-    name: str,
-    oas3_path: str = "",
-    crawl_enabled: bool = True,
-) -> MagicMock:
+def _make_repo(name: str, crawl_enabled: bool = True) -> MagicMock:
     r = MagicMock()
     r.name = name
-    r.oas3_path = oas3_path
-    r.merged_oas3_path = ""
     r.crawl_enabled = crawl_enabled
     return r
 
@@ -34,24 +28,30 @@ def _make_sc(repos: list) -> ScanCommands:
     return ScanCommands(repl)
 
 
-class TestMaybeWarnDastWithoutDiscoveryOas3Path:
-    def test_repo_with_oas3_path_not_in_missing(self) -> None:
-        """oas3_path set — repo not in missing, warning not shown."""
-        repo = _make_repo("api", oas3_path="/endpoints/api.json")
+class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
+    def test_repo_with_url_findings_not_in_missing(self) -> None:
+        """Repo has url_findings rows — no warning, tools unchanged."""
+        repo = _make_repo("api")
         sc = _make_sc([repo])
         mock_input = MagicMock()
-        with patch("builtins.input", mock_input):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=True),
+            patch("builtins.input", mock_input),
+        ):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
         assert result == ["zap"]
         mock_input.assert_not_called()
 
-    def test_repo_without_oas3_path_in_missing(self) -> None:
-        """oas3_path empty and no discovery output — repo IS in missing."""
-        repo = _make_repo("api", oas3_path="")
+    def test_repo_without_url_findings_triggers_warning(self) -> None:
+        """No url_findings rows — repo is in the missing list."""
+        repo = _make_repo("api")
         sc = _make_sc([repo])
-        with patch("builtins.input", return_value="2"):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=False),
+            patch("builtins.input", return_value="2"),
+        ):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -59,11 +59,18 @@ class TestMaybeWarnDastWithoutDiscoveryOas3Path:
         assert result == ["zap"]
 
     def test_mixed_repos_only_missing_prompted(self) -> None:
-        """One with oas3_path, one without — discovery prepended for latter."""
-        repo_with = _make_repo("with-oas3", oas3_path="/api.json")
-        repo_without = _make_repo("without-oas3", oas3_path="")
+        """One repo has url_findings, one doesn't — discovery prepended."""
+        repo_with = _make_repo("with-urls")
+        repo_without = _make_repo("without-urls")
         sc = _make_sc([repo_with, repo_without])
-        with patch("builtins.input", return_value="1"):
+
+        def _has_findings(repo: object) -> bool:
+            return getattr(repo, "name", "") == "with-urls"
+
+        with (
+            patch.object(sc, "_repo_has_url_findings", side_effect=_has_findings),
+            patch("builtins.input", return_value="1"),
+        ):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -77,7 +84,10 @@ class TestMaybeWarnDastWithoutDiscoveryOas3Path:
         repo = _make_repo("api", crawl_enabled=False)
         sc = _make_sc([repo])
         mock_input = MagicMock()
-        with patch("builtins.input", mock_input):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=False),
+            patch("builtins.input", mock_input),
+        ):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )

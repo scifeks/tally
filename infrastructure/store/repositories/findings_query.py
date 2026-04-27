@@ -35,7 +35,7 @@ class FindingQueryBuilder:
 
     _BASE_SELECT = """
         SELECT id, fingerprint, run_id,
-               tool, domain, segment, repo,
+               tool, domain, segment, repo_id,
                finding_type, severity, confidence,
                file, rule_id, url,
                vulnerability_id, package_name, ecosystem,

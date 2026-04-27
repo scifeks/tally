@@ -8,7 +8,7 @@ from application.pipeline.strategies import (
     EnrichThenPersistStrategy,
     PersistOnlyStrategy,
 )
-from application.pipeline.url_handlers import URLSourceEmitter
+from application.url_inventory.ingest_handler import UrlInventoryIngestHandler
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 
 
@@ -34,7 +34,7 @@ class TestPipelineFactory:
             bus = PipelineFactory.create(skip_enrichment=skip)
             handler_types = {type(h.__self__) for h in bus._handlers[ToolCompleted]}
             assert IngestHandler in handler_types
-            assert URLSourceEmitter in handler_types
+            assert UrlInventoryIngestHandler in handler_types
 
     def test_two_calls_return_independent_buses(self) -> None:
         bus_a = PipelineFactory.create()

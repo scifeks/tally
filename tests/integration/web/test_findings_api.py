@@ -148,6 +148,27 @@ class TestGetFindings:
         response = await client.get("/api/v1/findings/")
         assert response.status_code == 404
 
+    async def test_legacy_repo_string_param_is_silently_ignored(
+        self, app_client
+    ) -> None:
+        """The dropped ?repo= param is a no-op — FastAPI ignores unknown params.
+
+        C1: the legacy ``repo: list[str]`` query param was removed from
+        list_findings. FastAPI silently ignores unrecognised query params,
+        so callers sending ?repo=anything get the full unfiltered result
+        set (200) rather than a 422.
+        """
+        client, _, _, _, _, project_id = app_client
+        baseline = await client.get(f"/api/v1/projects/{project_id}/findings")
+        assert baseline.status_code == 200
+        total = baseline.json()["total"]
+
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/findings?repo=nonexistent-repo"
+        )
+        assert resp.status_code == 200
+        assert resp.json()["total"] == total
+
     async def test_get_by_id_returns_404_for_unknown(self, app_client) -> None:
         client, _, _, _, _, project_id = app_client
         response = await client.get(f"/api/v1/projects/{project_id}/findings/99999")

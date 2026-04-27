@@ -12,6 +12,7 @@ from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import tool_registry
 from core.detection.noir import noir_skip_reason
+from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -385,7 +386,7 @@ class ScanCommands:
         missing = [
             r
             for r in target_repos
-            if r.crawl_enabled and not r.oas3_path and not r.merged_oas3_path
+            if r.crawl_enabled and not self._repo_has_url_findings(r)
         ]
         if not missing:
             return tools
@@ -421,6 +422,40 @@ class ScanCommands:
             return to_prepend + existing
         # choice == "2": proceed without discovery
         return tools
+
+    def _repo_has_url_findings(self, repo: object) -> bool:
+        """Return True if *repo* already has any ``url_findings`` rows.
+
+        Used by the DAST-without-discovery warning: when a repo has
+        previously-ingested URL data (Katana/Noir scan, or a user-uploaded
+        endpoint file), the DAST tools have something to consume and the
+        warning is suppressed.
+        """
+        repo_uuid = getattr(repo, "uuid", "") or ""
+        if not repo_uuid:
+            return False
+        try:
+            from infrastructure.store.connection import ConnectionFactory
+            from infrastructure.store.repositories.repositories import (
+                RepositoryRepository,
+            )
+            from infrastructure.store.repositories.url_findings import (
+                UrlFindingRepository,
+            )
+
+            assert self.repl.active_project is not None
+            paths = ProjectPaths.from_canonical(
+                self.repl.base_path, self.repl.active_project
+            )
+            if not paths.findings_db.exists():
+                return False
+            factory = ConnectionFactory(paths.findings_db)
+            db_row = RepositoryRepository(factory).get_by_uuid(repo_uuid)
+            if db_row is None or db_row.deleted_at is not None:
+                return False
+            return bool(UrlFindingRepository(factory).list_for_repo(db_row.id))
+        except Exception:
+            return False
 
     # ------------------------------------------------------------------
     # Private — orchestrator factory and export

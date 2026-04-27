@@ -24,10 +24,27 @@ def repo(factory: ConnectionFactory) -> FindingRepository:
 
 
 def _insert(factory: ConnectionFactory, findings: list[dict]) -> None:
+    import uuid as _uuid
+
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
+    repo_ids: dict[str, int] = {}
+    patched: list[dict] = []
+    for f in findings:
+        repo_name = f.get("repo")
+        if repo_name and repo_name not in repo_ids:
+            with factory.connect() as conn:
+                cur = conn.execute(
+                    "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+                    (str(_uuid.uuid4()), repo_name),
+                )
+                repo_ids[repo_name] = cur.lastrowid  # type: ignore[assignment]
+        if repo_name:
+            patched.append({**f, "repo_id": repo_ids[repo_name]})
+        else:
+            patched.append(f)
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, findings)
+    finding_repo.insert_findings(run_id, patched)
 
 
 class TestCountAggregatesEmpty:

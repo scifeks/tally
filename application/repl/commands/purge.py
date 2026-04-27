@@ -116,6 +116,7 @@ class PurgeCommand:
         # Chat purge runs only on the full-purge path (no --tool filter),
         # mirroring decisions.md Q15.
         chat_count = self._count_chat_sessions() if tools is None else 0
+        url_count = self._count_url_findings() if tools is None else 0
 
         if (
             count == 0
@@ -123,6 +124,7 @@ class PurgeCommand:
             and not has_outputs
             and not has_reports
             and chat_count == 0
+            and url_count == 0
         ):
             self.repl.console.print("[yellow]Nothing to purge.[/yellow]")
             return
@@ -222,33 +224,25 @@ class PurgeCommand:
                 shutil.rmtree(item)
 
     def _delete_merged_endpoints(self) -> None:
-        """Empty each repo's merged-URL dir and clear merged path keys in config."""
+        """Empty each repo's endpoints directory.
+
+        Phase 9 dropped the JSON-side ``merged_seeds_path`` /
+        ``merged_oas3_path`` fields; the merged artifacts are now
+        JIT-rebuilt from ``url_findings`` rows, so the only cleanup
+        needed here is removing any stale on-disk files.
+        """
         assert self.repl.active_project is not None
         endpoints_dir = _project_paths(self.repl).endpoints_dir
-        if endpoints_dir.exists():
-            for repo_dir in endpoints_dir.iterdir():
-                if not repo_dir.is_dir():
-                    continue
-                for item in repo_dir.iterdir():
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        shutil.rmtree(item)
-
-        try:
-            from core.config.manager import ConfigManager
-
-            manager = ConfigManager(self.repl.base_path)
-            repos = manager.load_repositories(self.repl.active_project)
-            updated = [
-                r.model_copy(update={"merged_seeds_path": "", "merged_oas3_path": ""})
-                for r in repos
-            ]
-            manager.save_repositories(self.repl.active_project, updated)
-        except Exception as exc:
-            self.repl.console.print(
-                f"[yellow]Warning: could not clear merged path config: {exc}[/yellow]"
-            )
+        if not endpoints_dir.exists():
+            return
+        for repo_dir in endpoints_dir.iterdir():
+            if not repo_dir.is_dir():
+                continue
+            for item in repo_dir.iterdir():
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
 
     def _has_tool_output_files(self, tools: list[str] | None) -> bool:
         """Return True if any files exist in the relevant tool_outputs dirs."""
@@ -286,6 +280,27 @@ class PurgeCommand:
                         f"SELECT COUNT(*) FROM findings WHERE tool IN ({placeholders})",
                         tools,
                     ).fetchone()
+                return int(row[0]) if row else 0
+        except Exception:
+            return 0
+
+    def _count_url_findings(self) -> int:
+        """Count url_findings rows for the active project (full-purge guard)."""
+        try:
+            from infrastructure.store.connection import ConnectionFactory
+
+            db_path = _project_paths(self.repl).findings_db
+            if not db_path.exists():
+                return 0
+            factory = ConnectionFactory(db_path)
+            with factory.connect() as conn:
+                cur = conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='url_findings'"
+                )
+                if cur.fetchone() is None:
+                    return 0
+                row = conn.execute("SELECT COUNT(*) FROM url_findings").fetchone()
                 return int(row[0]) if row else 0
         except Exception:
             return 0
@@ -371,11 +386,37 @@ class PurgeCommand:
             db_path = _project_paths(self.repl).findings_db
             factory = ConnectionFactory(db_path)
             if tools is None:
-                # Full wipe: delete and recreate the database file
                 if factory.db_path.exists():
-                    factory.db_path.unlink()
-                factory.init_schema()
+                    try:
+                        from application.url_inventory.service import (
+                            UrlInventoryService,
+                        )
+                        from infrastructure.store.repositories.url_findings import (
+                            UrlFindingRepository,
+                        )
+
+                        UrlInventoryService(
+                            UrlFindingRepository(factory)
+                        ).delete_for_project()
+                    except Exception:
+                        pass
+                    factory.purge_non_preserved_tables()
+                else:
+                    factory.init_schema()
             else:
+                _URL_TOOLS = {"katana", "noir"}
+                url_tools = [t for t in tools if t in _URL_TOOLS]
+                if url_tools and factory.db_path.exists():
+                    try:
+                        placeholders = ",".join("?" * len(url_tools))
+                        with factory.connect() as conn:
+                            conn.execute(
+                                f"DELETE FROM url_findings WHERE tool IN "
+                                f"({placeholders})",
+                                url_tools,
+                            )
+                    except Exception:
+                        pass
                 FindingRepository(factory).delete_findings(tools=tools)
         except Exception as exc:
             self.repl.console.print(f"[yellow]SQLite purge warning:[/yellow] {exc}")
