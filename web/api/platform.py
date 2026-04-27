@@ -13,7 +13,9 @@ from importlib.metadata import PackageNotFoundError, version
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from application.capabilities.service import CapabilitiesService
 from web.api._redact import redact_exempt
+from web.api.schemas import CapabilitiesResponse
 
 platform_v1_router = APIRouter()
 
@@ -52,4 +54,17 @@ async def health(request: Request) -> JSONResponse:
             "db": "ok",
             "version": _VERSION,
         },
+    )
+
+
+@platform_v1_router.get("/capabilities", response_model=CapabilitiesResponse)
+def get_capabilities(request: Request) -> CapabilitiesResponse:
+    """Return SPA feature flags (chat / triage / report retention)."""
+    service: CapabilitiesService = request.app.state.capabilities_service
+    caps = service.compute()
+    return CapabilitiesResponse(
+        chat_enabled=caps.chat_enabled,
+        triage_enabled=caps.triage_enabled,
+        report_retention_enabled=caps.report_retention_enabled,
+        max_report_history=caps.max_report_history,
     )

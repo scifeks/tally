@@ -339,6 +339,13 @@ class RuntimeDependenciesResponse(BaseModel):
     dependencies: list[RuntimeDependencyItem]
 
 
+class CapabilitiesResponse(BaseModel):
+    chat_enabled: bool
+    triage_enabled: bool
+    report_retention_enabled: bool
+    max_report_history: int
+
+
 class FindingHistoryItem(BaseModel):
     id: int
     finding_id: int
@@ -362,6 +369,14 @@ class FindingsCountsResponse(BaseModel):
     by_segment: dict[str, int]
     by_repo: dict[str, int]
     by_status: dict[str, int]
+    by_tool: dict[str, int]
+    by_severity_status: dict[str, dict[str, int]]
+    total: int
+    scans_count: int
+    repos_count: int
+    urls_count: int
+    last_scan_at: str | None
+    last_triage_at: str | None
 
 
 class FindingsFacetsResponse(BaseModel):
