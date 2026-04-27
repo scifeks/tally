@@ -214,10 +214,10 @@ class TestIngestHandlerPhase2:
         _, finding_repo, _, _ = make_store(
             str(project_env["base_path"]), project_env["project_name"]
         )
-        findings = finding_repo.get_all_findings()
+        findings = finding_repo.get_all_findings_deserialized()
         assert len(findings) >= 1
         assert all(f["tool"] == "zap" for f in findings)
-        assert all(f["repo"] == "target-site" for f in findings), (
+        assert all(f.get("repo") == "target-site" for f in findings), (
             f"Expected repo='target-site' on all ZAP findings, got: "
-            f"{[f['repo'] for f in findings]}"
+            f"{[f.get('repo') for f in findings]}"
         )

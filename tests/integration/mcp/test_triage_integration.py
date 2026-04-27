@@ -54,15 +54,34 @@ _VALID_UPDATE = {
 }
 
 
+def _seed_repo(factory: ConnectionFactory, name: str = "testrepo") -> int:
+    """Insert a repositories row and return its id."""
+    import uuid as _uuid
+
+    with factory.connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+            (str(_uuid.uuid4()), name),
+        )
+        return cur.lastrowid  # type: ignore[return-value]
+
+
 def _seed(
     run_repo: RunRepository,
     finding_repo: FindingRepository,
     n: int = 1,
     overrides: dict | None = None,
+    factory: ConnectionFactory | None = None,
 ) -> int:
+    repo_id: int | None = _seed_repo(factory) if factory is not None else None
     run_id = run_repo.create_run({})
     batch = [
-        {**_BASE_FINDING, "file_path": f"src/file{i}.py", **(overrides or {})}
+        {
+            **_BASE_FINDING,
+            "file_path": f"src/file{i}.py",
+            **({"repo_id": repo_id} if repo_id is not None else {}),
+            **(overrides or {}),
+        }
         for i in range(n)
     ]
     finding_repo.insert_findings(run_id, batch)
@@ -308,7 +327,7 @@ def test_run_session_stdin_contains_finding_id(tmp_path: Path) -> None:
 
 def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
-    _seed(run_repo, finding_repo)
+    _seed(run_repo, finding_repo, factory=factory)
 
     mock_semgrep = _make_mock_semgrep()
     with patch("application.triage.runner.tool_registry") as mock_reg:
@@ -325,7 +344,7 @@ def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
 
 def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
-    _seed(run_repo, finding_repo)
+    _seed(run_repo, finding_repo, factory=factory)
 
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
@@ -345,7 +364,7 @@ def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
 
 def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
-    _seed(run_repo, finding_repo)
+    _seed(run_repo, finding_repo, factory=factory)
 
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
@@ -369,7 +388,7 @@ def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
 
 def test_pipeline_audit_log_written(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
-    _seed(run_repo, finding_repo)
+    _seed(run_repo, finding_repo, factory=factory)
 
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
@@ -389,7 +408,7 @@ def test_pipeline_audit_log_written(tmp_path: Path) -> None:
 
 def test_pipeline_result_counts_match(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
-    _seed(run_repo, finding_repo)
+    _seed(run_repo, finding_repo, factory=factory)
 
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
@@ -413,12 +432,18 @@ def test_pipeline_result_counts_match(tmp_path: Path) -> None:
 def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     # Seed 2 findings in different files so batching produces 2+ batches
+    repo_id = _seed_repo(factory)
     seed_run_id = run_repo.create_run({})
     finding_repo.insert_findings(
         seed_run_id,
         [
-            {**_BASE_FINDING, "file_path": "src/alpha.py"},
-            {**_BASE_FINDING, "file_path": "src/beta.py", "rule_id": "python.xss"},
+            {**_BASE_FINDING, "file_path": "src/alpha.py", "repo_id": repo_id},
+            {
+                **_BASE_FINDING,
+                "file_path": "src/beta.py",
+                "rule_id": "python.xss",
+                "repo_id": repo_id,
+            },
         ],
     )
 
@@ -442,12 +467,18 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
     """claim_batch is called exactly N+1 times (N batches + None sentinel)."""
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
     # Two findings → should produce at least 1 batch
+    repo_id = _seed_repo(factory)
     seed_run_id = run_repo.create_run({})
     finding_repo.insert_findings(
         seed_run_id,
         [
-            {**_BASE_FINDING, "file_path": "src/a.py"},
-            {**_BASE_FINDING, "file_path": "src/b.py", "rule_id": "python.xss"},
+            {**_BASE_FINDING, "file_path": "src/a.py", "repo_id": repo_id},
+            {
+                **_BASE_FINDING,
+                "file_path": "src/b.py",
+                "rule_id": "python.xss",
+                "repo_id": repo_id,
+            },
         ],
     )
 
@@ -477,12 +508,18 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
 
 def test_both_findings_enriched(tmp_path: Path) -> None:
     runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    repo_id = _seed_repo(factory)
     seed_run_id = run_repo.create_run({})
     finding_repo.insert_findings(
         seed_run_id,
         [
-            {**_BASE_FINDING, "file_path": "src/a.py"},
-            {**_BASE_FINDING, "file_path": "src/b.py", "rule_id": "python.xss"},
+            {**_BASE_FINDING, "file_path": "src/a.py", "repo_id": repo_id},
+            {
+                **_BASE_FINDING,
+                "file_path": "src/b.py",
+                "rule_id": "python.xss",
+                "repo_id": repo_id,
+            },
         ],
     )
 

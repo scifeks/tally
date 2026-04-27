@@ -221,85 +221,30 @@ class TestKatanaHandlerMeta:
 
 
 class TestKatanaHandlerNormalize:
-    def _endpoint(
-        self,
-        url: str = "http://localhost:8080/api/users",
-        path: str = "/api/users",
-        method: str = "GET",
-        status_code: int = 200,
-        content_type: str | None = "application/json",
-    ) -> dict:
+    """Phase 9: ``KatanaHandler.normalize`` is a no-op.
+
+    Katana output is routed into ``url_findings`` via
+    ``UrlInventoryIngestHandler``; it no longer emits ``findings`` rows.
+    """
+
+    def _endpoint(self) -> dict:
         return {
-            "url": url,
-            "path": path,
-            "method": method,
-            "status_code": status_code,
-            "content_type": content_type,
+            "url": "http://localhost:8080/api/users",
+            "path": "/api/users",
+            "method": "GET",
+            "status_code": 200,
+            "content_type": "application/json",
         }
 
-    def _normalize_one(self, **kwargs) -> dict:
-        handler = KatanaHandler()
-        result = _make_result([self._endpoint(**kwargs)])
-        rows = handler.normalize(result, profile="myrepo")
-        assert len(rows) == 1
-        return rows[0]
-
-    def test_tool_column(self) -> None:
-        assert self._normalize_one()["tool"] == "katana"
-
-    def test_profile_column(self) -> None:
+    def test_normalize_returns_empty(self) -> None:
         handler = KatanaHandler()
         result = _make_result([self._endpoint()])
-        rows = handler.normalize(result, profile="myrepo")
-        assert rows[0]["profile"] == "myrepo"
-
-    def test_finding_type_informational(self) -> None:
-        assert self._normalize_one()["finding_type"] == '["informational"]'
-
-    def test_severity_informational(self) -> None:
-        assert self._normalize_one()["severity"] == "informational"
-
-    def test_confidence_confirmed(self) -> None:
-        assert self._normalize_one()["confidence"] == "confirmed"
-
-    def test_risk_type_endpoint_discovery(self) -> None:
-        assert self._normalize_one()["risk_type"] == "endpoint-discovery"
-
-    def test_url_is_full_url(self) -> None:
-        row = self._normalize_one(url="http://localhost:8080/api/users")
-        assert row["url"] == "http://localhost:8080/api/users"
-
-    def test_method_in_row(self) -> None:
-        assert self._normalize_one(method="POST")["method"] == "POST"
-
-    def test_description_includes_method_and_path(self) -> None:
-        row = self._normalize_one(method="GET", path="/api/users")
-        assert "GET" in row["description"]
-        assert "/api/users" in row["description"]
-
-    def test_description_includes_status_code(self) -> None:
-        row = self._normalize_one(status_code=404)
-        assert "404" in row["description"]
-
-    def test_timestamp_from_result(self) -> None:
-        assert self._normalize_one()["timestamp"] == _TIMESTAMP
-
-    def test_multiple_endpoints_multiple_rows(self) -> None:
-        handler = KatanaHandler()
-        result = _make_result(
-            [
-                self._endpoint(url="http://h/a", path="/a"),
-                self._endpoint(url="http://h/b", path="/b"),
-            ]
-        )
-        rows = handler.normalize(result, profile="p")
-        assert len(rows) == 2
+        assert handler.normalize(result, profile="p") == []
 
     def test_empty_endpoints_returns_empty_rows(self) -> None:
         handler = KatanaHandler()
         result = _make_result([])
-        rows = handler.normalize(result, profile="p")
-        assert rows == []
+        assert handler.normalize(result, profile="p") == []
 
 
 # ---------------------------------------------------------------------------

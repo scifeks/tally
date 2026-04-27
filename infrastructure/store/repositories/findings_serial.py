@@ -27,7 +27,6 @@ _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
     "segment",
-    "repo",
     "confidence",
     "rule_id",
     "url",
@@ -133,6 +132,13 @@ def deserialise_row(row: Any) -> dict[str, Any]:
     rid_val = row["run_id"]
     if rid_val is not None:
         metadata["run_id"] = rid_val
+
+    try:
+        repo_id_val = row["repo_id"]
+    except (IndexError, KeyError):
+        repo_id_val = None
+    if repo_id_val is not None:
+        metadata["repo_id"] = repo_id_val
 
     # finding_type: stored as JSON array, return as list.
     ft_val = row["finding_type"]

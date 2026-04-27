@@ -184,20 +184,27 @@ async def get_scans_config(
 
     registry = request.app.state.project_registry
     manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(project_name)
+    # ``load_repositories`` joins the per-project ``repositories`` table to
+    # populate ``Repository.id``; ``get_project_info``'s direct JSON load
+    # does not. Use the joined view so we don't drop everything as id=None.
+    repo_models = manager.config.load_repositories(project_name)
     repos: list[ScanConfigRepo] = []
-    if config is not None:
-        for r in config.repositories:
-            data = r.model_dump()
-            location = "docker" if data.get("container_name") else "local"
-            repos.append(
-                ScanConfigRepo(
-                    id=data["name"],
-                    name=data["name"],
-                    source=",".join(data.get("type", [])) or "unknown",
-                    location=location,
-                )
+    for r in repo_models:
+        if not isinstance(r.id, int):
+            # Repo lacks a DB row (sync hasn't run, or repo soft-deleted);
+            # exclude rather than expose with a placeholder id.
+            continue
+        data = r.model_dump()
+        location = "docker" if data.get("container_name") else "local"
+        repos.append(
+            ScanConfigRepo(
+                id=r.id,
+                uuid=r.uuid or "",
+                name=r.name,
+                source=",".join(data.get("type", [])) or "unknown",
+                location=location,
             )
+        )
 
     tools: list[ScanConfigTool] = []
     for tw in tool_registry.get_all_tools():
@@ -345,6 +352,8 @@ async def start_scan(
     _validate_tool_ids(body.toolIds + body.skipToolIds)
     _validate_domains(body.domains)
 
+    repo_names = _repo_ids_to_names(request, project_name, body.repoIds)
+
     repo = _make_run_repo(row)
 
     lock_registry = get_registry()
@@ -358,7 +367,7 @@ async def start_scan(
         run_id = await asyncio.to_thread(
             repo.create,
             project_id=project_id,
-            repo_ids=body.repoIds,
+            repo_ids=repo_names,
             tool_ids=body.toolIds,
             domains=body.domains,
             skip_enrichment=body.skipEnrichment,
@@ -373,7 +382,7 @@ async def start_scan(
     factory = ConnectionFactory(ProjectPaths.from_registry_row(row).findings_db)
     bus = request.app.state.event_bus
     scan_request = ScanRequest(
-        repo_ids=tuple(body.repoIds),
+        repo_ids=tuple(repo_names),
         tool_ids=tuple(body.toolIds),
         domains=tuple(body.domains),
         skip_tool_ids=tuple(body.skipToolIds),
@@ -496,8 +505,14 @@ async def get_scan(
 
 
 def _validate_repo_ids(
-    request: Request, project_name: str, repo_ids: list[str]
+    request: Request, project_name: str, repo_ids: list[int]
 ) -> None:
+    """Validate that every requested ``repo_id`` is an active repo in the project.
+
+    Phase 9: requests carry integer DB ids (from ``ScanConfigRepo.id``);
+    validation joins against the per-project ``repositories`` table to
+    confirm each id exists and is not soft-deleted.
+    """
     if not repo_ids:
         return
     base_path: str = request.app.state.base_path
@@ -508,13 +523,42 @@ def _validate_repo_ids(
     config = manager.get_project_info(project_name)
     if config is None:
         raise NotFound(f"Project {project_name!r} not found")
-    valid = {r.name for r in config.repositories}
-    missing = [r for r in repo_ids if r not in valid]
+    valid_ids = {r.id for r in config.repositories if isinstance(r.id, int)}
+    missing = [rid for rid in repo_ids if rid not in valid_ids]
     if missing:
         raise ValidationError(
-            f"unknown repo names: {missing}",
-            details={"unknown": missing, "available": sorted(valid)},
+            f"unknown repo ids: {missing}",
+            details={
+                "unknown": missing,
+                "available": sorted(valid_ids),
+            },
         )
+
+
+def _repo_ids_to_names(
+    request: Request, project_name: str, repo_ids: list[int]
+) -> list[str]:
+    """Translate request-side integer ``repo_id``s into REPL-shaped names.
+
+    The internal scan orchestrator and run repository still address repos
+    by name. After ``_validate_repo_ids`` succeeds, this helper produces
+    the matching name list in the same order, dropping any id that fails
+    to resolve (defensive — should not happen post-validation).
+    """
+    if not repo_ids:
+        return []
+    base_path: str = request.app.state.base_path
+    registry = request.app.state.project_registry
+    from application.project.manager import ProjectManager
+
+    manager = ProjectManager(base_path, registry=registry)
+    config = manager.get_project_info(project_name)
+    if config is None:
+        return []
+    name_by_id: dict[int, str] = {
+        r.id: r.name for r in config.repositories if isinstance(r.id, int)
+    }
+    return [name_by_id[rid] for rid in repo_ids if rid in name_by_id]
 
 
 def _validate_tool_ids(tool_ids: list[str]) -> None:

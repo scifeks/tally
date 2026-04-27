@@ -64,16 +64,25 @@ def _make_db_active(
     db_path: Path,
     rows: list[tuple[str, str, str]],
 ) -> None:
-    """Seed active findings with (tool, repo, segment) tuples."""
+    """Seed active findings with (tool, repo_name, segment) tuples."""
+    import uuid as _uuid
+
     _init_store(db_path)
     _seed_scan_run(db_path)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    for tool, repo, segment in rows:
+    repo_ids: dict[str, int] = {}
+    for tool, repo_name, segment in rows:
+        if repo_name not in repo_ids:
+            cur = conn.execute(
+                "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+                (str(_uuid.uuid4()), repo_name),
+            )
+            repo_ids[repo_name] = cur.lastrowid  # type: ignore[assignment]
         conn.execute(
-            "INSERT INTO findings (tool, status, repo, segment, triaged_at)"
+            "INSERT INTO findings (tool, status, repo_id, segment, triaged_at)"
             " VALUES (?, 'active', ?, ?, NULL)",
-            (tool, repo, segment),
+            (tool, repo_ids[repo_name], segment),
         )
     conn.commit()
     conn.close()

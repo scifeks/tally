@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.project_paths import ProjectPaths
 
+from ._atomic import atomic_write_text, locked_config
 from .schemas import (
     CommandEntry,
     EndpointConfig,
@@ -21,7 +24,15 @@ if TYPE_CHECKING:
 
 
 class ConfigManager:
-    """Manages global and project-specific configurations."""
+    """Manages global and project-specific configurations.
+
+    Phase 9.1: every save method writes atomically (temp file + os.replace).
+    Callers that perform load → modify → save sequences must wrap the
+    sequence in one of the ``locked_*`` context managers so the entire
+    cycle is exclusive against other processes/tasks. ``save_repositories``
+    is the one save method that does an internal load → modify → save and
+    therefore acquires its own lock.
+    """
 
     def __init__(
         self,
@@ -30,6 +41,7 @@ class ConfigManager:
     ):
         self.base_path = Path(base_path)
         self.global_config_path = self.base_path / "config" / "global.json"
+        self.commands_config_path = self.base_path / "config" / "commands.json"
         self.projects_dir = ProjectPaths.projects_dir(self.base_path)
         self._registry = registry
 
@@ -43,6 +55,28 @@ class ConfigManager:
             if row is not None and not row.get("archived_at"):
                 return ProjectPaths.from_registry_row(row)
         return ProjectPaths(self.projects_dir / project_name)
+
+    def project_config_path(self, project_name: str) -> Path:
+        """Return the project.json path. Useful for external locking."""
+        return self._project_paths(project_name).config_json
+
+    @contextmanager
+    def locked_global_config(self) -> Iterator[Path]:
+        """Hold an exclusive lock around the global config file."""
+        with locked_config(self.global_config_path) as path:
+            yield path
+
+    @contextmanager
+    def locked_commands_config(self) -> Iterator[Path]:
+        """Hold an exclusive lock around the commands.json file."""
+        with locked_config(self.commands_config_path) as path:
+            yield path
+
+    @contextmanager
+    def locked_project_config(self, project_name: str) -> Iterator[Path]:
+        """Hold an exclusive lock around a project's project.json."""
+        with locked_config(self.project_config_path(project_name)) as path:
+            yield path
 
     def load_global_config(self) -> GlobalConfig:
         """Load global configuration from disk."""
@@ -62,13 +96,15 @@ class ConfigManager:
             ) from exc
 
     def save_global_config(self, config: GlobalConfig) -> None:
-        """Save global configuration to disk."""
-        with open(self.global_config_path, "w") as f:
-            json.dump(config.model_dump(), f, indent=2)
+        """Save global configuration atomically."""
+        atomic_write_text(
+            self.global_config_path,
+            json.dumps(config.model_dump(), indent=2),
+        )
 
     def load_project_config(self, project_name: str) -> ProjectConfig | None:
         """Load project configuration."""
-        config_path = self._project_paths(project_name).config_json
+        config_path = self.project_config_path(project_name)
         if not config_path.exists():
             return None
         with open(config_path) as f:
@@ -76,25 +112,69 @@ class ConfigManager:
             return ProjectConfig(**data)
 
     def save_project_config(self, project_name: str, config: ProjectConfig) -> None:
-        """Save project configuration. Implicitly registers the project."""
-        config_path = self._project_paths(project_name).config_json
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(config_path, "w") as f:
-            json.dump(config.model_dump(), f, indent=2)
+        """Save project configuration atomically. Implicitly registers project.
+
+        Does not acquire a lock. Callers that load → modify → save must wrap
+        the cycle in ``locked_project_config(project_name)``.
+        """
+        config_path = self.project_config_path(project_name)
+        atomic_write_text(config_path, json.dumps(config.model_dump(), indent=2))
         if self._registry is not None:
             self._registry.register(project_name, str(self.base_path))
 
     def load_repositories(self, project_name: str) -> list[Repository]:
-        """Load repositories from project.json for a project."""
+        """Load repositories from project.json for a project.
+
+        Phase 9: each returned ``Repository`` has its ``id`` populated by
+        joining its ``uuid`` against the per-project ``repositories``
+        table. Repos whose JSON-side uuid has no matching DB row (or
+        whose row is soft-deleted) come back with ``id=None``; callers
+        that need an active repo should filter accordingly.
+        """
         config = self.load_project_config(project_name)
         if config is None:
             return []
-        return config.repositories
+
+        try:
+            from infrastructure.store.connection import ConnectionFactory
+            from infrastructure.store.repositories.repositories import (
+                RepositoryRepository,
+            )
+
+            paths = self._project_paths(project_name)
+            if not paths.findings_db.exists():
+                return config.repositories
+            factory = ConnectionFactory(paths.findings_db)
+            repo_repo = RepositoryRepository(factory)
+        except Exception:
+            return config.repositories
+
+        out: list[Repository] = []
+        for repo in config.repositories:
+            if not repo.uuid:
+                out.append(repo)
+                continue
+            try:
+                db_row = repo_repo.get_by_uuid_including_deleted(repo.uuid)
+            except Exception:
+                out.append(repo)
+                continue
+            if db_row is None:
+                out.append(repo)
+                continue
+            if db_row.deleted_at is not None:
+                continue
+            out.append(repo.model_copy(update={"id": db_row.id}))
+        return out
 
     def save_repositories(
         self, project_name: str, repositories: list[Repository]
     ) -> None:
-        """Save repositories into project.json for a project."""
+        """Replace the repositories list in project.json atomically.
+
+        Caller must hold the project config lock for the surrounding load →
+        modify → save cycle (use ``locked_project_config(project_name)``).
+        """
         config = self.load_project_config(project_name)
         if config is None:
             raise ValueError(f"Project '{project_name}' not found.")
@@ -114,26 +194,24 @@ class ConfigManager:
 
     def load_commands_config(self) -> dict[str, CommandEntry] | None:
         """Load commands.json from the app config directory."""
-        config_path = self.base_path / "config" / "commands.json"
-        if not config_path.exists():
+        if not self.commands_config_path.exists():
             return None
-        with open(config_path) as f:
+        with open(self.commands_config_path) as f:
             data = json.load(f)
         return {name: CommandEntry(**entry) for name, entry in data.items()}
 
     def save_commands_config(self, config: dict[str, CommandEntry]) -> None:
-        """Save commands.json to the app config directory."""
-        config_path = self.base_path / "config" / "commands.json"
-        config_path.parent.mkdir(parents=True, exist_ok=True)
+        """Save commands.json atomically.
+
+        Does not acquire a lock. Callers that load → modify → save must wrap
+        the cycle in ``locked_commands_config()``.
+        """
         data = {name: entry.model_dump() for name, entry in config.items()}
-        with open(config_path, "w") as f:
-            json.dump(data, f, indent=2)
+        atomic_write_text(self.commands_config_path, json.dumps(data, indent=2))
 
     def save_endpoint_config(self, project_name: str, config: EndpointConfig) -> None:
-        """Save endpoint configuration for a repository."""
+        """Save endpoint configuration atomically."""
         config_path = self._project_paths(project_name).endpoint_config_json(
             config.repo_name
         )
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(config_path, "w") as f:
-            json.dump(config.model_dump(), f, indent=2)
+        atomic_write_text(config_path, json.dumps(config.model_dump(), indent=2))

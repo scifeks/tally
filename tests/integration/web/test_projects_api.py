@@ -194,6 +194,86 @@ class TestProjectInfoV1:
         assert resp.status_code == 404
 
 
+class TestProjectInfoPatchV1:
+    async def test_patch_updates_company_department_abbreviation(
+        self, projects_v1_client
+    ) -> None:
+        client, headers, project_id = projects_v1_client
+        resp = await client.patch(
+            f"/api/v1/projects/{project_id}/info",
+            json={
+                "company_name": "New Co",
+                "department_name": "Engineering",
+                "abbreviation": "NEW",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["company"] == "New Co"
+        assert data["department"] == "Engineering"
+        assert data["abbreviation"] == "NEW"
+        # Persists across reads.
+        resp2 = await client.get(f"/api/v1/projects/{project_id}/info")
+        assert resp2.json()["abbreviation"] == "NEW"
+
+    async def test_patch_partial_only_updates_provided_fields(
+        self, projects_v1_client
+    ) -> None:
+        client, headers, project_id = projects_v1_client
+        resp = await client.patch(
+            f"/api/v1/projects/{project_id}/info",
+            json={"company_name": "Only Co"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["company"] == "Only Co"
+        assert data["department"] == "Security"
+        assert data["abbreviation"] == "TP"
+
+    async def test_patch_rejects_abbreviation_too_long(
+        self, projects_v1_client
+    ) -> None:
+        client, headers, project_id = projects_v1_client
+        resp = await client.patch(
+            f"/api/v1/projects/{project_id}/info",
+            json={"abbreviation": "TOOLONG"},
+            headers=headers,
+        )
+        assert resp.status_code == 422
+
+    async def test_patch_unknown_project_returns_404(self, projects_v1_client) -> None:
+        client, headers, _ = projects_v1_client
+        resp = await client.patch(
+            "/api/v1/projects/9999/info",
+            json={"company_name": "X"},
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+    async def test_patch_without_csrf_returns_403(self, projects_v1_client) -> None:
+        client, _, project_id = projects_v1_client
+        resp = await client.patch(
+            f"/api/v1/projects/{project_id}/info",
+            json={"company_name": "NoCSRF"},
+        )
+        assert resp.status_code == 403
+
+    async def test_patch_empty_body_is_noop(self, projects_v1_client) -> None:
+        client, headers, project_id = projects_v1_client
+        resp = await client.patch(
+            f"/api/v1/projects/{project_id}/info",
+            json={},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["company"] == "Acme Corp"
+        assert data["department"] == "Security"
+        assert data["abbreviation"] == "TP"
+
+
 class TestRepositoriesV1:
     async def test_repositories_list_omits_auth(self, projects_v1_client) -> None:
         client, _, project_id = projects_v1_client

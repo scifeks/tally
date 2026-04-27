@@ -72,7 +72,9 @@ class TestInterviewSingleRepoDependenciesFile:
             "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == "requirements.txt"
 
@@ -96,7 +98,9 @@ class TestInterviewSingleRepoDependenciesFile:
             "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == ""
 
@@ -122,7 +126,9 @@ class TestInterviewSingleRepoDependenciesFile:
             "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == "/app/requirements.txt"
 
@@ -148,7 +154,9 @@ class TestInterviewSingleRepoDependenciesFile:
             "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == ""
 
@@ -172,7 +180,9 @@ class TestInterviewSingleRepoDependenciesFile:
             "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == ""
 

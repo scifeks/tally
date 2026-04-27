@@ -83,19 +83,27 @@ def is_excluded_path(rel_path: str, excluded_dirs: list[str]) -> bool:
     return bool(parts & lowered)
 
 
-def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, str | None]:
-    """Return (relative_path, repo_name) for file_path.
+def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, int | None]:
+    """Return ``(relative_path, repo_id)`` for ``file_path``.
 
-    If file_path starts with repo.path, strip that prefix.
-    If no repo matches, return (file_path, None) unchanged.
-    repo_name is None when no match found or file_path is empty.
+    Phase 9: identifies repos by integer ``id`` (FK to the
+    ``repositories`` table) instead of mutable string name. Display
+    sites JOIN to ``repositories`` via ``_repo_label.label_for`` at
+    render time.
+
+    If ``file_path`` starts with ``repo.path``, strip that prefix.
+    If no repo matches, return ``(file_path, None)`` unchanged.
+    ``repo_id`` is ``None`` when no match is found, when the matched
+    repo has no DB id (legacy / unsynced), or when ``file_path`` is
+    empty.
     """
     if not file_path:
         return (file_path, None)
     for repo in repos:
         if repo.path and file_path.startswith(repo.path):
             rel = "/" + file_path[len(repo.path) :].lstrip("/")
-            return (rel, repo.name)
+            rid = getattr(repo, "id", None)
+            return (rel, rid if isinstance(rid, int) else None)
     return (file_path, None)
 
 
@@ -121,18 +129,27 @@ def normalize_file_path(
     file_path: str,
     repositories: list[Repository],
     repo_name: str | None = None,
-) -> tuple[str, str | None] | None:
-    """Normalize file_path relative to repositories.
+) -> tuple[str, int | None] | None:
+    """Normalize ``file_path`` relative to ``repositories``.
 
-    Returns (relative_path, repo_name) or None when file_path is empty.
-    When repo_name is provided, strips that repo's path prefix; otherwise
-    finds the best-matching repo from the list.
+    Returns ``(relative_path, repo_id)`` or ``None`` when ``file_path``
+    is empty. When ``repo_name`` is provided, strips that repo's path
+    prefix and returns its DB ``id``; otherwise finds the best-matching
+    repo from the list. ``repo_id`` may be ``None`` when no repo
+    matches or when the matched repo lacks a DB id (legacy/unsynced).
     """
     if not file_path:
         return None
     if repo_name is not None:
         rel = _relativize_path(file_path, repo_name, repositories)
-        return (rel, repo_name)
+        rid: int | None = None
+        for r in repositories:
+            if r.name == repo_name:
+                cand = getattr(r, "id", None)
+                if isinstance(cand, int):
+                    rid = cand
+                break
+        return (rel, rid)
     return _normalize_path(file_path, repositories)
 
 
@@ -146,12 +163,25 @@ def filter_code_rows(
 
     Returns the filtered list. Rows with unresolvable paths are dropped and
     logged. Rows in test directories are dropped and logged.
+
+    Each surviving row is annotated with ``repo_id`` (int) when the
+    matched repo carries a DB id, and with ``repo`` (string name) for
+    legacy display consumers (reporting / draft generation) that
+    haven't been migrated to the JOIN-on-render model yet.
     """
     if not repos:
         return rows
-    repo_excluded_dirs: dict[str, list[str]] = {
-        r.name: excl for r in repos if (excl := build_excluded_dirs(r))
-    }
+    repo_excluded_dirs: dict[int, list[str]] = {}
+    repo_name_by_id: dict[int, str] = {}
+    for r in repos:
+        rid = r.id
+        if not isinstance(rid, int):
+            continue
+        excl = build_excluded_dirs(r)
+        if excl:
+            repo_excluded_dirs[rid] = excl
+        if r.name:
+            repo_name_by_id[rid] = r.name
     filtered: list[dict] = []
     for row in rows:
         file_path: str = row.get("file_path", "") or ""
@@ -163,12 +193,15 @@ def filter_code_rows(
                 row.get("rule_id", ""),
             )
             continue
-        rel, matched_repo = result_path
+        rel, matched_repo_id = result_path
         row["file_path"] = rel
-        if matched_repo is not None:
-            row["repo"] = matched_repo
-        if matched_repo is not None and rel:
-            _excl = repo_excluded_dirs.get(matched_repo, [])
+        if matched_repo_id is not None:
+            row["repo_id"] = matched_repo_id
+            display_name = repo_name_by_id.get(matched_repo_id)
+            if display_name:
+                row["repo"] = display_name
+        if matched_repo_id is not None and rel:
+            _excl = repo_excluded_dirs.get(matched_repo_id, [])
             if _excl and is_excluded_path(rel, _excl):
                 logger.debug(
                     "Excluding dir row: tool=%s path=%s",

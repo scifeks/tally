@@ -16,6 +16,12 @@ class TestProjectCommands(unittest.TestCase):
         self.repl.active_project = "test-project"
         self.help_renderer = MagicMock()
         self.cmds = ProjectCommands(self.repl, self.help_renderer)
+        # Default repo lookup so _resolve_repo_arg("my-repo") finds the
+        # repo for cmd_edit_repo / cmd_delete_repo tests.
+        default_repo = MagicMock()
+        default_repo.id = 1
+        default_repo.name = "my-repo"
+        self.repl.projects.config.load_repositories.return_value = [default_repo]
 
     # ------------------------------------------------------------------
     # cmd_project dispatch

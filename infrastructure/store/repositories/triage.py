@@ -63,33 +63,40 @@ class TriageBatchRepository:
         if segment == "api":
             sql = """
                 SELECT
-                    id, repo, url, tool, severity, confidence, description,
-                    json_extract(meta, '$.remediation') AS remediation,
-                    json_extract(meta, '$.method') AS method,
-                    json_extract(meta, '$.param') AS param,
-                    json_extract(meta, '$.evidence') AS evidence,
-                    json_extract(meta, '$.risk_type') AS risk_type,
-                    json_extract(meta, '$.cwe_id') AS cwe_id,
-                    json_extract(meta, '$.alert_name') AS alert_name
-                FROM findings
-                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
-                ORDER BY severity ASC, url, json_extract(meta, '$.risk_type')
+                    f.id, r.name AS repo, f.url, f.tool,
+                    f.severity, f.confidence, f.description,
+                    json_extract(f.meta, '$.remediation') AS remediation,
+                    json_extract(f.meta, '$.method') AS method,
+                    json_extract(f.meta, '$.param') AS param,
+                    json_extract(f.meta, '$.evidence') AS evidence,
+                    json_extract(f.meta, '$.risk_type') AS risk_type,
+                    json_extract(f.meta, '$.cwe_id') AS cwe_id,
+                    json_extract(f.meta, '$.alert_name') AS alert_name
+                FROM findings f
+                JOIN repositories r ON f.repo_id = r.id
+                WHERE f.segment = ? AND f.tool = ? AND r.name = ?
+                  AND f.status = 'active'
+                ORDER BY f.severity ASC, f.url,
+                         json_extract(f.meta, '$.risk_type')
             """
         elif segment == "sast":
             sql = """
                 SELECT
-                    id, repo, file, tool, rule_id, severity, confidence,
-                    description, cwe,
-                    json_extract(meta, '$.line_start') AS line_start,
-                    json_extract(meta, '$.code_snippet') AS code_snippet,
-                    json_extract(meta, '$.risk_type') AS risk_type,
-                    json_extract(meta, '$.owasp') AS owasp
-                FROM findings
-                WHERE segment = ? AND tool = ? AND repo = ? AND status = 'active'
+                    f.id, r.name AS repo, f.file, f.tool,
+                    f.rule_id, f.severity, f.confidence,
+                    f.description, f.cwe,
+                    json_extract(f.meta, '$.line_start') AS line_start,
+                    json_extract(f.meta, '$.code_snippet') AS code_snippet,
+                    json_extract(f.meta, '$.risk_type') AS risk_type,
+                    json_extract(f.meta, '$.owasp') AS owasp
+                FROM findings f
+                JOIN repositories r ON f.repo_id = r.id
+                WHERE f.segment = ? AND f.tool = ? AND r.name = ?
+                  AND f.status = 'active'
                 ORDER BY
-                    severity ASC,
-                    file,
-                    CAST(json_extract(meta, '$.line_start') AS INTEGER)
+                    f.severity ASC,
+                    f.file,
+                    CAST(json_extract(f.meta, '$.line_start') AS INTEGER)
             """
         else:
             return 0
@@ -203,17 +210,20 @@ class TriageBatchRepository:
     def get_active_finding_combos(
         self, skip_tools: frozenset[str]
     ) -> list[tuple[str, str, str]]:
-        """Return distinct (tool, repo, segment) tuples for active, segmented findings.
+        """Return distinct (tool, repo_name, segment) tuples for active findings.
 
-        Excludes any tool in skip_tools.
+        Excludes any tool in skip_tools. Findings without a repo_id are
+        omitted (legacy unlinked rows).
         """
         with self._factory.connect() as conn:
             rows = conn.execute(
-                "SELECT DISTINCT tool, repo, segment FROM findings"
-                " WHERE status = 'active' AND segment IS NOT NULL",
+                "SELECT DISTINCT f.tool, r.name, f.segment"
+                " FROM findings f"
+                " JOIN repositories r ON f.repo_id = r.id"
+                " WHERE f.status = 'active' AND f.segment IS NOT NULL",
             ).fetchall()
         return [
-            (r["tool"], r["repo"], r["segment"])
+            (r["tool"], r["name"], r["segment"])
             for r in rows
             if r["tool"] not in skip_tools
         ]

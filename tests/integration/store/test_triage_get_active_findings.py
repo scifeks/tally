@@ -41,11 +41,32 @@ def finding_repo(factory: ConnectionFactory) -> FindingRepository:
     return FindingRepository(factory)
 
 
+def _seed_repo(factory: ConnectionFactory, name: str) -> int:
+    import uuid as _uuid
+
+    with factory.connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
+            (str(_uuid.uuid4()), name),
+        )
+        return cur.lastrowid  # type: ignore[return-value]
+
+
 def _seed_findings(
     run_repo: RunRepository,
     finding_repo: FindingRepository,
     findings: list[dict],
+    factory: ConnectionFactory | None = None,
 ) -> int:
+    if factory is not None:
+        repo_ids: dict[str, int] = {}
+        for f in findings:
+            name = f.get("repo", "unknown")
+            if name not in repo_ids:
+                repo_ids[name] = _seed_repo(factory, name)
+        findings = [
+            {**f, "repo_id": repo_ids[f.get("repo", "unknown")]} for f in findings
+        ]
     run_id = run_repo.create_run({})
     finding_repo.insert_findings(run_id, findings)
     return run_id
@@ -102,7 +123,7 @@ class TestGetActiveFindings:
             _make_sast_finding(tool="semgrep", repo="r1"),  # duplicate
             _make_api_finding(tool="zap", repo="r1"),
         ]
-        _seed_findings(run_repo, finding_repo, findings)
+        _seed_findings(run_repo, finding_repo, findings, factory)
         combos = repo.get_active_finding_combos(frozenset())
         assert ("semgrep", "r1", "sast") in combos
         assert ("zap", "r1", "api") in combos
@@ -110,10 +131,13 @@ class TestGetActiveFindings:
 
     def test_excludes_skip_tools(
         self,
+        factory: ConnectionFactory,
         repo: TriageBatchRepository,
         run_repo: RunRepository,
         finding_repo: FindingRepository,
     ) -> None:
-        _seed_findings(run_repo, finding_repo, [_make_sast_finding(tool="nmap")])
+        _seed_findings(
+            run_repo, finding_repo, [_make_sast_finding(tool="nmap")], factory
+        )
         combos = repo.get_active_finding_combos(frozenset({"nmap"}))
         assert not any(c[0] == "nmap" for c in combos)

@@ -286,6 +286,199 @@ class TestToolOverrides:
         assert resp.status_code in (401, 403)
 
 
+class TestToolOverridesWriteCRUD:
+    """POST/PUT/DELETE coverage for ``/api/v1/projects/:id/tools/overrides``.
+
+    Each successful write must call ``discover_tools`` so the in-memory
+    registry reflects the change immediately. We verify that side-effect
+    by patching the call site in ``web.api.tools``.
+    """
+
+    @staticmethod
+    def _read_overrides(tmp_path: Path) -> dict:
+        commands_path = (
+            tmp_path / "projects" / "testproject" / "config" / "commands.json"
+        )
+        if not commands_path.exists():
+            return {}
+        return json.loads(commands_path.read_text())
+
+    async def test_post_creates_override_and_refreshes_registry(
+        self, tools_v1_client, monkeypatch
+    ) -> None:
+        client, headers, tmp_path, project_id = tools_v1_client
+        called: list[tuple[str, str | None]] = []
+
+        def _spy(base_path: str, project_name: str | None = None) -> None:
+            called.append((base_path, project_name))
+
+        monkeypatch.setattr("web.api.tools.discover_tools", _spy)
+
+        body = {
+            "tool_id": "bandit",
+            "type": "repo",
+            "location": "local",
+            "path": "/usr/local/bin/bandit",
+        }
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/tools/overrides",
+            json=body,
+            headers=headers,
+        )
+        assert resp.status_code == 201, resp.text
+        item = resp.json()
+        assert item["tool_id"] == "bandit"
+        assert item["location"] == "local"
+        assert item["path"] == "/usr/local/bin/bandit"
+
+        # CommandEntry.model_dump() includes ``container: None`` for local
+        # entries; assert on the meaningful fields rather than full equality.
+        overrides = self._read_overrides(tmp_path)
+        assert "bandit" in overrides
+        assert overrides["bandit"]["type"] == "repo"
+        assert overrides["bandit"]["location"] == "local"
+        assert overrides["bandit"]["path"] == "/usr/local/bin/bandit"
+        assert called and called[-1][1] == "testproject", (
+            "discover_tools must run after a successful POST"
+        )
+
+    async def test_post_duplicate_returns_409(self, tools_v1_client) -> None:
+        client, headers, tmp_path, project_id = tools_v1_client
+        commands_path = (
+            tmp_path / "projects" / "testproject" / "config" / "commands.json"
+        )
+        commands_path.write_text(
+            json.dumps({"bandit": {"type": "repo", "location": "local"}})
+        )
+        body = {
+            "tool_id": "bandit",
+            "type": "repo",
+            "location": "local",
+            "path": "/usr/local/bin/bandit",
+        }
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/tools/overrides",
+            json=body,
+            headers=headers,
+        )
+        assert resp.status_code == 409
+
+    async def test_post_invalid_payload_returns_422(self, tools_v1_client) -> None:
+        client, headers, _, project_id = tools_v1_client
+        # Missing required tool_id.
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/tools/overrides",
+            json={"type": "repo", "location": "local"},
+            headers=headers,
+        )
+        assert resp.status_code == 422
+
+    async def test_post_without_csrf_returns_403(self, tools_v1_client) -> None:
+        client, _, _, project_id = tools_v1_client
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/tools/overrides",
+            json={
+                "tool_id": "bandit",
+                "type": "repo",
+                "location": "local",
+                "path": "/x",
+            },
+        )
+        assert resp.status_code == 403
+
+    async def test_put_replaces_override_and_refreshes_registry(
+        self, tools_v1_client, monkeypatch
+    ) -> None:
+        client, headers, tmp_path, project_id = tools_v1_client
+        commands_path = (
+            tmp_path / "projects" / "testproject" / "config" / "commands.json"
+        )
+        commands_path.write_text(
+            json.dumps(
+                {"bandit": {"type": "repo", "location": "local", "path": "/old"}}
+            )
+        )
+        called: list[tuple[str, str | None]] = []
+        monkeypatch.setattr(
+            "web.api.tools.discover_tools",
+            lambda bp, project_name=None: called.append((bp, project_name)),
+        )
+
+        resp = await client.put(
+            f"/api/v1/projects/{project_id}/tools/overrides/bandit",
+            json={"type": "repo", "location": "local", "path": "/new"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["path"] == "/new"
+        assert self._read_overrides(tmp_path)["bandit"]["path"] == "/new"
+        assert called and called[-1][1] == "testproject"
+
+    async def test_put_unknown_returns_404(self, tools_v1_client) -> None:
+        client, headers, _, project_id = tools_v1_client
+        resp = await client.put(
+            f"/api/v1/projects/{project_id}/tools/overrides/unknown",
+            json={"type": "repo", "location": "local", "path": "/x"},
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+    async def test_put_without_csrf_returns_403(self, tools_v1_client) -> None:
+        client, _, _, project_id = tools_v1_client
+        resp = await client.put(
+            f"/api/v1/projects/{project_id}/tools/overrides/bandit",
+            json={"type": "repo", "location": "local", "path": "/x"},
+        )
+        assert resp.status_code == 403
+
+    async def test_delete_removes_override_and_refreshes_registry(
+        self, tools_v1_client, monkeypatch
+    ) -> None:
+        client, headers, tmp_path, project_id = tools_v1_client
+        commands_path = (
+            tmp_path / "projects" / "testproject" / "config" / "commands.json"
+        )
+        commands_path.write_text(
+            json.dumps(
+                {
+                    "bandit": {
+                        "type": "repo",
+                        "location": "local",
+                        "path": "/x",
+                    }
+                }
+            )
+        )
+        called: list[tuple[str, str | None]] = []
+        monkeypatch.setattr(
+            "web.api.tools.discover_tools",
+            lambda bp, project_name=None: called.append((bp, project_name)),
+        )
+
+        resp = await client.delete(
+            f"/api/v1/projects/{project_id}/tools/overrides/bandit",
+            headers=headers,
+        )
+        assert resp.status_code == 204
+        assert "bandit" not in self._read_overrides(tmp_path)
+        assert called and called[-1][1] == "testproject"
+
+    async def test_delete_unknown_returns_404(self, tools_v1_client) -> None:
+        client, headers, _, project_id = tools_v1_client
+        resp = await client.delete(
+            f"/api/v1/projects/{project_id}/tools/overrides/missing",
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+    async def test_delete_without_csrf_returns_403(self, tools_v1_client) -> None:
+        client, _, _, project_id = tools_v1_client
+        resp = await client.delete(
+            f"/api/v1/projects/{project_id}/tools/overrides/bandit",
+        )
+        assert resp.status_code == 403
+
+
 class TestRuntimeDependencies:
     async def test_returns_dependencies_list(self, app_client) -> None:
         client, *_ = app_client

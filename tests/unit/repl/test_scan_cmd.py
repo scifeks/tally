@@ -18,8 +18,10 @@ MOCK_TOOLS = ["gitleaks", "semgrep", "nmap", "zap", "pip-audit"]
 def _make_repo(name: str = "myrepo") -> MagicMock:
     repo = MagicMock()
     repo.name = name
-    repo.oas3_path = "/tmp/oas3.json"
-    repo.merged_oas3_path = "/tmp/merged_oas3.json"
+    # crawl_enabled=False keeps the repo out of the DAST-without-discovery
+    # warning path, which would otherwise prompt for stdin input under
+    # pytest's captured-stdin environment.
+    repo.crawl_enabled = False
     return repo
 
 

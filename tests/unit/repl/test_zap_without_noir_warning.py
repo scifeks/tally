@@ -1,5 +1,9 @@
 """Tests for the DAST-without-discovery warning in ScanCommands.
 
+Phase 9: discovery presence is now determined by ``_repo_has_url_findings``
+(SQLite ``url_findings`` query), not by reading ``repo.oas3_path`` /
+``repo.merged_oas3_path``. These tests stub that probe.
+
 Covers:
 - Warning is shown when DAST tools are requested and no discovery output exists
 - Option 1: discovery tools are prepended to the tool list (recommended)
@@ -18,10 +22,7 @@ from unittest.mock import MagicMock, patch
 from application.repl.commands.scan_commands import ScanCommands
 
 
-def _make_repl(
-    repo_names: list[str] | None = None,
-    merged_oas3_path: str = "",
-) -> MagicMock:
+def _make_repl(repo_names: list[str] | None = None) -> MagicMock:
     repl = MagicMock()
     repl.active_project = "DVPA"
     repl.base_path = "/tmp/tally"
@@ -30,19 +31,14 @@ def _make_repl(
     for name in names:
         r = MagicMock()
         r.name = name
-        r.oas3_path = ""
-        r.merged_oas3_path = merged_oas3_path
         r.crawl_enabled = True
         repos.append(r)
     repl.config.load_repositories.return_value = repos
     return repl
 
 
-def _make_sc(
-    repo_names: list[str] | None = None,
-    merged_oas3_path: str = "",
-) -> ScanCommands:
-    return ScanCommands(_make_repl(repo_names, merged_oas3_path=merged_oas3_path))
+def _make_sc(repo_names: list[str] | None = None) -> ScanCommands:
+    return ScanCommands(_make_repl(repo_names))
 
 
 # ---------------------------------------------------------------------------
@@ -56,14 +52,16 @@ class TestMaybeWarnDastWithoutDiscovery:
         tools: list[str],
         repo_name: str | None = None,
         auto_approve: bool = False,
-        merged_oas3_exists: bool = False,
+        url_findings_exist: bool = False,
         user_input: str = "1",
         repo_names: list[str] | None = None,
     ) -> list[str] | None:
-        merged_oas3 = "/tmp/dvna_merged_oas3.json" if merged_oas3_exists else ""
-        sc = _make_sc(repo_names, merged_oas3_path=merged_oas3)
+        sc = _make_sc(repo_names)
         names: list[str] | None = [repo_name] if repo_name is not None else repo_names
-        with patch("builtins.input", return_value=user_input):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=url_findings_exist),
+            patch("builtins.input", return_value=user_input),
+        ):
             return sc._maybe_warn_dast_without_discovery(
                 tools, names, auto_approve, MagicMock()
             )
@@ -84,12 +82,8 @@ class TestMaybeWarnDastWithoutDiscovery:
         result = self._call(["zap"], auto_approve=True)
         assert result == ["zap"]
 
-    def test_no_warning_when_katana_oas3_exists(self) -> None:
-        result = self._call(["zap"], merged_oas3_exists=True)
-        assert result == ["zap"]
-
-    def test_no_warning_when_noir_oas3_exists(self) -> None:
-        result = self._call(["zap"], merged_oas3_exists=True)
+    def test_no_warning_when_url_findings_exist(self) -> None:
+        result = self._call(["zap"], url_findings_exist=True)
         assert result == ["zap"]
 
     def test_no_warning_when_crawl_disabled(self) -> None:
@@ -99,7 +93,10 @@ class TestMaybeWarnDastWithoutDiscovery:
         r.crawl_enabled = False
         sc = ScanCommands(repl)
         mock_input = MagicMock()
-        with patch("builtins.input", mock_input):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=False),
+            patch("builtins.input", mock_input),
+        ):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -150,7 +147,10 @@ class TestMaybeWarnDastWithoutDiscovery:
 
     def test_eof_returns_none(self) -> None:
         sc = _make_sc()
-        with patch("builtins.input", side_effect=EOFError):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=False),
+            patch("builtins.input", side_effect=EOFError),
+        ):
             result = sc._maybe_warn_dast_without_discovery(
                 ["zap"], None, False, MagicMock()
             )
@@ -159,7 +159,10 @@ class TestMaybeWarnDastWithoutDiscovery:
     def test_warning_printed_to_console(self) -> None:
         repl = _make_repl()
         sc = ScanCommands(repl)
-        with patch("builtins.input", return_value="2"):
+        with (
+            patch.object(sc, "_repo_has_url_findings", return_value=False),
+            patch("builtins.input", return_value="2"),
+        ):
             sc._maybe_warn_dast_without_discovery(["zap"], None, False, MagicMock())
 
         printed = " ".join(
@@ -178,15 +181,11 @@ class TestCmdScanInnerWarning:
         self,
         args: list[str],
         user_input: str = "2",
-        merged_oas3_exists: bool = False,
+        url_findings_exist: bool = False,
     ) -> MagicMock:
-        repl = _make_repl(
-            merged_oas3_path="/tmp/k_oas3.json" if merged_oas3_exists else ""
-        )
+        repl = _make_repl()
         _repo = MagicMock()
         _repo.name = "dvna"
-        _repo.oas3_path = ""
-        _repo.merged_oas3_path = "/tmp/k_oas3.json" if merged_oas3_exists else ""
         _repo.crawl_enabled = True
         repl.config.load_repositories.return_value = [_repo]
 
@@ -199,6 +198,7 @@ class TestCmdScanInnerWarning:
             patch.object(
                 sc, "_create_sqlite_run", return_value=(MagicMock(), MagicMock(), 1)
             ),
+            patch.object(sc, "_repo_has_url_findings", return_value=url_findings_exist),
             patch("builtins.input", return_value=user_input),
         ):
             mock_reg.list_tool_names.return_value = [

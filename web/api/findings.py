@@ -173,7 +173,7 @@ async def list_findings(
     status: list[str] | None = Query(default=None),
     domain: list[str] | None = Query(default=None),
     tool: list[str] | None = Query(default=None),
-    repo: list[str] | None = Query(default=None),
+    repo_id: list[int] | None = Query(default=None),
     segment: list[str] | None = Query(default=None),
     finding_type: list[str] | None = Query(default=None),
     search: str | None = Query(default=None),
@@ -182,7 +182,12 @@ async def list_findings(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> FindingsListResponse:
-    """Return a paginated, filtered, sorted list of findings."""
+    """Return a paginated, filtered, sorted list of findings.
+
+    ``repo_id`` (integer DB id) is the canonical repo filter.
+    Each response item carries both ``repo_id`` and ``repo_name`` so
+    callers don't have to JOIN client-side.
+    """
     row = _resolve_project(request, project_id)
 
     # Validate severity labels — ValueError → 422 via global handler.
@@ -197,19 +202,20 @@ async def list_findings(
     if order:
         sort_dir = SortDirection.from_label(order)
 
-    conditions: list[tuple[str, str, list[str]]] = []
+    conditions: list[tuple[str, str, list[Any]]] = []
     for col, values in [
         ("severity", severity),
         ("confidence", confidence),
         ("status", status),
         ("domain", domain),
         ("tool", tool),
-        ("repo", repo),
         ("segment", segment),
         ("finding_type", finding_type),
     ]:
         if values:
             conditions.append((col, "=", list(values)))
+    if repo_id:
+        conditions.append(("repo_id", "=", [int(v) for v in repo_id]))
 
     filters: dict = {
         "conditions": conditions,
@@ -224,13 +230,40 @@ async def list_findings(
     service = FindingAnalystService(repo_obj)
     total = await asyncio.to_thread(service.search_count, filters)
     rows = await asyncio.to_thread(service.search_raw, filters)
-    items = [FindingResponse.model_validate(_serialise_finding(r)) for r in rows]
+
+    repo_name_by_id = _repo_name_lookup(row)
+    items: list[FindingResponse] = []
+    for r in rows:
+        serial = _serialise_finding(r)
+        rid = serial.get("repo_id")
+        if isinstance(rid, int):
+            serial["repo_name"] = repo_name_by_id.get(rid, "")
+        else:
+            serial["repo_name"] = ""
+        items.append(FindingResponse.model_validate(serial))
     return FindingsListResponse(
         items=items,
         total=total,
         offset=offset,
         limit=limit,
     )
+
+
+def _repo_name_lookup(project_row: dict) -> dict[int, str]:
+    """Build a ``{repo_id: repo_name}`` map for a project's active repos."""
+    try:
+        from infrastructure.store.repositories.repositories import (
+            RepositoryRepository,
+        )
+
+        paths = ProjectPaths.from_registry_row(project_row)
+        if not paths.findings_db.exists():
+            return {}
+        factory = ConnectionFactory(paths.findings_db)
+        repo_repo = RepositoryRepository(factory)
+        return {r.id: r.name for r in repo_repo.list_active() if r.name}
+    except Exception:
+        return {}
 
 
 @v1_router.get("/{project_id}/findings/events")

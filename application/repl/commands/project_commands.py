@@ -202,6 +202,7 @@ class ProjectCommands:
             return
 
         table = Table(show_header=True, header_style="bold")
+        table.add_column("ID", style="white", no_wrap=True)
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Type", style="white")
         table.add_column("Path", style="white")
@@ -212,9 +213,35 @@ class ProjectCommands:
             types = ", ".join(repo.type) if repo.type else "—"
             langs = ", ".join(repo.languages) if repo.languages else "—"
             urls = ", ".join(repo.base_urls) if repo.base_urls else "—"
-            table.add_row(repo.name, types, repo.path, langs, urls)
+            id_str = str(repo.id) if isinstance(repo.id, int) else "—"
+            table.add_row(id_str, repo.name, types, repo.path, langs, urls)
 
         self.repl.console.print(table)
+
+    def _resolve_repo_arg(self, arg: str) -> str | None:
+        """Translate ``arg`` (id or name) into the canonical repo name.
+
+        Phase 9: ``repo edit`` / ``repo delete`` accept either the
+        integer DB id (e.g. ``repo edit 3``) or the repo name. This
+        helper centralises resolution so the wizard / project-manager
+        callees keep their name-based contract intact.
+
+        Returns the repo name on success or ``None`` when the argument
+        doesn't match any active repository.
+        """
+        if not self.repl.active_project:
+            return None
+        repos = self.repl.projects.config.load_repositories(self.repl.active_project)
+        if arg.isdigit():
+            target_id = int(arg)
+            for r in repos:
+                if isinstance(r.id, int) and r.id == target_id:
+                    return r.name
+            return None
+        for r in repos:
+            if r.name == arg:
+                return r.name
+        return None
 
     def cmd_edit_repo(self, _cmd: str, args: list[str]) -> None:
         """Edit an existing repository's config."""
@@ -225,10 +252,15 @@ class ProjectCommands:
             )
             return
         if not args:
-            self.repl.console.print("[red]Usage:[/red] repo edit <name>")
+            self.repl.console.print("[red]Usage:[/red] repo edit <id-or-name>")
             return
 
-        repo_name = args[0]
+        repo_name = self._resolve_repo_arg(args[0])
+        if repo_name is None:
+            self.repl.console.print(
+                f"[red]Unknown repository (id or name): {args[0]}[/red]"
+            )
+            return
         try:
             self.repl.wizard.edit_repository(self.repl.active_project, repo_name)
         except ValueError as exc:
@@ -243,10 +275,15 @@ class ProjectCommands:
             )
             return
         if not args:
-            self.repl.console.print("[red]Usage:[/red] repo delete <name>")
+            self.repl.console.print("[red]Usage:[/red] repo delete <id-or-name>")
             return
 
-        repo_name = args[0]
+        repo_name = self._resolve_repo_arg(args[0])
+        if repo_name is None:
+            self.repl.console.print(
+                f"[red]Unknown repository (id or name): {args[0]}[/red]"
+            )
+            return
         confirm = input(f"Delete repository '{repo_name}'? [y/N]: ").strip().lower()
         if confirm not in ("y", "yes"):
             self.repl.console.print("[yellow]Cancelled.[/yellow]")

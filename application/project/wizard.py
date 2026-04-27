@@ -6,10 +6,17 @@ import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
+from application.url_inventory.ports import UrlProviderContext
+from application.url_inventory.providers.user_file import UserFileProvider
+from application.url_inventory.service import UrlInventoryService
 from core.config import Repository
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.repositories import RepositoryRepository
+from infrastructure.store.repositories.url_findings import UrlFindingRepository
 from infrastructure.tools.wrappers.utils.manifest_check import (
     LANGUAGE_MANIFESTS,
     has_dependency_manifests,
@@ -244,7 +251,8 @@ class InteractiveProjectWizard:
             if name is None:
                 return None
 
-            repositories = self._interview_repositories()
+            interview_results = self._interview_repositories()
+            repositories = [repo for repo, _ in interview_results]
 
             print("\nProject details:\n")
             company_name = self._interview_company_name()
@@ -256,6 +264,18 @@ class InteractiveProjectWizard:
                 name, repositories, company_name, department_name, abbreviation
             )
             self._manager.registry.register(name, str(self._manager.base_path))
+
+            paths = ProjectPaths.from_canonical(self._manager.base_path, name)
+            for repo, pending_endpoint_file in interview_results:
+                repo_id = self._ensure_repo_db_row(paths, repo)
+                if pending_endpoint_file:
+                    self._ingest_endpoint_file(
+                        project_name=name,
+                        repo=repo,
+                        repo_id=repo_id,
+                        source_path=pending_endpoint_file,
+                        paths=paths,
+                    )
 
             count = len(repositories)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
@@ -279,14 +299,26 @@ class InteractiveProjectWizard:
             existing = self._manager.config.load_repositories(project_name)
             idx = len(existing) + 1
             print(f"\nAdding repository to project '{project_name}'...\n")
-            repo = self._interview_single_repo(idx)
-            if repo is None:
+            result = self._interview_single_repo(idx)
+            if result is None:
                 return None
-            # Convert endpoint file if one was provided
-            if repo.oas3_path:
-                repo = self._convert_and_set_oas3_path(project_name, repo)
-            existing.append(repo)
-            self._manager.config.save_repositories(project_name, existing)
+            repo, pending_endpoint_file = result
+            with self._manager.config.locked_project_config(project_name):
+                config = self._manager.config.load_project_config(project_name)
+                if config is None:
+                    raise ValueError(f"Project '{project_name}' not found.")
+                config.repositories = [*config.repositories, repo]
+                self._manager.config.save_project_config(project_name, config)
+            paths = ProjectPaths.from_canonical(self._manager.base_path, project_name)
+            repo_id = self._ensure_repo_db_row(paths, repo)
+            if pending_endpoint_file:
+                self._ingest_endpoint_file(
+                    project_name=project_name,
+                    repo=repo,
+                    repo_id=repo_id,
+                    source_path=pending_endpoint_file,
+                    paths=paths,
+                )
             print(f"\n✓ Repository '{repo.name}' added to project '{project_name}'")
             return repo
         except KeyboardInterrupt:
@@ -461,18 +493,12 @@ class InteractiveProjectWizard:
             ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
             # Endpoint definition file
-            from infrastructure.endpoints.converters import (
-                ConverterError,
-                convert_endpoint_file,
-            )
-
-            oas3_path = existing.oas3_path
             paths = ProjectPaths.from_canonical(self._manager.base_path, project_name)
-            endpoints_dir = paths.endpoints_config_dir / name
-            originals_dir = endpoints_dir / "original"
+            pending_endpoint_file: str | None = None
+            had_existing_endpoint = self._has_existing_endpoint_file(paths, existing)
 
-            if existing.oas3_path:
-                print(f"  Current endpoint file: {existing.oas3_path}")
+            if had_existing_endpoint:
+                print("  Current endpoint file: (already ingested)")
                 replace_ans = _prompt(
                     "  Replace endpoint file? [y/N]", default="N"
                 ).lower()
@@ -483,44 +509,10 @@ class InteractiveProjectWizard:
                         " ZAP results will be less accurate if the file is"
                         " incomplete."
                     )
-                    while True:
-                        endpoint_input = _prompt(
-                            "  New endpoint definition file path (optional)"
-                        )
-                        if not endpoint_input:
-                            break
-                        try:
-                            src = Path(endpoint_input).expanduser().resolve()
-                            if not src.exists():
-                                raise FileNotFoundError(str(src))
-                            shutil.rmtree(endpoints_dir, ignore_errors=True)
-                            oas3_file = convert_endpoint_file(
-                                src, endpoints_dir, originals_dir
-                            )
-                            oas3_path = str(oas3_file)
-                            print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-                            break
-                        except (ConverterError, FileNotFoundError) as exc:
-                            _err = (
-                                exc
-                                if isinstance(exc, ConverterError)
-                                else f"File not found: {endpoint_input}"
-                            )
-                            print(f"\n  Endpoint file error: {_err}")
-                            choice = (
-                                _prompt(
-                                    "  [r]etry / [s]kip / [k]eep existing? [r/s/k]",
-                                    default="k",
-                                )
-                                .strip()
-                                .lower()
-                            )
-                            if choice in ("k", "keep", ""):
-                                oas3_path = existing.oas3_path
-                                break
-                            if choice in ("s", "skip"):
-                                oas3_path = ""
-                                break
+                    pending_endpoint_file = self._prompt_endpoint_file(
+                        prompt_label="  New endpoint definition file path (optional)",
+                        allow_keep=True,
+                    )
             else:
                 print(
                     "  Supported endpoint file formats:"
@@ -534,42 +526,18 @@ class InteractiveProjectWizard:
                     " ZAP results will be less accurate if the file is"
                     " incomplete."
                 )
-                while True:
-                    endpoint_input = _prompt(
-                        "  Endpoint definition file path (optional)"
-                    )
-                    if not endpoint_input:
-                        break
-                    try:
-                        src = Path(endpoint_input).expanduser().resolve()
-                        if not src.exists():
-                            raise FileNotFoundError(str(src))
-                        oas3_file = convert_endpoint_file(
-                            src, endpoints_dir, originals_dir
-                        )
-                        oas3_path = str(oas3_file)
-                        print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-                        break
-                    except (ConverterError, FileNotFoundError) as exc:
-                        _err = (
-                            exc
-                            if isinstance(exc, ConverterError)
-                            else f"File not found: {endpoint_input}"
-                        )
-                        print(f"\n  Endpoint file error: {_err}")
-                        choice = (
-                            _prompt("  [r]etry / [s]kip? [r/s]", default="s")
-                            .strip()
-                            .lower()
-                        )
-                        if choice in ("s", "skip", ""):
-                            break
+                pending_endpoint_file = self._prompt_endpoint_file(
+                    prompt_label="  Endpoint definition file path (optional)",
+                    allow_keep=False,
+                )
 
             # crawl_enabled — only asked when base URLs and endpoint file
-            # are both configured
+            # are both configured. Treat any prior or pending endpoint file
+            # as "endpoint file present" for the prompt logic.
+            has_endpoint_file = bool(pending_endpoint_file) or had_existing_endpoint
             crawl_enabled = _interview_crawl_enabled(
                 base_urls=base_urls,
-                has_endpoint_file=bool(oas3_path),
+                has_endpoint_file=has_endpoint_file,
             )
 
             # Katana crawler options — skipped when crawling is disabled
@@ -594,6 +562,7 @@ class InteractiveProjectWizard:
 
             updated = Repository(
                 name=name,
+                uuid=existing.uuid,
                 type=types,
                 path=local_path_str,
                 docker_path=docker_path,
@@ -603,9 +572,6 @@ class InteractiveProjectWizard:
                 test_dirs=test_dirs,
                 ignore_dirs=ignore_dirs,
                 dependencies_file=dependencies_file,
-                oas3_path=oas3_path,
-                merged_seeds_path=existing.merged_seeds_path,
-                merged_oas3_path=existing.merged_oas3_path,
                 crawl_enabled=crawl_enabled,
                 xsstrike_crawl_level=existing.xsstrike_crawl_level,
                 xsstrike_headers=dict(existing.xsstrike_headers),
@@ -615,28 +581,37 @@ class InteractiveProjectWizard:
                 katana_headers=dict(existing.katana_headers),
                 auth=auth,
             )
-            # Regenerate URL artifacts when oas3_path changed and base_urls
-            # are configured
-            if oas3_path and oas3_path != existing.oas3_path and base_urls:
-                from application.pipeline.url_handlers import regenerate_url_artifacts
 
-                seeds_path, merged_oas3 = regenerate_url_artifacts(
-                    base_path=str(self._manager.base_path),
-                    project_name=project_name,
-                    repo_name=name,
-                    base_url=base_urls[0],
-                    user_oas3_path=oas3_path,
+            with self._manager.config.locked_project_config(project_name):
+                config = self._manager.config.load_project_config(project_name)
+                if config is None:
+                    raise ValueError(f"Project '{project_name}' not found.")
+                cur_idx = next(
+                    (
+                        i
+                        for i, r in enumerate(config.repositories)
+                        if r.name == repo_name
+                    ),
+                    None,
                 )
-                if seeds_path:
-                    updated = updated.model_copy(
-                        update={
-                            "merged_seeds_path": seeds_path,
-                            "merged_oas3_path": merged_oas3,
-                        }
+                if cur_idx is None:
+                    raise ValueError(
+                        f"Repository '{repo_name}' was removed during editing."
                     )
+                new_list = list(config.repositories)
+                new_list[cur_idx] = updated
+                config.repositories = new_list
+                self._manager.config.save_project_config(project_name, config)
 
-            repos[idx] = updated
-            self._manager.config.save_repositories(project_name, repos)
+            repo_id = self._ensure_repo_db_row(paths, updated)
+            if pending_endpoint_file:
+                self._ingest_endpoint_file(
+                    project_name=project_name,
+                    repo=updated,
+                    repo_id=repo_id,
+                    source_path=pending_endpoint_file,
+                    paths=paths,
+                )
             _sca_manifest_notification(updated)
             print(f"\n✓ Repository '{name}' updated")
             return updated
@@ -645,62 +620,138 @@ class InteractiveProjectWizard:
             print("\n\n[Cancelled]")
             return None
 
-    def _convert_and_set_oas3_path(
+    def _has_existing_endpoint_file(
+        self, paths: ProjectPaths, repo: Repository
+    ) -> bool:
+        """Return True if the repo already has any user-uploaded endpoint file.
+
+        Checks for files under ``endpoints/<repo.uuid>/user_uploads/``. The
+        Phase 9 ingest path copies user uploads here before parsing them
+        into ``url_findings`` rows, so the directory's contents are the
+        single source of truth for "is an endpoint file configured?".
+        """
+        if not repo.uuid:
+            return False
+        upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
+        if not upload_dir.exists():
+            return False
+        return any(upload_dir.iterdir())
+
+    def _prompt_endpoint_file(
+        self, prompt_label: str, *, allow_keep: bool
+    ) -> str | None:
+        """Prompt for an endpoint-file path; validate that the path exists.
+
+        Returns the resolved source path string when the user supplies a
+        valid path, or ``None`` when the user skips (or — when
+        *allow_keep* is True — chooses to keep the existing file).
+        Format detection is deferred to the actual ingest helper, which
+        runs the converter pipeline and surfaces any format errors.
+        """
+        from infrastructure.endpoints.converters.detector import FormatDetector
+
+        while True:
+            endpoint_input = _prompt(prompt_label)
+            if not endpoint_input:
+                return None
+            try:
+                src = Path(endpoint_input).expanduser().resolve()
+                if not src.exists():
+                    raise FileNotFoundError(str(src))
+                FormatDetector().detect(src)
+                return str(src)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"  Endpoint file error: {exc}")
+                hint = (
+                    "  [r]etry / [s]kip / [k]eep existing? [r/s/k]"
+                    if allow_keep
+                    else "  [r]etry / [s]kip? [r/s]"
+                )
+                default = "k" if allow_keep else "s"
+                choice = _prompt(hint, default=default).strip().lower()
+                if allow_keep and choice in ("k", "keep", ""):
+                    return None
+                if choice in ("s", "skip", "" if not allow_keep else "_"):
+                    return None
+
+    def _ensure_repo_db_row(self, paths: ProjectPaths, repo: Repository) -> int:
+        """Ensure a per-project ``repositories`` row exists for *repo*.
+
+        Returns the integer primary key. Inserts a new row when none exists
+        for the repo's uuid; otherwise renames the existing row if its
+        name has drifted in JSON. This mirrors the lazy-backfill performed
+        by ``application.project.repository_sync``.
+        """
+        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        repo_repo = RepositoryRepository(factory)
+        existing = repo_repo.get_by_uuid(repo.uuid) if repo.uuid else None
+        if existing is None:
+            return repo_repo.insert(uuid=repo.uuid, name=repo.name)
+        if existing.name != repo.name:
+            repo_repo.rename(existing.id, repo.name)
+        return existing.id
+
+    def _ingest_endpoint_file(
         self,
+        *,
         project_name: str,
         repo: Repository,
-    ) -> Repository:
-        """Convert the pending endpoint file and update repo.oas3_path.
+        repo_id: int,
+        source_path: str,
+        paths: ProjectPaths,
+    ) -> None:
+        """Copy *source_path* into ``user_uploads/`` and ingest into ``url_findings``.
 
-        After a successful conversion, regenerates the merged URL artifacts
-        (seeds.txt and merged_oas3.json) when base_urls are configured.
-
-        If conversion fails, prints the error and clears oas3_path so
-        the repository is saved without an endpoint file.
-        Returns the (possibly updated) Repository.
+        Wipes any prior USER-source rows tied to the same uploaded file
+        path, inserts the freshly-parsed rows via ``UserFileProvider``,
+        then JIT-rebuilds ``merged_urls.txt`` + ``merged_oas3.json``.
+        On conversion failure, prints the error and leaves the repo in
+        place — same UX as the prior ``_convert_and_set_oas3_path``.
         """
-        from infrastructure.endpoints.converters import (
-            ConverterError,
-            convert_endpoint_file,
+        from infrastructure.endpoints.converters import ConverterError
+
+        upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        src = Path(source_path)
+        target = upload_dir / src.name
+        if src.resolve() != target.resolve():
+            shutil.copy2(src, target)
+
+        ctx = UrlProviderContext(
+            repo=repo,
+            repo_id=repo_id,
+            base_path=str(self._manager.base_path),
+            project_name=project_name,
+            run_id=None,
         )
-
-        src = Path(repo.oas3_path)
-        paths = ProjectPaths.from_canonical(self._manager.base_path, project_name)
-        endpoints_dir = paths.endpoints_config_dir / repo.name
-        originals_dir = endpoints_dir / "original"
         try:
-            oas3_file = convert_endpoint_file(src, endpoints_dir, originals_dir)
-            print(f"\n  ✓ Endpoint file converted: {oas3_file}")
-            updated = repo.model_copy(update={"oas3_path": str(oas3_file)})
-
-            if updated.base_urls:
-                from application.pipeline.url_handlers import (
-                    regenerate_url_artifacts,
-                )
-
-                seeds_path, merged_oas3_path = regenerate_url_artifacts(
-                    base_path=str(self._manager.base_path),
-                    project_name=project_name,
-                    repo_name=updated.name,
-                    base_url=updated.base_urls[0],
-                    user_oas3_path=str(oas3_file),
-                )
-                if seeds_path:
-                    updated = updated.model_copy(
-                        update={
-                            "merged_seeds_path": seeds_path,
-                            "merged_oas3_path": merged_oas3_path,
-                        }
-                    )
-
-            return updated
-        except ConverterError as exc:
+            entries = list(UserFileProvider().provide(ctx, file_path=str(target)))
+        except (ConverterError, ValueError, OSError) as exc:
             print(f"\n  Endpoint file conversion failed: {exc}")
             print(
-                "  Repository will be added without an endpoint"
-                " file. You can add one later with 'repo edit'."
+                "  Repository saved without an endpoint file."
+                " You can add one later with 'repo edit'."
             )
-            return repo.model_copy(update={"oas3_path": ""})
+            return
+
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        url_repo = UrlFindingRepository(factory)
+        service = UrlInventoryService(url_repo)
+        service.ingest_user_file(
+            repo_id=repo_id,
+            file_path=str(target),
+            entries=entries,
+        )
+        service.regenerate_artifacts(
+            repo_id=repo_id,
+            project_paths=paths,
+            repo_dir_key=repo.uuid,
+            base_url=repo.base_urls[0] if repo.base_urls else None,
+        )
+        print(f"\n  ✓ Endpoint file ingested: {target}")
 
     def _interview_company_name(self) -> str:
         """Prompt for a required company name."""
@@ -805,10 +856,14 @@ class InteractiveProjectWizard:
                 abbreviation = val
                 break
 
-            config.company_name = company_name
-            config.department_name = department_name
-            config.abbreviation = abbreviation
-            self._manager.config.save_project_config(project_name, config)
+            with self._manager.config.locked_project_config(project_name):
+                fresh = self._manager.config.load_project_config(project_name)
+                if fresh is None:
+                    raise ValueError(f"Project '{project_name}' not found.")
+                fresh.company_name = company_name
+                fresh.department_name = department_name
+                fresh.abbreviation = abbreviation
+                self._manager.config.save_project_config(project_name, fresh)
             print(f"\n✓ Project '{project_name}' updated")
             return True
 
@@ -816,26 +871,34 @@ class InteractiveProjectWizard:
             print("\n\n[Cancelled]")
             return False
 
-    def _interview_repositories(self) -> list[Repository]:
-        repositories: list[Repository] = []
+    def _interview_repositories(self) -> list[tuple[Repository, str | None]]:
+        results: list[tuple[Repository, str | None]] = []
         answer = _prompt("\nAdd repositories? [y/N]", default="N").lower()
         if answer not in ("y", "yes"):
-            return repositories
+            return results
 
         idx = 1
         while True:
-            repo = self._interview_single_repo(idx)
-            if repo is not None:
-                repositories.append(repo)
+            interview = self._interview_single_repo(idx)
+            if interview is not None:
+                results.append(interview)
                 idx += 1
 
             again = _prompt("\n  Add another repository? [y/N]", default="N").lower()
             if again not in ("y", "yes"):
                 break
 
-        return repositories
+        return results
 
-    def _interview_single_repo(self, idx: int) -> Repository | None:
+    def _interview_single_repo(self, idx: int) -> tuple[Repository, str | None] | None:
+        """Interview the user for one repository.
+
+        Returns a tuple ``(repo, pending_endpoint_file)`` where the second
+        element is the source path of a user-provided endpoint file (when
+        the user supplied one) or ``None``. Callers stamp a uuid + DB row
+        and ingest the file via ``UrlInventoryService`` after the project
+        config has been saved.
+        """
         print(f"\nRepository #{idx}:")
 
         # Name
@@ -1029,6 +1092,7 @@ class InteractiveProjectWizard:
 
         new_repo = Repository(
             name=name,
+            uuid=str(uuid4()),
             type=types,
             path=local_path_str,
             docker_path=docker_path,
@@ -1038,11 +1102,10 @@ class InteractiveProjectWizard:
             test_dirs=test_dirs,
             ignore_dirs=ignore_dirs,
             dependencies_file=dependencies_file,
-            oas3_path=oas3_path,
             crawl_enabled=crawl_enabled,
             katana_headless=katana_headless,
             katana_depth=katana_depth,
             auth=auth,
         )
         _sca_manifest_notification(new_repo)
-        return new_repo
+        return new_repo, (oas3_path or None)

@@ -1,10 +1,13 @@
-"""Integration tests for endpoint file handling in add_repository().
+"""Integration tests for endpoint file handling in ``add_repository``.
 
-Covers:
-- add_repository() with convert_endpoint_file mocked to succeed:
-  repo.oas3_path is set to the converted path
-- add_repository() with convert_endpoint_file raising ConverterError:
-  repo.oas3_path is empty; repository is still saved
+Phase 9: the wizard no longer stores a converted OAS3 path on the
+``Repository`` model. It copies the user upload into
+``endpoints/<repo.uuid>/user_uploads/`` and ingests the contents into
+``url_findings`` via ``UserFileProvider`` + ``UrlInventoryService``.
+These tests exercise both branches:
+
+- happy path → ``url_findings`` rows are inserted
+- conversion failure → repo is still saved; no ``url_findings`` rows
 """
 
 from __future__ import annotations
@@ -55,24 +58,41 @@ def _setup_project(base_path: Path):  # type: ignore[no-untyped-def]
     return pm
 
 
+def _count_url_findings(base_path: Path, repo_uuid: str) -> int:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.repositories import RepositoryRepository
+    from infrastructure.store.repositories.url_findings import UrlFindingRepository
+
+    paths = ProjectPaths.from_canonical(base_path, "test-project")
+    if not paths.findings_db.exists():
+        return 0
+    factory = ConnectionFactory(paths.findings_db)
+    repo_row = RepositoryRepository(factory).get_by_uuid(repo_uuid)
+    if repo_row is None:
+        return 0
+    return len(UrlFindingRepository(factory).list_for_repo(repo_row.id))
+
+
 class TestEndpointFileWizard:
     def test_add_repository_endpoint_file_success(self, tmp_path: Path) -> None:
-        """convert_endpoint_file succeeds — repo.oas3_path is set."""
+        """User-uploaded OAS3 → file copied + ``url_findings`` rows inserted."""
         from application.project.wizard import InteractiveProjectWizard
+        from core.project_paths import ProjectPaths
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         oas3_src = tmp_path / "api.json"
         oas3_src.write_text(
-            '{"openapi": "3.0.0", "info": {"title": "t", "version": "1"}, "paths": {}}'
+            '{"openapi": "3.0.0", "info": {"title": "t", "version": "1"},'
+            ' "paths": {"/users": {"get":'
+            ' {"responses": {"200": {"description": ""}}}}}}'
         )
-        converted = tmp_path / "endpoints" / "api.json"
 
-        pm = _setup_project(tmp_path / "pm")
+        base_path = tmp_path / "pm"
+        pm = _setup_project(base_path)
         wizard = InteractiveProjectWizard(pm)
 
-        # name, type, mode, path, langs, deps_file, base_urls,
-        # test_dirs, ignore_dirs, endpoint_file, auth
         inputs = [
             "my-repo",
             "api",
@@ -86,20 +106,22 @@ class TestEndpointFileWizard:
             str(oas3_src),
             "",  # auth
         ]
-        with (
-            patch("builtins.input", side_effect=inputs),
-            patch(
-                "infrastructure.endpoints.converters.convert_endpoint_file",
-                return_value=converted,
-            ),
-        ):
+        with patch("builtins.input", side_effect=inputs):
             repo = wizard.add_repository("test-project")
 
         assert repo is not None
-        assert repo.oas3_path == str(converted)
+        assert repo.uuid
+
+        # The wizard copies the upload under endpoints/<uuid>/user_uploads/.
+        paths = ProjectPaths.from_canonical(base_path, "test-project")
+        upload = paths.endpoint_dir(repo.uuid) / "user_uploads" / "api.json"
+        assert upload.exists()
+
+        # And ingests its contents into url_findings.
+        assert _count_url_findings(base_path, repo.uuid) == 1
 
     def test_add_repository_endpoint_file_converter_error(self, tmp_path: Path) -> None:
-        """ConverterError — repo.oas3_path is empty, repo is still saved."""
+        """``ConverterError`` → repo still saved; no ``url_findings`` rows."""
         from application.project.wizard import InteractiveProjectWizard
         from infrastructure.endpoints.converters.base import ConverterError
 
@@ -110,7 +132,8 @@ class TestEndpointFileWizard:
             '{"openapi": "3.0.0", "info": {"title": "t", "version": "1"}, "paths": {}}'
         )
 
-        pm = _setup_project(tmp_path / "pm")
+        base_path = tmp_path / "pm"
+        pm = _setup_project(base_path)
         wizard = InteractiveProjectWizard(pm)
 
         inputs = [
@@ -129,13 +152,14 @@ class TestEndpointFileWizard:
         with (
             patch("builtins.input", side_effect=inputs),
             patch(
-                "infrastructure.endpoints.converters.convert_endpoint_file",
+                "infrastructure.endpoints.converters.service.convert_endpoint_file",
                 side_effect=ConverterError("conversion failed"),
             ),
         ):
             repo = wizard.add_repository("test-project")
 
         assert repo is not None
-        assert repo.oas3_path == ""
+        assert repo.uuid
         repos = pm.config.load_repositories("test-project")
         assert any(r.name == "my-repo" for r in repos)
+        assert _count_url_findings(base_path, repo.uuid) == 0
