@@ -59,12 +59,12 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
       ) : (
         <div className="space-y-3">
           <div className="text-[11px] text-muted-foreground leading-relaxed">
-            <span className="text-dim">{'//'}</span> streaming segment progress via websocket.
+            <span className="text-dim">{'//'}</span> streaming segment progress via SSE.
             long-running ingestion + enrichment phases are normal.
           </div>
           {running.map(s => {
             const project = projects.find(p => p.id === s.projectId)
-            // Simulate forward progress until 95% — real data will come from WS.
+            // Simulate forward progress until 95% — real data will come from SSE.
             const base = s.progress ?? 0
             const simulated = Math.min(95, base + ((tick * 2) % 20))
             return (
@@ -98,7 +98,7 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
                       progress{' '}
                       <span className="text-accent tabular-nums">{simulated.toFixed(0)}%</span>
                     </span>
-                    <span className="text-dim">ws://tally/scans/{s.id}</span>
+                    <span className="text-dim">sse://tally/scans/events?run_id={s.id}</span>
                   </div>
                 </div>
               </div>
