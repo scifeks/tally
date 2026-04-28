@@ -50,10 +50,10 @@ async def _auth(client: httpx.AsyncClient) -> dict[str, str]:
         headers={"origin": f"http://127.0.0.1:{_TEST_PORT}"},
     )
     assert resp.status_code == 200
-    csrf_token = resp.json()["csrf_token"]
     for name, value in resp.cookies.items():
         client.cookies.delete(name, domain="127.0.0.1")
         client.cookies.set(name, value)
+    csrf_token = client.cookies["tally_csrf"]
     return {
         "X-CSRF-Token": csrf_token,
         "Origin": f"http://127.0.0.1:{_TEST_PORT}",

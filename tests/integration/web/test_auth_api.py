@@ -1,4 +1,4 @@
-"""Integration tests for the auth endpoints: exchange, me, logout."""
+"""Integration tests for the auth endpoint: exchange."""
 
 from __future__ import annotations
 
@@ -29,11 +29,28 @@ class TestExchange:
         )
         assert resp.status_code == 401
 
-    async def test_good_token_returns_csrf_token(self, app_client) -> None:
-        # The fixture already exchanged and captured the csrf_token in
-        # mut_headers — confirm it is a non-empty string.
+    async def test_good_token_returns_csrf_cookie(self, app_client) -> None:
+        # The fixture already exchanged. Confirm the X-CSRF-Token header in
+        # mut_headers (sourced from the cookie) is non-empty.
         _, _, _, _, mut_headers, _ = app_client
         assert mut_headers["X-CSRF-Token"]
+
+    async def test_exchange_response_body_does_not_leak_csrf(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        # New handshake on a fresh registry entry to inspect the response body
+        # directly. The fixture already consumed HANDSHAKE, so register a new
+        # one for this assertion.
+        registry = client._transport.app.state.handshake_registry
+        registry.register("inspect-token-1")
+        resp = await client.post(
+            "/api/v1/auth/exchange",
+            json={"token": "inspect-token-1"},
+            headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"ok": True}
+        assert "csrf_token" not in body
 
     async def test_exchange_sets_session_cookie(self, app_client) -> None:
         client, _, _, _, _, _ = app_client
@@ -42,47 +59,3 @@ class TestExchange:
     async def test_exchange_sets_csrf_cookie(self, app_client) -> None:
         client, _, _, _, _, _ = app_client
         assert client.cookies.get("tally_csrf") is not None
-
-
-class TestMe:
-    async def test_authenticated_returns_200(self, app_client) -> None:
-        client, _, _, _, _, _ = app_client
-        resp = await client.get("/api/v1/auth/me")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["authenticated"] is True
-        assert "session_id" in data
-
-    async def test_unauthenticated_returns_401(self, app_client) -> None:
-        client, _, _, _, _, _ = app_client
-        # /api/v1/auth/me is exempt from SessionAuthMiddleware but handles auth
-        # itself — a fresh client with no cookies gets 401.
-        import httpx
-
-        transport = client._transport
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
-        ) as fresh:
-            resp = await fresh.get("/api/v1/auth/me")
-        assert resp.status_code == 401
-
-
-class TestLogout:
-    async def test_logout_returns_204(self, app_client) -> None:
-        client, _, _, _, mut_headers, _ = app_client
-        resp = await client.post("/api/v1/auth/logout", headers=mut_headers)
-        assert resp.status_code == 204
-
-    async def test_post_logout_protected_route_returns_401(self, app_client) -> None:
-        client, _, _, _, mut_headers, _ = app_client
-        await client.post("/api/v1/auth/logout", headers=mut_headers)
-        # Session is revoked; subsequent /api/* calls must be rejected.
-        resp = await client.get("/api/findings/")
-        assert resp.status_code == 401
-
-    async def test_post_logout_me_returns_401(self, app_client) -> None:
-        client, _, _, _, mut_headers, _ = app_client
-        await client.post("/api/v1/auth/logout", headers=mut_headers)
-        resp = await client.get("/api/v1/auth/me")
-        assert resp.status_code == 401

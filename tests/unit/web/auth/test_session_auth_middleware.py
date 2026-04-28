@@ -25,10 +25,6 @@ def _app() -> tuple[FastAPI, SessionStore]:
     async def exchange() -> dict[str, bool]:
         return {"ok": True}
 
-    @app.get("/api/v1/auth/me")
-    async def me() -> dict[str, bool]:
-        return {"ok": True}
-
     @app.get("/public")
     async def public() -> dict[str, bool]:
         return {"ok": True}
@@ -53,16 +49,6 @@ async def test_exchange_path_is_exempt() -> None:
         transport=transport, base_url=f"http://127.0.0.1:{_PORT}"
     ) as c:
         resp = await c.post("/api/v1/auth/exchange")
-    assert resp.status_code == 200
-
-
-async def test_me_path_is_exempt() -> None:
-    app, _ = _app()
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(
-        transport=transport, base_url=f"http://127.0.0.1:{_PORT}"
-    ) as c:
-        resp = await c.get("/api/v1/auth/me")
     assert resp.status_code == 200
 
 

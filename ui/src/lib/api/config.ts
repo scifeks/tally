@@ -144,16 +144,16 @@ export const REST_ENDPOINTS = {
   /** GET: list repositories for a project */
   repositories: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/repositories`,
   /** GET: single repository config */
-  repository: (repoId: string) => `${API_BASE_URL}/repositories/${repoId}`,
+  repository: (projectId: string, repoId: string) =>
+    `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}`,
   /** POST: create a new repository */
   createRepository: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/repositories`,
-  /** PUT: update a repository */
-  updateRepository: (repoId: string) => `${API_BASE_URL}/repositories/${repoId}`,
+  /** PATCH: update a repository */
+  updateRepository: (projectId: string, repoId: string) =>
+    `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}`,
   /** DELETE: delete a repository */
-  deleteRepository: (repoId: string) => `${API_BASE_URL}/repositories/${repoId}`,
-  /** POST: auto-detect repo settings from local path */
-  detectRepoSettings: (projectId: string) =>
-    `${API_BASE_URL}/projects/${projectId}/repositories/detect`,
+  deleteRepository: (projectId: string, repoId: string) =>
+    `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}`,
   /** GET: tool catalog (available tools that can be overridden) */
   toolCatalog: `${API_BASE_URL}/tools/catalog`,
   /** GET: list tool overrides for a project */

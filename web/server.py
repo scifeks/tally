@@ -41,6 +41,7 @@ from web.middleware.access_log import AccessLogMiddleware
 from web.middleware.csrf import CSRFMiddleware
 from web.middleware.host_header import HostHeaderMiddleware
 from web.middleware.origin import OriginCheckMiddleware
+from web.middleware.security_headers import SecurityHeadersMiddleware
 from web.middleware.session_auth import SessionAuthMiddleware
 
 logger = logging.getLogger(__name__)
@@ -145,8 +146,11 @@ def create_app(
     app.include_router(url_list_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
-    # Execution: AccessLog → CORS → Host → Origin → SessionAuth → CSRF
-    #            → Redaction → handler.
+    # Execution: SecurityHeaders → AccessLog → CORS → Host → Origin →
+    #            SessionAuth → CSRF → Redaction → handler.
+    # SecurityHeaders is the outermost wrapper so its headers attach to
+    # every response — including 400/401/403 short-circuits from inner
+    # middlewares.
     install_redaction_middleware(app)
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(SessionAuthMiddleware)
@@ -170,6 +174,7 @@ def create_app(
         logger.info("CORS allow-list installed for origins: %s", allowed_origins)
 
     app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.exists():

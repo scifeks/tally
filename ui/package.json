@@ -30,6 +30,7 @@
     ]
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-table": "^8.20.5",
     "@tanstack/react-virtual": "^3.10.9",

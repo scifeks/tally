@@ -1,4 +1,4 @@
-"""Authentication endpoints: exchange handshake, logout, session status."""
+"""Authentication endpoint: exchange one-time handshake for session cookies."""
 
 from __future__ import annotations
 
@@ -39,23 +39,4 @@ async def exchange(
         secure=True,
         path="/",
     )
-    return {"ok": True, "csrf_token": csrf_token}
-
-
-@router.post("/logout", status_code=204)
-async def logout(request: Request, response: Response) -> None:
-    store = request.app.state.session_store
-    session_id = request.cookies.get("tally_session", "")
-    if session_id:
-        store.revoke(session_id)
-    response.delete_cookie("tally_session", path="/")
-    response.delete_cookie("tally_csrf", path="/")
-
-
-@router.get("/me")
-async def me(request: Request) -> dict[str, object]:
-    store = request.app.state.session_store
-    session_id = request.cookies.get("tally_session", "")
-    if not session_id or not store.verify(session_id):
-        raise Unauthenticated("Not authenticated")
-    return {"authenticated": True, "session_id": session_id}
+    return {"ok": True}

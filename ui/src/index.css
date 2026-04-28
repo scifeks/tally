@@ -33,14 +33,14 @@
   --radius: 0rem;
 }
 
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 100 800;
-  font-display: swap;
-  src: url('https://fonts.gstatic.com/s/jetbrainsmono/v20/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPVmUsaaDhw.woff2')
-    format('woff2');
-}
+/* Self-hosted JetBrains Mono. The previous remote URL pointed at
+ * fonts.gstatic.com, which (a) rotates filename hashes periodically
+ * (yielding 404s) and (b) is blocked by our strict CSP `font-src
+ * 'self'`. Self-hosting via @fontsource bundles the woff2 files into
+ * the Vite build so the SPA serves them itself. */
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/700.css';
 
 @layer base {
   html,
