@@ -30,13 +30,15 @@ export default function Triage() {
   const activeProjectId = useUI(s => s.activeProjectId)
   const setTriageRunStatus = useUI(s => s.setTriageRunStatus)
 
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
+
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
   // GET /api/v1/projects/:id/meta
-  const { data: projectMetaData } = useProjectMeta(activeProjectId ?? '')
+  const { data: projectMetaData } = useProjectMeta(projectIdParam)
   // GET /api/v1/projects/:id/findings
-  const { data: findings = [] } = useFindings({ projectId: activeProjectId ?? '' })
+  const { data: findings = [] } = useFindings({ projectId: projectIdParam })
 
   // TODO [BACKEND]: These mutations trigger server actions.
   // POST /api/v1/projects/:id/triage/start
@@ -59,8 +61,8 @@ export default function Triage() {
 
   // Count findings eligible for triage (open status, no existing triage)
   const eligibleFindings = useMemo(
-    () => findings.filter(f => f.projectId === activeProjectId && f.status === 'active'),
-    [findings, activeProjectId]
+    () => findings.filter(f => f.projectId === projectIdParam && f.status === 'active'),
+    [findings, projectIdParam]
   )
 
   // Triage run state

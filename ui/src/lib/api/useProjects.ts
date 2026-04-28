@@ -3,44 +3,55 @@
  * ================
  * Fetches the list of available projects.
  *
- * TODO [BACKEND]: Replace mock data with actual API call.
+ * Backed by `GET /api/v1/projects` (Phase 2.1). Auth-only; no project
+ * scope. Backend response is paginated:
  *
- * Expected API response (GET /api/v1/projects):
  * ```json
  * {
- *   "projects": [
- *     { "id": "1", "name": "acme-platform", "code": "ACM" },
- *     ...
- *   ]
+ *   "items": [
+ *     { "id": 1, "name": "acme-platform", "code": "ACM",
+ *       "created_at": "2026-04-01T00:00:00Z" }
+ *   ],
+ *   "total": 1, "offset": 0, "limit": 50
  * }
  * ```
+ *
+ * The TopBar consumes `useProjects()` for the project switcher; per-page
+ * project metadata still flows through `useProjectMeta()` (still mock —
+ * Phase 11.4+ owns that wiring).
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from './client'
+import { REST_ENDPOINTS } from './config'
 import type { Project } from '../types'
 
-// TODO [BACKEND]: Remove this mock import once API is connected.
-import { projects as mockProjects } from '../mock-data'
+interface ProjectListItemApi {
+  id: number
+  name: string
+  code: string
+  created_at: string
+}
+
+interface ProjectListResponseApi {
+  items: ProjectListItemApi[]
+  total: number
+  offset: number
+  limit: number
+}
 
 export function useProjects() {
   return useQuery({
     queryKey: ['projects'],
     queryFn: async (): Promise<Project[]> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.projects)                  │
-      // │ if (!res.ok) throw new Error("Failed to fetch projects")          │
-      // │ const data = await res.json()                                     │
-      // │ return data.projects                                              │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Return mock data immediately (no delay for prototype).
-      return mockProjects
+      const data = await apiFetch<ProjectListResponseApi>(REST_ENDPOINTS.projects)
+      return data.items.map(item => ({
+        id: item.id,
+        name: item.name,
+        code: item.code,
+      }))
     },
-    // Provide initial data to avoid loading state flicker.
-    initialData: mockProjects,
-    staleTime: 5 * 60 * 1000, // Projects rarely change; cache for 5 min.
+    staleTime: 5 * 60 * 1000,
   })
 }
 

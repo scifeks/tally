@@ -10,25 +10,27 @@ import type { ReactNode } from 'react'
 export default function Dashboard() {
   const activeProjectId = useUI(s => s.activeProjectId)
 
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
+
   // TODO [BACKEND]: All these hooks return mock data. Replace with real API calls.
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
   // GET /api/v1/projects/:id/meta (only fetches when activeProjectId is set)
-  const { data: projectMetaData } = useProjectMeta(activeProjectId ?? '')
+  const { data: projectMetaData } = useProjectMeta(projectIdParam)
   // GET /api/v1/projects/:id/findings (only fetches when activeProjectId is set)
-  const { data: findings = [] } = useFindings({ projectId: activeProjectId ?? '' })
+  const { data: findings = [] } = useFindings({ projectId: projectIdParam })
   // GET /api/v1/projects/:id/scans (only fetches when activeProjectId is set)
-  const { data: scans = [] } = useScanHistory(activeProjectId ?? '')
+  const { data: scans = [] } = useScanHistory(projectIdParam)
 
   // useMemo must run before the early return below to keep hook order stable
   // across renders where activeProjectId toggles between null and a value.
   const projectFindings = useMemo(
-    () => findings.filter(f => f.projectId === activeProjectId),
-    [findings, activeProjectId]
+    () => findings.filter(f => f.projectId === projectIdParam),
+    [findings, projectIdParam]
   )
   const projectScans = useMemo(
-    () => scans.filter(s => s.projectId === activeProjectId),
-    [scans, activeProjectId]
+    () => scans.filter(s => s.projectId === projectIdParam),
+    [scans, projectIdParam]
   )
 
   // Initial app load: no project picked yet — show selection state.
@@ -477,7 +479,7 @@ function EmptyProjectState({
 function NoProjectSelectedState({
   projects,
 }: {
-  projects: Array<{ id: string; code: string; name: string }>
+  projects: Array<{ id: number; code: string; name: string }>
 }) {
   const setActiveProject = useUI(s => s.setActiveProject)
 

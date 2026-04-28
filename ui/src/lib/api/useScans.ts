@@ -8,9 +8,10 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type { Scan, ScanLogEvent, ProjectScanConfig } from '../types'
-import { SSE_ENDPOINTS } from './config'
+import { API_BASE_URL, SSE_ENDPOINTS } from './config'
+import { apiEventSource } from './sse'
 
 // TODO [BACKEND]: Remove this mock import once API is connected.
 import { scans as mockScans } from '../mock-data'
@@ -336,4 +337,52 @@ export function useScanEvents(
       eventSource?.close()
     }
   }, [connect])
+}
+
+/**
+ * useRunningScansCount Hook (SSE)
+ * ===============================
+ * Returns the number of scan runs currently in flight for `projectId`. Wired
+ * to `GET /api/v1/projects/{id}/scans/events` via `apiEventSource`. The
+ * snapshot frame on connect carries `active_run_ids: number[]`; subsequent
+ * `run_started` / `run_completed` / `run_cancelled` events update the set.
+ *
+ * Returns 0 (and skips the subscription) when `projectId` is null.
+ */
+export function useRunningScansCount(projectId: number | null): number {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (projectId === null) {
+      setCount(0)
+      return
+    }
+
+    const active = new Set<number>()
+    const url = `${API_BASE_URL}/projects/${projectId}/scans/events`
+
+    const handle = apiEventSource(url, {
+      eventTypes: ['snapshot', 'run_started', 'run_completed', 'run_cancelled'],
+      onEvent: (type, data) => {
+        const payload = data as { run_id?: number | null; active_run_ids?: number[] }
+        if (type === 'snapshot') {
+          active.clear()
+          for (const id of payload.active_run_ids ?? []) {
+            active.add(id)
+          }
+        } else if (type === 'run_started') {
+          if (typeof payload.run_id === 'number') active.add(payload.run_id)
+        } else {
+          if (typeof payload.run_id === 'number') active.delete(payload.run_id)
+        }
+        setCount(active.size)
+      },
+    })
+
+    return () => {
+      handle.close()
+    }
+  }, [projectId])
+
+  return count
 }

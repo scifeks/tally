@@ -70,9 +70,11 @@ export default function Findings() {
     clearSelected()
   }, [activeProjectId, domain, clearSelected])
 
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
+
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
   // GET /api/v1/projects/:id/findings
-  const { data: baseFindings = [] } = useFindingsHook({ projectId: activeProjectId ?? '' })
+  const { data: baseFindings = [] } = useFindingsHook({ projectId: projectIdParam })
 
   // Merge in-memory edits (e.g. status, notes) on top of base findings.
   // TODO [BACKEND]: When backend is connected, local overrides should trigger
@@ -84,8 +86,8 @@ export default function Findings() {
   )
 
   const projectFindings = useMemo(
-    () => allFindings.filter(f => f.projectId === activeProjectId),
-    [allFindings, activeProjectId]
+    () => allFindings.filter(f => f.projectId === projectIdParam),
+    [allFindings, projectIdParam]
   )
 
   const domainCounts = useMemo(() => {

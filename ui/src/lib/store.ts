@@ -1,10 +1,11 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Segment, Finding, TriageRunStatus } from './types'
 
 interface UIState {
   /** null means no project selected yet (initial app load state) */
-  activeProjectId: string | null
-  setActiveProject: (id: string | null) => void
+  activeProjectId: number | null
+  setActiveProject: (id: number | null) => void
 
   findingsSegment: Segment
   setFindingsSegment: (d: Segment) => void
@@ -26,33 +27,41 @@ interface UIState {
   setTriageRunStatus: (status: TriageRunStatus) => void
 }
 
-export const useUI = create<UIState>(set => ({
-  activeProjectId: null,
-  setActiveProject: id => set({ activeProjectId: id, selectedFindingIds: new Set() }),
+export const useUI = create<UIState>()(
+  persist(
+    set => ({
+      activeProjectId: null,
+      setActiveProject: id => set({ activeProjectId: id, selectedFindingIds: new Set() }),
 
-  findingsSegment: 'sast',
-  setFindingsSegment: d => set({ findingsSegment: d, selectedFindingIds: new Set() }),
+      findingsSegment: 'sast',
+      setFindingsSegment: d => set({ findingsSegment: d, selectedFindingIds: new Set() }),
 
-  selectedFindingIds: new Set<string>(),
-  toggleSelected: id =>
-    set(s => {
-      const next = new Set(s.selectedFindingIds)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return { selectedFindingIds: next }
+      selectedFindingIds: new Set<string>(),
+      toggleSelected: id =>
+        set(s => {
+          const next = new Set(s.selectedFindingIds)
+          if (next.has(id)) next.delete(id)
+          else next.add(id)
+          return { selectedFindingIds: next }
+        }),
+      setSelected: ids => set({ selectedFindingIds: new Set(ids) }),
+      clearSelected: () => set({ selectedFindingIds: new Set() }),
+
+      findingOverrides: {},
+      updateFinding: (id, patch) =>
+        set(s => ({
+          findingOverrides: {
+            ...s.findingOverrides,
+            [id]: { ...(s.findingOverrides[id] ?? {}), ...patch },
+          },
+        })),
+
+      triageRunStatus: 'idle',
+      setTriageRunStatus: status => set({ triageRunStatus: status }),
     }),
-  setSelected: ids => set({ selectedFindingIds: new Set(ids) }),
-  clearSelected: () => set({ selectedFindingIds: new Set() }),
-
-  findingOverrides: {},
-  updateFinding: (id, patch) =>
-    set(s => ({
-      findingOverrides: {
-        ...s.findingOverrides,
-        [id]: { ...(s.findingOverrides[id] ?? {}), ...patch },
-      },
-    })),
-
-  triageRunStatus: 'idle',
-  setTriageRunStatus: status => set({ triageRunStatus: status }),
-}))
+    {
+      name: 'tally-ui-active-project',
+      partialize: s => ({ activeProjectId: s.activeProjectId }),
+    }
+  )
+)
