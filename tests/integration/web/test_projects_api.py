@@ -164,6 +164,40 @@ class TestProjectMetaV1:
         assert data["id"] == project_id
         assert data["repo_count"] >= 1
         assert data["finding_count"] >= 1
+        assert data["enabled_tools"] == []
+
+    async def test_project_meta_lists_project_level_tools(
+        self, projects_v1_client, tmp_path: Path
+    ) -> None:
+        client, _, project_id = projects_v1_client
+        commands_path = (
+            tmp_path / "projects" / "testproject" / "config" / "commands.json"
+        )
+        commands_path.write_text(
+            json.dumps(
+                {
+                    "composer_audit": {
+                        "type": "repo",
+                        "location": "docker",
+                        "path": "",
+                        "container": {
+                            "name": "composer_audit_container",
+                            "tool_path": "/usr/local/bin/composer",
+                        },
+                    },
+                    "bandit": {
+                        "type": "repo",
+                        "location": "local",
+                        "path": "/usr/local/bin/bandit",
+                        "container": None,
+                    },
+                }
+            )
+        )
+        resp = await client.get(f"/api/v1/projects/{project_id}/meta")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["enabled_tools"] == ["bandit", "composer_audit"]
 
     async def test_project_meta_unknown_returns_404(self, projects_v1_client) -> None:
         client, _, _ = projects_v1_client

@@ -200,6 +200,7 @@ class ProjectMetaResponse(BaseModel):
     repo_count: int
     url_list_count: int
     finding_count: int
+    enabled_tools: list[str]
 
 
 class ProjectInfoResponse(BaseModel):
