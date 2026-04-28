@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid as _uuid_mod
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile
@@ -61,6 +62,18 @@ def _count_url_findings(paths: ProjectPaths) -> int:
             return int(row[0]) if row else 0
     except Exception:
         return 0
+
+
+def _load_project_tool_ids(commands_path: Path) -> list[str]:
+    """Return sorted tool IDs from a project's commands.json, or [] if absent."""
+    if not commands_path.exists():
+        return []
+    try:
+        with open(commands_path) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return sorted(data.keys())
 
 
 async def _count_findings(paths: ProjectPaths) -> int:
@@ -130,6 +143,7 @@ async def get_project_meta(
     paths = ProjectPaths.from_registry_row(row)
     finding_count = await _count_findings(paths)
     url_list_count = await asyncio.to_thread(_count_url_findings, paths)
+    enabled_tools = await asyncio.to_thread(_load_project_tool_ids, paths.commands_json)
     return ProjectMetaResponse(
         id=int(row["id"]),
         name=config.project_name,
@@ -137,6 +151,7 @@ async def get_project_meta(
         repo_count=len(config.repositories),
         url_list_count=url_list_count,
         finding_count=finding_count,
+        enabled_tools=enabled_tools,
     )
 
 
