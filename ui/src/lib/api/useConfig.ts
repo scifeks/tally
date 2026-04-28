@@ -8,7 +8,36 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from './client'
+import { REST_ENDPOINTS } from './config'
 import type { ProjectInfo, RepositoryConfig, ToolOverrideConfig, ToolCatalogEntry } from '../types'
+
+/**
+ * Backend Repository serialisation shape (snake_case, matches
+ * `Repository.model_dump()` minus `auth`). Page-wiring in Phase 11.11
+ * will reconcile this against the UI's camelCase `RepositoryConfig`.
+ */
+export interface RepositoryDetailResponse {
+  id: number
+  uuid: string
+  name: string
+  type: string[]
+  path: string
+  docker_path: string
+  container_name: string
+  languages: string[]
+  base_urls: string[]
+  test_dirs: string[]
+  ignore_dirs: string[]
+  dependencies_file: string
+  crawl_enabled: boolean
+  xsstrike_crawl_level: number
+  xsstrike_headers: Record<string, string>
+  dalfox_headers: Record<string, string>
+  katana_headless: boolean
+  katana_depth: number
+  katana_headers: Record<string, string>
+}
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 // TODO [BACKEND]: Remove these mocks once API is connected.
@@ -315,6 +344,27 @@ export function useRepositories(projectId: string) {
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId),
     initialData: mockRepositories[projectId] ?? [],
+  })
+}
+
+/**
+ * useRepository Hook
+ * ==================
+ * Fetches a single repository's full configuration.
+ *
+ * Backed by `GET /api/v1/projects/:projectId/repositories/:repoId`. The
+ * `auth` field is intentionally omitted by the backend (`endpoints.md`
+ * §5). Returns the raw API shape (snake_case); Phase 11.11 will wire
+ * this into the Config page and map to camelCase as needed.
+ */
+export function useRepository(projectId: string, repoId: string) {
+  return useQuery({
+    queryKey: ['repository', projectId, repoId],
+    queryFn: async (): Promise<RepositoryDetailResponse> => {
+      return apiFetch<RepositoryDetailResponse>(REST_ENDPOINTS.repository(projectId, repoId))
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: Boolean(projectId) && Boolean(repoId),
   })
 }
 

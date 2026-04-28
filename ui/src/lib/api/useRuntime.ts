@@ -11,6 +11,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from './client'
 import { REST_ENDPOINTS } from './config'
 import type {
   RuntimeDependenciesResponse,
@@ -48,11 +49,9 @@ export function useRuntimeDependencies() {
   return useQuery({
     queryKey: ['runtime-dependencies'],
     queryFn: async (): Promise<RuntimeDependenciesResponse> => {
-      const res = await fetch(REST_ENDPOINTS.runtimeDependencies)
-      if (!res.ok) {
-        throw new Error('Failed to fetch runtime dependencies')
-      }
-      const data: RuntimeDependenciesApiResponse = await res.json()
+      const data = await apiFetch<RuntimeDependenciesApiResponse>(
+        REST_ENDPOINTS.runtimeDependencies
+      )
       return {
         dependencies: data.dependencies.map(toRuntimeDependency),
       }
@@ -65,11 +64,7 @@ export function useInstalledTools() {
   return useQuery({
     queryKey: ['installed-tools'],
     queryFn: async (): Promise<InstalledToolsResponse> => {
-      const res = await fetch(REST_ENDPOINTS.installedTools)
-      if (!res.ok) {
-        throw new Error('Failed to fetch installed tools')
-      }
-      return (await res.json()) as InstalledToolsResponse
+      return apiFetch<InstalledToolsResponse>(REST_ENDPOINTS.installedTools)
     },
     staleTime: 30 * 1000,
   })

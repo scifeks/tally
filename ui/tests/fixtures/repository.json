@@ -1,0 +1,21 @@
+{
+  "id": 42,
+  "uuid": "11111111-2222-4333-8444-555555555555",
+  "name": "dvwa",
+  "type": ["api", "ui"],
+  "path": "/opt/repos/dvwa",
+  "docker_path": "",
+  "container_name": "",
+  "languages": ["php", "javascript"],
+  "base_urls": ["http://localhost:8080"],
+  "test_dirs": ["tests"],
+  "ignore_dirs": ["vendor", "node_modules"],
+  "dependencies_file": "",
+  "crawl_enabled": true,
+  "xsstrike_crawl_level": 10,
+  "xsstrike_headers": {},
+  "dalfox_headers": {},
+  "katana_headless": false,
+  "katana_depth": 5,
+  "katana_headers": {}
+}

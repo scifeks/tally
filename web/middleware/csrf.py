@@ -9,7 +9,7 @@ from starlette.responses import Response
 from web.api._errors import error_response
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-_EXEMPT = frozenset({"/api/v1/auth/exchange", "/api/v1/auth/me"})
+_EXEMPT = frozenset({"/api/v1/auth/exchange"})
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):

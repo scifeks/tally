@@ -45,13 +45,13 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
         headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
     )
     assert resp.status_code == 200, f"exchange failed: {resp.text}"
-    csrf_token = resp.json()["csrf_token"]
     # httpx stores Secure cookies in the jar but won't send them over plain
     # HTTP. Delete the auto-stored domain-specific entry, then inject a
     # domain-less copy that bypasses the Secure-flag enforcement.
     for name, value in resp.cookies.items():
         client.cookies.delete(name, domain="127.0.0.1")
         client.cookies.set(name, value)
+    csrf_token = client.cookies["tally_csrf"]
     return {
         "X-CSRF-Token": csrf_token,
         "Origin": f"http://127.0.0.1:{TEST_PORT}",

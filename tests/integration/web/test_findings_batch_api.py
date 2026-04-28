@@ -83,10 +83,10 @@ async def batch_client(tmp_path: Path):
             headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 200, f"exchange failed: {resp.text}"
-        csrf_token = resp.json()["csrf_token"]
         for name, value in resp.cookies.items():
             client.cookies.delete(name, domain="127.0.0.1")
             client.cookies.set(name, value)
+        csrf_token = client.cookies["tally_csrf"]
         mut_headers = {
             "X-CSRF-Token": csrf_token,
             "Origin": f"http://127.0.0.1:{TEST_PORT}",
