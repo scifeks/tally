@@ -123,8 +123,13 @@ export const REST_ENDPOINTS = {
   installedTools: `${API_BASE_URL}/tools/installed`,
 
   // ─── URL Lists ──────────────────────────────────────────────────────────────
-  /** GET: URL entries for a project's URL list */
-  urlLists: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/url-lists`,
+  /**
+   * GET: paginated URL entries for a project. Query params: `search`, `method`,
+   * `repo_id`, `source` (`scan|user`), `tool` (`katana|noir`), `sort`
+   * (`host|path|method|port`), `order`, `offset`, `limit` (default 100, max 500).
+   */
+  urlListEntries: (projectId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/url-list/entries`,
 
   // ─── Reports ────────────────────────────────────────────────────────────────
   /** GET: list draft sections and their statuses for a project */

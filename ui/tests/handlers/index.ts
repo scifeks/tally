@@ -10,6 +10,22 @@ import findingsPopulatedFixture from '../fixtures/findings-populated.json'
 import findingsPage2Fixture from '../fixtures/findings-page-2.json'
 import findingsEmptyFixture from '../fixtures/findings-empty.json'
 import findingUpdatedFixture from '../fixtures/finding-updated.json'
+import urlListProject1Fixture from '../fixtures/url-list-project-1.json'
+import urlListProject2Fixture from '../fixtures/url-list-project-2.json'
+import urlListEmptyFixture from '../fixtures/url-list-empty.json'
+
+interface UrlListPage {
+  items: Array<Record<string, unknown> & { id: number }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const URL_LIST_FIXTURES: Record<string, UrlListPage> = {
+  '1': urlListProject1Fixture as UrlListPage,
+  '2': urlListProject2Fixture as UrlListPage,
+  '3': urlListEmptyFixture as UrlListPage,
+}
 
 interface FindingsPage {
   items: Array<Record<string, unknown> & { id: number; severity: string; status: string }>
@@ -87,6 +103,14 @@ export const handlers = [
   }),
   http.patch('/api/v1/projects/:projectId/findings/:findingId', () => {
     return HttpResponse.json(findingUpdatedFixture)
+  }),
+  http.get('/api/v1/projects/:projectId/url-list/entries', ({ params, request }) => {
+    const fixture = URL_LIST_FIXTURES[params.projectId as string] ?? urlListEmptyFixture
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 100)
+    const slice = (fixture as UrlListPage).items.slice(offset, offset + limit)
+    return HttpResponse.json({ items: slice, total: fixture.total, offset, limit })
   }),
 ]
 

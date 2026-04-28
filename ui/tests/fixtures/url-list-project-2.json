@@ -1,0 +1,805 @@
+{
+  "items": [
+    {
+      "id": 5180,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4000,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/assets/app.css",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:00:00.000Z"
+    },
+    {
+      "id": 5181,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4000,
+      "method": "GET",
+      "protocol": "ws",
+      "host": "api.atlas.dev",
+      "port": 80,
+      "path": "/ws/chat",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:01:00.000Z"
+    },
+    {
+      "id": 5182,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4000,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/login",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:02:00.000Z"
+    },
+    {
+      "id": 5183,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4000,
+      "method": "DELETE",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/users/{id}",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:03:00.000Z"
+    },
+    {
+      "id": 5184,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/webhooks/slack",
+      "file_path": "endpoints/2/imports/oas3-4.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:04:00.000Z"
+    },
+    {
+      "id": 5185,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4000,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/docs",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:05:00.000Z"
+    },
+    {
+      "id": 5186,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4000,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:06:00.000Z"
+    },
+    {
+      "id": 5187,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4000,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/health",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:07:00.000Z"
+    },
+    {
+      "id": 5188,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4000,
+      "method": "PUT",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/users",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:08:00.000Z"
+    },
+    {
+      "id": 5189,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/products/{id}/reviews",
+      "file_path": "endpoints/2/imports/oas3-9.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:09:00.000Z"
+    },
+    {
+      "id": 5190,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4001,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/auth/token",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:10:00.000Z"
+    },
+    {
+      "id": 5191,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4001,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/users/{id}/avatar",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:11:00.000Z"
+    },
+    {
+      "id": 5192,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4001,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/auth/.well-known/jwks",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:12:00.000Z"
+    },
+    {
+      "id": 5193,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4001,
+      "method": "OPTIONS",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/docs/changelog",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:13:00.000Z"
+    },
+    {
+      "id": 5194,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/orders/export",
+      "file_path": "endpoints/2/imports/oas3-14.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:14:00.000Z"
+    },
+    {
+      "id": 5195,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4001,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/orders",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:15:00.000Z"
+    },
+    {
+      "id": 5196,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4001,
+      "method": "DELETE",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/users/{id}/avatar",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:16:00.000Z"
+    },
+    {
+      "id": 5197,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4001,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/docs/openapi.json",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:17:00.000Z"
+    },
+    {
+      "id": 5198,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4001,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/orders/{id}/items",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:18:00.000Z"
+    },
+    {
+      "id": 5199,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "HEAD",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/auth/.well-known/jwks",
+      "file_path": "endpoints/2/imports/oas3-19.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:19:00.000Z"
+    },
+    {
+      "id": 5200,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4002,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/orders",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:20:00.000Z"
+    },
+    {
+      "id": 5201,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4002,
+      "method": "DELETE",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/orders",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:21:00.000Z"
+    },
+    {
+      "id": 5202,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4002,
+      "method": "POST",
+      "protocol": "ws",
+      "host": "api.atlas.dev",
+      "port": 80,
+      "path": "/ws/notifications",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:22:00.000Z"
+    },
+    {
+      "id": 5203,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4002,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/docs",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:23:00.000Z"
+    },
+    {
+      "id": 5204,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/robots.txt",
+      "file_path": "endpoints/2/imports/oas3-24.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:24:00.000Z"
+    },
+    {
+      "id": 5205,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4002,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/health",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:25:00.000Z"
+    },
+    {
+      "id": 5206,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4002,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/payments",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:26:00.000Z"
+    },
+    {
+      "id": 5207,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4002,
+      "method": "PUT",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v2/users/{id}",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:27:00.000Z"
+    },
+    {
+      "id": 5208,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4002,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/webhooks/slack",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:28:00.000Z"
+    },
+    {
+      "id": 5209,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/webhooks/github",
+      "file_path": "endpoints/2/imports/oas3-29.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:29:00.000Z"
+    },
+    {
+      "id": 5210,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4003,
+      "method": "DELETE",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/orders/{id}",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:30:00.000Z"
+    },
+    {
+      "id": 5211,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4003,
+      "method": "OPTIONS",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/logout",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:31:00.000Z"
+    },
+    {
+      "id": 5212,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4003,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/admin/users",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:32:00.000Z"
+    },
+    {
+      "id": 5213,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4003,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/webhooks/slack",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:33:00.000Z"
+    },
+    {
+      "id": 5214,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/users/{id}/sessions",
+      "file_path": "endpoints/2/imports/oas3-34.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:34:00.000Z"
+    },
+    {
+      "id": 5215,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4003,
+      "method": "GET",
+      "protocol": "ws",
+      "host": "api.atlas.dev",
+      "port": 80,
+      "path": "/ws/chat",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:35:00.000Z"
+    },
+    {
+      "id": 5216,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4003,
+      "method": "POST",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/admin/reports",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:36:00.000Z"
+    },
+    {
+      "id": 5217,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4003,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/robots.txt",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:37:00.000Z"
+    },
+    {
+      "id": 5218,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4003,
+      "method": "PATCH",
+      "protocol": "ws",
+      "host": "api.atlas.dev",
+      "port": 80,
+      "path": "/ws/notifications",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:38:00.000Z"
+    },
+    {
+      "id": 5219,
+      "project_id": 2,
+      "repo_id": 1,
+      "repo_name": "backend-api",
+      "source": "user",
+      "tool": null,
+      "run_id": null,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v2/users",
+      "file_path": "endpoints/2/imports/oas3-39.yaml",
+      "meta": {
+        "upload_format": "openapi3"
+      },
+      "created_at": "2026-04-26T10:39:00.000Z"
+    },
+    {
+      "id": 5220,
+      "project_id": 2,
+      "repo_id": 2,
+      "repo_name": "frontend-web",
+      "source": "scan",
+      "tool": "katana",
+      "run_id": 4004,
+      "method": "GET",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/users/{id}/avatar",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "katana"
+      },
+      "created_at": "2026-04-26T10:40:00.000Z"
+    },
+    {
+      "id": 5221,
+      "project_id": 2,
+      "repo_id": 3,
+      "repo_name": "gateway",
+      "source": "scan",
+      "tool": "noir",
+      "run_id": 4004,
+      "method": "HEAD",
+      "protocol": "https",
+      "host": "api.atlas.dev",
+      "port": 443,
+      "path": "/api/v1/products/{id}",
+      "file_path": null,
+      "meta": {
+        "discovered_via": "noir"
+      },
+      "created_at": "2026-04-26T10:41:00.000Z"
+    }
+  ],
+  "total": 42,
+  "offset": 0,
+  "limit": 100
+}
