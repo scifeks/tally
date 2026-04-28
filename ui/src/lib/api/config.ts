@@ -55,6 +55,8 @@ export const REST_ENDPOINTS = {
   // ─── Findings ───────────────────────────────────────────────────────────────
   /** GET: list findings for a project. Query params: ?domain=<domain>&status=<status>&severity=<severity> */
   findings: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/findings`,
+  /** GET: aggregate findings counts bucketed by severity, status, domain, segment, repo, tool */
+  findingsCounts: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/findings/counts`,
   /** GET: single finding by ID */
   finding: (id: string) => `${API_BASE_URL}/findings/${id}`,
   /** PATCH: update finding fields (status, severity, notes, title) */

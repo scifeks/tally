@@ -213,17 +213,6 @@ function buildScans(): Scan[] {
 
 export const scans: Scan[] = buildScans()
 
-// Per-project repository/target counts for the dashboard quick-start panel.
-// urlLists is the count of URL entries in the project's URL list.
-export const projectMeta: Record<
-  string,
-  { repositories: number; urlLists: number; enabledTools: number }
-> = {
-  '1': { repositories: 14, urlLists: 180, enabledTools: 9 },
-  '2': { repositories: 4, urlLists: 42, enabledTools: 5 },
-  '3': { repositories: 0, urlLists: 0, enabledTools: 0 },
-}
-
 // ─── URL Lists ──────────────────────────────────────────────────────────────
 // ACM has 180 entries, ATL has 42, NWD has 0 (exercises the empty state).
 

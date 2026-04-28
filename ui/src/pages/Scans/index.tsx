@@ -370,7 +370,7 @@ export default function Scans() {
               {project?.code} / {project?.name}
             </span>
             <span className="text-xs text-dim">
-              {meta?.repositories ?? 0} repos &middot; {meta?.enabledTools ?? 0} tools
+              {meta?.repoCount ?? 0} repos &middot; {meta?.enabledTools?.length ?? 0} tools
             </span>
           </div>
 

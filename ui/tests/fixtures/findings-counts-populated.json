@@ -1,0 +1,79 @@
+{
+  "by_severity": {
+    "critical": 12,
+    "high": 38,
+    "medium": 91,
+    "low": 64,
+    "informational": 15
+  },
+  "by_status": {
+    "active": 156,
+    "false_positive": 31,
+    "fixed": 25,
+    "wont_fix": 8
+  },
+  "by_domain": {
+    "code": 174,
+    "web": 46
+  },
+  "by_segment": {
+    "sast": 110,
+    "web": 46,
+    "secrets": 28,
+    "sca": 36
+  },
+  "by_repo": {
+    "acme-api": 84,
+    "acme-web": 71,
+    "acme-mobile": 39,
+    "acme-shared": 26
+  },
+  "by_tool": {
+    "semgrep": 56,
+    "bandit": 28,
+    "trivy": 24,
+    "trufflehog": 28,
+    "zap": 32,
+    "nuclei": 14,
+    "osv-scanner": 36,
+    "checkov": 2
+  },
+  "by_severity_status": {
+    "critical": {
+      "active": 11,
+      "false_positive": 2,
+      "fixed": 1,
+      "wont_fix": 0
+    },
+    "high": {
+      "active": 27,
+      "false_positive": 7,
+      "fixed": 4,
+      "wont_fix": 0
+    },
+    "medium": {
+      "active": 68,
+      "false_positive": 12,
+      "fixed": 9,
+      "wont_fix": 2
+    },
+    "low": {
+      "active": 42,
+      "false_positive": 7,
+      "fixed": 11,
+      "wont_fix": 4
+    },
+    "informational": {
+      "active": 10,
+      "false_positive": 3,
+      "fixed": 0,
+      "wont_fix": 2
+    }
+  },
+  "total": 220,
+  "scans_count": 9,
+  "repos_count": 14,
+  "urls_count": 180,
+  "last_scan_at": "2026-04-26T18:42:00Z",
+  "last_triage_at": "2026-04-25T11:05:00Z"
+}
