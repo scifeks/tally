@@ -25,8 +25,12 @@ export const API_BASE_URL = '/api/v1'
  * For triage:  event types match TriageLogEventType
  */
 export const SSE_ENDPOINTS = {
-  /** SSE stream for scan run events. Query param: ?runId=<id> or ?projectId=<id> */
-  scanEvents: `${API_BASE_URL}/scans/events`,
+  /**
+   * Project-scoped SSE stream for scan run events. Optional `?run_id=<id>`
+   * query param filters to a single run; otherwise emits a `snapshot` of
+   * `active_run_ids` on connect, then live events for any run in the project.
+   */
+  scanEvents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/scans/events`,
   /** SSE stream for triage run events. Query param: ?runId=<id> or ?projectId=<id> */
   triageEvents: `${API_BASE_URL}/triage/events`,
   /** SSE stream for report generation events. Query param: ?runId=<id> */
@@ -80,22 +84,24 @@ export const REST_ENDPOINTS = {
     `${API_BASE_URL}/projects/${projectId}/findings/${findingId}/history`,
 
   // ─── Scans ──────────────────────────────────────────────────────────────────
-  /** GET: list scan history for a project */
-  scans: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/scans`,
-  /** GET: single scan by ID */
-  scan: (id: string) => `${API_BASE_URL}/scans/${id}`,
+  /** GET: paginated scan history for a project. Query: status?, offset?, limit?. */
+  scans: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/scans`,
+  /** GET: single scan by run ID (project-scoped). */
+  scan: (projectId: number, runId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/scans/${runId}`,
   /**
    * GET: scan configuration for a project (available repos, tools, domains).
    * Used to populate advanced scan options UI.
    */
-  scanConfig: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/scans/config`,
+  scanConfig: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/scans/config`,
   /**
-   * POST: start a new scan run.
-   * Body: { repoId?, toolIds?, domains?, skipToolIds?, skipEnrichment? }
+   * POST: start a new scan run. Body is camelCase per `ScanStartRequest`:
+   * `{ repoIds?, toolIds?, domains?, skipToolIds?, skipEnrichment? }`.
    */
-  startScan: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/scans`,
-  /** POST: cancel a running scan */
-  cancelScan: (id: string) => `${API_BASE_URL}/scans/${id}/cancel`,
+  startScan: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/scans`,
+  /** POST: cancel a running scan (project-scoped). */
+  cancelScan: (projectId: number, runId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/scans/${runId}/cancel`,
 
   // ─── Triage ─────────────────────────────────────────────────────────────────
   /** GET: list triage runs for a project */

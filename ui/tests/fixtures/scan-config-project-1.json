@@ -1,0 +1,54 @@
+{
+  "repos": [
+    {
+      "id": 1,
+      "uuid": "repo-uuid-01",
+      "name": "dvwa",
+      "source": "github",
+      "location": "github.com/digininja/DVWA"
+    },
+    {
+      "id": 2,
+      "uuid": "repo-uuid-02",
+      "name": "dvpwa",
+      "source": "github",
+      "location": "github.com/example/dvpwa"
+    },
+    {
+      "id": 3,
+      "uuid": "repo-uuid-03",
+      "name": "juice-shop",
+      "source": "github",
+      "location": "github.com/juice-shop/juice-shop"
+    },
+    {
+      "id": 4,
+      "uuid": "repo-uuid-04",
+      "name": "php-goof",
+      "source": "gitlab",
+      "location": "gitlab.com/example/php-goof"
+    },
+    {
+      "id": 5,
+      "uuid": "repo-uuid-05",
+      "name": "vuln-nodejs",
+      "source": "local",
+      "location": "/opt/repos/vuln-nodejs"
+    }
+  ],
+  "tools": [
+    { "id": "semgrep", "name": "semgrep", "domain": "sast", "enabled": true },
+    { "id": "codeql", "name": "codeql", "domain": "sast", "enabled": true },
+    { "id": "bandit", "name": "bandit", "domain": "sast", "enabled": false },
+    { "id": "osv-scanner", "name": "osv-scanner", "domain": "sca", "enabled": true },
+    { "id": "npm-audit", "name": "npm-audit", "domain": "sca", "enabled": true },
+    { "id": "pip-audit", "name": "pip-audit", "domain": "sca", "enabled": true },
+    { "id": "composer-audit", "name": "composer-audit", "domain": "sca", "enabled": false },
+    { "id": "zap", "name": "zap", "domain": "web", "enabled": true },
+    { "id": "nuclei", "name": "nuclei", "domain": "web", "enabled": true },
+    { "id": "nikto", "name": "nikto", "domain": "web", "enabled": false },
+    { "id": "gitleaks", "name": "gitleaks", "domain": "secrets", "enabled": true },
+    { "id": "trufflehog", "name": "trufflehog", "domain": "secrets", "enabled": true }
+  ],
+  "domains": ["sast", "sca", "web", "secrets"]
+}

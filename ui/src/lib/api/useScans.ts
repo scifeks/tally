@@ -3,224 +3,252 @@
  * ==============
  * Fetches scan history and provides mutations for starting/stopping scans.
  * Also provides SSE subscription for live scan events.
- *
- * TODO [BACKEND]: Replace mock data with actual API calls and SSE stream.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, useCallback, useRef } from 'react'
-import type { Scan, ScanLogEvent, ProjectScanConfig } from '../types'
-import { API_BASE_URL, SSE_ENDPOINTS } from './config'
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import type {
+  Scan,
+  ScanLogEvent,
+  ScanLogEventType,
+  ProjectScanConfig,
+  ConfiguredRepo,
+  ConfiguredTool,
+  Segment,
+  ScanOptions,
+  ApiErrorPayload,
+} from '../types'
+import { REST_ENDPOINTS, SSE_ENDPOINTS } from './config'
+import type { ApiError } from './client'
+import { apiFetch } from './client'
 import { apiEventSource } from './sse'
+import { useUI } from '../store'
 
-// TODO [BACKEND]: Remove this mock import once API is connected.
-import { scans as mockScans } from '../mock-data'
+// ─── Scan-config: wire-format types & inline mappers ────────────────────────
 
-// ─── Mock Scan Config Data ─────────────────────────────────────────────────
-// TODO [BACKEND]: Remove these mocks once API is connected.
-
-const mockScanConfig: Record<string, ProjectScanConfig> = {
-  '1': {
-    repos: [
-      { id: 'r-01', name: 'dvwa', source: 'github', location: 'github.com/digininja/DVWA' },
-      { id: 'r-02', name: 'dvpwa', source: 'github', location: 'github.com/example/dvpwa' },
-      {
-        id: 'r-03',
-        name: 'juice-shop',
-        source: 'github',
-        location: 'github.com/juice-shop/juice-shop',
-      },
-      { id: 'r-04', name: 'php-goof', source: 'gitlab', location: 'gitlab.com/example/php-goof' },
-      { id: 'r-05', name: 'vuln-nodejs', source: 'local', location: '/opt/repos/vuln-nodejs' },
-    ],
-    tools: [
-      { id: 't-01', name: 'semgrep', segment: 'sast', enabled: true },
-      { id: 't-02', name: 'codeql', segment: 'sast', enabled: true },
-      { id: 't-03', name: 'bandit', segment: 'sast', enabled: false },
-      { id: 't-04', name: 'osv-scanner', segment: 'sca', enabled: true },
-      { id: 't-05', name: 'npm-audit', segment: 'sca', enabled: true },
-      { id: 't-06', name: 'pip-audit', segment: 'sca', enabled: true },
-      { id: 't-07', name: 'composer-audit', segment: 'sca', enabled: false },
-      { id: 't-08', name: 'zap', segment: 'web', enabled: true },
-      { id: 't-09', name: 'nuclei', segment: 'web', enabled: true },
-      { id: 't-10', name: 'nikto', segment: 'web', enabled: false },
-      { id: 't-11', name: 'gitleaks', segment: 'secrets', enabled: true },
-      { id: 't-12', name: 'trufflehog', segment: 'secrets', enabled: true },
-    ],
-    segments: ['sast', 'sca', 'web', 'secrets'],
-  },
-  '2': {
-    repos: [
-      { id: 'r-10', name: 'atl-api', source: 'github', location: 'github.com/atl/api' },
-      { id: 'r-11', name: 'atl-web', source: 'github', location: 'github.com/atl/web' },
-    ],
-    tools: [
-      { id: 't-01', name: 'semgrep', segment: 'sast', enabled: true },
-      { id: 't-04', name: 'osv-scanner', segment: 'sca', enabled: true },
-      { id: 't-08', name: 'zap', segment: 'web', enabled: true },
-      { id: 't-11', name: 'gitleaks', segment: 'secrets', enabled: true },
-    ],
-    segments: ['sast', 'sca', 'web', 'secrets'],
-  },
-  '3': {
-    repos: [],
-    tools: [],
-    segments: ['sast', 'sca', 'web', 'secrets'],
-  },
+interface ScanConfigRepoApi {
+  id: number
+  uuid: string
+  name: string
+  source: string
+  location: string | null
 }
 
+interface ScanConfigToolApi {
+  id: string
+  name: string
+  domain: string
+  enabled: boolean
+}
+
+interface ScanConfigResponseApi {
+  repos: ScanConfigRepoApi[]
+  tools: ScanConfigToolApi[]
+  domains: string[]
+}
+
+function mapRepo(api: ScanConfigRepoApi): ConfiguredRepo {
+  return {
+    id: api.id,
+    name: api.name,
+    source: api.source,
+    location: api.location ?? '',
+  }
+}
+
+function mapTool(api: ScanConfigToolApi): ConfiguredTool {
+  return {
+    id: api.id,
+    name: api.name,
+    segment: api.domain as Segment,
+    enabled: api.enabled,
+  }
+}
+
+function mapScanConfig(api: ScanConfigResponseApi): ProjectScanConfig {
+  return {
+    repos: api.repos.map(mapRepo),
+    tools: api.tools.map(mapTool),
+    segments: api.domains as Segment[],
+  }
+}
+
+// ─── Scan-history: wire-format types & inline mapper ────────────────────────
+
+interface ScanRunSummaryApi {
+  id: number
+  project_id: number | null
+  status: string | null
+  started_at: string | null
+  finished_at: string | null
+  repo_ids: string[]
+  tool_ids: string[]
+  domains: string[]
+  findings_count: number | null
+  skip_enrichment: boolean
+}
+
+interface ScansListResponseApi {
+  items: ScanRunSummaryApi[]
+  total: number
+  offset: number
+  limit: number
+}
+
+function mapScan(api: ScanRunSummaryApi): Scan {
+  return {
+    id: api.id,
+    projectId: api.project_id ?? 0,
+    status: (api.status ?? 'queued') as Scan['status'],
+    startedAt: api.started_at ?? '',
+    finishedAt: api.finished_at,
+    repoIds: api.repo_ids,
+    toolIds: api.tool_ids,
+    domains: api.domains as Segment[],
+    findingsCount: api.findings_count,
+    skipEnrichment: api.skip_enrichment,
+  }
+}
+
+interface ScansListPage {
+  items: Scan[]
+  total: number
+  offset: number
+  limit: number
+}
+
+const HISTORY_PAGE_LIMIT = 20
+
+function buildScanHistoryUrl(
+  projectId: number,
+  offset: number,
+  limit: number,
+  status?: Scan['status']
+): string {
+  const params = new URLSearchParams()
+  params.set('offset', String(offset))
+  params.set('limit', String(limit))
+  if (status) params.set('status', status)
+  return `${REST_ENDPOINTS.scans(projectId)}?${params.toString()}`
+}
+
+// ─── Hooks ──────────────────────────────────────────────────────────────────
+
 /**
- * useProjectScanConfig Hook
- * =========================
  * Fetches scan configuration for a project (available repos, tools, domains).
- * Used to populate the advanced scan options UI.
- *
- * TODO [BACKEND]: Replace mock data with actual API call.
- *
- * Expected API response (GET /api/v1/projects/:id/scans/config):
- * ```json
- * {
- *   "repos": [
- *     { "id": "r-01", "name": "dvwa", "source": "github", "location": "github.com/..." }
- *   ],
- *   "tools": [
- *     { "id": "t-01", "name": "semgrep", "segment": "sast", "enabled": true }
- *   ],
- *   "segments": ["sast", "sca", "web", "secrets"]
- * }
- * ```
+ * Used to populate the advanced scan options UI. Backend serves snake_case;
+ * the inline mapper renames `domain`/`domains` → `segment`/`segments` to
+ * match the FE Segment vocabulary.
  */
-export function useProjectScanConfig(projectId: string) {
+export function useProjectScanConfig(projectId: number) {
   return useQuery({
     queryKey: ['scanConfig', projectId],
     queryFn: async (): Promise<ProjectScanConfig> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.scanConfig(projectId))     │
-      // │ if (!res.ok) throw new Error("Failed to fetch scan config")       │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      return mockScanConfig[projectId] ?? { repos: [], tools: [], segments: [] }
+      const data = await apiFetch<ScanConfigResponseApi>(REST_ENDPOINTS.scanConfig(projectId))
+      return mapScanConfig(data)
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId),
   })
 }
 
-/**
- * useScanHistory Hook
- * ===================
- * Fetches completed/failed scan history for a project.
- *
- * Expected API response (GET /api/v1/projects/:id/scans):
- * ```json
- * {
- *   "scans": [
- *     {
- *       "id": "S-2000",
- *       "projectId": "1",
- *       "segment": "sast",
- *       "tool": "semgrep",
- *       "status": "done",
- *       "startedAt": "2024-01-15T10:00:00Z",
- *       "finishedAt": "2024-01-15T10:08:00Z",
- *       "findingsCount": 23
- *     },
- *     ...
- *   ]
- * }
- * ```
- */
-export function useScanHistory(projectId: string) {
-  return useQuery({
-    queryKey: ['scans', projectId],
-    queryFn: async (): Promise<Scan[]> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.scans(projectId))          │
-      // │ if (!res.ok) throw new Error("Failed to fetch scans")             │
-      // │ const data = await res.json()                                     │
-      // │ return data.scans                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
+export interface UseScanHistoryOptions {
+  status?: Scan['status']
+  limit?: number
+}
 
-      await new Promise(r => setTimeout(r, 100))
-      return mockScans.filter(s => s.projectId === projectId)
+/**
+ * Paginated scan history for a project, served by GET /api/v1/projects/:id/scans.
+ * Mirrors the `useFindings` infinite-query shape: items are flattened across
+ * pages, callers see `data: Scan[]` plus the standard load-more controls.
+ */
+export function useScanHistory(projectId: number, options?: UseScanHistoryOptions) {
+  const limit = options?.limit ?? HISTORY_PAGE_LIMIT
+  const status = options?.status
+  const query = useInfiniteQuery({
+    queryKey: ['scans', projectId, { status: status ?? null, limit }] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<ScansListPage> => {
+      const url = buildScanHistoryUrl(projectId, pageParam as number, limit, status)
+      const data = await apiFetch<ScansListResponseApi>(url)
+      return {
+        items: data.items.map(mapScan),
+        total: data.total,
+        offset: data.offset,
+        limit: data.limit,
+      }
     },
-    staleTime: 10 * 1000,
+    getNextPageParam: lastPage => {
+      const next = lastPage.offset + lastPage.items.length
+      return next < lastPage.total ? next : undefined
+    },
     enabled: Boolean(projectId),
+    staleTime: 10_000,
   })
+
+  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) ?? [], [query.data])
+  const total = query.data?.pages[0]?.total ?? 0
+
+  return {
+    data: items,
+    total,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage ?? false,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    isSuccess: query.isSuccess,
+  }
 }
 
 /**
- * useRunningScans Hook
- * ====================
- * Returns only currently running scans for a project.
- * Useful for the TopBar indicator and project switch blocking.
+ * Returns only the running scans for a project. Useful for the running-badge
+ * derive and the "scans running" modal. Backed by `useScanHistory` so it
+ * stays consistent with the cached list.
  */
-export function useRunningScans(projectId: string) {
-  const { data: scans = [] } = useScanHistory(projectId)
-  return scans.filter(s => s.status === 'running')
+export function useRunningScans(projectId: number) {
+  const { data: scans } = useScanHistory(projectId)
+  return useMemo(() => scans.filter(s => s.status === 'running'), [scans])
 }
 
 /**
- * useStartScan Mutation
- * =====================
- * Starts a new scan run for a project.
- *
- * Expected API request (POST /api/v1/projects/:id/scans):
- * ```json
- * {
- *   "segments": ["sast", "web"], // optional, default = all
- *   "tools": ["semgrep"],        // optional, default = all enabled
- *   "repos": ["repo-name"]       // optional, default = all
- * }
- * ```
- *
- * Expected API response:
- * ```json
- * {
- *   "runId": "SR-123",
- *   "status": "running",
- *   "startedAt": "2024-01-15T10:00:00Z"
- * }
- * ```
+ * Starts a new scan run. Body is camelCase per `ScanStartRequest`. On error,
+ * routes the failure into the `scanMutationError` slice so the
+ * `ScanMutationErrorModal` can surface it (most importantly the 409 raised
+ * when a scan is already running for the project).
  */
 export function useStartScan() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setScanMutationError)
 
-  return useMutation({
-    mutationFn: async ({
-      projectId: _projectId,
-      options: _options,
-    }: {
-      projectId: string
-      options?: {
-        segments?: string[]
-        tools?: string[]
-        repos?: string[]
-      }
-    }) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.startScan(projectId), {    │
-      // │   method: "POST",                                                 │
-      // │   headers: { "Content-Type": "application/json" },                │
-      // │   body: JSON.stringify(options ?? {}),                            │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to start scan")              │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
+  return useMutation<Scan, ApiError, { projectId: number; options?: ScanOptions }>({
+    mutationFn: async ({ projectId, options }) => {
+      const body: Record<string, unknown> = {}
+      if (options?.repoIds && options.repoIds.length > 0) body.repoIds = options.repoIds
+      if (options?.toolIds && options.toolIds.length > 0) body.toolIds = options.toolIds
+      if (options?.segments && options.segments.length > 0) body.domains = options.segments
+      if (options?.skipToolIds && options.skipToolIds.length > 0)
+        body.skipToolIds = options.skipToolIds
+      if (options?.skipEnrichment) body.skipEnrichment = true
 
-      await new Promise(r => setTimeout(r, 200))
-      return {
-        runId: `SR-${Date.now()}`,
-        status: 'running' as const,
-        startedAt: new Date().toISOString(),
+      const data = await apiFetch<ScanRunSummaryApi>(REST_ENDPOINTS.startScan(projectId), {
+        method: 'POST',
+        body,
+      })
+      return mapScan(data)
+    },
+    onError: err => {
+      const payload: ApiErrorPayload = {
+        code: err.code,
+        message: err.message,
+        details: err.details,
+        status: err.status,
       }
+      setError(payload)
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['scans', projectId] })
@@ -228,115 +256,166 @@ export function useStartScan() {
   })
 }
 
+interface ScanCancelResponseApi {
+  id: number
+  status: string
+}
+
 /**
- * useCancelScan Mutation
- * ======================
- * Cancels a running scan.
- *
- * Expected API request (POST /api/v1/scans/:id/cancel):
- * No body required.
- *
- * Expected API response:
- * ```json
- * { "status": "cancelled" }
- * ```
+ * Cancels an in-flight scan run. The backend returns the run with status
+ * `cancelling`; the actual `run_cancelled` SSE event arrives later and is
+ * the trigger for the page UI to flip to the cancelled state.
  */
 export function useCancelScan() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setScanMutationError)
 
-  return useMutation({
-    mutationFn: async (_scanId: string) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.cancelScan(scanId), {      │
-      // │   method: "POST",                                                 │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to cancel scan")             │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      await new Promise(r => setTimeout(r, 100))
-      return { status: 'cancelled' as const }
+  return useMutation<ScanCancelResponseApi, ApiError, { projectId: number; runId: number }>({
+    mutationFn: async ({ projectId, runId }) => {
+      return apiFetch<ScanCancelResponseApi>(REST_ENDPOINTS.cancelScan(projectId, runId), {
+        method: 'POST',
+      })
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scans'] })
+    onError: err => {
+      const payload: ApiErrorPayload = {
+        code: err.code,
+        message: err.message,
+        details: err.details,
+        status: err.status,
+      }
+      setError(payload)
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['scans', projectId] })
     },
   })
 }
 
+// ─── SSE event handling ─────────────────────────────────────────────────────
+
+const SCAN_EVENT_TYPES: readonly ScanLogEventType[] = [
+  'run_started',
+  'segment_started',
+  'tool_started',
+  'tool_skipped',
+  'tool_completed',
+  'tool_failed',
+  'enrichment_progress',
+  'enrichment_complete',
+  'segment_completed',
+  'run_completed',
+  'run_cancelled',
+  'run_failed',
+] as const
+
+interface ScanEventPayloadApi {
+  run_id: number
+  project_id: number | null
+  segment?: string
+  repo?: string
+  tool?: string
+  message?: string
+  findings_count?: number
+  enriched_count?: number
+  total_to_enrich?: number
+  exit_code?: number
+  duration?: number
+  skip_reason?: string
+}
+
+function mapScanEvent(type: ScanLogEventType, data: ScanEventPayloadApi): ScanLogEvent {
+  return {
+    id:
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${type}-${data.run_id}-${Date.now()}-${Math.random()}`,
+    runId: data.run_id,
+    type,
+    timestamp: new Date().toISOString(),
+    segment: data.segment as Segment | undefined,
+    repo: data.repo,
+    tool: data.tool,
+    message: data.message ?? '',
+    findingsCount: data.findings_count,
+    enrichedCount: data.enriched_count,
+    totalToEnrich: data.total_to_enrich,
+    exitCode: data.exit_code,
+    duration: data.duration,
+  }
+}
+
+export interface SnapshotPayload {
+  runId: number | null
+  projectId: number | null
+  activeRunIds?: number[]
+  status?: string
+  progress?: number
+  currentSegment?: string | null
+  segmentLabel?: string | null
+}
+
+interface SnapshotPayloadApi {
+  run_id: number | null
+  project_id: number | null
+  active_run_ids?: number[]
+  status?: string
+  progress?: number
+  current_segment?: string | null
+  segment_label?: string | null
+}
+
+function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
+  return {
+    runId: data.run_id,
+    projectId: data.project_id,
+    activeRunIds: data.active_run_ids,
+    status: data.status,
+    progress: data.progress,
+    currentSegment: data.current_segment,
+    segmentLabel: data.segment_label,
+  }
+}
+
 /**
- * useScanEvents Hook (SSE)
- * ========================
- * Subscribes to server-sent events for live scan progress.
+ * Subscribes to project-scoped scan SSE. Forwards each typed event to
+ * `onEvent` (mapped to `ScanLogEvent`). Snapshot frames are forwarded
+ * separately to `onSnapshot` because the snapshot payload shape differs
+ * from the per-event shape (it carries `active_run_ids` instead of the
+ * per-run fields).
  *
- * TODO [BACKEND]: Implement SSE endpoint at /api/v1/scans/events
- *
- * Expected SSE event format:
- * ```
- * event: tool_started
- * data: {"runId":"SR-123","tool":"semgrep","repo":"acme-api","segment":"sast","message":"Starting semgrep on acme-api..."}
- *
- * event: tool_completed
- * data: {"runId":"SR-123","tool":"semgrep","repo":"acme-api","findingsCount":12,"duration":45}
- *
- * event: run_completed
- * data: {"runId":"SR-123","message":"Scan completed","totalFindings":87}
- * ```
- *
- * Event types: see ScanLogEventType in types.ts
+ * `enrichment_progress` events MUST be rendered by the page consumer in
+ * a single state slot (latest-value-wins); never appended to a logs array.
+ * That's a §12.7 mandate from the roadmap — repeated enrichment ticks would
+ * otherwise grow the log unbounded.
  */
 export function useScanEvents(
-  projectId: string,
+  projectId: number,
   onEvent: (event: ScanLogEvent) => void,
-  enabled = true
+  options?: { enabled?: boolean; onSnapshot?: (snap: SnapshotPayload) => void }
 ) {
+  const enabled = options?.enabled ?? true
   const onEventRef = useRef(onEvent)
+  const onSnapshotRef = useRef(options?.onSnapshot)
   onEventRef.current = onEvent
-
-  const connect = useCallback((): EventSource | null => {
-    if (!enabled || !projectId) return null
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this SSE connection code.                   │
-    // │                                                                        │
-    // │ const url = `${SSE_ENDPOINTS.scanEvents}?projectId=${projectId}`      │
-    // │ const eventSource = new EventSource(url)                              │
-    // │                                                                        │
-    // │ // Listen for all event types defined in ScanLogEventType             │
-    // │ const eventTypes = [                                                  │
-    // │   "run_started", "segment_started", "tool_started", "tool_skipped",   │
-    // │   "tool_completed", "tool_failed", "enrichment_progress",             │
-    // │   "enrichment_complete", "segment_completed", "run_completed",        │
-    // │   "run_cancelled"                                                     │
-    // │ ]                                                                     │
-    // │                                                                        │
-    // │ eventTypes.forEach((type) => {                                        │
-    // │   eventSource.addEventListener(type, (e) => {                         │
-    // │     const data = JSON.parse(e.data)                                   │
-    // │     onEventRef.current({ ...data, type, id: crypto.randomUUID() })    │
-    // │   })                                                                  │
-    // │ })                                                                    │
-    // │                                                                        │
-    // │ eventSource.onerror = (err) => {                                      │
-    // │   console.error("[SSE] Scan events error:", err)                      │
-    // │   eventSource.close()                                                 │
-    // │ }                                                                     │
-    // │                                                                        │
-    // │ return eventSource                                                    │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // MOCK: No SSE in prototype. Events are simulated in the Scans page.
-    console.warn(`[MOCK SSE] Would connect to ${SSE_ENDPOINTS.scanEvents}?projectId=${projectId}`)
-    return null
-  }, [enabled, projectId])
+  onSnapshotRef.current = options?.onSnapshot
 
   useEffect(() => {
-    const eventSource: EventSource | null = connect()
-    return () => {
-      eventSource?.close()
-    }
-  }, [connect])
+    if (!enabled || !projectId) return
+    const url = SSE_ENDPOINTS.scanEvents(projectId)
+    const handle = apiEventSource(url, {
+      eventTypes: ['snapshot', ...SCAN_EVENT_TYPES],
+      onEvent: (type, data) => {
+        if (type === 'snapshot') {
+          onSnapshotRef.current?.(mapSnapshot(data as SnapshotPayloadApi))
+          return
+        }
+        if ((SCAN_EVENT_TYPES as readonly string[]).includes(type)) {
+          onEventRef.current(mapScanEvent(type as ScanLogEventType, data as ScanEventPayloadApi))
+        }
+      },
+    })
+    return () => handle.close()
+  }, [projectId, enabled])
 }
 
 /**
@@ -345,7 +424,8 @@ export function useScanEvents(
  * Returns the number of scan runs currently in flight for `projectId`. Wired
  * to `GET /api/v1/projects/{id}/scans/events` via `apiEventSource`. The
  * snapshot frame on connect carries `active_run_ids: number[]`; subsequent
- * `run_started` / `run_completed` / `run_cancelled` events update the set.
+ * `run_started` / `run_completed` / `run_cancelled` / `run_failed` events
+ * update the set.
  *
  * Returns 0 (and skips the subscription) when `projectId` is null.
  */
@@ -359,10 +439,10 @@ export function useRunningScansCount(projectId: number | null): number {
     }
 
     const active = new Set<number>()
-    const url = `${API_BASE_URL}/projects/${projectId}/scans/events`
+    const url = SSE_ENDPOINTS.scanEvents(projectId)
 
     const handle = apiEventSource(url, {
-      eventTypes: ['snapshot', 'run_started', 'run_completed', 'run_cancelled'],
+      eventTypes: ['snapshot', 'run_started', 'run_completed', 'run_cancelled', 'run_failed'],
       onEvent: (type, data) => {
         const payload = data as { run_id?: number | null; active_run_ids?: number[] }
         if (type === 'snapshot') {

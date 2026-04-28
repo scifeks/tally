@@ -13,6 +13,7 @@ const TYPE_STYLE: Record<ScanLogEventType, { color: string; prefix: string }> = 
   segment_completed: { color: 'text-accent', prefix: '===' },
   run_completed: { color: 'text-accent', prefix: '>>>' },
   run_cancelled: { color: 'text-high', prefix: 'XXX' },
+  run_failed: { color: 'text-crit', prefix: '!!!' },
 }
 
 export function LogRow({ event }: { event: ScanLogEvent }) {

@@ -1,0 +1,127 @@
+{
+  "items": [
+    {
+      "id": 2000,
+      "project_id": 1,
+      "status": "running",
+      "started_at": "2026-04-28T10:30:00+00:00",
+      "finished_at": null,
+      "repo_ids": ["dvwa", "juice-shop"],
+      "tool_ids": ["semgrep", "gitleaks"],
+      "domains": ["sast", "secrets"],
+      "findings_count": null,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2001,
+      "project_id": 1,
+      "status": "running",
+      "started_at": "2026-04-28T10:15:00+00:00",
+      "finished_at": null,
+      "repo_ids": ["vuln-nodejs"],
+      "tool_ids": ["zap"],
+      "domains": ["web"],
+      "findings_count": null,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2002,
+      "project_id": 1,
+      "status": "failed",
+      "started_at": "2026-04-28T09:00:00+00:00",
+      "finished_at": "2026-04-28T09:08:00+00:00",
+      "repo_ids": ["dvwa"],
+      "tool_ids": ["semgrep"],
+      "domains": ["sast"],
+      "findings_count": 0,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2003,
+      "project_id": 1,
+      "status": "done",
+      "started_at": "2026-04-28T07:30:00+00:00",
+      "finished_at": "2026-04-28T07:38:00+00:00",
+      "repo_ids": ["dvwa", "juice-shop", "php-goof"],
+      "tool_ids": ["semgrep", "codeql"],
+      "domains": ["sast"],
+      "findings_count": 23,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2004,
+      "project_id": 1,
+      "status": "done",
+      "started_at": "2026-04-28T06:00:00+00:00",
+      "finished_at": "2026-04-28T06:08:00+00:00",
+      "repo_ids": ["dvpwa"],
+      "tool_ids": ["pip-audit"],
+      "domains": ["sca"],
+      "findings_count": 11,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2005,
+      "project_id": 1,
+      "status": "done",
+      "started_at": "2026-04-28T04:30:00+00:00",
+      "finished_at": "2026-04-28T04:38:00+00:00",
+      "repo_ids": ["juice-shop"],
+      "tool_ids": ["nuclei", "zap"],
+      "domains": ["web"],
+      "findings_count": 35,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2006,
+      "project_id": 1,
+      "status": "done",
+      "started_at": "2026-04-28T03:00:00+00:00",
+      "finished_at": "2026-04-28T03:08:00+00:00",
+      "repo_ids": ["vuln-nodejs"],
+      "tool_ids": ["trufflehog"],
+      "domains": ["secrets"],
+      "findings_count": 4,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2007,
+      "project_id": 1,
+      "status": "cancelled",
+      "started_at": "2026-04-28T01:30:00+00:00",
+      "finished_at": "2026-04-28T01:32:00+00:00",
+      "repo_ids": ["php-goof"],
+      "tool_ids": ["semgrep"],
+      "domains": ["sast"],
+      "findings_count": null,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2008,
+      "project_id": 1,
+      "status": "done",
+      "started_at": "2026-04-28T00:00:00+00:00",
+      "finished_at": "2026-04-28T00:08:00+00:00",
+      "repo_ids": ["dvwa"],
+      "tool_ids": ["gitleaks"],
+      "domains": ["secrets"],
+      "findings_count": 2,
+      "skip_enrichment": true
+    },
+    {
+      "id": 2009,
+      "project_id": 1,
+      "status": "done",
+      "started_at": "2026-04-27T22:00:00+00:00",
+      "finished_at": "2026-04-27T22:09:00+00:00",
+      "repo_ids": ["dvwa", "dvpwa"],
+      "tool_ids": ["semgrep", "osv-scanner"],
+      "domains": ["sast", "sca"],
+      "findings_count": 18,
+      "skip_enrichment": false
+    }
+  ],
+  "total": 10,
+  "offset": 0,
+  "limit": 20
+}
