@@ -51,10 +51,50 @@ export interface Finding {
   triagedBy?: 'claude-code' | 'analyst_web'
 }
 
+/**
+ * Aggregate finding counts for a project, served by
+ * GET /api/v1/projects/:id/findings/counts. Camel-cased mirror of the
+ * backend's snake_case FindingsCountsResponse. The inner record on
+ * `bySeverityStatus` is `Record<string, number>` (not `Record<Status, number>`)
+ * because the endpoint spec permits non-canonical status columns when present
+ * in the data.
+ */
+export interface FindingsCounts {
+  bySeverity: Record<Severity, number>
+  byStatus: Record<Status, number>
+  byDomain: Record<string, number>
+  bySegment: Record<string, number>
+  byRepo: Record<string, number>
+  byTool: Record<string, number>
+  bySeverityStatus: Record<Severity, Record<string, number>>
+  total: number
+  scansCount: number
+  reposCount: number
+  urlsCount: number
+  lastScanAt: string | null
+  lastTriageAt: string | null
+}
+
 export interface Project {
   id: number
   name: string
   code: string
+}
+
+/**
+ * Project metadata served by GET /api/v1/projects/:id/meta. CamelCase mirror
+ * of the backend's snake_case ProjectMetaResponse. `enabledTools` is the list
+ * of tool IDs enabled for the project (not a count); call sites that want a
+ * count read `.length`.
+ */
+export interface ProjectMeta {
+  id: number
+  name: string
+  code: string
+  repoCount: number
+  urlListCount: number
+  findingCount: number
+  enabledTools: string[]
 }
 
 export interface Scan {

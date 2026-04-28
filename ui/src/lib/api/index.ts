@@ -44,10 +44,12 @@
 export { API_BASE_URL, SSE_ENDPOINTS, REST_ENDPOINTS } from './config'
 
 // Project hooks
-export { useProjects, useProjectMeta } from './useProjects'
+export { useProjects } from './useProjects'
+export { useProjectMeta } from './useProjectMeta'
 
 // Finding hooks
 export { useFindings, useUpdateFinding } from './useFindings'
+export { useFindingsCounts } from './useFindingsCounts'
 
 // Scan hooks
 export {

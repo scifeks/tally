@@ -1,7 +1,14 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useUI } from '@/lib/store'
-import { useProjects, useProjectMeta, useFindings, useScanHistory } from '@/lib/api'
+import {
+  useProjects,
+  useProjectMeta,
+  useFindings,
+  useFindingsCounts,
+  useScanHistory,
+  useRunningScansCount,
+} from '@/lib/api'
 import { Panel, SeverityChip } from '@/components/tty'
 import { cn, formatRelative } from '@/lib/utils'
 import { Play, GitBranch, Wrench, Link2, ScrollText, ArrowRight, FolderOpen } from 'lucide-react'
@@ -12,14 +19,17 @@ export default function Dashboard() {
 
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
-  // TODO [BACKEND]: All these hooks return mock data. Replace with real API calls.
-  // GET /api/v1/projects
+  // GET /api/v1/projects (real)
   const { data: projects = [] } = useProjects()
-  // GET /api/v1/projects/:id/meta (only fetches when activeProjectId is set)
-  const { data: projectMetaData } = useProjectMeta(projectIdParam)
-  // GET /api/v1/projects/:id/findings (only fetches when activeProjectId is set)
+  // GET /api/v1/projects/:id/meta (real)
+  const { data: meta } = useProjectMeta(projectIdParam)
+  // GET /api/v1/projects/:id/findings/counts (real)
+  const { data: counts } = useFindingsCounts(projectIdParam)
+  // SSE /api/v1/projects/:id/scans/events (real, snapshot+delta-driven)
+  const runningScansCount = useRunningScansCount(activeProjectId)
+  // GET /api/v1/projects/:id/findings — TODO [BACKEND]: still mock; Phase 11.5
   const { data: findings = [] } = useFindings({ projectId: projectIdParam })
-  // GET /api/v1/projects/:id/scans (only fetches when activeProjectId is set)
+  // GET /api/v1/projects/:id/scans — TODO [BACKEND]: still mock; Phase 11.7
   const { data: scans = [] } = useScanHistory(projectIdParam)
 
   // useMemo must run before the early return below to keep hook order stable
@@ -41,19 +51,15 @@ export default function Dashboard() {
   if (!project) {
     return <NoProjectSelectedState projects={projects} />
   }
-  const meta = projectMetaData ?? { repositories: 0, urlLists: 0, enabledTools: 0 }
+  const reposCount = counts?.reposCount ?? 0
+  const urlsCount = counts?.urlsCount ?? 0
+  const enabledToolsCount = meta?.enabledTools?.length ?? 0
+  const totalFindings = counts?.total ?? 0
+  const openCrit = counts?.bySeverityStatus.critical?.active ?? 0
+  const openHigh = counts?.bySeverityStatus.high?.active ?? 0
 
   const hasScans = projectScans.length > 0
   const hasFindings = projectFindings.length > 0
-  const lastScan = projectScans[0]
-  const runningScans = projectScans.filter(s => s.status === 'running').length
-
-  const openCrit = projectFindings.filter(
-    f => f.status === 'active' && f.severity === 'critical'
-  ).length
-  const openHigh = projectFindings.filter(
-    f => f.status === 'active' && f.severity === 'high'
-  ).length
 
   return (
     <div className="h-full overflow-auto">
@@ -73,26 +79,22 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex-1 grid grid-cols-4 divide-x divide-border">
-              <SummaryStat
-                label="repositories"
-                value={meta.repositories}
-                href="/config/repositories"
-              />
-              <SummaryStat label="url lists" value={meta.urlLists} href="/urls" />
-              <SummaryStat label="tools enabled" value={meta.enabledTools} href="/config/tools" />
+              <SummaryStat label="repositories" value={reposCount} href="/config/repositories" />
+              <SummaryStat label="urls" value={urlsCount} href="/urls" />
+              <SummaryStat label="tools enabled" value={enabledToolsCount} href="/config/tools" />
               <SummaryStat
                 label="scans"
                 value={projectScans.length}
                 href="/scans"
-                accent={runningScans > 0 ? 'accent' : undefined}
-                hint={runningScans > 0 ? `${runningScans} running` : undefined}
+                accent={runningScansCount > 0 ? 'accent' : undefined}
+                hint={runningScansCount > 0 ? `${runningScansCount} running` : undefined}
               />
             </div>
           </div>
         </section>
 
         {!hasScans ? (
-          <EmptyProjectState project={project} hasMeta={meta.repositories > 0} />
+          <EmptyProjectState project={project} hasMeta={reposCount > 0} />
         ) : (
           <>
             {/* Quick actions */}
@@ -179,9 +181,9 @@ export default function Dashboard() {
                 <div className="divide-y divide-border text-xs">
                   <GlanceRow
                     label="last scan"
-                    value={lastScan ? formatRelative(lastScan.startedAt) : 'never'}
+                    value={counts?.lastScanAt ? formatRelative(counts.lastScanAt) : 'never'}
                   />
-                  <GlanceRow label="total findings" value={projectFindings.length.toString()} />
+                  <GlanceRow label="total findings" value={totalFindings.toString()} />
                   <GlanceRow
                     label="open critical"
                     value={openCrit.toString()}
@@ -194,8 +196,8 @@ export default function Dashboard() {
                   />
                   <GlanceRow
                     label="scans running"
-                    value={runningScans.toString()}
-                    highlight={runningScans > 0 ? 'accent' : undefined}
+                    value={runningScansCount.toString()}
+                    highlight={runningScansCount > 0 ? 'accent' : undefined}
                   />
                 </div>
                 {hasFindings && (

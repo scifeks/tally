@@ -17,8 +17,7 @@
  * ```
  *
  * The TopBar consumes `useProjects()` for the project switcher; per-page
- * project metadata still flows through `useProjectMeta()` (still mock —
- * Phase 11.4+ owns that wiring).
+ * project metadata flows through `useProjectMeta()` in its own file.
  */
 
 import { useQuery } from '@tanstack/react-query'
@@ -52,44 +51,5 @@ export function useProjects() {
       }))
     },
     staleTime: 5 * 60 * 1000,
-  })
-}
-
-/**
- * useProjectMeta Hook
- * ===================
- * Fetches metadata for a single project (repo count, URL list count, enabled tools).
- *
- * TODO [BACKEND]: Replace mock data with actual API call.
- *
- * Expected API response (GET /api/v1/projects/:id/meta):
- * ```json
- * {
- *   "repositories": 14,
- *   "urlLists": 3,
- *   "enabledTools": 9
- * }
- * ```
- */
-
-// TODO [BACKEND]: Remove this mock import once API is connected.
-import { projectMeta as mockProjectMeta } from '../mock-data'
-
-export function useProjectMeta(projectId: string) {
-  return useQuery({
-    queryKey: ['projectMeta', projectId],
-    queryFn: async () => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.projectMeta(projectId))    │
-      // │ if (!res.ok) throw new Error("Failed to fetch project meta")      │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      return mockProjectMeta[projectId] ?? { repositories: 0, urlLists: 0, enabledTools: 0 }
-    },
-    staleTime: 60 * 1000,
-    enabled: Boolean(projectId),
   })
 }
