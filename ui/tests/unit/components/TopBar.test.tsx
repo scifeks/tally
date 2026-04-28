@@ -34,8 +34,8 @@ beforeEach(() => {
   useUI.setState({
     activeProjectId: null,
     findingsSegment: 'sast',
-    selectedFindingIds: new Set<string>(),
-    findingOverrides: {},
+    selectedFindingIds: new Set<number>(),
+    findingMutationError: null,
     triageRunStatus: 'idle',
   })
 })

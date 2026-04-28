@@ -1,48 +1,33 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
-import { useFindings as useFindingsHook } from '@/lib/api'
+import {
+  useFindings,
+  useFindingsCounts,
+  useFindingsEvents,
+  useUpdateFinding,
+  type FindingFilters,
+  type FindingSortKey,
+} from '@/lib/api'
+import { FindingMutationErrorModal } from '@/components/FindingMutationErrorModal'
 import { useUI } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import type { Segment, Finding, Severity } from '@/lib/types'
+import type { Severity } from '@/lib/types'
 import { SEGMENTS, SEV_ORDER, SEV_LABEL, SEV_COLOR } from './constants'
 import { emptyFilters } from './types'
-import type { Filters, FilterKey, SortKey, SortState } from './types'
+import type { Filters, SortKey, SortState } from './types'
 import { EmptyFindingsState } from './EmptyFindingsState'
 import { FindingsList } from './FindingsList'
 import { FindingDetailPanel } from './FindingDetailPanel'
 
-// ─── Pure helpers (module scope — no component state captured) ────────────────
+const SEARCH_DEBOUNCE_MS = 250
 
-/**
- * Apply subset of filters. `skip` excludes one filter so that facet
- * counts for that filter are computed against ALL-OTHER filters — this
- * keeps filter options live and in sync with each other.
- */
-function applyFilters(rows: Finding[], f: Filters, skip?: FilterKey): Finding[] {
-  return rows.filter(r => {
-    if (skip !== 'severity' && f.severity.size > 0 && !f.severity.has(r.severity)) return false
-    if (skip !== 'status' && f.status.size > 0 && !f.status.has(r.status)) return false
-    if (skip !== 'tool' && f.tool.size > 0 && !f.tool.has(r.tool)) return false
-    if (skip !== 'search' && f.search) {
-      const q = f.search.toLowerCase()
-      const hay =
-        r.title +
-        ' ' +
-        r.id +
-        ' ' +
-        r.tool +
-        ' ' +
-        (r.file ?? '') +
-        ' ' +
-        (r.target ?? '') +
-        ' ' +
-        (r.commitHash ?? '') +
-        ' ' +
-        (r.cwe ?? '')
-      if (!hay.toLowerCase().includes(q)) return false
-    }
-    return true
-  })
+/** Map a UI sort key to the backend `sort=` param. */
+const SORT_KEY_TO_SERVER: Record<SortKey, FindingSortKey> = {
+  severity: 'severity',
+  title: 'title',
+  tool: 'tool',
+  status: 'status',
+  found: 'first_seen',
 }
 
 // ─── Findings Page ────────────────────────────────────────────────────────────
@@ -55,12 +40,11 @@ export default function Findings() {
   const toggleSelected = useUI(s => s.toggleSelected)
   const setSelected = useUI(s => s.setSelected)
   const clearSelected = useUI(s => s.clearSelected)
-  const overrides = useUI(s => s.findingOverrides)
-  const updateFinding = useUI(s => s.updateFinding)
 
   const [filters, setFilters] = useState<Filters>(emptyFilters)
   const [sort, setSort] = useState<SortState>(null)
-  const [selectedRow, setSelectedRow] = useState<string | null>(null)
+  const [selectedRow, setSelectedRow] = useState<number | null>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('')
 
   // Reset filters, sort, and selection on project / domain change.
   useEffect(() => {
@@ -70,110 +54,71 @@ export default function Findings() {
     clearSelected()
   }, [activeProjectId, domain, clearSelected])
 
+  // Debounce the search box so a fresh query isn't fired on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(filters.search), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [filters.search])
+
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
-  // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
-  // GET /api/v1/projects/:id/findings
-  const { data: baseFindings = [] } = useFindingsHook({ projectId: projectIdParam })
+  // Project-level counts power the always-on facet labels (severity chips at
+  // top, FilterHeader option counts). They reflect the entire project, not
+  // the currently-filtered slice — which is the right UX once the page is
+  // server-paginated.
+  const { data: counts } = useFindingsCounts(projectIdParam)
 
-  // Merge in-memory edits (e.g. status, notes) on top of base findings.
-  // TODO [BACKEND]: When backend is connected, local overrides should trigger
-  // PATCH /api/v1/findings/:id and invalidate the query cache instead of
-  // maintaining a separate overrides map.
-  const allFindings = useMemo<Finding[]>(
-    () => baseFindings.map(f => (overrides[f.id] ? { ...f, ...overrides[f.id] } : f)),
-    [baseFindings, overrides]
-  )
+  const serverFilters: FindingFilters = useMemo(() => {
+    const f: FindingFilters = { segment: [domain] }
+    if (filters.severity.size > 0) f.severity = Array.from(filters.severity)
+    if (filters.status.size > 0) f.status = Array.from(filters.status)
+    if (filters.tool.size > 0) f.tool = Array.from(filters.tool)
+    if (debouncedSearch) f.search = debouncedSearch
+    if (sort) {
+      f.sort = SORT_KEY_TO_SERVER[sort.key]
+      f.order = sort.dir
+    }
+    return f
+  }, [domain, filters.severity, filters.status, filters.tool, debouncedSearch, sort])
 
-  const projectFindings = useMemo(
-    () => allFindings.filter(f => f.projectId === projectIdParam),
-    [allFindings, projectIdParam]
+  const findingsQuery = useFindings({ projectId: projectIdParam, filters: serverFilters })
+  const filtered = findingsQuery.data
+  const total = findingsQuery.total
+
+  const updateFindingMutation = useUpdateFinding()
+
+  // Subscribe to project-scoped finding_updated SSE events so other tabs /
+  // backend mutations land in the cache without a refetch.
+  useFindingsEvents(projectIdParam)
+
+  const detail = useMemo(
+    () => filtered.find(f => f.id === selectedRow) ?? null,
+    [filtered, selectedRow]
   )
 
   const domainCounts = useMemo(() => {
-    const m: Record<Segment, number> = { sast: 0, web: 0, secrets: 0, sca: 0 }
-    projectFindings.forEach(f => {
-      m[f.segment]++
-    })
-    return m
-  }, [projectFindings])
-
-  const domainFindings = useMemo(
-    () => projectFindings.filter(f => f.segment === domain),
-    [projectFindings, domain]
-  )
-
-  const filteredUnsorted = useMemo(
-    () => applyFilters(domainFindings, filters),
-
-    [domainFindings, filters]
-  )
-
-  const filtered = useMemo(() => {
-    if (!sort) return filteredUnsorted
-    const { key, dir } = sort
-    const mul = dir === 'asc' ? 1 : -1
-    const get = (f: Finding): string | number => {
-      switch (key) {
-        case 'id':
-          return f.id
-        case 'severity':
-          return f.severity
-        case 'title':
-          return f.title.toLowerCase()
-        case 'tool':
-          return f.tool
-        case 'location':
-          return (f.file ? `${f.file}:${f.line ?? ''}` : f.target).toLowerCase()
-        case 'commit':
-          return f.commitHash ?? '￿'
-        case 'status':
-          return f.status
-        case 'found':
-          return new Date(f.discoveredAt).getTime()
-      }
+    return {
+      sast: counts?.bySegment.sast ?? 0,
+      web: counts?.bySegment.web ?? 0,
+      secrets: counts?.bySegment.secrets ?? 0,
+      sca: counts?.bySegment.sca ?? 0,
     }
-    return [...filteredUnsorted].sort((a, b) => {
-      const av = get(a)
-      const bv = get(b)
-      if (av < bv) return -1 * mul
-      if (av > bv) return 1 * mul
-      return 0
-    })
-  }, [filteredUnsorted, sort])
+  }, [counts])
 
   const sevFacets = useMemo(() => {
-    const base = applyFilters(domainFindings, filters, 'severity')
-    const counts: Record<Severity, number> = {
+    const empty: Record<Severity, number> = {
       critical: 0,
       high: 0,
       medium: 0,
       low: 0,
       informational: 0,
     }
-    base.forEach(r => counts[r.severity]++)
-    return counts
-  }, [domainFindings, filters])
+    if (!counts) return empty
+    return { ...empty, ...counts.bySeverity }
+  }, [counts])
 
-  const statusFacets = useMemo(() => {
-    const base = applyFilters(domainFindings, filters, 'status')
-    const counts: Record<string, number> = {}
-    base.forEach(r => {
-      counts[r.status] = (counts[r.status] ?? 0) + 1
-    })
-    return counts
-  }, [domainFindings, filters])
-
-  const toolFacets = useMemo(() => {
-    const base = applyFilters(domainFindings, filters, 'tool')
-    const counts: Record<string, number> = {}
-    base.forEach(r => {
-      counts[r.tool] = (counts[r.tool] ?? 0) + 1
-    })
-    return counts
-  }, [domainFindings, filters])
-
-  const detail = filtered.find(f => f.id === selectedRow) ?? null
+  const statusFacets = counts?.byStatus ?? {}
+  const toolFacets = counts?.byTool ?? {}
 
   const hasAnyFilter =
     filters.severity.size > 0 ||
@@ -182,8 +127,7 @@ export default function Findings() {
     filters.search.length > 0
 
   const clearAllFilters = () => setFilters(emptyFilters())
-
-  const showEmptyState = domainFindings.length === 0
+  const showEmptyState = (counts?.bySegment[domain] ?? 0) === 0
 
   const cycleSort = (key: SortKey) =>
     setSort(prev => {
@@ -200,8 +144,38 @@ export default function Findings() {
       return { ...f, severity: next }
     })
 
+  const handleUpdate = useCallback(
+    (patch: Parameters<typeof updateFindingMutation.mutate>[0]['patch']) => {
+      if (!detail || !activeProjectId) return
+      updateFindingMutation.mutate({
+        projectId: String(activeProjectId),
+        id: detail.id,
+        patch,
+      })
+    },
+    [detail, activeProjectId, updateFindingMutation]
+  )
+
+  // Infinite-scroll sentinel — when the bottom marker enters the viewport
+  // we fetch the next page (if any).
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    if (!findingsQuery.hasNextPage) return
+    if (findingsQuery.isFetchingNextPage) return
+    const obs = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) {
+        void findingsQuery.fetchNextPage()
+      }
+    })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [findingsQuery])
+
   return (
     <div className="h-full flex flex-col min-h-0">
+      <FindingMutationErrorModal />
       {/* Unified filter row: [SEGMENT] + tabs | [SEVERITY] + chips | [SEARCH] + input */}
       <div className="flex items-stretch border-b border-border-strong bg-background shrink-0">
         {/* === SEGMENT SECTION === */}
@@ -300,7 +274,7 @@ export default function Findings() {
             <input
               value={filters.search}
               onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              placeholder="title, id, tool, location, commit, cwe..."
+              placeholder="title, description, tool, location..."
               className="bg-transparent outline-none text-sm flex-1 min-w-0 placeholder:text-dim text-foreground"
               aria-label="Search findings"
             />
@@ -314,7 +288,7 @@ export default function Findings() {
               </button>
             )}
             <span className="text-[10px] text-dim uppercase tracking-wider hidden xl:inline shrink-0">
-              {filters.search ? `matches: ${filteredUnsorted.length}` : 'press / to focus'}
+              {filters.search ? `matches: ${total}` : 'press / to focus'}
             </span>
           </div>
         )}
@@ -336,7 +310,7 @@ export default function Findings() {
         <div className="flex items-center gap-3 px-4 py-1.5 bg-muted border-b border-accent shrink-0">
           <span className="text-xs text-accent font-bold">{selectedFindingIds.size} selected</span>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            of {filtered.length} filtered
+            of {total} total
           </span>
           <div className="h-4 w-px bg-border-strong" />
           <button className="text-[11px] uppercase tracking-wider px-2 py-0.5 border border-border-strong hover:bg-background">
@@ -365,6 +339,7 @@ export default function Findings() {
           ) : (
             <FindingsList
               rows={filtered}
+              total={total}
               onSelect={setSelectedRow}
               selectedRowId={selectedRow}
               selectedIds={selectedFindingIds}
@@ -378,15 +353,15 @@ export default function Findings() {
               sevFacets={sevFacets}
               sort={sort}
               onSort={cycleSort}
+              sentinelRef={sentinelRef}
+              isFetchingNextPage={findingsQuery.isFetchingNextPage}
+              hasNextPage={findingsQuery.hasNextPage}
             />
           )}
         </div>
 
         <aside className="hidden xl:flex w-[420px] border-l border-border flex-col shrink-0">
-          <FindingDetailPanel
-            finding={detail}
-            onUpdate={patch => detail && updateFinding(detail.id, patch)}
-          />
+          <FindingDetailPanel finding={detail} onUpdate={handleUpdate} />
         </aside>
       </div>
     </div>

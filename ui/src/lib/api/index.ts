@@ -48,7 +48,11 @@ export { useProjects } from './useProjects'
 export { useProjectMeta } from './useProjectMeta'
 
 // Finding hooks
-export { useFindings, useUpdateFinding } from './useFindings'
+export { useFindings, mapFinding } from './useFindings'
+export type { FindingFilters, FindingSortKey, UseFindingsOptions } from './useFindings'
+export { useUpdateFinding } from './useUpdateFinding'
+export type { UpdateFindingPatch } from './useUpdateFinding'
+export { useFindingsEvents } from './useFindingsEvents'
 export { useFindingsCounts } from './useFindingsCounts'
 
 // Scan hooks

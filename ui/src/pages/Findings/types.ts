@@ -1,14 +1,13 @@
 import type { Severity, Status } from '@/lib/types'
 
-export type SortKey =
-  | 'id'
-  | 'severity'
-  | 'title'
-  | 'tool'
-  | 'location'
-  | 'commit'
-  | 'status'
-  | 'found'
+/**
+ * Server-supported sort columns. The previous prototype offered client-side
+ * sort on `id`, `location`, and `commit`; once the list is paginated those
+ * sorts only cover the currently-loaded slice and are misleading, so the
+ * affordance is dropped on those columns. CWE and finding-type columns are
+ * not server-sortable at all.
+ */
+export type SortKey = 'severity' | 'title' | 'tool' | 'status' | 'found'
 export type SortDir = 'asc' | 'desc'
 export type SortState = { key: SortKey; dir: SortDir } | null
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Segment, Finding, TriageRunStatus } from './types'
+import type { ApiErrorPayload, Segment, TriageRunStatus } from './types'
 
 interface UIState {
   /** null means no project selected yet (initial app load state) */
@@ -10,17 +10,18 @@ interface UIState {
   findingsSegment: Segment
   setFindingsSegment: (d: Segment) => void
 
-  selectedFindingIds: Set<string>
-  toggleSelected: (id: string) => void
-  setSelected: (ids: string[]) => void
+  selectedFindingIds: Set<number>
+  toggleSelected: (id: number) => void
+  setSelected: (ids: number[]) => void
   clearSelected: () => void
 
   /**
-   * Prototype: in-memory overrides for editable finding fields.
-   * Real app will PATCH the backend and invalidate the query cache.
+   * Surface mutation failures (especially `FINDING_LOCKED` 409s) so an
+   * optimistic rollback is visible to the user. Cleared by the modal's
+   * dismiss button. Not persisted.
    */
-  findingOverrides: Record<string, Partial<Finding>>
-  updateFinding: (id: string, patch: Partial<Finding>) => void
+  findingMutationError: ApiErrorPayload | null
+  setFindingMutationError: (err: ApiErrorPayload | null) => void
 
   /** Track triage run status to block project switches. */
   triageRunStatus: TriageRunStatus
@@ -36,7 +37,7 @@ export const useUI = create<UIState>()(
       findingsSegment: 'sast',
       setFindingsSegment: d => set({ findingsSegment: d, selectedFindingIds: new Set() }),
 
-      selectedFindingIds: new Set<string>(),
+      selectedFindingIds: new Set<number>(),
       toggleSelected: id =>
         set(s => {
           const next = new Set(s.selectedFindingIds)
@@ -47,14 +48,8 @@ export const useUI = create<UIState>()(
       setSelected: ids => set({ selectedFindingIds: new Set(ids) }),
       clearSelected: () => set({ selectedFindingIds: new Set() }),
 
-      findingOverrides: {},
-      updateFinding: (id, patch) =>
-        set(s => ({
-          findingOverrides: {
-            ...s.findingOverrides,
-            [id]: { ...(s.findingOverrides[id] ?? {}), ...patch },
-          },
-        })),
+      findingMutationError: null,
+      setFindingMutationError: err => set({ findingMutationError: err }),
 
       triageRunStatus: 'idle',
       setTriageRunStatus: status => set({ triageRunStatus: status }),

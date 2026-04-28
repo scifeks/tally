@@ -1,0 +1,53 @@
+{
+  "items": [
+    {
+      "id": 1051,
+      "project_id": 1,
+      "segment": "sast",
+      "domain": "code",
+      "severity": "low",
+      "status": "active",
+      "confidence": "low",
+      "finding_type": ["weak-crypto"],
+      "title": "MD5 used for non-security hashing",
+      "description": null,
+      "tool": "bandit",
+      "target": "acme-api",
+      "file": "src/util/cache.py",
+      "line": 9,
+      "cwe": ["CWE-327"],
+      "notes": null,
+      "discovered_at": "2026-04-26T10:30:00Z",
+      "triaged_at": null,
+      "triaged_by": null,
+      "is_locked": false,
+      "lock_holder": null
+    },
+    {
+      "id": 1052,
+      "project_id": 1,
+      "segment": "sca",
+      "domain": "code",
+      "severity": "informational",
+      "status": "active",
+      "confidence": "low",
+      "finding_type": ["outdated-dependency"],
+      "title": "axios 0.21.x has newer release available",
+      "description": null,
+      "tool": "trivy",
+      "target": "acme-web",
+      "file": "package.json",
+      "line": 22,
+      "cwe": [],
+      "notes": null,
+      "discovered_at": "2026-04-26T10:35:00Z",
+      "triaged_at": null,
+      "triaged_by": null,
+      "is_locked": false,
+      "lock_holder": null
+    }
+  ],
+  "total": 60,
+  "offset": 50,
+  "limit": 50
+}

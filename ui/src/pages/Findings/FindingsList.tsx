@@ -195,10 +195,29 @@ function FilterHeader({
   )
 }
 
+// ─── PlainHeader ──────────────────────────────────────────────────────────────
+// Header for columns that aren't server-sortable. Replaces the sortable
+// affordance for `id`, `location`, and `cwe` (which would only sort the
+// currently-loaded page client-side and mislead the user).
+
+function PlainHeader({ label, align }: { label: string; align?: 'right' }) {
+  return (
+    <span
+      className={cn(
+        'text-[10px] uppercase tracking-[0.18em] text-muted-foreground h-full inline-flex items-center',
+        align === 'right' && 'justify-end'
+      )}
+    >
+      {label}
+    </span>
+  )
+}
+
 // ─── FindingsList ─────────────────────────────────────────────────────────────
 
 export function FindingsList({
   rows,
+  total,
   onSelect,
   selectedRowId,
   selectedIds,
@@ -212,12 +231,16 @@ export function FindingsList({
   sevFacets,
   sort,
   onSort,
+  sentinelRef,
+  isFetchingNextPage,
+  hasNextPage,
 }: {
   rows: Finding[]
-  onSelect: (id: string) => void
-  selectedRowId: string | null
-  selectedIds: Set<string>
-  onToggle: (id: string) => void
+  total: number
+  onSelect: (id: number) => void
+  selectedRowId: number | null
+  selectedIds: Set<number>
+  onToggle: (id: number) => void
   onSelectAllFiltered: () => void
   onClearAll: () => void
   filters: Filters
@@ -227,6 +250,9 @@ export function FindingsList({
   sevFacets: Record<Severity, number>
   sort: SortState
   onSort: (key: SortKey) => void
+  sentinelRef: React.RefObject<HTMLDivElement | null>
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -276,7 +302,7 @@ export function FindingsList({
         <div>
           <input
             type="checkbox"
-            aria-label={`Select all ${rows.length} filtered findings`}
+            aria-label={`Select all ${rows.length} loaded findings`}
             checked={allFilteredSelected}
             onChange={e => {
               if (e.target.checked) onSelectAllFiltered()
@@ -285,7 +311,7 @@ export function FindingsList({
             className="accent-[var(--color-accent)]"
           />
         </div>
-        <SortHeader label="id" sortKey="id" sort={sort} onSort={onSort} />
+        <PlainHeader label="id" />
         <FilterHeader
           label="sev"
           sortKey="severity"
@@ -307,8 +333,8 @@ export function FindingsList({
           selected={filters.tool as Set<string>}
           onChange={next => setFilters(f => ({ ...f, tool: next }))}
         />
-        <SortHeader label="location" sortKey="location" sort={sort} onSort={onSort} />
-        <SortHeader label="commit" sortKey="commit" sort={sort} onSort={onSort} />
+        <PlainHeader label="location" />
+        <PlainHeader label="cwe" />
         <FilterHeader
           label="status"
           sortKey="status"
@@ -341,6 +367,7 @@ export function FindingsList({
               const f = rows[v.index]
               const isSelected = selectedIds.has(f.id)
               const isFocused = selectedRowId === f.id
+              const cweLabel = f.cwe.length > 0 ? f.cwe.join(', ') : '—'
               return (
                 <div
                   key={f.id}
@@ -381,9 +408,9 @@ export function FindingsList({
                   <div className="text-foreground truncate pr-3">{f.title}</div>
                   <div className="text-muted-foreground truncate">{f.tool}</div>
                   <div className="text-muted-foreground truncate tabular-nums">{locationOf(f)}</div>
-                  <div className="tabular-nums">
-                    {f.commitHash ? (
-                      <span className="text-primary">{f.commitHash}</span>
+                  <div className="tabular-nums truncate">
+                    {f.cwe.length > 0 ? (
+                      <span className="text-primary">{cweLabel}</span>
                     ) : (
                       <span className="text-dim">—</span>
                     )}
@@ -399,13 +426,15 @@ export function FindingsList({
             })}
           </div>
         )}
+        {/* Infinite-scroll sentinel sits below the virtualized body. */}
+        <div ref={sentinelRef} className="h-px" aria-hidden />
       </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between px-3 h-7 border-t border-border text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">
         <span>
-          <span className="text-primary tabular-nums">{rows.length}</span> result
-          {rows.length !== 1 ? 's' : ''}
+          <span className="text-primary tabular-nums">{rows.length}</span> of{' '}
+          <span className="text-foreground tabular-nums">{total}</span> loaded
           {selectedIds.size > 0 && (
             <>
               {' '}
@@ -417,6 +446,18 @@ export function FindingsList({
               {' '}
               · sorted by <span className="text-foreground">{sort.key}</span>{' '}
               <span className="text-dim">{sort.dir}</span>
+            </>
+          )}
+          {isFetchingNextPage && (
+            <>
+              {' '}
+              · <span className="text-accent">loading more…</span>
+            </>
+          )}
+          {!hasNextPage && rows.length > 0 && rows.length === total && (
+            <>
+              {' '}
+              · <span className="text-dim">end of list</span>
             </>
           )}
         </span>
