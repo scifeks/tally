@@ -13,6 +13,12 @@ import findingUpdatedFixture from '../fixtures/finding-updated.json'
 import urlListProject1Fixture from '../fixtures/url-list-project-1.json'
 import urlListProject2Fixture from '../fixtures/url-list-project-2.json'
 import urlListEmptyFixture from '../fixtures/url-list-empty.json'
+import scanConfigProject1Fixture from '../fixtures/scan-config-project-1.json'
+import scanConfigProject2Fixture from '../fixtures/scan-config-project-2.json'
+import scanConfigEmptyFixture from '../fixtures/scan-config-empty.json'
+import scanHistoryProject1Fixture from '../fixtures/scan-history-project-1.json'
+import scanHistoryProject2Fixture from '../fixtures/scan-history-project-2.json'
+import scanHistoryEmptyFixture from '../fixtures/scan-history-empty.json'
 
 interface UrlListPage {
   items: Array<Record<string, unknown> & { id: number }>
@@ -25,6 +31,25 @@ const URL_LIST_FIXTURES: Record<string, UrlListPage> = {
   '1': urlListProject1Fixture as UrlListPage,
   '2': urlListProject2Fixture as UrlListPage,
   '3': urlListEmptyFixture as UrlListPage,
+}
+
+const SCAN_CONFIG_FIXTURES: Record<string, unknown> = {
+  '1': scanConfigProject1Fixture,
+  '2': scanConfigProject2Fixture,
+  '3': scanConfigEmptyFixture,
+}
+
+interface ScanHistoryPage {
+  items: Array<Record<string, unknown> & { id: number; status: string | null }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const SCAN_HISTORY_FIXTURES: Record<string, ScanHistoryPage> = {
+  '1': scanHistoryProject1Fixture as ScanHistoryPage,
+  '2': scanHistoryProject2Fixture as ScanHistoryPage,
+  '3': scanHistoryEmptyFixture as ScanHistoryPage,
 }
 
 interface FindingsPage {
@@ -111,6 +136,49 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? 100)
     const slice = (fixture as UrlListPage).items.slice(offset, offset + limit)
     return HttpResponse.json({ items: slice, total: fixture.total, offset, limit })
+  }),
+  http.get('/api/v1/projects/:projectId/scans/config', ({ params }) => {
+    const fixture = SCAN_CONFIG_FIXTURES[params.projectId as string] ?? scanConfigEmptyFixture
+    return HttpResponse.json(fixture)
+  }),
+  http.get('/api/v1/projects/:projectId/scans', ({ params, request }) => {
+    const fixture = SCAN_HISTORY_FIXTURES[params.projectId as string] ?? scanHistoryEmptyFixture
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 20)
+    const status = url.searchParams.get('status')
+    let items = fixture.items
+    if (status) {
+      items = items.filter(it => it.status === status)
+    }
+    const total = items.length
+    const slice = items.slice(offset, offset + limit)
+    return HttpResponse.json({ items: slice, total, offset, limit })
+  }),
+  http.post('/api/v1/projects/:projectId/scans', async ({ params, request }) => {
+    const projectId = Number(params.projectId)
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    return HttpResponse.json(
+      {
+        id: 9999,
+        project_id: projectId,
+        status: 'queued',
+        started_at: new Date().toISOString(),
+        finished_at: null,
+        repo_ids: (body.repoIds as unknown[] | undefined)?.map(String) ?? [],
+        tool_ids: (body.toolIds as string[] | undefined) ?? [],
+        domains: (body.domains as string[] | undefined) ?? [],
+        findings_count: null,
+        skip_enrichment: Boolean(body.skipEnrichment ?? false),
+      },
+      { status: 202 }
+    )
+  }),
+  http.post('/api/v1/projects/:projectId/scans/:runId/cancel', ({ params }) => {
+    return HttpResponse.json(
+      { id: Number(params.runId), status: 'cancelling' },
+      { status: 202 }
+    )
   }),
 ]
 

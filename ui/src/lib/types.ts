@@ -140,38 +140,47 @@ export interface ProjectMeta {
   enabledTools: string[]
 }
 
+/**
+ * One scan run summary as served by `GET /api/v1/projects/:id/scans`.
+ * Mirrors the backend `ScanRunSummary` Pydantic model. The list endpoint
+ * does NOT carry `current_segment` / `segment_label` / `progress`; those
+ * live on `/scans/:run_id/progress`, which the FE consumes via SSE
+ * snapshots instead.
+ */
 export interface Scan {
-  id: string
-  projectId: string
-  segment: Segment
-  tool: string
-  status: 'queued' | 'running' | 'done' | 'failed'
+  /** Numeric SQLite primary key (matches backend `id: int`). */
+  id: number
+  /** Numeric project id (matches backend `project_id: int`). */
+  projectId: number
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled'
   startedAt: string
-  finishedAt?: string
-  findingsCount?: number
-  /** Only present when status === 'running'. Describes the current work unit. */
-  currentSegment?: string
-  /** 0-100, streamed via SSE when running. */
-  progress?: number
-  /** E.g. "3 / 14 repositories", "1.2k / 5.0k URLs". */
-  segmentLabel?: string
+  finishedAt: string | null
+  /** Repository names included in the run (backend serialises as strings). */
+  repoIds: string[]
+  /** Tool ids included in the run. */
+  toolIds: string[]
+  /** Segments / domains the run covered. */
+  domains: Segment[]
+  findingsCount: number | null
+  skipEnrichment: boolean
 }
 
 // ─── Detailed Scan Run Types ────────────────────────────────────────────────
 // Used by the Scans page for the live log stream and history view.
 
-export type ScanRunStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'failed'
+export type ScanRunStatus = 'idle' | 'running' | 'completed' | 'cancelling' | 'cancelled' | 'failed'
 
 // ─── Scan Configuration Types ───────────────────────────────────────────────
 // Used by the Scans page for advanced scan options.
 
 /** A repository configured for scanning in the project. */
 export interface ConfiguredRepo {
-  id: string
+  /** Numeric SQLite primary key (matches backend `id: int`). */
+  id: number
   name: string
   /** e.g., "github", "gitlab", "local" */
   source: string
-  /** URL or local path */
+  /** URL or local path; empty string when backend has no location. */
   location: string
 }
 
@@ -187,7 +196,7 @@ export interface ConfiguredTool {
 /** Scan options passed to the backend when starting a scan. */
 export interface ScanOptions {
   /** Scope to specific repos (ids). If omitted, scan all repos. */
-  repoIds?: string[]
+  repoIds?: number[]
   /** Run only these tools (ids). If omitted, run all enabled tools. */
   toolIds?: string[]
   /** Filter by segment(s). If omitted, run all segments. */
@@ -250,10 +259,11 @@ export type ScanLogEventType =
   | 'segment_completed'
   | 'run_completed'
   | 'run_cancelled'
+  | 'run_failed'
 
 export interface ScanLogEvent {
   id: string
-  runId: string
+  runId: number
   type: ScanLogEventType
   timestamp: string
   segment?: Segment

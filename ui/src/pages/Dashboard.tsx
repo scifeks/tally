@@ -39,13 +39,13 @@ export default function Dashboard() {
     },
   })
   // GET /api/v1/projects/:id/scans — TODO [BACKEND]: still mock; Phase 11.7
-  const { data: scans = [] } = useScanHistory(projectIdParam)
+  const { data: scans = [] } = useScanHistory(activeProjectId ?? 0)
 
   // useMemo must run before the early return below to keep hook order stable
   // across renders where activeProjectId toggles between null and a value.
   const projectScans = useMemo(
-    () => scans.filter(s => s.projectId === projectIdParam),
-    [scans, projectIdParam]
+    () => scans.filter(s => s.projectId === activeProjectId),
+    [scans, activeProjectId]
   )
 
   // Initial app load: no project picked yet — show selection state.
@@ -145,10 +145,10 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <Panel title="recent scans" className="lg:col-span-2" bodyClassName="overflow-auto">
                 <div className="text-xs">
-                  <div className="grid grid-cols-[90px_70px_90px_1fr_80px_110px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground px-3 h-7 items-center border-b border-border">
+                  <div className="grid grid-cols-[90px_110px_1fr_1fr_80px_110px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground px-3 h-7 items-center border-b border-border">
                     <div>id</div>
-                    <div>domain</div>
-                    <div>tool</div>
+                    <div>domains</div>
+                    <div>tools</div>
                     <div>status</div>
                     <div className="text-right">findings</div>
                     <div className="text-right">when</div>
@@ -156,11 +156,15 @@ export default function Dashboard() {
                   {projectScans.slice(0, 8).map(s => (
                     <div
                       key={s.id}
-                      className="grid grid-cols-[90px_70px_90px_1fr_80px_110px] items-center px-3 h-8 border-b border-border last:border-b-0 hover:bg-muted/50"
+                      className="grid grid-cols-[90px_110px_1fr_1fr_80px_110px] items-center px-3 h-8 border-b border-border last:border-b-0 hover:bg-muted/50"
                     >
                       <div className="text-dim tabular-nums">{s.id}</div>
-                      <div className="uppercase text-muted-foreground text-[11px]">{s.segment}</div>
-                      <div className="text-foreground">{s.tool}</div>
+                      <div className="uppercase text-muted-foreground text-[11px] truncate">
+                        {s.domains.length > 0 ? s.domains.join(', ') : '—'}
+                      </div>
+                      <div className="text-foreground truncate">
+                        {s.toolIds.length > 0 ? s.toolIds.join(', ') : '—'}
+                      </div>
                       <div>
                         <ScanStatus status={s.status} />
                       </div>

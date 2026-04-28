@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { useScanHistory } from '@/lib/api'
 
-export function HistoryTable({ projectId }: { projectId: string }) {
+export function HistoryTable({ projectId }: { projectId: number }) {
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
   // GET /api/v1/projects/:id/scans
   const { data: scans = [] } = useScanHistory(projectId)
@@ -29,8 +29,8 @@ export function HistoryTable({ projectId }: { projectId: string }) {
         <thead className="sticky top-0 bg-muted text-muted-foreground uppercase tracking-wider">
           <tr>
             <th className="text-left px-3 py-2 font-medium">ID</th>
-            <th className="text-left px-3 py-2 font-medium">Segment</th>
-            <th className="text-left px-3 py-2 font-medium">Tool</th>
+            <th className="text-left px-3 py-2 font-medium">Domains</th>
+            <th className="text-left px-3 py-2 font-medium">Tools</th>
             <th className="text-left px-3 py-2 font-medium">Status</th>
             <th className="text-right px-3 py-2 font-medium">Findings</th>
             <th className="text-left px-3 py-2 font-medium">Started</th>
@@ -40,14 +40,19 @@ export function HistoryTable({ projectId }: { projectId: string }) {
           {history.map(scan => (
             <tr key={scan.id} className="hover:bg-muted/30">
               <td className="px-3 py-2 font-mono text-accent">{scan.id}</td>
-              <td className="px-3 py-2 uppercase">{scan.segment}</td>
-              <td className="px-3 py-2">{scan.tool}</td>
+              <td className="px-3 py-2 uppercase">
+                {scan.domains.length > 0 ? scan.domains.join(', ') : '-'}
+              </td>
+              <td className="px-3 py-2">
+                {scan.toolIds.length > 0 ? scan.toolIds.join(', ') : '-'}
+              </td>
               <td className="px-3 py-2">
                 <span
                   className={cn(
                     'uppercase',
                     scan.status === 'done' && 'text-low',
-                    scan.status === 'failed' && 'text-crit'
+                    (scan.status === 'failed' || scan.status === 'cancelled') && 'text-crit',
+                    scan.status === 'cancelling' && 'text-high'
                   )}
                 >
                   {scan.status}

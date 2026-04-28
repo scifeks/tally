@@ -6,21 +6,16 @@ import { useUI } from '@/lib/store'
 import {
   useProjects,
   useProjectMeta,
-  useScanHistory,
   useProjectScanConfig,
   useStartScan,
   useCancelScan,
 } from '@/lib/api'
-import type {
-  Segment,
-  ScanLogEvent,
-  ScanLogEventType,
-  ScanRunStatus,
-  ScanOptions,
-} from '@/lib/types'
+import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
+import type { Segment, ScanLogEvent, ScanRunStatus, ScanOptions } from '@/lib/types'
 import { RadarSweep } from './RadarSweep'
 import { LogRow } from './LogRow'
 import { HistoryTable } from './HistoryTable'
+import { ScanMutationErrorModal } from '@/components/ScanMutationErrorModal'
 
 const SEGMENT_LABEL: Record<Segment, string> = {
   sast: 'SAST',
@@ -33,27 +28,14 @@ export default function Scans() {
   const activeProjectId = useUI(s => s.activeProjectId)
 
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
+  const projectIdNum = activeProjectId ?? 0
 
-  // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
-  // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
-  // GET /api/v1/projects/:id/meta
   const { data: projectMetaData } = useProjectMeta(projectIdParam)
-  // GET /api/v1/projects/:id/scans (history)
-  void useScanHistory(projectIdParam)
+  const { data: scanConfig } = useProjectScanConfig(projectIdNum)
 
-  // TODO [BACKEND]: Scan configuration (repos, tools, domains) from server.
-  // GET /api/v1/projects/:id/scans/config
-  const { data: scanConfig } = useProjectScanConfig(projectIdParam)
-
-  // TODO [BACKEND]: These mutations trigger server actions.
-  // POST /api/v1/projects/:id/scans/start
   const { mutate: startScanMutation } = useStartScan()
-  // POST /api/v1/scans/:id/cancel
   const { mutate: cancelScanMutation } = useCancelScan()
-
-  void startScanMutation
-  void cancelScanMutation
 
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
@@ -63,33 +45,25 @@ export default function Scans() {
   const configuredTools = useMemo(() => scanConfig?.tools ?? [], [scanConfig])
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
 
-  // Group tools by domain for display
-  const toolsByDomain = useMemo(() => {
-    const map: Record<Segment, typeof configuredTools> = { sast: [], sca: [], web: [], secrets: [] }
-    configuredTools.forEach(t => {
-      if (map[t.segment]) map[t.segment].push(t)
-    })
-    return map
-  }, [configuredTools])
-
   // Scan run state
   const [runStatus, setRunStatus] = useState<ScanRunStatus>('idle')
+  const [runId, setRunId] = useState<number | null>(null)
   const [logs, setLogs] = useState<ScanLogEvent[]>([])
+  const [enrichmentProgress, setEnrichmentProgress] = useState<{
+    enrichedCount: number
+    totalToEnrich: number
+  } | null>(null)
   const [elapsedSec, setElapsedSec] = useState(0)
-  const [expandedSegments, setExpandedSegments] = useState<Set<Segment>>(new Set(configuredDomains))
 
   // Advanced options state
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set()) // empty = all repos
+  const [selectedRepos, setSelectedRepos] = useState<Set<number>>(new Set()) // empty = all repos
   const [selectedDomains, setSelectedDomains] = useState<Set<Segment>>(new Set())
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [skipTools, setSkipTools] = useState<Set<string>>(new Set())
   const [skipEnrichment, setSkipEnrichment] = useState(false)
 
-  void expandedSegments
-  void setExpandedSegments
-
-  // Reset advanced options when config changes
+  // Reset advanced options when project changes
   useEffect(() => {
     setSelectedRepos(new Set())
     setSelectedDomains(new Set())
@@ -109,7 +83,6 @@ export default function Scans() {
     return opts
   }, [selectedRepos, selectedDomains, selectedTools, skipTools, skipEnrichment])
 
-  // Check if any advanced options are set
   const hasAdvancedOptions =
     selectedRepos.size > 0 ||
     selectedDomains.size > 0 ||
@@ -117,206 +90,120 @@ export default function Scans() {
     skipTools.size > 0 ||
     skipEnrichment
 
-  // For simulating log stream
-  const eventQueueRef = useRef<ScanLogEvent[]>([])
-  const eventIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
+  const runIdRef = useRef<number | null>(null)
+  runIdRef.current = runId
 
   const [activeTab, setActiveTab] = useState<'live' | 'history'>('live')
 
-  // Generate fake scan log events
-  const generateEvents = useCallback((): ScanLogEvent[] => {
-    const events: ScanLogEvent[] = []
-    const runId = `R-${Date.now()}`
-    let ts = Date.now()
-    const addEvent = (type: ScanLogEventType, msg: string, extra?: Partial<ScanLogEvent>) => {
-      events.push({
-        id: `E-${ts}`,
-        runId,
-        type,
-        timestamp: new Date(ts).toISOString(),
-        message: msg,
-        ...extra,
-      })
-      ts += Math.random() * 800 + 200
+  const stopElapsedTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
     }
-
-    const opts = buildScanOptions()
-
-    // Determine which repos/tools/domains to run based on options
-    const repoIdsSet = new Set(opts.repoIds ?? [])
-    const reposToScan =
-      repoIdsSet.size > 0 ? configuredRepos.filter(r => repoIdsSet.has(r.id)) : configuredRepos
-    const domainsToScan =
-      opts.segments && opts.segments.length > 0 ? opts.segments : configuredDomains
-    const toolIdsToRun = opts.toolIds && opts.toolIds.length > 0 ? new Set(opts.toolIds) : null // null = all tools
-    const toolIdsToSkip = new Set(opts.skipToolIds ?? [])
-
-    addEvent('run_started', `Scan started for project ${project?.name ?? activeProjectId}`)
-
-    for (const segment of domainsToScan) {
-      addEvent('segment_started', `${SEGMENT_LABEL[segment]}`, { segment })
-      const toolsInSegment = toolsByDomain[segment] ?? []
-      for (const repo of reposToScan) {
-        for (const toolConfig of toolsInSegment) {
-          // Skip if tool is in skip list
-          if (toolIdsToSkip.has(toolConfig.id)) {
-            addEvent('tool_skipped', `${toolConfig.name}/${repo.name} | SKIPPED (excluded)`, {
-              segment,
-              repo: repo.name,
-              tool: toolConfig.name,
-            })
-            continue
-          }
-          // Skip if we have a specific tool list and this tool isn't in it
-          if (toolIdsToRun && !toolIdsToRun.has(toolConfig.id)) {
-            continue
-          }
-          // Skip disabled tools unless explicitly selected
-          if (!toolConfig.enabled && !toolIdsToRun?.has(toolConfig.id)) {
-            addEvent('tool_skipped', `${toolConfig.name}/${repo.name} | SKIPPED (disabled)`, {
-              segment,
-              repo: repo.name,
-              tool: toolConfig.name,
-            })
-            continue
-          }
-
-          const skip = Math.random() < 0.2
-          if (skip) {
-            addEvent(
-              'tool_skipped',
-              `${toolConfig.name}/${repo.name} | SKIPPED (no manifest found)`,
-              { segment, repo: repo.name, tool: toolConfig.name }
-            )
-          } else {
-            addEvent('tool_started', `Running ${toolConfig.name} (${repo.name})...`, {
-              segment,
-              repo: repo.name,
-              tool: toolConfig.name,
-            })
-            const duration = Math.random() * 25 + 1
-            const findings = Math.floor(Math.random() * 50)
-            const exitCode = Math.random() < 0.05 ? 1 : 0
-            if (exitCode === 0) {
-              addEvent('tool_completed', `Complete (exit 0, ${duration.toFixed(1)}s)`, {
-                segment,
-                repo: repo.name,
-                tool: toolConfig.name,
-                duration,
-                exitCode: 0,
-              })
-              if (findings > 0 && !opts.skipEnrichment) {
-                const total = findings
-                for (let i = 0; i < 3; i++) {
-                  const enriched = Math.min(total, Math.floor((i + 1) * (total / 3)))
-                  addEvent('enrichment_progress', `Enriching findings... ${enriched}/${total}`, {
-                    segment,
-                    repo: repo.name,
-                    tool: toolConfig.name,
-                    enrichedCount: enriched,
-                    totalToEnrich: total,
-                  })
-                }
-                addEvent(
-                  'enrichment_complete',
-                  `Enrichment complete. ${total}/${total} findings enriched.`,
-                  {
-                    segment,
-                    repo: repo.name,
-                    tool: toolConfig.name,
-                    findingsCount: total,
-                  }
-                )
-              }
-              addEvent(
-                'tool_completed',
-                `${toolConfig.name}/${repo.name.padEnd(14)} | ${findings} findings | ${duration.toFixed(1)}s`,
-                {
-                  segment,
-                  repo: repo.name,
-                  tool: toolConfig.name,
-                  duration,
-                  findingsCount: findings,
-                }
-              )
-            } else {
-              addEvent(
-                'tool_failed',
-                `${toolConfig.name}/${repo.name} | FAILED (exit ${exitCode})`,
-                {
-                  segment,
-                  repo: repo.name,
-                  tool: toolConfig.name,
-                  exitCode,
-                }
-              )
-            }
-          }
-        }
-      }
-      addEvent('segment_completed', `${SEGMENT_LABEL[segment]} complete`, { segment })
-    }
-
-    addEvent('run_completed', 'Scan completed successfully')
-    return events
-  }, [
-    activeProjectId,
-    project?.name,
-    configuredRepos,
-    configuredDomains,
-    toolsByDomain,
-    buildScanOptions,
-  ])
-
-  // Start scan
-  const startScan = useCallback(() => {
-    setRunStatus('running')
-    setLogs([])
-    setElapsedSec(0)
-    setActiveTab('live')
-    eventQueueRef.current = generateEvents()
-
-    // Elapsed timer
-    timerRef.current = setInterval(() => setElapsedSec(s => s + 1), 1000)
-
-    // Stream events
-    eventIntervalRef.current = setInterval(() => {
-      if (eventQueueRef.current.length === 0) {
-        // Done
-        if (eventIntervalRef.current) clearInterval(eventIntervalRef.current)
-        if (timerRef.current) clearInterval(timerRef.current)
-        setRunStatus('completed')
-        return
-      }
-      const next = eventQueueRef.current.shift()
-      if (next) setLogs(prev => [...prev, next])
-    }, 120)
-  }, [generateEvents])
-
-  // Stop scan
-  const stopScan = useCallback(() => {
-    if (eventIntervalRef.current) clearInterval(eventIntervalRef.current)
-    if (timerRef.current) clearInterval(timerRef.current)
-    eventQueueRef.current = []
-    setLogs(prev => [
-      ...prev,
-      {
-        id: `E-cancel-${Date.now()}`,
-        runId: '',
-        type: 'run_cancelled',
-        timestamp: new Date().toISOString(),
-        message: 'Scan cancelled by user',
-      },
-    ])
-    setRunStatus('cancelled')
   }, [])
+
+  const startElapsedTimer = useCallback(() => {
+    stopElapsedTimer()
+    setElapsedSec(0)
+    timerRef.current = setInterval(() => setElapsedSec(s => s + 1), 1000)
+  }, [stopElapsedTimer])
+
+  // Per-event SSE handler. `enrichment_progress` is stored in a single state
+  // slot (latest-value-wins) per the §12.7 mandate — never appended to logs.
+  const handleScanEvent = useCallback((event: ScanLogEvent) => {
+    if (event.type === 'enrichment_progress') {
+      setEnrichmentProgress({
+        enrichedCount: event.enrichedCount ?? 0,
+        totalToEnrich: event.totalToEnrich ?? 0,
+      })
+      return
+    }
+
+    // Filter to the current run once one has been claimed by this page.
+    const currentRunId = runIdRef.current
+    if (currentRunId !== null && event.runId !== currentRunId) return
+
+    setLogs(prev => [...prev, event])
+
+    if (event.type === 'run_started') {
+      setRunStatus('running')
+    } else if (event.type === 'run_completed') {
+      setRunStatus('completed')
+      setEnrichmentProgress(null)
+    } else if (event.type === 'run_cancelled') {
+      setRunStatus('cancelled')
+      setEnrichmentProgress(null)
+    } else if (event.type === 'run_failed') {
+      setRunStatus('failed')
+      setEnrichmentProgress(null)
+    }
+  }, [])
+
+  // Snapshot frame on (re)connect — seed runId/runStatus only when there is
+  // exactly one active run for the project so we don't latch onto a stranger.
+  const handleSnapshot = useCallback((snap: SnapshotPayload) => {
+    if (snap.runId === null) {
+      const ids = snap.activeRunIds ?? []
+      if (ids.length === 1 && runIdRef.current === null) {
+        setRunId(ids[0])
+        setRunStatus('running')
+      }
+      return
+    }
+    if (snap.status === 'running' || snap.status === 'queued') {
+      setRunId(snap.runId)
+      setRunStatus('running')
+    } else if (snap.status === 'cancelling') {
+      setRunId(snap.runId)
+      setRunStatus('cancelling')
+    }
+  }, [])
+
+  useScanEvents(projectIdNum, handleScanEvent, {
+    enabled: projectIdNum > 0,
+    onSnapshot: handleSnapshot,
+  })
+
+  // Stop the elapsed timer once the run leaves a live-running state.
+  useEffect(() => {
+    if (runStatus !== 'running') stopElapsedTimer()
+  }, [runStatus, stopElapsedTimer])
+
+  // Start scan — POST to backend, capture runId from 202, flip to live tab.
+  const startScan = useCallback(() => {
+    if (projectIdNum === 0) return
+    setLogs([])
+    setEnrichmentProgress(null)
+    setActiveTab('live')
+    startScanMutation(
+      { projectId: projectIdNum, options: buildScanOptions() },
+      {
+        onSuccess: scan => {
+          setRunId(scan.id)
+          setRunStatus('running')
+          startElapsedTimer()
+        },
+      }
+    )
+  }, [projectIdNum, startScanMutation, buildScanOptions, startElapsedTimer])
+
+  // Cancel scan — POST cancel; UI flips to 'cancelled' on the run_cancelled
+  // SSE event, not synthetically. While the backend is processing the cancel,
+  // show 'cancelling'.
+  const stopScan = useCallback(() => {
+    if (runId === null || projectIdNum === 0) return
+    setRunStatus('cancelling')
+    cancelScanMutation({ projectId: projectIdNum, runId })
+  }, [runId, projectIdNum, cancelScanMutation])
 
   // Reset
   const resetScan = useCallback(() => {
     setRunStatus('idle')
+    setRunId(null)
     setLogs([])
+    setEnrichmentProgress(null)
     setElapsedSec(0)
   }, [])
 
@@ -328,7 +215,6 @@ export default function Scans() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (eventIntervalRef.current) clearInterval(eventIntervalRef.current)
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
@@ -339,7 +225,7 @@ export default function Scans() {
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  const isRunning = runStatus === 'running'
+  const isRunning = runStatus === 'running' || runStatus === 'cancelling'
   const canStart =
     runStatus === 'idle' ||
     runStatus === 'completed' ||
@@ -354,6 +240,7 @@ export default function Scans() {
 
   return (
     <div className="h-full flex flex-col min-h-0 p-4 gap-4">
+      <ScanMutationErrorModal />
       {/* Header row: radar + controls + stats */}
       <div className="flex items-start gap-6 shrink-0">
         {/* Radar */}
@@ -383,6 +270,7 @@ export default function Scans() {
               className={cn(
                 'text-sm font-bold uppercase tracking-wider',
                 runStatus === 'running' && 'text-high animate-pulse',
+                runStatus === 'cancelling' && 'text-high animate-pulse',
                 runStatus === 'completed' && 'text-low',
                 runStatus === 'cancelled' && 'text-muted-foreground',
                 runStatus === 'failed' && 'text-crit',
@@ -427,7 +315,8 @@ export default function Scans() {
             {isRunning && (
               <button
                 onClick={stopScan}
-                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/10 transition-colors"
+                disabled={runStatus === 'cancelling'}
+                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Square className="h-4 w-4" />
                 Stop
@@ -460,6 +349,14 @@ export default function Scans() {
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground uppercase tracking-wider">Failures:</span>
                   <span className="text-crit tabular-nums font-bold">{failures}</span>
+                </div>
+              )}
+              {enrichmentProgress && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground uppercase tracking-wider">Enriching:</span>
+                  <span className="text-accent tabular-nums font-bold">
+                    {enrichmentProgress.enrichedCount} / {enrichmentProgress.totalToEnrich}
+                  </span>
                 </div>
               )}
             </div>
@@ -728,7 +625,7 @@ export default function Scans() {
         </Panel>
       ) : (
         <Panel title="scan history" className="flex-1 min-h-0" bodyClassName="flex flex-col">
-          <HistoryTable projectId={projectIdParam} />
+          <HistoryTable projectId={projectIdNum} />
         </Panel>
       )}
     </div>

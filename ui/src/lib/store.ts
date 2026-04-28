@@ -23,6 +23,14 @@ interface UIState {
   findingMutationError: ApiErrorPayload | null
   setFindingMutationError: (err: ApiErrorPayload | null) => void
 
+  /**
+   * Surface scan start/cancel failures (most importantly the 409 returned
+   * when a scan is already running for the project) so the user can't miss
+   * a rejected action. Cleared by the modal's dismiss button. Not persisted.
+   */
+  scanMutationError: ApiErrorPayload | null
+  setScanMutationError: (err: ApiErrorPayload | null) => void
+
   /** Track triage run status to block project switches. */
   triageRunStatus: TriageRunStatus
   setTriageRunStatus: (status: TriageRunStatus) => void
@@ -50,6 +58,9 @@ export const useUI = create<UIState>()(
 
       findingMutationError: null,
       setFindingMutationError: err => set({ findingMutationError: err }),
+
+      scanMutationError: null,
+      setScanMutationError: err => set({ scanMutationError: err }),
 
       triageRunStatus: 'idle',
       setTriageRunStatus: status => set({ triageRunStatus: status }),

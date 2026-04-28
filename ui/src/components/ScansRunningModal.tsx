@@ -24,11 +24,10 @@ function useSimulatedProgress(running: Scan[]) {
 
 export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const activeProjectId = useUI(s => s.activeProjectId)
-  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: scans = [] } = useScanHistory(projectIdParam)
+  const { data: scans = [] } = useScanHistory(activeProjectId ?? 0)
 
   const running = scans.filter(s => s.status === 'running')
   const tick = useSimulatedProgress(running)
@@ -64,10 +63,12 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
             long-running ingestion + enrichment phases are normal.
           </div>
           {running.map(s => {
-            const project = projects.find(p => String(p.id) === s.projectId)
-            // Simulate forward progress until 95% — real data will come from SSE.
-            const base = s.progress ?? 0
-            const simulated = Math.min(95, base + ((tick * 2) % 20))
+            const project = projects.find(p => p.id === s.projectId)
+            // Indeterminate progress — real per-run progress arrives via SSE
+            // snapshot frames, which the running indicator does not subscribe to.
+            const simulated = Math.min(95, ((tick * 2) % 90) + 5)
+            const domainsLabel = s.domains.length > 0 ? s.domains.join(', ') : '—'
+            const toolsLabel = s.toolIds.length > 0 ? s.toolIds.join(', ') : '—'
             return (
               <div key={s.id} className="border border-border bg-background">
                 <div className="flex items-center gap-3 px-3 h-8 border-b border-border">
@@ -76,8 +77,8 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
                     {project?.code ?? '—'}
                   </span>
                   <span className="text-[11px] text-foreground truncate">{project?.name}</span>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {s.segment} · {s.tool}
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">
+                    {domainsLabel}
                   </span>
                   <span className="ml-auto text-[10px] text-dim tabular-nums">
                     started {formatRelative(s.startedAt)}
@@ -86,19 +87,15 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
                 <div className="p-3 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <div className="text-xs text-accent tty-glow">
-                      <span className="tty-cursor-inline">&gt;</span>{' '}
-                      {s.currentSegment ?? 'working'}
+                      <span className="tty-cursor-inline">&gt;</span> running
                     </div>
-                    <div className="text-[11px] text-muted-foreground tabular-nums">
-                      {s.segmentLabel}
+                    <div className="text-[11px] text-muted-foreground tabular-nums truncate">
+                      {toolsLabel}
                     </div>
                   </div>
                   <ProgressBar value={simulated} />
                   <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
-                    <span>
-                      progress{' '}
-                      <span className="text-accent tabular-nums">{simulated.toFixed(0)}%</span>
-                    </span>
+                    <span>scan in progress</span>
                     <span className="text-dim">sse://tally/scans/events?run_id={s.id}</span>
                   </div>
                 </div>
