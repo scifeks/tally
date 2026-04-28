@@ -12,19 +12,19 @@ function makeWrapper() {
 }
 
 describe('useProjects', () => {
-  it('resolves with an array of 3 projects', async () => {
+  it('resolves with the array of projects served by the API', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useProjects(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toHaveLength(3)
   })
 
-  it('each project has id, name, and code fields', async () => {
+  it('each project has id (number), name, and code fields', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useProjects(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     for (const project of result.current.data!) {
-      expect(typeof project.id).toBe('string')
+      expect(typeof project.id).toBe('number')
       expect(typeof project.name).toBe('string')
       expect(typeof project.code).toBe('string')
     }

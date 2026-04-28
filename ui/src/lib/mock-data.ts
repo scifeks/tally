@@ -11,9 +11,9 @@ import type {
 } from './types'
 
 export const projects: Project[] = [
-  { id: '1', name: 'acme-platform', code: 'ACM' },
-  { id: '2', name: 'atlas-api', code: 'ATL' },
-  { id: '3', name: 'northwind-web', code: 'NWD' },
+  { id: 1, name: 'acme-platform', code: 'ACM' },
+  { id: 2, name: 'atlas-api', code: 'ATL' },
+  { id: 3, name: 'northwind-web', code: 'NWD' },
 ]
 
 const sastTitles = [
@@ -122,7 +122,7 @@ function buildFindings(): Finding[] {
   let idCounter = 1000
   const triageActors: Array<'claude-code' | 'analyst_web'> = ['claude-code', 'analyst_web']
   for (const project of projects) {
-    const n = counts[project.id]
+    const n = counts[String(project.id)]
     for (let i = 0; i < n; i++) {
       const segment = pick(segments)
       const severity = pick(severities)
@@ -146,7 +146,7 @@ function buildFindings(): Finding[] {
           segment === 'sast' || segment === 'secrets' ? Math.floor(rand() * 500) + 1 : undefined,
         cwe: segment === 'sast' ? `CWE-${Math.floor(rand() * 900) + 20}` : undefined,
         commitHash: hasCommit ? commitHash() : undefined,
-        projectId: project.id,
+        projectId: String(project.id),
         discoveredAt: discovered.toISOString(),
         notes: undefined,
         triagedAt: isTriaged
@@ -324,8 +324,8 @@ function buildUrls(): UrlEntry[] {
   const out: UrlEntry[] = []
   let idCounter = 5000
   for (const project of projects) {
-    const host = hostByProject[project.id] ?? `api.${project.name}.example.com`
-    const count = countByProject[project.id] ?? 0
+    const host = hostByProject[String(project.id)] ?? `api.${project.name}.example.com`
+    const count = countByProject[String(project.id)] ?? 0
     for (let i = 0; i < count; i++) {
       const path = pick(pathPool)
       let protocol: UrlProtocol = 'https'
@@ -333,7 +333,7 @@ function buildUrls(): UrlEntry[] {
       const port = portFor(protocol)
       out.push({
         id: `U-${idCounter++}`,
-        projectId: project.id,
+        projectId: String(project.id),
         method: pickMethod(),
         protocol,
         host,

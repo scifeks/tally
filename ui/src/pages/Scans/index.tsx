@@ -32,17 +32,19 @@ const SEGMENT_LABEL: Record<Segment, string> = {
 export default function Scans() {
   const activeProjectId = useUI(s => s.activeProjectId)
 
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
+
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
   // GET /api/v1/projects/:id/meta
-  const { data: projectMetaData } = useProjectMeta(activeProjectId ?? '')
+  const { data: projectMetaData } = useProjectMeta(projectIdParam)
   // GET /api/v1/projects/:id/scans (history)
-  void useScanHistory(activeProjectId ?? '')
+  void useScanHistory(projectIdParam)
 
   // TODO [BACKEND]: Scan configuration (repos, tools, domains) from server.
   // GET /api/v1/projects/:id/scans/config
-  const { data: scanConfig } = useProjectScanConfig(activeProjectId ?? '')
+  const { data: scanConfig } = useProjectScanConfig(projectIdParam)
 
   // TODO [BACKEND]: These mutations trigger server actions.
   // POST /api/v1/projects/:id/scans/start
@@ -726,7 +728,7 @@ export default function Scans() {
         </Panel>
       ) : (
         <Panel title="scan history" className="flex-1 min-h-0" bodyClassName="flex flex-col">
-          <HistoryTable projectId={activeProjectId ?? ''} />
+          <HistoryTable projectId={projectIdParam} />
         </Panel>
       )}
     </div>

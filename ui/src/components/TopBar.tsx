@@ -1,13 +1,19 @@
 import { NavLink } from 'react-router-dom'
 import { ChevronDown, Activity } from 'lucide-react'
 import { useUI } from '@/lib/store'
-import { useProjects, useScanHistory } from '@/lib/api'
+import { useProjects, useRunningScansCount, useRuntimeDependencies } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { ScansRunningModal } from './ScansRunningModal'
 import { ProjectSwitchModal } from './ProjectSwitchModal'
 
-const primaryNav = [
+interface NavItem {
+  to: string
+  label: string
+  end?: boolean
+}
+
+const baseNav: NavItem[] = [
   { to: '/', label: 'DASHBOARD', end: true },
   { to: '/findings', label: 'FINDINGS' },
   { to: '/urls', label: 'URL LISTS' },
@@ -22,23 +28,27 @@ export function TopBar() {
   const setActiveProject = useUI(s => s.setActiveProject)
   const triageRunStatus = useUI(s => s.triageRunStatus)
 
-  // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: scans = [] } = useScanHistory(activeProjectId ?? '')
+  const runningCount = useRunningScansCount(activeProjectId)
+  const { data: runtimeDeps } = useRuntimeDependencies()
 
   const activeProject = activeProjectId
     ? (projects.find(p => p.id === activeProjectId) ?? null)
     : null
 
-  const runningScans = activeProjectId
-    ? scans.filter(s => s.status === 'running' && s.projectId === activeProjectId).length
-    : 0
-  const runningAny = scans.filter(s => s.status === 'running').length
   const triageRunning = triageRunStatus === 'running'
+
+  // Hide TRIAGE in chrome only when we know claude is missing. While the
+  // probe is loading or reports installed, render the link.
+  const primaryNav = useMemo<NavItem[]>(() => {
+    const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
+    const claudeMissing = claudeDep !== undefined && !claudeDep.installed
+    return claudeMissing ? baseNav.filter(n => n.to !== '/triage') : baseNav
+  }, [runtimeDeps])
 
   const [projectOpen, setProjectOpen] = useState(false)
   const [scansModalOpen, setScansModalOpen] = useState(false)
-  const [pendingProjectId, setPendingProjectId] = useState<string | null>(null)
+  const [pendingProjectId, setPendingProjectId] = useState<number | null>(null)
 
   const projectRef = useRef<HTMLDivElement>(null)
 
@@ -51,10 +61,9 @@ export function TopBar() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  // TODO [BACKEND]: pendingProject lookup uses projects from useProjects hook
   const pendingProject = projects.find(p => p.id === pendingProjectId) ?? null
 
-  const requestSwitch = (id: string) => {
+  const requestSwitch = (id: number) => {
     setProjectOpen(false)
     if (id === activeProjectId) return
     // First-time selection (no project active yet) skips the confirm dialog.
@@ -66,7 +75,7 @@ export function TopBar() {
   }
 
   const confirmSwitch = () => {
-    if (pendingProjectId) setActiveProject(pendingProjectId)
+    if (pendingProjectId !== null) setActiveProject(pendingProjectId)
     setPendingProjectId(null)
   }
 
@@ -101,20 +110,22 @@ export function TopBar() {
             onClick={() => setScansModalOpen(true)}
             className={cn(
               'flex items-center gap-2 px-4 border-l border-border hover:bg-muted transition-colors',
-              runningAny > 0 ? 'text-accent' : 'text-muted-foreground'
+              runningCount > 0 ? 'text-accent' : 'text-muted-foreground'
             )}
             aria-label="Open running scans"
           >
             <Activity
               className={cn(
                 'h-3.5 w-3.5',
-                runningAny > 0 ? 'text-accent animate-pulse' : 'text-dim'
+                runningCount > 0 ? 'text-accent animate-pulse' : 'text-dim'
               )}
             />
             <span className="text-[11px] uppercase tracking-wider">
-              {runningAny > 0 ? `${runningAny} scan${runningAny > 1 ? 's' : ''} running` : 'idle'}
+              {runningCount > 0
+                ? `${runningCount} scan${runningCount > 1 ? 's' : ''} running`
+                : 'idle'}
             </span>
-            {runningAny > 0 && <span className="text-[10px] text-dim">[ click to view ]</span>}
+            {runningCount > 0 && <span className="text-[10px] text-dim">[ click to view ]</span>}
           </button>
 
           {/* Project switcher */}
@@ -236,8 +247,9 @@ export function TopBar() {
         open={pendingProjectId !== null}
         from={activeProject}
         to={pendingProject}
-        // Block if scans or triage are running on the project we're leaving.
-        runningScansCount={runningScans}
+        // Block if scans or triage are running on the project we're leaving
+        // (which is the active project, the only one we hold a count for).
+        runningScansCount={runningCount}
         triageRunning={triageRunning}
         onConfirm={confirmSwitch}
         onCancel={() => setPendingProjectId(null)}

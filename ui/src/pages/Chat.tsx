@@ -142,6 +142,7 @@ function SessionItem({
 
 export default function Chat() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : null
 
   // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
   // GET /api/v1/projects
@@ -151,7 +152,7 @@ export default function Chat() {
 
   // TODO [BACKEND]: These hooks manage chat sessions and messages via API.
   // See useChat.ts for endpoint documentation.
-  const { sessions, refetch: refetchSessions, setSessions } = useChatSessions(activeProjectId)
+  const { sessions, refetch: refetchSessions, setSessions } = useChatSessions(projectIdParam)
   const { create: createSession, isLoading: isCreating } = useCreateSession()
   const { deleteSession } = useDeleteSession()
   const { send: sendMessage, cancel: cancelMessage, isStreaming } = useSendMessage()
@@ -245,7 +246,7 @@ export default function Chat() {
   // Create new session
   const handleNewSession = useCallback(async () => {
     try {
-      const session = await createSession(activeProjectId ?? '', 'New conversation')
+      const session = await createSession(projectIdParam ?? '', 'New conversation')
       setSessions(prev => [session, ...prev])
       setActiveSessionId(session.id)
       setMessages([])
@@ -253,7 +254,7 @@ export default function Chat() {
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to create session')
     }
-  }, [activeProjectId, createSession, setSessions])
+  }, [projectIdParam, createSession, setSessions])
 
   // Delete session
   const handleDeleteSession = useCallback(

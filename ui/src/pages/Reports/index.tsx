@@ -32,13 +32,15 @@ import { PreflightChecklist } from './PreflightChecklist'
 export default function Reports() {
   const activeProjectId = useUI(s => s.activeProjectId)
 
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : null
+
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
   // GET /api/v1/projects/:id/reports/drafts
-  const { data: draftData } = useReportDrafts(activeProjectId)
+  const { data: draftData } = useReportDrafts(projectIdParam)
   // GET /api/v1/projects/:id/reports (history)
-  const { data: historyData = [] } = useReportHistory(activeProjectId)
+  const { data: historyData = [] } = useReportHistory(projectIdParam)
 
   // TODO [BACKEND]: These mutations trigger server actions.
   // POST /api/v1/projects/:id/reports/drafts
@@ -81,21 +83,21 @@ export default function Reports() {
     SECTION_ORDER.map(section => ({
       section,
       status:
-        activeProjectId === '1'
+        activeProjectId === 1
           ? section === 'executive_summary' || section === 'risk_level'
             ? 'draft'
             : 'not_generated'
           : 'not_generated',
       generatedAt:
-        activeProjectId === '1' && (section === 'executive_summary' || section === 'risk_level')
+        activeProjectId === 1 && (section === 'executive_summary' || section === 'risk_level')
           ? new Date(Date.now() - 86400000).toISOString()
           : undefined,
       preview:
-        activeProjectId === '1' && (section === 'executive_summary' || section === 'risk_level')
+        activeProjectId === 1 && (section === 'executive_summary' || section === 'risk_level')
           ? `# ${SECTION_LABELS[section]}\n\nThis is a preview of the generated content for the ${SECTION_LABELS[section].toLowerCase()} section. The full document contains detailed analysis based on the security findings from this engagement...`
           : undefined,
       wordCount:
-        activeProjectId === '1' && (section === 'executive_summary' || section === 'risk_level')
+        activeProjectId === 1 && (section === 'executive_summary' || section === 'risk_level')
           ? 450 + Math.floor(Math.random() * 200)
           : undefined,
     }))
@@ -103,7 +105,7 @@ export default function Reports() {
 
   // Mock history data
   const [history] = useState<ReportHistoryEntry[]>(() =>
-    activeProjectId === '1'
+    activeProjectId === 1
       ? [
           {
             id: 'rpt-001',

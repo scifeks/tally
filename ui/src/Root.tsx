@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
+import { ActiveProjectGuard } from './components/ActiveProjectGuard'
 import { SessionExpiredModal } from './components/SessionExpiredModal'
 import { subscribeSessionExpired } from './lib/api/client'
 
@@ -27,6 +28,7 @@ export default function Root() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ActiveProjectGuard />
       <BrowserRouter>
         <App />
       </BrowserRouter>

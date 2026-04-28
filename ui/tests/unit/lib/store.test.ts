@@ -35,13 +35,13 @@ describe('useUI — initial state', () => {
 
 describe('setActiveProject', () => {
   it('updates activeProjectId', () => {
-    useUI.getState().setActiveProject('2')
-    expect(useUI.getState().activeProjectId).toBe('2')
+    useUI.getState().setActiveProject(2)
+    expect(useUI.getState().activeProjectId).toBe(2)
   })
 
   it('clears selectedFindingIds', () => {
     useUI.setState({ selectedFindingIds: new Set(['f-1', 'f-2']) })
-    useUI.getState().setActiveProject('2')
+    useUI.getState().setActiveProject(2)
     expect(useUI.getState().selectedFindingIds.size).toBe(0)
   })
 })

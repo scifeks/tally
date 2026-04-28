@@ -73,7 +73,7 @@ function renderPage(qc = makeQC()) {
 
 beforeEach(() => {
   useUI.setState({
-    activeProjectId: '1',
+    activeProjectId: 1,
     findingsSegment: 'sast',
     selectedFindingIds: new Set<string>(),
     findingOverrides: {},

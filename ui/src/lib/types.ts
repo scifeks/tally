@@ -52,7 +52,7 @@ export interface Finding {
 }
 
 export interface Project {
-  id: string
+  id: number
   name: string
   code: string
 }

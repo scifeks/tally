@@ -24,10 +24,11 @@ function useSimulatedProgress(running: Scan[]) {
 
 export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
   // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: scans = [] } = useScanHistory(activeProjectId ?? '')
+  const { data: scans = [] } = useScanHistory(projectIdParam)
 
   const running = scans.filter(s => s.status === 'running')
   const tick = useSimulatedProgress(running)
@@ -63,7 +64,7 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
             long-running ingestion + enrichment phases are normal.
           </div>
           {running.map(s => {
-            const project = projects.find(p => p.id === s.projectId)
+            const project = projects.find(p => String(p.id) === s.projectId)
             // Simulate forward progress until 95% — real data will come from SSE.
             const base = s.progress ?? 0
             const simulated = Math.min(95, base + ((tick * 2) % 20))

@@ -84,7 +84,7 @@ export default function UrlLists() {
 
   // TODO [BACKEND]: Replace with real API call.
   // GET /api/v1/projects/:id/url-lists
-  const { data: urls = [] } = useUrlLists(activeProjectId ?? '')
+  const { data: urls = [] } = useUrlLists(activeProjectId !== null ? String(activeProjectId) : '')
 
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<ColumnKey | null>(null)

@@ -53,6 +53,7 @@ export { useFindings, useUpdateFinding } from './useFindings'
 export {
   useScanHistory,
   useRunningScans,
+  useRunningScansCount,
   useProjectScanConfig,
   useStartScan,
   useCancelScan,
