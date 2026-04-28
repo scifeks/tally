@@ -59,11 +59,9 @@ export default function Triage() {
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
 
-  // Count findings eligible for triage (open status, no existing triage)
-  const eligibleFindings = useMemo(
-    () => findings.filter(f => f.projectId === projectIdParam && f.status === 'active'),
-    [findings, projectIdParam]
-  )
+  // Count findings eligible for triage (open status, no existing triage).
+  // useFindings is already project-scoped via the server, so no projectId filter needed.
+  const eligibleFindings = useMemo(() => findings.filter(f => f.status === 'active'), [findings])
 
   // Triage run state
   const [runStatus, setRunStatus] = useState<TriageRunStatus>('idle')

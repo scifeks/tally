@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "FINDING_LOCKED",
+    "message": "Finding 1003 is currently held by job scan:S-2042",
+    "details": {
+      "conflicting_ids": [1003],
+      "holders": { "1003": "scan:S-2042" }
+    }
+  }
+}

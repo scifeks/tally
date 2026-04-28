@@ -1,136 +1,186 @@
 /**
  * useFindings Hook
  * ================
- * Fetches findings for a project, optionally filtered by segment.
+ * Paginated read of findings for a project, served by
+ * `GET /api/v1/projects/:id/findings`. Per `decisions.md` B13 the UI uses
+ * infinite-scroll pagination (offset+limit, not page numbers). Filters,
+ * sorting, and search are server-driven query params; the SPA does not
+ * filter the global pool.
  *
- * TODO [BACKEND]: Replace mock data with actual API call.
+ * The backend always returns array-typed `cwe` and `finding_type`; the
+ * inline `mapFinding` mapper coerces nullables to safe defaults so the
+ * camel-cased `Finding` type is always well-formed at every render.
  *
- * Expected API response (GET /api/v1/projects/:id/findings?segment=sast):
- * ```json
- * {
- *   "findings": [
- *     {
- *       "id": "F-1000",
- *       "segment": "sast",
- *       "severity": "critical",
- *       "status": "active",
- *       "title": "SQL injection via unparameterized query",
- *       "tool": "semgrep",
- *       "target": "acme-platform",
- *       "file": "src/api/users.py",
- *       "line": 42,
- *       "cwe": "CWE-89",
- *       "commitHash": "a1b2c3d",
- *       "projectId": "1",
- *       "discoveredAt": "2024-01-15T10:30:00Z",
- *       "notes": null
- *     },
- *     ...
- *   ],
- *   "total": 220
- * }
- * ```
+ * Returns a flattened `data: Finding[]` (across all loaded pages) so
+ * non-paginated consumers (Dashboard, Triage) can keep their
+ * `const { data: findings = [] } = useFindings(...)` shape. Pagination
+ * controls (`fetchNextPage`, `hasNextPage`, `isFetchingNextPage`) and the
+ * server-reported `total` are exposed alongside.
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { Finding, Segment } from '../types'
+import { useMemo } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { apiFetch } from './client'
+import { REST_ENDPOINTS } from './config'
+import type { Finding, Segment, Severity, Status } from '../types'
 
-// TODO [BACKEND]: Remove this mock import once API is connected.
-import { findings as mockFindings } from '../mock-data'
+/** Server-supported sort columns for `GET /findings`. */
+export type FindingSortKey = 'severity' | 'status' | 'tool' | 'first_seen' | 'last_seen' | 'title'
 
-interface UseFindingsOptions {
+export interface FindingFilters {
+  severity?: Severity[]
+  status?: Status[]
+  segment?: Segment[]
+  tool?: string[]
+  domain?: ('code' | 'web')[]
+  search?: string
+  sort?: FindingSortKey
+  order?: 'asc' | 'desc'
+  /** Page size. Default 50, max 500 (backend-enforced). */
+  limit?: number
+}
+
+export interface UseFindingsOptions {
+  /**
+   * Project id as a string. Empty string disables the query (matches the
+   * sibling-hook convention for "no project selected").
+   */
   projectId: string
-  segment?: Segment
+  filters?: FindingFilters
+  /** Optional override; combined with the projectId gate. */
+  enabled?: boolean
 }
 
-export function useFindings({ projectId, segment }: UseFindingsOptions) {
-  return useQuery({
-    queryKey: ['findings', projectId, segment],
-    queryFn: async (): Promise<Finding[]> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const params = new URLSearchParams()                              │
-      // │ if (segment) params.set("segment", segment)                       │
-      // │ const url = `${REST_ENDPOINTS.findings(projectId)}?${params}`     │
-      // │ const res = await fetch(url)                                      │
-      // │ if (!res.ok) throw new Error("Failed to fetch findings")          │
-      // │ const data = await res.json()                                     │
-      // │ return data.findings                                              │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      await new Promise(r => setTimeout(r, 150))
-      let result = mockFindings.filter(f => f.projectId === projectId)
-      if (segment) {
-        result = result.filter(f => f.segment === segment)
-      }
-      return result
-    },
-    staleTime: 30 * 1000,
-    enabled: Boolean(projectId),
-  })
+interface FindingApi {
+  id: number
+  project_id: number
+  segment: Segment
+  domain: 'code' | 'web'
+  severity: Severity
+  status: Status
+  confidence: string
+  finding_type: string[] | null
+  title: string
+  description?: string | null
+  tool: string
+  target: string
+  file?: string | null
+  line?: number | null
+  cwe: string[] | null
+  notes?: string | null
+  discovered_at: string
+  triaged_at?: string | null
+  triaged_by?: 'claude-code' | 'analyst_web' | null
+  is_locked: boolean
+  lock_holder: string | null
 }
+
+interface FindingsListPageApi {
+  items: FindingApi[]
+  total: number
+  offset: number
+  limit: number
+}
+
+interface FindingsListPage {
+  items: Finding[]
+  total: number
+  offset: number
+  limit: number
+}
+
+const DEFAULT_LIMIT = 50
 
 /**
- * useUpdateFinding Mutation
- * =========================
- * Updates a finding's editable fields (status, severity, title, notes).
- *
- * TODO [BACKEND]: Replace mock mutation with actual API call.
- *
- * Expected API request (PATCH /api/v1/findings/:id):
- * ```json
- * {
- *   "status": "active",
- *   "notes": "Analyst notes here..."
- * }
- * ```
- *
- * Expected API response:
- * ```json
- * {
- *   "id": "F-1000",
- *   "status": "active",
- *   ... (full updated finding)
- * }
- * ```
+ * Coerce the snake-cased FindingResponse into the camel-cased FE `Finding`.
+ * Exported so the PATCH mutation and SSE handler can reuse the same mapper.
  */
+export function mapFinding(api: FindingApi): Finding {
+  return {
+    id: api.id,
+    projectId: api.project_id,
+    segment: api.segment,
+    domain: api.domain,
+    severity: api.severity,
+    status: api.status,
+    confidence: api.confidence,
+    findingType: api.finding_type ?? [],
+    title: api.title,
+    description: api.description ?? undefined,
+    tool: api.tool,
+    target: api.target,
+    file: api.file ?? undefined,
+    line: api.line ?? undefined,
+    cwe: api.cwe ?? [],
+    notes: api.notes ?? undefined,
+    discoveredAt: api.discovered_at,
+    triagedAt: api.triaged_at ?? undefined,
+    triagedBy: api.triaged_by ?? undefined,
+    isLocked: api.is_locked,
+    lockHolder: api.lock_holder,
+  }
+}
 
-export function useUpdateFinding() {
-  const queryClient = useQueryClient()
+function buildUrl(
+  projectId: string,
+  filters: FindingFilters | undefined,
+  offset: number,
+  limit: number
+): string {
+  const params = new URLSearchParams()
+  params.set('offset', String(offset))
+  params.set('limit', String(limit))
+  if (filters) {
+    for (const v of filters.severity ?? []) params.append('severity', v)
+    for (const v of filters.status ?? []) params.append('status', v)
+    for (const v of filters.segment ?? []) params.append('segment', v)
+    for (const v of filters.tool ?? []) params.append('tool', v)
+    for (const v of filters.domain ?? []) params.append('domain', v)
+    if (filters.search) params.set('search', filters.search)
+    if (filters.sort) params.set('sort', filters.sort)
+    if (filters.order) params.set('order', filters.order)
+  }
+  return `${REST_ENDPOINTS.findings(projectId)}?${params.toString()}`
+}
 
-  return useMutation({
-    mutationFn: async ({
-      id,
-      patch,
-    }: {
-      id: string
-      patch: Partial<Pick<Finding, 'status' | 'severity' | 'title' | 'notes'>>
-    }): Promise<Finding> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.updateFinding(id), {       │
-      // │   method: "PATCH",                                                │
-      // │   headers: { "Content-Type": "application/json" },                │
-      // │   body: JSON.stringify(patch),                                    │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to update finding")          │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Mock: find the finding and apply the patch in memory.
-      await new Promise(r => setTimeout(r, 100))
-      const finding = mockFindings.find(f => f.id === id)
-      if (!finding) throw new Error(`Finding ${id} not found`)
-      // Note: This doesn't persist — real API would persist.
-      return { ...finding, ...patch }
+export function useFindings({ projectId, filters, enabled = true }: UseFindingsOptions) {
+  const limit = filters?.limit ?? DEFAULT_LIMIT
+  const query = useInfiniteQuery({
+    queryKey: ['findings', projectId, filters ?? null] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<FindingsListPage> => {
+      const url = buildUrl(projectId, filters, pageParam as number, limit)
+      const data = await apiFetch<FindingsListPageApi>(url)
+      return {
+        items: data.items.map(mapFinding),
+        total: data.total,
+        offset: data.offset,
+        limit: data.limit,
+      }
     },
-    onSuccess: updatedFinding => {
-      // Invalidate findings queries so they refetch with updated data.
-      queryClient.invalidateQueries({ queryKey: ['findings'] })
-      // Also update the single finding cache if we have one.
-      queryClient.setQueryData(['finding', updatedFinding.id], updatedFinding)
+    getNextPageParam: lastPage => {
+      const next = lastPage.offset + lastPage.items.length
+      return next < lastPage.total ? next : undefined
     },
+    enabled: enabled && Boolean(projectId),
+    staleTime: 10_000,
   })
+
+  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) ?? [], [query.data])
+  const total = query.data?.pages[0]?.total ?? 0
+
+  return {
+    data: items,
+    total,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage ?? false,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    isSuccess: query.isSuccess,
+  }
 }

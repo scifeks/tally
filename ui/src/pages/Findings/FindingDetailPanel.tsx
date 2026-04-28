@@ -131,8 +131,11 @@ export function FindingDetailPanel({
         {finding.file && (
           <Field label="file" value={`${finding.file}:${finding.line ?? ''}`} mono />
         )}
-        {finding.commitHash && <Field label="commit" value={finding.commitHash} mono accent />}
-        {finding.cwe && <Field label="cwe" value={finding.cwe} />}
+        <Field
+          label="type"
+          value={finding.findingType.length > 0 ? finding.findingType.join(', ') : '—'}
+        />
+        <Field label="cwe" value={finding.cwe.length > 0 ? finding.cwe.join(', ') : '—'} />
 
         {/* Editable notes */}
         <div>
@@ -153,12 +156,12 @@ export function FindingDetailPanel({
           <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
             description
           </div>
-          <div className="border border-border p-3 text-foreground leading-relaxed bg-muted/30">
-            <span className="text-dim">$</span> cat finding/{finding.id}.md
-            <br />
-            Placeholder description rendered by the FastAPI backend. This field will carry full
-            remediation guidance, CVSS vector, references, and code context when the real API is
-            wired in.
+          <div className="border border-border p-3 text-foreground leading-relaxed bg-muted/30 whitespace-pre-wrap">
+            {finding.description ? (
+              finding.description
+            ) : (
+              <span className="text-dim">{'// no description provided'}</span>
+            )}
           </div>
         </div>
 

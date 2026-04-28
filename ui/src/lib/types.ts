@@ -31,24 +31,49 @@ export interface UrlEntry {
 }
 
 export interface Finding {
-  id: string
+  /** Numeric SQLite primary key (matches backend `id: int`). */
+  id: number
+  /** Numeric project id (matches backend `project_id: int`). */
+  projectId: number
   segment: Segment
+  /** `code` or `web`. Distinct from segment (sast/web/secrets/sca). */
+  domain: 'code' | 'web'
   severity: Severity
   status: Status
+  /** confidence label — confirmed / probable / potential / false_positive. */
+  confidence: string
+  /** Backend always returns an array (possibly empty) for finding_type. */
+  findingType: string[]
   title: string
+  description?: string
   tool: string
   target: string
   file?: string
   line?: number
-  cwe?: string
-  /** Short (7-char) git commit hash that introduced / last touched this finding. */
-  commitHash?: string
+  /** Backend always returns an array (possibly empty) for cwe. */
+  cwe: string[]
   /** Free-form analyst notes — editable in the detail panel. */
   notes?: string
-  projectId: string
   discoveredAt: string
   triagedAt?: string
   triagedBy?: 'claude-code' | 'analyst_web'
+  /** Live lock state — true while a scan/triage job holds the row. */
+  isLocked: boolean
+  /** Identifier of the job currently holding the lock, when locked. */
+  lockHolder: string | null
+}
+
+/**
+ * Mirrors `ApiError` from `lib/api/client.ts` but in plain-object form so it
+ * can live in the Zustand UI store without serialising an Error class. Used
+ * by the global mutation-error modal to show the user when an optimistic
+ * update was rolled back.
+ */
+export interface ApiErrorPayload {
+  code: string
+  message: string
+  details: Record<string, unknown>
+  status: number
 }
 
 /**

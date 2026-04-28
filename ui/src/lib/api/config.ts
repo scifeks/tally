@@ -36,6 +36,13 @@ export const SSE_ENDPOINTS = {
    * Events: stream_start, token (word-by-word), stream_end, error
    */
   chatStream: `${API_BASE_URL}/chat/stream`,
+  /**
+   * Project-scoped SSE stream emitting `finding_updated` events. Tail-only
+   * (no snapshot on connect — the SPA already holds the canonical list from
+   * GET /findings). Heartbeat every 15s when idle.
+   */
+  findingsEvents: (projectId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/events`,
 } as const
 
 /**
@@ -53,14 +60,24 @@ export const REST_ENDPOINTS = {
   projectMeta: (id: string) => `${API_BASE_URL}/projects/${id}/meta`,
 
   // ─── Findings ───────────────────────────────────────────────────────────────
-  /** GET: list findings for a project. Query params: ?domain=<domain>&status=<status>&severity=<severity> */
-  findings: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/findings`,
+  /**
+   * GET: paginated, filterable findings list for a project. Query params:
+   * `severity`, `status`, `confidence`, `domain`, `tool`, `segment`,
+   * `finding_type`, `repo_id`, `search`, `sort`, `order`, `offset`, `limit`.
+   */
+  findings: (projectId: string | number) => `${API_BASE_URL}/projects/${projectId}/findings`,
   /** GET: aggregate findings counts bucketed by severity, status, domain, segment, repo, tool */
-  findingsCounts: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/findings/counts`,
-  /** GET: single finding by ID */
-  finding: (id: string) => `${API_BASE_URL}/findings/${id}`,
-  /** PATCH: update finding fields (status, severity, notes, title) */
-  updateFinding: (id: string) => `${API_BASE_URL}/findings/${id}`,
+  findingsCounts: (projectId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/counts`,
+  /** GET: single finding by ID (project-scoped). */
+  finding: (projectId: string | number, findingId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/${findingId}`,
+  /** PATCH: update finding fields (status, severity, notes, title, ...). */
+  updateFinding: (projectId: string | number, findingId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/${findingId}`,
+  /** GET: audit trail (newest-first) for a single finding. */
+  findingHistory: (projectId: string | number, findingId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/${findingId}/history`,
 
   // ─── Scans ──────────────────────────────────────────────────────────────────
   /** GET: list scan history for a project */

@@ -31,8 +31,8 @@ beforeEach(() => {
   useUI.setState({
     activeProjectId: null,
     findingsSegment: 'sast',
-    selectedFindingIds: new Set<string>(),
-    findingOverrides: {},
+    selectedFindingIds: new Set<number>(),
+    findingMutationError: null,
     triageRunStatus: 'idle',
   })
 })
@@ -106,6 +106,73 @@ describe('Dashboard — project selected (empty counts)', () => {
     expect(await screen.findByText(/welcome :: NWD/i)).toBeInTheDocument()
     expect(screen.getByText(/no scans have been run/i)).toBeInTheDocument()
     expect(screen.getByText(/add a repository or URL list/i)).toBeInTheDocument()
+  })
+})
+
+describe('Dashboard — recent high-severity findings panel', () => {
+  it('requests findings filtered to critical+high active sorted by severity desc, limit 10', async () => {
+    let observedUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings', ({ request }) => {
+        observedUrl = new URL(request.url)
+        return HttpResponse.json({
+          items: [
+            {
+              id: 1001,
+              project_id: 1,
+              segment: 'sast',
+              domain: 'code',
+              severity: 'critical',
+              status: 'active',
+              confidence: 'high',
+              finding_type: ['sql-injection'],
+              title: 'SQL injection in user search',
+              description: null,
+              tool: 'semgrep',
+              target: 'acme-api',
+              file: null,
+              line: null,
+              cwe: ['CWE-89'],
+              notes: null,
+              discovered_at: '2026-04-26T10:00:00Z',
+              triaged_at: null,
+              triaged_by: null,
+              is_locked: false,
+              lock_holder: null,
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 10,
+        })
+      })
+    )
+
+    useUI.setState({ activeProjectId: 1 })
+    renderDashboard()
+
+    await screen.findByText('SQL injection in user search')
+
+    expect(observedUrl).not.toBeNull()
+    const params = observedUrl!.searchParams
+    expect(params.getAll('severity').sort()).toEqual(['critical', 'high'])
+    expect(params.getAll('status')).toEqual(['active'])
+    expect(params.get('sort')).toBe('severity')
+    expect(params.get('order')).toBe('desc')
+    expect(params.get('limit')).toBe('10')
+  })
+
+  it('hides the recent high-severity panel when the filtered query returns zero items', async () => {
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings', () =>
+        HttpResponse.json({ items: [], total: 0, offset: 0, limit: 10 })
+      )
+    )
+    useUI.setState({ activeProjectId: 1 })
+    renderDashboard()
+
+    await screen.findByText('repositories')
+    expect(screen.queryByText('recent high-severity findings')).toBeNull()
   })
 })
 

@@ -1,67 +1,9 @@
-import type {
-  Finding,
-  HttpMethod,
-  Project,
-  Scan,
-  Severity,
-  Status,
-  Segment,
-  UrlEntry,
-  UrlProtocol,
-} from './types'
+import type { HttpMethod, Project, Scan, Segment, UrlEntry, UrlProtocol } from './types'
 
 export const projects: Project[] = [
   { id: 1, name: 'acme-platform', code: 'ACM' },
   { id: 2, name: 'atlas-api', code: 'ATL' },
   { id: 3, name: 'northwind-web', code: 'NWD' },
-]
-
-const sastTitles = [
-  'SQL injection via unparameterized query',
-  'Command injection in subprocess call',
-  'Path traversal in file read',
-  'Hardcoded cryptographic key',
-  'Insecure deserialization (pickle)',
-  'XXE in XML parser',
-  'Use of weak hash algorithm (MD5)',
-  'SSRF via user-controlled URL',
-  'Missing authorization check on endpoint',
-  'Race condition in file handler',
-]
-
-const webTitles = [
-  'Reflected XSS in search param',
-  'Missing Content-Security-Policy header',
-  'Cookie without Secure flag',
-  'Open redirect on /logout',
-  'Clickjacking: missing X-Frame-Options',
-  'Directory listing enabled',
-  'Stored XSS in profile bio',
-  'CSRF on state-changing POST',
-  'Verbose error exposes stack trace',
-  'TLS 1.0 supported',
-]
-
-const secretsTitles = [
-  'AWS access key in repo history',
-  'Stripe live key in .env.example',
-  'Private SSH key committed',
-  'GitHub personal access token',
-  'Slack webhook URL leaked',
-  'JWT signing secret in source',
-  'Database password in config.yaml',
-  'Google API key in frontend bundle',
-]
-
-const scaTitles = [
-  'lodash < 4.17.21: prototype pollution',
-  'axios < 1.6.0: SSRF via follow-redirects',
-  'log4j 2.14: RCE (Log4Shell)',
-  'jackson-databind: deserialization RCE',
-  'jinja2 < 3.1.3: sandbox escape',
-  'openssl 1.1.1: buffer overread',
-  'urllib3 < 2.2.2: cert validation bypass',
-  'pillow < 10.2.0: arbitrary file read',
 ]
 
 const tools: Record<Segment, string[]> = {
@@ -70,9 +12,6 @@ const tools: Record<Segment, string[]> = {
   secrets: ['gitleaks', 'trufflehog'],
   sca: ['osv-scanner', 'trivy', 'grype'],
 }
-
-const severities: Severity[] = ['critical', 'high', 'medium', 'low', 'informational']
-const statusPool: Status[] = ['active', 'active', 'active', 'fixed', 'wont_fix', 'false_positive']
 
 function seeded(seed: number) {
   let s = seed
@@ -84,82 +23,7 @@ function seeded(seed: number) {
 const rand = seeded(42)
 const pick = <T>(a: T[]) => a[Math.floor(rand() * a.length)]
 
-const titleMap: Record<Segment, string[]> = {
-  sast: sastTitles,
-  web: webTitles,
-  secrets: secretsTitles,
-  sca: scaTitles,
-}
-
-const files = [
-  'src/api/users.py',
-  'src/auth/middleware.ts',
-  'internal/db/query.go',
-  'app/controllers/payment.rb',
-  'lib/http/client.java',
-  'services/upload/handler.py',
-  'frontend/src/pages/profile.tsx',
-  'backend/routes/admin.js',
-]
-
 const segments: Segment[] = ['sast', 'web', 'secrets', 'sca']
-
-// 7-char git short hash (lowercase hex).
-function commitHash(): string {
-  const hex = '0123456789abcdef'
-  let s = ''
-  for (let i = 0; i < 7; i++) s += hex[Math.floor(rand() * 16)]
-  return s
-}
-
-// Findings distribution:
-//   ACM (p-01) — 220 findings, fully scanned
-//   ATL (p-02) — 35 findings, partial scans
-//   NWD (p-03) — 0 findings, no scans yet (exercises empty states)
-function buildFindings(): Finding[] {
-  const out: Finding[] = []
-  const counts: Record<string, number> = { '1': 220, '2': 35, '3': 0 }
-  let idCounter = 1000
-  const triageActors: Array<'claude-code' | 'analyst_web'> = ['claude-code', 'analyst_web']
-  for (const project of projects) {
-    const n = counts[String(project.id)]
-    for (let i = 0; i < n; i++) {
-      const segment = pick(segments)
-      const severity = pick(severities)
-      const status = pick(statusPool)
-      const tool = pick(tools[segment])
-      const title = pick(titleMap[segment])
-      const discovered = new Date(Date.now() - Math.floor(rand() * 1000 * 60 * 60 * 24 * 30))
-      // Web findings don't typically have a commit — they're runtime targets.
-      const hasCommit = segment !== 'web'
-      const isTriaged = rand() < 0.3
-      out.push({
-        id: `F-${idCounter++}`,
-        segment,
-        severity,
-        status,
-        title,
-        tool,
-        target: segment === 'web' ? `https://${project.name}.example.com` : project.name,
-        file: segment === 'sast' || segment === 'secrets' ? pick(files) : undefined,
-        line:
-          segment === 'sast' || segment === 'secrets' ? Math.floor(rand() * 500) + 1 : undefined,
-        cwe: segment === 'sast' ? `CWE-${Math.floor(rand() * 900) + 20}` : undefined,
-        commitHash: hasCommit ? commitHash() : undefined,
-        projectId: String(project.id),
-        discoveredAt: discovered.toISOString(),
-        notes: undefined,
-        triagedAt: isTriaged
-          ? new Date(discovered.getTime() + Math.floor(rand() * 1000 * 60 * 60 * 24)).toISOString()
-          : undefined,
-        triagedBy: isTriaged ? pick(triageActors) : undefined,
-      })
-    }
-  }
-  return out
-}
-
-export const findings: Finding[] = buildFindings()
 
 // Scans: ACM has many scans (2 running with segment info), ATL has a few, NWD has none.
 function buildScans(): Scan[] {

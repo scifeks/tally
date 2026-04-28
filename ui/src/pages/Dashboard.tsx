@@ -27,17 +27,22 @@ export default function Dashboard() {
   const { data: counts } = useFindingsCounts(projectIdParam)
   // SSE /api/v1/projects/:id/scans/events (real, snapshot+delta-driven)
   const runningScansCount = useRunningScansCount(activeProjectId)
-  // GET /api/v1/projects/:id/findings — TODO [BACKEND]: still mock; Phase 11.5
-  const { data: findings = [] } = useFindings({ projectId: projectIdParam })
+  // GET /api/v1/projects/:id/findings (real, server-filtered to top crit/high active)
+  const { data: recentFindings } = useFindings({
+    projectId: projectIdParam,
+    filters: {
+      severity: ['critical', 'high'],
+      status: ['active'],
+      sort: 'severity',
+      order: 'desc',
+      limit: 10,
+    },
+  })
   // GET /api/v1/projects/:id/scans — TODO [BACKEND]: still mock; Phase 11.7
   const { data: scans = [] } = useScanHistory(projectIdParam)
 
   // useMemo must run before the early return below to keep hook order stable
   // across renders where activeProjectId toggles between null and a value.
-  const projectFindings = useMemo(
-    () => findings.filter(f => f.projectId === projectIdParam),
-    [findings, projectIdParam]
-  )
   const projectScans = useMemo(
     () => scans.filter(s => s.projectId === projectIdParam),
     [scans, projectIdParam]
@@ -59,7 +64,8 @@ export default function Dashboard() {
   const openHigh = counts?.bySeverityStatus.high?.active ?? 0
 
   const hasScans = projectScans.length > 0
-  const hasFindings = projectFindings.length > 0
+  const hasAnyFindings = totalFindings > 0
+  const hasRecentHighSeverity = recentFindings.length > 0
 
   return (
     <div className="h-full overflow-auto">
@@ -200,7 +206,7 @@ export default function Dashboard() {
                     highlight={runningScansCount > 0 ? 'accent' : undefined}
                   />
                 </div>
-                {hasFindings && (
+                {hasAnyFindings && (
                   <div className="border-t border-border p-2 flex justify-end">
                     <Link
                       to="/findings"
@@ -214,7 +220,7 @@ export default function Dashboard() {
             </div>
 
             {/* Most recent critical/high findings */}
-            {hasFindings && (
+            {hasRecentHighSeverity && (
               <Panel title="recent high-severity findings">
                 <div className="text-xs">
                   <div className="grid grid-cols-[80px_70px_1fr_110px_90px] text-[10px] uppercase tracking-[0.18em] text-muted-foreground px-3 h-7 items-center border-b border-border">
@@ -224,30 +230,23 @@ export default function Dashboard() {
                     <div>tool</div>
                     <div className="text-right">when</div>
                   </div>
-                  {projectFindings
-                    .filter(
-                      f =>
-                        f.status === 'active' &&
-                        (f.severity === 'critical' || f.severity === 'high')
-                    )
-                    .slice(0, 8)
-                    .map(f => (
-                      <Link
-                        to="/findings"
-                        key={f.id}
-                        className="grid grid-cols-[80px_70px_1fr_110px_90px] items-center px-3 h-8 border-b border-border last:border-b-0 hover:bg-muted/50"
-                      >
-                        <div className="text-dim tabular-nums">{f.id}</div>
-                        <div>
-                          <SeverityChip severity={f.severity} />
-                        </div>
-                        <div className="text-foreground truncate pr-3">{f.title}</div>
-                        <div className="text-muted-foreground">{f.tool}</div>
-                        <div className="text-right text-muted-foreground tabular-nums">
-                          {formatRelative(f.discoveredAt)}
-                        </div>
-                      </Link>
-                    ))}
+                  {recentFindings.slice(0, 8).map(f => (
+                    <Link
+                      to="/findings"
+                      key={f.id}
+                      className="grid grid-cols-[80px_70px_1fr_110px_90px] items-center px-3 h-8 border-b border-border last:border-b-0 hover:bg-muted/50"
+                    >
+                      <div className="text-dim tabular-nums">{f.id}</div>
+                      <div>
+                        <SeverityChip severity={f.severity} />
+                      </div>
+                      <div className="text-foreground truncate pr-3">{f.title}</div>
+                      <div className="text-muted-foreground">{f.tool}</div>
+                      <div className="text-right text-muted-foreground tabular-nums">
+                        {formatRelative(f.discoveredAt)}
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               </Panel>
             )}

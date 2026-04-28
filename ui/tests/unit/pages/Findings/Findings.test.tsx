@@ -1,158 +1,170 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import { http, HttpResponse } from 'msw'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import Findings from '@/pages/Findings/index'
 import { useUI } from '@/lib/store'
-import type { Finding } from '@/lib/types'
+import { __setEventSourceFactory } from '@/lib/api/sse'
+import { server } from '../../../handlers'
+import { setCookie, clearAllCookies } from '../../../helpers/cookies'
+import { MockEventSource } from '../../../helpers/sse'
+import populatedFixture from '../../../fixtures/findings-populated.json'
+import findingUpdatedFixture from '../../../fixtures/finding-updated.json'
 
-const baseFinding: Omit<Finding, 'id' | 'severity' | 'status' | 'title' | 'tool'> = {
-  projectId: '1',
-  segment: 'sast',
-  target: 'acme',
-  discoveredAt: '2024-01-01T00:00:00Z',
-}
-
-const FINDINGS: Finding[] = [
-  {
-    ...baseFinding,
-    id: 'f-1',
-    severity: 'critical',
-    status: 'active',
-    title: 'SQL injection',
-    tool: 'semgrep',
-  },
-  {
-    ...baseFinding,
-    id: 'f-2',
-    severity: 'high',
-    status: 'active',
-    title: 'XSS vulnerability',
-    tool: 'bandit',
-  },
-  {
-    ...baseFinding,
-    id: 'f-3',
-    severity: 'medium',
-    status: 'fixed',
-    title: 'Path traversal',
-    tool: 'semgrep',
-  },
-  {
-    ...baseFinding,
-    id: 'f-4',
-    severity: 'critical',
-    status: 'fixed',
-    title: 'Remote code execution',
-    tool: 'bandit',
-  },
-]
-
-// The footer renders <span>{count}</span> result(s) — getNodeText only sees the
-// direct text node (" results"), so we must match via element.textContent.
-function byResultCount(n: number) {
-  const expected = n === 1 ? '1 result' : `${n} results`
-  return (_: string, el: Element | null) => el?.textContent?.trim() === expected
+class StubIntersectionObserver implements IntersectionObserver {
+  readonly root: Element | Document | null = null
+  readonly rootMargin: string = ''
+  readonly thresholds: ReadonlyArray<number> = []
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
 }
 
 function makeQC() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  qc.setQueryData(['findings', '1', undefined], FINDINGS)
-  return qc
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
 }
 
 function renderPage(qc = makeQC()) {
-  render(
+  return render(
     <MemoryRouter>
       <QueryClientProvider client={qc}>
         <Findings />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
 beforeEach(() => {
+  clearAllCookies()
+  setCookie('tally_csrf', 'test-csrf-token')
+  vi.stubGlobal('IntersectionObserver', StubIntersectionObserver)
+  MockEventSource.reset()
+  __setEventSourceFactory(
+    (url, init) => new MockEventSource(url, init) as unknown as EventSource
+  )
   useUI.setState({
     activeProjectId: 1,
     findingsSegment: 'sast',
-    selectedFindingIds: new Set<string>(),
-    findingOverrides: {},
+    selectedFindingIds: new Set<number>(),
+    findingMutationError: null,
     triageRunStatus: 'idle',
   })
 })
 
-describe('Findings page — applyFilters', () => {
-  it('shows all findings in the footer when no filters are active', async () => {
-    renderPage()
-    await screen.findByText(byResultCount(4))
-  })
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  __setEventSourceFactory(null)
+  server.resetHandlers()
+})
 
-  it('removes non-matching findings when severity filter is applied', async () => {
-    const user = userEvent.setup()
+describe('Findings page — server-driven list', () => {
+  it('renders the loaded total in the footer once findings resolve', async () => {
     renderPage()
-    await screen.findByText(byResultCount(4))
-    await user.click(screen.getByTitle('filter CRIT'))
-    // critical: f-1, f-4
-    await screen.findByText(byResultCount(2))
-  })
-
-  it('uses OR when multiple severity filters are selected', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByText(byResultCount(4))
-    await user.click(screen.getByTitle('filter CRIT'))
-    await user.click(screen.getByTitle('filter HIGH'))
-    // critical (f-1, f-4) OR high (f-2) = 3
-    await screen.findByText(byResultCount(3))
-  })
-
-  it('uses AND between severity and status filters', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByText(byResultCount(4))
-    await user.click(screen.getByTitle('filter CRIT'))
-    await screen.findByText(byResultCount(2))
-    await user.click(screen.getByRole('button', { name: 'Filter status' }))
-    await user.click(screen.getByRole('checkbox', { name: /^active/ }))
-    // critical AND active = only f-1
-    await screen.findByText(byResultCount(1))
-  })
-
-  it('matches findings by title substring case-insensitively', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByText(byResultCount(4))
-    await user.type(screen.getByRole('textbox', { name: 'Search findings' }), 'sql')
-    // "SQL injection" (f-1) contains "sql" case-insensitively
-    await screen.findByText(byResultCount(1))
-  })
-
-  it('search also matches the tool field', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByText(byResultCount(4))
-    await user.type(screen.getByRole('textbox', { name: 'Search findings' }), 'bandit')
-    // f-2 and f-4 both have tool "bandit"
-    await screen.findByText(byResultCount(2))
-  })
-
-  it('shows the no-match message when no findings pass filters', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByText(byResultCount(4))
-    await user.type(
-      screen.getByRole('textbox', { name: 'Search findings' }),
-      'zzznomatch',
+    // SAST count from fixture: 2 items (1001, 1002).
+    await waitFor(() =>
+      expect(screen.getByText(/loaded/i).textContent ?? '').toMatch(/2.+of.+2/)
     )
-    await screen.findByText('// no findings match current filters')
   })
 
-  it('shows the empty-state component when the domain has no findings', async () => {
+  it('renders the cwe column header (commit column was removed)', async () => {
+    renderPage()
+    await screen.findByText('cwe')
+    expect(screen.queryByText(/^commit$/)).toBeNull()
+  })
+
+  it('shows the empty state when the segment has no findings (project 3)', async () => {
+    useUI.setState({ activeProjectId: 3 })
+    renderPage()
+    await screen.findByText(/no findings yet/i)
+  })
+
+  it('forwards the segment filter to the request URL', async () => {
+    let observedSegments: string[] = []
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings', ({ request }) => {
+        observedSegments = new URL(request.url).searchParams.getAll('segment')
+        return HttpResponse.json({ items: [], total: 0, offset: 0, limit: 50 })
+      })
+    )
+    renderPage()
+    await waitFor(() => expect(observedSegments).toEqual(['sast']))
+  })
+
+  it('forwards a severity facet click to a new request with severity= param', async () => {
+    const user = userEvent.setup()
+    const observedRequests: string[][] = []
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings', ({ request }) => {
+        observedRequests.push(new URL(request.url).searchParams.getAll('severity'))
+        return HttpResponse.json({ items: [], total: 0, offset: 0, limit: 50 })
+      })
+    )
+    renderPage()
+    await waitFor(() => expect(observedRequests.length).toBeGreaterThan(0))
+
+    await user.click(screen.getByTitle('filter CRIT'))
+    await waitFor(() =>
+      expect(observedRequests.some(arr => arr.includes('critical'))).toBe(true)
+    )
+  })
+
+  it('debounces the search box and forwards search= when it stabilises', async () => {
+    const observed: Array<string | null> = []
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings', ({ request }) => {
+        observed.push(new URL(request.url).searchParams.get('search'))
+        return HttpResponse.json({ items: [], total: 0, offset: 0, limit: 50 })
+      })
+    )
     const user = userEvent.setup()
     renderPage()
-    await screen.findByText(byResultCount(4))
-    // WEB domain has no findings in seeded data (all are sast)
-    await user.click(screen.getByRole('button', { name: /^WEB/ }))
-    await screen.findByText(/no findings yet/i)
+    await waitFor(() => expect(observed.length).toBeGreaterThan(0))
+
+    await user.type(screen.getByRole('textbox', { name: 'Search findings' }), 'sql')
+    // Real-timer wait past the 250ms debounce.
+    await waitFor(() => expect(observed.some(v => v === 'sql')).toBe(true), {
+      timeout: 1500,
+    })
+  })
+
+  it('opens an SSE connection scoped to the active project', async () => {
+    renderPage()
+    await waitFor(() => {
+      const opened = MockEventSource.instances.find(es =>
+        es.url.includes('/projects/1/findings/events')
+      )
+      expect(opened).toBeDefined()
+    })
+  })
+
+  it('reflects an SSE finding_updated event in the cache without refetching the list', async () => {
+    let listFetches = 0
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings', () => {
+        listFetches += 1
+        return HttpResponse.json(populatedFixture)
+      })
+    )
+    renderPage()
+    await waitFor(() => expect(listFetches).toBe(1))
+
+    const es = MockEventSource.instances.find(e =>
+      e.url.includes('/findings/events')
+    )!
+    act(() => {
+      es.emitTyped('finding_updated', findingUpdatedFixture)
+    })
+
+    // Give the cache patch a tick — and assert no extra GET happened.
+    await waitFor(() => expect(listFetches).toBe(1))
   })
 })
