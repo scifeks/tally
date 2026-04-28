@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
@@ -81,10 +81,15 @@ const COLUMNS: ColumnDef[] = [
 
 export default function UrlLists() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
-  // TODO [BACKEND]: Replace with real API call.
-  // GET /api/v1/projects/:id/url-lists
-  const { data: urls = [] } = useUrlLists(activeProjectId !== null ? String(activeProjectId) : '')
+  const {
+    data: urls,
+    total,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useUrlLists(projectIdParam)
 
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<ColumnKey | null>(null)
@@ -99,8 +104,7 @@ export default function UrlLists() {
         u.protocol.toLowerCase().includes(q) ||
         u.host.toLowerCase().includes(q) ||
         u.path.toLowerCase().includes(q) ||
-        String(u.port).includes(q) ||
-        u.id.toLowerCase().includes(q)
+        String(u.port).includes(q)
       )
     })
   }, [urls, search])
@@ -145,10 +149,27 @@ export default function UrlLists() {
     overscan: 12,
   })
 
+  // Infinite-scroll sentinel — fetch the next page when the bottom marker
+  // enters the viewport.
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    if (!hasNextPage) return
+    if (isFetchingNextPage) return
+    const obs = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) {
+        void fetchNextPage()
+      }
+    })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Filter row: [SEARCH] — only rendered when there are URLs to search */}
-      {urls.length > 0 && (
+      {total > 0 && (
         <div className="flex items-stretch h-9 border-b border-border-strong bg-background shrink-0">
           {/* SEARCH */}
           <div className="flex-1 min-w-0 flex items-center gap-2 px-4 focus-within:bg-muted/30 transition-colors">
@@ -176,7 +197,7 @@ export default function UrlLists() {
               </button>
             )}
             <span className="text-[10px] text-dim uppercase tracking-wider hidden xl:inline shrink-0">
-              {search ? `matches: ${filtered.length}` : `${urls.length} entries`}
+              {search ? `matches: ${filtered.length}` : `${urls.length} of ${total} entries`}
             </span>
           </div>
 
@@ -196,7 +217,7 @@ export default function UrlLists() {
       )}
 
       {/* ─── Table or empty state ──────────────────────────────────────────── */}
-      {urls.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           title="no urls yet"
           body="This project has no URLs in its URL list. Add entries manually or import a file to populate it before kicking off web scans."
@@ -268,12 +289,20 @@ export default function UrlLists() {
                   })}
                 </div>
               )}
+              {/* Sentinel: triggers fetchNextPage when scrolled into view */}
+              <div ref={sentinelRef} aria-hidden className="h-1" />
             </div>
 
             {/* Footer status line */}
             <div className="border-t border-border px-3 h-6 flex items-center shrink-0 text-[10px] uppercase tracking-wider text-dim">
               <span>
-                {sorted.length} of {urls.length} urls
+                {urls.length} of {total} loaded
+                {isFetchingNextPage && (
+                  <span className="text-muted-foreground ml-2">{'// loading more'}</span>
+                )}
+                {!isFetchingNextPage && !hasNextPage && total > 0 && (
+                  <span className="text-muted-foreground ml-2">{'// end of list'}</span>
+                )}
                 {sortKey && sortDir && (
                   <span className="text-muted-foreground ml-2">
                     {'// sorted by '}

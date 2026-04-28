@@ -11,13 +11,27 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 
 export type UrlProtocol = string
 
 /**
- * A single URL entry in a URL list. Kept flat + flexible so we can add columns
- * later without a migration — any extra metadata the backend returns lands in
- * `extras` and can be surfaced in the detail panel or as new columns.
+ * A single URL entry from a project's URL list. Camel-cased mirror of the
+ * backend's snake_case row from `GET /api/v1/projects/:id/url-list/entries`.
+ * URLs come from two sources: scan tools (Katana, Noir) and user-uploaded
+ * endpoint files. `tool` and `runId` are populated only when `source === 'scan'`.
+ * `filePath` is populated only when `source === 'user'`.
  */
 export interface UrlEntry {
-  id: string
-  projectId: string
+  /** Numeric SQLite primary key (matches backend `id: int`). */
+  id: number
+  /** Numeric project id (matches backend `project_id: int`). */
+  projectId: number
+  /** Repository this entry belongs to. */
+  repoId: number
+  /** Resolved repository name for display. */
+  repoName: string
+  /** Origin of the entry. */
+  source: 'scan' | 'user'
+  /** Discovery tool when source is 'scan'; null for user-uploaded entries. */
+  tool: 'katana' | 'noir' | null
+  /** Scan run that produced this entry; null for user-uploaded entries. */
+  runId: number | null
   method: HttpMethod
   protocol: UrlProtocol
   /** Bare host, no protocol, no port, no trailing slash. e.g. "api.example.com" */
@@ -26,8 +40,12 @@ export interface UrlEntry {
   port: number
   /** Path portion starting with "/". e.g. "/foo/bar/123" */
   path: string
-  /** Any additional backend-provided metadata. */
-  extras?: Record<string, string | number | boolean | null>
+  /** Path of the user-uploaded file when source is 'user'; null for scan entries. */
+  filePath: string | null
+  /** Tool-specific or upload-specific metadata. */
+  meta: Record<string, unknown>
+  /** ISO-8601 timestamp when the row was inserted. */
+  createdAt: string
 }
 
 export interface Finding {
