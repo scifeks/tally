@@ -126,7 +126,7 @@ class TestListProjectsV1:
         self, projects_v1_client
     ) -> None:
         client, _, project_id = projects_v1_client
-        resp = await client.get("/api/v1/projects/")
+        resp = await client.get("/api/v1/projects")
         assert resp.status_code == 200
         items = resp.json()["items"]
         ids = [i["id"] for i in items]
@@ -134,7 +134,7 @@ class TestListProjectsV1:
 
     async def test_list_projects_pagination(self, projects_v1_client) -> None:
         client, _, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/?limit=1&offset=0")
+        resp = await client.get("/api/v1/projects?limit=1&offset=0")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] >= 1
@@ -144,7 +144,7 @@ class TestListProjectsV1:
         self, projects_v1_client
     ) -> None:
         client, _, _ = projects_v1_client
-        resp = await client.get("/api/v1/projects/")
+        resp = await client.get("/api/v1/projects")
         assert resp.status_code == 200
         for item in resp.json()["items"]:
             assert "id" in item

@@ -92,7 +92,7 @@ async def _count_findings(paths: ProjectPaths) -> int:
     return await asyncio.to_thread(_query, factory)
 
 
-@v1_router.get("/", response_model=ProjectListResponse)
+@v1_router.get("", response_model=ProjectListResponse)
 async def list_projects(
     request: Request,
     offset: int = Query(0, ge=0),
