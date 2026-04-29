@@ -178,9 +178,10 @@ async def test_post_drives_stream_start_token_x_n_stream_end(
     assert types[-1] == "stream_end"
     assert types.count("token") == 3
 
-    # Tokens preserve order, use §15.4 field name `token`.
-    tokens = [e.payload["token"] for e in events if e.event_type == "token"]
-    assert tokens == ["Hel", "lo,", " world"]
+    # Token-event chunks preserve order, use §15.4 field name `chunk`
+    # (renamed from `token` to avoid the redaction blacklist collision).
+    chunks = [e.payload["chunk"] for e in events if e.event_type == "token"]
+    assert chunks == ["Hel", "lo,", " world"]
 
     # stream_end carries assembled content under `content` (Decision 7).
     end = next(e for e in events if e.event_type == "stream_end")

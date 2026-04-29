@@ -173,7 +173,7 @@ export default function Chat() {
           break
         case 'token':
           setStreamingOverlay(prev =>
-            prev ? { ...prev, assistantContent: prev.assistantContent + event.token } : prev
+            prev ? { ...prev, assistantContent: prev.assistantContent + event.chunk } : prev
           )
           break
         case 'stream_end':

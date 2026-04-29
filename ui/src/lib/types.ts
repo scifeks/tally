@@ -598,7 +598,7 @@ export interface ChatStreamSnapshotPayload {
  */
 export type ChatStreamEvent =
   | { type: 'stream_start'; projectId: number; sessionId: number; messageId: null }
-  | { type: 'token'; projectId: number; sessionId: number; messageId: null; token: string }
+  | { type: 'token'; projectId: number; sessionId: number; messageId: null; chunk: string }
   | {
       type: 'stream_end'
       projectId: number
