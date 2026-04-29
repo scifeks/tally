@@ -6,6 +6,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Findings from '@/pages/Findings/index'
+import { FindingDetailPanel } from '@/pages/Findings/FindingDetailPanel'
 import { useUI } from '@/lib/store'
 import { __setEventSourceFactory } from '@/lib/api/sse'
 import { server } from '../../../handlers'
@@ -55,6 +56,8 @@ beforeEach(() => {
     findingsSegment: 'sast',
     selectedFindingIds: new Set<number>(),
     findingMutationError: null,
+    triageMutationError: null,
+    triageInjectionAcked: false,
     triageRunStatus: 'idle',
   })
 })
@@ -166,5 +169,120 @@ describe('Findings page — server-driven list', () => {
 
     // Give the cache patch a tick — and assert no extra GET happened.
     await waitFor(() => expect(listFetches).toBe(1))
+  })
+})
+
+describe('Findings detail panel — Triage button', () => {
+  // The full Findings page uses TanStack Virtual which doesn't paint rows
+  // in jsdom (zero element heights), so render the detail panel directly
+  // with a known finding.
+  const fixtureFinding = {
+    id: 1001,
+    projectId: 1,
+    segment: 'sast' as const,
+    domain: 'code' as const,
+    severity: 'critical' as const,
+    status: 'active' as const,
+    confidence: 'high',
+    findingType: ['sql-injection'],
+    title: 'SQL injection in user search',
+    tool: 'semgrep',
+    target: 'acme-api',
+    file: 'src/handlers/users.py',
+    line: 42,
+    cwe: ['CWE-89'],
+    discoveredAt: '2026-04-26T10:00:00Z',
+    isLocked: false,
+    lockHolder: null,
+  }
+
+  function renderPanel() {
+    const qc = makeQC()
+    return render(
+      <MemoryRouter>
+        <QueryClientProvider client={qc}>
+          <FindingDetailPanel finding={fixtureFinding} onUpdate={() => undefined} />
+        </QueryClientProvider>
+      </MemoryRouter>
+    )
+  }
+
+  it('opens the prompt-injection warning modal on first click and fires single-finding triage on accept', async () => {
+    let startBody: Record<string, unknown> | null = null
+    server.use(
+      http.post('/api/v1/projects/1/triage', async ({ request }) => {
+        startBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json(
+          {
+            scan_run_id: 2099,
+            project_id: 1,
+            status: 'queued',
+            started_at: null,
+            finished_at: null,
+            total_findings: 1,
+            processed_findings: 0,
+          },
+          { status: 202 }
+        )
+      })
+    )
+
+    const user = userEvent.setup()
+    renderPanel()
+
+    const triageBtn = await screen.findByRole('button', { name: /^>\s*triage$/i })
+    await user.click(triageBtn)
+
+    expect(
+      await screen.findByRole('dialog', { name: /prompt injection risk/i })
+    ).toBeInTheDocument()
+    expect(startBody).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: /accept & continue/i }))
+
+    await waitFor(() => expect(startBody).not.toBeNull())
+    expect(startBody).toMatchObject({
+      acknowledge_injection_risk: true,
+      finding_ids: [1001],
+    })
+    expect(useUI.getState().triageInjectionAcked).toBe(true)
+  })
+
+  it('fires single-finding triage immediately when the ack is already set', async () => {
+    useUI.setState({ triageInjectionAcked: true })
+
+    let startBody: Record<string, unknown> | null = null
+    server.use(
+      http.post('/api/v1/projects/1/triage', async ({ request }) => {
+        startBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json(
+          {
+            scan_run_id: 2099,
+            project_id: 1,
+            status: 'queued',
+            started_at: null,
+            finished_at: null,
+            total_findings: 1,
+            processed_findings: 0,
+          },
+          { status: 202 }
+        )
+      })
+    )
+
+    const user = userEvent.setup()
+    renderPanel()
+
+    const triageBtn = await screen.findByRole('button', { name: /^>\s*triage$/i })
+    await user.click(triageBtn)
+
+    expect(
+      screen.queryByRole('dialog', { name: /prompt injection risk/i })
+    ).not.toBeInTheDocument()
+    await waitFor(() => expect(startBody).not.toBeNull())
+    expect(startBody).toMatchObject({
+      acknowledge_injection_risk: true,
+      finding_ids: [1001],
+    })
   })
 })

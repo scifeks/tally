@@ -280,35 +280,61 @@ export interface ScanLogEvent {
 // ─── Triage Types ───────────────────────────────────────────────────────────
 // Used by the Triage page for batch monitoring and AI pipeline status.
 
-export type TriageRunStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'failed'
+/**
+ * Backend-shaped run status served by `/api/v1/projects/:id/triage*` and
+ * emitted on SSE `snapshot` events. Matches `TriageRun.status` in
+ * `web/api/schemas.py`.
+ */
+export type TriageRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled'
 
-export type TriageBatchStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
+/**
+ * UI-only page status used by the `useUI` store to gate project switching.
+ * The Triage page derives this from `useActiveTriage`. `'idle'` means
+ * "no triage is currently active for the active project".
+ */
+export type TriagePageStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'failed'
 
+export type TriageBatchStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+
+/**
+ * One batch within a triage run. Mirrors `TriageBatchItem` in
+ * `web/api/schemas.py`. The backend may emit `segment: null` for
+ * cross-segment batches; consumers should fall back to a neutral label.
+ */
 export interface TriageBatch {
-  id: string
-  runId: string
-  segment: Segment
-  findingIds: string[]
+  /** Numeric SQLite primary key. */
+  id: number
+  /** scan_run_id of the parent triage run (kept as `runId` in FE for brevity). */
+  runId: number
+  segment: Segment | null
+  findingIds: number[]
   status: TriageBatchStatus
   attempts: number
-  startedAt?: string
-  finishedAt?: string
-  /** Raw response from Claude, if completed. */
-  responsePreview?: string
-  error?: string
+  startedAt: string | null
+  finishedAt: string | null
+  /** Raw response preview from Claude, if completed. */
+  responsePreview: string | null
+  error: string | null
 }
 
+/**
+ * A triage run summary or detail. The summary endpoint returns no `batches`;
+ * the detail endpoint and SSE `snapshot` event include them. Mirrors
+ * `TriageRunSummary` / `TriageDetailResponse` in `web/api/schemas.py`.
+ *
+ * Note: a triage run is keyed by its `scan_run_id` (the scan it triages),
+ * not by a separate primary key.
+ */
 export interface TriageRun {
-  id: string
-  projectId: string
+  scanRunId: number
+  projectId: number
   status: TriageRunStatus
-  startedAt: string
-  finishedAt?: string
-  /** Total findings queued for triage. */
+  startedAt: string | null
+  finishedAt: string | null
   totalFindings: number
-  /** Findings processed so far. */
   processedFindings: number
-  batches: TriageBatch[]
+  /** Present on detail / snapshot; absent on summary list rows. */
+  batches?: TriageBatch[]
 }
 
 export type TriageLogEventType =
@@ -324,11 +350,13 @@ export type TriageLogEventType =
   | 'triage_failed'
 
 export interface TriageLogEvent {
+  /** Event identifier (UUID string from `new_event_id()` on the backend). */
   id: string
-  runId: string
+  scanRunId: number
+  projectId: number
   type: TriageLogEventType
   timestamp: string
-  batchId?: string
+  batchId?: number
   segment?: Segment
   message: string
   findingsCount?: number
@@ -338,10 +366,32 @@ export interface TriageLogEvent {
   /** Set on `triage_failed`. Human-readable error message. */
   error?: string
   /** Set on `triage_failed`. First finding id of the most recent in-progress batch. */
-  failedAtFindingId?: number
+  failedAtFindingId?: number | null
   /** Set on `triage_failed`. True iff the run still has resumable batches. */
   resumable?: boolean
 }
+
+/**
+ * Discriminated union for SSE `snapshot` payloads. The backend emits the
+ * run-scoped variant when the consumer subscribed with `?scan_run_id=<id>`,
+ * and the project-scoped variant otherwise.
+ */
+export type TriageSnapshotPayload =
+  | {
+      projectId: number
+      scanRunId: number
+      status: TriageRunStatus
+      totalFindings: number
+      processedFindings: number
+      startedAt: string | null
+      finishedAt: string | null
+      batches: TriageBatch[]
+    }
+  | {
+      projectId: number
+      scanRunId: null
+      activeScanRunIds: number[]
+    }
 
 // ─── Runtime Dependencies / Installed Tools (Phase 2.6, Phase 6.8) ──────────
 

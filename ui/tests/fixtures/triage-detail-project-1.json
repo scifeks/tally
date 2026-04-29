@@ -1,0 +1,59 @@
+{
+  "scan_run_id": 2010,
+  "project_id": 1,
+  "status": "running",
+  "started_at": "2026-04-28T11:00:00+00:00",
+  "finished_at": null,
+  "total_findings": 18,
+  "processed_findings": 5,
+  "batches": [
+    {
+      "id": 7001,
+      "scan_run_id": 2010,
+      "segment": "sast",
+      "finding_ids": [101, 102, 103, 104, 105],
+      "status": "completed",
+      "attempts": 1,
+      "started_at": "2026-04-28T11:01:00+00:00",
+      "finished_at": "2026-04-28T11:03:30+00:00",
+      "response_preview": null,
+      "error": null
+    },
+    {
+      "id": 7002,
+      "scan_run_id": 2010,
+      "segment": "web",
+      "finding_ids": [106, 107, 108, 109],
+      "status": "in_progress",
+      "attempts": 1,
+      "started_at": "2026-04-28T11:03:45+00:00",
+      "finished_at": null,
+      "response_preview": null,
+      "error": null
+    },
+    {
+      "id": 7003,
+      "scan_run_id": 2010,
+      "segment": "secrets",
+      "finding_ids": [110, 111, 112],
+      "status": "pending",
+      "attempts": 0,
+      "started_at": null,
+      "finished_at": null,
+      "response_preview": null,
+      "error": null
+    },
+    {
+      "id": 7004,
+      "scan_run_id": 2010,
+      "segment": "sca",
+      "finding_ids": [113, 114, 115, 116, 117, 118],
+      "status": "pending",
+      "attempts": 0,
+      "started_at": null,
+      "finished_at": null,
+      "response_preview": null,
+      "error": null
+    }
+  ]
+}

@@ -31,8 +31,13 @@ export const SSE_ENDPOINTS = {
    * `active_run_ids` on connect, then live events for any run in the project.
    */
   scanEvents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/scans/events`,
-  /** SSE stream for triage run events. Query param: ?runId=<id> or ?projectId=<id> */
-  triageEvents: `${API_BASE_URL}/triage/events`,
+  /**
+   * Project-scoped SSE stream for triage run events. Optional
+   * `?scan_run_id=<id>` query param filters to a single triage run and
+   * emits a snapshot of that run's batches on connect; otherwise emits a
+   * project-scoped snapshot listing `active_scan_run_ids`.
+   */
+  triageEvents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage/events`,
   /** SSE stream for report generation events. Query param: ?runId=<id> */
   reportEvents: `${API_BASE_URL}/reports/events`,
   /**
@@ -104,22 +109,22 @@ export const REST_ENDPOINTS = {
     `${API_BASE_URL}/projects/${projectId}/scans/${runId}/cancel`,
 
   // ─── Triage ─────────────────────────────────────────────────────────────────
-  /** GET: list triage runs for a project */
-  triageRuns: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage`,
+  /** GET: paginated triage run history for a project. Query: offset?, limit?. */
+  triageRuns: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage`,
   /** GET: single triage run with batches */
-  triageRun: (projectId: string, scanRunId: string) =>
+  triageRun: (projectId: number, scanRunId: number) =>
     `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}`,
   /** GET: currently-running triage for a project (or null) */
-  activeTriage: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage/active`,
+  activeTriage: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage/active`,
   /** GET: most-recent triage run summary for a project */
-  latestTriage: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage/latest`,
-  /** POST: start a new triage run (optionally with specific finding IDs) */
-  startTriage: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/triage`,
+  latestTriage: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage/latest`,
+  /** POST: start a new triage run. Body must include `acknowledge_injection_risk: true`. */
+  startTriage: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage`,
   /** POST: cancel a running triage */
-  cancelTriage: (projectId: string, scanRunId: string) =>
+  cancelTriage: (projectId: number, scanRunId: number) =>
     `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/cancel`,
-  /** POST: resume a failed/stranded triage run */
-  resumeTriage: (projectId: string, scanRunId: string) =>
+  /** POST: resume a failed/stranded triage run. Body must include `acknowledge_injection_risk: true`. */
+  resumeTriage: (projectId: number, scanRunId: number) =>
     `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/resume`,
 
   // ─── Runtime / Tools (cross-project) ────────────────────────────────────────
