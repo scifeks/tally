@@ -38,9 +38,7 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", return_value=True),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_dast_without_discovery(
-                ["zap"], None, False, MagicMock()
-            )
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
         assert result == ["zap"]
         mock_input.assert_not_called()
 
@@ -52,9 +50,7 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", return_value="2"),
         ):
-            result = sc._maybe_warn_dast_without_discovery(
-                ["zap"], None, False, MagicMock()
-            )
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
         # Warning shown; option 2 chosen — ZAP-only, tools unchanged
         assert result == ["zap"]
 
@@ -71,9 +67,7 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", side_effect=_has_findings),
             patch("builtins.input", return_value="1"),
         ):
-            result = sc._maybe_warn_dast_without_discovery(
-                ["zap"], None, False, MagicMock()
-            )
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
         # Option 1 — katana prepended (and noir for non-node repos)
         assert result is not None
         assert "katana" in result
@@ -88,8 +82,6 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_dast_without_discovery(
-                ["zap"], None, False, MagicMock()
-            )
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
         assert result == ["zap"]
         mock_input.assert_not_called()

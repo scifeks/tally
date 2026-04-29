@@ -1,6 +1,6 @@
 """ReportRunRegistry — process-singleton tracking active report runs.
 
-Mirrors :class:`web.adapters.scan_run_registry.ScanRunRegistry`. The
+Mirrors :class:`application.tools.scan_run_registry.ScanRunRegistry`. The
 cancel endpoint looks up cancellation tokens by ``report_id``. The
 report worker thread unregisters itself in its ``finally`` block.
 

@@ -6,13 +6,17 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.locking import JobBusy
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
-from application.tools.factory import ToolWrapperFactory
+from application.tools.orchestrator import ScanCancelled
 from application.tools.registry import tool_registry
+from application.tools.scan_service import get_scan_service
 from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.runs import RunRepository
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -158,47 +162,72 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        _finding_repo, run_repo, run_id = self._create_sqlite_run(args)
-        orchestrator = self._make_orchestrator(
-            run_id=run_id,
-            auto_approve=auto_approve,
-            skip_enrichment=skip_enrichment,
-        )
-        if orchestrator is None:
-            return
-
-        # DAST-without-discovery prompt remains an adapter-level concern: it
-        # asks the user a question and may rewrite effective_tools before
-        # dispatch. Apply it here so the orchestrator sees the final tool set.
+        # DAST-without-discovery prompt remains an adapter-level concern:
+        # it asks the user a question and may rewrite effective_tools
+        # before dispatch.
         if effective_tools is not None:
             effective_tools = self._maybe_warn_dast_without_discovery(
                 effective_tools,
                 repo_names,
                 auto_approve,
-                orchestrator,
             )
             if effective_tools is None:
                 return
 
+        project_id = self._resolve_project_id()
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
+        )
+
         try:
-            summary = orchestrator.run_scoped_scan(
-                repo_names=repo_names,
-                tool_names=effective_tools,
-                domains=None,
-                skip_tools=skip_tools or None,
+            handle = get_scan_service().start_scan(
+                project_id=project_id,
+                project_name=self.repl.active_project,
+                base_path=str(self.repl.base_path),
+                paths=paths,
+                repo_ids=tuple(repo_names or ()),
+                tool_ids=tuple(effective_tools or ()),
+                skip_tool_ids=tuple(skip_tools),
+                skip_enrichment=skip_enrichment,
+                prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
+                console=self.repl.console,
+                run_args={"args": args},
             )
+        except JobBusy as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
         except ValueError as exc:
             self.repl.console.print(f"[red]Error:[/red] {exc}")
             return
 
-        if run_id is not None and run_repo is not None and summary.findings_by_tool:
-            run_repo.add_run_tools(  # type: ignore[union-attr]
-                run_id,
+        try:
+            summary = handle.result.result()
+        except ScanCancelled:
+            self.repl.console.print("[yellow]Scan cancelled.[/yellow]")
+            return
+        except ValueError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+        except Exception as exc:
+            self.repl.console.print(f"[red]Scan failed:[/red] {exc}")
+            return
+
+        if summary.findings_by_tool:
+            run_repo = RunRepository(ConnectionFactory(paths.findings_db))
+            run_repo.add_run_tools(
+                handle.run_id,
                 [
                     {"tool": t, "findings_count": c}
                     for t, c in summary.findings_by_tool.items()
                 ],
             )
+
+    def _resolve_project_id(self) -> int:
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            raise ValueError(f"project not found: {self.repl.active_project}")
+        return int(row["id"])
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
         """run <tool> [--timeout <seconds>] [args...]  — execute a tool with raw
@@ -351,7 +380,6 @@ class ScanCommands:
         tools: list[str],
         repo_names: list[str] | None,
         auto_approve: bool,
-        orchestrator: object,
     ) -> list[str] | None:
         """Warn when DAST tools are requested but no discovery output exists.
 
@@ -458,70 +486,8 @@ class ScanCommands:
             return False
 
     # ------------------------------------------------------------------
-    # Private — orchestrator factory and export
+    # Private — export
     # ------------------------------------------------------------------
-
-    def _create_sqlite_run(self, args: list[str]) -> tuple[object, object, int | None]:
-        """Instantiate repositories and create a run record.
-
-        Returns (finding_repo, run_repo, run_id).
-        On failure returns (None, None, None).
-        """
-        assert self.repl.active_project is not None
-        try:
-            from infrastructure.store import make_store
-
-            run_repo, finding_repo, _, _ = make_store(
-                self.repl.base_path, self.repl.active_project
-            )
-            run_id = run_repo.create_run({"args": args})
-            return finding_repo, run_repo, run_id
-        except Exception as exc:
-            self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
-            return None, None, None
-
-    def _make_orchestrator(
-        self,
-        run_id: int | None = None,
-        auto_approve: bool = False,
-        skip_enrichment: bool = False,
-    ):
-        """Create a ScanOrchestrator for the active project.
-
-        Each call creates a fresh EventBus wired with the appropriate
-        post-ingest strategy, so scans are isolated from one another.
-        """
-        from application.pipeline.factory import PipelineFactory
-        from application.tools.executor import ToolExecutor
-        from application.tools.orchestrator import ScanOrchestrator
-
-        assert self.repl.active_project is not None
-        prompt = RichConsolePromptAdapter(auto_approve=auto_approve)
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-            prompt=prompt,
-        )
-        project_id: int | None = None
-        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
-        if row is not None:
-            project_id = int(row["id"])
-        bus = PipelineFactory.create(
-            console=self.repl.console,
-            skip_enrichment=skip_enrichment,
-            project_id=project_id,
-        )
-        return ScanOrchestrator(
-            project=self.repl.active_project,
-            tool_registry=tool_registry,
-            tool_executor=executor,
-            event_bus=bus,
-            prompt=prompt,
-            run_id=run_id,
-            factory=ToolWrapperFactory(),
-            console=self.repl.console,
-            project_id=project_id,
-        )
 
     def _export_summary(self, summary, export_path: str) -> None:
         """Export ScanSummary results to a JSON file."""

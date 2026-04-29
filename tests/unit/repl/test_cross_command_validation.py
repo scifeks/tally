@@ -62,14 +62,19 @@ def test_invalid_tool_rejected_by_search():
 
 
 @patch("application.repl.commands.scan_commands.tool_registry")
-def test_valid_tool_accepted_by_scan(mock_reg):
+@patch("application.repl.commands.scan_commands.get_scan_service")
+def test_valid_tool_accepted_by_scan(mock_get_service, mock_reg):
     mock_reg.list_tool_names.return_value = _VALID_TOOLS
     repl = MagicMock()
     repl.active_project = "proj"
     repl.config.load_repositories.return_value = []
-    sc = ScanCommands(repl)
-    sc._make_orchestrator = MagicMock(return_value=None)  # skip FS/RAG setup
-    sc.cmd_scan("scan", [f"--tool={_VALID_TOOL}"])
+    repl.project_registry.resolve_by_name.return_value = {"id": 1}
+
+    mock_handle = MagicMock(run_id=1)
+    mock_handle.result.result.return_value = MagicMock(findings_by_tool={})
+    mock_get_service.return_value.start_scan.return_value = mock_handle
+
+    ScanCommands(repl).cmd_scan("scan", [f"--tool={_VALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Unknown tool" in p for p in printed)
 
