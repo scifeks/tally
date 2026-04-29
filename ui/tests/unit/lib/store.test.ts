@@ -10,6 +10,8 @@ const reset = () =>
     triageMutationError: null,
     triageInjectionAcked: false,
     triageRunStatus: 'idle',
+    reportMutationError: null,
+    chatMutationError: null,
   })
 
 beforeEach(reset)
@@ -166,5 +168,69 @@ describe('setTriageInjectionAcked', () => {
   it('updates the ack flag', () => {
     useUI.getState().setTriageInjectionAcked(true)
     expect(useUI.getState().triageInjectionAcked).toBe(true)
+  })
+})
+
+describe('setReportMutationError', () => {
+  it('defaults to null', () => {
+    expect(useUI.getState().reportMutationError).toBeNull()
+  })
+
+  it('stores an error payload for the modal', () => {
+    useUI.getState().setReportMutationError({
+      code: 'JOB_ALREADY_RUNNING',
+      message: 'a report generation is already running',
+      details: {},
+      status: 409,
+    })
+    expect(useUI.getState().reportMutationError).toEqual({
+      code: 'JOB_ALREADY_RUNNING',
+      message: 'a report generation is already running',
+      details: {},
+      status: 409,
+    })
+  })
+
+  it('clears the error when set to null', () => {
+    useUI.getState().setReportMutationError({
+      code: 'X',
+      message: 'm',
+      details: {},
+      status: 500,
+    })
+    useUI.getState().setReportMutationError(null)
+    expect(useUI.getState().reportMutationError).toBeNull()
+  })
+})
+
+describe('setChatMutationError', () => {
+  it('defaults to null', () => {
+    expect(useUI.getState().chatMutationError).toBeNull()
+  })
+
+  it('stores an error payload for the modal', () => {
+    useUI.getState().setChatMutationError({
+      code: 'CHAT_SESSION_EXPIRED',
+      message: 'this chat session has been sealed',
+      details: { expired_at: '2026-04-26T11:45:00+00:00' },
+      status: 409,
+    })
+    expect(useUI.getState().chatMutationError).toEqual({
+      code: 'CHAT_SESSION_EXPIRED',
+      message: 'this chat session has been sealed',
+      details: { expired_at: '2026-04-26T11:45:00+00:00' },
+      status: 409,
+    })
+  })
+
+  it('clears the error when set to null', () => {
+    useUI.getState().setChatMutationError({
+      code: 'X',
+      message: 'm',
+      details: {},
+      status: 500,
+    })
+    useUI.getState().setChatMutationError(null)
+    expect(useUI.getState().chatMutationError).toBeNull()
   })
 })

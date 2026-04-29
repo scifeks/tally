@@ -38,13 +38,26 @@ export const SSE_ENDPOINTS = {
    * project-scoped snapshot listing `active_scan_run_ids`.
    */
   triageEvents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage/events`,
-  /** SSE stream for report generation events. Query param: ?runId=<id> */
-  reportEvents: `${API_BASE_URL}/reports/events`,
   /**
-   * SSE stream for chat responses. Query param: ?sessionId=<id>
-   * Events: stream_start, token (word-by-word), stream_end, error
+   * Project-scoped SSE stream for full-report generation events. Optional
+   * `?run_id=<id>` query param filters to a single run; otherwise emits a
+   * project-level snapshot of the active generation (if any) on connect.
    */
-  chatStream: `${API_BASE_URL}/chat/stream`,
+  reportEvents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/events`,
+  /**
+   * Project-scoped SSE stream for draft-section generation events. Optional
+   * `?section=<section>` query param filters to a single section.
+   */
+  reportDraftEvents: (projectId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/reports/drafts/events`,
+  /**
+   * Project-scoped SSE stream for chat token events. Required query param
+   * `?session_id=<id>`. Emits a `snapshot` frame on connect, then live
+   * `stream_start` / `token` / `stream_end` / `error` / `stream_cancelled`
+   * events for the requested session. Per endpoints.md §15.4.
+   */
+  chatStream: (projectId: number, sessionId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/chat/stream?session_id=${sessionId}`,
   /**
    * Project-scoped SSE stream emitting `finding_updated` events. Tail-only
    * (no snapshot on connect — the SPA already holds the canonical list from
@@ -144,32 +157,47 @@ export const REST_ENDPOINTS = {
 
   // ─── Reports ────────────────────────────────────────────────────────────────
   /** GET: list draft sections and their statuses for a project */
-  reportDrafts: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/reports/drafts`,
+  reportDrafts: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/drafts`,
   /** POST: generate a draft for a specific section. Body: { section, force?: boolean } */
-  generateDraft: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/reports/drafts`,
+  generateDraft: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/drafts`,
   /** GET: download a draft section content. Returns text/markdown */
-  downloadDraft: (projectId: string, section: string) =>
+  downloadDraft: (projectId: number, section: string) =>
     `${API_BASE_URL}/projects/${projectId}/reports/drafts/${section}/download`,
-  /** GET: list previously generated reports (history) */
-  reportHistory: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/reports`,
-  /** POST: generate a full report. Body: { format, testingType?, engagementDate, outputPath? } */
-  generateReport: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/reports/generate`,
-  /** GET: download a generated report by ID */
-  downloadReport: (reportId: string) => `${API_BASE_URL}/reports/${reportId}/download`,
+  /** POST (multipart): upload a reviewed draft section to replace the generated version */
+  uploadDraft: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/drafts/upload`,
+  /** DELETE: remove a draft section, resetting it to `not_generated` */
+  deleteDraft: (projectId: number, section: string) =>
+    `${API_BASE_URL}/projects/${projectId}/reports/drafts/${section}`,
+  /** GET: list previously generated reports (history). Query: offset?, limit?. */
+  reportHistory: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports`,
+  /** GET: most recently generated report for a project (or null) */
+  latestReport: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/latest`,
+  /** POST: generate a full report. Body uses snake_case wire format. */
+  generateReport: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/generate`,
+  /** POST: cancel an in-progress report generation run */
+  cancelReport: (projectId: number, reportId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/reports/${reportId}/cancel`,
+  /** GET: download a generated report file (project-scoped) */
+  downloadReport: (projectId: number, reportId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/reports/${reportId}/download`,
 
   // ─── Chat ───────────────────────────────────────────────────────────────────
-  /** GET: list chat sessions for a project */
-  chatSessions: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/chat/sessions`,
-  /** POST: create a new chat session */
-  createChatSession: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/chat/sessions`,
-  /** GET: list messages in a chat session */
-  chatMessages: (sessionId: string) => `${API_BASE_URL}/chat/sessions/${sessionId}/messages`,
-  /** POST: send a message and start streaming response. Body: { content: string } */
-  sendChatMessage: (sessionId: string) => `${API_BASE_URL}/chat/sessions/${sessionId}/messages`,
-  /** POST: cancel an in-progress chat response */
-  cancelChatResponse: (sessionId: string) => `${API_BASE_URL}/chat/sessions/${sessionId}/cancel`,
-  /** DELETE: delete a chat session */
-  deleteChatSession: (sessionId: string) => `${API_BASE_URL}/chat/sessions/${sessionId}`,
+  /** GET: paginated chat sessions for a project. Query: offset?, limit?. */
+  chatSessions: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/chat/sessions`,
+  /** POST: create a new chat session (empty body; server-set timestamp title). */
+  createChatSession: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/chat/sessions`,
+  /** DELETE: hard-delete a chat session and its messages. */
+  deleteChatSession: (projectId: number, sessionId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}`,
+  /** GET: paginated messages in a chat session, oldest-first. */
+  chatMessages: (projectId: number, sessionId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}/messages`,
+  /** POST: send a user message and start the streaming assistant response. */
+  sendChatMessage: (projectId: number, sessionId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}/messages`,
+  /** POST: cancel an in-flight assistant response stream. */
+  cancelChatResponse: (projectId: number, sessionId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}/cancel`,
 
   // ─── Configuration ──────────────────────────────────────────────────────────
   /** GET: project info for config page */

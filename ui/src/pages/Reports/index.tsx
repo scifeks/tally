@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Play, Square, RotateCcw, AlertTriangle, Loader2, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel, Bar } from '@/components/tty'
@@ -8,19 +8,22 @@ import {
   useReportDrafts,
   useReportHistory,
   useGenerateDraft,
+  useUploadDraft,
+  useDeleteDraft,
   useGenerateReport,
+  useCancelReport,
+  useReportEvents,
+  useReportDraftEvents,
 } from '@/lib/api'
 import type {
   ReportFormat,
   TestingType,
   ReportDraftSection,
-  ReportDraft,
   ReportLogEvent,
   ReportGenerationStatus,
-  ReportHistoryEntry,
-  ReportDraftStatus,
 } from '@/lib/types'
-import { SECTION_ORDER, SECTION_LABELS, FORMAT_OPTIONS, TESTING_TYPE_OPTIONS } from './constants'
+import { ReportMutationErrorModal } from '@/components/ReportMutationErrorModal'
+import { SECTION_ORDER, FORMAT_OPTIONS, TESTING_TYPE_OPTIONS } from './constants'
 import { PrinterAnimation } from './PrinterAnimation'
 import { DraftCard } from './DraftCard'
 import { HistoryTable } from './HistoryTable'
@@ -32,29 +35,14 @@ import { PreflightChecklist } from './PreflightChecklist'
 export default function Reports() {
   const activeProjectId = useUI(s => s.activeProjectId)
 
-  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : null
-
-  // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
-  // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
-  // GET /api/v1/projects/:id/reports/drafts
-  const { data: draftData } = useReportDrafts(projectIdParam)
-  // GET /api/v1/projects/:id/reports (history)
-  const { data: historyData = [] } = useReportHistory(projectIdParam)
-
-  // TODO [BACKEND]: These mutations trigger server actions.
-  // POST /api/v1/projects/:id/reports/drafts
-  const { generate: generateDraftMutation, isLoading: isGeneratingDraft } = useGenerateDraft()
-  // POST /api/v1/projects/:id/reports/generate
-  const { generate: generateReportMutation, isLoading: isGeneratingReport } = useGenerateReport()
-
-  // Suppress unused warnings — hooks are wired for future backend integration
-  void draftData
-  void historyData
-  void generateDraftMutation
-  void isGeneratingDraft
-  void generateReportMutation
-  void isGeneratingReport
+  const { data: draftData = [] } = useReportDrafts(activeProjectId)
+  const { data: historyData = [] } = useReportHistory(activeProjectId)
+  const generateDraft = useGenerateDraft()
+  const uploadDraft = useUploadDraft()
+  const deleteDraft = useDeleteDraft()
+  const generateReport = useGenerateReport()
+  const cancelReport = useCancelReport()
 
   const project = projects.find(p => p.id === activeProjectId)
 
@@ -67,74 +55,33 @@ export default function Reports() {
   const [showPreflight, setShowPreflight] = useState(false)
   const [showTalWarning, setShowTalWarning] = useState(true)
 
-  // Generation run state
-  const [runId, setRunId] = useState<string | null>(null)
+  // Generation run state — driven by the real SSE stream once a run starts.
+  const [runId, setRunId] = useState<number | null>(null)
   const [generationStatus, setGenerationStatus] = useState<ReportGenerationStatus>('idle')
   const [progress, setProgress] = useState(0)
   const [logs, setLogs] = useState<ReportLogEvent[]>([])
   const logContainerRef = useRef<HTMLDivElement>(null)
 
-  // Draft generation state
-  const [generatingSection, setGeneratingSection] = useState<ReportDraftSection | null>(null)
-  const [generatingAll, setGeneratingAll] = useState(false)
-
-  // Mock draft data - in real app, this comes from useReportDrafts hook
-  const [drafts, setDrafts] = useState<ReportDraft[]>(() =>
-    SECTION_ORDER.map(section => ({
-      section,
-      status:
-        activeProjectId === 1
-          ? section === 'executive_summary' || section === 'risk_level'
-            ? 'draft'
-            : 'not_generated'
-          : 'not_generated',
-      generatedAt:
-        activeProjectId === 1 && (section === 'executive_summary' || section === 'risk_level')
-          ? new Date(Date.now() - 86400000).toISOString()
-          : undefined,
-      preview:
-        activeProjectId === 1 && (section === 'executive_summary' || section === 'risk_level')
-          ? `# ${SECTION_LABELS[section]}\n\nThis is a preview of the generated content for the ${SECTION_LABELS[section].toLowerCase()} section. The full document contains detailed analysis based on the security findings from this engagement...`
-          : undefined,
-      wordCount:
-        activeProjectId === 1 && (section === 'executive_summary' || section === 'risk_level')
-          ? 450 + Math.floor(Math.random() * 200)
-          : undefined,
-    }))
-  )
-
-  // Mock history data
-  const [history] = useState<ReportHistoryEntry[]>(() =>
-    activeProjectId === 1
-      ? [
-          {
-            id: 'rpt-001',
-            projectId: '1',
-            filename: 'ACME_Platform_Security_Assessment_2024-03-15.pdf',
-            format: 'pdf',
-            generatedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-            sizeBytes: 2450000,
-            downloadUrl: '#',
-          },
-          {
-            id: 'rpt-002',
-            projectId: '1',
-            filename: 'ACME_Platform_Findings_Export.json',
-            format: 'json',
-            generatedAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-            sizeBytes: 156000,
-            downloadUrl: '#',
-          },
-        ]
-      : []
-  )
+  // Sections backfilled with `not_generated` so the UI always renders 6 cards
+  // even before the first hook resolution.
+  const drafts = useMemo(() => {
+    const bySection = new Map(draftData.map(d => [d.section, d]))
+    return SECTION_ORDER.map(
+      section => bySection.get(section) ?? { section, status: 'not_generated' as const }
+    )
+  }, [draftData])
 
   const draftCount = drafts.filter(d => d.status === 'draft' || d.status === 'reviewed').length
   const reviewedCount = drafts.filter(d => d.status === 'reviewed').length
-  const allDraftsReady = draftCount === 6
+  const allDraftsReady = draftCount === SECTION_ORDER.length
 
   const selectedFormat = FORMAT_OPTIONS.find(f => f.value === format) ?? FORMAT_OPTIONS[0]
   const canGenerate = selectedFormat.requiresDrafts ? allDraftsReady : true
+
+  // Track which single section is being generated for the per-card spinner.
+  const generatingSection: ReportDraftSection | null =
+    generateDraft.isPending && generateDraft.variables ? generateDraft.variables.section : null
+  const [generatingAll, setGeneratingAll] = useState(false)
 
   // Auto-scroll logs
   useEffect(() => {
@@ -143,185 +90,129 @@ export default function Reports() {
     }
   }, [logs])
 
-  const handleGenerateDraft = useCallback((section: ReportDraftSection, force: boolean) => {
-    setGeneratingSection(section)
-    setDrafts(prev =>
-      prev.map(d =>
-        d.section === section ? { ...d, status: 'generating' as ReportDraftStatus } : d
-      )
-    )
-    setTimeout(
-      () => {
-        setDrafts(prev =>
-          prev.map(d =>
-            d.section === section
-              ? {
-                  ...d,
-                  status: 'draft' as ReportDraftStatus,
-                  generatedAt: new Date().toISOString(),
-                  preview: `# ${SECTION_LABELS[section]}\n\nThis is a preview of the generated content for the ${SECTION_LABELS[section].toLowerCase()} section. The full document contains detailed analysis based on the security findings from this engagement...`,
-                  wordCount: 450 + Math.floor(Math.random() * 200),
-                }
-              : d
-          )
-        )
-        setGeneratingSection(null)
-      },
-      1500 + Math.random() * 1000
-    )
-    void force
+  const appendEvent = useCallback((event: ReportLogEvent) => {
+    setLogs(prev => [...prev, event])
+    if (event.type === 'step_completed' && typeof event.progress === 'number') {
+      setProgress(event.progress)
+    }
+    if (event.type === 'generation_started') {
+      setGenerationStatus('generating')
+    }
+    if (event.type === 'generation_completed') {
+      setGenerationStatus('completed')
+      setProgress(100)
+    }
+    if (event.type === 'generation_failed') {
+      setGenerationStatus('failed')
+    }
   }, [])
+
+  // Full-report SSE — only subscribe while we actually have a run in flight.
+  useReportEvents(activeProjectId, appendEvent, {
+    enabled: runId !== null,
+    runId,
+  })
+
+  // Draft SSE — always-on while a project is selected so per-section
+  // generations triggered from any card surface their lifecycle in the log.
+  useReportDraftEvents(activeProjectId, appendEvent)
+
+  const handleGenerateDraft = useCallback(
+    (section: ReportDraftSection, force: boolean) => {
+      if (activeProjectId === null) return
+      generateDraft.mutate({ projectId: activeProjectId, section, force })
+    },
+    [activeProjectId, generateDraft]
+  )
 
   const handleGenerateAll = useCallback(
     async (force: boolean) => {
+      if (activeProjectId === null) return
       setGeneratingAll(true)
-      const toGenerate = force
-        ? SECTION_ORDER
-        : SECTION_ORDER.filter(s => {
-            const d = drafts.find(dr => dr.section === s)
-            return !d || d.status === 'not_generated' || d.status === 'failed'
-          })
-
-      for (const section of toGenerate) {
-        await new Promise<void>(resolve => {
-          setDrafts(prev =>
-            prev.map(d =>
-              d.section === section ? { ...d, status: 'generating' as ReportDraftStatus } : d
-            )
-          )
-          setTimeout(
-            () => {
-              setDrafts(prev =>
-                prev.map(d =>
-                  d.section === section
-                    ? {
-                        ...d,
-                        status: 'draft' as ReportDraftStatus,
-                        generatedAt: new Date().toISOString(),
-                        preview: `# ${SECTION_LABELS[section]}\n\nThis is a preview of the generated content...`,
-                        wordCount: 450 + Math.floor(Math.random() * 200),
-                      }
-                    : d
-                )
-              )
-              resolve()
-            },
-            800 + Math.random() * 400
-          )
-        })
+      try {
+        const toGenerate = force
+          ? SECTION_ORDER
+          : SECTION_ORDER.filter(s => {
+              const d = drafts.find(dr => dr.section === s)
+              return !d || d.status === 'not_generated' || d.status === 'failed'
+            })
+        for (const section of toGenerate) {
+          try {
+            await generateDraft.mutateAsync({ projectId: activeProjectId, section, force })
+          } catch {
+            // Mutation error is surfaced via the modal slice; abort the loop
+            // so the user can resolve before continuing.
+            break
+          }
+        }
+      } finally {
+        setGeneratingAll(false)
       }
-      setGeneratingAll(false)
     },
-    [drafts]
+    [activeProjectId, drafts, generateDraft]
   )
 
-  const handleUpload = useCallback((section: ReportDraftSection, file: File) => {
-    setDrafts(prev =>
-      prev.map(d =>
-        d.section === section
-          ? {
-              ...d,
-              status: 'reviewed' as ReportDraftStatus,
-              reviewedAt: new Date().toISOString(),
-              uploadedFilename: file.name,
-            }
-          : d
-      )
-    )
-  }, [])
+  const handleUpload = useCallback(
+    (section: ReportDraftSection, file: File) => {
+      if (activeProjectId === null) return
+      uploadDraft.mutate({ projectId: activeProjectId, section, file })
+    },
+    [activeProjectId, uploadDraft]
+  )
 
-  // Simulate report generation progress
-  useEffect(() => {
-    if (generationStatus !== 'generating') return
+  const handleDelete = useCallback(
+    (section: ReportDraftSection) => {
+      if (activeProjectId === null) return
+      deleteDraft.mutate({ projectId: activeProjectId, section })
+    },
+    [activeProjectId, deleteDraft]
+  )
 
-    const steps = [
-      'Validating findings data...',
-      'Loading draft sections...',
-      'Compiling executive summary...',
-      'Formatting risk assessment...',
-      'Building critical issues section...',
-      'Adding improvement points...',
-      'Generating scope & methodology...',
-      'Compiling recommendations...',
-      'Rendering PDF...',
-      'Writing output file...',
-    ]
-
-    let stepIndex = 0
-    const interval = setInterval(
-      () => {
-        if (stepIndex < steps.length) {
-          const newProgress = Math.min(100, Math.round(((stepIndex + 1) / steps.length) * 100))
-          setProgress(newProgress)
-          setLogs(prev => [
-            ...prev,
-            {
-              id: `log-${Date.now()}`,
-              runId: runId || '',
-              type: 'step_completed',
-              timestamp: new Date().toISOString(),
-              step: steps[stepIndex],
-              message: steps[stepIndex],
-              progress: newProgress,
-            },
-          ])
-          stepIndex++
-        } else {
-          clearInterval(interval)
-          setGenerationStatus('completed')
-          setLogs(prev => [
-            ...prev,
-            {
-              id: `log-${Date.now()}`,
-              runId: runId || '',
-              type: 'generation_completed',
-              timestamp: new Date().toISOString(),
-              message: 'Report generated successfully',
-              progress: 100,
-            },
-          ])
-        }
-      },
-      600 + Math.random() * 300
-    )
-
-    return () => clearInterval(interval)
-  }, [generationStatus, runId])
-
-  const handleStartGeneration = () => {
+  const handleStartGeneration = useCallback(async () => {
+    if (activeProjectId === null) return
     if (format === 'pdf' && !allDraftsReady) {
       setShowPreflight(true)
       return
     }
-
     setLogs([])
     setProgress(0)
     setGenerationStatus('generating')
-    const newRunId = `run-${Date.now()}`
-    setRunId(newRunId)
-    setLogs([
-      {
-        id: `log-${Date.now()}`,
-        runId: newRunId,
-        type: 'generation_started',
-        timestamp: new Date().toISOString(),
-        message: `Starting ${format.toUpperCase()} report generation...`,
-      },
-    ])
-  }
+    try {
+      const run = await generateReport.mutateAsync({
+        projectId: activeProjectId,
+        format,
+        testingType: format === 'pdf' ? testingType : undefined,
+        engagementDate,
+        companyName: companyName || undefined,
+        skipTriage,
+      })
+      setRunId(run.id)
+    } catch {
+      setGenerationStatus('failed')
+      setRunId(null)
+    }
+  }, [
+    activeProjectId,
+    format,
+    allDraftsReady,
+    testingType,
+    engagementDate,
+    companyName,
+    skipTriage,
+    generateReport,
+  ])
 
-  const handleStopGeneration = () => {
-    setGenerationStatus('idle')
-    setProgress(0)
-    setRunId(null)
-  }
+  const handleStopGeneration = useCallback(() => {
+    if (activeProjectId === null || runId === null) return
+    cancelReport.mutate({ projectId: activeProjectId, reportId: runId })
+  }, [activeProjectId, runId, cancelReport])
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setGenerationStatus('idle')
     setProgress(0)
     setRunId(null)
     setLogs([])
-  }
+  }, [])
 
   const isRunning = generationStatus === 'generating'
 
@@ -336,7 +227,7 @@ export default function Reports() {
             <span className="text-accent">]</span>
           </h1>
           <span className="text-sm text-muted-foreground">
-            {project?.name} / {draftCount} of 6 sections ready
+            {project?.name} / {draftCount} of {SECTION_ORDER.length} sections ready
             {reviewedCount > 0 && <span className="text-good"> ({reviewedCount} reviewed)</span>}
           </span>
         </div>
@@ -397,7 +288,12 @@ export default function Reports() {
               {generationStatus === 'idle' && (
                 <button
                   onClick={handleStartGeneration}
-                  disabled={!canGenerate && format === 'pdf'}
+                  disabled={
+                    activeProjectId === null ||
+                    generateReport.isPending ||
+                    (!canGenerate && format === 'pdf')
+                  }
+                  data-testid="report-generate-button"
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wider transition-colors',
                     canGenerate || format !== 'pdf'
@@ -412,7 +308,9 @@ export default function Reports() {
               {isRunning && (
                 <button
                   onClick={handleStopGeneration}
-                  className="flex items-center gap-2 px-4 py-2 bg-crit text-background text-sm font-bold uppercase tracking-wider hover:bg-crit/90 transition-colors"
+                  disabled={cancelReport.isPending || runId === null}
+                  data-testid="report-stop-button"
+                  className="flex items-center gap-2 px-4 py-2 bg-crit text-background text-sm font-bold uppercase tracking-wider hover:bg-crit/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Square className="h-4 w-4" />
                   Stop
@@ -421,6 +319,7 @@ export default function Reports() {
               {(generationStatus === 'completed' || generationStatus === 'failed') && (
                 <button
                   onClick={handleReset}
+                  data-testid="report-reset-button"
                   className="flex items-center gap-2 px-4 py-2 border border-border text-muted-foreground text-sm font-bold uppercase tracking-wider hover:bg-muted/30 transition-colors"
                 >
                   <RotateCcw className="h-4 w-4" />
@@ -449,6 +348,7 @@ export default function Reports() {
                       value={format}
                       onChange={e => setFormat(e.target.value as ReportFormat)}
                       disabled={isRunning}
+                      data-testid="report-format-select"
                       className="w-full bg-muted border border-border px-3 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-50"
                     >
                       {FORMAT_OPTIONS.map(opt => (
@@ -472,6 +372,7 @@ export default function Reports() {
                       value={testingType}
                       onChange={e => setTestingType(e.target.value as TestingType)}
                       disabled={isRunning || format !== 'pdf'}
+                      data-testid="report-testing-type-select"
                       className="w-full bg-muted border border-border px-3 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-50"
                     >
                       {TESTING_TYPE_OPTIONS.map(opt => (
@@ -496,6 +397,7 @@ export default function Reports() {
                       value={companyName}
                       onChange={e => setCompanyName(e.target.value)}
                       disabled={isRunning}
+                      data-testid="report-company-name-input"
                       placeholder="e.g. ACME Corporation"
                       className="w-full bg-muted border border-border px-3 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-50 placeholder:text-dim"
                     />
@@ -515,6 +417,7 @@ export default function Reports() {
                       value={engagementDate}
                       onChange={e => setEngagementDate(e.target.value)}
                       disabled={isRunning}
+                      data-testid="report-engagement-date-input"
                       className="w-full bg-muted border border-border px-3 py-2 text-sm focus:outline-none focus:border-accent disabled:opacity-50"
                     />
                   </div>
@@ -527,6 +430,7 @@ export default function Reports() {
                     checked={skipTriage}
                     onChange={e => setSkipTriage(e.target.checked)}
                     disabled={isRunning}
+                    data-testid="report-skip-triage-checkbox"
                     className="accent-accent"
                   />
                   <span className="text-sm text-muted-foreground">
@@ -539,7 +443,8 @@ export default function Reports() {
                   <div className="flex items-center gap-2 text-[11px] text-warn">
                     <AlertTriangle className="h-3 w-3" />
                     <span>
-                      PDF requires all 6 draft sections. {6 - draftCount} section(s) still needed.
+                      PDF requires all {SECTION_ORDER.length} draft sections.{' '}
+                      {SECTION_ORDER.length - draftCount} section(s) still needed.
                     </span>
                   </div>
                 )}
@@ -553,7 +458,8 @@ export default function Reports() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleGenerateAll(false)}
-                    disabled={generatingAll || allDraftsReady}
+                    disabled={generatingAll || allDraftsReady || activeProjectId === null}
+                    data-testid="report-generate-missing-button"
                     className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {generatingAll ? (
@@ -564,7 +470,8 @@ export default function Reports() {
                   </button>
                   <button
                     onClick={() => handleGenerateAll(true)}
-                    disabled={generatingAll}
+                    disabled={generatingAll || activeProjectId === null}
+                    data-testid="report-regenerate-all-button"
                     className="px-2 py-1 text-[10px] uppercase tracking-wider border border-warn text-warn hover:bg-warn hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Regenerate all (overwrites existing)"
                   >
@@ -577,9 +484,11 @@ export default function Reports() {
                 {drafts.map(draft => (
                   <DraftCard
                     key={draft.section}
+                    projectId={activeProjectId ?? 0}
                     draft={draft}
                     onGenerate={force => handleGenerateDraft(draft.section, force)}
                     onUpload={file => handleUpload(draft.section, file)}
+                    onDelete={() => handleDelete(draft.section)}
                     isGenerating={generatingSection === draft.section || generatingAll}
                     skipTriage={skipTriage}
                   />
@@ -604,7 +513,7 @@ export default function Reports() {
             {/* History */}
             <Panel title="Report History">
               <div className="p-4">
-                <HistoryTable entries={history} />
+                <HistoryTable projectId={activeProjectId ?? 0} entries={historyData} />
               </div>
             </Panel>
           </div>
@@ -618,10 +527,12 @@ export default function Reports() {
           onClose={() => setShowPreflight(false)}
           onConfirm={() => {
             setShowPreflight(false)
-            handleStartGeneration()
+            void handleStartGeneration()
           }}
         />
       )}
+
+      <ReportMutationErrorModal />
     </div>
   )
 }

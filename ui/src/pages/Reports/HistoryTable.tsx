@@ -1,7 +1,14 @@
 import { Download, FileText } from 'lucide-react'
 import type { ReportHistoryEntry } from '@/lib/types'
+import { downloadReportFile } from '@/lib/api'
 
-export function HistoryTable({ entries }: { entries: ReportHistoryEntry[] }) {
+export function HistoryTable({
+  projectId,
+  entries,
+}: {
+  projectId: number
+  entries: ReportHistoryEntry[]
+}) {
   if (entries.length === 0) {
     return (
       <div className="text-center py-12 text-dim">
@@ -23,6 +30,7 @@ export function HistoryTable({ entries }: { entries: ReportHistoryEntry[] }) {
       {entries.map(entry => (
         <div
           key={entry.id}
+          data-testid={`report-history-row-${entry.id}`}
           className="grid grid-cols-[1fr_80px_140px_80px_60px] gap-4 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/20 transition-colors"
         >
           <span className="text-sm font-mono truncate" title={entry.filename}>
@@ -35,7 +43,12 @@ export function HistoryTable({ entries }: { entries: ReportHistoryEntry[] }) {
           <span className="text-sm text-muted-foreground tabular-nums">
             {(entry.sizeBytes / 1024).toFixed(0)} KB
           </span>
-          <button className="text-accent hover:text-foreground transition-colors">
+          <button
+            onClick={() => void downloadReportFile(projectId, entry.id, entry.filename)}
+            data-testid={`report-history-download-${entry.id}`}
+            className="text-accent hover:text-foreground transition-colors"
+            title="Download report"
+          >
             <Download className="h-4 w-4" />
           </button>
         </div>
