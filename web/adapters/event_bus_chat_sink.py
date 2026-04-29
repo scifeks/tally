@@ -13,10 +13,14 @@ same loop, so the sink can stay sync to match the Phase 8.2 port. The
 bus publish failure is swallowed (``contextlib.suppress``) so chat
 streaming never fails because nothing is listening.
 
-Field projection mirrors ``endpoints.md §15.4`` directly thanks to the
-domain rename done in this slice (``ChatToken.token`` /
-``ChatStreamCompleted.content``). The only remap left is
-``assistant_message_id -> message_id`` for the public payload shape.
+Field projection mirrors ``endpoints.md §15.4`` with two deliberate
+remaps: ``assistant_message_id -> message_id`` for the public payload
+shape, and ``ChatToken.token -> chunk`` so the wire payload does not
+collide with the ``token`` key in
+``infrastructure.security.redaction.SENSITIVE_KEYS`` (which would
+otherwise replace each LLM chunk with ``***REDACTED***`` at
+``format_sse_frame``). ``ChatStreamCompleted.content`` projects
+through unchanged.
 """
 
 from __future__ import annotations
@@ -47,8 +51,9 @@ def _payload_for(event: ChatEvent) -> dict[str, Any]:
     Common fields: ``session_id``, ``project_id`` (kept for SSE filter),
     ``message_id`` (= ``assistant_message_id`` — populated only on
     ``stream_end``), ``user_message_id`` (kept for snapshot use).
-    Per-type extras: ``token`` (chunk text), ``content`` (full assistant
-    turn), ``error`` + ``message`` (failure / cancellation detail).
+    Per-type extras: ``chunk`` (token chunk text), ``content`` (full
+    assistant turn), ``error`` + ``message`` (failure / cancellation
+    detail).
     """
     base: dict[str, Any] = {
         "session_id": event.session_id,
@@ -57,7 +62,7 @@ def _payload_for(event: ChatEvent) -> dict[str, Any]:
         "user_message_id": event.user_message_id,
     }
     if isinstance(event, ChatToken):
-        base["token"] = event.token
+        base["chunk"] = event.token
     elif isinstance(event, ChatStreamCompleted):
         base["content"] = event.content
     elif isinstance(event, ChatStreamFailed):

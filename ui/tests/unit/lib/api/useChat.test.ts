@@ -361,13 +361,13 @@ describe('useChatStream', () => {
       project_id: 1,
       session_id: 101,
       message_id: null,
-      token: 'Hello ',
+      chunk: 'Hello ',
     })
     es.emitTyped('token', {
       project_id: 1,
       session_id: 101,
       message_id: null,
-      token: 'world',
+      chunk: 'world',
     })
     es.emitTyped('stream_end', {
       project_id: 1,
@@ -377,7 +377,7 @@ describe('useChatStream', () => {
     })
     expect(seen).toHaveLength(4)
     expect(seen[0].type).toBe('stream_start')
-    expect(seen[1]).toMatchObject({ type: 'token', token: 'Hello ', sessionId: 101 })
+    expect(seen[1]).toMatchObject({ type: 'token', chunk: 'Hello ', sessionId: 101 })
     expect(seen[3]).toMatchObject({ type: 'stream_end', messageId: 7777, content: 'Hello world' })
   })
 

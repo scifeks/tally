@@ -96,7 +96,7 @@ interface ChatTokenEventApi {
   project_id: number
   session_id: number
   message_id: number | null
-  token?: string
+  chunk?: string
   content?: string
   error?: string
   message?: string
@@ -168,7 +168,7 @@ function mapChatStreamEvent(type: ChatStreamEventType, data: ChatTokenEventApi):
         projectId: data.project_id,
         sessionId: data.session_id,
         messageId: null,
-        token: data.token ?? '',
+        chunk: data.chunk ?? '',
       }
     case 'stream_end':
       return {

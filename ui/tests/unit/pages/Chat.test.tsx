@@ -129,13 +129,13 @@ describe('Chat page — send + stream golden path', () => {
         project_id: 1,
         session_id: 101,
         message_id: null,
-        token: 'CVSS ',
+        chunk: 'CVSS ',
       })
       es.emitTyped('token', {
         project_id: 1,
         session_id: 101,
         message_id: null,
-        token: '9.8',
+        chunk: '9.8',
       })
     })
     await waitFor(() => expect(screen.getByText(/CVSS 9\.8/)).toBeInTheDocument())
