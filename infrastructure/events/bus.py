@@ -66,6 +66,11 @@ class EventBus:
                     q.put_nowait(item)
             if item is EOS:
                 break
+            # Yield so SSE-consumer tasks can write each frame to the
+            # wire before the next event lands in their queue. Without
+            # this, a burst of events from a worker thread can drain
+            # straight through without the consumer ever running.
+            await asyncio.sleep(0)
         self._jobs.pop(state.job_id, None)
 
     async def publish(self, event: BusEvent) -> None:

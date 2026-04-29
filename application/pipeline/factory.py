@@ -16,6 +16,7 @@ from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from application.locking.cancellation import CancellationToken
     from application.ports.scan_event_sink import ScanEventSink
 
 
@@ -33,6 +34,7 @@ class PipelineFactory:
         skip_enrichment: bool = False,
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> EventBus:
         """Return an EventBus wired with the appropriate post-ingest strategy."""
         bus = EventBus()
@@ -49,6 +51,7 @@ class PipelineFactory:
                 console=console,
                 project_id=project_id,
                 event_sink=event_sink,
+                cancel_token=cancel_token,
             )
 
         bus.subscribe(IngestCompleted, strategy.handle)
