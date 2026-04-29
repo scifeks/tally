@@ -1,411 +1,607 @@
 /**
- * Report API Hooks
+ * useReports Hooks
  * ================
- * Hooks for report drafts, generation, and history.
+ * Wires the Reports page (drafts, full-report generation, history, SSE) to
+ * the real backend. Mirrors `useTriage.ts`: project-scoped REST + SSE,
+ * `useInfiniteQuery` for paginated history, inline snake→camel mappers,
+ * mutation errors routed through the `reportMutationError` Zustand slice
+ * for the dedicated mutation-error modal.
  *
- * TODO [BACKEND]: Implement these FastAPI endpoints:
- *
- * GET  /api/v1/projects/{id}/reports/drafts
- *      Returns: { drafts: ReportDraft[] }
- *
- * POST /api/v1/projects/{id}/reports/drafts
- *      Body: { section: string, force?: boolean }
- *      Returns: { draft: ReportDraft }
- *      Triggers LLM draft generation for the specified section.
- *
- * GET  /api/v1/projects/{id}/reports/drafts/{section}/download
- *      Returns: text/markdown file content
- *
- * GET  /api/v1/projects/{id}/reports
- *      Returns: { reports: ReportHistoryEntry[] }
- *
- * POST /api/v1/projects/{id}/reports/generate
- *      Body: { format: "pdf"|"markdown"|"html"|"json", testingType?: string, engagementDate: string }
- *      Returns: { runId: string }
- *      Triggers full report generation. Progress streamed via SSE.
- *
- * GET  /api/v1/reports/{id}/download
- *      Returns: The generated report file (PDF, MD, HTML, or JSON)
- *
- * SSE  /api/v1/reports/events?runId={id}
- *      Event types: generation_started, step_started, step_completed, step_failed,
- *                   generation_completed, generation_failed, draft_started, draft_completed, draft_failed
- *      Data format: ReportLogEvent
+ * Endpoint contract:
+ *   GET    /api/v1/projects/:id/reports/drafts
+ *   POST   /api/v1/projects/:id/reports/drafts             — body { section, force? }
+ *   GET    /api/v1/projects/:id/reports/drafts/:section/download  — text/markdown
+ *   POST   /api/v1/projects/:id/reports/drafts/upload      — multipart { section, file }
+ *   DELETE /api/v1/projects/:id/reports/drafts/:section
+ *   GET    /api/v1/projects/:id/reports                    — paginated history
+ *   GET    /api/v1/projects/:id/reports/latest             — most recent (or null)
+ *   POST   /api/v1/projects/:id/reports/generate           — start full report
+ *   POST   /api/v1/projects/:id/reports/:rid/cancel        — cancel in-flight run
+ *   GET    /api/v1/projects/:id/reports/:rid/download      — binary file stream
+ *   GET    /api/v1/projects/:id/reports/events             — SSE (full report)
+ *   GET    /api/v1/projects/:id/reports/drafts/events      — SSE (drafts)
  */
 
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
+  ApiErrorPayload,
+  ReportCancelResponse,
   ReportDraft,
   ReportDraftSection,
-  ReportHistoryEntry,
+  ReportDraftSnapshotPayload,
+  ReportDraftStatus,
   ReportFormat,
-  TestingType,
-  ReportLogEvent,
+  ReportGenerationRun,
   ReportGenerationStatus,
+  ReportGenerationStep,
+  ReportHistoryEntry,
+  ReportLogEvent,
+  ReportLogEventType,
+  ReportSnapshotPayload,
+  TestingType,
 } from '../types'
+import { ApiError, apiFetch } from './client'
+import { apiEventSource } from './sse'
+import { REST_ENDPOINTS, SSE_ENDPOINTS } from './config'
+import { useUI } from '../store'
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
+// ─── Wire-format types ──────────────────────────────────────────────────────
 
-const MOCK_DRAFTS: Record<string, ReportDraft[]> = {
-  '1': [
-    {
-      section: 'executive_summary',
-      status: 'draft',
-      generatedAt: '2025-03-15T10:30:00Z',
-      wordCount: 450,
-      preview:
-        'This security assessment of ACME Platform identified several critical vulnerabilities that require immediate attention. The engagement covered both static analysis of source code repositories and dynamic testing of web application endpoints...',
-    },
-    {
-      section: 'risk_level',
-      status: 'reviewed',
-      generatedAt: '2025-03-15T10:32:00Z',
-      reviewedAt: '2025-03-15T14:00:00Z',
-      wordCount: 280,
-      preview:
-        'Based on the findings identified during this assessment, the overall risk level is rated as HIGH. This rating reflects the presence of 3 critical vulnerabilities and 12 high-severity issues...',
-    },
-    {
-      section: 'critical_issues',
-      status: 'draft',
-      generatedAt: '2025-03-15T10:35:00Z',
-      wordCount: 1200,
-      preview:
-        'The following critical issues were identified and require immediate remediation:\n\n1. SQL Injection in User Authentication Module (TAL-001)\n2. Remote Code Execution via Deserialization (TAL-002)...',
-    },
-    { section: 'improvement_points', status: 'not_generated' },
-    { section: 'scope_methodology', status: 'not_generated' },
-    {
-      section: 'general_recommendations',
-      status: 'reviewed',
-      generatedAt: '2025-03-14T16:00:00Z',
-      reviewedAt: '2025-03-15T09:00:00Z',
-      wordCount: 650,
-      uploadedFilename: 'general_recommendations_v2.md',
-      preview:
-        'To improve the overall security posture of the ACME Platform, we recommend implementing the following measures:\n\n1. Adopt a Secure Development Lifecycle (SDL)...',
-    },
-  ],
-  '2': [
-    { section: 'executive_summary', status: 'not_generated' },
-    { section: 'risk_level', status: 'not_generated' },
-    { section: 'critical_issues', status: 'not_generated' },
-    { section: 'improvement_points', status: 'not_generated' },
-    { section: 'scope_methodology', status: 'not_generated' },
-    { section: 'general_recommendations', status: 'not_generated' },
-  ],
-  '3': [
-    { section: 'executive_summary', status: 'not_generated' },
-    { section: 'risk_level', status: 'not_generated' },
-    { section: 'critical_issues', status: 'not_generated' },
-    { section: 'improvement_points', status: 'not_generated' },
-    { section: 'scope_methodology', status: 'not_generated' },
-    { section: 'general_recommendations', status: 'not_generated' },
-  ],
+interface ReportDraftApi {
+  section: ReportDraftSection
+  status: ReportDraftStatus
+  generated_at?: string | null
+  reviewed_at?: string | null
+  preview?: string | null
+  word_count?: number | null
+  uploaded_filename?: string | null
+  error?: string | null
 }
 
-const MOCK_HISTORY: Record<string, ReportHistoryEntry[]> = {
-  '1': [
-    {
-      id: 'rpt-001',
-      projectId: '1',
-      filename: 'ACME-Platform-Security-Assessment-2025-03-10.pdf',
-      format: 'pdf',
-      generatedAt: '2025-03-10T14:30:00Z',
-      sizeBytes: 2450000,
-      downloadUrl: '#',
-    },
-    {
-      id: 'rpt-002',
-      projectId: '1',
-      filename: 'ACME-Platform-Security-Assessment-2025-02-15.pdf',
-      format: 'pdf',
-      generatedAt: '2025-02-15T09:00:00Z',
-      sizeBytes: 2100000,
-      downloadUrl: '#',
-    },
-    {
-      id: 'rpt-003',
-      projectId: '1',
-      filename: 'ACME-Platform-Findings-2025-03-10.json',
-      format: 'json',
-      generatedAt: '2025-03-10T14:35:00Z',
-      sizeBytes: 185000,
-      downloadUrl: '#',
-    },
-  ],
-  '2': [
-    {
-      id: 'rpt-004',
-      projectId: '2',
-      filename: 'Atlas-API-Assessment-2025-03-01.pdf',
-      format: 'pdf',
-      generatedAt: '2025-03-01T11:00:00Z',
-      sizeBytes: 980000,
-      downloadUrl: '#',
-    },
-  ],
-  '3': [],
+interface ReportDraftsResponseApi {
+  drafts: ReportDraftApi[]
 }
 
-// ─── Draft Hooks ────────────────────────────────────────────────────────────
-
-/**
- * Fetch report drafts for a project.
- */
-export function useReportDrafts(projectId: string | null) {
-  const [data, setData] = useState<ReportDraft[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, _setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    if (!projectId) {
-      setData([])
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Replace mock with fetch.                              │
-    // │                                                                        │
-    // │ const response = await fetch(REST_ENDPOINTS.reportDrafts(projectId))  │
-    // │ const json = await response.json()                                    │
-    // │ setData(json.drafts)                                                  │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: simulate network delay
-    const timer = setTimeout(() => {
-      setData(MOCK_DRAFTS[projectId] ?? [])
-      setIsLoading(false)
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [projectId])
-
-  const refetch = useCallback(() => {
-    if (!projectId) return
-    setIsLoading(true)
-    setTimeout(() => {
-      setData(MOCK_DRAFTS[projectId] ?? [])
-      setIsLoading(false)
-    }, 300)
-  }, [projectId])
-
-  return { data, isLoading, error, refetch }
+interface ReportSummaryApi {
+  id: number
+  project_id: number | null
+  filename: string
+  format: ReportFormat
+  generated_at: string
+  size_bytes: number
+  download_url: string
+  pinned?: boolean
 }
 
-/**
- * Generate or regenerate a draft section.
- */
-export function useGenerateDraft() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, _setError] = useState<Error | null>(null)
+interface ReportHistoryResponseApi {
+  items: ReportSummaryApi[]
+  total: number
+  offset: number
+  limit: number
+}
 
-  const generate = useCallback(
-    async (
-      projectId: string,
-      section: ReportDraftSection,
-      _force: boolean = false
-    ): Promise<ReportDraft | null> => {
-      setIsLoading(true)
-      _setError(null)
+interface ReportGenerationStepApi {
+  id: string
+  name: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  message?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+}
 
-      // ┌────────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch.                              │
-      // │                                                                        │
-      // │ const response = await fetch(REST_ENDPOINTS.generateDraft(projectId), {│
-      // │   method: "POST",                                                     │
-      // │   headers: { "Content-Type": "application/json" },                    │
-      // │   body: JSON.stringify({ section, force }),                           │
-      // │ })                                                                     │
-      // │ const json = await response.json()                                    │
-      // │ return json.draft                                                     │
-      // └────────────────────────────────────────────────────────────────────────┘
+interface ReportGenerationRunApi {
+  id: number
+  project_id: number
+  status: ReportGenerationStatus
+  format: ReportFormat
+  testing_type?: TestingType
+  engagement_date?: string | null
+  started_at: string
+  finished_at?: string | null
+  output_path?: string | null
+  error?: string | null
+  steps?: ReportGenerationStepApi[]
+}
 
-      // Mock: simulate generation delay
-      return new Promise(resolve => {
-        setTimeout(
-          () => {
-            const draft: ReportDraft = {
-              section,
-              status: 'draft',
-              generatedAt: new Date().toISOString(),
-              wordCount: Math.floor(Math.random() * 800) + 200,
-              preview: `[Generated content for ${section.replace(/_/g, ' ')}]...`,
-            }
-            setIsLoading(false)
-            resolve(draft)
-          },
-          2000 + Math.random() * 2000
+interface ReportCancelResponseApi {
+  id: number
+  status: 'cancelling'
+}
+
+interface ReportEventPayloadApi {
+  id: string
+  run_id: number
+  timestamp: string
+  message?: string
+  step?: string
+  section?: ReportDraftSection
+  progress?: number
+  output_path?: string
+  word_count?: number
+  error?: string
+}
+
+interface ReportSnapshotApi {
+  run_id: number
+  status: ReportGenerationStatus
+  steps?: ReportGenerationStepApi[]
+}
+
+interface ReportDraftSnapshotApi {
+  in_flight?: ReportDraftSection[]
+}
+
+// ─── Mappers ────────────────────────────────────────────────────────────────
+
+export function mapReportDraft(api: ReportDraftApi): ReportDraft {
+  return {
+    section: api.section,
+    status: api.status,
+    generatedAt: api.generated_at ?? undefined,
+    reviewedAt: api.reviewed_at ?? undefined,
+    preview: api.preview ?? undefined,
+    wordCount: api.word_count ?? undefined,
+    uploadedFilename: api.uploaded_filename ?? undefined,
+    error: api.error ?? undefined,
+  }
+}
+
+export function mapReportHistoryEntry(api: ReportSummaryApi): ReportHistoryEntry {
+  return {
+    id: api.id,
+    projectId: api.project_id ?? 0,
+    filename: api.filename,
+    format: api.format,
+    generatedAt: api.generated_at,
+    sizeBytes: api.size_bytes,
+    downloadUrl: api.download_url,
+    pinned: api.pinned,
+  }
+}
+
+function mapReportStep(api: ReportGenerationStepApi): ReportGenerationStep {
+  return {
+    id: api.id,
+    name: api.name,
+    status: api.status,
+    message: api.message ?? undefined,
+    startedAt: api.started_at ?? undefined,
+    finishedAt: api.finished_at ?? undefined,
+  }
+}
+
+export function mapReportRun(api: ReportGenerationRunApi): ReportGenerationRun {
+  return {
+    id: api.id,
+    projectId: api.project_id,
+    status: api.status,
+    format: api.format,
+    testingType: api.testing_type,
+    engagementDate: api.engagement_date ?? undefined,
+    startedAt: api.started_at,
+    finishedAt: api.finished_at ?? undefined,
+    outputPath: api.output_path ?? undefined,
+    error: api.error ?? undefined,
+    steps: (api.steps ?? []).map(mapReportStep),
+  }
+}
+
+function mapReportEvent(type: ReportLogEventType, data: ReportEventPayloadApi): ReportLogEvent {
+  return {
+    id: data.id,
+    runId: data.run_id,
+    type,
+    timestamp: data.timestamp,
+    step: data.step,
+    section: data.section,
+    message: data.message ?? '',
+    progress: data.progress,
+  }
+}
+
+function mapReportSnapshot(data: ReportSnapshotApi): ReportSnapshotPayload {
+  return {
+    runId: data.run_id,
+    status: data.status,
+    steps: (data.steps ?? []).map(mapReportStep),
+  }
+}
+
+function mapDraftSnapshot(data: ReportDraftSnapshotApi): ReportDraftSnapshotPayload {
+  return {
+    inFlight: data.in_flight ?? [],
+  }
+}
+
+function toErrorPayload(err: ApiError): ApiErrorPayload {
+  return {
+    code: err.code,
+    message: err.message,
+    details: err.details,
+    status: err.status,
+  }
+}
+
+// ─── Read hooks ─────────────────────────────────────────────────────────────
+
+export function useReportDrafts(projectId: number | null) {
+  return useQuery({
+    queryKey: ['reports', projectId, 'drafts'],
+    queryFn: async (): Promise<ReportDraft[]> => {
+      const data = await apiFetch<ReportDraftsResponseApi>(
+        REST_ENDPOINTS.reportDrafts(projectId as number)
+      )
+      return data.drafts.map(mapReportDraft)
+    },
+    enabled: projectId !== null,
+    staleTime: 10_000,
+  })
+}
+
+export interface UseReportHistoryOptions {
+  limit?: number
+}
+
+interface ReportHistoryPage {
+  items: ReportHistoryEntry[]
+  total: number
+  offset: number
+  limit: number
+}
+
+const HISTORY_PAGE_LIMIT = 20
+
+function buildReportHistoryUrl(projectId: number, offset: number, limit: number): string {
+  const params = new URLSearchParams()
+  params.set('offset', String(offset))
+  params.set('limit', String(limit))
+  return `${REST_ENDPOINTS.reportHistory(projectId)}?${params.toString()}`
+}
+
+export function useReportHistory(projectId: number | null, options?: UseReportHistoryOptions) {
+  const limit = options?.limit ?? HISTORY_PAGE_LIMIT
+  const query = useInfiniteQuery({
+    queryKey: ['reports', projectId, 'history', { limit }] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<ReportHistoryPage> => {
+      const url = buildReportHistoryUrl(projectId as number, pageParam as number, limit)
+      const data = await apiFetch<ReportHistoryResponseApi>(url)
+      return {
+        items: data.items.map(mapReportHistoryEntry),
+        total: data.total,
+        offset: data.offset,
+        limit: data.limit,
+      }
+    },
+    getNextPageParam: lastPage => {
+      const next = lastPage.offset + lastPage.items.length
+      return next < lastPage.total ? next : undefined
+    },
+    enabled: projectId !== null,
+    staleTime: 10_000,
+  })
+
+  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) ?? [], [query.data])
+  const total = query.data?.pages[0]?.total ?? 0
+
+  return {
+    data: items,
+    total,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage ?? false,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+    fetchStatus: query.fetchStatus,
+    refetch: query.refetch,
+    isSuccess: query.isSuccess,
+  }
+}
+
+export function useLatestReport(projectId: number | null) {
+  return useQuery({
+    queryKey: ['reports', projectId, 'latest'],
+    queryFn: async (): Promise<ReportHistoryEntry | null> => {
+      try {
+        const data = await apiFetch<ReportSummaryApi | null>(
+          REST_ENDPOINTS.latestReport(projectId as number)
         )
-      })
+        return data ? mapReportHistoryEntry(data) : null
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          return null
+        }
+        throw err
+      }
     },
-    []
-  )
-
-  return { generate, isLoading, error }
+    enabled: projectId !== null,
+    staleTime: 10_000,
+    retry: (failureCount, err) => {
+      if (err instanceof ApiError && err.status === 404) return false
+      return failureCount < 3
+    },
+  })
 }
 
-// ─── History Hooks ──────────────────────────────────────────────────────────
+// ─── Mutations ──────────────────────────────────────────────────────────────
 
-/**
- * Fetch report generation history for a project.
- */
-export function useReportHistory(projectId: string | null) {
-  const [data, setData] = useState<ReportHistoryEntry[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, _setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    if (!projectId) {
-      setData([])
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Replace mock with fetch.                              │
-    // │                                                                        │
-    // │ const response = await fetch(REST_ENDPOINTS.reportHistory(projectId)) │
-    // │ const json = await response.json()                                    │
-    // │ setData(json.reports)                                                 │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    const timer = setTimeout(() => {
-      setData(MOCK_HISTORY[projectId] ?? [])
-      setIsLoading(false)
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [projectId])
-
-  const refetch = useCallback(() => {
-    if (!projectId) return
-    setIsLoading(true)
-    setTimeout(() => {
-      setData(MOCK_HISTORY[projectId] ?? [])
-      setIsLoading(false)
-    }, 300)
-  }, [projectId])
-
-  return { data, isLoading, error, refetch }
+export interface GenerateDraftVariables {
+  projectId: number
+  section: ReportDraftSection
+  force?: boolean
 }
 
-// ─── Generation Hooks ───────────────────────────────────────────────────────
+export function useGenerateDraft() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setReportMutationError)
 
-export interface GenerateReportParams {
+  return useMutation<ReportDraft, ApiError, GenerateDraftVariables>({
+    mutationFn: async ({ projectId, section, force }) => {
+      const data = await apiFetch<ReportDraftApi>(REST_ENDPOINTS.generateDraft(projectId), {
+        method: 'POST',
+        body: { section, force: force ?? false },
+      })
+      return mapReportDraft(data)
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reports', projectId, 'drafts'] })
+    },
+  })
+}
+
+export interface UploadDraftVariables {
+  projectId: number
+  section: ReportDraftSection
+  file: File
+}
+
+export function useUploadDraft() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setReportMutationError)
+
+  return useMutation<ReportDraft, ApiError, UploadDraftVariables>({
+    mutationFn: async ({ projectId, section, file }) => {
+      const form = new FormData()
+      form.append('section', section)
+      form.append('file', file)
+      const data = await apiFetch<ReportDraftApi>(REST_ENDPOINTS.uploadDraft(projectId), {
+        method: 'POST',
+        body: form,
+      })
+      return mapReportDraft(data)
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reports', projectId, 'drafts'] })
+    },
+  })
+}
+
+export interface DeleteDraftVariables {
+  projectId: number
+  section: ReportDraftSection
+}
+
+export function useDeleteDraft() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setReportMutationError)
+
+  return useMutation<void, ApiError, DeleteDraftVariables>({
+    mutationFn: async ({ projectId, section }) => {
+      await apiFetch<void>(REST_ENDPOINTS.deleteDraft(projectId, section), { method: 'DELETE' })
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reports', projectId, 'drafts'] })
+    },
+  })
+}
+
+export interface GenerateReportVariables {
+  projectId: number
   format: ReportFormat
   testingType?: TestingType
-  engagementDate: string
+  engagementDate?: string
+  companyName?: string
   outputPath?: string
+  skipTriage?: boolean
 }
 
-/**
- * Trigger full report generation.
- */
 export function useGenerateReport() {
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setReportMutationError)
 
-  const generate = useCallback(
-    async (_projectId: string, _params: GenerateReportParams): Promise<string | null> => {
-      setIsLoading(true)
-      setError(null)
-
-      // ┌────────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch.                              │
-      // │                                                                        │
-      // │ const response = await fetch(REST_ENDPOINTS.generateReport(projectId),│
-      // │   {                                                                    │
-      // │     method: "POST",                                                   │
-      // │     headers: { "Content-Type": "application/json" },                  │
-      // │     body: JSON.stringify(params),                                     │
-      // │   }                                                                    │
-      // │ )                                                                      │
-      // │ const json = await response.json()                                    │
-      // │ return json.runId                                                     │
-      // └────────────────────────────────────────────────────────────────────────┘
-
-      // Mock: return fake run ID after brief delay
-      return new Promise(resolve => {
-        setTimeout(() => {
-          const runId = `run-${Date.now()}`
-          setIsLoading(false)
-          resolve(runId)
-        }, 500)
-      })
+  return useMutation<ReportGenerationRun, ApiError, GenerateReportVariables>({
+    mutationFn: async vars => {
+      const body: Record<string, unknown> = { format: vars.format }
+      if (vars.testingType !== undefined) body.testing_type = vars.testingType
+      if (vars.engagementDate !== undefined) body.engagement_date = vars.engagementDate
+      if (vars.companyName !== undefined && vars.companyName !== '') {
+        body.company_name = vars.companyName
+      }
+      if (vars.outputPath !== undefined) body.output_path = vars.outputPath
+      if (vars.skipTriage !== undefined) body.skip_triage = vars.skipTriage
+      const data = await apiFetch<ReportGenerationRunApi>(
+        REST_ENDPOINTS.generateReport(vars.projectId),
+        { method: 'POST', body }
+      )
+      return mapReportRun(data)
     },
-    []
-  )
-
-  return { generate, isLoading, error }
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reports', projectId] })
+    },
+  })
 }
 
-// ─── SSE Hook for Report Generation Events ──────────────────────────────────
+export interface CancelReportVariables {
+  projectId: number
+  reportId: number
+}
 
-/**
- * Subscribe to report generation events via SSE.
- */
-export function useReportEvents({
-  runId,
-  enabled = true,
-  onEvent,
-}: {
-  runId: string | null
+export function useCancelReport() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setReportMutationError)
+
+  return useMutation<ReportCancelResponse, ApiError, CancelReportVariables>({
+    mutationFn: async ({ projectId, reportId }) => {
+      const data = await apiFetch<ReportCancelResponseApi>(
+        REST_ENDPOINTS.cancelReport(projectId, reportId),
+        { method: 'POST' }
+      )
+      return data
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['reports', projectId] })
+    },
+  })
+}
+
+// ─── Download helpers ───────────────────────────────────────────────────────
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function downloadDraftSection(
+  projectId: number,
+  section: ReportDraftSection
+): Promise<void> {
+  const blob = await apiFetch<Blob>(REST_ENDPOINTS.downloadDraft(projectId, section), {
+    headers: { Accept: 'text/markdown' },
+    parseAs: 'blob',
+  })
+  triggerBlobDownload(blob, `${section}.md`)
+}
+
+export async function downloadReportFile(
+  projectId: number,
+  reportId: number,
+  filename: string
+): Promise<void> {
+  const blob = await apiFetch<Blob>(REST_ENDPOINTS.downloadReport(projectId, reportId), {
+    parseAs: 'blob',
+  })
+  triggerBlobDownload(blob, filename)
+}
+
+// ─── SSE consumers ──────────────────────────────────────────────────────────
+
+const REPORT_EVENT_TYPES: readonly ReportLogEventType[] = [
+  'generation_started',
+  'step_started',
+  'step_completed',
+  'step_failed',
+  'generation_completed',
+  'generation_failed',
+] as const
+
+const DRAFT_EVENT_TYPES: readonly ReportLogEventType[] = [
+  'draft_started',
+  'draft_completed',
+  'draft_failed',
+] as const
+
+export interface UseReportEventsOptions {
   enabled?: boolean
-  onEvent?: (event: ReportLogEvent) => void
-}) {
-  const [events, setEvents] = useState<ReportLogEvent[]>([])
-  const [status, setStatus] = useState<ReportGenerationStatus>('idle')
-  const [error, setError] = useState<Error | null>(null)
+  /**
+   * Optional run_id query param. When set, the snapshot frame on connect
+   * is scoped to that single generation run.
+   */
+  runId?: number | null
+  onSnapshot?: (snap: ReportSnapshotPayload) => void
+}
+
+export function useReportEvents(
+  projectId: number | null,
+  onEvent: (event: ReportLogEvent) => void,
+  options?: UseReportEventsOptions
+) {
+  const enabled = options?.enabled ?? true
+  const runId = options?.runId ?? null
   const onEventRef = useRef(onEvent)
+  const onSnapshotRef = useRef(options?.onSnapshot)
   onEventRef.current = onEvent
-
-  const connect = useCallback((): EventSource | null => {
-    if (!enabled || !runId) return null
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this SSE connection code.                   │
-    // │                                                                        │
-    // │ const es = new EventSource(`${SSE_ENDPOINTS.reportEvents}?runId=${runId}`)│
-    // │                                                                        │
-    // │ es.onmessage = (e) => {                                               │
-    // │   const event: ReportLogEvent = JSON.parse(e.data)                    │
-    // │   setEvents((prev) => [...prev, event])                               │
-    // │   onEventRef.current?.(event)                                         │
-    // │                                                                        │
-    // │   if (event.type === "generation_completed") setStatus("completed")   │
-    // │   if (event.type === "generation_failed") setStatus("failed")         │
-    // │ }                                                                      │
-    // │                                                                        │
-    // │ es.onerror = () => {                                                  │
-    // │   setError(new Error("SSE connection error"))                         │
-    // │   es.close()                                                          │
-    // │ }                                                                      │
-    // │                                                                        │
-    // │ return es                                                              │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: no actual SSE connection
-    return null
-  }, [enabled, runId])
+  onSnapshotRef.current = options?.onSnapshot
 
   useEffect(() => {
-    const eventSource: EventSource | null = connect()
-    return () => {
-      eventSource?.close()
+    if (!enabled || projectId === null) return
+    let url = SSE_ENDPOINTS.reportEvents(projectId)
+    if (runId !== null) {
+      url = `${url}?run_id=${runId}`
     }
-  }, [connect])
+    const handle = apiEventSource(url, {
+      eventTypes: ['snapshot', ...REPORT_EVENT_TYPES],
+      onEvent: (type, data) => {
+        if (type === 'snapshot') {
+          onSnapshotRef.current?.(mapReportSnapshot(data as ReportSnapshotApi))
+          return
+        }
+        if ((REPORT_EVENT_TYPES as readonly string[]).includes(type)) {
+          onEventRef.current(
+            mapReportEvent(type as ReportLogEventType, data as ReportEventPayloadApi)
+          )
+        }
+      },
+    })
+    return () => handle.close()
+  }, [projectId, enabled, runId])
+}
 
-  const reset = useCallback(() => {
-    setEvents([])
-    setStatus('idle')
-    setError(null)
-  }, [])
+export interface UseReportDraftEventsOptions {
+  enabled?: boolean
+  /**
+   * Optional section query param. When set, the snapshot scopes to that
+   * section's in-flight state only.
+   */
+  section?: ReportDraftSection | null
+  onSnapshot?: (snap: ReportDraftSnapshotPayload) => void
+}
 
-  return { events, status, setStatus, error, reset, setEvents }
+export function useReportDraftEvents(
+  projectId: number | null,
+  onEvent: (event: ReportLogEvent) => void,
+  options?: UseReportDraftEventsOptions
+) {
+  const enabled = options?.enabled ?? true
+  const section = options?.section ?? null
+  const onEventRef = useRef(onEvent)
+  const onSnapshotRef = useRef(options?.onSnapshot)
+  onEventRef.current = onEvent
+  onSnapshotRef.current = options?.onSnapshot
+
+  useEffect(() => {
+    if (!enabled || projectId === null) return
+    let url = SSE_ENDPOINTS.reportDraftEvents(projectId)
+    if (section !== null) {
+      url = `${url}?section=${section}`
+    }
+    const handle = apiEventSource(url, {
+      eventTypes: ['snapshot', ...DRAFT_EVENT_TYPES],
+      onEvent: (type, data) => {
+        if (type === 'snapshot') {
+          onSnapshotRef.current?.(mapDraftSnapshot(data as ReportDraftSnapshotApi))
+          return
+        }
+        if ((DRAFT_EVENT_TYPES as readonly string[]).includes(type)) {
+          onEventRef.current(
+            mapReportEvent(type as ReportLogEventType, data as ReportEventPayloadApi)
+          )
+        }
+      },
+    })
+    return () => handle.close()
+  }, [projectId, enabled, section])
 }

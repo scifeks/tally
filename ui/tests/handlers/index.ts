@@ -28,6 +28,28 @@ import triageDetailProject1Fixture from '../fixtures/triage-detail-project-1.jso
 import triageStart202Fixture from '../fixtures/triage-start-202.json'
 import triageCancel202Fixture from '../fixtures/triage-cancel-202.json'
 import triageResume202Fixture from '../fixtures/triage-resume-202.json'
+import reportDraftsProject1Fixture from '../fixtures/report-drafts-project-1.json'
+import reportDraftsProject2Fixture from '../fixtures/report-drafts-project-2.json'
+import reportDraftsEmptyFixture from '../fixtures/report-drafts-empty.json'
+import reportHistoryProject1Fixture from '../fixtures/report-history-project-1.json'
+import reportHistoryEmptyFixture from '../fixtures/report-history-empty.json'
+import reportLatestProject1Fixture from '../fixtures/report-latest-project-1.json'
+import reportGenerate202Fixture from '../fixtures/report-generate-202.json'
+import reportDraftStart202Fixture from '../fixtures/report-draft-start-202.json'
+import reportCancel202Fixture from '../fixtures/report-cancel-202.json'
+import reportDraftUpload200Fixture from '../fixtures/report-draft-upload-200.json'
+import chatSessionsProject1Fixture from '../fixtures/chat-sessions-project-1.json'
+import chatSessionsProject2Fixture from '../fixtures/chat-sessions-project-2.json'
+import chatSessionsEmptyFixture from '../fixtures/chat-sessions-empty.json'
+import chatMessagesSession101Fixture from '../fixtures/chat-messages-session-101.json'
+import chatMessagesEmptyFixture from '../fixtures/chat-messages-empty.json'
+import chatCreateSession201Fixture from '../fixtures/chat-create-session-201.json'
+import chatSendMessage202Fixture from '../fixtures/chat-send-message-202.json'
+import chatCancel202Fixture from '../fixtures/chat-cancel-202.json'
+const reportDraftDownloadMarkdown = `# Executive Summary
+
+This is a sample reviewed draft section served as \`text/markdown\`.
+`
 
 interface UrlListPage {
   items: Array<Record<string, unknown> & { id: number }>
@@ -74,6 +96,29 @@ const TRIAGE_HISTORY_FIXTURES: Record<string, TriageHistoryPage> = {
   '3': triageHistoryEmptyFixture as TriageHistoryPage,
 }
 
+interface ReportDraftsFixture {
+  drafts: Array<Record<string, unknown> & { section: string; status: string }>
+}
+
+const REPORT_DRAFTS_FIXTURES: Record<string, ReportDraftsFixture> = {
+  '1': reportDraftsProject1Fixture as ReportDraftsFixture,
+  '2': reportDraftsProject2Fixture as ReportDraftsFixture,
+  '3': reportDraftsEmptyFixture as ReportDraftsFixture,
+}
+
+interface ReportHistoryPage {
+  items: Array<Record<string, unknown> & { id: number }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const REPORT_HISTORY_FIXTURES: Record<string, ReportHistoryPage> = {
+  '1': reportHistoryProject1Fixture as ReportHistoryPage,
+  '2': reportHistoryEmptyFixture as ReportHistoryPage,
+  '3': reportHistoryEmptyFixture as ReportHistoryPage,
+}
+
 /**
  * Test trigger ids:
  *   projectId 99  → POST /triage returns 409 JOB_ALREADY_RUNNING
@@ -87,6 +132,55 @@ const PROJECT_TRIAGE_NOT_FOUND = '98'
 const SCAN_RUN_NOT_CANCELLABLE = '999'
 const SCAN_RUN_NOT_RESUMABLE = '998'
 const SCAN_RUN_DETAIL_NOT_FOUND = '997'
+
+/**
+ * Reports test trigger ids (separate namespace from triage above):
+ *   projectId 99   → POST /reports/generate or /reports/drafts → 409 JOB_ALREADY_RUNNING
+ *   projectId 98   → POST /reports/generate or /reports/drafts → 404 NOT_FOUND
+ *   projectId 3    → GET /reports/latest → 404 (treated as null by hook)
+ *   reportId  999  → POST /reports/:id/cancel → 409 REPORT_NOT_CANCELLABLE
+ */
+const PROJECT_REPORT_CONFLICT = '99'
+const PROJECT_REPORT_NOT_FOUND = '98'
+const REPORT_NOT_CANCELLABLE = '999'
+
+/**
+ * Chat test trigger ids:
+ *   sessionId 901 → POST .../messages → 409 CHAT_SESSION_EXPIRED
+ *   sessionId 902 → POST .../messages → 409 CHAT_STREAM_ALREADY_RUNNING
+ *   sessionId 903 → POST .../messages → 422 VALIDATION_ERROR
+ *   sessionId 904 → POST .../cancel   → 409 CHAT_NO_ACTIVE_STREAM
+ *   sessionId 905 → GET messages or POST anything → 404 NOT_FOUND
+ */
+const CHAT_SESSION_EXPIRED_ID = '901'
+const CHAT_STREAM_ALREADY_RUNNING_ID = '902'
+const CHAT_VALIDATION_ERROR_ID = '903'
+const CHAT_NO_ACTIVE_STREAM_ID = '904'
+const CHAT_SESSION_NOT_FOUND_ID = '905'
+
+interface ChatSessionsFixture {
+  items: Array<Record<string, unknown> & { id: number; project_id: number }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const CHAT_SESSIONS_FIXTURES: Record<string, ChatSessionsFixture> = {
+  '1': chatSessionsProject1Fixture as ChatSessionsFixture,
+  '2': chatSessionsProject2Fixture as ChatSessionsFixture,
+  '3': chatSessionsEmptyFixture as ChatSessionsFixture,
+}
+
+interface ChatMessagesFixture {
+  items: Array<Record<string, unknown> & { id: number; session_id: number }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const CHAT_MESSAGES_FIXTURES: Record<string, ChatMessagesFixture> = {
+  '101': chatMessagesSession101Fixture as ChatMessagesFixture,
+}
 
 function errorEnvelope(
   status: number,
@@ -307,6 +401,197 @@ export const handlers = [
         )
       }
       return HttpResponse.json(triageResume202Fixture, { status: 202 })
+    }
+  ),
+
+  // ─── Reports ──────────────────────────────────────────────────────────────
+  // Literal-segment routes registered BEFORE the parameterized
+  // `:reportId` route so MSW doesn't bind 'drafts'/'latest'/'generate'/
+  // 'events' to the param.
+  http.get('/api/v1/projects/:projectId/reports/drafts', ({ params }) => {
+    const fixture =
+      REPORT_DRAFTS_FIXTURES[params.projectId as string] ?? reportDraftsEmptyFixture
+    return HttpResponse.json(fixture)
+  }),
+  http.post('/api/v1/projects/:projectId/reports/drafts', async ({ params, request }) => {
+    if (params.projectId === PROJECT_REPORT_CONFLICT) {
+      return errorEnvelope(409, 'JOB_ALREADY_RUNNING', 'a draft generation is already running')
+    }
+    if (params.projectId === PROJECT_REPORT_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+    }
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    if (typeof body.section !== 'string') {
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'section is required', { field: 'section' })
+    }
+    return HttpResponse.json(
+      { ...reportDraftStart202Fixture, section: body.section },
+      { status: 202 }
+    )
+  }),
+  http.get(
+    '/api/v1/projects/:projectId/reports/drafts/:section/download',
+    ({ params }) => {
+      // Return 404 for the failed section in fixture-1 to exercise the
+      // not-yet-generated path. All others get the sample markdown body.
+      if (params.projectId === '1' && params.section === 'general_recommendations') {
+        return errorEnvelope(404, 'NOT_FOUND', 'draft not generated')
+      }
+      return new HttpResponse(reportDraftDownloadMarkdown, {
+        status: 200,
+        headers: { 'Content-Type': 'text/markdown' },
+      })
+    }
+  ),
+  http.post('/api/v1/projects/:projectId/reports/drafts/upload', async ({ request }) => {
+    const form = await request.formData()
+    const section = form.get('section')
+    if (typeof section !== 'string' || section === '') {
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'section is required', { field: 'section' })
+    }
+    return HttpResponse.json({ ...reportDraftUpload200Fixture, section })
+  }),
+  http.delete(
+    '/api/v1/projects/:projectId/reports/drafts/:section',
+    () => new HttpResponse(null, { status: 204 })
+  ),
+  http.get('/api/v1/projects/:projectId/reports/latest', ({ params }) => {
+    if (params.projectId === '3') {
+      return errorEnvelope(404, 'NOT_FOUND', 'no reports for this project')
+    }
+    return HttpResponse.json(reportLatestProject1Fixture)
+  }),
+  http.post('/api/v1/projects/:projectId/reports/generate', async ({ params, request }) => {
+    if (params.projectId === PROJECT_REPORT_CONFLICT) {
+      return errorEnvelope(409, 'JOB_ALREADY_RUNNING', 'a report generation is already running')
+    }
+    if (params.projectId === PROJECT_REPORT_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+    }
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    if (typeof body.format !== 'string') {
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'format is required', { field: 'format' })
+    }
+    return HttpResponse.json(
+      { ...reportGenerate202Fixture, format: body.format },
+      { status: 202 }
+    )
+  }),
+  http.get('/api/v1/projects/:projectId/reports', ({ params, request }) => {
+    const fixture =
+      REPORT_HISTORY_FIXTURES[params.projectId as string] ?? reportHistoryEmptyFixture
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 20)
+    const items = fixture.items
+    const total = items.length
+    const slice = items.slice(offset, offset + limit)
+    return HttpResponse.json({ items: slice, total, offset, limit })
+  }),
+  http.post('/api/v1/projects/:projectId/reports/:reportId/cancel', ({ params }) => {
+    if (params.reportId === REPORT_NOT_CANCELLABLE) {
+      return errorEnvelope(
+        409,
+        'REPORT_NOT_CANCELLABLE',
+        'report run is no longer cancellable'
+      )
+    }
+    return HttpResponse.json(reportCancel202Fixture, { status: 202 })
+  }),
+  http.get('/api/v1/projects/:projectId/reports/:reportId/download', () => {
+    return new HttpResponse(new Uint8Array([0x25, 0x50, 0x44, 0x46]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/pdf' },
+    })
+  }),
+
+  // ─── Chat ─────────────────────────────────────────────────────────────────
+  http.get('/api/v1/projects/:projectId/chat/sessions', ({ params, request }) => {
+    const fixture =
+      CHAT_SESSIONS_FIXTURES[params.projectId as string] ?? chatSessionsEmptyFixture
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 50)
+    const items = fixture.items
+    const total = items.length
+    const slice = items.slice(offset, offset + limit)
+    return HttpResponse.json({ items: slice, total, offset, limit })
+  }),
+  http.post('/api/v1/projects/:projectId/chat/sessions', () => {
+    return HttpResponse.json(chatCreateSession201Fixture, { status: 201 })
+  }),
+  http.delete(
+    '/api/v1/projects/:projectId/chat/sessions/:sessionId',
+    ({ params }) => {
+      if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
+        return errorEnvelope(404, 'NOT_FOUND', 'session not found')
+      }
+      return new HttpResponse(null, { status: 204 })
+    }
+  ),
+  http.get(
+    '/api/v1/projects/:projectId/chat/sessions/:sessionId/messages',
+    ({ params, request }) => {
+      if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
+        return errorEnvelope(404, 'NOT_FOUND', 'session not found')
+      }
+      const fixture =
+        CHAT_MESSAGES_FIXTURES[params.sessionId as string] ?? chatMessagesEmptyFixture
+      const url = new URL(request.url)
+      const offset = Number(url.searchParams.get('offset') ?? 0)
+      const limit = Number(url.searchParams.get('limit') ?? 50)
+      const items = fixture.items
+      const total = items.length
+      const slice = items.slice(offset, offset + limit)
+      return HttpResponse.json({ items: slice, total, offset, limit })
+    }
+  ),
+  http.post(
+    '/api/v1/projects/:projectId/chat/sessions/:sessionId/messages',
+    async ({ params, request }) => {
+      if (params.sessionId === CHAT_SESSION_EXPIRED_ID) {
+        return errorEnvelope(
+          409,
+          'CHAT_SESSION_EXPIRED',
+          'this chat session has been sealed',
+          { expired_at: '2026-04-26T11:45:00+00:00' }
+        )
+      }
+      if (params.sessionId === CHAT_STREAM_ALREADY_RUNNING_ID) {
+        return errorEnvelope(
+          409,
+          'CHAT_STREAM_ALREADY_RUNNING',
+          'a stream is already running for this session',
+          { session_id: Number(params.sessionId) }
+        )
+      }
+      if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
+        return errorEnvelope(404, 'NOT_FOUND', 'session not found')
+      }
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+      if (params.sessionId === CHAT_VALIDATION_ERROR_ID || typeof body.content !== 'string') {
+        return errorEnvelope(422, 'VALIDATION_ERROR', 'content is required', {
+          field: 'content',
+        })
+      }
+      return HttpResponse.json(chatSendMessage202Fixture, { status: 202 })
+    }
+  ),
+  http.post(
+    '/api/v1/projects/:projectId/chat/sessions/:sessionId/cancel',
+    ({ params }) => {
+      if (params.sessionId === CHAT_NO_ACTIVE_STREAM_ID) {
+        return errorEnvelope(
+          409,
+          'CHAT_NO_ACTIVE_STREAM',
+          'no in-flight stream to cancel',
+          { session_id: Number(params.sessionId) }
+        )
+      }
+      if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
+        return errorEnvelope(404, 'NOT_FOUND', 'session not found')
+      }
+      return HttpResponse.json(chatCancel202Fixture, { status: 202 })
     }
   ),
 ]

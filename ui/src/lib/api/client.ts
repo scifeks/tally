@@ -63,8 +63,16 @@ export function subscribeSessionExpired(cb: SessionExpiredHandler): () => void {
   }
 }
 
+export type ApiResponseFormat = 'json' | 'blob' | 'text'
+
 export type ApiFetchInit = Omit<RequestInit, 'body'> & {
   body?: unknown
+  /**
+   * How to decode a successful (2xx) response body. Defaults to `'json'`.
+   * Set to `'blob'` for file downloads or `'text'` for raw markdown / plain
+   * text. Error responses still use the canonical JSON envelope.
+   */
+  parseAs?: ApiResponseFormat
 }
 
 function isRawBody(body: unknown): body is BodyInit {
@@ -119,6 +127,13 @@ export async function apiFetch<T = unknown>(input: string, init: ApiFetchInit = 
   if (res.ok) {
     if (!shouldParseBody(res)) {
       return undefined as T
+    }
+    const parseAs: ApiResponseFormat = init.parseAs ?? 'json'
+    if (parseAs === 'blob') {
+      return (await res.blob()) as T
+    }
+    if (parseAs === 'text') {
+      return (await res.text()) as T
     }
     return (await res.json()) as T
   }

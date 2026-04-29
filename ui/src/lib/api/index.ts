@@ -94,19 +94,51 @@ export { useUrlLists } from './useUrlLists'
 // Report hooks
 export {
   useReportDrafts,
-  useGenerateDraft,
   useReportHistory,
+  useLatestReport,
+  useGenerateDraft,
+  useUploadDraft,
+  useDeleteDraft,
   useGenerateReport,
+  useCancelReport,
   useReportEvents,
+  useReportDraftEvents,
+  downloadDraftSection,
+  downloadReportFile,
+  mapReportDraft,
+  mapReportHistoryEntry,
+  mapReportRun,
+} from './useReports'
+export type {
+  GenerateDraftVariables,
+  UploadDraftVariables,
+  DeleteDraftVariables,
+  GenerateReportVariables,
+  CancelReportVariables,
+  UseReportHistoryOptions,
+  UseReportEventsOptions,
+  UseReportDraftEventsOptions,
 } from './useReports'
 
 // Chat hooks
 export {
   useChatSessions,
   useChatMessages,
-  useCreateSession,
-  useSendMessage,
-  useDeleteSession,
+  useCreateChatSession,
+  useSendChatMessage,
+  useCancelChatStream,
+  useDeleteChatSession,
+  useChatStream,
+  useInvalidateChatMessages,
+  mapChatSession,
+  mapChatMessage,
+} from './useChat'
+export type {
+  CreateChatSessionVariables,
+  SendChatMessageVariables,
+  CancelChatStreamVariables,
+  DeleteChatSessionVariables,
+  UseChatStreamOptions,
 } from './useChat'
 
 // Config hooks

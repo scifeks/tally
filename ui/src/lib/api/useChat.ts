@@ -1,407 +1,484 @@
 /**
- * Chat Hooks
- * ==========
- * Hooks for RAG-powered LLM chat functionality.
+ * useChat Hooks
+ * =============
+ * Wires the Chat page (sessions, messages, send + streaming, cancel,
+ * delete) to the real backend. Mirrors `useReports.ts`: project-scoped
+ * REST + SSE, `useInfiniteQuery` for paginated message history, inline
+ * snake→camel mappers, mutation errors routed through the
+ * `chatMutationError` Zustand slice for the dedicated mutation-error
+ * modal.
  *
- * BACKEND ENDPOINTS NEEDED:
- * -------------------------
- * GET  /projects/:projectId/chat/sessions     - List chat sessions
- * POST /projects/:projectId/chat/sessions     - Create new session
- * GET  /chat/sessions/:sessionId/messages     - List messages in session
- * POST /chat/sessions/:sessionId/messages     - Send message (triggers SSE stream)
- * POST /chat/sessions/:sessionId/cancel       - Cancel in-progress response
- * DELETE /chat/sessions/:sessionId            - Delete session
- *
- * SSE /chat/stream?sessionId=<id>             - Stream response tokens
- *
- * SSE EVENT FORMAT:
- * -----------------
- * event: stream_start
- * data: {"sessionId": "...", "messageId": "..."}
- *
- * event: token
- * data: {"sessionId": "...", "messageId": "...", "token": "word "}
- *
- * event: stream_end
- * data: {"sessionId": "...", "messageId": "...", "content": "full response text"}
- *
- * event: error
- * data: {"sessionId": "...", "error": "Error message"}
+ * Endpoint contract (endpoints.md §12):
+ *   GET    /api/v1/projects/:id/chat/sessions
+ *   POST   /api/v1/projects/:id/chat/sessions                    — empty body
+ *   DELETE /api/v1/projects/:id/chat/sessions/:sid
+ *   GET    /api/v1/projects/:id/chat/sessions/:sid/messages      — paginated
+ *   POST   /api/v1/projects/:id/chat/sessions/:sid/messages      — body { content }
+ *   POST   /api/v1/projects/:id/chat/sessions/:sid/cancel        — empty body
+ *   GET    /api/v1/projects/:id/chat/stream?session_id=:sid      — SSE
  */
 
-import { useState, useCallback, useRef } from 'react'
-import type { ChatMessage, ChatSession } from '../types'
+import { useEffect, useMemo, useRef } from 'react'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type {
+  ApiErrorPayload,
+  ChatCancelResponse,
+  ChatMessage,
+  ChatMessageRole,
+  ChatSendMessageResponse,
+  ChatSession,
+  ChatStreamEvent,
+  ChatStreamEventType,
+  ChatStreamSnapshotPayload,
+} from '../types'
+import type { ApiError } from './client'
+import { apiFetch } from './client'
+import { apiEventSource } from './sse'
+import { REST_ENDPOINTS, SSE_ENDPOINTS } from './config'
+import { useUI } from '../store'
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-// TODO [BACKEND]: Remove mock data once connected to real API.
+// ─── Wire-format types ──────────────────────────────────────────────────────
 
-const MOCK_SESSIONS: Record<string, ChatSession[]> = {
-  '1': [
-    {
-      id: 'chat-001',
-      projectId: '1',
-      title: 'SQL Injection remediation',
-      createdAt: '2025-03-15T10:00:00Z',
-      lastMessageAt: '2025-03-15T10:15:00Z',
-      messageCount: 6,
-    },
-    {
-      id: 'chat-002',
-      projectId: '1',
-      title: 'Understanding XSS findings',
-      createdAt: '2025-03-14T14:00:00Z',
-      lastMessageAt: '2025-03-14T14:30:00Z',
-      messageCount: 4,
-    },
-  ],
-  '2': [
-    {
-      id: 'chat-003',
-      projectId: '2',
-      title: 'Dependency vulnerabilities',
-      createdAt: '2025-03-13T09:00:00Z',
-      lastMessageAt: '2025-03-13T09:20:00Z',
-      messageCount: 3,
-    },
-  ],
-  '3': [],
+interface ChatSessionApi {
+  id: number
+  project_id: number
+  title: string
+  created_at: string
+  last_message_at: string | null
+  message_count: number
+  expired_at: string | null
 }
 
-const MOCK_MESSAGES: Record<string, ChatMessage[]> = {
-  'chat-001': [
-    {
-      id: 'msg-001',
-      sessionId: 'chat-001',
-      role: 'user',
-      content: 'Can you explain the SQL injection vulnerability in TAL-001?',
-      timestamp: '2025-03-15T10:00:00Z',
-    },
-    {
-      id: 'msg-002',
-      sessionId: 'chat-001',
-      role: 'assistant',
-      content:
-        'Based on the finding TAL-001, there\'s a SQL injection vulnerability in the user authentication module. The issue occurs in `auth/login.py` at line 42 where user input is concatenated directly into the SQL query without proper parameterization.\n\n**Vulnerable code:**\n```python\nquery = f"SELECT * FROM users WHERE username = \'{username}\'"\n```\n\n**Recommended fix:**\n```python\nquery = "SELECT * FROM users WHERE username = ?"\ncursor.execute(query, (username,))\n```\n\nThis vulnerability allows attackers to bypass authentication or extract sensitive data from the database.',
-      timestamp: '2025-03-15T10:00:30Z',
-    },
-    {
-      id: 'msg-003',
-      sessionId: 'chat-001',
-      role: 'user',
-      content: "What's the CVSS score for this type of vulnerability?",
-      timestamp: '2025-03-15T10:05:00Z',
-    },
-    {
-      id: 'msg-004',
-      sessionId: 'chat-001',
-      role: 'assistant',
-      content:
-        'SQL injection vulnerabilities in authentication flows are typically rated as **Critical** with a CVSS 3.1 score of **9.8**.\n\nThe scoring breakdown:\n- **Attack Vector (AV):** Network - exploitable remotely\n- **Attack Complexity (AC):** Low - no special conditions needed\n- **Privileges Required (PR):** None - attacker needs no privileges\n- **User Interaction (UI):** None - no user action required\n- **Scope (S):** Unchanged\n- **Confidentiality (C):** High - full database access possible\n- **Integrity (I):** High - can modify/delete data\n- **Availability (A):** High - can disrupt service\n\nGiven the authentication context, this should be prioritized for immediate remediation.',
-      timestamp: '2025-03-15T10:05:45Z',
-    },
-  ],
-  'chat-002': [
-    {
-      id: 'msg-005',
-      sessionId: 'chat-002',
-      role: 'user',
-      content: 'How many XSS findings do we have?',
-      timestamp: '2025-03-14T14:00:00Z',
-    },
-    {
-      id: 'msg-006',
-      sessionId: 'chat-002',
-      role: 'assistant',
-      content:
-        'Based on my analysis of the ACME Platform findings, you currently have **7 XSS (Cross-Site Scripting) vulnerabilities**:\n\n- **2 Critical** - Stored XSS in user profile and comment sections\n- **3 High** - Reflected XSS in search and URL parameters\n- **2 Medium** - DOM-based XSS with limited exploitation vectors\n\nThe stored XSS findings are the highest priority as they can affect all users who view the compromised content. Would you like me to provide specific remediation guidance for any of these?',
-      timestamp: '2025-03-14T14:00:30Z',
-    },
-  ],
-  'chat-003': [],
+interface ChatSessionsResponseApi {
+  items: ChatSessionApi[]
+  total: number
+  offset: number
+  limit: number
 }
 
-// Mock response phrases for simulating streaming
-const MOCK_RESPONSES = [
-  'Based on my analysis of the project findings, ',
-  'I can see that there are several key areas to address. ',
-  'The most critical issue relates to input validation in the authentication module. ',
-  'I recommend implementing parameterized queries and output encoding as immediate fixes. ',
-  'Would you like me to provide more specific guidance on any particular finding?',
-]
-
-// ─── useChatSessions ────────────────────────────────────────────────────────
-
-/**
- * Fetch chat sessions for a project.
- *
- * TODO [BACKEND]: Replace mock with:
- *   const res = await fetch(REST_ENDPOINTS.chatSessions(projectId))
- *   const sessions = await res.json()
- *   return sessions
- */
-export function useChatSessions(projectId: string | null) {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetch = useCallback(async () => {
-    if (!projectId) return
-
-    setIsLoading(true)
-    setError(null)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this fetch code.                            │
-    // │                                                                        │
-    // │ const res = await fetch(REST_ENDPOINTS.chatSessions(projectId))       │
-    // │ if (!res.ok) throw new Error(`Failed to fetch sessions: ${res.status}`)│
-    // │ const data = await res.json()                                          │
-    // │ setSessions(data)                                                      │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: return mock sessions after delay
-    await new Promise(r => setTimeout(r, 300))
-    setSessions(MOCK_SESSIONS[projectId] ?? [])
-    setIsLoading(false)
-  }, [projectId])
-
-  return { sessions, isLoading, error, refetch: fetch, setSessions }
+interface ChatMessageApi {
+  id: number
+  session_id: number
+  role: ChatMessageRole
+  content: string
+  model: string | null
+  timestamp: string
+  citations: null
 }
 
-// ─── useChatMessages ────────────────────────────────────────────────────────
-
-/**
- * Fetch messages for a chat session.
- *
- * TODO [BACKEND]: Replace mock with:
- *   const res = await fetch(REST_ENDPOINTS.chatMessages(sessionId))
- *   const messages = await res.json()
- *   return messages
- */
-export function useChatMessages(sessionId: string | null) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetch = useCallback(async () => {
-    if (!sessionId) {
-      setMessages([])
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this fetch code.                            │
-    // │                                                                        │
-    // │ const res = await fetch(REST_ENDPOINTS.chatMessages(sessionId))       │
-    // │ if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`)│
-    // │ const data = await res.json()                                          │
-    // │ setMessages(data)                                                      │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: return mock messages after delay
-    await new Promise(r => setTimeout(r, 200))
-    setMessages(MOCK_MESSAGES[sessionId] ?? [])
-    setIsLoading(false)
-  }, [sessionId])
-
-  return { messages, isLoading, error, refetch: fetch, setMessages }
+interface ChatMessagesResponseApi {
+  items: ChatMessageApi[]
+  total: number
+  offset: number
+  limit: number
 }
 
-// ─── useCreateSession ───────────────────────────────────────────────────────
-
-/**
- * Create a new chat session.
- *
- * TODO [BACKEND]: Replace mock with:
- *   const res = await fetch(REST_ENDPOINTS.createChatSession(projectId), {
- *     method: "POST",
- *     headers: { "Content-Type": "application/json" },
- *     body: JSON.stringify({ title }),
- *   })
- *   return await res.json()
- */
-export function useCreateSession() {
-  const [isLoading, setIsLoading] = useState(false)
-
-  const create = useCallback(async (projectId: string, title?: string): Promise<ChatSession> => {
-    setIsLoading(true)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this fetch code.                            │
-    // │                                                                        │
-    // │ const res = await fetch(REST_ENDPOINTS.createChatSession(projectId), {│
-    // │   method: "POST",                                                      │
-    // │   headers: { "Content-Type": "application/json" },                     │
-    // │   body: JSON.stringify({ title }),                                     │
-    // │ })                                                                     │
-    // │ if (!res.ok) throw new Error(`Failed to create session: ${res.status}`)│
-    // │ return await res.json()                                                │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: create a new session
-    await new Promise(r => setTimeout(r, 300))
-    const session: ChatSession = {
-      id: `chat-${Date.now()}`,
-      projectId,
-      title: title ?? 'New conversation',
-      createdAt: new Date().toISOString(),
-      messageCount: 0,
-    }
-    setIsLoading(false)
-    return session
-  }, [])
-
-  return { create, isLoading }
+interface ChatSendMessageResponseApi {
+  user_message_id: number
+  assistant_message_id: null
+  session_id: number
+  stream_url: string
 }
 
-// ─── useSendMessage ─────────────────────────────────────────────────────────
+interface ChatCancelResponseApi {
+  session_id: number
+  cancelled_message_id: null
+}
 
-/**
- * Send a message and receive streaming response via SSE.
- *
- * TODO [BACKEND]: Replace mock with:
- *   1. POST to REST_ENDPOINTS.sendChatMessage(sessionId) with { content }
- *   2. Connect to SSE_ENDPOINTS.chatStream?sessionId=<id>&messageId=<id>
- *   3. Process stream_start, token, stream_end, error events
- */
-export function useSendMessage() {
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const abortRef = useRef<(() => void) | null>(null)
+interface ChatStreamSnapshotApi {
+  project_id: number
+  session_id: number
+  active: boolean
+  user_message_id?: number | null
+}
 
-  const send = useCallback(
-    async (
-      sessionId: string,
-      content: string,
-      onToken: (token: string) => void,
-      onComplete: (fullContent: string) => void,
-      _onError: (error: string) => void
-    ): Promise<string> => {
-      setIsStreaming(true)
-      setError(null)
+interface ChatTokenEventApi {
+  project_id: number
+  session_id: number
+  message_id: number | null
+  token?: string
+  content?: string
+  error?: string
+  message?: string
+}
 
-      // ┌────────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Uncomment this SSE streaming code.                    │
-      // │                                                                        │
-      // │ // First, POST the message                                             │
-      // │ const res = await fetch(REST_ENDPOINTS.sendChatMessage(sessionId), {  │
-      // │   method: "POST",                                                      │
-      // │   headers: { "Content-Type": "application/json" },                     │
-      // │   body: JSON.stringify({ content }),                                   │
-      // │ })                                                                     │
-      // │ if (!res.ok) {                                                         │
-      // │   const err = `Failed to send message: ${res.status}`                  │
-      // │   setError(err)                                                        │
-      // │   onError(err)                                                         │
-      // │   setIsStreaming(false)                                                │
-      // │   throw new Error(err)                                                 │
-      // │ }                                                                      │
-      // │ const { messageId } = await res.json()                                 │
-      // │                                                                        │
-      // │ // Then connect to SSE for streaming response                          │
-      // │ const eventSource = new EventSource(                                   │
-      // │   `${SSE_ENDPOINTS.chatStream}?sessionId=${sessionId}&messageId=${messageId}`│
-      // │ )                                                                      │
-      // │                                                                        │
-      // │ abortRef.current = () => eventSource.close()                           │
-      // │                                                                        │
-      // │ eventSource.addEventListener("token", (e) => {                         │
-      // │   const data: ChatStreamEvent = JSON.parse(e.data)                     │
-      // │   if (data.token) onToken(data.token)                                  │
-      // │ })                                                                     │
-      // │                                                                        │
-      // │ eventSource.addEventListener("stream_end", (e) => {                    │
-      // │   const data: ChatStreamEvent = JSON.parse(e.data)                     │
-      // │   eventSource.close()                                                  │
-      // │   setIsStreaming(false)                                                │
-      // │   if (data.content) onComplete(data.content)                           │
-      // │ })                                                                     │
-      // │                                                                        │
-      // │ eventSource.addEventListener("error", (e) => {                         │
-      // │   const data: ChatStreamEvent = JSON.parse(e.data)                     │
-      // │   eventSource.close()                                                  │
-      // │   setIsStreaming(false)                                                │
-      // │   setError(data.error ?? "Unknown error")                              │
-      // │   onError(data.error ?? "Unknown error")                               │
-      // │ })                                                                     │
-      // │                                                                        │
-      // │ return messageId                                                       │
-      // └────────────────────────────────────────────────────────────────────────┘
+// ─── Mappers ────────────────────────────────────────────────────────────────
 
-      // Mock: simulate streaming response word by word
-      const messageId = `msg-${Date.now()}`
-      const fullResponse = MOCK_RESPONSES.join('')
-      const words = fullResponse.split(' ')
-      let accumulated = ''
+export function mapChatSession(api: ChatSessionApi): ChatSession {
+  return {
+    id: api.id,
+    projectId: api.project_id,
+    title: api.title,
+    createdAt: api.created_at,
+    lastMessageAt: api.last_message_at,
+    messageCount: api.message_count,
+    expiredAt: api.expired_at,
+  }
+}
 
-      abortRef.current = () => {
-        setIsStreaming(false)
+export function mapChatMessage(api: ChatMessageApi): ChatMessage {
+  return {
+    id: api.id,
+    sessionId: api.session_id,
+    role: api.role,
+    content: api.content,
+    model: api.model,
+    timestamp: api.timestamp,
+    citations: null,
+  }
+}
+
+function mapSendMessageResponse(api: ChatSendMessageResponseApi): ChatSendMessageResponse {
+  return {
+    userMessageId: api.user_message_id,
+    assistantMessageId: null,
+    sessionId: api.session_id,
+    streamUrl: api.stream_url,
+  }
+}
+
+function mapCancelResponse(api: ChatCancelResponseApi): ChatCancelResponse {
+  return {
+    sessionId: api.session_id,
+    cancelledMessageId: null,
+  }
+}
+
+function mapChatSnapshot(api: ChatStreamSnapshotApi): ChatStreamSnapshotPayload {
+  return {
+    projectId: api.project_id,
+    sessionId: api.session_id,
+    active: api.active,
+    userMessageId: api.user_message_id ?? null,
+  }
+}
+
+function mapChatStreamEvent(type: ChatStreamEventType, data: ChatTokenEventApi): ChatStreamEvent {
+  switch (type) {
+    case 'stream_start':
+      return {
+        type: 'stream_start',
+        projectId: data.project_id,
+        sessionId: data.session_id,
+        messageId: null,
       }
-
-      for (let i = 0; i < words.length; i++) {
-        if (!abortRef.current) break // Check if cancelled
-        await new Promise(r => setTimeout(r, 50 + Math.random() * 100))
-        const token = words[i] + (i < words.length - 1 ? ' ' : '')
-        accumulated += token
-        onToken(token)
+    case 'token':
+      return {
+        type: 'token',
+        projectId: data.project_id,
+        sessionId: data.session_id,
+        messageId: null,
+        token: data.token ?? '',
       }
-
-      setIsStreaming(false)
-      onComplete(accumulated)
-      return messageId
-    },
-    []
-  )
-
-  const cancel = useCallback(async (_sessionId: string) => {
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this cancel request.                        │
-    // │                                                                        │
-    // │ await fetch(REST_ENDPOINTS.cancelChatResponse(sessionId), {           │
-    // │   method: "POST",                                                      │
-    // │ })                                                                     │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    if (abortRef.current) {
-      abortRef.current()
-      abortRef.current = null
-    }
-    setIsStreaming(false)
-  }, [])
-
-  return { send, cancel, isStreaming, error }
+    case 'stream_end':
+      return {
+        type: 'stream_end',
+        projectId: data.project_id,
+        sessionId: data.session_id,
+        messageId: data.message_id as number,
+        content: data.content ?? '',
+      }
+    case 'error':
+      return {
+        type: 'error',
+        projectId: data.project_id,
+        sessionId: data.session_id,
+        messageId: null,
+        error: data.error ?? 'unknown',
+        message: data.message ?? '',
+      }
+    case 'stream_cancelled':
+      return {
+        type: 'stream_cancelled',
+        projectId: data.project_id,
+        sessionId: data.session_id,
+        messageId: null,
+        message: data.message ?? 'stream cancelled',
+      }
+  }
 }
 
-// ─── useDeleteSession ───────────────────────────────────────────────────────
+function toErrorPayload(err: ApiError): ApiErrorPayload {
+  return {
+    code: err.code,
+    message: err.message,
+    details: err.details,
+    status: err.status,
+  }
+}
+
+// ─── Read hooks ─────────────────────────────────────────────────────────────
+
+const SESSIONS_PAGE_LIMIT = 50
+const MESSAGES_PAGE_LIMIT = 50
+
+function buildChatSessionsUrl(projectId: number, offset: number, limit: number): string {
+  const params = new URLSearchParams()
+  params.set('offset', String(offset))
+  params.set('limit', String(limit))
+  return `${REST_ENDPOINTS.chatSessions(projectId)}?${params.toString()}`
+}
+
+interface ChatSessionsPage {
+  items: ChatSession[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export function useChatSessions(projectId: number | null) {
+  const limit = SESSIONS_PAGE_LIMIT
+  const query = useInfiniteQuery({
+    queryKey: ['chat', projectId, 'sessions', { limit }] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<ChatSessionsPage> => {
+      const url = buildChatSessionsUrl(projectId as number, pageParam as number, limit)
+      const data = await apiFetch<ChatSessionsResponseApi>(url)
+      return {
+        items: data.items.map(mapChatSession),
+        total: data.total,
+        offset: data.offset,
+        limit: data.limit,
+      }
+    },
+    getNextPageParam: lastPage => {
+      const next = lastPage.offset + lastPage.items.length
+      return next < lastPage.total ? next : undefined
+    },
+    enabled: projectId !== null,
+    staleTime: 10_000,
+  })
+
+  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) ?? [], [query.data])
+  const total = query.data?.pages[0]?.total ?? 0
+
+  return {
+    data: items,
+    total,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage ?? false,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+    isSuccess: query.isSuccess,
+  }
+}
+
+function buildChatMessagesUrl(
+  projectId: number,
+  sessionId: number,
+  offset: number,
+  limit: number
+): string {
+  const params = new URLSearchParams()
+  params.set('offset', String(offset))
+  params.set('limit', String(limit))
+  return `${REST_ENDPOINTS.chatMessages(projectId, sessionId)}?${params.toString()}`
+}
+
+interface ChatMessagesPage {
+  items: ChatMessage[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export function useChatMessages(projectId: number | null, sessionId: number | null) {
+  const limit = MESSAGES_PAGE_LIMIT
+  const enabled = projectId !== null && sessionId !== null
+  const query = useInfiniteQuery({
+    queryKey: ['chat', projectId, 'messages', sessionId, { limit }] as const,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }): Promise<ChatMessagesPage> => {
+      const url = buildChatMessagesUrl(
+        projectId as number,
+        sessionId as number,
+        pageParam as number,
+        limit
+      )
+      const data = await apiFetch<ChatMessagesResponseApi>(url)
+      return {
+        items: data.items.map(mapChatMessage),
+        total: data.total,
+        offset: data.offset,
+        limit: data.limit,
+      }
+    },
+    getNextPageParam: lastPage => {
+      const next = lastPage.offset + lastPage.items.length
+      return next < lastPage.total ? next : undefined
+    },
+    enabled,
+    staleTime: 10_000,
+  })
+
+  const items = useMemo(() => query.data?.pages.flatMap(p => p.items) ?? [], [query.data])
+  const total = query.data?.pages[0]?.total ?? 0
+
+  return {
+    data: items,
+    total,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage ?? false,
+    isFetchingNextPage: query.isFetchingNextPage,
+    isLoading: query.isLoading,
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+    isSuccess: query.isSuccess,
+  }
+}
+
+// ─── Mutations ──────────────────────────────────────────────────────────────
+
+export interface CreateChatSessionVariables {
+  projectId: number
+}
+
+export function useCreateChatSession() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setChatMutationError)
+
+  return useMutation<ChatSession, ApiError, CreateChatSessionVariables>({
+    mutationFn: async ({ projectId }) => {
+      const data = await apiFetch<ChatSessionApi>(REST_ENDPOINTS.createChatSession(projectId), {
+        method: 'POST',
+        body: {},
+      })
+      return mapChatSession(data)
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', projectId, 'sessions'] })
+    },
+  })
+}
+
+export interface SendChatMessageVariables {
+  projectId: number
+  sessionId: number
+  content: string
+}
+
+export function useSendChatMessage() {
+  const setError = useUI(s => s.setChatMutationError)
+
+  return useMutation<ChatSendMessageResponse, ApiError, SendChatMessageVariables>({
+    mutationFn: async ({ projectId, sessionId, content }) => {
+      const data = await apiFetch<ChatSendMessageResponseApi>(
+        REST_ENDPOINTS.sendChatMessage(projectId, sessionId),
+        { method: 'POST', body: { content } }
+      )
+      return mapSendMessageResponse(data)
+    },
+    onError: err => setError(toErrorPayload(err)),
+  })
+}
+
+export interface CancelChatStreamVariables {
+  projectId: number
+  sessionId: number
+}
+
+export function useCancelChatStream() {
+  const setError = useUI(s => s.setChatMutationError)
+
+  return useMutation<ChatCancelResponse, ApiError, CancelChatStreamVariables>({
+    mutationFn: async ({ projectId, sessionId }) => {
+      const data = await apiFetch<ChatCancelResponseApi>(
+        REST_ENDPOINTS.cancelChatResponse(projectId, sessionId),
+        { method: 'POST' }
+      )
+      return mapCancelResponse(data)
+    },
+    onError: err => setError(toErrorPayload(err)),
+  })
+}
+
+export interface DeleteChatSessionVariables {
+  projectId: number
+  sessionId: number
+}
+
+export function useDeleteChatSession() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setChatMutationError)
+
+  return useMutation<void, ApiError, DeleteChatSessionVariables>({
+    mutationFn: async ({ projectId, sessionId }) => {
+      await apiFetch<void>(REST_ENDPOINTS.deleteChatSession(projectId, sessionId), {
+        method: 'DELETE',
+      })
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId, sessionId }) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', projectId, 'sessions'] })
+      queryClient.removeQueries({ queryKey: ['chat', projectId, 'messages', sessionId] })
+    },
+  })
+}
+
+// ─── SSE consumer ───────────────────────────────────────────────────────────
+
+const CHAT_STREAM_EVENT_TYPES: readonly ChatStreamEventType[] = [
+  'stream_start',
+  'token',
+  'stream_end',
+  'error',
+  'stream_cancelled',
+] as const
+
+export interface UseChatStreamOptions {
+  enabled?: boolean
+  onSnapshot?: (snap: ChatStreamSnapshotPayload) => void
+}
+
+export function useChatStream(
+  projectId: number | null,
+  sessionId: number | null,
+  onEvent: (event: ChatStreamEvent) => void,
+  options?: UseChatStreamOptions
+) {
+  const enabled = options?.enabled ?? true
+  const onEventRef = useRef(onEvent)
+  const onSnapshotRef = useRef(options?.onSnapshot)
+  onEventRef.current = onEvent
+  onSnapshotRef.current = options?.onSnapshot
+
+  useEffect(() => {
+    if (!enabled || projectId === null || sessionId === null) return
+    const url = SSE_ENDPOINTS.chatStream(projectId, sessionId)
+    const handle = apiEventSource(url, {
+      eventTypes: ['snapshot', ...CHAT_STREAM_EVENT_TYPES],
+      onEvent: (type, data) => {
+        if (type === 'snapshot') {
+          onSnapshotRef.current?.(mapChatSnapshot(data as ChatStreamSnapshotApi))
+          return
+        }
+        if ((CHAT_STREAM_EVENT_TYPES as readonly string[]).includes(type)) {
+          onEventRef.current(
+            mapChatStreamEvent(type as ChatStreamEventType, data as ChatTokenEventApi)
+          )
+        }
+      },
+    })
+    return () => handle.close()
+  }, [projectId, sessionId, enabled])
+}
 
 /**
- * Delete a chat session.
- *
- * TODO [BACKEND]: Replace mock with:
- *   await fetch(REST_ENDPOINTS.deleteChatSession(sessionId), { method: "DELETE" })
+ * Hook helper to invalidate the cached message list for a session, useful
+ * after `stream_end` so the SPA refetches the persisted assistant turn
+ * (with its real DB id and `model` value).
  */
-export function useDeleteSession() {
-  const [isLoading, setIsLoading] = useState(false)
-
-  const deleteSession = useCallback(async (_sessionId: string): Promise<void> => {
-    setIsLoading(true)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Uncomment this delete request.                        │
-    // │                                                                        │
-    // │ const res = await fetch(REST_ENDPOINTS.deleteChatSession(sessionId), {│
-    // │   method: "DELETE",                                                    │
-    // │ })                                                                     │
-    // │ if (!res.ok) throw new Error(`Failed to delete: ${res.status}`)       │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: just delay
-    await new Promise(r => setTimeout(r, 300))
-    setIsLoading(false)
-  }, [])
-
-  return { deleteSession, isLoading }
+export function useInvalidateChatMessages() {
+  const queryClient = useQueryClient()
+  return (projectId: number, sessionId: number) =>
+    queryClient.invalidateQueries({
+      queryKey: ['chat', projectId, 'messages', sessionId],
+    })
 }

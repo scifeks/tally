@@ -1,48 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Square, Plus, Trash2, MessageSquare, AlertTriangle, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Send, Square, Plus, Trash2, MessageSquare, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUI } from '@/lib/store'
 import {
   useChatSessions,
-  useCreateSession,
-  useSendMessage,
-  useDeleteSession,
+  useChatMessages,
+  useCreateChatSession,
+  useSendChatMessage,
+  useCancelChatStream,
+  useDeleteChatSession,
+  useChatStream,
   useProjects,
 } from '@/lib/api'
-import type { ChatMessage, ChatSession } from '@/lib/types'
-import { Modal, ModalButton } from '@/components/Modal'
+import type { ChatMessage, ChatSession, ChatStreamEvent } from '@/lib/types'
+import { ChatMutationErrorModal } from '@/components/ChatMutationErrorModal'
 
-// ─── Error Modal ────────────────────────────────────────────────────────────
-
-function ErrorModal({
-  open,
-  message,
-  onClose,
-}: {
-  open: boolean
-  message: string
-  onClose: () => void
-}) {
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="connection error"
-      tone="error"
-      width="sm"
-      footer={<ModalButton onClick={onClose}>dismiss</ModalButton>}
-    >
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="h-4 w-4 text-crit mt-0.5 shrink-0" />
-        <div className="text-foreground leading-relaxed">
-          <span className="text-crit font-bold">Failed to communicate with server.</span>
-          <div className="mt-2 text-[11px] text-muted-foreground border border-border bg-muted/30 p-2">
-            {message}
-          </div>
-        </div>
-      </div>
-    </Modal>
-  )
+interface StreamingOverlay {
+  userMessageId: number
+  userContent: string
+  userTimestamp: string
+  assistantContent: string
+  assistantTimestamp: string
+  status: 'pending' | 'streaming' | 'complete' | 'cancelled' | 'error'
 }
 
 // ─── Message Bubble ─────────────────────────────────────────────────────────
@@ -62,13 +42,10 @@ function MessageBubble({ message, isLast }: { message: ChatMessage; isLast?: boo
         isUser ? 'self-end items-end' : 'self-start items-start'
       )}
     >
-      {/* Header */}
       <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
         <span>{isUser ? 'YOU' : 'TALLY'}</span>
         <span className="text-dim">{time}</span>
       </div>
-
-      {/* Content */}
       <div
         className={cn(
           'px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap',
@@ -101,6 +78,7 @@ function SessionItem({
 }) {
   const date = new Date(session.lastMessageAt ?? session.createdAt)
   const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const isExpired = session.expiredAt !== null
 
   return (
     <div
@@ -110,18 +88,20 @@ function SessionItem({
         'group flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-colors border-l-2',
         isActive
           ? 'border-accent bg-accent/10 text-accent'
-          : 'border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+          : 'border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground',
+        isExpired && 'opacity-60'
       )}
       onClick={onClick}
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') onClick()
       }}
+      data-testid={`chat-session-${session.id}`}
     >
       <MessageSquare className="h-3 w-3 shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="truncate text-[11px]">{session.title ?? 'Untitled'}</div>
+        <div className="truncate text-[11px]">{session.title}</div>
         <div className="text-[9px] text-dim">
-          {dateStr} · {session.messageCount} msgs
+          {dateStr} · {session.messageCount} msgs{isExpired ? ' · sealed' : ''}
         </div>
       </div>
       <button
@@ -131,6 +111,7 @@ function SessionItem({
         }}
         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-crit/20 hover:text-crit transition-all"
         title="Delete session"
+        aria-label="delete session"
       >
         <Trash2 className="h-3 w-3" />
       </button>
@@ -142,207 +123,172 @@ function SessionItem({
 
 export default function Chat() {
   const activeProjectId = useUI(s => s.activeProjectId)
-  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : null
+  const queryClient = useQueryClient()
 
-  // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
-  // GET /api/v1/projects
   const { data: projects = [] } = useProjects()
-
   const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0]
 
-  // TODO [BACKEND]: These hooks manage chat sessions and messages via API.
-  // See useChat.ts for endpoint documentation.
-  const { sessions, refetch: refetchSessions, setSessions } = useChatSessions(projectIdParam)
-  const { create: createSession, isLoading: isCreating } = useCreateSession()
-  const { deleteSession } = useDeleteSession()
-  const { send: sendMessage, cancel: cancelMessage, isStreaming } = useSendMessage()
+  const { data: sessions } = useChatSessions(activeProjectId)
+  const createSession = useCreateChatSession()
+  const deleteSession = useDeleteChatSession()
+  const sendMessage = useSendChatMessage()
+  const cancelStream = useCancelChatStream()
 
-  // Local state
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [inputValue, setInputValue] = useState('')
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [streamingOverlay, setStreamingOverlay] = useState<StreamingOverlay | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load sessions on mount
-  useEffect(() => {
-    refetchSessions()
-  }, [refetchSessions])
+  const { data: persistedMessages, isLoading: isLoadingMessages } = useChatMessages(
+    activeProjectId,
+    activeSessionId
+  )
 
-  // Auto-select first session or none
+  const isStreaming =
+    streamingOverlay !== null &&
+    (streamingOverlay.status === 'pending' || streamingOverlay.status === 'streaming')
+
+  const activeSession = sessions.find(s => s.id === activeSessionId) ?? null
+  const sessionExpired = activeSession?.expiredAt !== null && activeSession !== null
+
   useEffect(() => {
-    if (sessions.length > 0 && !activeSessionId) {
+    if (sessions.length > 0 && activeSessionId === null) {
       setActiveSessionId(sessions[0].id)
-    } else if (sessions.length === 0) {
+    } else if (sessions.length === 0 && activeSessionId !== null) {
       setActiveSessionId(null)
     }
   }, [sessions, activeSessionId])
 
-  // Load messages when session changes
   useEffect(() => {
-    if (!activeSessionId) {
-      setMessages([])
-      return
-    }
-
-    setIsLoadingMessages(true)
-
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ TODO [BACKEND]: Replace with useChatMessages hook fetch               │
-    // └────────────────────────────────────────────────────────────────────────┘
-
-    // Mock: load from mock data
-    const MOCK_MESSAGES: Record<string, ChatMessage[]> = {
-      'chat-001': [
-        {
-          id: 'msg-001',
-          sessionId: 'chat-001',
-          role: 'user',
-          content: 'Can you explain the SQL injection vulnerability in TAL-001?',
-          timestamp: '2025-03-15T10:00:00Z',
-        },
-        {
-          id: 'msg-002',
-          sessionId: 'chat-001',
-          role: 'assistant',
-          content:
-            'Based on the finding TAL-001, there\'s a SQL injection vulnerability in the user authentication module. The issue occurs in `auth/login.py` at line 42 where user input is concatenated directly into the SQL query without proper parameterization.\n\n**Vulnerable code:**\n```python\nquery = f"SELECT * FROM users WHERE username = \'{username}\'"\n```\n\n**Recommended fix:**\n```python\nquery = "SELECT * FROM users WHERE username = ?"\ncursor.execute(query, (username,))\n```\n\nThis vulnerability allows attackers to bypass authentication or extract sensitive data from the database.',
-          timestamp: '2025-03-15T10:00:30Z',
-        },
-      ],
-      'chat-002': [
-        {
-          id: 'msg-005',
-          sessionId: 'chat-002',
-          role: 'user',
-          content: 'How many XSS findings do we have?',
-          timestamp: '2025-03-14T14:00:00Z',
-        },
-        {
-          id: 'msg-006',
-          sessionId: 'chat-002',
-          role: 'assistant',
-          content:
-            'Based on my analysis of the ACME Platform findings, you currently have **7 XSS (Cross-Site Scripting) vulnerabilities**:\n\n- **2 Critical** - Stored XSS in user profile and comment sections\n- **3 High** - Reflected XSS in search and URL parameters\n- **2 Medium** - DOM-based XSS with limited exploitation vectors',
-          timestamp: '2025-03-14T14:00:30Z',
-        },
-      ],
-    }
-
-    setTimeout(() => {
-      setMessages(MOCK_MESSAGES[activeSessionId] ?? [])
-      setIsLoadingMessages(false)
-    }, 200)
+    setStreamingOverlay(null)
   }, [activeSessionId])
 
-  // Scroll to bottom when messages change
+  const onStreamEvent = useCallback(
+    (event: ChatStreamEvent) => {
+      switch (event.type) {
+        case 'stream_start':
+          setStreamingOverlay(prev => (prev ? { ...prev, status: 'streaming' } : prev))
+          break
+        case 'token':
+          setStreamingOverlay(prev =>
+            prev ? { ...prev, assistantContent: prev.assistantContent + event.token } : prev
+          )
+          break
+        case 'stream_end':
+          if (activeProjectId !== null && activeSessionId !== null) {
+            queryClient.invalidateQueries({
+              queryKey: ['chat', activeProjectId, 'messages', activeSessionId],
+            })
+            queryClient.invalidateQueries({
+              queryKey: ['chat', activeProjectId, 'sessions'],
+            })
+          }
+          setStreamingOverlay(null)
+          break
+        case 'stream_cancelled':
+          setStreamingOverlay(null)
+          break
+        case 'error':
+          setStreamingOverlay(prev => (prev ? { ...prev, status: 'error' } : prev))
+          break
+      }
+    },
+    [activeProjectId, activeSessionId, queryClient]
+  )
+
+  useChatStream(activeProjectId, activeSessionId, onStreamEvent, {
+    enabled: streamingOverlay !== null,
+  })
+
+  const messages: ChatMessage[] = useMemo(() => {
+    if (!streamingOverlay || activeSessionId === null) return persistedMessages
+    const filtered = persistedMessages.filter(m => m.id !== streamingOverlay.userMessageId)
+    const overlay: ChatMessage[] = [
+      {
+        id: streamingOverlay.userMessageId,
+        sessionId: activeSessionId,
+        role: 'user',
+        content: streamingOverlay.userContent,
+        model: null,
+        timestamp: streamingOverlay.userTimestamp,
+        citations: null,
+      },
+      {
+        id: -1,
+        sessionId: activeSessionId,
+        role: 'assistant',
+        content: streamingOverlay.assistantContent,
+        model: null,
+        timestamp: streamingOverlay.assistantTimestamp,
+        citations: null,
+        isStreaming:
+          streamingOverlay.status === 'pending' || streamingOverlay.status === 'streaming',
+      },
+    ]
+    return [...filtered, ...overlay]
+  }, [persistedMessages, streamingOverlay, activeSessionId])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Create new session
   const handleNewSession = useCallback(async () => {
-    try {
-      const session = await createSession(projectIdParam ?? '', 'New conversation')
-      setSessions(prev => [session, ...prev])
-      setActiveSessionId(session.id)
-      setMessages([])
-      inputRef.current?.focus()
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to create session')
-    }
-  }, [projectIdParam, createSession, setSessions])
+    if (activeProjectId === null) return
+    const session = await createSession
+      .mutateAsync({ projectId: activeProjectId })
+      .catch(() => null)
+    if (session === null) return
+    setActiveSessionId(session.id)
+    inputRef.current?.focus()
+  }, [activeProjectId, createSession])
 
-  // Delete session
   const handleDeleteSession = useCallback(
-    async (sessionId: string) => {
-      try {
-        await deleteSession(sessionId)
-        setSessions(prev => prev.filter(s => s.id !== sessionId))
-        if (activeSessionId === sessionId) {
-          setActiveSessionId(null)
-        }
-      } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to delete session')
+    async (sessionId: number) => {
+      if (activeProjectId === null) return
+      await deleteSession
+        .mutateAsync({ projectId: activeProjectId, sessionId })
+        .catch(() => undefined)
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null)
       }
     },
-    [activeSessionId, deleteSession, setSessions]
+    [activeProjectId, activeSessionId, deleteSession]
   )
 
-  // Send message
   const handleSend = useCallback(async () => {
-    if (!inputValue.trim() || !activeSessionId || isStreaming) return
+    if (!inputValue.trim()) return
+    if (activeProjectId === null || activeSessionId === null) return
+    if (isStreaming) return
 
-    const userMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sessionId: activeSessionId,
-      role: 'user',
-      content: inputValue.trim(),
-      timestamp: new Date().toISOString(),
-    }
-
-    // Add user message immediately
-    setMessages(prev => [...prev, userMessage])
+    const content = inputValue.trim()
+    const now = new Date().toISOString()
     setInputValue('')
 
-    // Create placeholder for assistant response
-    const assistantMessageId = `msg-${Date.now() + 1}`
-    const assistantMessage: ChatMessage = {
-      id: assistantMessageId,
-      sessionId: activeSessionId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-      isStreaming: true,
+    const result = await sendMessage
+      .mutateAsync({ projectId: activeProjectId, sessionId: activeSessionId, content })
+      .catch(() => null)
+    if (result === null) {
+      setInputValue(content)
+      return
     }
-    setMessages(prev => [...prev, assistantMessage])
 
-    try {
-      await sendMessage(
-        activeSessionId,
-        userMessage.content,
-        // onToken
-        token => {
-          setMessages(prev =>
-            prev.map(m => (m.id === assistantMessageId ? { ...m, content: m.content + token } : m))
-          )
-        },
-        // onComplete
-        fullContent => {
-          setMessages(prev =>
-            prev.map(m =>
-              m.id === assistantMessageId ? { ...m, content: fullContent, isStreaming: false } : m
-            )
-          )
-        },
-        // onError
-        error => {
-          setErrorMessage(error)
-          // Remove the failed assistant message
-          setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
-        }
-      )
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to send message')
-      setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
-    }
-  }, [activeSessionId, inputValue, isStreaming, sendMessage])
+    setStreamingOverlay({
+      userMessageId: result.userMessageId,
+      userContent: content,
+      userTimestamp: now,
+      assistantContent: '',
+      assistantTimestamp: new Date().toISOString(),
+      status: 'pending',
+    })
+  }, [activeProjectId, activeSessionId, inputValue, isStreaming, sendMessage])
 
-  // Cancel streaming
   const handleCancel = useCallback(() => {
-    if (activeSessionId) {
-      cancelMessage(activeSessionId)
-      // Mark last message as not streaming
-      setMessages(prev =>
-        prev.map((m, i) => (i === prev.length - 1 ? { ...m, isStreaming: false } : m))
-      )
-    }
-  }, [activeSessionId, cancelMessage])
+    if (activeProjectId === null || activeSessionId === null) return
+    cancelStream.mutate({ projectId: activeProjectId, sessionId: activeSessionId })
+  }, [activeProjectId, activeSessionId, cancelStream])
 
-  // Handle enter key
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -352,35 +298,35 @@ export default function Chat() {
 
   const hasNoSessions = sessions.length === 0
   const hasNoMessages = messages.length === 0
+  const projectLabel = activeProject?.code ?? '—'
+
+  const inputDisabled = isStreaming || sessionExpired || activeSessionId === null
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <div className="shrink-0 px-6 py-4 border-b border-border">
         <h1 className="text-sm font-bold text-foreground tracking-wide">
-          [CHAT] <span className="text-primary tty-glow">{activeProject.code}</span>
+          [CHAT] <span className="text-primary tty-glow">{projectLabel}</span>
         </h1>
         <p className="text-[11px] text-muted-foreground mt-0.5">
           RAG-powered assistant for security findings analysis
         </p>
       </div>
 
-      {/* Main content */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Sidebar - Session list */}
         <div className="w-56 shrink-0 border-r border-border flex flex-col">
           <div className="p-2 border-b border-border">
             <button
               onClick={handleNewSession}
-              disabled={isCreating}
+              disabled={createSession.isPending || activeProjectId === null}
               className={cn(
                 'w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-colors',
-                isCreating
+                createSession.isPending || activeProjectId === null
                   ? 'opacity-50 cursor-not-allowed border-muted text-muted-foreground'
                   : 'border-accent text-accent hover:bg-accent/10'
               )}
             >
-              {isCreating ? (
+              {createSession.isPending ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <Plus className="h-3 w-3" />
@@ -410,10 +356,8 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* Chat area */}
         <div className="flex-1 flex flex-col min-w-0">
-          {!activeSessionId ? (
-            // No session selected
+          {activeSessionId === null ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/30" />
@@ -424,20 +368,18 @@ export default function Chat() {
             </div>
           ) : (
             <>
-              {/* Messages area with CRT frame */}
               <div className="flex-1 p-4 overflow-hidden">
                 <div className="relative h-full border-2 border-primary/30 bg-background">
-                  {/* CRT corner brackets */}
                   <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-accent" />
                   <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-accent" />
                   <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-accent" />
                   <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-accent" />
 
-                  {/* Session header */}
                   <div className="absolute top-0 left-0 right-0 px-4 py-1.5 bg-muted/50 border-b border-border flex items-center justify-between">
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="text-dim">SESSION:</span>
                       <span className="text-muted-foreground font-mono">{activeSessionId}</span>
+                      {sessionExpired && <span className="text-warn font-mono">[SEALED]</span>}
                     </div>
                     <div className="flex items-center gap-2">
                       {isStreaming ? (
@@ -454,7 +396,6 @@ export default function Chat() {
                     </div>
                   </div>
 
-                  {/* Messages */}
                   <div className="absolute top-8 bottom-0 left-0 right-0 overflow-y-auto px-4 py-4">
                     {isLoadingMessages ? (
                       <div className="flex items-center justify-center h-full">
@@ -471,7 +412,7 @@ export default function Chat() {
                       <div className="flex flex-col gap-4">
                         {messages.map((message, idx) => (
                           <MessageBubble
-                            key={message.id}
+                            key={`${message.id}-${idx}`}
                             message={message}
                             isLast={idx === messages.length - 1}
                           />
@@ -483,7 +424,6 @@ export default function Chat() {
                 </div>
               </div>
 
-              {/* Input area */}
               <div className="shrink-0 p-4 pt-0">
                 <div className="flex items-end gap-2 border border-border bg-muted/30 p-2">
                   <span className="text-accent text-sm font-bold pb-1.5">&gt;</span>
@@ -492,13 +432,17 @@ export default function Chat() {
                     value={inputValue}
                     onChange={e => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask about your security findings..."
-                    disabled={isStreaming}
+                    placeholder={
+                      sessionExpired
+                        ? 'session sealed — start a new chat'
+                        : 'Ask about your security findings...'
+                    }
+                    disabled={inputDisabled}
                     rows={1}
                     className={cn(
                       'flex-1 bg-transparent text-foreground text-[12px] placeholder:text-muted-foreground resize-none outline-none',
                       'min-h-[24px] max-h-[120px]',
-                      isStreaming && 'opacity-50'
+                      inputDisabled && 'opacity-50'
                     )}
                     style={{ height: 'auto' }}
                     onInput={e => {
@@ -512,20 +456,22 @@ export default function Chat() {
                       onClick={handleCancel}
                       className="shrink-0 p-2 bg-crit/20 border border-crit text-crit hover:bg-crit/30 transition-colors"
                       title="Stop generation"
+                      aria-label="cancel stream"
                     >
                       <Square className="h-4 w-4" />
                     </button>
                   ) : (
                     <button
                       onClick={handleSend}
-                      disabled={!inputValue.trim()}
+                      disabled={!inputValue.trim() || inputDisabled}
                       className={cn(
                         'shrink-0 p-2 border transition-colors',
-                        inputValue.trim()
+                        inputValue.trim() && !inputDisabled
                           ? 'bg-accent/20 border-accent text-accent hover:bg-accent/30'
                           : 'bg-muted border-border text-muted-foreground cursor-not-allowed'
                       )}
                       title="Send message"
+                      aria-label="send message"
                     >
                       <Send className="h-4 w-4" />
                     </button>
@@ -540,12 +486,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Error Modal */}
-      <ErrorModal
-        open={errorMessage !== null}
-        message={errorMessage ?? ''}
-        onClose={() => setErrorMessage(null)}
-      />
+      <ChatMutationErrorModal />
     </div>
   )
 }

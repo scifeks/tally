@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "id": 4001,
+      "project_id": 1,
+      "filename": "ACME-Platform-Security-Assessment-2026-04-28.pdf",
+      "format": "pdf",
+      "generated_at": "2026-04-28T11:45:00+00:00",
+      "size_bytes": 2450000,
+      "download_url": "/api/v1/projects/1/reports/4001/download",
+      "pinned": false
+    }
+  ],
+  "total": 1,
+  "offset": 0,
+  "limit": 20
+}

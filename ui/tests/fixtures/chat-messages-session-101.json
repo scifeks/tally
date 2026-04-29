@@ -1,0 +1,43 @@
+{
+  "items": [
+    {
+      "id": 1001,
+      "session_id": 101,
+      "role": "user",
+      "content": "What does finding 42 mean?",
+      "model": null,
+      "timestamp": "2026-04-28T10:00:00+00:00",
+      "citations": null
+    },
+    {
+      "id": 1002,
+      "session_id": 101,
+      "role": "assistant",
+      "content": "Finding 42 is a SQL injection vulnerability in the user authentication module.",
+      "model": "claude-sonnet-4-6",
+      "timestamp": "2026-04-28T10:00:05+00:00",
+      "citations": null
+    },
+    {
+      "id": 1003,
+      "session_id": 101,
+      "role": "user",
+      "content": "How do I fix it?",
+      "model": null,
+      "timestamp": "2026-04-28T10:05:00+00:00",
+      "citations": null
+    },
+    {
+      "id": 1004,
+      "session_id": 101,
+      "role": "assistant",
+      "content": "Use parameterized queries via cursor.execute(query, (username,)).",
+      "model": "claude-sonnet-4-6",
+      "timestamp": "2026-04-28T10:05:08+00:00",
+      "citations": null
+    }
+  ],
+  "total": 4,
+  "offset": 0,
+  "limit": 50
+}

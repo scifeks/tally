@@ -10,22 +10,28 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Trash2,
   Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ReportDraft } from '@/lib/types'
+import { downloadDraftSection } from '@/lib/api'
 import { SECTION_LABELS } from './constants'
 
 export function DraftCard({
+  projectId,
   draft,
   onGenerate,
   onUpload,
+  onDelete,
   isGenerating,
   skipTriage,
 }: {
+  projectId: number
   draft: ReportDraft
   onGenerate: (force: boolean) => void
   onUpload: (file: File) => void
+  onDelete: () => void
   isGenerating: boolean
   skipTriage: boolean
 }) {
@@ -40,6 +46,17 @@ export function DraftCard({
       onUpload(file)
     }
     e.target.value = ''
+  }
+
+  const handleDownload = () => {
+    void downloadDraftSection(projectId, draft.section)
+  }
+
+  const handleDelete = () => {
+    const ok = window.confirm(
+      `Delete the ${SECTION_LABELS[draft.section]} draft? This cannot be undone.`
+    )
+    if (ok) onDelete()
   }
 
   return (
@@ -112,6 +129,7 @@ export function DraftCard({
             <button
               onClick={() => onGenerate(false)}
               disabled={isGenerating}
+              data-testid={`report-draft-${draft.section}-generate`}
               className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Generate'}
@@ -120,6 +138,7 @@ export function DraftCard({
             <button
               onClick={() => onGenerate(true)}
               disabled={isGenerating}
+              data-testid={`report-draft-${draft.section}-regenerate`}
               className="p-1.5 text-[10px] border border-border text-muted-foreground hover:border-warn hover:text-warn transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Regenerate (overwrites existing)"
             >
@@ -133,9 +152,11 @@ export function DraftCard({
             accept=".md,.txt"
             onChange={handleFileChange}
             className="hidden"
+            data-testid={`report-draft-${draft.section}-file-input`}
           />
           <button
             onClick={() => fileInputRef.current?.click()}
+            data-testid={`report-draft-${draft.section}-upload`}
             className={cn(
               'p-1.5 text-[10px] border transition-colors',
               hasDraft
@@ -149,6 +170,8 @@ export function DraftCard({
           </button>
 
           <button
+            onClick={handleDownload}
+            data-testid={`report-draft-${draft.section}-download`}
             className={cn(
               'p-1.5 text-[10px] border transition-colors',
               hasDraft
@@ -159,6 +182,21 @@ export function DraftCard({
             title={hasDraft ? 'Download draft' : 'No draft to download'}
           >
             <Download className="h-3 w-3" />
+          </button>
+
+          <button
+            onClick={handleDelete}
+            data-testid={`report-draft-${draft.section}-delete`}
+            className={cn(
+              'p-1.5 text-[10px] border transition-colors',
+              hasDraft
+                ? 'border-border text-muted-foreground hover:border-crit hover:text-crit'
+                : 'border-border/50 text-dim cursor-not-allowed'
+            )}
+            disabled={!hasDraft}
+            title={hasDraft ? 'Delete draft' : 'No draft to delete'}
+          >
+            <Trash2 className="h-3 w-3" />
           </button>
         </div>
       </div>

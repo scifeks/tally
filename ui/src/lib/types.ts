@@ -446,12 +446,12 @@ export interface ReportDraft {
 export type ReportGenerationStatus = 'idle' | 'generating' | 'completed' | 'failed'
 
 export interface ReportGenerationRun {
-  id: string
-  projectId: string
+  id: number
+  projectId: number
   status: ReportGenerationStatus
   format: ReportFormat
   testingType?: TestingType
-  engagementDate: string
+  engagementDate?: string
   startedAt: string
   finishedAt?: string
   outputPath?: string
@@ -470,13 +470,19 @@ export interface ReportGenerationStep {
 }
 
 export interface ReportHistoryEntry {
-  id: string
-  projectId: string
+  id: number
+  projectId: number
   filename: string
   format: ReportFormat
   generatedAt: string
   sizeBytes: number
   downloadUrl: string
+  pinned?: boolean
+}
+
+export interface ReportCancelResponse {
+  id: number
+  status: 'cancelling'
 }
 
 export type ReportLogEventType =
@@ -492,7 +498,7 @@ export type ReportLogEventType =
 
 export interface ReportLogEvent {
   id: string
-  runId: string
+  runId: number
   type: ReportLogEventType
   timestamp: string
   step?: string
@@ -501,28 +507,69 @@ export interface ReportLogEvent {
   progress?: number
 }
 
+export interface ReportSnapshotPayload {
+  runId: number
+  status: ReportGenerationStatus
+  steps: ReportGenerationStep[]
+}
+
+export interface ReportDraftSnapshotPayload {
+  /** Sections currently in flight (server-side state). */
+  inFlight: ReportDraftSection[]
+}
+
 // ─── Chat Types ─────────────────────────────────────────────────────────────
 // Used by the Chat page for RAG-powered LLM conversations.
 
-export type ChatMessageRole = 'user' | 'assistant' | 'system'
+/**
+ * Backend CHECK-constrains chat message roles to exactly these two values
+ * (endpoints.md §12.4). No 'system' role on the wire.
+ */
+export type ChatMessageRole = 'user' | 'assistant'
 
+/**
+ * One persisted chat message. CamelCase mirror of the backend's snake_case
+ * row served by `GET /api/v1/projects/:id/chat/sessions/:sid/messages`.
+ *
+ * `model` is null on user turns and the LLM provider's model id on assistant
+ * turns. `citations` is reserved for the future RAG citations surface
+ * (chat-history.md decision 10) — always `null` in v1.
+ */
 export interface ChatMessage {
-  id: string
-  sessionId: string
+  /** Numeric SQLite primary key. */
+  id: number
+  /** Numeric session id (matches backend `session_id: int`). */
+  sessionId: number
   role: ChatMessageRole
   content: string
+  /** LLM model id on assistant turns; null on user turns. */
+  model: string | null
+  /** ISO-8601 timestamp; backend column name is `created_at`. */
   timestamp: string
-  /** True while the message is still being streamed from the server */
+  /** Reserved for future RAG citations surface — always null in v1. */
+  citations: null
+  /** UI-only: true while the assistant turn is streaming tokens. */
   isStreaming?: boolean
 }
 
+/**
+ * One chat session row served by `GET /api/v1/projects/:id/chat/sessions`.
+ * Title is server-set as `'YYYY-MM-DD HH:MM'`; sessions are sealed (their
+ * `expiredAt` is set) when a new scan run starts (decisions.md B7).
+ */
 export interface ChatSession {
-  id: string
-  projectId: string
-  title?: string
+  /** Numeric SQLite primary key. */
+  id: number
+  /** Numeric project id (matches backend `project_id: int`). */
+  projectId: number
+  /** Server-set timestamp title — never null. */
+  title: string
   createdAt: string
-  lastMessageAt?: string
+  /** Null until the first message is sent. */
+  lastMessageAt: string | null
   messageCount: number
+  /** Set when the session is sealed by a new scan; null when active. */
+  expiredAt: string | null
 }
 
 export type ChatStreamEventType =
@@ -532,16 +579,67 @@ export type ChatStreamEventType =
   | 'error'
   | 'stream_cancelled'
 
-export interface ChatStreamEvent {
-  type: ChatStreamEventType
-  sessionId: string
-  messageId?: string
-  /** Token content for "token" events */
-  token?: string
-  /** Full message content for "stream_end" events */
-  content?: string
-  /** Error message for "error" events */
-  error?: string
+/**
+ * SSE snapshot frame emitted once per subscriber on connect (endpoints.md
+ * §15.4). When `active` is true, a stream is currently in flight for this
+ * session and `userMessageId` is the in-progress user turn's id.
+ */
+export interface ChatStreamSnapshotPayload {
+  projectId: number
+  sessionId: number
+  active: boolean
+  userMessageId: number | null
+}
+
+/**
+ * Discriminated union of SSE token-stream events (endpoints.md §15.4).
+ * `messageId` is null on every event except `stream_end`, where the
+ * persisted assistant row id is delivered (write-once semantics, B7.7).
+ */
+export type ChatStreamEvent =
+  | { type: 'stream_start'; projectId: number; sessionId: number; messageId: null }
+  | { type: 'token'; projectId: number; sessionId: number; messageId: null; token: string }
+  | {
+      type: 'stream_end'
+      projectId: number
+      sessionId: number
+      messageId: number
+      content: string
+    }
+  | {
+      type: 'error'
+      projectId: number
+      sessionId: number
+      messageId: null
+      error: string
+      message: string
+    }
+  | {
+      type: 'stream_cancelled'
+      projectId: number
+      sessionId: number
+      messageId: null
+      message: string
+    }
+
+/**
+ * 202 response from `POST .../sessions/:sid/messages`. The assistant id is
+ * always null here — the SPA learns it from the `stream_end` SSE event.
+ */
+export interface ChatSendMessageResponse {
+  userMessageId: number
+  assistantMessageId: null
+  sessionId: number
+  streamUrl: string
+}
+
+/**
+ * 202 response from `POST .../sessions/:sid/cancel`. `cancelledMessageId` is
+ * always null in v1 — the assistant id is only assigned at stream_end.
+ */
+export interface ChatCancelResponse {
+  sessionId: number
+  cancelledMessageId: null
 }
 
 // ─── Configuration Types ────────────────────────────────────────────────────

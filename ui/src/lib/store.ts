@@ -41,6 +41,24 @@ interface UIState {
   setTriageMutationError: (err: ApiErrorPayload | null) => void
 
   /**
+   * Surface report draft / generate / cancel / upload / delete failures
+   * (409 JOB_ALREADY_RUNNING, 409 REPORT_NOT_CANCELLABLE, 422
+   * VALIDATION_ERROR, 404 NOT_FOUND, 400 PATH_TRAVERSAL). Cleared by the
+   * modal's dismiss button. Not persisted.
+   */
+  reportMutationError: ApiErrorPayload | null
+  setReportMutationError: (err: ApiErrorPayload | null) => void
+
+  /**
+   * Surface chat session create / delete / send / cancel failures (409
+   * CHAT_SESSION_EXPIRED, 409 CHAT_STREAM_ALREADY_RUNNING, 409
+   * CHAT_NO_ACTIVE_STREAM, 422 VALIDATION_ERROR, 404 NOT_FOUND). Cleared
+   * by the modal's dismiss button. Not persisted.
+   */
+  chatMutationError: ApiErrorPayload | null
+  setChatMutationError: (err: ApiErrorPayload | null) => void
+
+  /**
    * One-time prompt-injection acknowledgement flag. The user must accept
    * the warning modal before any triage action (start / resume / single-
    * finding triage from the Findings detail panel) can fire. Persisted to
@@ -82,6 +100,12 @@ export const useUI = create<UIState>()(
 
       triageMutationError: null,
       setTriageMutationError: err => set({ triageMutationError: err }),
+
+      reportMutationError: null,
+      setReportMutationError: err => set({ reportMutationError: err }),
+
+      chatMutationError: null,
+      setChatMutationError: err => set({ chatMutationError: err }),
 
       triageInjectionAcked: false,
       setTriageInjectionAcked: acked => set({ triageInjectionAcked: acked }),
