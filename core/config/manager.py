@@ -151,9 +151,6 @@ class ConfigManager:
 
         out: list[Repository] = []
         for repo in config.repositories:
-            if not repo.uuid:
-                out.append(repo)
-                continue
             try:
                 db_row = repo_repo.get_by_uuid_including_deleted(repo.uuid)
             except Exception:

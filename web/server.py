@@ -112,13 +112,6 @@ def create_app(
     project_registry.sync(base_path)
     app.state.project_registry = project_registry
 
-    # Phase 9.2: ensure every project's repos have stamped uuids and DB rows.
-    from application.project.repository_sync import (
-        sync_repositories_for_all_projects,
-    )
-
-    sync_repositories_for_all_projects(base_path)
-
     app.state.rag_engine_cache = {}
 
     app.state.installed_tools = InstalledToolsProbe()

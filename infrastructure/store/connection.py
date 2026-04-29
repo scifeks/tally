@@ -43,7 +43,6 @@ class ConnectionFactory:
         finally:
             conn.close()
 
-    # DDL shared between init_schema and _migrate_fingerprint_unique.
     _FINDINGS_COLUMNS = """
                     id               INTEGER PRIMARY KEY AUTOINCREMENT,
                     fingerprint      TEXT,
@@ -73,7 +72,8 @@ class ConnectionFactory:
                     triaged_by       TEXT,
                     should_report    INTEGER NOT NULL DEFAULT 0,
                     business_impact  TEXT,
-                    tal_id           TEXT
+                    tal_id           TEXT,
+                    repo_id          INTEGER
     """
 
     _FINDINGS_INDEXES = """
@@ -85,6 +85,8 @@ class ConnectionFactory:
                     ON findings (fingerprint);
                 CREATE INDEX IF NOT EXISTS idx_findings_segment
                     ON findings (segment);
+                CREATE INDEX IF NOT EXISTS idx_findings_repo_id
+                    ON findings (repo_id);
     """
 
     # Tables that must survive a full purge. Extend this set when new
@@ -290,11 +292,6 @@ class ConnectionFactory:
                 CREATE INDEX IF NOT EXISTS idx_url_findings_run
                     ON url_findings (run_id);
             """)
-        self._migrate_fingerprint_unique()
-        self._migrate_drop_run_repos()
-        self._migrate_runs_to_scan_runs()
-        self._migrate_extend_run_tools()
-        self._migrate_findings_add_repo_id()
 
     def purge_non_preserved_tables(self) -> None:
         """Delete all rows from every table not in PRESERVED_TABLES.
@@ -322,121 +319,3 @@ class ConnectionFactory:
                         "DELETE FROM sqlite_sequence WHERE name = ?",
                         (table,),
                     )
-
-    def _migrate_fingerprint_unique(self) -> None:
-        """Remove the UNIQUE constraint on findings.fingerprint if present.
-
-        Existing databases created before this fix have
-        ``fingerprint TEXT UNIQUE``.  SQLite does not support
-        ``ALTER TABLE DROP CONSTRAINT``, so the migration recreates the
-        table without the constraint and copies all rows.
-
-        The check uses ``PRAGMA index_list`` — rows with ``origin = 'u'``
-        are unique constraints from the CREATE TABLE definition (not
-        explicit CREATE UNIQUE INDEX statements).
-        """
-        with self.connect() as conn:
-            idx_rows = conn.execute("PRAGMA index_list(findings)").fetchall()
-            has_unique = any(row["origin"] == "u" for row in idx_rows)
-            if not has_unique:
-                return
-
-        with self.connect() as conn:
-            conn.executescript(f"""
-                CREATE TABLE findings_new (
-                    {self._FINDINGS_COLUMNS}
-                );
-
-                INSERT INTO findings_new SELECT * FROM findings;
-                DROP TABLE findings;
-                ALTER TABLE findings_new RENAME TO findings;
-
-                {self._FINDINGS_INDEXES}
-            """)
-
-    def _migrate_drop_run_repos(self) -> None:
-        """Drop the run_repos table if it still exists.
-
-        The table was removed from the schema because it was never
-        written to by any production code path — repo-level data is
-        already available via the ``repo`` column on ``findings``.
-        """
-        with self.connect() as conn:
-            exists = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='run_repos'"
-            ).fetchone()
-            if not exists:
-                return
-        with self.connect() as conn:
-            conn.execute("DROP TABLE run_repos")
-
-    def _migrate_runs_to_scan_runs(self) -> None:
-        """Rename legacy ``runs`` table to ``scan_runs`` (Phase 5.1).
-
-        Idempotent — safe to run on a fresh DB (only ``scan_runs`` exists),
-        on a legacy DB (only ``runs`` exists at entry; ``init_schema`` has
-        just created an empty ``scan_runs`` so both are present), and on
-        an already-migrated DB (only ``scan_runs`` remains).
-        """
-        with self.connect() as conn:
-            runs_exists = conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='runs'"
-            ).fetchone()
-            if not runs_exists:
-                return
-        with self.connect() as conn:
-            conn.execute(
-                "INSERT INTO scan_runs (id, args, created_at) "
-                "SELECT id, args, created_at FROM runs"
-            )
-            conn.execute("DROP TABLE runs")
-
-    def _migrate_findings_add_repo_id(self) -> None:
-        """Phase 9.2: add ``findings.repo_id`` (FK to ``repositories(id)``).
-
-        Idempotent. Adds the column if missing and creates the matching
-        index. The backfill from the legacy ``findings.repo`` string column
-        and the eventual DROP of that column are handled in
-        ``application.project.repository_sync.sync_repositories_for_project``
-        once per-project ``repositories`` rows are populated.
-        """
-        with self.connect() as conn:
-            existing = {
-                row["name"]
-                for row in conn.execute("PRAGMA table_info(findings)").fetchall()
-            }
-            if "repo_id" not in existing:
-                conn.execute("ALTER TABLE findings ADD COLUMN repo_id INTEGER")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_findings_repo_id ON findings (repo_id)"
-            )
-
-    def _migrate_extend_run_tools(self) -> None:
-        """Add Phase 5.1 columns to ``run_tools`` if missing.
-
-        Pre-existing databases were created when ``run_tools`` had only
-        ``id``, ``run_id``, ``tool``, and ``findings_count``. Phase 5.1
-        adds per-tool execution metadata (status, timestamps, exit_code,
-        skip_reason, enrichment counters) and the ``repo`` / ``domain``
-        dimensions findings already track.
-        """
-        new_columns = (
-            ("repo", "TEXT"),
-            ("domain", "TEXT"),
-            ("status", "TEXT"),
-            ("started_at", "TEXT"),
-            ("finished_at", "TEXT"),
-            ("exit_code", "INTEGER"),
-            ("skip_reason", "TEXT"),
-            ("enriched_count", "INTEGER"),
-            ("total_to_enrich", "INTEGER"),
-        )
-        with self.connect() as conn:
-            existing = {
-                row["name"]
-                for row in conn.execute("PRAGMA table_info(run_tools)").fetchall()
-            }
-            for name, sqltype in new_columns:
-                if name in existing:
-                    continue
-                conn.execute(f"ALTER TABLE run_tools ADD COLUMN {name} {sqltype}")

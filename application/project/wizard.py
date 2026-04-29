@@ -6,7 +6,6 @@ import re
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers.user_file import UserFileProvider
@@ -679,14 +678,13 @@ class InteractiveProjectWizard:
 
         Returns the integer primary key. Inserts a new row when none exists
         for the repo's uuid; otherwise renames the existing row if its
-        name has drifted in JSON. This mirrors the lazy-backfill performed
-        by ``application.project.repository_sync``.
+        name has drifted in JSON.
         """
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
         factory = ConnectionFactory(paths.findings_db)
         factory.init_schema()
         repo_repo = RepositoryRepository(factory)
-        existing = repo_repo.get_by_uuid(repo.uuid) if repo.uuid else None
+        existing = repo_repo.get_by_uuid(repo.uuid)
         if existing is None:
             return repo_repo.insert(uuid=repo.uuid, name=repo.name)
         if existing.name != repo.name:
@@ -1090,9 +1088,8 @@ class InteractiveProjectWizard:
 
         auth = _interview_auth()
 
-        new_repo = Repository(
+        new_repo = Repository.new(
             name=name,
-            uuid=str(uuid4()),
             type=types,
             path=local_path_str,
             docker_path=docker_path,

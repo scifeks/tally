@@ -123,14 +123,6 @@ if __name__ == "__main__":
     # Build the project registry (creates tally.db on first run, syncs from disk).
     project_registry = _build_project_registry(_BASE_PATH)
 
-    # Phase 9.2: stamp uuids into project.json + populate the per-project
-    # ``repositories`` table + backfill ``findings.repo_id``. Idempotent.
-    from application.project.repository_sync import (
-        sync_repositories_for_all_projects,
-    )
-
-    sync_repositories_for_all_projects(_BASE_PATH)
-
     try:
         REPL(
             base_path=_BASE_PATH,
