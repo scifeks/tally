@@ -11,6 +11,7 @@ import pytest_asyncio
 
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
 from web.server import create_app
 
@@ -37,6 +38,8 @@ _BASE_FINDING: dict[str, Any] = {
     "commit": "abc123",
 }
 
+_REPO_UUID = "11111111-1111-4111-8111-111111111111"
+
 _PROJECT_CONFIG: dict[str, Any] = {
     "project_name": "Test Project",
     "created": "2024-01-01T00:00:00",
@@ -46,6 +49,7 @@ _PROJECT_CONFIG: dict[str, Any] = {
     "repositories": [
         {
             "name": "test-repo",
+            "uuid": _REPO_UUID,
             "type": ["api"],
             "path": "",
             "docker_path": "/app",
@@ -94,6 +98,9 @@ async def projects_v1_client(tmp_path: Path):
     db_path.parent.mkdir(parents=True)
     factory = ConnectionFactory(db_path)
     factory.init_schema()
+
+    repo_repo = RepositoryRepository(factory)
+    repo_repo.insert(uuid=_REPO_UUID, name="test-repo")
 
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import uuid as _uuid_mod
 from pathlib import Path
 from typing import Any
 
@@ -341,11 +340,9 @@ async def create_repository(
 
     data = _parse_payload(payload)
     data.pop("uuid", None)
-    new_uuid = str(_uuid_mod.uuid4())
-    data["uuid"] = new_uuid
 
     try:
-        repo = Repository(**data)
+        repo = Repository.new(**data)
     except ValidationError as exc:
         raise ApiValidationError(str(exc)) from exc
 
@@ -359,7 +356,7 @@ async def create_repository(
             raise ApiValidationError(
                 f"Repository '{repo.name}' already exists in project"
             )
-        repo_id = repo_repo.insert(uuid=new_uuid, name=repo.name)
+        repo_id = repo_repo.insert(uuid=repo.uuid, name=repo.name)
         config.repositories = [*config.repositories, repo]
         manager.save_project_config(project_name, config)
 

@@ -38,11 +38,14 @@ def _seed_global_config(base_path: str) -> None:
 def _seed_project_config(base_path: str, project_name: str) -> None:
     """Write a minimal project.json so /scans/config can list repos.
 
-    Also triggers Phase 9 ``sync_repositories_for_project`` to stamp uuid +
-    insert the matching ``repositories`` row, so the repo surfaces with a
-    real DB id from the scan-config endpoint.
+    Stamps a uuid into the seeded JSON and inserts the matching
+    ``repositories`` row so the repo surfaces with a real DB id from
+    the scan-config endpoint.
     """
-    from application.project.repository_sync import sync_repositories_for_project
+    from uuid import uuid4
+
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.repositories import RepositoryRepository
 
     _seed_global_config(base_path)
     repo_path = Path(base_path) / "fake-repo"
@@ -50,6 +53,7 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
     project_dir = Path(base_path) / "projects" / project_name
     config_dir = project_dir / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
+    repo_uuid = str(uuid4())
     project_json = config_dir / "project.json"
     project_json.write_text(
         json.dumps(
@@ -59,6 +63,7 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
                 "repositories": [
                     {
                         "name": "test-repo",
+                        "uuid": repo_uuid,
                         "type": ["api"],
                         "path": str(repo_path),
                         "languages": ["python"],
@@ -68,7 +73,11 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
             }
         )
     )
-    sync_repositories_for_project(str(project_dir))
+    sqlite_dir = project_dir / "sqlite"
+    sqlite_dir.mkdir(parents=True, exist_ok=True)
+    factory = ConnectionFactory(sqlite_dir / "findings.db")
+    factory.init_schema()
+    RepositoryRepository(factory).insert(uuid=repo_uuid, name="test-repo")
 
 
 @pytest.fixture(autouse=True)

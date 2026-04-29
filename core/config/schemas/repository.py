@@ -3,6 +3,8 @@
 import re
 import warnings
 from pathlib import Path
+from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -59,10 +61,10 @@ class Repository(BaseModel):
     uuid: str = Field(
         default="",
         description=(
-            "Stable uuid4 identifier stamped at creation. Empty on legacy "
-            "JSON entries — the per-project repository sync stamps a fresh "
-            "uuid into both JSON and the ``repositories`` table on first "
-            "load."
+            "Stable uuid4 identifier stamped at creation. Use "
+            "``Repository.new(...)`` to construct new instances so the uuid "
+            "is auto-stamped; bare ``Repository(...)`` calls require an "
+            "explicit non-empty uuid."
         ),
     )
     id: int | None = Field(
@@ -175,14 +177,23 @@ class Repository(BaseModel):
         ),
     )
 
+    @classmethod
+    def new(cls, **fields: Any) -> "Repository":
+        """Construct a Repository with a freshly-stamped uuid4.
+
+        Single point of uuid generation — both the REPL wizard and the
+        web API construct new repositories via this method so the uuid
+        policy lives in the schema, not duplicated in adapters.
+        """
+        fields.setdefault("uuid", str(uuid4()))
+        return cls(**fields)
+
     @field_validator("uuid")
     @classmethod
     def validate_uuid(cls, v: str) -> str:
-        """Allow '' (legacy backfill sentinel) or a valid uuid4 string."""
-        if v == "":
-            return v
+        """Require a valid uuid4 string."""
         if not _UUID4_RE.match(v.lower()):
-            raise ValueError(f"uuid must be '' or a valid uuid4 string, got: {v!r}")
+            raise ValueError(f"uuid must be a valid uuid4 string, got: {v!r}")
         return v
 
     @field_validator("type")

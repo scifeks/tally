@@ -44,7 +44,7 @@ def _make_repo(**kwargs: object) -> Repository:
         "languages": ["python"],
     }
     defaults.update(kwargs)
-    return Repository(**defaults)  # type: ignore[arg-type]
+    return Repository.new(**defaults)
 
 
 class TestEditRepository:
