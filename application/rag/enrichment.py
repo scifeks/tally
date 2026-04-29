@@ -23,6 +23,7 @@ from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt
 
 if TYPE_CHECKING:
+    from application.locking.cancellation import CancellationToken
     from application.ports.scan_event_sink import ScanEventSink
     from infrastructure.store.repositories.findings import FindingRepository
 
@@ -237,6 +238,7 @@ class EnrichmentPipeline:
         max_workers: int = 4,
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> None:
         from application.ports.scan_event_sink import NullScanEventSink
 
@@ -249,6 +251,7 @@ class EnrichmentPipeline:
         self._had_errors: bool = False
         self._project_id = project_id
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
+        self._cancel_token = cancel_token
 
     @property
     def had_errors(self) -> bool:
@@ -329,6 +332,7 @@ class EnrichmentPipeline:
         # Pre-resolve LLM provider once before spawning threads
         _ = self._provider
 
+        cancelled = False
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_row = {
                 executor.submit(
@@ -359,12 +363,25 @@ class EnrichmentPipeline:
                 except Exception as exc:
                     logger.error("Enrichment failed for id %s: %s", row.get("id"), exc)
                     self._had_errors = True
+                if self._cancel_token is not None and self._cancel_token.is_set():
+                    # Stop launching new Ollama calls and let in-flight
+                    # workers wind down. Findings collected up to this
+                    # point are persisted in Phase 3 below.
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    cancelled = True
+                    break
 
-        # Phase 3: SQLite writes (sequential — avoids write contention)
+        # Phase 3: SQLite writes (sequential — avoids write contention).
+        # Runs even on cancel so already-completed work isn't lost.
         for row, validated_fields in updates:
             self._finding_repo.update_enrichment_fields(
                 row["id"], validated_fields, source="llm_inference"
             )
+
+        if cancelled:
+            from application.tools.orchestrator import ScanCancelled
+
+            raise ScanCancelled
 
         enriched_count = len(updates) + auto_enriched
         if self._console:

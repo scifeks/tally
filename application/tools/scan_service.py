@@ -204,6 +204,7 @@ class ScanService:
                 skip_enrichment=skip_enrichment,
                 project_id=project_id,
                 event_sink=event_sink,
+                cancel_token=cancel_token,
             )
             orchestrator = ScanOrchestrator(
                 project=project_name,

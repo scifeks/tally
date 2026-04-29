@@ -22,6 +22,9 @@ from infrastructure.store import make_store
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from application.locking.cancellation import CancellationToken
+
+
 from domain.pipeline.events import IngestCompleted
 
 logger = logging.getLogger(__name__)
@@ -42,11 +45,13 @@ class EnrichThenPersistStrategy(BaseHandler):
         console: Console | None = None,
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> None:
         super().__init__()
         self._console = console
         self._project_id = project_id
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
+        self._cancel_token = cancel_token
 
     def handle(self, event: IngestCompleted) -> None:
         if not event.ids:
@@ -60,6 +65,7 @@ class EnrichThenPersistStrategy(BaseHandler):
             run_id=event.run_id,
             project_id=self._project_id,
             event_sink=self._event_sink,
+            cancel_token=self._cancel_token,
         )
         pipeline.enrich(event.ids)
         self._persist_to_chromadb(event.ids, event.project_name, event.base_path)

@@ -52,6 +52,7 @@ export default function Scans() {
   const [enrichmentProgress, setEnrichmentProgress] = useState<{
     enrichedCount: number
     totalToEnrich: number
+    timestamp: string
   } | null>(null)
   const [elapsedSec, setElapsedSec] = useState(0)
 
@@ -112,11 +113,13 @@ export default function Scans() {
 
   // Per-event SSE handler. `enrichment_progress` is stored in a single state
   // slot (latest-value-wins) per the §12.7 mandate — never appended to logs.
+  // The live row in the scan log is rendered from that same slot below.
   const handleScanEvent = useCallback((event: ScanLogEvent) => {
     if (event.type === 'enrichment_progress') {
       setEnrichmentProgress({
         enrichedCount: event.enrichedCount ?? 0,
         totalToEnrich: event.totalToEnrich ?? 0,
+        timestamp: event.timestamp,
       })
       return
     }
@@ -127,7 +130,9 @@ export default function Scans() {
 
     setLogs(prev => [...prev, event])
 
-    if (event.type === 'run_started') {
+    if (event.type === 'enrichment_complete') {
+      setEnrichmentProgress(null)
+    } else if (event.type === 'run_started') {
       setRunStatus('running')
     } else if (event.type === 'run_completed') {
       setRunStatus('completed')
@@ -619,6 +624,18 @@ export default function Scans() {
               {logs.map(event => (
                 <LogRow key={event.id} event={event} />
               ))}
+              {enrichmentProgress && runId !== null && (
+                <LogRow
+                  key="_live_enrichment"
+                  event={{
+                    id: '_live_enrichment',
+                    runId,
+                    type: 'enrichment_progress',
+                    timestamp: enrichmentProgress.timestamp,
+                    message: `Enriching findings... ${enrichmentProgress.enrichedCount}/${enrichmentProgress.totalToEnrich}`,
+                  }}
+                />
+              )}
               <div ref={logEndRef} />
             </div>
           )}
