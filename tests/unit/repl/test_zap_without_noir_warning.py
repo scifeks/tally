@@ -62,9 +62,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=url_findings_exist),
             patch("builtins.input", return_value=user_input),
         ):
-            return sc._maybe_warn_dast_without_discovery(
-                tools, names, auto_approve, MagicMock()
-            )
+            return sc._maybe_warn_dast_without_discovery(tools, names, auto_approve)
 
     def test_no_warning_when_no_dast_tools(self) -> None:
         result = self._call(["semgrep"])
@@ -97,9 +95,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_dast_without_discovery(
-                ["zap"], None, False, MagicMock()
-            )
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
         assert result == ["zap"]
         mock_input.assert_not_called()
 
@@ -151,9 +147,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", side_effect=EOFError),
         ):
-            result = sc._maybe_warn_dast_without_discovery(
-                ["zap"], None, False, MagicMock()
-            )
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
         assert result is None
 
     def test_warning_printed_to_console(self) -> None:
@@ -163,7 +157,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", return_value="2"),
         ):
-            sc._maybe_warn_dast_without_discovery(["zap"], None, False, MagicMock())
+            sc._maybe_warn_dast_without_discovery(["zap"], None, False)
 
         printed = " ".join(
             str(a) for call in repl.console.print.call_args_list for a in call[0]
@@ -188,15 +182,22 @@ class TestCmdScanInnerWarning:
         _repo.name = "dvna"
         _repo.crawl_enabled = True
         repl.config.load_repositories.return_value = [_repo]
+        repl.project_registry.resolve_by_name.return_value = {"id": 1}
 
         sc = ScanCommands(repl)
-        mock_orchestrator = MagicMock()
+
+        mock_summary = MagicMock(findings_by_tool={})
+        mock_handle = MagicMock(run_id=1)
+        mock_handle.result.result.return_value = mock_summary
+
+        mock_service = MagicMock()
+        mock_service.start_scan.return_value = mock_handle
 
         with (
             patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
-            patch.object(sc, "_make_orchestrator", return_value=mock_orchestrator),
-            patch.object(
-                sc, "_create_sqlite_run", return_value=(MagicMock(), MagicMock(), 1)
+            patch(
+                "application.repl.commands.scan_commands.get_scan_service",
+                return_value=mock_service,
             ),
             patch.object(sc, "_repo_has_url_findings", return_value=url_findings_exist),
             patch("builtins.input", return_value=user_input),
@@ -209,16 +210,16 @@ class TestCmdScanInnerWarning:
             ]
             sc.cmd_scan("scan", args)
 
-        return mock_orchestrator
+        return mock_service
 
     def test_zap_scan_with_option2_runs_zap_only(self) -> None:
-        orchestrator = self._run_scan(["--tool=zap"], user_input="2")
-        kwargs = orchestrator.run_scoped_scan.call_args.kwargs
-        tools = kwargs.get("tool_names") or []
+        service = self._run_scan(["--tool=zap"], user_input="2")
+        kwargs = service.start_scan.call_args.kwargs
+        tools = kwargs.get("tool_ids") or ()
         assert "zap" in tools
         assert "noir" not in tools
         assert "katana" not in tools
 
     def test_zap_scan_cancelled_does_not_run(self) -> None:
-        orchestrator = self._run_scan(["--tool=zap"], user_input="3")
-        orchestrator.run_scoped_scan.assert_not_called()
+        service = self._run_scan(["--tool=zap"], user_input="3")
+        service.start_scan.assert_not_called()

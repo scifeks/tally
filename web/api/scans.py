@@ -27,8 +27,10 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.locking import JobBusy, get_registry
+from application.locking import JobBusy
 from application.tools.registry import discover_tools, tool_registry
+from application.tools.scan_run_registry import get_scan_run_registry
+from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
 from domain.tools.scan_types import SEGMENT_ORDER
 from infrastructure.events.ids import new_event_id
@@ -41,7 +43,8 @@ from infrastructure.store.repositories.runs import (
     ScanRunRow,
     ToolRunRow,
 )
-from web.adapters.scan_run_registry import get_scan_run_registry
+from web.adapters.event_bus_scan_sink import EventBusScanSink
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
@@ -58,7 +61,6 @@ from web.api.schemas import (
     ToolRunItem,
     ToolRunsSummary,
 )
-from web.scans.runner import ScanRequest, start_scan_thread
 
 logger = logging.getLogger("tally.web.scans")
 
@@ -354,57 +356,31 @@ async def start_scan(
 
     repo_names = _repo_ids_to_names(request, project_name, body.repoIds)
 
-    repo = _make_run_repo(row)
+    paths = ProjectPaths.from_registry_row(row)
+    sink = EventBusScanSink(request.app.state.event_bus)
 
-    lock_registry = get_registry()
-    holder = f"scan-web:{new_event_id()[:8]}"
     try:
-        lock_registry.acquire_job("scan", holder)
+        handle = await asyncio.to_thread(
+            get_scan_service().start_scan,
+            project_id=project_id,
+            project_name=project_name,
+            base_path=base_path,
+            paths=paths,
+            repo_ids=tuple(repo_names),
+            tool_ids=tuple(body.toolIds),
+            domains=tuple(body.domains),
+            skip_tool_ids=tuple(body.skipToolIds),
+            skip_enrichment=body.skipEnrichment,
+            prompt=NoApprovalPromptAdapter(),
+            event_sink=sink,
+        )
     except JobBusy as exc:
         raise JobBusyError("scan", exc.current_holder) from exc
 
-    try:
-        run_id = await asyncio.to_thread(
-            repo.create,
-            project_id=project_id,
-            repo_ids=repo_names,
-            tool_ids=body.toolIds,
-            domains=body.domains,
-            skip_enrichment=body.skipEnrichment,
-        )
-    except Exception:
-        try:
-            lock_registry.release_job("scan", holder)
-        except Exception:  # noqa: BLE001
-            pass
-        raise
-
-    factory = ConnectionFactory(ProjectPaths.from_registry_row(row).findings_db)
-    bus = request.app.state.event_bus
-    scan_request = ScanRequest(
-        repo_ids=tuple(repo_names),
-        tool_ids=tuple(body.toolIds),
-        domains=tuple(body.domains),
-        skip_tool_ids=tuple(body.skipToolIds),
-        skip_enrichment=body.skipEnrichment,
-    )
-
-    start_scan_thread(
-        base_path=base_path,
-        project_name=project_name,
-        project_id=project_id,
-        run_id=run_id,
-        request=scan_request,
-        holder_token=holder,
-        factory=factory,
-        bus=bus,
-        lock_registry=lock_registry,
-        scan_run_registry=get_scan_run_registry(),
-    )
-
-    fresh = await asyncio.to_thread(repo.get, run_id)
+    repo = _make_run_repo(row)
+    fresh = await asyncio.to_thread(repo.get, handle.run_id)
     if fresh is None:
-        raise NotFound(f"scan run {run_id} not found after creation")
+        raise NotFound(f"scan run {handle.run_id} not found after creation")
     return _scan_run_to_summary(fresh)
 
 

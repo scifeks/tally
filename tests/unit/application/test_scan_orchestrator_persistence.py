@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.locking.cancellation import CancellationToken
-from application.locking.registry import LockRegistry
 from application.ports.scan_event_sink import NullScanEventSink
 from application.tools.orchestrator import ScanCancelled, ScanOrchestrator
 from domain.pipeline import scan_events as se
@@ -25,7 +24,6 @@ def _make_orchestrator(
     *,
     run_id: int | None = 1,
     project_id: int | None = 1,
-    registry: LockRegistry | None = None,
     sink: NullScanEventSink | None = None,
     cancel: CancellationToken | None = None,
     repo: MagicMock | None = None,
@@ -38,7 +36,6 @@ def _make_orchestrator(
             event_bus=MagicMock(),
             prompt=MagicMock(),
             run_id=run_id,
-            lock_registry=registry or LockRegistry(),
             event_sink=sink,
             cancel_token=cancel,
             run_repository=repo,

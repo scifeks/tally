@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from application.locking import LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken, no_op_token
 from application.ports.scan_event_sink import NullScanEventSink, ScanEventSink
 from application.ports.user_prompt import UserPromptPort
@@ -63,7 +61,6 @@ class ScanOrchestrator:
         run_id:         Optional scan_runs.id; required for persistence + lock.
         factory:        Optional ToolWrapperFactory; defaults to a fresh one.
         console:        Optional Rich console for REPL display output.
-        lock_registry:  Optional LockRegistry; defaults to the process singleton.
         event_sink:     Optional ScanEventSink for SSE event emission.
                         Defaults to a no-op sink (REPL behavior unchanged).
         cancel_token:   Optional cooperative cancellation flag.
@@ -89,7 +86,6 @@ class ScanOrchestrator:
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
         console: Console | None = None,
-        lock_registry: LockRegistry | None = None,
         event_sink: ScanEventSink | None = None,
         cancel_token: CancellationToken | None = None,
         run_repository: RunRepository | None = None,
@@ -103,9 +99,6 @@ class ScanOrchestrator:
         self._run_id = run_id
         self.display = OrchestratorDisplay(console=console)
         self._factory = factory or ToolWrapperFactory()
-        self._lock_registry = (
-            lock_registry if lock_registry is not None else get_registry()
-        )
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
         self._cancel_token: CancellationToken = cancel_token or no_op_token()
         self._run_repository = run_repository
@@ -144,12 +137,6 @@ class ScanOrchestrator:
             event_sink=self._event_sink,
         )
 
-    def _scan_lock(self) -> AbstractContextManager[None]:
-        if self._run_id is None:
-            return nullcontext()
-        holder = f"scan-run:{self._run_id}"
-        return self._lock_registry.job("scan", holder)
-
     def _emit(self, event: Any) -> None:
         try:
             self._event_sink.emit(event)
@@ -173,65 +160,66 @@ class ScanOrchestrator:
     # ------------------------------------------------------------------
 
     def _run(self, body: Callable[[], ScanSummary]) -> ScanSummary:
-        """Wrap a scan invocation with lock + persistence + event emission.
+        """Wrap a scan invocation with persistence + event emission.
 
         Persistence + events are best-effort and never mask the underlying
         scan result. Cancellation surfaces a ``ScanCancelled`` exception.
+
+        The Tier-1 ``scan`` job-slot lock is held by the caller
+        (:class:`application.tools.scan_service.ScanService`) for the
+        duration of this call; the orchestrator does not acquire it.
         """
         run_id = self._run_id or 0
         project_id = self._project_id
-        with self._scan_lock():
-            self._check_cancel()
-            self._persist(lambda r, rid: r.set_status(rid, "running"))
-            self._persist(lambda r, rid: r.set_started_at(rid, _utc_now_iso()))
-            self._emit(
-                se.RunStarted(
-                    run_id=run_id,
-                    project_id=project_id,
-                    message="scan started",
-                )
+        self._check_cancel()
+        self._persist(lambda r, rid: r.set_status(rid, "running"))
+        self._persist(lambda r, rid: r.set_started_at(rid, _utc_now_iso()))
+        self._emit(
+            se.RunStarted(
+                run_id=run_id,
+                project_id=project_id,
+                message="scan started",
             )
-            try:
-                summary = body()
-            except ScanCancelled:
-                self._persist(lambda r, rid: r.set_status(rid, "cancelled"))
-                self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
-                self._emit(
-                    se.RunCancelled(
-                        run_id=run_id,
-                        project_id=project_id,
-                        message="scan cancelled",
-                    )
-                )
-                raise
-            except Exception as exc:
-                self._persist(lambda r, rid: r.set_status(rid, "failed"))
-                self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
-                self._emit(
-                    se.RunFailed(
-                        run_id=run_id,
-                        project_id=project_id,
-                        message=f"{type(exc).__name__}: {exc}",
-                    )
-                )
-                raise
-            self._persist(
-                lambda r, rid: r.set_findings_count(
-                    rid, _summary_findings_count(summary)
-                )
-            )
-            self._persist(lambda r, rid: r.set_status(rid, "done"))
+        )
+        try:
+            summary = body()
+        except ScanCancelled:
+            self._persist(lambda r, rid: r.set_status(rid, "cancelled"))
             self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
             self._emit(
-                se.RunCompleted(
+                se.RunCancelled(
                     run_id=run_id,
                     project_id=project_id,
-                    message="scan complete",
-                    findings_count=_summary_findings_count(summary),
+                    message="scan cancelled",
                 )
             )
-            self._seal_chat_sessions()
-            return summary
+            raise
+        except Exception as exc:
+            self._persist(lambda r, rid: r.set_status(rid, "failed"))
+            self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
+            self._emit(
+                se.RunFailed(
+                    run_id=run_id,
+                    project_id=project_id,
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            )
+            raise
+        self._persist(
+            lambda r, rid: r.set_findings_count(rid, _summary_findings_count(summary))
+        )
+        self._persist(lambda r, rid: r.set_status(rid, "done"))
+        self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
+        self._emit(
+            se.RunCompleted(
+                run_id=run_id,
+                project_id=project_id,
+                message="scan complete",
+                findings_count=_summary_findings_count(summary),
+            )
+        )
+        self._seal_chat_sessions()
+        return summary
 
     def _seal_chat_sessions(self) -> None:
         """Run Phase 8.10 chat-session sealing + retention sweep.

@@ -1,10 +1,8 @@
 """ScanRunRegistry — process-singleton tracking active scan runs.
 
-Phase 5.6 needs a way for the cancel endpoints to find the
-``CancellationToken`` for a running scan. The registry maps
-``run_id`` -> live entry while the background scan thread holds the
-``LockRegistry`` slot. Cancel endpoints look up tokens here. The scan
-thread unregisters itself in its ``finally`` block.
+Maps ``run_id`` -> ``ScanRunHandle`` while a scan is in flight so cancel
+endpoints can find the ``CancellationToken`` and signal a stop. The
+service that started the scan unregisters in its ``finally`` block.
 
 Thread-safe via an internal mutex; reads and writes are O(1).
 """

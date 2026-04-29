@@ -11,9 +11,9 @@ import pytest
 
 from application.locking import get_registry
 from application.locking.cancellation import CancellationToken
+from application.tools.scan_run_registry import get_scan_run_registry
 from infrastructure.events.types import BusEvent
 from infrastructure.store.repositories.runs import RunRepository
-from web.adapters.scan_run_registry import get_scan_run_registry
 
 pytestmark = pytest.mark.integration
 
@@ -195,8 +195,8 @@ async def test_start_scan_returns_202_and_creates_row(app_client, monkeypatch) -
 
     spawned = []
     monkeypatch.setattr(
-        "web.api.scans.start_scan_thread",
-        lambda **kw: spawned.append(kw),
+        "application.tools.scan_service.ScanService._run_worker",
+        lambda self, **kw: spawned.append(kw),
     )
 
     resp = await client.post(
@@ -217,10 +217,10 @@ async def test_start_scan_returns_202_and_creates_row(app_client, monkeypatch) -
 async def test_start_scan_409_when_busy(app_client, monkeypatch) -> None:
     client, _fid, _rag, _factory, muth, project_id = app_client
     monkeypatch.setattr(
-        "web.api.scans.start_scan_thread",
-        lambda **kw: None,
+        "application.tools.scan_service.ScanService._run_worker",
+        lambda self, **kw: None,
     )
-    # First start acquires the lock and never releases (start_scan_thread no-op).
+    # First start acquires the lock and never releases (worker no-op).
     first = await client.post(
         f"/api/v1/projects/{project_id}/scans",
         json={"repoIds": [], "toolIds": [], "domains": []},
@@ -242,7 +242,10 @@ async def test_start_scan_409_when_busy(app_client, monkeypatch) -> None:
 async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) -> None:
     client, _fid, _rag, _factory, muth, project_id = app_client
     _seed_project_config(str(tmp_path), "testproject")
-    monkeypatch.setattr("web.api.scans.start_scan_thread", lambda **kw: None)
+    monkeypatch.setattr(
+        "application.tools.scan_service.ScanService._run_worker",
+        lambda self, **kw: None,
+    )
 
     # Phase 9: repoIds is list[int]. Send an integer id that doesn't exist
     # in the active repositories table to trigger _validate_repo_ids.
@@ -266,7 +269,10 @@ async def test_start_scan_soft_deleted_repo_422(
 
     client, _fid, _rag, factory, muth, project_id = app_client
     _seed_project_config(str(tmp_path), "testproject")
-    monkeypatch.setattr("web.api.scans.start_scan_thread", lambda **kw: None)
+    monkeypatch.setattr(
+        "application.tools.scan_service.ScanService._run_worker",
+        lambda self, **kw: None,
+    )
 
     repo_repo = RepositoryRepository(factory)
     active = repo_repo.list_active()
@@ -289,7 +295,10 @@ async def test_start_scan_soft_deleted_repo_422(
 @pytest.mark.asyncio
 async def test_start_scan_unknown_domain_422(app_client, monkeypatch) -> None:
     client, _fid, _rag, _factory, muth, project_id = app_client
-    monkeypatch.setattr("web.api.scans.start_scan_thread", lambda **kw: None)
+    monkeypatch.setattr(
+        "application.tools.scan_service.ScanService._run_worker",
+        lambda self, **kw: None,
+    )
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/scans",
