@@ -67,7 +67,23 @@ export {
 } from './useScans'
 
 // Triage hooks
-export { useTriageHistory, useStartTriage, useCancelTriage, useTriageEvents } from './useTriage'
+export {
+  useTriageHistory,
+  useActiveTriage,
+  useLatestTriage,
+  useTriageRun,
+  useStartTriage,
+  useCancelTriage,
+  useResumeTriage,
+  useTriageEvents,
+  mapTriageRun,
+  mapTriageBatch,
+} from './useTriage'
+export type {
+  StartTriageOptions,
+  UseTriageEventsOptions,
+  UseTriageHistoryOptions,
+} from './useTriage'
 
 // Runtime / installed-tools hooks (cross-project)
 export { useRuntimeDependencies, useInstalledTools } from './useRuntime'

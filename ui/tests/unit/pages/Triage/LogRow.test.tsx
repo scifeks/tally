@@ -8,7 +8,8 @@ function makeEvent(
 ): TriageLogEvent {
   return {
     id: 'e-1',
-    runId: 'TR-1',
+    scanRunId: 1,
+    projectId: 1,
     type,
     timestamp: '2024-06-15T09:05:30.000Z',
     message: `message for ${type}`,

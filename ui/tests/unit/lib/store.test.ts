@@ -6,6 +6,9 @@ const reset = () =>
     findingsSegment: 'sast',
     selectedFindingIds: new Set<number>(),
     findingMutationError: null,
+    scanMutationError: null,
+    triageMutationError: null,
+    triageInjectionAcked: false,
     triageRunStatus: 'idle',
   })
 
@@ -30,6 +33,14 @@ describe('useUI — initial state', () => {
 
   it('triageRunStatus defaults to "idle"', () => {
     expect(useUI.getState().triageRunStatus).toBe('idle')
+  })
+
+  it('triageMutationError defaults to null', () => {
+    expect(useUI.getState().triageMutationError).toBeNull()
+  })
+
+  it('triageInjectionAcked defaults to false', () => {
+    expect(useUI.getState().triageInjectionAcked).toBe(false)
   })
 })
 
@@ -120,5 +131,40 @@ describe('setTriageRunStatus', () => {
   it('updates triageRunStatus', () => {
     useUI.getState().setTriageRunStatus('running')
     expect(useUI.getState().triageRunStatus).toBe('running')
+  })
+})
+
+describe('setTriageMutationError', () => {
+  it('stores an error payload for the modal', () => {
+    useUI.getState().setTriageMutationError({
+      code: 'JOB_ALREADY_RUNNING',
+      message: 'Triage is already running',
+      details: {},
+      status: 409,
+    })
+    expect(useUI.getState().triageMutationError).toEqual({
+      code: 'JOB_ALREADY_RUNNING',
+      message: 'Triage is already running',
+      details: {},
+      status: 409,
+    })
+  })
+
+  it('clears the error when set to null', () => {
+    useUI.getState().setTriageMutationError({
+      code: 'X',
+      message: 'm',
+      details: {},
+      status: 500,
+    })
+    useUI.getState().setTriageMutationError(null)
+    expect(useUI.getState().triageMutationError).toBeNull()
+  })
+})
+
+describe('setTriageInjectionAcked', () => {
+  it('updates the ack flag', () => {
+    useUI.getState().setTriageInjectionAcked(true)
+    expect(useUI.getState().triageInjectionAcked).toBe(true)
   })
 })

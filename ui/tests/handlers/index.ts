@@ -19,6 +19,15 @@ import scanConfigEmptyFixture from '../fixtures/scan-config-empty.json'
 import scanHistoryProject1Fixture from '../fixtures/scan-history-project-1.json'
 import scanHistoryProject2Fixture from '../fixtures/scan-history-project-2.json'
 import scanHistoryEmptyFixture from '../fixtures/scan-history-empty.json'
+import triageHistoryProject1Fixture from '../fixtures/triage-history-project-1.json'
+import triageHistoryProject2Fixture from '../fixtures/triage-history-project-2.json'
+import triageHistoryEmptyFixture from '../fixtures/triage-history-empty.json'
+import triageActiveRunningFixture from '../fixtures/triage-active-running.json'
+import triageLatestCompletedFixture from '../fixtures/triage-latest-completed.json'
+import triageDetailProject1Fixture from '../fixtures/triage-detail-project-1.json'
+import triageStart202Fixture from '../fixtures/triage-start-202.json'
+import triageCancel202Fixture from '../fixtures/triage-cancel-202.json'
+import triageResume202Fixture from '../fixtures/triage-resume-202.json'
 
 interface UrlListPage {
   items: Array<Record<string, unknown> & { id: number }>
@@ -50,6 +59,42 @@ const SCAN_HISTORY_FIXTURES: Record<string, ScanHistoryPage> = {
   '1': scanHistoryProject1Fixture as ScanHistoryPage,
   '2': scanHistoryProject2Fixture as ScanHistoryPage,
   '3': scanHistoryEmptyFixture as ScanHistoryPage,
+}
+
+interface TriageHistoryPage {
+  items: Array<Record<string, unknown> & { scan_run_id: number; status: string }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const TRIAGE_HISTORY_FIXTURES: Record<string, TriageHistoryPage> = {
+  '1': triageHistoryProject1Fixture as TriageHistoryPage,
+  '2': triageHistoryProject2Fixture as TriageHistoryPage,
+  '3': triageHistoryEmptyFixture as TriageHistoryPage,
+}
+
+/**
+ * Test trigger ids:
+ *   projectId 99  → POST /triage returns 409 JOB_ALREADY_RUNNING
+ *   projectId 98  → POST /triage returns 404 NOT_FOUND (no scans)
+ *   scanRunId 999 → POST /cancel returns 409 TRIAGE_NOT_CANCELLABLE
+ *   scanRunId 998 → POST /resume returns 409 TRIAGE_NOT_RESUMABLE
+ *   scanRunId 997 → GET /triage/:scanRunId returns 404 NOT_FOUND
+ */
+const PROJECT_TRIAGE_CONFLICT = '99'
+const PROJECT_TRIAGE_NOT_FOUND = '98'
+const SCAN_RUN_NOT_CANCELLABLE = '999'
+const SCAN_RUN_NOT_RESUMABLE = '998'
+const SCAN_RUN_DETAIL_NOT_FOUND = '997'
+
+function errorEnvelope(
+  status: number,
+  code: string,
+  message: string,
+  details: Record<string, unknown> = {}
+) {
+  return HttpResponse.json({ error: { code, message, details } }, { status })
 }
 
 interface FindingsPage {
@@ -180,6 +225,90 @@ export const handlers = [
       { status: 202 }
     )
   }),
+
+  // ─── Triage ───────────────────────────────────────────────────────────────
+  // Literal-segment routes registered BEFORE the parameterized
+  // `:scanRunId` route so MSW doesn't bind 'active'/'latest'/'events' to
+  // the param.
+  http.get('/api/v1/projects/:projectId/triage/active', ({ params }) => {
+    if (params.projectId === '1') {
+      return HttpResponse.json(triageActiveRunningFixture)
+    }
+    return HttpResponse.json(null)
+  }),
+  http.get('/api/v1/projects/:projectId/triage/latest', ({ params }) => {
+    if (params.projectId === '3') {
+      return errorEnvelope(404, 'NOT_FOUND', 'no triage history for this project')
+    }
+    return HttpResponse.json(triageLatestCompletedFixture)
+  }),
+  http.get('/api/v1/projects/:projectId/triage/:scanRunId', ({ params }) => {
+    if (params.scanRunId === SCAN_RUN_DETAIL_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'triage run not found')
+    }
+    return HttpResponse.json(triageDetailProject1Fixture)
+  }),
+  http.get('/api/v1/projects/:projectId/triage', ({ params, request }) => {
+    const fixture =
+      TRIAGE_HISTORY_FIXTURES[params.projectId as string] ?? triageHistoryEmptyFixture
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 20)
+    const items = fixture.items
+    const total = items.length
+    const slice = items.slice(offset, offset + limit)
+    return HttpResponse.json({ items: slice, total, offset, limit })
+  }),
+  http.post('/api/v1/projects/:projectId/triage', async ({ params, request }) => {
+    if (params.projectId === PROJECT_TRIAGE_CONFLICT) {
+      return errorEnvelope(409, 'JOB_ALREADY_RUNNING', 'triage is already running')
+    }
+    if (params.projectId === PROJECT_TRIAGE_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'no scan runs for this project')
+    }
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    if (body.acknowledge_injection_risk !== true) {
+      return errorEnvelope(
+        422,
+        'VALIDATION_ERROR',
+        'acknowledge_injection_risk must be true to dispatch triage',
+        { field: 'acknowledge_injection_risk' }
+      )
+    }
+    return HttpResponse.json(triageStart202Fixture, { status: 202 })
+  }),
+  http.post('/api/v1/projects/:projectId/triage/:scanRunId/cancel', ({ params }) => {
+    if (params.scanRunId === SCAN_RUN_NOT_CANCELLABLE) {
+      return errorEnvelope(
+        409,
+        'TRIAGE_NOT_CANCELLABLE',
+        'triage run is no longer cancellable'
+      )
+    }
+    return HttpResponse.json(triageCancel202Fixture, { status: 202 })
+  }),
+  http.post(
+    '/api/v1/projects/:projectId/triage/:scanRunId/resume',
+    async ({ params, request }) => {
+      if (params.scanRunId === SCAN_RUN_NOT_RESUMABLE) {
+        return errorEnvelope(
+          409,
+          'TRIAGE_NOT_RESUMABLE',
+          'triage run is not in a resumable state'
+        )
+      }
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+      if (body.acknowledge_injection_risk !== true) {
+        return errorEnvelope(
+          422,
+          'VALIDATION_ERROR',
+          'acknowledge_injection_risk must be true to resume triage',
+          { field: 'acknowledge_injection_risk' }
+        )
+      }
+      return HttpResponse.json(triageResume202Fixture, { status: 202 })
+    }
+  ),
 ]
 
 export const server = setupServer(...handlers)

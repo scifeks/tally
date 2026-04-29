@@ -10,8 +10,8 @@ const SEGMENT_LABEL: Record<Segment, string> = {
 }
 
 export interface BatchDisplay {
-  id: string
-  segment: Segment
+  id: number
+  segment: Segment | null
   findingCount: number
   status: TriageBatchStatus
   attempt: number
@@ -33,6 +33,7 @@ export function BatchRow({
     in_progress: 'text-high animate-pulse',
     completed: 'text-low',
     failed: 'text-crit',
+    cancelled: 'text-muted-foreground',
   }
 
   return (
@@ -46,8 +47,10 @@ export function BatchRow({
         ) : (
           <ChevronRight className="h-3 w-3 text-muted-foreground" />
         )}
-        <span className="text-accent font-mono w-20">{batch.id}</span>
-        <span className="uppercase text-muted-foreground w-16">{SEGMENT_LABEL[batch.segment]}</span>
+        <span className="text-accent font-mono w-20">B-{String(batch.id).padStart(3, '0')}</span>
+        <span className="uppercase text-muted-foreground w-16">
+          {batch.segment ? SEGMENT_LABEL[batch.segment] : 'MIXED'}
+        </span>
         <span className="tabular-nums w-20">{batch.findingCount} findings</span>
         <span className={cn('uppercase font-bold w-24', statusColor[batch.status])}>
           {batch.status.replace('_', ' ')}
@@ -68,7 +71,7 @@ export function BatchRow({
             {'// Claude analysis for '}
             {batch.findingCount}
             {' findings in '}
-            {SEGMENT_LABEL[batch.segment]}
+            {batch.segment ? SEGMENT_LABEL[batch.segment] : 'MIXED'}
             <br />
             {
               '// Prompt: Analyze security findings, provide severity assessment, recommend actions...'

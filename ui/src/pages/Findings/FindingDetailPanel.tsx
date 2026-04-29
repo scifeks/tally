@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import { Panel } from '@/components/tty'
 import { EditableText, EditableSelect } from '@/components/Editable'
 import { cn, formatRelative } from '@/lib/utils'
 import type { Finding, Severity, Status } from '@/lib/types'
+import { useUI } from '@/lib/store'
+import { useStartTriage, useRuntimeDependencies } from '@/lib/api'
+import { TriagePromptInjectionWarningModal } from '@/components/TriagePromptInjectionWarningModal'
 import {
   SEV_ORDER,
   SEV_LABEL,
@@ -47,6 +51,14 @@ export function FindingDetailPanel({
   finding: Finding | null
   onUpdate: (patch: Partial<Finding>) => void
 }) {
+  const activeProjectId = useUI(s => s.activeProjectId)
+  const triageInjectionAcked = useUI(s => s.triageInjectionAcked)
+  const { mutate: startTriageMutation, isPending: isTriagePending } = useStartTriage()
+  const { data: runtimeDeps } = useRuntimeDependencies()
+  const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
+  const claudeMissing = claudeDep !== undefined && !claudeDep.installed
+  const [showInjectionWarning, setShowInjectionWarning] = useState(false)
+
   if (!finding) {
     return (
       <Panel title="detail" className="h-full">
@@ -57,6 +69,29 @@ export function FindingDetailPanel({
       </Panel>
     )
   }
+
+  const fireTriage = () => {
+    if (activeProjectId === null) return
+    startTriageMutation({
+      projectId: activeProjectId,
+      options: { findingIds: [finding.id] },
+    })
+  }
+
+  const handleTriageClick = () => {
+    if (!triageInjectionAcked) {
+      setShowInjectionWarning(true)
+      return
+    }
+    fireTriage()
+  }
+
+  const handleAcceptInjectionWarning = () => {
+    setShowInjectionWarning(false)
+    fireTriage()
+  }
+
+  const triageDisabled = claudeMissing || isTriagePending || activeProjectId === null
   return (
     <Panel title={`detail :: ${finding.id}`} className="h-full" bodyClassName="overflow-auto">
       <div className="p-4 space-y-4 text-xs">
@@ -165,10 +200,20 @@ export function FindingDetailPanel({
           </div>
         </div>
 
+        <TriagePromptInjectionWarningModal
+          open={showInjectionWarning}
+          onAccept={handleAcceptInjectionWarning}
+          onCancel={() => setShowInjectionWarning(false)}
+        />
+
         <div className="grid grid-cols-2 gap-2 pt-2">
           <button
-            onClick={() => onUpdate({ triagedBy: 'analyst_web' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-accent text-accent hover:bg-muted"
+            onClick={handleTriageClick}
+            disabled={triageDisabled}
+            className={cn(
+              'text-[11px] uppercase tracking-wider py-1.5 border border-accent text-accent hover:bg-muted',
+              triageDisabled && 'opacity-40 cursor-not-allowed hover:bg-transparent'
+            )}
           >
             &gt; triage
           </button>
