@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { SeverityChip } from '@/components/tty'
+import { FilterHeader } from '@/components/FilterHeader'
+import type { FilterHeaderOption } from '@/components/FilterHeader'
 import { cn, formatRelative } from '@/lib/utils'
 import type { Finding, Severity, Status } from '@/lib/types'
 import {
@@ -13,7 +15,7 @@ import {
   STATUS_COLOR,
   locationOf,
 } from './constants'
-import type { Filters, FilterOption, SortKey, SortState } from './types'
+import type { Filters, SortKey, SortState } from './types'
 
 // ─── StatusCell ───────────────────────────────────────────────────────────────
 
@@ -63,135 +65,6 @@ function SortHeader({
       <span>{label}</span>
       <SortIndicator state={dir} />
     </button>
-  )
-}
-
-// ─── FilterHeader ─────────────────────────────────────────────────────────────
-
-function FilterHeader({
-  label,
-  sortKey,
-  sort,
-  onSort,
-  activeCount,
-  options,
-  selected,
-  onChange,
-}: {
-  label: string
-  sortKey: SortKey
-  sort: SortState
-  onSort: (key: SortKey) => void
-  activeCount: number
-  options: FilterOption[]
-  selected: Set<string>
-  onChange: (next: Set<string>) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const toggle = (v: string) => {
-    const next = new Set(selected)
-    if (next.has(v)) next.delete(v)
-    else next.add(v)
-    onChange(next)
-  }
-
-  const sortActive = sort?.key === sortKey
-  const sortDir = sortActive ? (sort?.dir ?? null) : null
-  const hasFilter = activeCount > 0
-
-  return (
-    <div ref={ref} className="relative flex items-center gap-1 h-full">
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={cn(
-          'group flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] transition-colors h-full',
-          sortActive || hasFilter ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
-        )}
-      >
-        <span>{label}</span>
-        <SortIndicator state={sortDir} />
-      </button>
-      <button
-        type="button"
-        onClick={e => {
-          e.stopPropagation()
-          setOpen(v => !v)
-        }}
-        aria-label={`Filter ${label}`}
-        className={cn(
-          'flex items-center h-5 px-1 border',
-          hasFilter
-            ? 'border-accent text-accent bg-muted'
-            : 'border-border text-muted-foreground hover:text-foreground hover:border-border-strong'
-        )}
-      >
-        <ChevronDown className="h-3 w-3" />
-        {hasFilter && <span className="ml-0.5 text-[9px] tabular-nums">{activeCount}</span>}
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 min-w-[200px] max-h-[320px] border border-border-strong bg-background z-30">
-          <div className="px-2 py-1.5 border-b border-border text-[10px] uppercase tracking-[0.2em] text-dim flex items-center justify-between">
-            <span>filter by {label}</span>
-            {selected.size > 0 && (
-              <button
-                onClick={() => onChange(new Set())}
-                className="text-muted-foreground hover:text-accent normal-case tracking-normal"
-              >
-                clear
-              </button>
-            )}
-          </div>
-          <div className="overflow-auto max-h-[272px]">
-            {options.length === 0 && (
-              <div className="px-3 py-3 text-[11px] text-muted-foreground">
-                no options available for current filters
-              </div>
-            )}
-            {options.map(opt => {
-              const on = selected.has(opt.value)
-              return (
-                <label
-                  key={opt.value}
-                  className="flex items-center gap-2 px-2 py-1.5 text-xs cursor-pointer hover:bg-muted border-b border-border last:border-b-0"
-                >
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => toggle(opt.value)}
-                    className="accent-[var(--color-accent)]"
-                  />
-                  <span className={cn('flex-1', on ? 'text-accent' : 'text-foreground')}>
-                    {opt.label}
-                  </span>
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {opt.count}
-                  </span>
-                </label>
-              )
-            })}
-          </div>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -314,20 +187,18 @@ export function FindingsList({
         <PlainHeader label="id" />
         <FilterHeader
           label="sev"
-          sortKey="severity"
-          sort={sort}
-          onSort={onSort}
+          sortDir={sort?.key === 'severity' ? sort.dir : null}
+          onSort={() => onSort('severity')}
           activeCount={filters.severity.size}
-          options={sevOptions as unknown as FilterOption[]}
+          options={sevOptions as unknown as FilterHeaderOption[]}
           selected={filters.severity as unknown as Set<string>}
           onChange={next => setFilters(f => ({ ...f, severity: next as unknown as Set<Severity> }))}
         />
         <SortHeader label="title" sortKey="title" sort={sort} onSort={onSort} />
         <FilterHeader
           label="tool"
-          sortKey="tool"
-          sort={sort}
-          onSort={onSort}
+          sortDir={sort?.key === 'tool' ? sort.dir : null}
+          onSort={() => onSort('tool')}
           activeCount={filters.tool.size}
           options={toolOptions}
           selected={filters.tool as Set<string>}
@@ -337,9 +208,8 @@ export function FindingsList({
         <PlainHeader label="cwe" />
         <FilterHeader
           label="status"
-          sortKey="status"
-          sort={sort}
-          onSort={onSort}
+          sortDir={sort?.key === 'status' ? sort.dir : null}
+          onSort={() => onSort('status')}
           activeCount={filters.status.size}
           options={statusOptions}
           selected={filters.status as unknown as Set<string>}

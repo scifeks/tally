@@ -152,11 +152,21 @@ export const REST_ENDPOINTS = {
   // ─── URL Lists ──────────────────────────────────────────────────────────────
   /**
    * GET: paginated URL entries for a project. Query params: `search`, `method`,
-   * `repo_id`, `source` (`scan|user`), `tool` (`katana|noir`), `sort`
-   * (`host|path|method|port`), `order`, `offset`, `limit` (default 100, max 500).
+   * `protocol`, `host`, `port`, `path`, `repo_id` (all repeatable for
+   * multi-value), `source` (`scan|user`), `tool` (`katana|noir`), `sort`
+   * (`host|path|method|port|protocol|repo`), `order`, `offset`, `limit`
+   * (default 100, max 500).
    */
   urlListEntries: (projectId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/url-list/entries`,
+  /**
+   * GET: per-dimension filter options under the active filter set. Strict
+   * semantics: each dimension's counts apply every active filter; zero-count
+   * options are omitted. Powers the URL Lists page filter dropdowns. Same
+   * query params as `urlListEntries`.
+   */
+  urlListFilterOptions: (projectId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/url-list/filter-options`,
 
   // ─── Reports ────────────────────────────────────────────────────────────────
   /** GET: list draft sections and their statuses for a project */

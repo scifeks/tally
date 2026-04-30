@@ -2,14 +2,14 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import UrlLists from '@/pages/UrlLists'
 import { useUI } from '@/lib/store'
 import { server } from '../../handlers'
+import urlListFilterOptionsPopulatedFixture from '../../fixtures/url-list-filter-options-populated.json'
 
-// Controllable IntersectionObserver - lets the test trigger sentinel
-// intersection on demand. jsdom has no native IntersectionObserver.
 type IOCallback = (entries: IntersectionObserverEntry[]) => void
 const ioInstances: { cb: IOCallback; target: Element | null }[] = []
 
@@ -84,16 +84,19 @@ afterEach(() => {
 describe('UrlLists page', () => {
   it('renders the first-page loaded count in the footer once urls resolve', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getByText(/100\s*of\s*180\s*loaded/i)).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getAllByText(/100\s*of\s*180\s*loaded/i)[0]).toBeInTheDocument()
+    )
   })
 
-  it('renders the column headers', async () => {
+  it('renders all six column headers including the new repo column', async () => {
     renderPage()
-    await screen.findByText('METHOD')
-    expect(screen.getByText('PROTO')).toBeInTheDocument()
-    expect(screen.getByText('HOST')).toBeInTheDocument()
-    expect(screen.getByText('PORT')).toBeInTheDocument()
-    expect(screen.getByText('PATH')).toBeInTheDocument()
+    await screen.findByText('method')
+    expect(screen.getByText('protocol')).toBeInTheDocument()
+    expect(screen.getByText('host')).toBeInTheDocument()
+    expect(screen.getByText('port')).toBeInTheDocument()
+    expect(screen.getByText('path')).toBeInTheDocument()
+    expect(screen.getByText('repo')).toBeInTheDocument()
   })
 
   it('shows the empty state when the project has no urls (project 3)', async () => {
@@ -102,46 +105,208 @@ describe('UrlLists page', () => {
     await screen.findByText(/no urls yet/i)
   })
 
-  it('search input filters the loaded entries client-side', async () => {
+  it('selecting a method filter forwards method= to the entries endpoint', async () => {
     const user = userEvent.setup()
+    let lastEntriesUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/entries', ({ request }) => {
+        lastEntriesUrl = new URL(request.url)
+        return HttpResponse.json({
+          items: [
+            {
+              id: 1,
+              project_id: 1,
+              repo_id: 1,
+              repo_name: 'backend-api',
+              source: 'scan',
+              tool: 'katana',
+              run_id: 1,
+              method: 'GET',
+              protocol: 'https',
+              host: 'api.acme-platform.com',
+              port: 443,
+              path: '/docs',
+              file_path: null,
+              meta: {},
+              created_at: '2026-04-26T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 100,
+        })
+      }),
+      http.get('/api/v1/projects/:projectId/url-list/filter-options', () =>
+        HttpResponse.json(urlListFilterOptionsPopulatedFixture)
+      )
+    )
     renderPage()
-    await waitFor(() => expect(screen.getByText(/100\s*of\s*180\s*loaded/i)).toBeInTheDocument())
+    await waitFor(() => expect(lastEntriesUrl).not.toBeNull())
+
+    const methodFilterButton = screen.getByRole('button', { name: /filter method/i })
+    await user.click(methodFilterButton)
+
+    const getCheckbox = await screen.findByRole('checkbox', { name: /GET/i })
+    await user.click(getCheckbox)
+
+    await waitFor(() => expect(lastEntriesUrl!.searchParams.getAll('method')).toContain('GET'))
+  })
+
+  it('typing in the search input forwards search= after debounce', async () => {
+    const user = userEvent.setup()
+    let lastEntriesUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/entries', ({ request }) => {
+        lastEntriesUrl = new URL(request.url)
+        return HttpResponse.json({
+          items: [
+            {
+              id: 1,
+              project_id: 1,
+              repo_id: 1,
+              repo_name: 'backend-api',
+              source: 'scan',
+              tool: 'katana',
+              run_id: 1,
+              method: 'GET',
+              protocol: 'https',
+              host: 'api.acme-platform.com',
+              port: 443,
+              path: '/docs',
+              file_path: null,
+              meta: {},
+              created_at: '2026-04-26T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 100,
+        })
+      })
+    )
+    renderPage()
+    await waitFor(() => expect(lastEntriesUrl).not.toBeNull())
 
     const input = screen.getByLabelText(/search urls/i)
     await user.type(input, 'admin')
 
-    await waitFor(() => {
-      const matches = screen.queryByText(/^matches:\s*\d+/i)
-      expect(matches).not.toBeNull()
-    })
+    await waitFor(
+      () => expect(lastEntriesUrl!.searchParams.get('search')).toBe('admin'),
+      { timeout: 2000 }
+    )
   })
 
-  it('clicking a column header cycles sort direction (asc → desc → off)', async () => {
+  it('clicking a column header forwards sort and order to the server', async () => {
     const user = userEvent.setup()
+    let lastEntriesUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/entries', ({ request }) => {
+        lastEntriesUrl = new URL(request.url)
+        return HttpResponse.json({
+          items: [
+            {
+              id: 1,
+              project_id: 1,
+              repo_id: 1,
+              repo_name: 'backend-api',
+              source: 'scan',
+              tool: 'katana',
+              run_id: 1,
+              method: 'GET',
+              protocol: 'https',
+              host: 'api.acme-platform.com',
+              port: 443,
+              path: '/docs',
+              file_path: null,
+              meta: {},
+              created_at: '2026-04-26T10:00:00.000Z',
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 100,
+        })
+      })
+    )
     renderPage()
-    await waitFor(() => expect(screen.getByText(/100\s*of\s*180\s*loaded/i)).toBeInTheDocument())
+    await waitFor(() => expect(lastEntriesUrl).not.toBeNull())
 
-    const hostHeader = screen.getByTitle(/sort by host/i)
+    const hostHeader = screen.getByRole('button', { name: /^host/i })
     await user.click(hostHeader)
-    await waitFor(() => expect(screen.getByText(/sorted by\s+host\s+asc/i)).toBeInTheDocument())
+    await waitFor(() => expect(lastEntriesUrl!.searchParams.get('sort')).toBe('host'))
+    expect(lastEntriesUrl!.searchParams.get('order')).toBe('asc')
 
-    await user.click(hostHeader)
-    await waitFor(() => expect(screen.getByText(/sorted by\s+host\s+desc/i)).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByText(/sorted by\s+host\s+asc/i)).toBeInTheDocument()
+    )
+  })
 
-    await user.click(hostHeader)
-    await waitFor(() => expect(screen.queryByText(/sorted by/i)).toBeNull())
+  it('forwards active filters to the filter-options endpoint', async () => {
+    const user = userEvent.setup()
+    let lastFilterOptionsUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/filter-options', ({ request }) => {
+        lastFilterOptionsUrl = new URL(request.url)
+        return HttpResponse.json(urlListFilterOptionsPopulatedFixture)
+      })
+    )
+    renderPage()
+    await waitFor(() => expect(lastFilterOptionsUrl).not.toBeNull())
+
+    const methodFilterButton = screen.getByRole('button', { name: /filter method/i })
+    await user.click(methodFilterButton)
+    const getCheckbox = await screen.findByRole('checkbox', { name: /GET/i })
+    await user.click(getCheckbox)
+
+    await waitFor(() =>
+      expect(lastFilterOptionsUrl!.searchParams.getAll('method')).toContain('GET')
+    )
+  })
+
+  it('keeps a selected filter value visible in the dropdown even when the response drops it', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/filter-options', ({ request }) => {
+        const hasMethodFilter =
+          new URL(request.url).searchParams.getAll('method').length > 0
+        if (hasMethodFilter) {
+          return HttpResponse.json({
+            method: [{ value: 'POST', count: 5 }],
+            protocol: [],
+            host: [],
+            port: [],
+            path: [],
+            repo: [],
+          })
+        }
+        return HttpResponse.json(urlListFilterOptionsPopulatedFixture)
+      })
+    )
+    renderPage()
+    const methodFilterButton = await screen.findByRole('button', { name: /filter method/i })
+    await user.click(methodFilterButton)
+    const getCheckbox = await screen.findByRole('checkbox', { name: /GET/i })
+    await user.click(getCheckbox)
+
+    // After response only contains POST, the GET checkbox must still render so
+    // the user can deselect it.
+    await waitFor(() =>
+      expect(screen.getAllByRole('checkbox', { name: /GET/i }).length).toBeGreaterThan(0)
+    )
   })
 
   it('sentinel intersection triggers fetchNextPage and grows the loaded count to total', async () => {
     renderPage()
-    await waitFor(() => expect(screen.getByText(/100\s*of\s*180\s*loaded/i)).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getAllByText(/100\s*of\s*180\s*loaded/i)[0]).toBeInTheDocument()
+    )
 
     await act(async () => {
       fireSentinelIntersection()
     })
 
     await waitFor(() =>
-      expect(screen.getByText(/180\s*of\s*180\s*loaded/i)).toBeInTheDocument()
+      expect(screen.getAllByText(/180\s*of\s*180\s*loaded/i)[0]).toBeInTheDocument()
     )
     expect(screen.getByText(/end of list/i)).toBeInTheDocument()
   })

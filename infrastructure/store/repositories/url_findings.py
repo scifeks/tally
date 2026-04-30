@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
 
@@ -26,10 +26,71 @@ if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
 
-_VALID_SORT_COLUMNS: frozenset[str] = frozenset(
-    {"host", "path", "method", "port", "id", "created_at"}
-)
+_SORT_COL_MAP: dict[str, str] = {
+    "host": "uf.host",
+    "path": "uf.path",
+    "method": "uf.method",
+    "port": "uf.port",
+    "protocol": "uf.protocol",
+    "id": "uf.id",
+    "created_at": "uf.created_at",
+    "repo": "r.name",
+}
 _VALID_ORDERS: frozenset[str] = frozenset({"asc", "desc"})
+
+
+def _in_clause(
+    col: str, values: list[Any], parts: list[str], params: list[Any]
+) -> None:
+    if not values:
+        return
+    if len(values) == 1:
+        parts.append(f"{col} = ?")
+        params.append(values[0])
+    else:
+        placeholders = ",".join("?" * len(values))
+        parts.append(f"{col} IN ({placeholders})")
+        params.extend(values)
+
+
+def _build_where(
+    *,
+    repo_id: list[int] | None = None,
+    source: UrlSource | None = None,
+    tool: UrlTool | None = None,
+    method: list[str] | None = None,
+    protocol: list[str] | None = None,
+    host: list[str] | None = None,
+    port: list[int] | None = None,
+    path: list[str] | None = None,
+    search: str | None = None,
+) -> tuple[list[str], list[Any]]:
+    """Return (where_parts, params) shared by ``list_paginated`` and
+    ``filter_options``. The ``r.deleted_at IS NULL`` clause excludes
+    soft-deleted repos and assumes the caller joins ``repositories AS r``.
+    """
+    parts: list[str] = ["r.deleted_at IS NULL"]
+    params: list[Any] = []
+    _in_clause("uf.repo_id", list(repo_id or []), parts, params)
+    if source is not None:
+        parts.append("uf.source = ?")
+        params.append(str(source))
+    if tool is not None:
+        parts.append("uf.tool = ?")
+        params.append(str(tool))
+    _in_clause("uf.method", list(method or []), parts, params)
+    _in_clause("uf.protocol", list(protocol or []), parts, params)
+    _in_clause("uf.host", list(host or []), parts, params)
+    _in_clause("uf.port", list(port or []), parts, params)
+    _in_clause("uf.path", list(path or []), parts, params)
+    if search:
+        term = f"%{search}%"
+        parts.append(
+            "(uf.method LIKE ? OR uf.protocol LIKE ? OR uf.host LIKE ?"
+            " OR uf.path LIKE ? OR r.name LIKE ?)"
+        )
+        params.extend([term] * 5)
+    return parts, params
 
 
 class UrlFindingRepository:
@@ -125,43 +186,41 @@ class UrlFindingRepository:
     def list_paginated(
         self,
         *,
-        repo_id: int | None = None,
+        repo_id: list[int] | None = None,
         source: UrlSource | None = None,
         tool: UrlTool | None = None,
+        method: list[str] | None = None,
+        protocol: list[str] | None = None,
+        host: list[str] | None = None,
+        port: list[int] | None = None,
+        path: list[str] | None = None,
         search: str | None = None,
-        method: str | None = None,
         sort: str = "host",
         order: str = "asc",
         offset: int = 0,
         limit: int = 100,
     ) -> tuple[list[UrlFinding], int]:
-        """Paginated list. Filters: repo_id, source, tool, search (path
-        substring), method. Returns ``(rows, total)``.
+        """Paginated list with multi-value filters.
 
-        Joins ``repositories`` so soft-deleted repos are excluded.
+        Filters all use exact-match equality (``IN`` for multi-value); the
+        ``search`` param is a substring match on ``path``. Joins
+        ``repositories`` so soft-deleted repos are excluded.
         """
-        sort_col = sort if sort in _VALID_SORT_COLUMNS else "host"
+        sort_col = _SORT_COL_MAP.get(sort, "uf.host")
         order_dir = order.upper() if order.lower() in _VALID_ORDERS else "ASC"
 
-        clauses: list[str] = ["r.deleted_at IS NULL"]
-        params: list[object] = []
-        if repo_id is not None:
-            clauses.append("uf.repo_id = ?")
-            params.append(repo_id)
-        if source is not None:
-            clauses.append("uf.source = ?")
-            params.append(str(source))
-        if tool is not None:
-            clauses.append("uf.tool = ?")
-            params.append(str(tool))
-        if method:
-            clauses.append("uf.method = ?")
-            params.append(method)
-        if search:
-            clauses.append("uf.path LIKE ?")
-            params.append(f"%{search}%")
-
-        where = " WHERE " + " AND ".join(clauses)
+        where_parts, params = _build_where(
+            repo_id=repo_id,
+            source=source,
+            tool=tool,
+            method=method,
+            protocol=protocol,
+            host=host,
+            port=port,
+            path=path,
+            search=search,
+        )
+        where = " WHERE " + " AND ".join(where_parts)
         base = f"FROM url_findings uf JOIN repositories r ON r.id = uf.repo_id{where}"
 
         with self._factory.connect() as conn:
@@ -170,11 +229,84 @@ class UrlFindingRepository:
             rows = conn.execute(
                 "SELECT uf.* "
                 f"{base}"
-                f" ORDER BY uf.{sort_col} {order_dir}, uf.id {order_dir}"
+                f" ORDER BY {sort_col} {order_dir}, uf.id {order_dir}"
                 " LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             ).fetchall()
         return [self._row_to_entity(r) for r in rows], total
+
+    def filter_options(self, filters: dict[str, Any]) -> dict:
+        """Return per-dimension counts under the given filter set.
+
+        Strict semantics: every dimension's counts apply every active
+        filter, including its own dimension's filter. Options with
+        ``count == 0`` are omitted (HAVING COUNT(*) > 0). All six dimension
+        keys are always present (empty list when no values match).
+
+        ``filters`` is a dict with the same keys as ``list_paginated``
+        accepts (``repo_id``, ``source``, ``tool``, ``method``,
+        ``protocol``, ``host``, ``port``, ``path``, ``search``).
+
+        ``repo`` entries carry a ``label`` (repo name) since the filter
+        param is ``repo_id`` but the UI displays names. ``port`` values
+        are ``int``; all other ``value``s are ``str``.
+        """
+        where_parts, params = _build_where(
+            repo_id=filters.get("repo_id"),
+            source=filters.get("source"),
+            tool=filters.get("tool"),
+            method=filters.get("method"),
+            protocol=filters.get("protocol"),
+            host=filters.get("host"),
+            port=filters.get("port"),
+            path=filters.get("path"),
+            search=filters.get("search"),
+        )
+        where = " WHERE " + " AND ".join(where_parts)
+        join = "FROM url_findings uf JOIN repositories r ON r.id = uf.repo_id"
+
+        with self._factory.connect() as conn:
+
+            def _scalar(col: str) -> list[dict[str, Any]]:
+                rows = conn.execute(
+                    f"SELECT uf.{col}, COUNT(*) {join}{where}"
+                    f" GROUP BY uf.{col} HAVING COUNT(*) > 0"
+                    f" ORDER BY uf.{col}",
+                    params,
+                ).fetchall()
+                return [{"value": v, "count": int(c)} for v, c in rows]
+
+            method_dim = _scalar("method")
+            protocol_dim = _scalar("protocol")
+            host_dim = _scalar("host")
+            path_dim = _scalar("path")
+
+            port_rows = conn.execute(
+                f"SELECT uf.port, COUNT(*) {join}{where}"
+                " GROUP BY uf.port HAVING COUNT(*) > 0 ORDER BY uf.port",
+                params,
+            ).fetchall()
+            port_dim = [{"value": int(v), "count": int(c)} for v, c in port_rows]
+
+            repo_rows = conn.execute(
+                f"SELECT uf.repo_id, r.name, COUNT(*) {join}{where}"
+                " GROUP BY uf.repo_id, r.name HAVING COUNT(*) > 0"
+                " ORDER BY r.name",
+                params,
+            ).fetchall()
+            repo_dim = [
+                {"value": int(rid), "label": name, "count": int(c)}
+                for rid, name, c in repo_rows
+            ]
+
+        return {
+            "method": method_dim,
+            "protocol": protocol_dim,
+            "host": host_dim,
+            "port": port_dim,
+            "path": path_dim,
+            "repo": repo_dim,
+        }
 
     # ------------------------------------------------------------------
     # Helpers

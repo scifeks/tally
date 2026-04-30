@@ -176,6 +176,23 @@ class TestListEntries:
         assert data["total"] == 1
         assert data["items"][0]["path"] == "/api/orders"
 
+    async def test_list_search_matches_method_and_repo_name(
+        self, url_list_client
+    ) -> None:
+        client, _, project_id, _ = url_list_client
+        # Method match: only the POST row
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/entries?search=POST"
+        )
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 1
+        # Repo-name match: "alpha" is the seeded repo name → all 3 rows
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/entries?search=alpha"
+        )
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 3
+
     async def test_list_pagination(self, url_list_client) -> None:
         client, _, project_id, _ = url_list_client
         resp = await client.get(
@@ -185,6 +202,123 @@ class TestListEntries:
         data = resp.json()
         assert data["total"] == 3
         assert len(data["items"]) == 1
+
+    async def test_list_filter_by_method_multi_value(self, url_list_client) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/entries?method=GET&method=POST"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 3
+
+    async def test_list_filter_by_protocol_host_port_path(
+        self, url_list_client
+    ) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/entries"
+            "?protocol=https&host=api.example.com&port=443&path=/api/orders"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["items"][0]["path"] == "/api/orders"
+
+
+class TestUrlListFilterOptions:
+    async def test_no_filters_returns_all_dims(self, url_list_client) -> None:
+        client, _, project_id, repo_id = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {
+            "method",
+            "protocol",
+            "host",
+            "port",
+            "path",
+            "repo",
+        }
+        method_values = {item["value"]: item["count"] for item in data["method"]}
+        assert method_values == {"GET": 2, "POST": 1}
+        assert data["protocol"] == [{"value": "https", "count": 3}]
+        assert data["port"] == [{"value": 443, "count": 3}]
+        assert data["repo"] == [{"value": repo_id, "label": "alpha", "count": 3}]
+
+    async def test_method_filter_narrows_other_dims(self, url_list_client) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options?method=POST"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # Strict semantics: method dim only shows POST.
+        assert data["method"] == [{"value": "POST", "count": 1}]
+        # Other dims also reflect the POST filter.
+        path_values = {item["value"]: item["count"] for item in data["path"]}
+        assert path_values == {"/api/users": 1}
+
+    async def test_combined_filters_intersect(self, url_list_client) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options"
+            "?method=GET&path=/api/orders"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["method"] == [{"value": "GET", "count": 1}]
+        assert data["path"] == [{"value": "/api/orders", "count": 1}]
+
+    async def test_no_match_returns_empty_arrays(self, url_list_client) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options"
+            "?host=nowhere.invalid"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {
+            "method": [],
+            "protocol": [],
+            "host": [],
+            "port": [],
+            "path": [],
+            "repo": [],
+        }
+
+    async def test_port_returns_int_type(self, url_list_client) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        for item in data["port"]:
+            assert isinstance(item["value"], int)
+
+    async def test_repo_filter_param(self, url_list_client) -> None:
+        client, _, project_id, repo_id = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options?repo_id={repo_id}"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["repo"] == [{"value": repo_id, "label": "alpha", "count": 3}]
+
+    async def test_invalid_port_returns_422(self, url_list_client) -> None:
+        client, _, project_id, _ = url_list_client
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/url-list/filter-options?port=abc"
+        )
+        assert resp.status_code == 422
+
+    async def test_unknown_project_returns_404(self, url_list_client) -> None:
+        client, _, _, _ = url_list_client
+        resp = await client.get("/api/v1/projects/99999/url-list/filter-options")
+        assert resp.status_code == 404
 
 
 class TestExport:

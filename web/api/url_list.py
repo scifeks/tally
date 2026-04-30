@@ -26,6 +26,7 @@ from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
 from web.api._redact import redact_exempt
+from web.api.schemas import UrlListFilterOptionsResponse
 
 url_list_v1_router = APIRouter()
 
@@ -84,11 +85,15 @@ def _parse_tool(value: str | None) -> UrlTool | None:
 async def list_url_entries(
     project_id: int,
     request: Request,
-    repo_id: int | None = Query(default=None),
+    repo_id: list[int] | None = Query(default=None),
     source: str | None = Query(default=None),
     tool: str | None = Query(default=None),
+    method: list[str] | None = Query(default=None),
+    protocol: list[str] | None = Query(default=None),
+    host: list[str] | None = Query(default=None),
+    port: list[int] | None = Query(default=None),
+    path: list[str] | None = Query(default=None),
     search: str | None = Query(default=None),
-    method: str | None = Query(default=None),
     sort: str = Query(default="host"),
     order: str = Query(default="asc"),
     offset: int = Query(default=0, ge=0),
@@ -100,8 +105,12 @@ async def list_url_entries(
         repo_id=repo_id,
         source=_parse_source(source),
         tool=_parse_tool(tool),
-        search=search,
         method=method,
+        protocol=protocol,
+        host=host,
+        port=port,
+        path=path,
+        search=search,
         sort=sort,
         order=order,
         offset=offset,
@@ -122,6 +131,47 @@ async def list_url_entries(
             "limit": limit,
         }
     )
+
+
+@url_list_v1_router.get(
+    "/{project_id}/url-list/filter-options",
+    response_model=UrlListFilterOptionsResponse,
+)
+async def get_url_list_filter_options(
+    project_id: int,
+    request: Request,
+    repo_id: list[int] | None = Query(default=None),
+    source: str | None = Query(default=None),
+    tool: str | None = Query(default=None),
+    method: list[str] | None = Query(default=None),
+    protocol: list[str] | None = Query(default=None),
+    host: list[str] | None = Query(default=None),
+    port: list[int] | None = Query(default=None),
+    path: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+) -> UrlListFilterOptionsResponse:
+    """Per-dimension filter options under the active filter set.
+
+    Mirrors the filter query params of ``GET /url-list/entries``. Each
+    dimension's counts apply every active filter (strict semantics) and
+    zero-count options are omitted. Powers the URL Lists page filter
+    dropdowns (Phase 12.2).
+    """
+    row = _resolve_project(request, project_id)
+    url_repo, _ = _make_repos(row)
+    filters: dict = {
+        "repo_id": repo_id,
+        "source": _parse_source(source),
+        "tool": _parse_tool(tool),
+        "method": method,
+        "protocol": protocol,
+        "host": host,
+        "port": port,
+        "path": path,
+        "search": search,
+    }
+    data = url_repo.filter_options(filters)
+    return UrlListFilterOptionsResponse(**data)
 
 
 @url_list_v1_router.get("/{project_id}/url-list/export")
