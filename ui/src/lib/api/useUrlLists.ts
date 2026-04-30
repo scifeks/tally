@@ -1,14 +1,12 @@
 /**
  * useUrlLists Hook
  * ================
- * Paginated read of URL entries for a project, served by
- * `GET /api/v1/projects/:id/url-list/entries`. Phase 11.6 wires the page off
- * mock data onto the live FastAPI endpoint, mirroring the offset+limit
- * infinite-scroll pattern used by `useFindings`.
+ * Paginated read of URL entries for a project via
+ * `GET /api/v1/projects/:id/url-list/entries`, mirroring the
+ * offset+limit infinite-scroll pattern used by `useFindings`.
  *
- * Sort and search remain client-side per roadmap §11.6 ("Local search / sort
- * kept client-side per existing UI"); the page filters the loaded set as the
- * user scrolls more pages in.
+ * Sort and search remain client-side; the page filters the loaded set
+ * as the user scrolls more pages in.
  *
  * Returns a flattened `data: UrlEntry[]` (across all loaded pages) plus
  * `total` and the `useInfiniteQuery` pagination controls.

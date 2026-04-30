@@ -1,12 +1,10 @@
 /**
  * API Configuration
  * =================
- * Central configuration for all API endpoints.
- *
- * TODO [BACKEND]: Update API_BASE_URL to point to your FastAPI server.
- * In development this might be "http://localhost:8000/api/v1".
- * In production, use a relative path "/api/v1" if FastAPI serves the SPA,
- * or the full URL if they're on different domains.
+ * Central configuration for all API endpoints. The base path is a
+ * relative `/api/v1` so the SPA is same-origin in production. In
+ * development, Vite proxies `/api` to the FastAPI server (see
+ * `vite.config.ts`, which reads `VITE_API_BASE_URL` from `.env.local`).
  */
 
 export const API_BASE_URL = '/api/v1'
@@ -14,10 +12,8 @@ export const API_BASE_URL = '/api/v1'
 /**
  * SSE endpoint paths (relative to API_BASE_URL).
  *
- * TODO [BACKEND]: Implement these SSE endpoints in FastAPI.
- * Each should return `text/event-stream` with JSON-encoded event data.
- *
- * Expected event format:
+ * Each endpoint returns `text/event-stream` with JSON-encoded event
+ * data:
  *   event: <event_type>
  *   data: {"field": "value", ...}
  *
@@ -60,7 +56,7 @@ export const SSE_ENDPOINTS = {
     `${API_BASE_URL}/projects/${projectId}/chat/stream?session_id=${sessionId}`,
   /**
    * Project-scoped SSE stream emitting `finding_updated` events. Tail-only
-   * (no snapshot on connect — the SPA already holds the canonical list from
+   * (no snapshot on connect - the SPA already holds the canonical list from
    * GET /findings). Heartbeat every 15s when idle.
    */
   findingsEvents: (projectId: string | number) =>
@@ -69,8 +65,6 @@ export const SSE_ENDPOINTS = {
 
 /**
  * REST endpoint paths (relative to API_BASE_URL).
- *
- * TODO [BACKEND]: Implement these REST endpoints in FastAPI.
  */
 export const REST_ENDPOINTS = {
   // ─── Projects ───────────────────────────────────────────────────────────────
@@ -201,33 +195,36 @@ export const REST_ENDPOINTS = {
 
   // ─── Configuration ──────────────────────────────────────────────────────────
   /** GET: project info for config page */
-  projectInfo: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/info`,
+  projectInfo: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/info`,
   /** PATCH: update project info */
-  updateProjectInfo: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/info`,
+  updateProjectInfo: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/info`,
   /** GET: list repositories for a project */
-  repositories: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/repositories`,
+  repositories: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/repositories`,
   /** GET: single repository config */
-  repository: (projectId: string, repoId: string) =>
+  repository: (projectId: number, repoId: number) =>
     `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}`,
-  /** POST: create a new repository */
-  createRepository: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/repositories`,
-  /** PATCH: update a repository */
-  updateRepository: (projectId: string, repoId: string) =>
+  /** POST (multipart): create a new repository */
+  createRepository: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/repositories`,
+  /** PATCH (multipart): update a repository */
+  updateRepository: (projectId: number, repoId: number) =>
     `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}`,
   /** DELETE: delete a repository */
-  deleteRepository: (projectId: string, repoId: string) =>
+  deleteRepository: (projectId: number, repoId: number) =>
     `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}`,
+  /** PATCH: update a repository's write-only auth block */
+  repositoryAuth: (projectId: number, repoId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/repositories/${repoId}/auth`,
   /** GET: tool catalog (available tools that can be overridden) */
   toolCatalog: `${API_BASE_URL}/tools/catalog`,
   /** GET: list tool overrides for a project */
-  toolOverrides: (projectId: string) => `${API_BASE_URL}/projects/${projectId}/tools/overrides`,
+  toolOverrides: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/tools/overrides`,
   /** POST: create a tool override */
-  createToolOverride: (projectId: string) =>
+  createToolOverride: (projectId: number) =>
     `${API_BASE_URL}/projects/${projectId}/tools/overrides`,
   /** PUT: update a tool override */
-  updateToolOverride: (projectId: string, toolId: string) =>
+  updateToolOverride: (projectId: number, toolId: string) =>
     `${API_BASE_URL}/projects/${projectId}/tools/overrides/${toolId}`,
   /** DELETE: remove a tool override (reverts to global) */
-  deleteToolOverride: (projectId: string, toolId: string) =>
+  deleteToolOverride: (projectId: number, toolId: string) =>
     `${API_BASE_URL}/projects/${projectId}/tools/overrides/${toolId}`,
 } as const

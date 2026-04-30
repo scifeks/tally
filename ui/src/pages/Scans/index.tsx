@@ -41,7 +41,7 @@ export default function Scans() {
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
 
-  // Derived config data — memoized to avoid new array refs on every render
+  // Derived config data - memoized to avoid new array refs on every render
   const configuredRepos = useMemo(() => scanConfig?.repos ?? [], [scanConfig])
   const configuredTools = useMemo(() => scanConfig?.tools ?? [], [scanConfig])
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
@@ -113,7 +113,7 @@ export default function Scans() {
   }, [stopElapsedTimer])
 
   // Per-event SSE handler. `enrichment_progress` is stored in a single state
-  // slot (latest-value-wins) per the §12.7 mandate — never appended to logs.
+  // slot (latest-value-wins) per the §12.7 mandate - never appended to logs.
   // The live row in the scan log is rendered from that same slot below.
   const handleScanEvent = useCallback((event: ScanLogEvent) => {
     if (event.type === 'enrichment_progress') {
@@ -147,7 +147,7 @@ export default function Scans() {
     }
   }, [])
 
-  // Snapshot frame on (re)connect — seed runId/runStatus only when there is
+  // Snapshot frame on (re)connect - seed runId/runStatus only when there is
   // exactly one active run for the project so we don't latch onto a stranger.
   const handleSnapshot = useCallback((snap: SnapshotPayload) => {
     if (snap.runId === null) {
@@ -177,7 +177,7 @@ export default function Scans() {
     if (runStatus !== 'running') stopElapsedTimer()
   }, [runStatus, stopElapsedTimer])
 
-  // Start scan — POST to backend, capture runId from 202, flip to live tab.
+  // Start scan - POST to backend, capture runId from 202, flip to live tab.
   const startScan = useCallback(() => {
     if (projectIdNum === 0) return
     setLogs([])
@@ -195,7 +195,7 @@ export default function Scans() {
     )
   }, [projectIdNum, startScanMutation, buildScanOptions, startElapsedTimer])
 
-  // Cancel scan — POST cancel; UI flips to 'cancelled' on the run_cancelled
+  // Cancel scan - POST cancel; UI flips to 'cancelled' on the run_cancelled
   // SSE event, not synthetically. While the backend is processing the cancel,
   // show 'cancelling'.
   const stopScan = useCallback(() => {

@@ -1,0 +1,49 @@
+{
+  "items": [
+    {
+      "id": 101,
+      "uuid": "11111111-2222-4333-8444-555555555555",
+      "name": "dvwa",
+      "type": ["api", "ui"],
+      "path": "/opt/repos/dvwa",
+      "docker_path": "",
+      "container_name": "",
+      "languages": ["php", "javascript"],
+      "base_urls": ["http://localhost:8080"],
+      "test_dirs": ["tests", "spec"],
+      "ignore_dirs": ["vendor", "node_modules"],
+      "dependencies_file": "",
+      "crawl_enabled": true,
+      "xsstrike_crawl_level": 10,
+      "xsstrike_headers": {},
+      "dalfox_headers": {},
+      "katana_headless": false,
+      "katana_depth": 10,
+      "katana_headers": {}
+    },
+    {
+      "id": 102,
+      "uuid": "22222222-3333-4444-8555-666666666666",
+      "name": "dvpwa",
+      "type": ["api"],
+      "path": "/opt/repos/dvpwa",
+      "docker_path": "/app",
+      "container_name": "dvpwa-container",
+      "languages": ["python"],
+      "base_urls": ["http://localhost:5000"],
+      "test_dirs": ["tests"],
+      "ignore_dirs": ["__pycache__", ".venv"],
+      "dependencies_file": "/app/requirements.txt",
+      "crawl_enabled": true,
+      "xsstrike_crawl_level": 10,
+      "xsstrike_headers": {},
+      "dalfox_headers": {},
+      "katana_headless": false,
+      "katana_depth": 8,
+      "katana_headers": {}
+    }
+  ],
+  "total": 2,
+  "offset": 0,
+  "limit": 500
+}

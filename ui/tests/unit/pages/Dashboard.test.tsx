@@ -41,7 +41,7 @@ afterEach(() => {
   __setEventSourceFactory(null)
 })
 
-describe('Dashboard — no project selected', () => {
+describe('Dashboard - no project selected', () => {
   it('renders the picker with all projects from the API', async () => {
     renderDashboard()
     expect(screen.getByText('No Project Selected')).toBeInTheDocument()
@@ -64,7 +64,7 @@ describe('Dashboard — no project selected', () => {
   })
 })
 
-describe('Dashboard — project selected (populated counts)', () => {
+describe('Dashboard - project selected (populated counts)', () => {
   it('renders header tiles + at-a-glance from /findings/counts and /meta', async () => {
     useUI.setState({ activeProjectId: 1 })
     renderDashboard()
@@ -83,7 +83,7 @@ describe('Dashboard — project selected (populated counts)', () => {
       screen.getByText(String(projectMetaPopulatedFixture.enabled_tools.length))
     ).toBeInTheDocument()
 
-    // At-a-glance rows from the same fixture (wait for hasScans branch — mock
+    // At-a-glance rows from the same fixture (wait for hasScans branch - mock
     // useScanHistory resolves on a 100ms timer). Value mapping for the
     // by_severity_status crosstab is covered by the hook unit test; here we
     // assert the rows render and the unambiguous total is shown.
@@ -97,19 +97,19 @@ describe('Dashboard — project selected (populated counts)', () => {
   })
 })
 
-describe('Dashboard — project selected (empty counts)', () => {
+describe('Dashboard - project selected (empty counts)', () => {
   it('renders the EmptyProjectState onboarding for a brand-new project', async () => {
     useUI.setState({ activeProjectId: 3 })
     renderDashboard()
 
-    // EmptyProjectState — onboarding copy plus the welcome panel header.
+    // EmptyProjectState - onboarding copy plus the welcome panel header.
     expect(await screen.findByText(/welcome :: NWD/i)).toBeInTheDocument()
     expect(screen.getByText(/no scans have been run/i)).toBeInTheDocument()
     expect(screen.getByText(/add a repository or URL list/i)).toBeInTheDocument()
   })
 })
 
-describe('Dashboard — recent high-severity findings panel', () => {
+describe('Dashboard - recent high-severity findings panel', () => {
   it('requests findings filtered to critical+high active sorted by severity desc, limit 10', async () => {
     let observedUrl: URL | null = null
     server.use(
@@ -176,7 +176,7 @@ describe('Dashboard — recent high-severity findings panel', () => {
   })
 })
 
-describe('Dashboard — counts endpoint error handling', () => {
+describe('Dashboard - counts endpoint error handling', () => {
   it('renders gracefully (zero defaults) when counts returns 500', async () => {
     server.use(
       http.get('/api/v1/projects/:projectId/findings/counts', () =>

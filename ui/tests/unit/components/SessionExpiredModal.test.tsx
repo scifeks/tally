@@ -13,7 +13,7 @@ describe('SessionExpiredModal', () => {
     expect(screen.getByText(/tally ui/i)).toBeInTheDocument()
   })
 
-  it('has no close button — modal cannot be dismissed', () => {
+  it('has no close button - modal cannot be dismissed', () => {
     render(<SessionExpiredModal />)
     expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument()
   })

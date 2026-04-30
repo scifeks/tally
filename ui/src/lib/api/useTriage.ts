@@ -8,14 +8,14 @@
  * Zustand slice for the dedicated mutation-error modal.
  *
  * Endpoint contract:
- *   GET    /api/v1/projects/:id/triage              — paginated history
- *   GET    /api/v1/projects/:id/triage/active       — current run | null
- *   GET    /api/v1/projects/:id/triage/latest       — most recent run (404 if none)
- *   GET    /api/v1/projects/:id/triage/:scanRunId   — detail with batches
- *   POST   /api/v1/projects/:id/triage              — start (body must ack injection risk)
- *   POST   /api/v1/projects/:id/triage/:srId/cancel — cancel
- *   POST   /api/v1/projects/:id/triage/:srId/resume — resume (body must ack)
- *   GET    /api/v1/projects/:id/triage/events       — SSE stream
+ *   GET    /api/v1/projects/:id/triage              - paginated history
+ *   GET    /api/v1/projects/:id/triage/active       - current run | null
+ *   GET    /api/v1/projects/:id/triage/latest       - most recent run (404 if none)
+ *   GET    /api/v1/projects/:id/triage/:scanRunId   - detail with batches
+ *   POST   /api/v1/projects/:id/triage              - start (body must ack injection risk)
+ *   POST   /api/v1/projects/:id/triage/:srId/cancel - cancel
+ *   POST   /api/v1/projects/:id/triage/:srId/resume - resume (body must ack)
+ *   GET    /api/v1/projects/:id/triage/events       - SSE stream
  */
 
 import { useEffect, useMemo, useRef } from 'react'

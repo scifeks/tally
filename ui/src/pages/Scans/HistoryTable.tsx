@@ -3,8 +3,6 @@ import { cn } from '@/lib/utils'
 import { useScanHistory } from '@/lib/api'
 
 export function HistoryTable({ projectId }: { projectId: number }) {
-  // TODO [BACKEND]: This hook returns mock data. Replace with real API call.
-  // GET /api/v1/projects/:id/scans
   const { data: scans = [] } = useScanHistory(projectId)
 
   const history = useMemo(

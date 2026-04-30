@@ -2,10 +2,33 @@ import { useState, useEffect } from 'react'
 import { Settings, RotateCcw, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
-import type { ProjectInfo } from '@/lib/types'
+import type { ProjectInfo, ProjectInfoUpdate } from '@/lib/types'
 import { SectionHeader } from './shared'
 
 // ─── Project Info Section ─────────────────────────────────────────────────────
+
+interface FormState {
+  companyName: string
+  departmentName: string
+  abbreviation: string
+}
+
+function initialForm(info: ProjectInfo | null): FormState {
+  return {
+    companyName: info?.companyName ?? '',
+    departmentName: info?.departmentName ?? '',
+    abbreviation: info?.abbreviation ?? '',
+  }
+}
+
+function diff(form: FormState, info: ProjectInfo | null): ProjectInfoUpdate {
+  const out: ProjectInfoUpdate = {}
+  if (!info) return out
+  if (form.companyName !== info.companyName) out.companyName = form.companyName
+  if (form.departmentName !== info.departmentName) out.departmentName = form.departmentName
+  if (form.abbreviation !== info.abbreviation) out.abbreviation = form.abbreviation
+  return out
+}
 
 export function ProjectInfoSection({
   projectInfo,
@@ -13,46 +36,35 @@ export function ProjectInfoSection({
   isSaving,
 }: {
   projectInfo: ProjectInfo | null
-  onSave: (updates: Partial<ProjectInfo>) => void
+  onSave: (updates: ProjectInfoUpdate) => void
   isSaving: boolean
 }) {
-  const [form, setForm] = useState<Partial<ProjectInfo>>({})
+  const [form, setForm] = useState<FormState>(() => initialForm(projectInfo))
   const [isDirty, setIsDirty] = useState(false)
 
   useEffect(() => {
-    if (projectInfo) {
-      setForm({
-        name: projectInfo.name,
-        code: projectInfo.code,
-        company: projectInfo.company ?? '',
-        department: projectInfo.department ?? '',
-        abbreviation: projectInfo.abbreviation ?? '',
-      })
-      setIsDirty(false)
-    }
+    setForm(initialForm(projectInfo))
+    setIsDirty(false)
   }, [projectInfo])
 
-  const updateField = (field: keyof ProjectInfo, value: string) => {
+  const updateField = (field: keyof FormState, value: string) => {
     setForm(f => ({ ...f, [field]: value }))
     setIsDirty(true)
   }
 
   const handleSave = () => {
-    onSave(form)
+    const updates = diff(form, projectInfo)
+    if (Object.keys(updates).length === 0) {
+      setIsDirty(false)
+      return
+    }
+    onSave(updates)
     setIsDirty(false)
   }
 
   const handleReset = () => {
-    if (projectInfo) {
-      setForm({
-        name: projectInfo.name,
-        code: projectInfo.code,
-        company: projectInfo.company ?? '',
-        department: projectInfo.department ?? '',
-        abbreviation: projectInfo.abbreviation ?? '',
-      })
-      setIsDirty(false)
-    }
+    setForm(initialForm(projectInfo))
+    setIsDirty(false)
   }
 
   if (!projectInfo) {
@@ -92,7 +104,7 @@ export function ProjectInfoSection({
             )}
           >
             <Save className="h-3 w-3" />
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving...' : 'Update'}
           </button>
         </div>
       </SectionHeader>
@@ -102,62 +114,47 @@ export function ProjectInfoSection({
         <div className="space-y-3">
           <div>
             <label
-              htmlFor="proj-name"
+              htmlFor="proj-company-name"
               className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
             >
-              Project Name
+              Company Name
             </label>
             <input
-              id="proj-name"
+              id="proj-company-name"
               type="text"
-              value={form.name ?? ''}
-              onChange={e => updateField('name', e.target.value)}
+              value={form.companyName}
+              onChange={e => updateField('companyName', e.target.value)}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
           <div>
             <label
-              htmlFor="proj-code"
+              htmlFor="proj-department-name"
               className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
             >
-              Code
+              Department Name
             </label>
             <input
-              id="proj-code"
+              id="proj-department-name"
               type="text"
-              value={form.code ?? ''}
-              onChange={e => updateField('code', e.target.value.toUpperCase())}
-              maxLength={4}
+              value={form.departmentName}
+              onChange={e => updateField('departmentName', e.target.value)}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
           <div>
             <label
-              htmlFor="proj-company"
+              htmlFor="proj-abbreviation"
               className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
             >
-              Company
+              Abbreviation <span className="text-dim">(max 3)</span>
             </label>
             <input
-              id="proj-company"
+              id="proj-abbreviation"
               type="text"
-              value={form.company ?? ''}
-              onChange={e => updateField('company', e.target.value)}
-              className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="proj-dept"
-              className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
-            >
-              Department
-            </label>
-            <input
-              id="proj-dept"
-              type="text"
-              value={form.department ?? ''}
-              onChange={e => updateField('department', e.target.value)}
+              value={form.abbreviation}
+              onChange={e => updateField('abbreviation', e.target.value.toUpperCase())}
+              maxLength={3}
               className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
             />
           </div>
@@ -165,6 +162,14 @@ export function ProjectInfoSection({
 
         {/* Read-only info */}
         <div className="space-y-3">
+          <div>
+            <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">
+              Project Name (read-only)
+            </div>
+            <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim">
+              {projectInfo.name}
+            </div>
+          </div>
           <div>
             <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">
               Path (read-only)

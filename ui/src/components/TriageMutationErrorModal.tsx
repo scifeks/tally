@@ -8,11 +8,11 @@ import { useUI } from '@/lib/store'
  * block, dismiss-only footer.
  *
  * Special-cased copy for the codes the backend can return:
- *   - JOB_ALREADY_RUNNING (409)    — another triage holds the lock
- *   - TRIAGE_NOT_CANCELLABLE (409) — already in a terminal state
- *   - TRIAGE_NOT_RESUMABLE (409)   — terminal (done/cancelled), can't resume
- *   - VALIDATION_ERROR (422)       — typically the missing ack flag
- *   - NOT_FOUND (404)              — project has no scans yet, or no batches
+ *   - JOB_ALREADY_RUNNING (409)    - another triage holds the lock
+ *   - TRIAGE_NOT_CANCELLABLE (409) - already in a terminal state
+ *   - TRIAGE_NOT_RESUMABLE (409)   - terminal (done/cancelled), can't resume
+ *   - VALIDATION_ERROR (422)       - typically the missing ack flag
+ *   - NOT_FOUND (404)              - project has no scans yet, or no batches
  */
 export function TriageMutationErrorModal() {
   const error = useUI(s => s.triageMutationError)
@@ -34,7 +34,7 @@ export function TriageMutationErrorModal() {
       case 'VALIDATION_ERROR':
         return 'the request was rejected by validation.'
       case 'NOT_FOUND':
-        return 'no triage data found for this project — run a scan first.'
+        return 'no triage data found for this project - run a scan first.'
       default:
         return `${error?.message ?? 'the request failed'}.`
     }
@@ -49,7 +49,7 @@ export function TriageMutationErrorModal() {
       case 'TRIAGE_NOT_RESUMABLE':
         return 'resume only applies to failed runs that still have pending or in-progress batches.'
       case 'VALIDATION_ERROR':
-        return 'reload the page and try again — if this persists, file a bug.'
+        return 'reload the page and try again - if this persists, file a bug.'
       case 'NOT_FOUND':
         return 'a successful scan must complete before triage can run.'
       default:

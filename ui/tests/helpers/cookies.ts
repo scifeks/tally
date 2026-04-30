@@ -1,5 +1,5 @@
 /**
- * jsdom cookie helpers — `document.cookie` is read/write but does not
+ * jsdom cookie helpers - `document.cookie` is read/write but does not
  * actually parse attribute strings, so setting a cookie just appends to
  * the existing value. These helpers keep tests honest by clearing first.
  */

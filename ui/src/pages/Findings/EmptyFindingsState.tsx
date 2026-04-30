@@ -29,7 +29,7 @@ export function EmptyFindingsState({ segment }: { segment: Segment }) {
               while)
             </li>
             <li>
-              <span className="text-dim">•</span> scans ran clean — nothing to report in this
+              <span className="text-dim">•</span> scans ran clean - nothing to report in this
               segment
             </li>
           </ul>

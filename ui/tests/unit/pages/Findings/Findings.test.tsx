@@ -69,7 +69,7 @@ afterEach(() => {
   server.resetHandlers()
 })
 
-describe('Findings page — server-driven list', () => {
+describe('Findings page - server-driven list', () => {
   it('renders the loaded total in the footer once findings resolve', async () => {
     renderPage()
     // SAST count from fixture: 2 items (1001, 1002).
@@ -167,12 +167,12 @@ describe('Findings page — server-driven list', () => {
       es.emitTyped('finding_updated', findingUpdatedFixture)
     })
 
-    // Give the cache patch a tick — and assert no extra GET happened.
+    // Give the cache patch a tick - and assert no extra GET happened.
     await waitFor(() => expect(listFetches).toBe(1))
   })
 })
 
-describe('Findings detail panel — Triage button', () => {
+describe('Findings detail panel - Triage button', () => {
   // The full Findings page uses TanStack Virtual which doesn't paint rows
   // in jsdom (zero element heights), so render the detail panel directly
   // with a known finding.

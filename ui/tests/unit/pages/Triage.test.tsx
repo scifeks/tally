@@ -49,7 +49,7 @@ afterEach(() => {
   server.resetHandlers()
 })
 
-describe('Triage page — Claude missing gate', () => {
+describe('Triage page - Claude missing gate', () => {
   it('disables Start Triage and renders the install warning', async () => {
     server.use(
       http.get('/api/v1/runtime-dependencies', () =>
@@ -63,7 +63,7 @@ describe('Triage page — Claude missing gate', () => {
   })
 })
 
-describe('Triage page — start mutation flow', () => {
+describe('Triage page - start mutation flow', () => {
   it('opens the prompt-injection modal on first click and fires Start after accept', async () => {
     useUI.setState({ activeProjectId: 2 })
 
@@ -141,7 +141,7 @@ describe('Triage page — start mutation flow', () => {
   })
 })
 
-describe('Triage page — active run', () => {
+describe('Triage page - active run', () => {
   it('renders the running state and a working Stop button', async () => {
     useUI.setState({ activeProjectId: 1, triageInjectionAcked: true })
     let cancelCalled = false
@@ -196,7 +196,7 @@ describe('Triage page — active run', () => {
   })
 })
 
-describe('Triage page — Resume swap on triage_failed', () => {
+describe('Triage page - Resume swap on triage_failed', () => {
   it('swaps Start → Resume on triage_failed { resumable: true } and renders the inline note', async () => {
     useUI.setState({ activeProjectId: 2, triageInjectionAcked: true })
     renderTriage()

@@ -12,7 +12,7 @@ describe('emptyFilters', () => {
     expect(f.search).toBe('')
   })
 
-  it('two calls produce independent objects — mutating one Set does not affect the other', () => {
+  it('two calls produce independent objects - mutating one Set does not affect the other', () => {
     const a = emptyFilters()
     const b = emptyFilters()
     a.severity.add('critical')

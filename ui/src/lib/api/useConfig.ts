@@ -1,23 +1,43 @@
 /**
- * useConfig Hooks
- * ===============
- * Hooks for the Config page: project info, repositories, and tool overrides.
- *
- * TODO [BACKEND]: Replace mock data with actual API calls.
- * See REST_ENDPOINTS in config.ts for endpoint paths.
+ * Config-page hooks. Live-wired to the Phase 9 backend (project info,
+ * repository CRUD + auth, tool overrides). Snake-case wire shapes are
+ * kept private to this module; consumers see camelCase domain types.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from './client'
+import { apiFetch, type ApiError } from './client'
 import { REST_ENDPOINTS } from './config'
-import type { ProjectInfo, RepositoryConfig, ToolOverrideConfig, ToolCatalogEntry } from '../types'
+import { useUI } from '../store'
+import type {
+  ApiErrorPayload,
+  ProjectInfo,
+  ProjectInfoUpdate,
+  RepoLocationMode,
+  RepoType,
+  RepositoryAuthUpdate,
+  RepositoryConfig,
+  ToolCatalogEntry,
+  ToolLocationMode,
+  ToolOverrideConfig,
+  ToolType,
+} from '../types'
 
-/**
- * Backend Repository serialisation shape (snake_case, matches
- * `Repository.model_dump()` minus `auth`). Page-wiring in Phase 11.11
- * will reconcile this against the UI's camelCase `RepositoryConfig`.
- */
-export interface RepositoryDetailResponse {
+// ─── Wire types (snake_case mirrors of backend Pydantic models) ──────────────
+
+interface ProjectInfoApi {
+  id: number
+  name: string
+  code: string
+  company_name: string
+  department_name: string
+  abbreviation: string
+  created_at: string
+  path: string
+  repo_count: number
+  finding_count: number
+}
+
+interface RepositoryApi {
   id: number
   uuid: string
   name: string
@@ -39,566 +59,360 @@ export interface RepositoryDetailResponse {
   katana_headers: Record<string, string>
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-// TODO [BACKEND]: Remove these mocks once API is connected.
-
-const mockProjectInfo: Record<string, ProjectInfo> = {
-  '1': {
-    id: '1',
-    name: 'acme-platform',
-    code: 'ACM',
-    company: 'ACME Corporation',
-    department: 'Security',
-    abbreviation: 'acme',
-    createdAt: '2024-01-15T10:30:00Z',
-    path: '/opt/tally/projects/acme-platform',
-    repoCount: 14,
-    findingCount: 220,
-  },
-  '2': {
-    id: '2',
-    name: 'atlas-api',
-    code: 'ATL',
-    company: 'Atlas Inc',
-    department: 'Engineering',
-    abbreviation: 'atlas',
-    createdAt: '2024-02-20T14:00:00Z',
-    path: '/opt/tally/projects/atlas-api',
-    repoCount: 4,
-    findingCount: 35,
-  },
-  '3': {
-    id: '3',
-    name: 'northwind-web',
-    code: 'NWD',
-    company: 'Northwind',
-    department: 'Product',
-    abbreviation: 'nwd',
-    createdAt: '2024-03-10T09:00:00Z',
-    path: '/opt/tally/projects/northwind-web',
-    repoCount: 0,
-    findingCount: 0,
-  },
+interface RepositoryListResponseApi {
+  items: RepositoryApi[]
+  total: number
+  offset: number
+  limit: number
 }
 
-const mockRepositories: Record<string, RepositoryConfig[]> = {
-  '1': [
-    {
-      id: 'r-01',
-      projectId: '1',
-      name: 'dvwa',
-      types: ['api', 'ui'],
-      locationMode: 'local',
-      localPath: '/opt/repos/dvwa',
-      languages: ['php', 'javascript'],
-      testDirectories: ['tests', 'spec'],
-      ignoreDirectories: ['vendor', 'node_modules'],
-      baseUrls: ['http://localhost:8080'],
-      alsoRunCrawlers: true,
-      katana: { headless: false, crawlDepth: 10 },
-    },
-    {
-      id: 'r-02',
-      projectId: '1',
-      name: 'dvpwa',
-      types: ['api'],
-      locationMode: 'docker',
-      localPath: '/opt/repos/dvpwa',
-      docker: { containerName: 'dvpwa-container', mountPoint: '/app' },
-      languages: ['python'],
-      testDirectories: ['tests'],
-      ignoreDirectories: ['__pycache__', '.venv'],
-      baseUrls: ['http://localhost:5000'],
-      alsoRunCrawlers: true,
-      katana: { headless: false, crawlDepth: 8 },
-    },
-    {
-      id: 'r-03',
-      projectId: '1',
-      name: 'juice-shop',
-      types: ['api', 'ui'],
-      locationMode: 'local',
-      localPath: '/opt/repos/juice-shop',
-      languages: ['typescript', 'javascript'],
-      testDirectories: ['test', 'e2e'],
-      ignoreDirectories: ['node_modules', 'dist'],
-      baseUrls: ['http://localhost:3000'],
-      alsoRunCrawlers: true,
-      katana: { headless: true, crawlDepth: 5 },
-      detected: { isSpa: true, languages: ['typescript', 'javascript'], testDirectories: ['test'] },
-    },
-    {
-      id: 'r-04',
-      projectId: '1',
-      name: 'common-utils',
-      types: ['library'],
-      locationMode: 'local',
-      localPath: '/opt/repos/common-utils',
-      languages: ['python'],
-      testDirectories: ['tests'],
-      ignoreDirectories: ['__pycache__'],
-      baseUrls: [],
-      alsoRunCrawlers: false,
-      katana: { headless: false, crawlDepth: 10 },
-    },
-    {
-      id: 'r-05',
-      projectId: '1',
-      name: 'php-goof',
-      types: ['api'],
-      locationMode: 'local',
-      localPath: '/opt/repos/php-goof',
-      languages: ['php'],
-      testDirectories: [],
-      ignoreDirectories: ['vendor'],
-      baseUrls: ['http://localhost:8081'],
-      endpointFile: '/opt/repos/php-goof/openapi.yaml',
-      endpointFileFormat: 'openapi3',
-      alsoRunCrawlers: false,
-      katana: { headless: false, crawlDepth: 10 },
-    },
-  ],
-  '2': [
-    {
-      id: 'r-10',
-      projectId: '2',
-      name: 'atl-api',
-      types: ['api'],
-      locationMode: 'local',
-      localPath: '/opt/repos/atl-api',
-      languages: ['go'],
-      testDirectories: ['test'],
-      ignoreDirectories: ['vendor'],
-      baseUrls: ['https://api.atlas.dev'],
-      alsoRunCrawlers: true,
-      katana: { headless: false, crawlDepth: 10 },
-    },
-    {
-      id: 'r-11',
-      projectId: '2',
-      name: 'atl-web',
-      types: ['ui'],
-      locationMode: 'local',
-      localPath: '/opt/repos/atl-web',
-      languages: ['typescript', 'javascript'],
-      testDirectories: ['__tests__', 'e2e'],
-      ignoreDirectories: ['node_modules', '.next'],
-      baseUrls: ['https://atlas.dev'],
-      alsoRunCrawlers: true,
-      katana: { headless: true, crawlDepth: 5 },
-      detected: { isSpa: true, languages: ['typescript'], testDirectories: ['__tests__'] },
-    },
-  ],
-  '3': [],
+interface ToolCatalogItemApi {
+  id: string
+  name: string
+  domain: string
+  supports_local: boolean
+  supports_docker: boolean
+  description: string
 }
 
-const mockToolCatalog: ToolCatalogEntry[] = [
-  { id: 'semgrep', name: 'Semgrep', supportsLocal: true, supportsDocker: true },
-  { id: 'gitleaks', name: 'Gitleaks', supportsLocal: true, supportsDocker: true },
-  { id: 'osv-scanner', name: 'OSV Scanner', supportsLocal: true, supportsDocker: true },
-  { id: 'npm-audit', name: 'NPM Audit', supportsLocal: true, supportsDocker: true },
-  { id: 'composer-audit', name: 'Composer Audit', supportsLocal: true, supportsDocker: true },
-  { id: 'pip-audit', name: 'Pip Audit', supportsLocal: true, supportsDocker: true },
-  { id: 'zap', name: 'ZAP', supportsLocal: true, supportsDocker: true },
-  { id: 'xsstrike', name: 'XSStrike', supportsLocal: true, supportsDocker: true },
-  { id: 'dalfox', name: 'Dalfox', supportsLocal: true, supportsDocker: true },
-  { id: 'katana', name: 'Katana', supportsLocal: true, supportsDocker: false },
-  { id: 'noir', name: 'Noir', supportsLocal: true, supportsDocker: false },
-]
-
-const mockToolOverrides: Record<string, ToolOverrideConfig[]> = {
-  '1': [
-    {
-      toolId: 'semgrep',
-      type: 'repo',
-      location: 'docker',
-      container: { name: 'semgrep-runner', toolPath: '/usr/local/bin/semgrep' },
-    },
-    { toolId: 'gitleaks', type: 'repo', location: 'local', path: '/opt/tools/gitleaks-custom' },
-  ],
-  '2': [
-    {
-      toolId: 'zap',
-      type: 'api',
-      location: 'docker',
-      container: { name: 'zap-container', toolPath: '/zap/zap.sh' },
-    },
-  ],
-  '3': [],
+interface ToolCatalogResponseApi {
+  items: ToolCatalogItemApi[]
+  total: number
 }
 
-// ─── Project Info Hook ────────────────────────────────────────────────────────
+interface ToolOverrideItemApi {
+  tool_id: string
+  type: string
+  location: string
+  path: string | null
+  container: { name: string; tool_path: string } | null
+}
 
-/**
- * useProjectInfo Hook
- * ===================
- * Fetches project info for the config page.
- *
- * TODO [BACKEND]: Replace mock data with actual API call.
- *
- * Expected API response (GET /api/v1/projects/:id/info):
- * ```json
- * {
- *   "id": "1",
- *   "name": "acme-platform",
- *   "code": "ACM",
- *   "company": "ACME Corporation",
- *   "department": "Security",
- *   "abbreviation": "acme",
- *   "createdAt": "2024-01-15T10:30:00Z",
- *   "path": "/opt/tally/projects/acme-platform",
- *   "repoCount": 14,
- *   "findingCount": 220
- * }
- * ```
- */
-export function useProjectInfo(projectId: string) {
+interface ToolOverrideResponseApi {
+  items: ToolOverrideItemApi[]
+  total: number
+}
+
+// ─── Mappers (wire <-> domain) ───────────────────────────────────────────────
+
+function mapProjectInfo(api: ProjectInfoApi): ProjectInfo {
+  return {
+    id: api.id,
+    name: api.name,
+    code: api.code,
+    companyName: api.company_name,
+    departmentName: api.department_name,
+    abbreviation: api.abbreviation,
+    createdAt: api.created_at,
+    path: api.path,
+    repoCount: api.repo_count,
+    findingCount: api.finding_count,
+  }
+}
+
+function mapRepository(api: RepositoryApi, projectId: number): RepositoryConfig {
+  const types = api.type as RepoType[]
+  const locationMode: RepoLocationMode = api.container_name ? 'docker' : 'local'
+  const docker = api.container_name
+    ? { containerName: api.container_name, mountPoint: api.docker_path }
+    : undefined
+  return {
+    id: api.id,
+    projectId,
+    name: api.name,
+    types,
+    locationMode,
+    localPath: api.path,
+    docker,
+    languages: api.languages,
+    testDirectories: api.test_dirs,
+    ignoreDirectories: api.ignore_dirs,
+    baseUrls: api.base_urls,
+    alsoRunCrawlers: api.crawl_enabled,
+    katana: {
+      headless: api.katana_headless,
+      crawlDepth: api.katana_depth,
+    },
+  }
+}
+
+function toRepositoryPayload(repo: RepositoryConfig): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    name: repo.name,
+    type: repo.types,
+    path: repo.localPath,
+    languages: repo.languages,
+    base_urls: repo.baseUrls,
+    test_dirs: repo.testDirectories,
+    ignore_dirs: repo.ignoreDirectories,
+    crawl_enabled: repo.alsoRunCrawlers,
+    katana_headless: repo.katana.headless,
+    katana_depth: repo.katana.crawlDepth,
+  }
+  if (repo.locationMode === 'docker') {
+    payload.docker_path = repo.docker?.mountPoint ?? ''
+    payload.container_name = repo.docker?.containerName ?? ''
+  } else {
+    payload.docker_path = ''
+    payload.container_name = ''
+  }
+  return payload
+}
+
+function mapToolCatalog(api: ToolCatalogItemApi): ToolCatalogEntry {
+  return {
+    id: api.id,
+    name: api.name,
+    supportsLocal: api.supports_local,
+    supportsDocker: api.supports_docker,
+  }
+}
+
+function mapToolOverride(api: ToolOverrideItemApi): ToolOverrideConfig {
+  const out: ToolOverrideConfig = {
+    toolId: api.tool_id,
+    type: api.type as ToolType,
+    location: api.location as ToolLocationMode,
+  }
+  if (api.path) out.path = api.path
+  if (api.container) {
+    out.container = { name: api.container.name, toolPath: api.container.tool_path }
+  }
+  return out
+}
+
+function toToolOverrideRequest(o: ToolOverrideConfig): Record<string, unknown> {
+  return {
+    type: o.type,
+    location: o.location,
+    path: o.path ?? '',
+    container: o.container ? { name: o.container.name, tool_path: o.container.toolPath } : null,
+  }
+}
+
+function toRepoAuthPayload(auth: RepositoryAuthUpdate): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+  if (auth.loginUrl !== undefined) payload.login_url = auth.loginUrl
+  if (auth.usernameField !== undefined) payload.username_field = auth.usernameField
+  if (auth.passwordField !== undefined) payload.password_field = auth.passwordField
+  if (auth.extraFields !== undefined) payload.extra_fields = auth.extraFields
+  if (auth.credentialsEnv !== undefined) payload.credentials_env = auth.credentialsEnv
+  if (auth.username !== undefined) payload.username = auth.username
+  if (auth.password !== undefined) payload.password = auth.password
+  return payload
+}
+
+function toErrorPayload(err: ApiError): ApiErrorPayload {
+  return {
+    code: err.code,
+    message: err.message,
+    details: err.details,
+    status: err.status,
+  }
+}
+
+// ─── Project Info ────────────────────────────────────────────────────────────
+
+export function useProjectInfo(projectId: number) {
   return useQuery({
     queryKey: ['projectInfo', projectId],
-    queryFn: async (): Promise<ProjectInfo | null> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.projectInfo(projectId))    │
-      // │ if (!res.ok) throw new Error("Failed to fetch project info")      │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      return mockProjectInfo[projectId] ?? null
+    queryFn: async (): Promise<ProjectInfo> => {
+      const api = await apiFetch<ProjectInfoApi>(REST_ENDPOINTS.projectInfo(projectId))
+      return mapProjectInfo(api)
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId),
   })
 }
 
-/**
- * useUpdateProjectInfo Hook
- * =========================
- * Updates project info.
- *
- * TODO [BACKEND]: Wire up to PATCH /api/v1/projects/:id/info
- */
 export function useUpdateProjectInfo() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation({
-    mutationFn: async (data: { projectId: string; updates: Partial<ProjectInfo> }) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.updateProjectInfo(projectId), { │
-      // │   method: "PATCH",                                                │
-      // │   headers: { "Content-Type": "application/json" },                │
-      // │   body: JSON.stringify(updates)                                   │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to update project info")     │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Mock: update in-memory
-      const current = mockProjectInfo[data.projectId]
-      if (current) {
-        Object.assign(current, data.updates)
-      }
-      return current
+  return useMutation<ProjectInfo, ApiError, { projectId: number; updates: ProjectInfoUpdate }>({
+    mutationFn: async ({ projectId, updates }) => {
+      const body: Record<string, unknown> = {}
+      if (updates.companyName !== undefined) body.company_name = updates.companyName
+      if (updates.departmentName !== undefined) body.department_name = updates.departmentName
+      if (updates.abbreviation !== undefined) body.abbreviation = updates.abbreviation
+      const api = await apiFetch<ProjectInfoApi>(REST_ENDPOINTS.updateProjectInfo(projectId), {
+        method: 'PATCH',
+        body,
+      })
+      return mapProjectInfo(api)
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['projectInfo', variables.projectId] })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['projectInfo', projectId] })
     },
   })
 }
 
-// ─── Repositories Hook ────────────────────────────────────────────────────────
+// ─── Repositories ────────────────────────────────────────────────────────────
 
-/**
- * useRepositories Hook
- * ====================
- * Fetches all repositories for a project.
- *
- * TODO [BACKEND]: Replace mock data with actual API call.
- *
- * Expected API response (GET /api/v1/projects/:id/repositories):
- * ```json
- * {
- *   "repositories": [
- *     { "id": "r-01", "name": "dvwa", "types": ["api", "ui"], ... }
- *   ]
- * }
- * ```
- */
-export function useRepositories(projectId: string) {
+export function useRepositories(projectId: number) {
   return useQuery({
     queryKey: ['repositories', projectId],
     queryFn: async (): Promise<RepositoryConfig[]> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.repositories(projectId))   │
-      // │ if (!res.ok) throw new Error("Failed to fetch repositories")      │
-      // │ const data = await res.json()                                     │
-      // │ return data.repositories                                          │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      return mockRepositories[projectId] ?? []
+      const url = `${REST_ENDPOINTS.repositories(projectId)}?limit=500`
+      const api = await apiFetch<RepositoryListResponseApi>(url)
+      return api.items.map(item => mapRepository(item, projectId))
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId),
-    initialData: mockRepositories[projectId] ?? [],
   })
 }
 
-/**
- * useRepository Hook
- * ==================
- * Fetches a single repository's full configuration.
- *
- * Backed by `GET /api/v1/projects/:projectId/repositories/:repoId`. The
- * `auth` field is intentionally omitted by the backend (`endpoints.md`
- * §5). Returns the raw API shape (snake_case); Phase 11.11 will wire
- * this into the Config page and map to camelCase as needed.
- */
-export function useRepository(projectId: string, repoId: string) {
+export function useRepository(projectId: number, repoId: number) {
   return useQuery({
     queryKey: ['repository', projectId, repoId],
-    queryFn: async (): Promise<RepositoryDetailResponse> => {
-      return apiFetch<RepositoryDetailResponse>(REST_ENDPOINTS.repository(projectId, repoId))
+    queryFn: async (): Promise<RepositoryConfig> => {
+      const api = await apiFetch<RepositoryApi>(REST_ENDPOINTS.repository(projectId, repoId))
+      return mapRepository(api, projectId)
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId) && Boolean(repoId),
   })
 }
 
-/**
- * useSaveRepository Hook
- * ======================
- * Creates or updates a repository.
- *
- * TODO [BACKEND]: Wire up to POST/PUT /api/v1/repositories
- */
 export function useSaveRepository() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation({
-    mutationFn: async (data: { repo: RepositoryConfig; isNew: boolean }) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const url = isNew                                                 │
-      // │   ? REST_ENDPOINTS.createRepository(repo.projectId)               │
-      // │   : REST_ENDPOINTS.updateRepository(repo.id)                      │
-      // │ const res = await fetch(url, {                                    │
-      // │   method: isNew ? "POST" : "PUT",                                 │
-      // │   headers: { "Content-Type": "application/json" },                │
-      // │   body: JSON.stringify(repo)                                      │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to save repository")         │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Mock: add/update in-memory
-      const list = mockRepositories[data.repo.projectId] ?? []
-      if (data.isNew) {
-        data.repo.id = `r-${Date.now()}`
-        list.push(data.repo)
-        mockRepositories[data.repo.projectId] = list
-      } else {
-        const idx = list.findIndex(r => r.id === data.repo.id)
-        if (idx >= 0) list[idx] = data.repo
+  return useMutation<
+    RepositoryConfig,
+    ApiError,
+    {
+      projectId: number
+      repo: RepositoryConfig
+      isNew: boolean
+      endpointFile?: File | null
+    }
+  >({
+    mutationFn: async ({ projectId, repo, isNew, endpointFile }) => {
+      const formData = new FormData()
+      formData.append('payload', JSON.stringify(toRepositoryPayload(repo)))
+      if (endpointFile) {
+        formData.append('endpoint_file', endpointFile)
       }
-      return data.repo
+      const url = isNew
+        ? REST_ENDPOINTS.createRepository(projectId)
+        : REST_ENDPOINTS.updateRepository(projectId, repo.id)
+      const api = await apiFetch<RepositoryApi>(url, {
+        method: isNew ? 'POST' : 'PATCH',
+        body: formData,
+      })
+      return mapRepository(api, projectId)
     },
-    onSuccess: repo => {
-      queryClient.invalidateQueries({ queryKey: ['repositories', repo.projectId] })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
     },
   })
 }
 
-/**
- * useDeleteRepository Hook
- * ========================
- * Deletes a repository.
- *
- * TODO [BACKEND]: Wire up to DELETE /api/v1/repositories/:id
- */
 export function useDeleteRepository() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation({
-    mutationFn: async (data: { repoId: string; projectId: string }) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.deleteRepository(repoId), {│
-      // │   method: "DELETE"                                                │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to delete repository")       │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Mock: remove from in-memory list
-      const list = mockRepositories[data.projectId] ?? []
-      const idx = list.findIndex(r => r.id === data.repoId)
-      if (idx >= 0) list.splice(idx, 1)
-      return { success: true }
+  return useMutation<void, ApiError, { projectId: number; repoId: number }>({
+    mutationFn: async ({ projectId, repoId }) => {
+      await apiFetch<void>(REST_ENDPOINTS.deleteRepository(projectId, repoId), {
+        method: 'DELETE',
+      })
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['repositories', variables.projectId] })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['repositories', projectId] })
     },
   })
 }
 
-// ─── Tool Overrides Hook ──────────────────────────────────────────────────────
+export function useUpdateRepoAuth() {
+  const setError = useUI(s => s.setConfigMutationError)
 
-/**
- * useToolCatalog Hook
- * ===================
- * Fetches the catalog of available tools that can be overridden.
- *
- * TODO [BACKEND]: Replace mock data with actual API call.
- *
- * Expected API response (GET /api/v1/tools/catalog):
- * ```json
- * {
- *   "tools": [
- *     { "id": "semgrep", "name": "Semgrep", "supportsLocal": true, "supportsDocker": true }
- *   ]
- * }
- * ```
- */
+  return useMutation<
+    void,
+    ApiError,
+    { projectId: number; repoId: number; auth: RepositoryAuthUpdate }
+  >({
+    mutationFn: async ({ projectId, repoId, auth }) => {
+      await apiFetch<void>(REST_ENDPOINTS.repositoryAuth(projectId, repoId), {
+        method: 'PATCH',
+        body: toRepoAuthPayload(auth),
+      })
+    },
+    onError: err => setError(toErrorPayload(err)),
+  })
+}
+
+// ─── Tool Catalog & Overrides ────────────────────────────────────────────────
+
 export function useToolCatalog() {
   return useQuery({
     queryKey: ['toolCatalog'],
     queryFn: async (): Promise<ToolCatalogEntry[]> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.toolCatalog)               │
-      // │ if (!res.ok) throw new Error("Failed to fetch tool catalog")      │
-      // │ const data = await res.json()                                     │
-      // │ return data.tools                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      return mockToolCatalog
+      const api = await apiFetch<ToolCatalogResponseApi>(REST_ENDPOINTS.toolCatalog)
+      return api.items.map(mapToolCatalog)
     },
-    staleTime: 30 * 60 * 1000, // Tools don't change often
-    initialData: mockToolCatalog,
+    staleTime: 30 * 60 * 1000,
   })
 }
 
-/**
- * useToolOverrides Hook
- * =====================
- * Fetches tool overrides for a project.
- *
- * TODO [BACKEND]: Replace mock data with actual API call.
- *
- * Expected API response (GET /api/v1/projects/:id/tools/overrides):
- * ```json
- * {
- *   "overrides": [
- *     { "toolId": "semgrep", "type": "repo", "location": "docker", "container": { ... } }
- *   ]
- * }
- * ```
- */
-export function useToolOverrides(projectId: string) {
+export function useToolOverrides(projectId: number) {
   return useQuery({
     queryKey: ['toolOverrides', projectId],
     queryFn: async (): Promise<ToolOverrideConfig[]> => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(REST_ENDPOINTS.toolOverrides(projectId))  │
-      // │ if (!res.ok) throw new Error("Failed to fetch tool overrides")    │
-      // │ const data = await res.json()                                     │
-      // │ return data.overrides                                             │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      return mockToolOverrides[projectId] ?? []
+      const api = await apiFetch<ToolOverrideResponseApi>(REST_ENDPOINTS.toolOverrides(projectId))
+      return api.items.map(mapToolOverride)
     },
     staleTime: 5 * 60 * 1000,
     enabled: Boolean(projectId),
-    initialData: mockToolOverrides[projectId] ?? [],
   })
 }
 
-/**
- * useSaveToolOverride Hook
- * ========================
- * Creates or updates a tool override.
- *
- * TODO [BACKEND]: Wire up to POST/PUT /api/v1/projects/:id/tools/overrides
- */
 export function useSaveToolOverride() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation({
-    mutationFn: async (data: {
-      projectId: string
-      override: ToolOverrideConfig
-      isNew: boolean
-    }) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const url = isNew                                                 │
-      // │   ? REST_ENDPOINTS.createToolOverride(projectId)                  │
-      // │   : REST_ENDPOINTS.updateToolOverride(projectId, override.toolId) │
-      // │ const res = await fetch(url, {                                    │
-      // │   method: isNew ? "POST" : "PUT",                                 │
-      // │   headers: { "Content-Type": "application/json" },                │
-      // │   body: JSON.stringify(override)                                  │
-      // │ })                                                                │
-      // │ if (!res.ok) throw new Error("Failed to save tool override")      │
-      // │ return res.json()                                                 │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Mock: add/update in-memory
-      const list = mockToolOverrides[data.projectId] ?? []
-      if (data.isNew) {
-        list.push(data.override)
-        mockToolOverrides[data.projectId] = list
-      } else {
-        const idx = list.findIndex(o => o.toolId === data.override.toolId)
-        if (idx >= 0) list[idx] = data.override
-      }
-      return data.override
+  return useMutation<
+    ToolOverrideConfig,
+    ApiError,
+    { projectId: number; override: ToolOverrideConfig; isNew: boolean }
+  >({
+    mutationFn: async ({ projectId, override, isNew }) => {
+      const url = isNew
+        ? REST_ENDPOINTS.createToolOverride(projectId)
+        : REST_ENDPOINTS.updateToolOverride(projectId, override.toolId)
+      const body: Record<string, unknown> = isNew
+        ? { tool_id: override.toolId, ...toToolOverrideRequest(override) }
+        : toToolOverrideRequest(override)
+      const api = await apiFetch<ToolOverrideItemApi>(url, {
+        method: isNew ? 'POST' : 'PUT',
+        body,
+      })
+      return mapToolOverride(api)
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['toolOverrides', variables.projectId] })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['toolOverrides', projectId] })
     },
   })
 }
 
-/**
- * useDeleteToolOverride Hook
- * ==========================
- * Deletes a tool override (reverts to global config).
- *
- * TODO [BACKEND]: Wire up to DELETE /api/v1/projects/:id/tools/overrides/:toolId
- */
 export function useDeleteToolOverride() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation({
-    mutationFn: async (data: { projectId: string; toolId: string }) => {
-      // ┌────────────────────────────────────────────────────────────────────┐
-      // │ TODO [BACKEND]: Replace mock with fetch()                         │
-      // │                                                                    │
-      // │ const res = await fetch(                                          │
-      // │   REST_ENDPOINTS.deleteToolOverride(projectId, toolId),           │
-      // │   { method: "DELETE" }                                            │
-      // │ )                                                                 │
-      // │ if (!res.ok) throw new Error("Failed to delete tool override")    │
-      // └────────────────────────────────────────────────────────────────────┘
-
-      // Mock: remove from in-memory list
-      const list = mockToolOverrides[data.projectId] ?? []
-      const idx = list.findIndex(o => o.toolId === data.toolId)
-      if (idx >= 0) list.splice(idx, 1)
-      return { success: true }
+  return useMutation<void, ApiError, { projectId: number; toolId: string }>({
+    mutationFn: async ({ projectId, toolId }) => {
+      await apiFetch<void>(REST_ENDPOINTS.deleteToolOverride(projectId, toolId), {
+        method: 'DELETE',
+      })
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['toolOverrides', variables.projectId] })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['toolOverrides', projectId] })
     },
   })
 }

@@ -10,14 +10,12 @@ import { SectionHeader } from './shared'
 export function ToolOverridesSection({
   catalog,
   overrides,
-  projectId,
   onSave,
   onDelete,
   isSaving,
 }: {
   catalog: ToolCatalogEntry[]
   overrides: ToolOverrideConfig[]
-  projectId: string
   onSave: (override: ToolOverrideConfig, isNew: boolean) => void
   onDelete: (toolId: string) => void
   isSaving: boolean
@@ -73,9 +71,6 @@ export function ToolOverridesSection({
   }
 
   const canSelectDocker = selectedTool?.supportsDocker ?? true
-
-  // Suppress unused warning — projectId is passed by the parent for future use
-  void projectId
 
   return (
     <Panel>

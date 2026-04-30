@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Database,
   ChevronDown,
@@ -8,33 +8,61 @@ import {
   RotateCcw,
   Check,
   AlertCircle,
+  Lock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
-import type { RepositoryConfig, RepoType, RepoLocationMode } from '@/lib/types'
+import type {
+  RepositoryAuthUpdate,
+  RepositoryConfig,
+  RepoType,
+  RepoLocationMode,
+} from '@/lib/types'
 import { SectionHeader, TagInput } from './shared'
 
 // ─── Repository Section ───────────────────────────────────────────────────────
+
+const NEW_REPO_ID = -1 as const
+
+interface AuthFormState {
+  loginUrl: string
+  username: string
+  password: string
+}
+
+const EMPTY_AUTH: AuthFormState = { loginUrl: '', username: '', password: '' }
 
 export function RepositorySection({
   repositories,
   projectId,
   onSave,
   onDelete,
+  onUpdateAuth,
   isSaving,
+  isSavingAuth,
+  authSavedAt,
 }: {
   repositories: RepositoryConfig[]
-  projectId: string
-  onSave: (repo: RepositoryConfig, isNew: boolean) => void
-  onDelete: (repoId: string) => void
+  projectId: number
+  onSave: (repo: RepositoryConfig, isNew: boolean, endpointFile?: File | null) => void
+  onDelete: (repoId: number) => void
+  onUpdateAuth: (repoId: number, auth: RepositoryAuthUpdate) => void
   isSaving: boolean
+  isSavingAuth: boolean
+  /** Set to a fresh timestamp after a successful auth save; used to flash a "Saved" affordance. */
+  authSavedAt: number | null
 }) {
-  const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const [form, setForm] = useState<Partial<RepositoryConfig>>({})
+  const [endpointFileUpload, setEndpointFileUpload] = useState<File | null>(null)
   const [_isDirty, setIsDirty] = useState(false)
+  const [auth, setAuth] = useState<AuthFormState>(EMPTY_AUTH)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const isNewRepo = selectedId === NEW_REPO_ID
 
   useEffect(() => {
-    if (selectedId === 'new') {
+    if (isNewRepo) {
       setForm({
         projectId,
         name: '',
@@ -48,15 +76,19 @@ export function RepositorySection({
         alsoRunCrawlers: true,
         katana: { headless: false, crawlDepth: 10 },
       })
+      setEndpointFileUpload(null)
+      setAuth(EMPTY_AUTH)
       setIsDirty(false)
-    } else if (selectedId) {
+    } else if (selectedId !== null) {
       const repo = repositories.find(r => r.id === selectedId)
       if (repo) {
         setForm({ ...repo })
+        setEndpointFileUpload(null)
+        setAuth(EMPTY_AUTH)
         setIsDirty(false)
       }
     }
-  }, [selectedId, repositories, projectId])
+  }, [selectedId, repositories, projectId, isNewRepo])
 
   const updateField = <K extends keyof RepositoryConfig>(field: K, value: RepositoryConfig[K]) => {
     setForm(f => ({ ...f, [field]: value }))
@@ -65,28 +97,43 @@ export function RepositorySection({
 
   const handleSave = () => {
     if (!form.name) return
-    onSave(form as RepositoryConfig, selectedId === 'new')
-    if (selectedId === 'new') setSelectedId(null)
+    const repo = { ...form, projectId } as RepositoryConfig
+    onSave(repo, isNewRepo, endpointFileUpload)
+    if (isNewRepo) setSelectedId(null)
+    setEndpointFileUpload(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setIsDirty(false)
   }
 
   const handleReset = () => {
-    if (selectedId === 'new') {
+    if (isNewRepo) {
       setSelectedId(null)
-    } else if (selectedId) {
+    } else if (selectedId !== null) {
       const repo = repositories.find(r => r.id === selectedId)
       if (repo) setForm({ ...repo })
     }
+    setEndpointFileUpload(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setIsDirty(false)
   }
 
   const handleDelete = () => {
-    if (selectedId && selectedId !== 'new') {
+    if (selectedId !== null && !isNewRepo) {
       if (confirm('Delete this repository? This cannot be undone.')) {
         onDelete(selectedId)
         setSelectedId(null)
       }
     }
+  }
+
+  const handleSaveAuth = () => {
+    if (selectedId === null || isNewRepo) return
+    const payload: RepositoryAuthUpdate = {
+      loginUrl: auth.loginUrl,
+      username: auth.username,
+      password: auth.password,
+    }
+    onUpdateAuth(selectedId, payload)
   }
 
   const toggleType = (type: RepoType) => {
@@ -108,9 +155,12 @@ export function RepositorySection({
 
   const isLibrary = form.types?.includes('library') ?? false
   const hasBaseUrls = (form.baseUrls?.length ?? 0) > 0
-  const hasEndpointFile = Boolean(form.endpointFile)
+  const hasEndpointFile = Boolean(endpointFileUpload)
   const showCrawlerQuestion = hasBaseUrls && hasEndpointFile
   const showKatanaFields = hasBaseUrls && (!hasEndpointFile || form.alsoRunCrawlers)
+
+  // Flash "Saved" for ~3s after a successful auth save.
+  const authJustSaved = authSavedAt !== null && Date.now() - authSavedAt < 3000
 
   return (
     <Panel>
@@ -118,8 +168,8 @@ export function RepositorySection({
         <div className="flex items-center gap-2">
           <div className="relative">
             <select
-              value={selectedId ?? ''}
-              onChange={e => setSelectedId(e.target.value || null)}
+              value={selectedId === null ? '' : String(selectedId)}
+              onChange={e => setSelectedId(e.target.value === '' ? null : Number(e.target.value))}
               className="h-7 pl-2 pr-6 bg-background border border-border text-xs text-foreground appearance-none cursor-pointer focus:border-accent focus:outline-none"
             >
               <option value="">Select repository...</option>
@@ -132,7 +182,7 @@ export function RepositorySection({
             <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-dim pointer-events-none" />
           </div>
           <button
-            onClick={() => setSelectedId('new')}
+            onClick={() => setSelectedId(NEW_REPO_ID)}
             className="flex items-center gap-1 px-2 h-7 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
           >
             <Plus className="h-3 w-3" />
@@ -141,13 +191,13 @@ export function RepositorySection({
         </div>
       </SectionHeader>
 
-      {!selectedId && (
+      {selectedId === null && (
         <div className="text-sm text-dim py-8 text-center">
           Select a repository to edit or create a new one
         </div>
       )}
 
-      {selectedId && (
+      {selectedId !== null && (
         <div className="space-y-4">
           {/* Identity */}
           <div className="grid grid-cols-2 gap-4">
@@ -352,12 +402,15 @@ export function RepositorySection({
                   Endpoint File
                 </label>
                 <input
+                  ref={fileInputRef}
                   id="repo-endpoint-file"
-                  type="text"
-                  value={form.endpointFile ?? ''}
-                  onChange={e => updateField('endpointFile', e.target.value)}
-                  placeholder="/path/to/openapi.yaml"
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
+                  type="file"
+                  onChange={e => {
+                    const file = e.target.files?.[0] ?? null
+                    setEndpointFileUpload(file)
+                    setIsDirty(true)
+                  }}
+                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
                 />
                 <div className="text-[9px] text-dim mt-1">
                   OpenAPI, Swagger, Postman, HAR, or Katana JSONL
@@ -432,7 +485,7 @@ export function RepositorySection({
                   {form.detected?.isSpa && (
                     <div className="mt-1 ml-6 flex items-center gap-1 text-[9px] text-high">
                       <AlertCircle className="h-3 w-3" />
-                      SPA detected — headless recommended
+                      SPA detected - headless recommended
                     </div>
                   )}
                 </div>
@@ -468,7 +521,7 @@ export function RepositorySection({
           {/* Actions */}
           <div className="border-t border-border pt-4 flex items-center justify-between">
             <div>
-              {selectedId !== 'new' && (
+              {!isNewRepo && (
                 <button
                   onClick={handleDelete}
                   className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-crit text-crit hover:bg-crit/10 transition-colors"
@@ -499,10 +552,96 @@ export function RepositorySection({
                 )}
               >
                 <Save className="h-3 w-3" />
-                {isSaving ? 'Saving...' : selectedId === 'new' ? 'Create' : 'Save'}
+                {isSaving ? 'Saving...' : isNewRepo ? 'Create' : 'Save'}
               </button>
             </div>
           </div>
+
+          {/* Auth credentials (write-only, existing repos only) */}
+          {!isNewRepo && (
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Lock className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Auth Credentials (write-only)
+                </span>
+              </div>
+              <div className="text-[9px] text-dim mb-3">
+                Set login credentials for crawlers. Values are never echoed back from the server.
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label
+                    htmlFor="repo-auth-login-url"
+                    className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+                  >
+                    Login URL
+                  </label>
+                  <input
+                    id="repo-auth-login-url"
+                    type="text"
+                    value={auth.loginUrl}
+                    onChange={e => setAuth(a => ({ ...a, loginUrl: e.target.value }))}
+                    placeholder="https://example.com/login"
+                    className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="repo-auth-username"
+                    className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="repo-auth-username"
+                    type="text"
+                    autoComplete="off"
+                    value={auth.username}
+                    onChange={e => setAuth(a => ({ ...a, username: e.target.value }))}
+                    className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="repo-auth-password"
+                    className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="repo-auth-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={auth.password}
+                    onChange={e => setAuth(a => ({ ...a, password: e.target.value }))}
+                    className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 mt-3">
+                {authJustSaved && (
+                  <span className="text-[10px] text-accent flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    Saved
+                  </span>
+                )}
+                <button
+                  onClick={handleSaveAuth}
+                  disabled={isSavingAuth || !auth.loginUrl}
+                  className={cn(
+                    'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-colors',
+                    auth.loginUrl
+                      ? 'bg-accent text-background hover:bg-accent/80'
+                      : 'bg-muted text-dim cursor-not-allowed'
+                  )}
+                >
+                  <Save className="h-3 w-3" />
+                  {isSavingAuth ? 'Saving...' : 'Save Auth'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Panel>

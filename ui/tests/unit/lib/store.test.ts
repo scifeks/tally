@@ -16,7 +16,7 @@ const reset = () =>
 
 beforeEach(reset)
 
-describe('useUI — initial state', () => {
+describe('useUI - initial state', () => {
   it('activeProjectId defaults to null (no project selected)', () => {
     expect(useUI.getState().activeProjectId).toBeNull()
   })

@@ -303,7 +303,7 @@ export default function Chat() {
 
   const hasNoSessions = sessions.length === 0
   const hasNoMessages = messages.length === 0
-  const projectLabel = activeProject?.code ?? '—'
+  const projectLabel = activeProject?.code ?? '-'
 
   const inputDisabled = isStreaming || sessionExpired || activeSessionId === null
 
@@ -439,7 +439,7 @@ export default function Chat() {
                     onKeyDown={handleKeyDown}
                     placeholder={
                       sessionExpired
-                        ? 'session sealed — start a new chat'
+                        ? 'session sealed - start a new chat'
                         : 'Ask about your security findings...'
                     }
                     disabled={inputDisabled}

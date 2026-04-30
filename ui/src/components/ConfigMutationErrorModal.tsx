@@ -2,21 +2,9 @@ import { AlertTriangle } from 'lucide-react'
 import { Modal, ModalButton } from './Modal'
 import { useUI } from '@/lib/store'
 
-/**
- * Surfaces a report draft / generate / cancel / upload / delete failure.
- * Mirrors the `TriageMutationErrorModal` layout: AlertTriangle + reason
- * line + small hint block, dismiss-only footer.
- *
- * Special-cased copy for the codes the backend can return:
- *   - JOB_ALREADY_RUNNING (409)     - another report generation is in flight
- *   - REPORT_NOT_CANCELLABLE (409)  - already in a terminal state
- *   - VALIDATION_ERROR (422)        - bad body / missing required fields
- *   - NOT_FOUND (404)               - report or draft section missing
- *   - PATH_TRAVERSAL (400)          - server refused the resolved path
- */
-export function ReportMutationErrorModal() {
-  const error = useUI(s => s.reportMutationError)
-  const setError = useUI(s => s.setReportMutationError)
+export function ConfigMutationErrorModal() {
+  const error = useUI(s => s.configMutationError)
+  const setError = useUI(s => s.setConfigMutationError)
   const open = error !== null
   const dismiss = () => setError(null)
 
@@ -25,16 +13,14 @@ export function ReportMutationErrorModal() {
 
   const reason = (() => {
     switch (code) {
-      case 'JOB_ALREADY_RUNNING':
-        return 'a report generation is already running for this project.'
-      case 'REPORT_NOT_CANCELLABLE':
-        return 'this report run is no longer cancellable (already finished).'
       case 'VALIDATION_ERROR':
-        return 'the request was rejected by validation.'
+        return 'one or more fields were rejected by validation.'
       case 'NOT_FOUND':
-        return 'the report or draft section was not found.'
+        return 'the project, repository, or tool override no longer exists.'
+      case 'CONFLICT':
+        return 'this change conflicts with the current configuration.'
       case 'PATH_TRAVERSAL':
-        return 'the server refused the download path (security guard).'
+        return 'the server refused the path (security guard).'
       default:
         return `${error?.message ?? 'the request failed'}.`
     }
@@ -42,16 +28,14 @@ export function ReportMutationErrorModal() {
 
   const hint = (() => {
     switch (code) {
-      case 'JOB_ALREADY_RUNNING':
-        return 'wait for the running generation to complete, or cancel it first.'
-      case 'REPORT_NOT_CANCELLABLE':
-        return 'cancellation only applies to runs that are queued or in progress.'
       case 'VALIDATION_ERROR':
-        return 'check the form values and try again - if this persists, file a bug.'
+        return 'check the highlighted fields and try again.'
       case 'NOT_FOUND':
-        return 'the section may not have been generated yet, or the report has been deleted.'
+        return 'the row may have been deleted in another tab; reload to refresh.'
+      case 'CONFLICT':
+        return 'reload to see the latest configuration before retrying.'
       case 'PATH_TRAVERSAL':
-        return 'this should never happen with a real report id - file a bug.'
+        return 'use a path inside the project workspace.'
       default:
         return null
     }
@@ -61,7 +45,7 @@ export function ReportMutationErrorModal() {
     <Modal
       open={open}
       onClose={dismiss}
-      title="report action failed"
+      title="config action failed"
       tone="error"
       width="sm"
       footer={<ModalButton onClick={dismiss}>dismiss</ModalButton>}

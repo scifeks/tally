@@ -207,8 +207,8 @@ class ProjectInfoResponse(BaseModel):
     id: int
     name: str
     code: str
-    company: str
-    department: str
+    company_name: str
+    department_name: str
     abbreviation: str
     created_at: str
     path: str

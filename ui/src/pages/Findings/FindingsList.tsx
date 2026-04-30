@@ -367,7 +367,7 @@ export function FindingsList({
               const f = rows[v.index]
               const isSelected = selectedIds.has(f.id)
               const isFocused = selectedRowId === f.id
-              const cweLabel = f.cwe.length > 0 ? f.cwe.join(', ') : '—'
+              const cweLabel = f.cwe.length > 0 ? f.cwe.join(', ') : '-'
               return (
                 <div
                   key={f.id}
@@ -412,7 +412,7 @@ export function FindingsList({
                     {f.cwe.length > 0 ? (
                       <span className="text-primary">{cweLabel}</span>
                     ) : (
-                      <span className="text-dim">—</span>
+                      <span className="text-dim">-</span>
                     )}
                   </div>
                   <div>

@@ -68,7 +68,7 @@ export default function Findings() {
 
   // Project-level counts power the always-on facet labels (severity chips at
   // top, FilterHeader option counts). They reflect the entire project, not
-  // the currently-filtered slice — which is the right UX once the page is
+  // the currently-filtered slice - which is the right UX once the page is
   // server-paginated.
   const { data: counts } = useFindingsCounts(projectIdParam)
 
@@ -160,7 +160,7 @@ export default function Findings() {
     [detail, activeProjectId, updateFindingMutation]
   )
 
-  // Infinite-scroll sentinel — when the bottom marker enters the viewport
+  // Infinite-scroll sentinel - when the bottom marker enters the viewport
   // we fetch the next page (if any).
   const sentinelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {

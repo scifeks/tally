@@ -11,7 +11,7 @@
  *      handshake value from leaking out via Referer on any subsequent
  *      cross-origin asset request the SPA might make.
  *   2. We use raw `fetch` (not `apiFetch`) because the CSRF cookie
- *      doesn't exist yet — `apiFetch` would short-circuit with
+ *      doesn't exist yet - `apiFetch` would short-circuit with
  *      `MissingCsrfError` on this very request.
  *
  * On a reload (no `?token=` in the URL), `bootstrapAuth` no-ops. The

@@ -6,6 +6,7 @@ import {
   useRepositories,
   useSaveRepository,
   useDeleteRepository,
+  useUpdateRepoAuth,
   useToolCatalog,
   useToolOverrides,
   useSaveToolOverride,
@@ -16,23 +17,24 @@ import { ProjectInfoSection } from './ProjectInfoSection'
 import { RepositorySection } from './RepositorySection'
 import { ToolOverridesSection } from './ToolOverridesSection'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
+import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
 
 // ─── Main Config Page ─────────────────────────────────────────────────────────
 
 export default function Config() {
   const activeProjectId = useUI(s => s.activeProjectId)
-  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
+  const projectId = activeProjectId ?? 0
 
-  // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: projectInfo } = useProjectInfo(projectIdParam)
-  const { data: repositories = [] } = useRepositories(projectIdParam)
+  const { data: projectInfo } = useProjectInfo(projectId)
+  const { data: repositories = [] } = useRepositories(projectId)
   const { data: toolCatalog = [] } = useToolCatalog()
-  const { data: toolOverrides = [] } = useToolOverrides(projectIdParam)
+  const { data: toolOverrides = [] } = useToolOverrides(projectId)
 
   const updateProjectInfo = useUpdateProjectInfo()
   const saveRepository = useSaveRepository()
   const deleteRepository = useDeleteRepository()
+  const updateRepoAuth = useUpdateRepoAuth()
   const saveToolOverride = useSaveToolOverride()
   const deleteToolOverride = useDeleteToolOverride()
 
@@ -44,7 +46,6 @@ export default function Config() {
 
   return (
     <div className="h-full flex flex-col min-h-0 p-4 gap-4">
-      {/* Header */}
       <div className="flex items-start gap-6 shrink-0">
         <ConfigPanel active size={180} />
 
@@ -64,37 +65,38 @@ export default function Config() {
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-        {/* Project Info - full width row */}
         <ProjectInfoSection
           projectInfo={projectInfo ?? null}
-          onSave={updates => updateProjectInfo.mutate({ projectId: projectIdParam, updates })}
+          onSave={updates => updateProjectInfo.mutate({ projectId, updates })}
           isSaving={updateProjectInfo.isPending}
         />
 
-        {/* Repositories + Tool Overrides - 2 column layout */}
         <div className="grid grid-cols-2 gap-4">
           <RepositorySection
             repositories={repositories}
-            projectId={projectIdParam}
-            onSave={(repo, isNew) => saveRepository.mutate({ repo, isNew })}
-            onDelete={repoId => deleteRepository.mutate({ repoId, projectId: projectIdParam })}
+            projectId={projectId}
+            onSave={(repo, isNew, endpointFile) =>
+              saveRepository.mutate({ projectId, repo, isNew, endpointFile })
+            }
+            onDelete={repoId => deleteRepository.mutate({ projectId, repoId })}
+            onUpdateAuth={(repoId, auth) => updateRepoAuth.mutate({ projectId, repoId, auth })}
             isSaving={saveRepository.isPending}
+            isSavingAuth={updateRepoAuth.isPending}
+            authSavedAt={updateRepoAuth.isSuccess ? Date.now() : null}
           />
 
           <ToolOverridesSection
             catalog={toolCatalog}
             overrides={toolOverrides}
-            projectId={projectIdParam}
-            onSave={(override, isNew) =>
-              saveToolOverride.mutate({ projectId: projectIdParam, override, isNew })
-            }
-            onDelete={toolId => deleteToolOverride.mutate({ projectId: projectIdParam, toolId })}
+            onSave={(override, isNew) => saveToolOverride.mutate({ projectId, override, isNew })}
+            onDelete={toolId => deleteToolOverride.mutate({ projectId, toolId })}
             isSaving={saveToolOverride.isPending}
           />
         </div>
       </div>
+
+      <ConfigMutationErrorModal />
     </div>
   )
 }

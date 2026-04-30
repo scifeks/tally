@@ -49,7 +49,7 @@ afterEach(() => {
   server.resetHandlers()
 })
 
-describe('Reports page — generate flow', () => {
+describe('Reports page - generate flow', () => {
   it('starts a generation, sets runId from the response, and lets SSE drive logs + status', async () => {
     useUI.setState({ activeProjectId: 1 })
 
@@ -175,7 +175,7 @@ describe('Reports page — generate flow', () => {
   })
 })
 
-describe('Reports page — draft generation', () => {
+describe('Reports page - draft generation', () => {
   it('per-section Generate fires the mutation with the chosen section', async () => {
     useUI.setState({ activeProjectId: 1 })
 
@@ -228,7 +228,7 @@ describe('Reports page — draft generation', () => {
   })
 })
 
-describe('Reports page — DraftCard download + delete', () => {
+describe('Reports page - DraftCard download + delete', () => {
   it('Download button on a generated draft fetches text/markdown', async () => {
     useUI.setState({ activeProjectId: 1 })
     let calledUrl: string | null = null
@@ -298,7 +298,7 @@ describe('Reports page — DraftCard download + delete', () => {
   })
 })
 
-describe('Reports page — HistoryTable', () => {
+describe('Reports page - HistoryTable', () => {
   it('renders the project-1 fixture row and wires the download button', async () => {
     useUI.setState({ activeProjectId: 1 })
     let calledUrl = ''
@@ -318,7 +318,7 @@ describe('Reports page — HistoryTable', () => {
   })
 })
 
-describe('Reports page — draft SSE → log surface', () => {
+describe('Reports page - draft SSE → log surface', () => {
   it('appends draft_completed events to the log panel', async () => {
     useUI.setState({ activeProjectId: 1 })
     renderReports()

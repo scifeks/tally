@@ -56,7 +56,7 @@ export default function Reports() {
   const [showPreflight, setShowPreflight] = useState(false)
   const [showTalWarning, setShowTalWarning] = useState(true)
 
-  // Generation run state — driven by the real SSE stream once a run starts.
+  // Generation run state - driven by the real SSE stream once a run starts.
   const [runId, setRunId] = useState<number | null>(null)
   const [generationStatus, setGenerationStatus] = useState<ReportGenerationStatus>('idle')
   const [progress, setProgress] = useState(0)
@@ -108,13 +108,13 @@ export default function Reports() {
     }
   }, [])
 
-  // Full-report SSE — only subscribe while we actually have a run in flight.
+  // Full-report SSE - only subscribe while we actually have a run in flight.
   useReportEvents(activeProjectId, appendEvent, {
     enabled: runId !== null,
     runId,
   })
 
-  // Draft SSE — always-on while a project is selected so per-section
+  // Draft SSE - always-on while a project is selected so per-section
   // generations triggered from any card surface their lifecycle in the log.
   useReportDraftEvents(activeProjectId, appendEvent)
 

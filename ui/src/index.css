@@ -177,7 +177,7 @@
     animation: tty-blink 1s steps(1) infinite;
   }
 
-  /* Editable text hover affordance — subtle dotted underline so the user
+  /* Editable text hover affordance - subtle dotted underline so the user
      knows this field is clickable/editable before they click. */
   .editable:hover,
   .editable:focus-visible {

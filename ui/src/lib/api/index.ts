@@ -1,25 +1,8 @@
 /**
  * API Module
  * ==========
- * Central export for all data fetching hooks.
- *
- * BACKEND INTEGRATION GUIDE
- * =========================
- *
- * This module provides a clean abstraction layer between the UI and the backend.
- * Currently all hooks return mock data. To connect to a real FastAPI backend:
- *
- * 1. Update API_BASE_URL in config.ts to point to your server.
- *
- * 2. For each hook, find the TODO [BACKEND] block and:
- *    - Uncomment the fetch() or EventSource code
- *    - Remove the mock data import and usage
- *    - The expected request/response format is documented above each hook
- *
- * 3. For SSE endpoints (scan events, triage events):
- *    - Implement SSE handlers in FastAPI that emit events matching the documented format
- *    - Uncomment the EventSource connection code in the hook
- *    - The mock event simulation in pages can be removed once real SSE is connected
+ * Barrel export for all data fetching hooks. Each hook calls the
+ * FastAPI backend via `apiFetch` (REST) or `apiEventSource` (SSE).
  *
  * FILE STRUCTURE:
  * ---------------
@@ -31,13 +14,7 @@
  * useUrlLists.ts  - Project URL list entries (GET)
  * useReports.ts   - Report drafts, generation, history, SSE events (GET, POST, SSE)
  * useChat.ts      - Chat sessions, messages, streaming responses (GET, POST, SSE)
- *
- * SEARCH FOR SWAP POINTS:
- * -----------------------
- * grep -r "TODO \[BACKEND\]" src/lib/api/
- *
- * This will show every location where mock data needs to be replaced with
- * real API calls.
+ * useConfig.ts    - Project info, repositories, tool overrides (GET, PATCH, POST, DELETE)
  */
 
 // Configuration
@@ -146,8 +123,10 @@ export {
   useProjectInfo,
   useUpdateProjectInfo,
   useRepositories,
+  useRepository,
   useSaveRepository,
   useDeleteRepository,
+  useUpdateRepoAuth,
   useToolCatalog,
   useToolOverrides,
   useSaveToolOverride,

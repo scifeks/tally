@@ -1,9 +1,9 @@
 /**
- * useFindingsEvents — subscribe to the project-scoped `finding_updated`
+ * useFindingsEvents - subscribe to the project-scoped `finding_updated`
  * SSE stream and patch the TanStack Query cache directly.
  *
  * Per `decisions.md` B13 the SPA does not refetch the list when an event
- * arrives — the event payload is the full serialised finding row, so we
+ * arrives - the event payload is the full serialised finding row, so we
  * locate it across every cached page of `['findings', projectId, *]`
  * and replace it in place. When the event reports a different
  * `severity` or `status` than the previously cached row,

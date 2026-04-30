@@ -9,17 +9,17 @@
  *
  * Endpoint contract:
  *   GET    /api/v1/projects/:id/reports/drafts
- *   POST   /api/v1/projects/:id/reports/drafts             — body { section, force? }
- *   GET    /api/v1/projects/:id/reports/drafts/:section/download  — text/markdown
- *   POST   /api/v1/projects/:id/reports/drafts/upload      — multipart { section, file }
+ *   POST   /api/v1/projects/:id/reports/drafts             - body { section, force? }
+ *   GET    /api/v1/projects/:id/reports/drafts/:section/download  - text/markdown
+ *   POST   /api/v1/projects/:id/reports/drafts/upload      - multipart { section, file }
  *   DELETE /api/v1/projects/:id/reports/drafts/:section
- *   GET    /api/v1/projects/:id/reports                    — paginated history
- *   GET    /api/v1/projects/:id/reports/latest             — most recent (or null)
- *   POST   /api/v1/projects/:id/reports/generate           — start full report
- *   POST   /api/v1/projects/:id/reports/:rid/cancel        — cancel in-flight run
- *   GET    /api/v1/projects/:id/reports/:rid/download      — binary file stream
- *   GET    /api/v1/projects/:id/reports/events             — SSE (full report)
- *   GET    /api/v1/projects/:id/reports/drafts/events      — SSE (drafts)
+ *   GET    /api/v1/projects/:id/reports                    - paginated history
+ *   GET    /api/v1/projects/:id/reports/latest             - most recent (or null)
+ *   POST   /api/v1/projects/:id/reports/generate           - start full report
+ *   POST   /api/v1/projects/:id/reports/:rid/cancel        - cancel in-flight run
+ *   GET    /api/v1/projects/:id/reports/:rid/download      - binary file stream
+ *   GET    /api/v1/projects/:id/reports/events             - SSE (full report)
+ *   GET    /api/v1/projects/:id/reports/drafts/events      - SSE (drafts)
  */
 
 import { useEffect, useMemo, useRef } from 'react'

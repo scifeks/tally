@@ -38,7 +38,7 @@ export class ApiError extends Error {
 
 export class MissingCsrfError extends Error {
   constructor() {
-    super('CSRF cookie missing — session not initialised')
+    super('CSRF cookie missing - session not initialised')
     this.name = 'MissingCsrfError'
   }
 }

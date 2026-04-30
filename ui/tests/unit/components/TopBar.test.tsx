@@ -44,7 +44,7 @@ afterEach(() => {
   __setEventSourceFactory(null)
 })
 
-describe('TopBar — project switcher', () => {
+describe('TopBar - project switcher', () => {
   it('shows the placeholder before any project is selected', async () => {
     renderTopBar()
     expect(screen.getByText('-- select project --')).toBeInTheDocument()
@@ -91,7 +91,7 @@ describe('TopBar — project switcher', () => {
   })
 })
 
-describe('TopBar — persisted activeProjectId', () => {
+describe('TopBar - persisted activeProjectId', () => {
   it('rehydrates a valid persisted ID across remount', async () => {
     useUI.setState({ activeProjectId: 2 })
     const { unmount } = renderTopBar()
@@ -106,7 +106,7 @@ describe('TopBar — persisted activeProjectId', () => {
   })
 })
 
-describe('TopBar — triage gate', () => {
+describe('TopBar - triage gate', () => {
   it('hides the TRIAGE nav link when claude is not installed', async () => {
     server.use(
       http.get('/api/v1/runtime-dependencies', () =>
@@ -130,7 +130,7 @@ describe('TopBar — triage gate', () => {
   })
 })
 
-describe('TopBar — scans-running indicator', () => {
+describe('TopBar - scans-running indicator', () => {
   it('renders idle when no scans are active', async () => {
     useUI.setState({ activeProjectId: 1 })
     renderTopBar()

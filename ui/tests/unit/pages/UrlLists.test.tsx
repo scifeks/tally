@@ -8,7 +8,7 @@ import UrlLists from '@/pages/UrlLists'
 import { useUI } from '@/lib/store'
 import { server } from '../../handlers'
 
-// Controllable IntersectionObserver — lets the test trigger sentinel
+// Controllable IntersectionObserver - lets the test trigger sentinel
 // intersection on demand. jsdom has no native IntersectionObserver.
 type IOCallback = (entries: IntersectionObserverEntry[]) => void
 const ioInstances: { cb: IOCallback; target: Element | null }[] = []

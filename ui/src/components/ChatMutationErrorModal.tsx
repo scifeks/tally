@@ -9,11 +9,11 @@ import { useUI } from '@/lib/store'
  *
  * Special-cased copy for the codes the chat backend can return
  * (endpoints.md §12):
- *   - CHAT_SESSION_EXPIRED (409)        — sealed by a new scan run
- *   - CHAT_STREAM_ALREADY_RUNNING (409) — one in-flight stream per session
- *   - CHAT_NO_ACTIVE_STREAM (409)       — cancel with nothing to cancel
- *   - VALIDATION_ERROR (422)            — empty / over-length content
- *   - NOT_FOUND (404)                   — session or project missing
+ *   - CHAT_SESSION_EXPIRED (409)        - sealed by a new scan run
+ *   - CHAT_STREAM_ALREADY_RUNNING (409) - one in-flight stream per session
+ *   - CHAT_NO_ACTIVE_STREAM (409)       - cancel with nothing to cancel
+ *   - VALIDATION_ERROR (422)            - empty / over-length content
+ *   - NOT_FOUND (404)                   - session or project missing
  */
 export function ChatMutationErrorModal() {
   const error = useUI(s => s.chatMutationError)

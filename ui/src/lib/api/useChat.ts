@@ -10,12 +10,12 @@
  *
  * Endpoint contract (endpoints.md §12):
  *   GET    /api/v1/projects/:id/chat/sessions
- *   POST   /api/v1/projects/:id/chat/sessions                    — empty body
+ *   POST   /api/v1/projects/:id/chat/sessions                    - empty body
  *   DELETE /api/v1/projects/:id/chat/sessions/:sid
- *   GET    /api/v1/projects/:id/chat/sessions/:sid/messages      — paginated
- *   POST   /api/v1/projects/:id/chat/sessions/:sid/messages      — body { content }
- *   POST   /api/v1/projects/:id/chat/sessions/:sid/cancel        — empty body
- *   GET    /api/v1/projects/:id/chat/stream?session_id=:sid      — SSE
+ *   GET    /api/v1/projects/:id/chat/sessions/:sid/messages      - paginated
+ *   POST   /api/v1/projects/:id/chat/sessions/:sid/messages      - body { content }
+ *   POST   /api/v1/projects/:id/chat/sessions/:sid/cancel        - empty body
+ *   GET    /api/v1/projects/:id/chat/stream?session_id=:sid      - SSE
  */
 
 import { useEffect, useMemo, useRef } from 'react'
