@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import httpx
@@ -55,7 +55,11 @@ class TestHealth:
             headers={"Origin": f"http://127.0.0.1:{_TEST_PORT}"},
         )
         assert resp.status_code == 200
-        assert resp.json()["version"] == version("tally")
+        try:
+            expected = version("tally")
+        except PackageNotFoundError:
+            expected = "0.0.0"
+        assert resp.json()["version"] == expected
 
     async def test_health_returns_503_when_db_unavailable(
         self, platform_client, monkeypatch

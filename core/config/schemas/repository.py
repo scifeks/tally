@@ -100,7 +100,10 @@ class Repository(BaseModel):
         description=(
             "Dir names to exclude from scans. Matched by name at any depth "
             "in the tree (e.g. 'vendor' excludes app/vendor/). "
-            "Case-insensitive. Applies to SAST and secrets tool segments."
+            "Case-insensitive. Applies to SAST and secrets tool segments, "
+            "and to URL discovery (Noir, Katana) at the inventory ingest "
+            "boundary — vendor-style names listed here are excluded from "
+            "url_findings on top of the built-in indicators."
         ),
     )
     dependencies_file: str = Field(
