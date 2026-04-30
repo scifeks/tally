@@ -92,13 +92,19 @@ class TestServeCommand:
 
         repl = _make_repl_mock(base_path=str(tmp_path))
         cmds = UiCommands(repl, app_factory=factory)
-        with patch("webbrowser.open"):
+        with patch("webbrowser.open") as mock_open:
             cmds.cmd_serve([])
 
         mock_uvicorn_run.assert_called_once_with(
             app_mock, host="127.0.0.1", port=8080, log_level="warning"
         )
-        assert "running at" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "running at" in out
+        # The browser URL must carry `&fresh=1` so the SPA clears any
+        # persisted activeProjectId on each `ui serve` invocation.
+        opened_url = mock_open.call_args.args[0]
+        assert opened_url.startswith("http://127.0.0.1:3000/?token=")
+        assert opened_url.endswith("&fresh=1")
 
     @patch("uvicorn.run", side_effect=OSError("address already in use"))
     @patch("application.repl.commands.ui_commands.UiCommands._wait_for_port")

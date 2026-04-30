@@ -99,7 +99,7 @@ class UiCommands:
         else:
             import webbrowser
 
-            browser_url = f"{vite_url}/?token={token}"
+            browser_url = f"{vite_url}/?token={token}&fresh=1"
             print(f"\nTally Web UI is running at:\n  {browser_url}\n")
             threading.Thread(
                 target=webbrowser.open, args=(browser_url,), daemon=True
