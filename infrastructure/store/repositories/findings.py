@@ -935,3 +935,104 @@ class FindingRepository:
             "repos": repos,
             "segments": segments,
         }
+
+    def filter_options(self, filters: dict) -> dict:
+        """Return per-dimension counts under the given filter set.
+
+        Strict semantics: every dimension's counts apply every active
+        filter, including its own dimension's filter. Options with
+        ``count = 0`` are omitted (HAVING COUNT > 0). Every dimension key
+        is always present (empty list when no values match).
+
+        Returns::
+
+            {
+                "severity":     [{"value": "high", "count": 12}, ...],
+                "status":       [...],
+                "confidence":   [...],
+                "domain":       [...],
+                "segment":      [...],
+                "tool":         [...],
+                "finding_type": [...],
+                "repo":         [
+                    {"value": <int>, "label": <str>, "count": <int>}, ...
+                ],
+            }
+        """
+        builder = FindingQueryBuilder(filters)
+        where_parts, params = builder.build_where_parts()
+
+        def _where(extra: str) -> str:
+            return " WHERE " + " AND ".join([*where_parts, extra])
+
+        with self._factory.connect() as conn:
+            severity: list[dict[str, Any]] = [
+                {
+                    "value": Severity.from_rank(rank).label,
+                    "count": int(count),
+                }
+                for rank, count in conn.execute(
+                    "SELECT severity, COUNT(*) FROM findings"
+                    + _where("severity IS NOT NULL")
+                    + " GROUP BY severity HAVING COUNT(*) > 0"
+                    " ORDER BY severity",
+                    params,
+                ).fetchall()
+            ]
+
+            def _scalar(col: str) -> list[dict[str, Any]]:
+                return [
+                    {"value": value, "count": int(count)}
+                    for value, count in conn.execute(
+                        f"SELECT {col}, COUNT(*) FROM findings"
+                        + _where(f"{col} IS NOT NULL")
+                        + f" GROUP BY {col} HAVING COUNT(*) > 0"
+                        f" ORDER BY {col}",
+                        params,
+                    ).fetchall()
+                ]
+
+            status = _scalar("status")
+            confidence = _scalar("confidence")
+            domain = _scalar("domain")
+            segment = _scalar("segment")
+            tool = _scalar("tool")
+
+            finding_type: list[dict[str, Any]] = [
+                {"value": value, "count": int(count)}
+                for value, count in conn.execute(
+                    "SELECT je.value, COUNT(DISTINCT findings.id)"
+                    " FROM findings, json_each(findings.finding_type) AS je"
+                    + _where("je.value IS NOT NULL")
+                    + " GROUP BY je.value"
+                    " HAVING COUNT(DISTINCT findings.id) > 0"
+                    " ORDER BY je.value",
+                    params,
+                ).fetchall()
+            ]
+
+            repo: list[dict[str, Any]] = [
+                {"value": int(rid), "label": name, "count": int(count)}
+                for rid, name, count in conn.execute(
+                    "SELECT findings.repo_id, repositories.name, COUNT(*)"
+                    " FROM findings"
+                    " JOIN repositories"
+                    " ON findings.repo_id = repositories.id"
+                    + _where("findings.repo_id IS NOT NULL")
+                    + " GROUP BY findings.repo_id, repositories.name"
+                    " HAVING COUNT(*) > 0"
+                    " ORDER BY repositories.name",
+                    params,
+                ).fetchall()
+            ]
+
+        return {
+            "severity": severity,
+            "status": status,
+            "confidence": confidence,
+            "domain": domain,
+            "segment": segment,
+            "tool": tool,
+            "finding_type": finding_type,
+            "repo": repo,
+        }

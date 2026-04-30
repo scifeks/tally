@@ -1,7 +1,7 @@
 """Coverage + cross-reference checks for the generated fixture tree.
 
 Run after generate.py:
-    python -m scripts.generate_ui_fixtures.check_coverage
+    python ui/testing/generator/check_coverage.py
 
 Fails (non-zero exit) if:
 - findings/populated.json is missing any canonical severity / status /
@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 FIX_ROOT = REPO_ROOT / "ui" / "testing" / "fixtures"
 
 REQUIRED_SEVERITIES = {"critical", "high", "medium", "low", "informational"}

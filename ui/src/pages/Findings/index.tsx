@@ -4,6 +4,7 @@ import {
   useFindings,
   useFindingsCounts,
   useFindingsEvents,
+  useFindingsFilterOptions,
   useUpdateFinding,
   type FindingFilters,
   type FindingSortKey,
@@ -66,10 +67,10 @@ export default function Findings() {
 
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
-  // Project-level counts power the always-on facet labels (severity chips at
-  // top, FilterHeader option counts). They reflect the entire project, not
-  // the currently-filtered slice - which is the right UX once the page is
-  // server-paginated.
+  // Project-level counts power the segment tabs and the empty-state gate.
+  // They reflect the whole project (Dashboard semantics) and are NOT the
+  // source of dropdown / chip counts — those come from the filter-options
+  // endpoint below.
   const { data: counts } = useFindingsCounts(projectIdParam)
 
   const serverFilters: FindingFilters = useMemo(() => {
@@ -84,6 +85,11 @@ export default function Findings() {
     }
     return f
   }, [domain, filters.severity, filters.status, filters.tool, debouncedSearch, sort])
+
+  // Filter-aware option counts for the severity chips and FilterHeader
+  // dropdowns (Phase 12.1). Strict semantics: every count reflects every
+  // active filter; zero-count options are dropped by the backend.
+  const filterOptionsQuery = useFindingsFilterOptions(projectIdParam, serverFilters)
 
   const findingsQuery = useFindings({ projectId: projectIdParam, filters: serverFilters })
   const filtered = findingsQuery.data
@@ -117,12 +123,28 @@ export default function Findings() {
       low: 0,
       informational: 0,
     }
-    if (!counts) return empty
-    return { ...empty, ...counts.bySeverity }
-  }, [counts])
+    const opts = filterOptionsQuery.data?.severity
+    if (!opts) return empty
+    const out = { ...empty }
+    for (const item of opts) out[item.value as Severity] = item.count
+    return out
+  }, [filterOptionsQuery.data])
 
-  const statusFacets = counts?.byStatus ?? {}
-  const toolFacets = counts?.byTool ?? {}
+  const statusFacets = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const item of filterOptionsQuery.data?.status ?? []) {
+      out[item.value] = item.count
+    }
+    return out
+  }, [filterOptionsQuery.data])
+
+  const toolFacets = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const item of filterOptionsQuery.data?.tool ?? []) {
+      out[item.value] = item.count
+    }
+    return out
+  }, [filterOptionsQuery.data])
 
   const hasAnyFilter =
     filters.severity.size > 0 ||
@@ -230,41 +252,40 @@ export default function Findings() {
               </span>
             </div>
             <div className="flex items-stretch divide-x divide-border">
-              {SEV_ORDER.map(sev => {
-                const count = sevFacets[sev] ?? 0
-                const on = filters.severity.has(sev)
-                const disabled = count === 0 && !on
-                return (
-                  <button
-                    key={sev}
-                    disabled={disabled}
-                    onClick={() => toggleSev(sev)}
-                    title={on ? `filtering ${SEV_LABEL[sev]}` : `filter ${SEV_LABEL[sev]}`}
-                    className={cn(
-                      'flex items-center gap-2 px-3 h-9 transition-opacity border-l-2',
-                      on
-                        ? 'bg-muted opacity-100'
-                        : 'opacity-60 hover:opacity-100 hover:bg-muted/50',
-                      disabled && 'opacity-20 cursor-not-allowed hover:bg-transparent'
-                    )}
-                    style={{ borderLeftColor: SEV_COLOR[sev] }}
-                    aria-pressed={on}
-                  >
-                    <span
-                      className="text-[11px] font-bold uppercase tracking-[0.2em]"
-                      style={{ color: SEV_COLOR[sev] }}
+              {SEV_ORDER.filter(sev => (sevFacets[sev] ?? 0) > 0 || filters.severity.has(sev)).map(
+                sev => {
+                  const count = sevFacets[sev] ?? 0
+                  const on = filters.severity.has(sev)
+                  return (
+                    <button
+                      key={sev}
+                      onClick={() => toggleSev(sev)}
+                      title={on ? `filtering ${SEV_LABEL[sev]}` : `filter ${SEV_LABEL[sev]}`}
+                      className={cn(
+                        'flex items-center gap-2 px-3 h-9 transition-opacity border-l-2',
+                        on
+                          ? 'bg-muted opacity-100'
+                          : 'opacity-60 hover:opacity-100 hover:bg-muted/50'
+                      )}
+                      style={{ borderLeftColor: SEV_COLOR[sev] }}
+                      aria-pressed={on}
                     >
-                      {SEV_LABEL[sev]}
-                    </span>
-                    <span
-                      className="text-[11px] tabular-nums font-bold leading-none"
-                      style={{ color: SEV_COLOR[sev] }}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                )
-              })}
+                      <span
+                        className="text-[11px] font-bold uppercase tracking-[0.2em]"
+                        style={{ color: SEV_COLOR[sev] }}
+                      >
+                        {SEV_LABEL[sev]}
+                      </span>
+                      <span
+                        className="text-[11px] tabular-nums font-bold leading-none"
+                        style={{ color: SEV_COLOR[sev] }}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  )
+                }
+              )}
             </div>
           </div>
         )}

@@ -56,6 +56,16 @@ class FindingQueryBuilder:
         self._limit: int | None = filters.get("limit")
         self._search: str | None = filters.get("search")
 
+    def build_where_parts(self) -> tuple[list[str], list[Any]]:
+        """Return (where_parts, params) for callers composing custom SQL.
+
+        Public counterpart of :py:meth:`_build_where`. Used by repository
+        methods (e.g. ``filter_options``) that need to share the exact
+        filter semantics with ``search_raw`` while running their own
+        SELECT/GROUP BY shapes.
+        """
+        return self._build_where()
+
     def _build_where(self) -> tuple[list[str], list[Any]]:
         """Return (where_parts, params) without ORDER BY / LIMIT."""
         where_parts: list[str] = []

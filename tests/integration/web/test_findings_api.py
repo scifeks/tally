@@ -347,6 +347,132 @@ class TestFindingsFacets:
         assert response.status_code == 404
 
 
+class TestFindingsFilterOptions:
+    async def test_filter_options_returns_all_dimensions(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        for key in (
+            "severity",
+            "status",
+            "confidence",
+            "domain",
+            "segment",
+            "tool",
+            "finding_type",
+            "repo",
+        ):
+            assert key in data, f"missing dimension key: {key!r}"
+            assert isinstance(data[key], list)
+
+    async def test_filter_options_no_filter_includes_seeded_finding(
+        self, app_client
+    ) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        sev_values = [item["value"] for item in data["severity"]]
+        assert "high" in sev_values
+        tool_values = [item["value"] for item in data["tool"]]
+        assert "semgrep" in tool_values
+        domain_values = [item["value"] for item in data["domain"]]
+        assert "code" in domain_values
+        segment_values = [item["value"] for item in data["segment"]]
+        assert "sast" in segment_values
+
+    async def test_filter_options_each_entry_has_value_and_count(
+        self, app_client
+    ) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options"
+        )
+        data = response.json()
+        for entry in data["severity"]:
+            assert set(entry.keys()) == {"value", "count"}
+            assert entry["count"] >= 1
+        for entry in data["tool"]:
+            assert set(entry.keys()) == {"value", "count"}
+            assert entry["count"] >= 1
+
+    async def test_filter_options_severity_filter_drops_other_severities(
+        self, app_client
+    ) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options?severity=high"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        sev_values = [item["value"] for item in data["severity"]]
+        # Strict semantics: only the filtered value survives.
+        assert sev_values == ["high"]
+
+    async def test_filter_options_no_match_returns_empty_dimensions(
+        self, app_client
+    ) -> None:
+        client, _, _, _, _, project_id = app_client
+        # Filter for a severity that doesn't exist in the seed data.
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options?severity=critical"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        for key in (
+            "severity",
+            "status",
+            "confidence",
+            "domain",
+            "segment",
+            "tool",
+            "finding_type",
+            "repo",
+        ):
+            assert data[key] == [], f"expected empty list for {key!r}"
+
+    async def test_filter_options_search_filter_applies(self, app_client) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options?search=zzznomatch"
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["severity"] == []
+
+    async def test_filter_options_invalid_severity_returns_422(
+        self, app_client
+    ) -> None:
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options?severity=extreme"
+        )
+        assert response.status_code == 422
+
+    async def test_filter_options_unknown_project_returns_404(self, app_client) -> None:
+        client, _, _, _, _, _ = app_client
+        response = await client.get("/api/v1/projects/99999/findings/filter-options")
+        assert response.status_code == 404
+
+    async def test_filter_options_excluded_from_finding_id_route(
+        self, app_client
+    ) -> None:
+        """Confirm the static ``filter-options`` segment is matched before the
+        dynamic ``/findings/{finding_id}`` route. If routing order broke we'd
+        get a 404 (filter-options is not a numeric id) or 422.
+        """
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings/filter-options"
+        )
+        assert response.status_code == 200
+
+
 class TestPatchFinding:
     async def test_patch_updates_editable_field(self, app_client) -> None:
         client, finding_id, _, factory, mut_headers, project_id = app_client

@@ -4,6 +4,8 @@ import projectsFixture from '../fixtures/projects.json'
 import runtimeDepsClaudeInstalledFixture from '../fixtures/runtime-dependencies-claude-installed.json'
 import findingsCountsPopulatedFixture from '../fixtures/findings-counts-populated.json'
 import findingsCountsEmptyFixture from '../fixtures/findings-counts-empty.json'
+import findingsFilterOptionsPopulatedFixture from '../fixtures/findings-filter-options-populated.json'
+import findingsFilterOptionsEmptyFixture from '../fixtures/findings-filter-options-empty.json'
 import projectMetaPopulatedFixture from '../fixtures/project-meta-populated.json'
 import projectMetaEmptyFixture from '../fixtures/project-meta-empty.json'
 import findingsPopulatedFixture from '../fixtures/findings-populated.json'
@@ -308,6 +310,13 @@ export const handlers = [
   http.get('/api/v1/projects/:projectId/findings/counts', ({ params }) => {
     const fixture =
       params.projectId === '3' ? findingsCountsEmptyFixture : findingsCountsPopulatedFixture
+    return HttpResponse.json(fixture)
+  }),
+  http.get('/api/v1/projects/:projectId/findings/filter-options', ({ params }) => {
+    const fixture =
+      params.projectId === '3'
+        ? findingsFilterOptionsEmptyFixture
+        : findingsFilterOptionsPopulatedFixture
     return HttpResponse.json(fixture)
   }),
   http.get('/api/v1/projects/:projectId/meta', ({ params }) => {

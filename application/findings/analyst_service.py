@@ -151,3 +151,6 @@ class FindingAnalystService:
 
     def distinct_facet_values(self) -> dict:
         return self._repo.distinct_facet_values()
+
+    def filter_options(self, filters: dict) -> dict:
+        return self._repo.filter_options(filters)
