@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Send, Square, Plus, Trash2, MessageSquare, Loader2, Lock } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, parseIso } from '@/lib/utils'
 import { useUI } from '@/lib/store'
 import {
   useChatSessions,
@@ -30,11 +30,14 @@ interface StreamingOverlay {
 
 function MessageBubble({ message, isLast }: { message: ChatMessage; isLast?: boolean }) {
   const isUser = message.role === 'user'
-  const time = new Date(message.timestamp).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  const parsed = parseIso(message.timestamp)
+  const time = parsed
+    ? parsed.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : '—'
 
   return (
     <div
@@ -77,8 +80,8 @@ function SessionItem({
   onClick: () => void
   onDelete: () => void
 }) {
-  const date = new Date(session.lastMessageAt ?? session.createdAt)
-  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const date = parseIso(session.lastMessageAt ?? session.createdAt)
+  const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
   const isExpired = session.expiredAt !== null
 
   return (

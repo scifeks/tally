@@ -21,7 +21,11 @@ class TestProjectCommands(unittest.TestCase):
         default_repo = MagicMock()
         default_repo.id = 1
         default_repo.name = "my-repo"
-        self.repl.projects.config.load_repositories.return_value = [default_repo]
+        self._active_repos_patcher = patch.object(
+            ProjectCommands, "_active_repos", return_value=[default_repo]
+        )
+        self._active_repos_mock = self._active_repos_patcher.start()
+        self.addCleanup(self._active_repos_patcher.stop)
 
     # ------------------------------------------------------------------
     # cmd_project dispatch
@@ -74,12 +78,10 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_repo("repo", ["add"])
         self.repl.wizard.add_repository.assert_called_once_with("test-project")
 
-    def test_cmd_repo_list_calls_load_repositories(self) -> None:
-        self.repl.projects.config.load_repositories.return_value = []
+    def test_cmd_repo_list_calls_active_repos(self) -> None:
+        self._active_repos_mock.return_value = []
         self.cmds.cmd_repo("repo", ["list"])
-        self.repl.projects.config.load_repositories.assert_called_once_with(
-            "test-project"
-        )
+        self._active_repos_mock.assert_called_with("test-project")
 
     def test_cmd_repo_edit_calls_wizard_edit_repository(self) -> None:
         self.cmds.cmd_repo("repo", ["edit", "my-repo"])
@@ -232,7 +234,7 @@ class TestProjectCommands(unittest.TestCase):
         self.repl.console.print.assert_called_once()
 
     def test_cmd_repos_empty_list_prints_no_repos_message(self) -> None:
-        self.repl.projects.config.load_repositories.return_value = []
+        self._active_repos_mock.return_value = []
         self.cmds.cmd_repos("repo", [])
         args, _ = self.repl.console.print.call_args
         self.assertIn("No repositories configured", args[0])
@@ -244,7 +246,7 @@ class TestProjectCommands(unittest.TestCase):
         mock_repo.path = "/p"
         mock_repo.languages = ["python"]
         mock_repo.base_urls = ["http://x"]
-        self.repl.projects.config.load_repositories.return_value = [mock_repo]
+        self._active_repos_mock.return_value = [mock_repo]
         self.cmds.cmd_repos("repo", [])
         self.repl.console.print.assert_called_once()
 

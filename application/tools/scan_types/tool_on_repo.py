@@ -12,6 +12,7 @@ from application.tools.registry import ToolRegistry
 from application.tools.scan_types.execution import (
     dispatch_and_count_ingested,
     execute_tool_passes,
+    load_active_repos,
     make_context,
     normalize_success,
     should_skip_sca_tool,
@@ -42,7 +43,7 @@ class ToolOnRepoScan(ScanType):
         factory = cast(ToolWrapperFactory, resources.factory)
         executor = cast(ToolExecutor, resources.executor)
 
-        repos = config.config_manager.load_repositories(config.project_name)
+        repos = load_active_repos(config.base_path, config.project_name)
         repo = next(
             (r for r in repos if r.name.lower() == self.repo_name.lower()), None
         )

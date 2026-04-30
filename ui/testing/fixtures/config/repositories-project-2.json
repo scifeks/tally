@@ -2,7 +2,6 @@
   "items": [
     {
       "name": "dvwa",
-      "uuid": "d2d58577-aa07-494b-80aa-19a3cf4fbdb6",
       "type": [
         "ui",
         "api"
@@ -34,7 +33,6 @@
     },
     {
       "name": "dvpwa",
-      "uuid": "7f34afbd-c000-490a-9768-342a3f65b31c",
       "type": [
         "api",
         "ui"
@@ -63,7 +61,6 @@
     },
     {
       "name": "juice-shop",
-      "uuid": "e08a9e45-188b-428f-ae64-57d18e5af331",
       "type": [
         "api",
         "ui"
@@ -98,7 +95,6 @@
     },
     {
       "name": "php-goof",
-      "uuid": "c840af14-e2f0-44a0-bce8-826601fb980c",
       "type": [
         "api",
         "ui"

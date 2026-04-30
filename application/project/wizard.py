@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 import shutil
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.project.repositories_service import ProjectRepositoriesService
 from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers.user_file import UserFileProvider
 from application.url_inventory.service import UrlInventoryService
@@ -14,7 +16,6 @@ from core.config import Repository
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.url_findings import UrlFindingRepository
 from infrastructure.tools.wrappers.utils.manifest_check import (
     LANGUAGE_MANIFESTS,
@@ -237,6 +238,13 @@ class InteractiveProjectWizard:
 
     def __init__(self, manager: ProjectManager) -> None:
         self._manager = manager
+        self._service = ProjectRepositoriesService(manager.registry, manager.config)
+
+    def _project_id(self, project_name: str) -> int:
+        row = self._manager.registry.resolve_by_name(project_name)
+        if row is None or row.get("archived_at"):
+            raise ValueError(f"Project '{project_name}' does not exist.")
+        return int(row["id"])
 
     def create_project(self) -> str | None:
         """Run interactive interview to create a new project.
@@ -251,7 +259,6 @@ class InteractiveProjectWizard:
                 return None
 
             interview_results = self._interview_repositories()
-            repositories = [repo for repo, _ in interview_results]
 
             print("\nProject details:\n")
             company_name = self._interview_company_name()
@@ -260,23 +267,26 @@ class InteractiveProjectWizard:
 
             self._manager.create_project_dirs(name)
             self._manager.save_project(
-                name, repositories, company_name, department_name, abbreviation
+                name, company_name, department_name, abbreviation
             )
             self._manager.registry.register(name, str(self._manager.base_path))
 
+            project_id = self._project_id(name)
             paths = ProjectPaths.from_canonical(self._manager.base_path, name)
             for repo, pending_endpoint_file in interview_results:
-                repo_id = self._ensure_repo_db_row(paths, repo)
+                persisted = self._service.create(project_id, repo)
+                assert persisted.id is not None
                 if pending_endpoint_file:
                     self._ingest_endpoint_file(
+                        project_id=project_id,
                         project_name=name,
-                        repo=repo,
-                        repo_id=repo_id,
+                        repo=persisted,
+                        repo_id=persisted.id,
                         source_path=pending_endpoint_file,
                         paths=paths,
                     )
 
-            count = len(repositories)
+            count = len(interview_results)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
             print(f"\n✓ Project '{name}' created with {repo_str}")
 
@@ -295,31 +305,31 @@ class InteractiveProjectWizard:
         if project_name not in self._manager.list_projects():
             raise ValueError(f"Project '{project_name}' does not exist.")
         try:
-            existing = self._manager.config.load_repositories(project_name)
+            project_id = self._project_id(project_name)
+            existing = self._service.list_active(project_id)
             idx = len(existing) + 1
             print(f"\nAdding repository to project '{project_name}'...\n")
             result = self._interview_single_repo(idx)
             if result is None:
                 return None
             repo, pending_endpoint_file = result
-            with self._manager.config.locked_project_config(project_name):
-                config = self._manager.config.load_project_config(project_name)
-                if config is None:
-                    raise ValueError(f"Project '{project_name}' not found.")
-                config.repositories = [*config.repositories, repo]
-                self._manager.config.save_project_config(project_name, config)
+            persisted = self._service.create(project_id, repo)
+            assert persisted.id is not None
             paths = ProjectPaths.from_canonical(self._manager.base_path, project_name)
-            repo_id = self._ensure_repo_db_row(paths, repo)
             if pending_endpoint_file:
                 self._ingest_endpoint_file(
+                    project_id=project_id,
                     project_name=project_name,
-                    repo=repo,
-                    repo_id=repo_id,
+                    repo=persisted,
+                    repo_id=persisted.id,
                     source_path=pending_endpoint_file,
                     paths=paths,
                 )
-            print(f"\n✓ Repository '{repo.name}' added to project '{project_name}'")
-            return repo
+                persisted = self._service.get(project_id, persisted.id)
+            print(
+                f"\n✓ Repository '{persisted.name}' added to project '{project_name}'"
+            )
+            return persisted
         except KeyboardInterrupt:
             print("\n\n[Cancelled]")
             return None
@@ -335,12 +345,14 @@ class InteractiveProjectWizard:
         """
         if project_name not in self._manager.list_projects():
             raise ValueError(f"Project '{project_name}' does not exist.")
-        repos = self._manager.config.load_repositories(project_name)
+        project_id = self._project_id(project_name)
+        repos = self._service.list_active(project_id)
         idx = next((i for i, r in enumerate(repos) if r.name == repo_name), None)
         if idx is None:
             raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
 
         existing = repos[idx]
+        assert existing.id is not None
         print(
             f"\nEditing repository '{repo_name}'"
             " (press Enter to keep current value)...\n"
@@ -559,58 +571,35 @@ class InteractiveProjectWizard:
 
             auth = _interview_auth(current=existing.auth)
 
-            updated = Repository(
-                name=name,
-                uuid=existing.uuid,
-                type=types,
-                path=local_path_str,
-                docker_path=docker_path,
-                container_name=container_name,
-                languages=langs,
-                base_urls=base_urls,
-                test_dirs=test_dirs,
-                ignore_dirs=ignore_dirs,
-                dependencies_file=dependencies_file,
-                crawl_enabled=crawl_enabled,
-                xsstrike_crawl_level=existing.xsstrike_crawl_level,
-                xsstrike_headers=dict(existing.xsstrike_headers),
-                dalfox_headers=dict(existing.dalfox_headers),
-                katana_headless=katana_headless,
-                katana_depth=katana_depth,
-                katana_headers=dict(existing.katana_headers),
-                auth=auth,
-            )
+            patch: dict[str, object] = {
+                "name": name,
+                "type": types,
+                "path": local_path_str,
+                "docker_path": docker_path,
+                "container_name": container_name,
+                "languages": langs,
+                "base_urls": base_urls,
+                "test_dirs": test_dirs,
+                "ignore_dirs": ignore_dirs,
+                "dependencies_file": dependencies_file,
+                "crawl_enabled": crawl_enabled,
+                "katana_headless": katana_headless,
+                "katana_depth": katana_depth,
+                "auth": auth.model_dump() if auth is not None else None,
+            }
+            updated = self._service.update(project_id, existing.id, patch)
+            assert updated.id is not None
 
-            with self._manager.config.locked_project_config(project_name):
-                config = self._manager.config.load_project_config(project_name)
-                if config is None:
-                    raise ValueError(f"Project '{project_name}' not found.")
-                cur_idx = next(
-                    (
-                        i
-                        for i, r in enumerate(config.repositories)
-                        if r.name == repo_name
-                    ),
-                    None,
-                )
-                if cur_idx is None:
-                    raise ValueError(
-                        f"Repository '{repo_name}' was removed during editing."
-                    )
-                new_list = list(config.repositories)
-                new_list[cur_idx] = updated
-                config.repositories = new_list
-                self._manager.config.save_project_config(project_name, config)
-
-            repo_id = self._ensure_repo_db_row(paths, updated)
             if pending_endpoint_file:
                 self._ingest_endpoint_file(
+                    project_id=project_id,
                     project_name=project_name,
                     repo=updated,
-                    repo_id=repo_id,
+                    repo_id=updated.id,
                     source_path=pending_endpoint_file,
                     paths=paths,
                 )
+                updated = self._service.get(project_id, updated.id)
             _sca_manifest_notification(updated)
             print(f"\n✓ Repository '{name}' updated")
             return updated
@@ -622,19 +611,14 @@ class InteractiveProjectWizard:
     def _has_existing_endpoint_file(
         self, paths: ProjectPaths, repo: Repository
     ) -> bool:
-        """Return True if the repo already has any user-uploaded endpoint file.
+        """Return True if the repo has a user-uploaded endpoint file recorded.
 
-        Checks for files under ``endpoints/<repo.uuid>/user_uploads/``. The
-        Phase 9 ingest path copies user uploads here before parsing them
-        into ``url_findings`` rows, so the directory's contents are the
-        single source of truth for "is an endpoint file configured?".
+        Phase 14.3: the DB column ``url_seed_file`` is the source of truth.
+        ``paths`` is unused but preserved for callsite symmetry with the
+        rest of the wizard.
         """
-        if not repo.uuid:
-            return False
-        upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
-        if not upload_dir.exists():
-            return False
-        return any(upload_dir.iterdir())
+        del paths
+        return repo.url_seed_file is not None
 
     def _prompt_endpoint_file(
         self, prompt_label: str, *, allow_keep: bool
@@ -673,44 +657,28 @@ class InteractiveProjectWizard:
                 if choice in ("s", "skip", "" if not allow_keep else "_"):
                     return None
 
-    def _ensure_repo_db_row(self, paths: ProjectPaths, repo: Repository) -> int:
-        """Ensure a per-project ``repositories`` row exists for *repo*.
-
-        Returns the integer primary key. Inserts a new row when none exists
-        for the repo's uuid; otherwise renames the existing row if its
-        name has drifted in JSON.
-        """
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        repo_repo = RepositoryRepository(factory)
-        existing = repo_repo.get_by_uuid(repo.uuid)
-        if existing is None:
-            return repo_repo.insert(uuid=repo.uuid, name=repo.name)
-        if existing.name != repo.name:
-            repo_repo.rename(existing.id, repo.name)
-        return existing.id
-
     def _ingest_endpoint_file(
         self,
         *,
+        project_id: int,
         project_name: str,
         repo: Repository,
         repo_id: int,
         source_path: str,
         paths: ProjectPaths,
     ) -> None:
-        """Copy *source_path* into ``user_uploads/`` and ingest into ``url_findings``.
+        """Copy *source_path* into a fresh ``<name>-<epoch>/`` dir and ingest.
 
-        Wipes any prior USER-source rows tied to the same uploaded file
-        path, inserts the freshly-parsed rows via ``UserFileProvider``,
-        then JIT-rebuilds ``merged_urls.txt`` + ``merged_oas3.json``.
-        On conversion failure, prints the error and leaves the repo in
-        place — same UX as the prior ``_convert_and_set_oas3_path``.
+        Each upload creates a new sibling dir under ``endpoints/`` so
+        prior uploads accumulate as history. The DB ``url_seed_file``
+        column is updated with the latest path. JIT-rebuilds
+        ``merged_urls.txt`` + ``merged_oas3.json`` under
+        ``endpoints/<repo_id>/``.
         """
         from infrastructure.endpoints.converters import ConverterError
 
-        upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
+        epoch = time.time_ns()
+        upload_dir = paths.seed_upload_dir(repo.name, epoch)
         upload_dir.mkdir(parents=True, exist_ok=True)
         src = Path(source_path)
         target = upload_dir / src.name
@@ -746,9 +714,10 @@ class InteractiveProjectWizard:
         service.regenerate_artifacts(
             repo_id=repo_id,
             project_paths=paths,
-            repo_dir_key=repo.uuid,
+            repo_dir_key=str(repo_id),
             base_url=repo.base_urls[0] if repo.base_urls else None,
         )
+        self._service.record_seed_file(project_id, repo_id, str(target))
         print(f"\n  ✓ Endpoint file ingested: {target}")
 
     def _interview_company_name(self) -> str:
@@ -1088,7 +1057,7 @@ class InteractiveProjectWizard:
 
         auth = _interview_auth()
 
-        new_repo = Repository.new(
+        new_repo = Repository(
             name=name,
             type=types,
             path=local_path_str,

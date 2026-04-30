@@ -1,6 +1,7 @@
 import { Download, FileText } from 'lucide-react'
 import type { ReportHistoryEntry } from '@/lib/types'
 import { downloadReportFile } from '@/lib/api'
+import { formatDateTime } from '@/lib/utils'
 
 export function HistoryTable({
   projectId,
@@ -37,9 +38,7 @@ export function HistoryTable({
             {entry.filename}
           </span>
           <span className="text-sm uppercase text-accent">{entry.format}</span>
-          <span className="text-sm text-muted-foreground">
-            {new Date(entry.generatedAt).toLocaleString()}
-          </span>
+          <span className="text-sm text-muted-foreground">{formatDateTime(entry.generatedAt)}</span>
           <span className="text-sm text-muted-foreground tabular-nums">
             {(entry.sizeBytes / 1024).toFixed(0)} KB
           </span>

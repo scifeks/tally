@@ -189,10 +189,7 @@ export default function Dashboard() {
 
               <Panel title="at a glance">
                 <div className="divide-y divide-border text-xs">
-                  <GlanceRow
-                    label="last scan"
-                    value={counts?.lastScanAt ? formatRelative(counts.lastScanAt) : 'never'}
-                  />
+                  <GlanceRow label="last scan" value={formatRelative(counts?.lastScanAt)} />
                   <GlanceRow label="total findings" value={totalFindings.toString()} />
                   <GlanceRow
                     label="open critical"

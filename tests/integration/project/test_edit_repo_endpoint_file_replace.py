@@ -1,27 +1,20 @@
 """Integration tests for ``edit_repository`` endpoint-file replacement.
 
-Phase 9 closure: when a user edits a repo and answers "y" to replace
-the endpoint file, the wizard ingests the new file via
-``UserFileProvider`` + ``UrlInventoryService.ingest_user_file``, which
-wipes prior USER-source rows that share the new file's destination
-path (``endpoints/<uuid>/user_uploads/<basename>``) before inserting
-rows for the new file.
+Each upload lands in a fresh ``endpoints/<repo-name>-<epoch>/`` sibling
+directory; prior uploads are kept as history. The repo's
+``url_seed_file`` column points at the most-recent upload path. Per-file
+``url_findings`` rows accumulate (each upload has its own ``file_path``).
 
-These tests assert the wipe-and-replace semantics end-to-end:
+These tests cover:
 
-- Same-basename replacement: rows for the prior file are wiped because
-  the upload target path collides — only the new file's rows survive.
-- Different-basename replacement: both files' rows coexist in
-  ``url_findings`` (the wipe primitive is keyed on file_path; this is
-  a documented quirk that allows multiple endpoint files per repo).
-- "N" (keep): rows are untouched.
-- The new upload lives under
-  ``endpoints/<repo.uuid>/user_uploads/<basename>``.
+- Replace branch (any basename): a new sibling dir is created, rows for
+  both files coexist in ``url_findings``, and ``url_seed_file`` points
+  at the latest upload.
+- "N" (keep): rows and seed-file pointer are untouched.
 """
 
 from __future__ import annotations
 
-import datetime
 import json
 import shutil
 from pathlib import Path
@@ -55,30 +48,20 @@ def _make_pm(base_path: Path):  # type: ignore[no-untyped-def]
 
 
 def _setup_project(base_path: Path):  # type: ignore[no-untyped-def]
-    from core.config.schemas import ProjectConfig
-
     pm = _make_pm(base_path)
     pm.create_project_dirs("test-project")
-    pc = ProjectConfig(
-        project_name="test-project",
-        created=datetime.datetime.now().isoformat(),
-        repositories=[],
-    )
-    pm.config.save_project_config("test-project", pc)
+    pm.save_project("test-project")
     return pm
 
 
-def _list_url_findings(base_path: Path, repo_uuid: str):  # type: ignore[no-untyped-def]
+def _list_url_findings(base_path: Path, repo_id: int):  # type: ignore[no-untyped-def]
     from core.project_paths import ProjectPaths
     from infrastructure.store.connection import ConnectionFactory
-    from infrastructure.store.repositories.repositories import RepositoryRepository
     from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
     paths = ProjectPaths.from_canonical(base_path, "test-project")
     factory = ConnectionFactory(paths.findings_db)
-    repo_row = RepositoryRepository(factory).get_by_uuid(repo_uuid)
-    assert repo_row is not None, "expected repositories row after add_repository"
-    return UrlFindingRepository(factory).list_for_repo(repo_row.id)
+    return UrlFindingRepository(factory).list_for_repo(repo_id)
 
 
 def _make_oas3_with_path(path: str) -> str:
@@ -139,18 +122,17 @@ class TestEditRepositoryEndpointFileReplacement:
     def test_replacement_with_same_basename_wipes_and_inserts(
         self, tmp_path: Path
     ) -> None:
-        """Same-basename replace: old rows wiped, only new rows remain.
+        """Same-basename replace: each upload lands in a fresh sibling dir.
 
-        The wipe primitive keys on the upload target path
-        (``user_uploads/<basename>``); a same-basename re-upload collides,
-        so the prior rows are removed before the new file's rows go in.
+        Two uploads with the same basename create two distinct sibling
+        dirs (different epochs), both files' rows accumulate, and the
+        seed-file pointer tracks the latest upload.
         """
         from application.project.wizard import InteractiveProjectWizard
         from core.project_paths import ProjectPaths
 
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
-        # Two source files with the SAME basename but in different dirs.
         src_a_dir = tmp_path / "src_a"
         src_a_dir.mkdir()
         src_b_dir = tmp_path / "src_b"
@@ -166,38 +148,40 @@ class TestEditRepositoryEndpointFileReplacement:
 
         repo = _add_repository_with_endpoint(wizard, repo_dir, oas3_a)
         assert repo is not None
-        assert repo.uuid
+        assert repo.id is not None
 
-        before = _list_url_findings(base_path, repo.uuid)
+        before = _list_url_findings(base_path, repo.id)
         assert len(before) == 1
         assert before[0].path == "/users"
 
         edited = _edit_repository_replace_endpoint(wizard, repo.name, repo_dir, oas3_b)
         assert edited is not None
+        assert edited.url_seed_file is not None
 
-        after = _list_url_findings(base_path, repo.uuid)
-        assert len(after) == 1, (
-            f"expected exactly one row after same-basename replacement, "
-            f"got {len(after)}"
-        )
-        assert after[0].path == "/products"
-        assert after[0].file_path is not None
-        assert after[0].file_path.endswith("api.json")
+        after = _list_url_findings(base_path, repo.id)
+        paths_seen = sorted(r.path for r in after)
+        assert paths_seen == ["/products", "/users"]
 
         paths = ProjectPaths.from_canonical(base_path, "test-project")
-        upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
-        assert (upload_dir / "api.json").exists()
+        sibling_dirs = sorted(
+            p.name
+            for p in paths.endpoints_dir.iterdir()
+            if p.is_dir() and p.name.startswith(f"{repo.name}-")
+        )
+        assert len(sibling_dirs) == 2
+        for d in sibling_dirs:
+            assert (paths.endpoints_dir / d / "api.json").exists()
+
+        # url_seed_file points at the latest upload.
+        assert Path(edited.url_seed_file).name == "api.json"
+        assert Path(edited.url_seed_file).parent.parent == paths.endpoints_dir
+        assert Path(edited.url_seed_file).parent.name == sibling_dirs[-1]
 
     def test_replacement_with_different_basename_keeps_both(
         self, tmp_path: Path
     ) -> None:
-        """Different-basename replace: rows for both files coexist.
-
-        Documented quirk: ``ingest_user_file`` wipes by the new file's
-        upload path. A different basename = different upload path = no
-        overlap, so prior file's rows survive. This is by design — the
-        repo can carry multiple endpoint files.
-        """
+        """Different-basename replace: rows for both files coexist; both
+        sibling dirs are kept on disk."""
         from application.project.wizard import InteractiveProjectWizard
         from core.project_paths import ProjectPaths
 
@@ -214,20 +198,28 @@ class TestEditRepositoryEndpointFileReplacement:
 
         repo = _add_repository_with_endpoint(wizard, repo_dir, oas3_a)
         assert repo is not None
+        assert repo.id is not None
 
         edited = _edit_repository_replace_endpoint(wizard, repo.name, repo_dir, oas3_b)
         assert edited is not None
 
-        after = _list_url_findings(base_path, repo.uuid)
+        after = _list_url_findings(base_path, repo.id)
         paths_seen = sorted(r.path for r in after)
         assert paths_seen == ["/products", "/users"], (
             f"expected both files' rows to coexist, got {paths_seen}"
         )
 
         paths = ProjectPaths.from_canonical(base_path, "test-project")
-        upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
-        assert (upload_dir / "api_v1.json").exists()
-        assert (upload_dir / "api_v2.json").exists()
+        sibling_dirs = sorted(
+            p.name
+            for p in paths.endpoints_dir.iterdir()
+            if p.is_dir() and p.name.startswith(f"{repo.name}-")
+        )
+        assert len(sibling_dirs) == 2
+        basenames = {
+            (paths.endpoints_dir / d).iterdir().__next__().name for d in sibling_dirs
+        }
+        assert basenames == {"api_v1.json", "api_v2.json"}
 
     def test_replacement_with_keep_choice_leaves_rows_untouched(
         self, tmp_path: Path
@@ -246,7 +238,10 @@ class TestEditRepositoryEndpointFileReplacement:
 
         repo = _add_repository_with_endpoint(wizard, repo_dir, oas3_a)
         assert repo is not None
-        before = _list_url_findings(base_path, repo.uuid)
+        assert repo.id is not None
+        seed_before = repo.url_seed_file
+
+        before = _list_url_findings(base_path, repo.id)
         assert len(before) == 1
         assert before[0].path == "/keep"
 
@@ -266,7 +261,8 @@ class TestEditRepositoryEndpointFileReplacement:
         with patch("builtins.input", side_effect=edit_inputs):
             edited = wizard.edit_repository("test-project", repo.name)
         assert edited is not None
+        assert edited.url_seed_file == seed_before
 
-        after = _list_url_findings(base_path, repo.uuid)
+        after = _list_url_findings(base_path, repo.id)
         assert len(after) == 1
         assert after[0].path == "/keep"

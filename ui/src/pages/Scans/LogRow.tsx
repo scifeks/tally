@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn, formatTime } from '@/lib/utils'
 import type { ScanLogEvent, ScanLogEventType } from '@/lib/types'
 
 const TYPE_STYLE: Record<ScanLogEventType, { color: string; prefix: string }> = {
@@ -17,7 +17,7 @@ const TYPE_STYLE: Record<ScanLogEventType, { color: string; prefix: string }> = 
 }
 
 export function LogRow({ event }: { event: ScanLogEvent }) {
-  const time = new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false })
+  const time = formatTime(event.timestamp)
   const style = TYPE_STYLE[event.type]
 
   return (

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 
@@ -12,6 +11,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from core.config.schemas.repository import Repository  # noqa: E402
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.repositories import (  # noqa: E402
@@ -24,6 +24,17 @@ from infrastructure.store.repositories.url_findings import (  # noqa: E402
 pytestmark = pytest.mark.integration
 
 
+def _repo(name: str) -> Repository:
+    """Minimal Repository for tests that only need a row id."""
+    return Repository(
+        name=name,
+        type=["api"],
+        languages=["python"],
+        docker_path="/app",
+        container_name="ctr",
+    )
+
+
 @pytest.fixture()
 def factory(tmp_path: Path) -> ConnectionFactory:
     f = ConnectionFactory(tmp_path / "findings.db")
@@ -34,7 +45,7 @@ def factory(tmp_path: Path) -> ConnectionFactory:
 @pytest.fixture()
 def repo_id(factory: ConnectionFactory) -> int:
     rr = RepositoryRepository(factory)
-    return rr.insert(uuid=str(uuid4()), name="alpha")
+    return rr.insert(_repo("alpha"))
 
 
 @pytest.fixture()
@@ -244,8 +255,8 @@ class TestPagination:
         url_repo: UrlFindingRepository,
     ) -> None:
         rr = RepositoryRepository(factory)
-        repo_a = rr.insert(uuid=str(uuid4()), name="acme-api")
-        repo_b = rr.insert(uuid=str(uuid4()), name="other-svc")
+        repo_a = rr.insert(_repo("acme-api"))
+        repo_b = rr.insert(_repo("other-svc"))
         url_repo.insert_many(
             [
                 _scan(repo_a, method="GET", host="api.example.com", path="/u"),
@@ -269,8 +280,8 @@ class TestPagination:
         self, factory: ConnectionFactory, url_repo: UrlFindingRepository
     ) -> None:
         rr = RepositoryRepository(factory)
-        active_id = rr.insert(uuid=str(uuid4()), name="active")
-        deleted_id = rr.insert(uuid=str(uuid4()), name="deleted")
+        active_id = rr.insert(_repo("active"))
+        deleted_id = rr.insert(_repo("deleted"))
         url_repo.insert_many([_scan(active_id, path="/a")])
         url_repo.insert_many([_scan(deleted_id, path="/d")])
         rr.soft_delete(deleted_id)
@@ -350,8 +361,8 @@ class TestFilterOptions:
         self, factory: ConnectionFactory, url_repo: UrlFindingRepository
     ) -> None:
         rr = RepositoryRepository(factory)
-        a_id = rr.insert(uuid=str(uuid4()), name="alpha-repo")
-        b_id = rr.insert(uuid=str(uuid4()), name="beta-repo")
+        a_id = rr.insert(_repo("alpha-repo"))
+        b_id = rr.insert(_repo("beta-repo"))
         url_repo.insert_many(
             [
                 _scan(a_id, path="/x"),
@@ -406,8 +417,8 @@ class TestFilterOptions:
         self, factory: ConnectionFactory, url_repo: UrlFindingRepository
     ) -> None:
         rr = RepositoryRepository(factory)
-        active_id = rr.insert(uuid=str(uuid4()), name="active")
-        deleted_id = rr.insert(uuid=str(uuid4()), name="deleted")
+        active_id = rr.insert(_repo("active"))
+        deleted_id = rr.insert(_repo("deleted"))
         url_repo.insert_many([_scan(active_id, path="/a")])
         url_repo.insert_many([_scan(deleted_id, path="/d")])
         rr.soft_delete(deleted_id)
@@ -423,7 +434,7 @@ class TestForeignKeys:
         # ON DELETE CASCADE only fires on hard delete, not soft delete.
         # Hard delete the repositories row directly to verify the FK.
         rr = RepositoryRepository(factory)
-        rid = rr.insert(uuid=str(uuid4()), name="dynamite")
+        rid = rr.insert(_repo("dynamite"))
         url_repo.insert_many([_scan(rid, path="/x"), _scan(rid, path="/y")])
         with factory.connect() as conn:
             conn.execute("DELETE FROM repositories WHERE id = ?", (rid,))

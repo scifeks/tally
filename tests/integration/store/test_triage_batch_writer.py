@@ -36,12 +36,10 @@ def _make_repos(
 
 
 def _seed_repo(factory: ConnectionFactory, name: str) -> int:
-    import uuid as _uuid
-
     with factory.connect() as conn:
         cur = conn.execute(
-            "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
-            (str(_uuid.uuid4()), name),
+            "INSERT INTO repositories (name) VALUES (?)",
+            (name,),
         )
         return cur.lastrowid  # type: ignore[return-value]
 

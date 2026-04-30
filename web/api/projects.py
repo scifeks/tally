@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,11 +18,15 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from application.project.manager import ProjectManager
+from application.project.repositories_service import (
+    DuplicateRepositoryName,
+    ProjectRepositoriesService,
+    RepositoryNotFound,
+)
 from core.config.manager import ConfigManager
 from core.config.schemas import Repository
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
 from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -91,6 +96,14 @@ async def _count_findings(paths: ProjectPaths) -> int:
     return await asyncio.to_thread(_query, factory)
 
 
+def _service_from_request(request: Request) -> ProjectRepositoriesService:
+    return ProjectRepositoriesService.from_request(request)
+
+
+def _count_active_repos(service: ProjectRepositoriesService, project_id: int) -> int:
+    return len(service.list_active(project_id))
+
+
 @v1_router.get("", response_model=ProjectListResponse)
 async def list_projects(
     request: Request,
@@ -143,11 +156,13 @@ async def get_project_meta(
     finding_count = await _count_findings(paths)
     url_list_count = await asyncio.to_thread(_count_url_findings, paths)
     enabled_tools = await asyncio.to_thread(_load_project_tool_ids, paths.commands_json)
+    service = _service_from_request(request)
+    repo_count = await asyncio.to_thread(_count_active_repos, service, project_id)
     return ProjectMetaResponse(
         id=int(row["id"]),
         name=config.project_name,
         code=config.abbreviation,
-        repo_count=len(config.repositories),
+        repo_count=repo_count,
         url_list_count=url_list_count,
         finding_count=finding_count,
         enabled_tools=enabled_tools,
@@ -158,6 +173,7 @@ def _build_project_info_response(
     row: dict,
     config,
     finding_count: int,
+    repo_count: int,
 ) -> ProjectInfoResponse:
     paths = ProjectPaths.from_registry_row(row)
     return ProjectInfoResponse(
@@ -169,7 +185,7 @@ def _build_project_info_response(
         abbreviation=config.abbreviation,
         created_at=config.created,
         path=str(paths.root),
-        repo_count=len(config.repositories),
+        repo_count=repo_count,
         finding_count=finding_count,
     )
 
@@ -188,7 +204,9 @@ async def get_project_info_endpoint(
         raise NotFound(f"Project {project_id} not found")
     paths = ProjectPaths.from_registry_row(row)
     finding_count = await _count_findings(paths)
-    return _build_project_info_response(row, config, finding_count)
+    service = _service_from_request(request)
+    repo_count = await asyncio.to_thread(_count_active_repos, service, project_id)
+    return _build_project_info_response(row, config, finding_count, repo_count)
 
 
 @v1_router.patch("/{project_id}/info", response_model=ProjectInfoResponse)
@@ -218,52 +236,29 @@ async def patch_project_info(
 
     paths = ProjectPaths.from_registry_row(row)
     finding_count = await _count_findings(paths)
-    return _build_project_info_response(row, config, finding_count)
+    service = _service_from_request(request)
+    repo_count = await asyncio.to_thread(_count_active_repos, service, project_id)
+    return _build_project_info_response(row, config, finding_count, repo_count)
 
 
-def _make_repo_repo(row: dict) -> RepositoryRepository:
-    """Build a RepositoryRepository for the given project registry row."""
-    paths = ProjectPaths.from_registry_row(row)
-    paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    return RepositoryRepository(factory)
+def _existing_endpoint_file(repo: Repository) -> str | None:
+    """Return the basename of the repo's most-recent seed-file upload, or
+    ``None`` if no seed file is configured.
 
-
-def _existing_endpoint_file(paths: ProjectPaths, repo: Repository) -> str | None:
-    """Return the basename of the most-recent file under
-    ``endpoints/<repo.uuid>/user_uploads/`` if any, else ``None``.
-
-    Phase 9 stores user-uploaded endpoint specs under that directory; the
-    presence of a file is the authoritative signal that a seed file is
-    configured for the repo. Multiple files can coexist (replace-by-basename
-    semantics); return the one most recently written.
+    The path is persisted in ``repositories.url_seed_file`` and points
+    at ``endpoints/<repo-name>-<epoch>/<basename>``.
     """
-    if not repo.uuid:
+    if not repo.url_seed_file:
         return None
-    upload_dir = paths.endpoints_dir / repo.uuid / "user_uploads"
-    if not upload_dir.exists():
-        return None
-    candidates = [p for p in upload_dir.iterdir() if p.is_file()]
-    if not candidates:
-        return None
-    latest = max(candidates, key=lambda p: p.stat().st_mtime)
-    return latest.name
+    return Path(repo.url_seed_file).name
 
 
-def _serialize_repo(
-    repo: Repository,
-    repo_id: int | None,
-    *,
-    paths: ProjectPaths | None = None,
-) -> dict:
+def _serialize_repo(repo: Repository, repo_id: int | None) -> dict:
     """Dump a Repository to a JSON dict; strip auth; carry id and seed file."""
     data = repo.model_dump()
     data.pop("auth", None)
     data["id"] = repo_id
-    data["endpoint_file"] = (
-        _existing_endpoint_file(paths, repo) if paths is not None else None
-    )
+    data["endpoint_file"] = _existing_endpoint_file(repo)
     return data
 
 
@@ -277,30 +272,12 @@ async def list_repositories(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
 ) -> JSONResponse:
-    row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    registry = request.app.state.project_registry
-    manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(row["name"])
-    if config is None:
-        raise NotFound(f"Project {project_id} not found")
-    paths = ProjectPaths.from_registry_row(row)
-    repo_repo = _make_repo_repo(row)
-    repos = config.repositories
+    _resolve_project(request, project_id)
+    service = _service_from_request(request)
+    repos = service.list_active(project_id)
     total = len(repos)
     page = repos[offset : offset + limit]
-    items = []
-    for repo in page:
-        db_row = (
-            repo_repo.get_by_uuid_including_deleted(repo.uuid) if repo.uuid else None
-        )
-        if db_row is not None and db_row.deleted_at is not None:
-            continue
-        repo_id = db_row.id if db_row is not None else None
-        # DB name is the source of truth: name-only PATCHes rename the DB
-        # row without rewriting project.json (Phase 9 / C4 dual-write rule).
-        display = repo.model_copy(update={"name": db_row.name}) if db_row else repo
-        items.append(_serialize_repo(display, repo_id, paths=paths))
+    items = [_serialize_repo(repo, repo.id) for repo in page]
     return JSONResponse(
         content={
             "items": items,
@@ -321,27 +298,13 @@ async def get_repository_detail(
     request: Request,
 ) -> JSONResponse:
     """Return a single repository. Auth fields are never echoed."""
-    row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    registry = request.app.state.project_registry
-    manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(row["name"])
-    if config is None:
-        raise NotFound(f"Project {project_id} not found")
-
-    repo_repo = _make_repo_repo(row)
-    db_row = repo_repo.get_by_id(repo_id)
-    if db_row is None or db_row.deleted_at is not None:
-        raise NotFound(f"Repository {repo_id} not found")
-
-    config_repo = next((r for r in config.repositories if r.uuid == db_row.uuid), None)
-    if config_repo is None:
-        raise NotFound(f"Repository {repo_id} not found")
-
-    # DB name is the source of truth (Phase 9 / C4 dual-write rule).
-    display = config_repo.model_copy(update={"name": db_row.name})
-    paths = ProjectPaths.from_registry_row(row)
-    return JSONResponse(content=_serialize_repo(display, db_row.id, paths=paths))
+    _resolve_project(request, project_id)
+    service = _service_from_request(request)
+    try:
+        repo = service.get(project_id, repo_id)
+    except RepositoryNotFound as exc:
+        raise NotFound(str(exc)) from exc
+    return JSONResponse(content=_serialize_repo(repo, repo.id))
 
 
 def _parse_payload(payload: str | None) -> dict[str, Any]:
@@ -364,40 +327,28 @@ async def create_repository(
     payload: str = Form(...),
     endpoint_file: UploadFile | None = File(default=None),
 ) -> JSONResponse:
-    """Create a new repository (multipart). Generates uuid server-side."""
-    row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    project_name = row["name"]
+    """Create a new repository (multipart)."""
+    _resolve_project(request, project_id)
 
     data = _parse_payload(payload)
-    data.pop("uuid", None)
+    data.pop("id", None)
 
     try:
-        repo = Repository.new(**data)
+        repo = Repository(**data)
     except ValidationError as exc:
         raise ApiValidationError(str(exc)) from exc
 
-    manager = ConfigManager(base_path)
-    repo_repo = _make_repo_repo(row)
-    with manager.locked_project_config(project_name):
-        config = manager.load_project_config(project_name)
-        if config is None:
-            raise NotFound(f"Project {project_id} not found")
-        if any(r.name == repo.name for r in config.repositories):
-            raise ApiValidationError(
-                f"Repository '{repo.name}' already exists in project"
-            )
-        repo_id = repo_repo.insert(uuid=repo.uuid, name=repo.name)
-        config.repositories = [*config.repositories, repo]
-        manager.save_project_config(project_name, config)
+    service = _service_from_request(request)
+    try:
+        created = service.create(project_id, repo)
+    except DuplicateRepositoryName as exc:
+        raise ApiValidationError(str(exc)) from exc
 
-    if endpoint_file is not None and endpoint_file.filename:
-        await _ingest_endpoint_file(row, repo, repo_id, endpoint_file)
+    if endpoint_file is not None and endpoint_file.filename and created.id is not None:
+        await _ingest_endpoint_file(request, project_id, created, endpoint_file)
+        created = service.get(project_id, created.id)
 
-    paths = ProjectPaths.from_registry_row(row)
-    return JSONResponse(
-        status_code=201, content=_serialize_repo(repo, repo_id, paths=paths)
-    )
+    return JSONResponse(status_code=201, content=_serialize_repo(created, created.id))
 
 
 @v1_router.patch("/{project_id}/repositories/{repo_id}")
@@ -409,59 +360,26 @@ async def patch_repository(
     endpoint_file: UploadFile | None = File(default=None),
 ) -> JSONResponse:
     """Partial update of a repository (multipart)."""
-    row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    project_name = row["name"]
-
-    repo_repo = _make_repo_repo(row)
-    db_row = repo_repo.get_by_id(repo_id)
-    if db_row is None or db_row.deleted_at is not None:
-        raise NotFound(f"Repository {repo_id} not found")
-    target_uuid = db_row.uuid
+    _resolve_project(request, project_id)
+    service = _service_from_request(request)
 
     data = _parse_payload(payload)
-    data.pop("uuid", None)
     data.pop("id", None)
 
-    manager = ConfigManager(base_path)
-    with manager.locked_project_config(project_name):
-        config = manager.load_project_config(project_name)
-        if config is None:
-            raise NotFound(f"Project {project_id} not found")
-        idx = next(
-            (i for i, r in enumerate(config.repositories) if r.uuid == target_uuid),
-            None,
-        )
-        if idx is None:
-            raise NotFound(f"Repository {repo_id} not found in project config")
-
-        existing = config.repositories[idx]
-        merged = existing.model_dump()
-        merged.update(data)
-        try:
-            updated = Repository(**merged)
-        except ValidationError as exc:
-            raise ApiValidationError(str(exc)) from exc
-
-        if updated.name != existing.name:
-            repo_repo.rename(repo_id, updated.name)
-
-        non_name_changed = existing.model_dump(exclude={"name"}) != updated.model_dump(
-            exclude={"name"}
-        )
-        if non_name_changed:
-            config.repositories = [
-                *config.repositories[:idx],
-                updated,
-                *config.repositories[idx + 1 :],
-            ]
-            manager.save_project_config(project_name, config)
+    try:
+        updated = service.update(project_id, repo_id, data)
+    except RepositoryNotFound as exc:
+        raise NotFound(str(exc)) from exc
+    except DuplicateRepositoryName as exc:
+        raise ApiValidationError(str(exc)) from exc
+    except ValidationError as exc:
+        raise ApiValidationError(str(exc)) from exc
 
     if endpoint_file is not None and endpoint_file.filename:
-        await _ingest_endpoint_file(row, updated, repo_id, endpoint_file)
+        await _ingest_endpoint_file(request, project_id, updated, endpoint_file)
+        updated = service.get(project_id, repo_id)
 
-    paths = ProjectPaths.from_registry_row(row)
-    return JSONResponse(content=_serialize_repo(updated, repo_id, paths=paths))
+    return JSONResponse(content=_serialize_repo(updated, updated.id))
 
 
 @v1_router.delete("/{project_id}/repositories/{repo_id}", status_code=204)
@@ -470,25 +388,13 @@ async def delete_repository(
     repo_id: int,
     request: Request,
 ) -> Response:
-    """Soft-delete a repository: mark deleted_at + drop from project.json."""
-    row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    project_name = row["name"]
-
-    repo_repo = _make_repo_repo(row)
-    db_row = repo_repo.get_by_id(repo_id)
-    if db_row is None or db_row.deleted_at is not None:
-        raise NotFound(f"Repository {repo_id} not found")
-    target_uuid = db_row.uuid
-
-    manager = ConfigManager(base_path)
-    with manager.locked_project_config(project_name):
-        config = manager.load_project_config(project_name)
-        if config is None:
-            raise NotFound(f"Project {project_id} not found")
-        config.repositories = [r for r in config.repositories if r.uuid != target_uuid]
-        manager.save_project_config(project_name, config)
-    repo_repo.soft_delete(repo_id)
+    """Soft-delete a repository."""
+    _resolve_project(request, project_id)
+    service = _service_from_request(request)
+    try:
+        service.delete(project_id, repo_id)
+    except RepositoryNotFound as exc:
+        raise NotFound(str(exc)) from exc
     return Response(status_code=204)
 
 
@@ -503,69 +409,53 @@ async def patch_repository_auth(
     body: RepoAuthPatchRequest,
 ) -> Response:
     """Update the auth block on a repository (JSON). Auth is never echoed."""
-    row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    project_name = row["name"]
-
-    repo_repo = _make_repo_repo(row)
-    db_row = repo_repo.get_by_id(repo_id)
-    if db_row is None or db_row.deleted_at is not None:
-        raise NotFound(f"Repository {repo_id} not found")
-    target_uuid = db_row.uuid
-
-    update = body.model_dump(exclude_none=True)
-    manager = ConfigManager(base_path)
-    with manager.locked_project_config(project_name):
-        config = manager.load_project_config(project_name)
-        if config is None:
-            raise NotFound(f"Project {project_id} not found")
-        idx = next(
-            (i for i, r in enumerate(config.repositories) if r.uuid == target_uuid),
-            None,
-        )
-        if idx is None:
-            raise NotFound(f"Repository {repo_id} not found in project config")
-        existing = config.repositories[idx]
-        existing_auth = existing.auth.model_dump() if existing.auth else {}
-        merged_auth = {**existing_auth, **update}
-        try:
-            from core.config.schemas.repository import RepoAuth
-
-            new_auth = RepoAuth(**merged_auth)
-            updated = existing.model_copy(update={"auth": new_auth})
-            Repository(**updated.model_dump())
-        except ValidationError as exc:
-            raise ApiValidationError(str(exc)) from exc
-        config.repositories = [
-            *config.repositories[:idx],
-            updated,
-            *config.repositories[idx + 1 :],
-        ]
-        manager.save_project_config(project_name, config)
+    _resolve_project(request, project_id)
+    service = _service_from_request(request)
+    auth_patch = body.model_dump(exclude_none=True)
+    try:
+        service.update_auth(project_id, repo_id, auth_patch)
+    except RepositoryNotFound as exc:
+        raise NotFound(str(exc)) from exc
+    except ValidationError as exc:
+        raise ApiValidationError(str(exc)) from exc
     return Response(status_code=204)
 
 
 async def _ingest_endpoint_file(
-    row: dict,
+    request: Request,
+    project_id: int,
     repo: Repository,
-    repo_id: int,
     endpoint_file: UploadFile,
 ) -> None:
-    """Save the upload under user_uploads/ and ingest via UserFileProvider."""
+    """Persist the upload to ``endpoints/<repo-name>-<epoch>/`` and ingest it.
+
+    Each upload lands in a fresh sibling directory keyed on epoch
+    seconds; prior uploads accumulate as history. The most-recent path
+    is recorded on ``repositories.url_seed_file``.
+    """
     from application.url_inventory.ports import UrlProviderContext
     from application.url_inventory.providers.user_file import UserFileProvider
     from application.url_inventory.service import UrlInventoryService
     from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
+    if repo.id is None:
+        raise ApiValidationError("Repository must be persisted before upload")
+    repo_id = repo.id
+
+    row = _resolve_project(request, project_id)
     paths = ProjectPaths.from_registry_row(row)
-    upload_dir = paths.endpoints_dir / repo.uuid / "user_uploads"
+    epoch = time.time_ns()
+    upload_dir = paths.seed_upload_dir(repo.name, epoch)
     upload_dir.mkdir(parents=True, exist_ok=True)
     dest = upload_dir / (endpoint_file.filename or "upload.json")
     dest.write_bytes(await endpoint_file.read())
 
+    service = _service_from_request(request)
+    service.record_seed_file(project_id, repo_id, str(dest))
+
     factory = ConnectionFactory(paths.findings_db)
     factory.init_schema()
-    service = UrlInventoryService(UrlFindingRepository(factory))
+    inventory = UrlInventoryService(UrlFindingRepository(factory))
     ctx = UrlProviderContext(
         repo=repo,
         repo_id=repo_id,
@@ -574,7 +464,7 @@ async def _ingest_endpoint_file(
         run_id=None,
     )
     entries = list(UserFileProvider().provide(ctx, file_path=str(dest)))
-    service.ingest_user_file(
+    inventory.ingest_user_file(
         repo_id=repo_id,
         file_path=str(dest),
         entries=entries,

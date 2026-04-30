@@ -1,19 +1,11 @@
 """Repository schema."""
 
-import re
 import warnings
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _VALID_REPO_TYPES: frozenset[str] = frozenset({"library", "api", "ui"})
-
-_UUID4_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}"
-    r"-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-)
 
 
 class RepoAuth(BaseModel):
@@ -48,32 +40,30 @@ class RepoAuth(BaseModel):
 class Repository(BaseModel):
     """Repository configuration.
 
-    Phase 9 introduces a stable integer ``id`` (carried in the per-project
-    SQLite ``repositories`` table) and an immutable ``uuid`` (the JSON-side
-    identifier). ``name`` remains in JSON during the Phase 9 transition;
-    Phase 13.3 will move it (and the rest of the per-repo JSON config) into
-    the database. New code paths should resolve repos by ``uuid`` or ``id``.
+    Phase 14.3: the per-project SQLite ``repositories`` table is the sole
+    source of truth for per-repo config. ``id`` is the stable identifier
+    (assigned by SQLite on first insert); ``url_seed_file`` carries the
+    most-recent user-uploaded endpoint file path. Both are populated by
+    the DB row builder and excluded from any JSON serialisation.
     """
 
     model_config = ConfigDict(extra="ignore")
 
     name: str = Field(..., description="Repository name (mutable label)")
-    uuid: str = Field(
-        default="",
-        description=(
-            "Stable uuid4 identifier stamped at creation. Use "
-            "``Repository.new(...)`` to construct new instances so the uuid "
-            "is auto-stamped; bare ``Repository(...)`` calls require an "
-            "explicit non-empty uuid."
-        ),
-    )
     id: int | None = Field(
         default=None,
         description=(
-            "Phase 9: integer primary key from the ``repositories`` table. "
-            "Populated by ``ConfigManager.load_repositories`` after sync; "
-            "``None`` on freshly-built ``Repository`` instances that have "
-            "not been persisted yet. Not serialised back to ``project.json``."
+            "Integer primary key from the ``repositories`` table. ``None`` "
+            "on freshly-built instances that have not been persisted yet."
+        ),
+        exclude=True,
+    )
+    url_seed_file: str | None = Field(
+        default=None,
+        description=(
+            "Absolute path to the most-recent user-uploaded endpoint file "
+            "for this repo, or ``None`` when no upload has occurred. "
+            "Populated by the DB row builder."
         ),
         exclude=True,
     )
@@ -179,25 +169,6 @@ class Repository(BaseModel):
             "injects it into Katana headers automatically."
         ),
     )
-
-    @classmethod
-    def new(cls, **fields: Any) -> "Repository":
-        """Construct a Repository with a freshly-stamped uuid4.
-
-        Single point of uuid generation — both the REPL wizard and the
-        web API construct new repositories via this method so the uuid
-        policy lives in the schema, not duplicated in adapters.
-        """
-        fields.setdefault("uuid", str(uuid4()))
-        return cls(**fields)
-
-    @field_validator("uuid")
-    @classmethod
-    def validate_uuid(cls, v: str) -> str:
-        """Require a valid uuid4 string."""
-        if not _UUID4_RE.match(v.lower()):
-            raise ValueError(f"uuid must be a valid uuid4 string, got: {v!r}")
-        return v
 
     @field_validator("type")
     @classmethod

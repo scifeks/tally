@@ -24,8 +24,10 @@ def _make_sc(repos: list) -> ScanCommands:
     repl = MagicMock()
     repl.active_project = "DVPA"
     repl.base_path = "/tmp/tally"
-    repl.config.load_repositories.return_value = repos
-    return ScanCommands(repl)
+    sc = ScanCommands(repl)
+    # _active_repos hits the per-project SQLite DB; stub at the instance.
+    sc._active_repos = MagicMock(return_value=repos)  # type: ignore[method-assign]
+    return sc
 
 
 class TestMaybeWarnDastWithoutDiscoveryUrlFindings:

@@ -65,7 +65,6 @@ def _make_db_active(
     rows: list[tuple[str, str, str]],
 ) -> None:
     """Seed active findings with (tool, repo_name, segment) tuples."""
-    import uuid as _uuid
 
     _init_store(db_path)
     _seed_scan_run(db_path)
@@ -75,8 +74,8 @@ def _make_db_active(
     for tool, repo_name, segment in rows:
         if repo_name not in repo_ids:
             cur = conn.execute(
-                "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
-                (str(_uuid.uuid4()), repo_name),
+                "INSERT INTO repositories (name) VALUES (?)",
+                (repo_name,),
             )
             repo_ids[repo_name] = cur.lastrowid  # type: ignore[assignment]
         conn.execute(

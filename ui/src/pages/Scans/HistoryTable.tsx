@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { cn } from '@/lib/utils'
+import { cn, formatDateTime, toEpoch } from '@/lib/utils'
 import { useScanHistory } from '@/lib/api'
 
 export function HistoryTable({ projectId }: { projectId: number }) {
@@ -9,7 +9,7 @@ export function HistoryTable({ projectId }: { projectId: number }) {
     () =>
       scans
         .filter(s => s.projectId === projectId && s.status !== 'running')
-        .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
+        .sort((a, b) => toEpoch(b.startedAt) - toEpoch(a.startedAt)),
     [scans, projectId]
   )
 
@@ -57,9 +57,7 @@ export function HistoryTable({ projectId }: { projectId: number }) {
                 </span>
               </td>
               <td className="px-3 py-2 text-right tabular-nums">{scan.findingsCount ?? '-'}</td>
-              <td className="px-3 py-2 text-muted-foreground">
-                {new Date(scan.startedAt).toLocaleString()}
-              </td>
+              <td className="px-3 py-2 text-muted-foreground">{formatDateTime(scan.startedAt)}</td>
             </tr>
           ))}
         </tbody>

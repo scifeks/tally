@@ -2,24 +2,47 @@
   "repos": [
     {
       "id": 10,
-      "uuid": "repo-uuid-10",
       "name": "atl-api",
       "source": "github",
       "location": "github.com/atl/api"
     },
     {
       "id": 11,
-      "uuid": "repo-uuid-11",
       "name": "atl-web",
       "source": "github",
       "location": "github.com/atl/web"
     }
   ],
   "tools": [
-    { "id": "semgrep", "name": "semgrep", "domain": "sast", "enabled": true },
-    { "id": "osv-scanner", "name": "osv-scanner", "domain": "sca", "enabled": true },
-    { "id": "zap", "name": "zap", "domain": "web", "enabled": true },
-    { "id": "gitleaks", "name": "gitleaks", "domain": "secrets", "enabled": true }
+    {
+      "id": "semgrep",
+      "name": "semgrep",
+      "domain": "sast",
+      "enabled": true
+    },
+    {
+      "id": "osv-scanner",
+      "name": "osv-scanner",
+      "domain": "sca",
+      "enabled": true
+    },
+    {
+      "id": "zap",
+      "name": "zap",
+      "domain": "web",
+      "enabled": true
+    },
+    {
+      "id": "gitleaks",
+      "name": "gitleaks",
+      "domain": "secrets",
+      "enabled": true
+    }
   ],
-  "domains": ["sast", "sca", "web", "secrets"]
+  "domains": [
+    "sast",
+    "sca",
+    "web",
+    "secrets"
+  ]
 }

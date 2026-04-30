@@ -24,7 +24,6 @@ def repo(factory: ConnectionFactory) -> FindingRepository:
 
 
 def _insert(factory: ConnectionFactory, findings: list[dict]) -> None:
-    import uuid as _uuid
 
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
@@ -35,8 +34,8 @@ def _insert(factory: ConnectionFactory, findings: list[dict]) -> None:
         if repo_name and repo_name not in repo_ids:
             with factory.connect() as conn:
                 cur = conn.execute(
-                    "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
-                    (str(_uuid.uuid4()), repo_name),
+                    "INSERT INTO repositories (name) VALUES (?)",
+                    (repo_name,),
                 )
                 repo_ids[repo_name] = cur.lastrowid  # type: ignore[assignment]
         if repo_name:

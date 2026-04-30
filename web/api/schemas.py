@@ -228,7 +228,6 @@ class RepositoryItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: int | None = None
-    uuid: str | None = None
     name: str
     type: list[str]
     path: str | None = None
@@ -461,7 +460,6 @@ class UrlListFilterOptionsResponse(BaseModel):
 
 class ScanConfigRepo(BaseModel):
     id: int
-    uuid: str
     name: str
     source: str
     location: str | None = None

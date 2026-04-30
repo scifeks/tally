@@ -16,7 +16,6 @@ from .schemas import (
     EndpointConfig,
     GlobalConfig,
     ProjectConfig,
-    Repository,
 )
 
 if TYPE_CHECKING:
@@ -26,12 +25,10 @@ if TYPE_CHECKING:
 class ConfigManager:
     """Manages global and project-specific configurations.
 
-    Phase 9.1: every save method writes atomically (temp file + os.replace).
-    Callers that perform load → modify → save sequences must wrap the
-    sequence in one of the ``locked_*`` context managers so the entire
-    cycle is exclusive against other processes/tasks. ``save_repositories``
-    is the one save method that does an internal load → modify → save and
-    therefore acquires its own lock.
+    Every save method writes atomically (temp file + os.replace). Callers
+    that perform load → modify → save sequences must wrap the sequence in
+    one of the ``locked_*`` context managers so the entire cycle is
+    exclusive against other processes/tasks.
     """
 
     def __init__(
@@ -121,62 +118,6 @@ class ConfigManager:
         atomic_write_text(config_path, json.dumps(config.model_dump(), indent=2))
         if self._registry is not None:
             self._registry.register(project_name, str(self.base_path))
-
-    def load_repositories(self, project_name: str) -> list[Repository]:
-        """Load repositories from project.json for a project.
-
-        Phase 9: each returned ``Repository`` has its ``id`` populated by
-        joining its ``uuid`` against the per-project ``repositories``
-        table. Repos whose JSON-side uuid has no matching DB row (or
-        whose row is soft-deleted) come back with ``id=None``; callers
-        that need an active repo should filter accordingly.
-        """
-        config = self.load_project_config(project_name)
-        if config is None:
-            return []
-
-        try:
-            from infrastructure.store.connection import ConnectionFactory
-            from infrastructure.store.repositories.repositories import (
-                RepositoryRepository,
-            )
-
-            paths = self._project_paths(project_name)
-            if not paths.findings_db.exists():
-                return config.repositories
-            factory = ConnectionFactory(paths.findings_db)
-            repo_repo = RepositoryRepository(factory)
-        except Exception:
-            return config.repositories
-
-        out: list[Repository] = []
-        for repo in config.repositories:
-            try:
-                db_row = repo_repo.get_by_uuid_including_deleted(repo.uuid)
-            except Exception:
-                out.append(repo)
-                continue
-            if db_row is None:
-                out.append(repo)
-                continue
-            if db_row.deleted_at is not None:
-                continue
-            out.append(repo.model_copy(update={"id": db_row.id}))
-        return out
-
-    def save_repositories(
-        self, project_name: str, repositories: list[Repository]
-    ) -> None:
-        """Replace the repositories list in project.json atomically.
-
-        Caller must hold the project config lock for the surrounding load →
-        modify → save cycle (use ``locked_project_config(project_name)``).
-        """
-        config = self.load_project_config(project_name)
-        if config is None:
-            raise ValueError(f"Project '{project_name}' not found.")
-        config.repositories = repositories
-        self.save_project_config(project_name, config)
 
     def load_endpoint_config(
         self, project_name: str, repo_name: str

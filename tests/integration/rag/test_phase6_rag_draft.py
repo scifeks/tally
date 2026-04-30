@@ -64,7 +64,7 @@ def phase6_env(tmp_path: Path) -> dict:
     project_name = "test-phase6"
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(project_name)
-    pm.save_project(project_name, [])
+    pm.save_project(project_name)
 
     engine = _make_rag_engine(str(tmp_path), project_name)
     try:

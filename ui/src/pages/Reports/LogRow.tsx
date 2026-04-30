@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn, formatTime } from '@/lib/utils'
 import type { ReportLogEvent } from '@/lib/types'
 
 const TYPE_COLORS: Record<string, string> = {
@@ -14,7 +14,7 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 export function LogRow({ event }: { event: ReportLogEvent }) {
-  const time = new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false })
+  const time = formatTime(event.timestamp)
 
   return (
     <div className="flex items-start gap-3 px-3 py-1.5 font-mono text-[11px] hover:bg-muted/20">

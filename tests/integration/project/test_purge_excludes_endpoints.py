@@ -1,11 +1,8 @@
 """Integration tests: purge behaviour for endpoint artifacts.
 
-Phase 9: ``Repository.merged_seeds_path`` / ``merged_oas3_path`` no
-longer exist; the merged artifacts are JIT-rebuilt from
-``url_findings`` rows. ``_delete_merged_endpoints`` is therefore a
-file-level cleanup only — it removes any stale on-disk merged files
-under ``endpoints/<repo>/`` while leaving ``config/endpoints/`` and
-the project config untouched.
+``_delete_merged_endpoints`` removes JIT-rebuilt merged files under
+``endpoints/<repo>/`` while leaving ``config/endpoints/`` untouched.
+The merged artifacts are rebuilt from ``url_findings`` rows.
 """
 
 from __future__ import annotations
@@ -23,7 +20,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from core.config.manager import ConfigManager  # noqa: E402
-from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.config.schemas import ProjectConfig  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -37,24 +34,12 @@ def _write_global_config(base_path: Path) -> None:
     shutil.copy(real_config, config_dir / "global.json")
 
 
-def _make_repo(name: str, **kwargs: object) -> Repository:
-    defaults: dict[str, object] = {
-        "name": name,
-        "type": ["api"],
-        "path": str(_TALLY_ROOT),
-        "languages": ["python"],
-    }
-    defaults.update(kwargs)
-    return Repository(**defaults)  # type: ignore[arg-type]
-
-
-def _save_project(base_path: Path, project_name: str, repos: list[Repository]) -> None:
+def _save_project(base_path: Path, project_name: str) -> None:
     _write_global_config(base_path)
     manager = ConfigManager(str(base_path))
     pc = ProjectConfig(
         project_name=project_name,
         created=datetime.datetime.now().isoformat(),
-        repositories=repos,
     )
     manager.save_project_config(project_name, pc)
 
@@ -105,8 +90,7 @@ class TestDeleteMergedEndpoints:
         project_name: str,
         repo_name: str,
     ) -> tuple[Path, Path]:
-        repo = _make_repo(repo_name)
-        _save_project(tmp_path, project_name, [repo])
+        _save_project(tmp_path, project_name)
 
         merged_dir = tmp_path / "projects" / project_name / "endpoints" / repo_name
         merged_dir.mkdir(parents=True, exist_ok=True)
@@ -157,8 +141,7 @@ class TestCmdPurgeMergedPrompt:
     def _setup(
         self, tmp_path: Path, project_name: str, repo_name: str
     ) -> tuple[Path, Path]:
-        repo = _make_repo(repo_name)
-        _save_project(tmp_path, project_name, [repo])
+        _save_project(tmp_path, project_name)
 
         project_dir = tmp_path / "projects" / project_name
         sqlite_dir = project_dir / "sqlite"

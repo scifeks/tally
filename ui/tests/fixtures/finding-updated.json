@@ -15,7 +15,7 @@
   "line": 42,
   "cwe": ["CWE-89"],
   "notes": "Patched in PR #482.",
-  "discovered_at": "2026-04-26T10:00:00Z",
+  "first_seen": "2026-04-26T10:00:00Z",
   "triaged_at": "2026-04-28T09:00:00Z",
   "triaged_by": "analyst_web",
   "is_locked": false,

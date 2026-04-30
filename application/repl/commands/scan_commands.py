@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.locking import JobBusy
+from application.project.repositories_service import ProjectRepositoriesService
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
@@ -20,6 +21,7 @@ from infrastructure.store.repositories.runs import RunRepository
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
+    from core.config.schemas import Repository
 
 
 class ScanCommands:
@@ -27,6 +29,17 @@ class ScanCommands:
 
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
+
+    def _active_repos(self) -> list[Repository]:
+        """Return active repos for the REPL's current project."""
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            return []
+        service = ProjectRepositoriesService(
+            self.repl.project_registry, self.repl.config
+        )
+        return service.list_active(int(row["id"]))
 
     # ------------------------------------------------------------------
     # Commands
@@ -98,7 +111,7 @@ class ScanCommands:
         repo_names: list[str] | None = None
         if repo_val is not None:
             requested_repos = [r.strip() for r in repo_val.split(",") if r.strip()]
-            repos = self.repl.config.load_repositories(self.repl.active_project)
+            repos = self._active_repos()
             repo_map = {r.name.lower(): r.name for r in repos}
             invalid_repos = [r for r in requested_repos if r.lower() not in repo_map]
             if invalid_repos:
@@ -404,7 +417,7 @@ class ScanCommands:
             return tools
 
         assert self.repl.active_project is not None
-        repos = self.repl.config.load_repositories(self.repl.active_project)
+        repos = self._active_repos()
         target_repos = (
             [r for r in repos if r.name in repo_names]
             if repo_names is not None
@@ -459,14 +472,11 @@ class ScanCommands:
         endpoint file), the DAST tools have something to consume and the
         warning is suppressed.
         """
-        repo_uuid = getattr(repo, "uuid", "") or ""
-        if not repo_uuid:
+        repo_id = getattr(repo, "id", None)
+        if not isinstance(repo_id, int):
             return False
         try:
             from infrastructure.store.connection import ConnectionFactory
-            from infrastructure.store.repositories.repositories import (
-                RepositoryRepository,
-            )
             from infrastructure.store.repositories.url_findings import (
                 UrlFindingRepository,
             )
@@ -478,10 +488,7 @@ class ScanCommands:
             if not paths.findings_db.exists():
                 return False
             factory = ConnectionFactory(paths.findings_db)
-            db_row = RepositoryRepository(factory).get_by_uuid(repo_uuid)
-            if db_row is None or db_row.deleted_at is not None:
-                return False
-            return bool(UrlFindingRepository(factory).list_for_repo(db_row.id))
+            return bool(UrlFindingRepository(factory).list_for_repo(repo_id))
         except Exception:
             return False
 

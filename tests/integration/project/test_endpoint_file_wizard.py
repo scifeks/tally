@@ -1,10 +1,7 @@
 """Integration tests for endpoint file handling in ``add_repository``.
 
-Phase 9: the wizard no longer stores a converted OAS3 path on the
-``Repository`` model. It copies the user upload into
-``endpoints/<repo.uuid>/user_uploads/`` and ingests the contents into
-``url_findings`` via ``UserFileProvider`` + ``UrlInventoryService``.
-These tests exercise both branches:
+The wizard ingests the user-uploaded OAS3 spec into ``url_findings`` and
+records the seed-file path on the repo's DB row. These tests cover:
 
 - happy path → ``url_findings`` rows are inserted
 - conversion failure → repo is still saved; no ``url_findings`` rows
@@ -12,7 +9,6 @@ These tests exercise both branches:
 
 from __future__ import annotations
 
-import datetime
 import shutil
 from pathlib import Path
 from unittest.mock import patch
@@ -45,33 +41,22 @@ def _make_pm(base_path: Path):  # type: ignore[no-untyped-def]
 
 
 def _setup_project(base_path: Path):  # type: ignore[no-untyped-def]
-    from core.config.schemas import ProjectConfig
-
     pm = _make_pm(base_path)
     pm.create_project_dirs("test-project")
-    pc = ProjectConfig(
-        project_name="test-project",
-        created=datetime.datetime.now().isoformat(),
-        repositories=[],
-    )
-    pm.config.save_project_config("test-project", pc)
+    pm.save_project("test-project")
     return pm
 
 
-def _count_url_findings(base_path: Path, repo_uuid: str) -> int:
+def _count_url_findings(base_path: Path, repo_id: int) -> int:
     from core.project_paths import ProjectPaths
     from infrastructure.store.connection import ConnectionFactory
-    from infrastructure.store.repositories.repositories import RepositoryRepository
     from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
     paths = ProjectPaths.from_canonical(base_path, "test-project")
     if not paths.findings_db.exists():
         return 0
     factory = ConnectionFactory(paths.findings_db)
-    repo_row = RepositoryRepository(factory).get_by_uuid(repo_uuid)
-    if repo_row is None:
-        return 0
-    return len(UrlFindingRepository(factory).list_for_repo(repo_row.id))
+    return len(UrlFindingRepository(factory).list_for_repo(repo_id))
 
 
 class TestEndpointFileWizard:
@@ -110,15 +95,19 @@ class TestEndpointFileWizard:
             repo = wizard.add_repository("test-project")
 
         assert repo is not None
-        assert repo.uuid
+        assert repo.id is not None
+        assert repo.url_seed_file is not None
 
-        # The wizard copies the upload under endpoints/<uuid>/user_uploads/.
-        paths = ProjectPaths.from_canonical(base_path, "test-project")
-        upload = paths.endpoint_dir(repo.uuid) / "user_uploads" / "api.json"
+        # The wizard copies the upload under endpoints/<repo-name>-<epoch>/.
+        upload = Path(repo.url_seed_file)
         assert upload.exists()
+        assert upload.name == "api.json"
+        paths = ProjectPaths.from_canonical(base_path, "test-project")
+        assert upload.parent.parent == paths.endpoints_dir
+        assert upload.parent.name.startswith(f"{repo.name}-")
 
         # And ingests its contents into url_findings.
-        assert _count_url_findings(base_path, repo.uuid) == 1
+        assert _count_url_findings(base_path, repo.id) == 1
 
     def test_add_repository_endpoint_file_converter_error(self, tmp_path: Path) -> None:
         """``ConverterError`` → repo still saved; no ``url_findings`` rows."""
@@ -159,7 +148,12 @@ class TestEndpointFileWizard:
             repo = wizard.add_repository("test-project")
 
         assert repo is not None
-        assert repo.uuid
-        repos = pm.config.load_repositories("test-project")
+        assert repo.id is not None
+        from application.project import ProjectRepositoriesService
+
+        row = pm.registry.resolve_by_name("test-project")
+        assert row is not None
+        service = ProjectRepositoriesService(pm.registry, pm.config)
+        repos = service.list_active(int(row["id"]))
         assert any(r.name == "my-repo" for r in repos)
-        assert _count_url_findings(base_path, repo.uuid) == 0
+        assert _count_url_findings(base_path, repo.id) == 0

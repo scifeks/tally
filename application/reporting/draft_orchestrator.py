@@ -34,10 +34,24 @@ from core.llm.factory import get_llm_provider
 from core.project_paths import ProjectPaths
 from domain.pipeline.report_events import DraftCompleted, DraftFailed, DraftStarted
 from infrastructure.store import make_store
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.repositories import RepositoryRepository
 
 if TYPE_CHECKING:
     from application.ports.user_prompt import UserPromptPort
+    from core.config.schemas import Repository
     from infrastructure.store.repositories.drafts import DraftRecord, DraftRepository
+
+
+def _active_repos(base_path: str, project_name: str) -> list[Repository]:
+    """Return active repos for the project, or ``[]`` if none."""
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    if not paths.findings_db.exists():
+        return []
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    return RepositoryRepository(factory).list_active()
+
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +224,7 @@ def _generate(
     project_cfg = config.load_project_config(request.project)
     project_name = project_cfg.project_name if project_cfg else request.project
     engagement_date = project_cfg.created[:10] if project_cfg else ""
-    repos = [r.name for r in project_cfg.repositories] if project_cfg else []
+    repos = [r.name for r in _active_repos(str(request.base_path), request.project)]
     prefix = resolve_prefix(
         project_cfg.abbreviation if project_cfg else "",
         config.global_config.report_finding_prefix,

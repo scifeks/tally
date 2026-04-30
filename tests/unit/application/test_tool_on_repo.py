@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.scan_types.models import ScanTypeConfig
+
+_LOAD_REPOS = "application.tools.scan_types.tool_on_repo.load_active_repos"
 
 
 def _make_mock_repo(
@@ -26,7 +28,6 @@ def _make_mock_repo(
 @pytest.fixture()
 def mock_config() -> Any:
     cm = MagicMock()
-    cm.load_repositories.return_value = [_make_mock_repo()]
     prompt = MagicMock()
     prompt.confirm.return_value = True
     prompt.approve_all_remaining.return_value = None
@@ -62,11 +63,11 @@ class TestToolOnRepoScan:
     ) -> None:
         from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
 
-        mock_config.config_manager.load_repositories.return_value = []
-        with pytest.raises(ValueError, match="missing-repo"):
-            ToolOnRepoScan("semgrep", "missing-repo").execute(
-                mock_config, mock_resources
-            )
+        with patch(_LOAD_REPOS, return_value=[]):
+            with pytest.raises(ValueError, match="missing-repo"):
+                ToolOnRepoScan("semgrep", "missing-repo").execute(
+                    mock_config, mock_resources
+                )
 
     def test_tool_not_registered_raises_value_error(
         self,
@@ -76,8 +77,11 @@ class TestToolOnRepoScan:
         from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
 
         mock_resources.registry.get_tool_config.return_value = None
-        with pytest.raises(ValueError, match="not registered"):
-            ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo()]):
+            with pytest.raises(ValueError, match="not registered"):
+                ToolOnRepoScan("semgrep", "my-repo").execute(
+                    mock_config, mock_resources
+                )
 
     def test_factory_error_raises_value_error(
         self,
@@ -88,8 +92,11 @@ class TestToolOnRepoScan:
 
         mock_resources.registry.get_tool_config.return_value = MagicMock()
         mock_resources.factory.create.side_effect = RuntimeError("bad")
-        with pytest.raises(ValueError, match="factory error"):
-            ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo()]):
+            with pytest.raises(ValueError, match="factory error"):
+                ToolOnRepoScan("semgrep", "my-repo").execute(
+                    mock_config, mock_resources
+                )
 
     def test_tool_not_available_raises_value_error(
         self,
@@ -102,8 +109,11 @@ class TestToolOnRepoScan:
         tool = MagicMock()
         tool.check_available.return_value = False
         mock_resources.factory.create.return_value = tool
-        with pytest.raises(ValueError, match="not installed"):
-            ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo()]):
+            with pytest.raises(ValueError, match="not installed"):
+                ToolOnRepoScan("semgrep", "my-repo").execute(
+                    mock_config, mock_resources
+                )
 
     def test_requires_base_urls_raises_when_empty(
         self,
@@ -112,13 +122,11 @@ class TestToolOnRepoScan:
     ) -> None:
         from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
 
-        mock_config.config_manager.load_repositories.return_value = [
-            _make_mock_repo(base_urls=[])
-        ]
         mock_resources.registry.get_tool_config.return_value = MagicMock()
         tool = MagicMock()
         tool.check_available.return_value = True
         tool.requires_base_urls = True
         mock_resources.factory.create.return_value = tool
-        with pytest.raises(ValueError, match="requires base_urls"):
-            ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo(base_urls=[])]):
+            with pytest.raises(ValueError, match="requires base_urls"):
+                ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)

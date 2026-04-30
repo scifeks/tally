@@ -134,7 +134,7 @@ describe('Dashboard - recent high-severity findings panel', () => {
               line: null,
               cwe: ['CWE-89'],
               notes: null,
-              discovered_at: '2026-04-26T10:00:00Z',
+              first_seen: '2026-04-26T10:00:00Z',
               triaged_at: null,
               triaged_by: null,
               is_locked: false,

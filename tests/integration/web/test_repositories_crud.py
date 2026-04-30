@@ -24,7 +24,6 @@ _PROJECT_CONFIG: dict[str, Any] = {
     "abbreviation": "TP",
     "company_name": "Acme Corp",
     "department_name": "Security",
-    "repositories": [],
 }
 
 
@@ -91,7 +90,7 @@ def _basic_payload(name: str, path: str) -> str:
 
 
 class TestCreateRepository:
-    async def test_create_returns_201_with_uuid_and_id(self, repo_crud_client) -> None:
+    async def test_create_returns_201_with_id(self, repo_crud_client) -> None:
         client, headers, project_id, repo_path = repo_crud_client
         resp = await client.post(
             f"/api/v1/projects/{project_id}/repositories",
@@ -101,7 +100,6 @@ class TestCreateRepository:
         assert resp.status_code == 201, resp.text
         data = resp.json()
         assert data["name"] == "alpha"
-        assert data["uuid"]
         assert isinstance(data["id"], int)
         assert "auth" not in data
 
@@ -208,9 +206,7 @@ class TestPatchRepository:
         assert json_path.read_text() == content_before
         assert json_path.stat().st_mtime_ns == mtime_before
 
-    async def test_patch_non_name_field_updates_json(
-        self, repo_crud_client, tmp_path: Path
-    ) -> None:
+    async def test_patch_non_name_field_persists_in_db(self, repo_crud_client) -> None:
         client, headers, project_id, repo_path = repo_crud_client
         post = await client.post(
             f"/api/v1/projects/{project_id}/repositories",
@@ -218,9 +214,6 @@ class TestPatchRepository:
             headers=headers,
         )
         repo_id = post.json()["id"]
-
-        json_path = tmp_path / "projects" / "testproject" / "config" / "project.json"
-        mtime_before = json_path.stat().st_mtime_ns
 
         resp = await client.patch(
             f"/api/v1/projects/{project_id}/repositories/{repo_id}",
@@ -232,10 +225,12 @@ class TestPatchRepository:
             headers=headers,
         )
         assert resp.status_code == 200, resp.text
-        assert json_path.stat().st_mtime_ns != mtime_before
-        saved = json.loads(json_path.read_text())
-        repo_entry = next(r for r in saved["repositories"] if r["name"] == "field-test")
-        assert "http://updated" in repo_entry["base_urls"]
+
+        detail = await client.get(
+            f"/api/v1/projects/{project_id}/repositories/{repo_id}"
+        )
+        assert detail.status_code == 200
+        assert "http://updated" in detail.json()["base_urls"]
 
 
 class TestDeleteRepository:
@@ -287,13 +282,14 @@ class TestDeleteRepository:
 
 
 class TestRepositoryEndpointFileMultipart:
-    """POST and PATCH with the optional ``endpoint_file`` upload (Phase 9.3).
+    """POST and PATCH with the optional ``endpoint_file`` upload.
 
-    The single multipart surface covers the role of the dropped
+    The multipart surface covers the role of the dropped
     ``POST /endpoint-file`` and ``POST /url-list/import`` routes:
-    uploading an OAS3 / HAR / Postman / Swagger file copies it into
-    ``endpoints/<repo.uuid>/user_uploads/`` and ingests its rows into
-    ``url_findings`` via ``UserFileProvider``.
+    uploading an OAS3 / HAR / Postman / Swagger file copies it into a
+    fresh ``endpoints/<repo-name>-<epoch>/`` sibling directory and
+    ingests its rows into ``url_findings``. The repo's
+    ``url_seed_file`` column tracks the most-recent upload path.
     """
 
     @staticmethod
@@ -307,10 +303,7 @@ class TestRepositoryEndpointFileMultipart:
         ).encode("utf-8")
 
     @staticmethod
-    def _row_count(tmp_path: Path, repo_uuid: str) -> int:
-        from infrastructure.store.repositories.repositories import (
-            RepositoryRepository,
-        )
+    def _row_count(tmp_path: Path, repo_id: int) -> int:
         from infrastructure.store.repositories.url_findings import (
             UrlFindingRepository,
         )
@@ -319,10 +312,16 @@ class TestRepositoryEndpointFileMultipart:
         if not db_path.exists():
             return 0
         factory = ConnectionFactory(db_path)
-        repo_row = RepositoryRepository(factory).get_by_uuid(repo_uuid)
-        if repo_row is None:
-            return 0
-        return len(UrlFindingRepository(factory).list_for_repo(repo_row.id))
+        return len(UrlFindingRepository(factory).list_for_repo(repo_id))
+
+    @staticmethod
+    def _find_seed_dir(tmp_path: Path, repo_name: str, basename: str) -> Path:
+        endpoints = tmp_path / "projects" / "testproject" / "endpoints"
+        for candidate in endpoints.iterdir():
+            if candidate.is_dir() and candidate.name.startswith(f"{repo_name}-"):
+                if (candidate / basename).exists():
+                    return candidate / basename
+        raise AssertionError(f"upload {basename!r} not found under {endpoints}")
 
     async def test_post_with_endpoint_file_seeds_url_findings(
         self, repo_crud_client, tmp_path: Path
@@ -344,24 +343,16 @@ class TestRepositoryEndpointFileMultipart:
         )
         assert resp.status_code == 201, resp.text
         repo = resp.json()
-        assert repo["uuid"]
-        assert self._row_count(tmp_path, repo["uuid"]) == 1
-        upload = (
-            tmp_path
-            / "projects"
-            / "testproject"
-            / "endpoints"
-            / repo["uuid"]
-            / "user_uploads"
-            / "api.json"
-        )
+        assert isinstance(repo["id"], int)
+        assert self._row_count(tmp_path, repo["id"]) == 1
+        upload = self._find_seed_dir(tmp_path, "with-file", "api.json")
         assert upload.exists()
         assert repo["endpoint_file"] == "api.json"
 
     async def test_patch_endpoint_file_replaces_rows(
         self, repo_crud_client, tmp_path: Path
     ) -> None:
-        """PATCH with new ``endpoint_file`` wipes prior USER rows for that file."""
+        """PATCH with new ``endpoint_file`` adds the new file's rows."""
         client, headers, project_id, repo_path = repo_crud_client
         post = await client.post(
             f"/api/v1/projects/{project_id}/repositories",
@@ -377,7 +368,7 @@ class TestRepositoryEndpointFileMultipart:
         )
         assert post.status_code == 201
         repo = post.json()
-        assert self._row_count(tmp_path, repo["uuid"]) == 1
+        assert self._row_count(tmp_path, repo["id"]) == 1
 
         patch = await client.patch(
             f"/api/v1/projects/{project_id}/repositories/{repo['id']}",
@@ -393,34 +384,20 @@ class TestRepositoryEndpointFileMultipart:
         )
         assert patch.status_code == 200, patch.text
 
-        # Replacement is per file_path, so /old (from first.json) survives
-        # alongside /new (from second.json) — but the new file is on disk.
-        # Total rows ≥ 1; the new path must be present.
-        from infrastructure.store.repositories.repositories import (
-            RepositoryRepository,
-        )
+        # Each upload lives in its own sibling dir; both files' rows
+        # accumulate (history-friendly layout).
         from infrastructure.store.repositories.url_findings import (
             UrlFindingRepository,
         )
 
         db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
         factory = ConnectionFactory(db_path)
-        db_row = RepositoryRepository(factory).get_by_uuid(repo["uuid"])
-        assert db_row is not None
-        rows = UrlFindingRepository(factory).list_for_repo(db_row.id)
+        rows = UrlFindingRepository(factory).list_for_repo(repo["id"])
         paths = sorted({r.path for r in rows})
         assert "/new" in paths
-        # The new upload exists under user_uploads/.
-        upload = (
-            tmp_path
-            / "projects"
-            / "testproject"
-            / "endpoints"
-            / repo["uuid"]
-            / "user_uploads"
-            / "second.json"
-        )
-        assert upload.exists()
+        # Both uploads exist on disk in their respective sibling dirs.
+        assert self._find_seed_dir(tmp_path, "file-edit", "first.json").exists()
+        assert self._find_seed_dir(tmp_path, "file-edit", "second.json").exists()
         assert patch.json()["endpoint_file"] == "second.json"
 
     async def test_get_repository_detail_returns_endpoint_file_when_present(

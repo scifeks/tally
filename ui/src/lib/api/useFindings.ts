@@ -68,7 +68,7 @@ interface FindingApi {
   line?: number | null
   cwe: string[] | null
   notes?: string | null
-  discovered_at: string
+  first_seen: string
   triaged_at?: string | null
   triaged_by?: 'claude-code' | 'analyst_web' | null
   is_locked: boolean
@@ -113,7 +113,7 @@ export function mapFinding(api: FindingApi): Finding {
     line: api.line ?? undefined,
     cwe: api.cwe ?? [],
     notes: api.notes ?? undefined,
-    discoveredAt: api.discovered_at,
+    discoveredAt: api.first_seen,
     triagedAt: api.triaged_at ?? undefined,
     triagedBy: api.triaged_by ?? undefined,
     isLocked: api.is_locked,

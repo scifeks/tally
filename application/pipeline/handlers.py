@@ -10,7 +10,7 @@ from application.rag.ingestor import (
     ToolHandlerFactory,
     filter_code_rows,
 )
-from core.config.manager import ConfigManager
+from core.project_paths import ProjectPaths
 from domain.pipeline.events import (
     EventBus,
     IngestCompleted,
@@ -18,13 +18,26 @@ from domain.pipeline.events import (
 )
 from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.repositories import RepositoryRepository
 
 if TYPE_CHECKING:
     from rich.console import Console
 
     from application.rag.engine import RAGEngine
+    from core.config.schemas import Repository
 
 logger = logging.getLogger(__name__)
+
+
+def _load_active_repos(base_path: str, project_name: str) -> list[Repository]:
+    """Return active repos from the per-project DB; ``[]`` if absent."""
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    if not paths.findings_db.exists():
+        return []
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    return RepositoryRepository(factory).list_active()
 
 
 class BaseHandler:
@@ -129,9 +142,7 @@ class IngestHandler(BaseHandler):
                             row.setdefault("repo", event.repo)
                 else:
                     try:
-                        repos = ConfigManager(event.base_path).load_repositories(
-                            event.project_name
-                        )
+                        repos = _load_active_repos(event.base_path, event.project_name)
                     except Exception:
                         repos = None
                     rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
