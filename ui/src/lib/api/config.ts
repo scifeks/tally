@@ -85,6 +85,15 @@ export const REST_ENDPOINTS = {
   /** GET: aggregate findings counts bucketed by severity, status, domain, segment, repo, tool */
   findingsCounts: (projectId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/findings/counts`,
+  /**
+   * GET: per-dimension filter options under the active filter set. Strict
+   * semantics: each dimension's counts apply every active filter; zero-count
+   * options are omitted. Powers the Findings filter dropdowns. Same query
+   * params as `findings` (severity, status, confidence, domain, segment,
+   * tool, finding_type, repo_id, search).
+   */
+  findingsFilterOptions: (projectId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/filter-options`,
   /** GET: single finding by ID (project-scoped). */
   finding: (projectId: string | number, findingId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/findings/${findingId}`,

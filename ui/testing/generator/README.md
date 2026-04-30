@@ -8,7 +8,8 @@ files for the dimensions the real DB does not cover.
 
 ```bash
 cd /llm/code/tally
-python -m scripts.generate_ui_fixtures.generate
+python ui/testing/generator/generate.py
+python ui/testing/generator/check_coverage.py
 ```
 
 The script is read-only with respect to all SQLite databases and the

@@ -233,3 +233,247 @@ class TestDistinctFacetValuesMultiRow:
         result = repo.distinct_facet_values()
         assert result["tools"] == sorted(result["tools"])
         assert result["domains"] == sorted(result["domains"])
+
+
+class TestFilterOptionsEmpty:
+    def test_empty_db_returns_empty_dimensions(self, repo: FindingRepository) -> None:
+        result = repo.filter_options({"conditions": []})
+        for key in (
+            "severity",
+            "status",
+            "confidence",
+            "domain",
+            "segment",
+            "tool",
+            "finding_type",
+            "repo",
+        ):
+            assert result[key] == [], f"expected empty list for {key!r}"
+
+
+class TestFilterOptionsNoFilters:
+    def test_all_dimensions_populated(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {
+                    "tool": "semgrep",
+                    "domain": "code",
+                    "severity": "high",
+                    "segment": "sast",
+                    "status": "active",
+                    "confidence": "confirmed",
+                    "url": "u1",
+                    "repo": "alpha",
+                    "finding_type": ["vulnerability"],
+                },
+                {
+                    "tool": "bandit",
+                    "domain": "code",
+                    "severity": "medium",
+                    "segment": "sast",
+                    "status": "active",
+                    "confidence": "probable",
+                    "url": "u2",
+                    "repo": "beta",
+                    "finding_type": ["weakness"],
+                },
+            ],
+        )
+        result = repo.filter_options({"conditions": []})
+
+        sev_values = {item["value"] for item in result["severity"]}
+        assert sev_values == {"high", "medium"}
+        sev_counts = {item["value"]: item["count"] for item in result["severity"]}
+        assert sev_counts == {"high": 1, "medium": 1}
+
+        tool_values = {item["value"] for item in result["tool"]}
+        assert tool_values == {"semgrep", "bandit"}
+
+        ft_values = {item["value"] for item in result["finding_type"]}
+        assert ft_values == {"vulnerability", "weakness"}
+
+        repo_labels = {item["label"] for item in result["repo"]}
+        assert repo_labels == {"alpha", "beta"}
+        for entry in result["repo"]:
+            assert isinstance(entry["value"], int)
+            assert entry["count"] == 1
+
+
+class TestFilterOptionsStrictSemantics:
+    def test_severity_filter_applies_to_every_dimension(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {
+                    "tool": "semgrep",
+                    "domain": "code",
+                    "severity": "high",
+                    "segment": "sast",
+                    "status": "active",
+                    "url": "u1",
+                    "repo": "alpha",
+                },
+                {
+                    "tool": "bandit",
+                    "domain": "code",
+                    "severity": "low",
+                    "segment": "sast",
+                    "status": "fixed",
+                    "url": "u2",
+                    "repo": "beta",
+                },
+            ],
+        )
+        filters = {
+            "conditions": [("severity", "=", ["high"])],
+        }
+        result = repo.filter_options(filters)
+
+        # severity dim: only "high" survives the strict filter.
+        assert [item["value"] for item in result["severity"]] == ["high"]
+        # tool dim: only "semgrep" (the tool used by the high-severity row).
+        assert [item["value"] for item in result["tool"]] == ["semgrep"]
+        # status dim: only "active".
+        assert [item["value"] for item in result["status"]] == ["active"]
+        # repo dim: only "alpha".
+        assert [item["label"] for item in result["repo"]] == ["alpha"]
+
+    def test_combined_filters_intersect(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {
+                    "tool": "semgrep",
+                    "domain": "code",
+                    "severity": "high",
+                    "confidence": "confirmed",
+                    "segment": "sast",
+                    "url": "u1",
+                },
+                {
+                    "tool": "semgrep",
+                    "domain": "code",
+                    "severity": "high",
+                    "confidence": "probable",
+                    "segment": "sast",
+                    "url": "u2",
+                },
+            ],
+        )
+        filters = {
+            "conditions": [
+                ("severity", "=", ["high"]),
+                ("confidence", "=", ["confirmed"]),
+            ],
+        }
+        result = repo.filter_options(filters)
+        # Only the confirmed+high finding survives.
+        assert [item["value"] for item in result["severity"]] == ["high"]
+        sev_counts = {item["value"]: item["count"] for item in result["severity"]}
+        assert sev_counts == {"high": 1}
+        assert [item["value"] for item in result["confidence"]] == ["confirmed"]
+
+
+class TestFilterOptionsZeroCountsOmitted:
+    def test_no_match_returns_empty_arrays(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [{"tool": "t", "domain": "code", "severity": "high", "url": "u"}],
+        )
+        # Filter for a severity that does not exist → every dim empty.
+        result = repo.filter_options({"conditions": [("severity", "=", ["critical"])]})
+        for key in (
+            "severity",
+            "status",
+            "confidence",
+            "domain",
+            "segment",
+            "tool",
+            "finding_type",
+            "repo",
+        ):
+            assert result[key] == [], f"expected empty list for {key!r}"
+
+    def test_low_severity_dropped_when_none_present(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {"tool": "t", "domain": "code", "severity": "high", "url": "u1"},
+                {"tool": "t", "domain": "code", "severity": "medium", "url": "u2"},
+            ],
+        )
+        result = repo.filter_options({"conditions": []})
+        sev_values = {item["value"] for item in result["severity"]}
+        # Only high and medium are present; low/critical/informational dropped.
+        assert sev_values == {"high", "medium"}
+
+
+class TestFilterOptionsFindingTypeJsonEach:
+    def test_finding_type_unrolled_per_array_element(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {
+                    "tool": "t",
+                    "domain": "code",
+                    "severity": "high",
+                    "url": "u1",
+                    "finding_type": ["vulnerability", "weakness"],
+                },
+                {
+                    "tool": "t",
+                    "domain": "code",
+                    "severity": "high",
+                    "url": "u2",
+                    "finding_type": ["weakness"],
+                },
+            ],
+        )
+        result = repo.filter_options({"conditions": []})
+        ft_counts = {item["value"]: item["count"] for item in result["finding_type"]}
+        # vulnerability appears in 1 finding; weakness in 2.
+        assert ft_counts == {"vulnerability": 1, "weakness": 2}
+
+
+class TestFilterOptionsRepoLabel:
+    def test_repo_dim_returns_id_label_count(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {
+                    "tool": "t",
+                    "domain": "code",
+                    "severity": "high",
+                    "url": "u1",
+                    "repo": "myrepo",
+                },
+                {
+                    "tool": "t",
+                    "domain": "code",
+                    "severity": "high",
+                    "url": "u2",
+                    "repo": "myrepo",
+                },
+            ],
+        )
+        result = repo.filter_options({"conditions": []})
+        assert len(result["repo"]) == 1
+        entry = result["repo"][0]
+        assert isinstance(entry["value"], int)
+        assert entry["label"] == "myrepo"
+        assert entry["count"] == 2

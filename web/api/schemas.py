@@ -391,6 +391,43 @@ class FindingsFacetsResponse(BaseModel):
     segments: list[str]
 
 
+class FilterOption(BaseModel):
+    """One value/count pair for a Findings filter dropdown."""
+
+    value: str
+    count: int
+
+
+class RepoFilterOption(BaseModel):
+    """Repo dropdown option. ``value`` is the integer repo id used by
+    the filter param; ``label`` is the human-readable repo name shown in
+    the UI.
+    """
+
+    value: int
+    label: str
+    count: int
+
+
+class FindingsFilterOptionsResponse(BaseModel):
+    """Per-dimension filter options under the active filter set.
+
+    Strict semantics: every dimension's counts apply every active
+    filter, including its own dimension's filter. Options with zero
+    matches are omitted; every dimension key is always present (empty
+    list is allowed).
+    """
+
+    severity: list[FilterOption]
+    status: list[FilterOption]
+    confidence: list[FilterOption]
+    domain: list[FilterOption]
+    segment: list[FilterOption]
+    tool: list[FilterOption]
+    finding_type: list[FilterOption]
+    repo: list[RepoFilterOption]
+
+
 # ---------------------------------------------------------------------------
 # Phase 5 — Scans
 # ---------------------------------------------------------------------------

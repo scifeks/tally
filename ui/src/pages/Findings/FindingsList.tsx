@@ -282,12 +282,12 @@ export function FindingsList({
 
   const sevOptions = useMemo(
     () =>
-      SEV_ORDER.map(s => ({
+      SEV_ORDER.filter(s => (sevFacets[s] ?? 0) > 0 || filters.severity.has(s)).map(s => ({
         value: s,
         label: SEV_LABEL[s],
         count: sevFacets[s] ?? 0,
       })),
-    [sevFacets]
+    [sevFacets, filters.severity]
   )
 
   return (

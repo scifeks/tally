@@ -1,7 +1,7 @@
 """Generate UI test fixtures in ui/testing/fixtures/ from real DB data.
 
 Run from the repo root:
-    python -m scripts.generate_ui_fixtures.generate
+    python ui/testing/generator/generate.py
 
 Read-only with respect to all SQLite databases and the project JSON.
 Writes only to ui/testing/fixtures/.
@@ -18,8 +18,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-# Make repo top-level packages importable when invoked as a module.
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Make repo top-level packages importable when invoked as a script.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 

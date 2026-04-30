@@ -31,6 +31,12 @@ export { useUpdateFinding } from './useUpdateFinding'
 export type { UpdateFindingPatch } from './useUpdateFinding'
 export { useFindingsEvents } from './useFindingsEvents'
 export { useFindingsCounts } from './useFindingsCounts'
+export { useFindingsFilterOptions } from './useFindingsFilterOptions'
+export type {
+  FilterOption,
+  RepoFilterOption,
+  FindingsFilterOptions,
+} from './useFindingsFilterOptions'
 
 // Scan hooks
 export {

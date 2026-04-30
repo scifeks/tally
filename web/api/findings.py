@@ -36,6 +36,7 @@ from web.api.schemas import (
     FindingResponse,
     FindingsCountsResponse,
     FindingsFacetsResponse,
+    FindingsFilterOptionsResponse,
     FindingsListResponse,
 )
 
@@ -159,6 +160,62 @@ async def get_findings_facets(
     service = FindingAnalystService(repo)
     data = await asyncio.to_thread(service.distinct_facet_values)
     return FindingsFacetsResponse(**data)
+
+
+@v1_router.get(
+    "/{project_id}/findings/filter-options",
+    response_model=FindingsFilterOptionsResponse,
+)
+async def get_findings_filter_options(
+    project_id: int,
+    request: Request,
+    severity: list[str] | None = Query(default=None),
+    confidence: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    domain: list[str] | None = Query(default=None),
+    tool: list[str] | None = Query(default=None),
+    repo_id: list[int] | None = Query(default=None),
+    segment: list[str] | None = Query(default=None),
+    finding_type: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+) -> FindingsFilterOptionsResponse:
+    """Return per-dimension filter options under the active filter set.
+
+    Mirrors the filter query params of ``GET /findings``. Each dimension's
+    counts apply every active filter (strict semantics) and zero-count
+    options are omitted. Powers the Findings page filter dropdowns
+    (Phase 12.1).
+    """
+    row = _resolve_project(request, project_id)
+
+    if severity:
+        for s in severity:
+            Severity.from_label(s)
+
+    conditions: list[tuple[str, str, list[Any]]] = []
+    for col, values in [
+        ("severity", severity),
+        ("confidence", confidence),
+        ("status", status),
+        ("domain", domain),
+        ("tool", tool),
+        ("segment", segment),
+        ("finding_type", finding_type),
+    ]:
+        if values:
+            conditions.append((col, "=", list(values)))
+    if repo_id:
+        conditions.append(("repo_id", "=", [int(v) for v in repo_id]))
+
+    filters: dict = {
+        "conditions": conditions,
+        "search": search,
+    }
+
+    repo_obj = _make_repo(row)
+    service = FindingAnalystService(repo_obj)
+    data = await asyncio.to_thread(service.filter_options, filters)
+    return FindingsFilterOptionsResponse(**data)
 
 
 @v1_router.get(

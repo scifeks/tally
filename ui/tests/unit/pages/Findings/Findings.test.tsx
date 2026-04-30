@@ -48,9 +48,7 @@ beforeEach(() => {
   setCookie('tally_csrf', 'test-csrf-token')
   vi.stubGlobal('IntersectionObserver', StubIntersectionObserver)
   MockEventSource.reset()
-  __setEventSourceFactory(
-    (url, init) => new MockEventSource(url, init) as unknown as EventSource
-  )
+  __setEventSourceFactory((url, init) => new MockEventSource(url, init) as unknown as EventSource)
   useUI.setState({
     activeProjectId: 1,
     findingsSegment: 'sast',
@@ -73,9 +71,7 @@ describe('Findings page - server-driven list', () => {
   it('renders the loaded total in the footer once findings resolve', async () => {
     renderPage()
     // SAST count from fixture: 2 items (1001, 1002).
-    await waitFor(() =>
-      expect(screen.getByText(/loaded/i).textContent ?? '').toMatch(/2.+of.+2/)
-    )
+    await waitFor(() => expect(screen.getByText(/loaded/i).textContent ?? '').toMatch(/2.+of.+2/))
   })
 
   it('renders the cwe column header (commit column was removed)', async () => {
@@ -115,9 +111,7 @@ describe('Findings page - server-driven list', () => {
     await waitFor(() => expect(observedRequests.length).toBeGreaterThan(0))
 
     await user.click(screen.getByTitle('filter CRIT'))
-    await waitFor(() =>
-      expect(observedRequests.some(arr => arr.includes('critical'))).toBe(true)
-    )
+    await waitFor(() => expect(observedRequests.some(arr => arr.includes('critical'))).toBe(true))
   })
 
   it('debounces the search box and forwards search= when it stabilises', async () => {
@@ -149,6 +143,100 @@ describe('Findings page - server-driven list', () => {
     })
   })
 
+  it('forwards active filters to /findings/filter-options on chip click', async () => {
+    const user = userEvent.setup()
+    const observedSeverity: string[][] = []
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings/filter-options', ({ request }) => {
+        observedSeverity.push(new URL(request.url).searchParams.getAll('severity'))
+        return HttpResponse.json({
+          severity: [
+            { value: 'critical', count: 3 },
+            { value: 'high', count: 5 },
+            { value: 'medium', count: 2 },
+          ],
+          status: [{ value: 'active', count: 10 }],
+          confidence: [],
+          domain: [{ value: 'code', count: 10 }],
+          segment: [{ value: 'sast', count: 10 }],
+          tool: [{ value: 'semgrep', count: 10 }],
+          finding_type: [],
+          repo: [],
+        })
+      })
+    )
+    renderPage()
+    await waitFor(() => expect(observedSeverity.length).toBeGreaterThan(0))
+
+    await user.click(screen.getByTitle('filter CRIT'))
+    await waitFor(() => expect(observedSeverity.some(arr => arr.includes('critical'))).toBe(true))
+  })
+
+  it('hides severity chips with zero count from filter-options', async () => {
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings/filter-options', () =>
+        HttpResponse.json({
+          severity: [{ value: 'high', count: 4 }],
+          status: [{ value: 'active', count: 4 }],
+          confidence: [],
+          domain: [{ value: 'code', count: 4 }],
+          segment: [{ value: 'sast', count: 4 }],
+          tool: [{ value: 'semgrep', count: 4 }],
+          finding_type: [],
+          repo: [],
+        })
+      )
+    )
+    renderPage()
+    await screen.findByTitle('filter HIGH')
+    expect(screen.queryByTitle('filter CRIT')).toBeNull()
+    expect(screen.queryByTitle('filter MED')).toBeNull()
+    expect(screen.queryByTitle('filter LOW')).toBeNull()
+    expect(screen.queryByTitle('filter INFO')).toBeNull()
+  })
+
+  it('keeps a selected severity chip visible even when its count drops to zero', async () => {
+    const user = userEvent.setup()
+    let chipsClicked = false
+    server.use(
+      http.get('/api/v1/projects/:projectId/findings/filter-options', () =>
+        HttpResponse.json(
+          chipsClicked
+            ? {
+                severity: [{ value: 'high', count: 4 }],
+                status: [{ value: 'active', count: 4 }],
+                confidence: [],
+                domain: [{ value: 'code', count: 4 }],
+                segment: [{ value: 'sast', count: 4 }],
+                tool: [{ value: 'semgrep', count: 4 }],
+                finding_type: [],
+                repo: [],
+              }
+            : {
+                severity: [
+                  { value: 'critical', count: 3 },
+                  { value: 'high', count: 4 },
+                ],
+                status: [{ value: 'active', count: 7 }],
+                confidence: [],
+                domain: [{ value: 'code', count: 7 }],
+                segment: [{ value: 'sast', count: 7 }],
+                tool: [{ value: 'semgrep', count: 7 }],
+                finding_type: [],
+                repo: [],
+              }
+        )
+      )
+    )
+    renderPage()
+    const critChip = await screen.findByTitle('filter CRIT')
+    chipsClicked = true
+    await user.click(critChip)
+    // Even though "critical" no longer appears in the new filter-options
+    // response, the selected chip must still render so the user can deselect.
+    await waitFor(() => expect(screen.getByTitle('filtering CRIT')).toBeInTheDocument())
+  })
+
   it('reflects an SSE finding_updated event in the cache without refetching the list', async () => {
     let listFetches = 0
     server.use(
@@ -160,9 +248,7 @@ describe('Findings page - server-driven list', () => {
     renderPage()
     await waitFor(() => expect(listFetches).toBe(1))
 
-    const es = MockEventSource.instances.find(e =>
-      e.url.includes('/findings/events')
-    )!
+    const es = MockEventSource.instances.find(e => e.url.includes('/findings/events'))!
     act(() => {
       es.emitTyped('finding_updated', findingUpdatedFixture)
     })
@@ -276,9 +362,7 @@ describe('Findings detail panel - Triage button', () => {
     const triageBtn = await screen.findByRole('button', { name: /^>\s*triage$/i })
     await user.click(triageBtn)
 
-    expect(
-      screen.queryByRole('dialog', { name: /prompt injection risk/i })
-    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: /prompt injection risk/i })).not.toBeInTheDocument()
     await waitFor(() => expect(startBody).not.toBeNull())
     expect(startBody).toMatchObject({
       acknowledge_injection_risk: true,
