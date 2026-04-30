@@ -1,0 +1,24 @@
+{
+  "drafts": [
+    {
+      "section": "executive_summary",
+      "status": "not_generated",
+      "generated_at": null,
+      "reviewed_at": null,
+      "preview": null,
+      "word_count": null,
+      "uploaded_filename": null,
+      "error": null
+    },
+    {
+      "section": "risk_level",
+      "status": "not_generated",
+      "generated_at": null,
+      "reviewed_at": null,
+      "preview": null,
+      "word_count": null,
+      "uploaded_filename": null,
+      "error": null
+    }
+  ]
+}

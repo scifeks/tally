@@ -1,0 +1,156 @@
+{
+  "_comment": "Wire-shape triage fixtures with {{placeholder}} tokens. The orchestrator substitutes placeholders with values from the context (real ids harvested from findings.db / tally.db).",
+  "active_running": {
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "project_id": "{{int:project_1_id}}",
+    "status": "running",
+    "started_at": "{{str:scan_started_at}}",
+    "finished_at": null,
+    "total_findings": "{{int:findings_total_p1}}",
+    "processed_findings": 142
+  },
+  "active_null": null,
+  "latest_completed": {
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "project_id": "{{int:project_1_id}}",
+    "status": "done",
+    "started_at": "{{str:scan_started_at}}",
+    "finished_at": "{{str:scan_finished_at}}",
+    "total_findings": "{{int:findings_total_p1}}",
+    "processed_findings": "{{int:findings_total_p1}}"
+  },
+  "start_202": {
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "project_id": "{{int:project_1_id}}",
+    "status": "queued",
+    "started_at": null,
+    "finished_at": null,
+    "total_findings": 0,
+    "processed_findings": 0
+  },
+  "resume_202": {
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "project_id": "{{int:project_1_id}}",
+    "status": "running",
+    "started_at": "{{str:scan_started_at}}",
+    "finished_at": null,
+    "total_findings": "{{int:findings_total_p1}}",
+    "processed_findings": 174
+  },
+  "cancel_202": {
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "status": "cancelling"
+  },
+  "detail_project_1": {
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "project_id": "{{int:project_1_id}}",
+    "status": "done",
+    "started_at": "{{str:scan_started_at}}",
+    "finished_at": "{{str:scan_finished_at}}",
+    "total_findings": "{{int:findings_total_p1}}",
+    "processed_findings": "{{int:findings_total_p1}}",
+    "batches": [
+      {
+        "id": 7001,
+        "scan_run_id": "{{int:scan_run_id_real}}",
+        "segment": "sast",
+        "finding_ids": "{{ints:finding_ids_p1_sast_5}}",
+        "status": "completed",
+        "attempts": 1,
+        "started_at": "{{str:scan_started_at}}",
+        "finished_at": "{{str:scan_finished_at}}",
+        "response_preview": "Triaged 5 SAST findings; flagged 2 as false_positive.",
+        "error": null
+      },
+      {
+        "id": 7002,
+        "scan_run_id": "{{int:scan_run_id_real}}",
+        "segment": "web",
+        "finding_ids": "{{ints:finding_ids_p1_web_5}}",
+        "status": "completed",
+        "attempts": 1,
+        "started_at": "{{str:scan_started_at}}",
+        "finished_at": "{{str:scan_finished_at}}",
+        "response_preview": "All 5 findings confirmed active; remediation suggested.",
+        "error": null
+      },
+      {
+        "id": 7003,
+        "scan_run_id": "{{int:scan_run_id_real}}",
+        "segment": "secrets",
+        "finding_ids": "{{ints:finding_ids_p1_secrets_5}}",
+        "status": "failed",
+        "attempts": 2,
+        "started_at": "{{str:scan_started_at}}",
+        "finished_at": "{{str:scan_finished_at}}",
+        "response_preview": null,
+        "error": "LLM call timed out after 60s"
+      }
+    ]
+  },
+  "history_project_1": {
+    "items": [
+      {
+        "scan_run_id": "{{int:scan_run_id_real}}",
+        "project_id": "{{int:project_1_id}}",
+        "status": "done",
+        "started_at": "{{str:scan_started_at}}",
+        "finished_at": "{{str:scan_finished_at}}",
+        "total_findings": "{{int:findings_total_p1}}",
+        "processed_findings": "{{int:findings_total_p1}}"
+      },
+      {
+        "scan_run_id": 1001,
+        "project_id": "{{int:project_1_id}}",
+        "status": "failed",
+        "started_at": "2026-04-29T22:18:32+00:00",
+        "finished_at": "2026-04-29T22:21:14+00:00",
+        "total_findings": 87,
+        "processed_findings": 31
+      },
+      {
+        "scan_run_id": 1002,
+        "project_id": "{{int:project_1_id}}",
+        "status": "cancelled",
+        "started_at": "2026-04-30T11:01:43+00:00",
+        "finished_at": "2026-04-30T11:02:08+00:00",
+        "total_findings": 12,
+        "processed_findings": 4
+      }
+    ],
+    "total": 3,
+    "offset": 0,
+    "limit": 20
+  },
+  "history_project_2": {
+    "items": [
+      {
+        "scan_run_id": 2001,
+        "project_id": "{{int:project_2_id}}",
+        "status": "done",
+        "started_at": "2026-04-30T14:11:56+00:00",
+        "finished_at": "2026-04-30T14:18:42+00:00",
+        "total_findings": 188,
+        "processed_findings": 188
+      },
+      {
+        "scan_run_id": 2003,
+        "project_id": "{{int:project_2_id}}",
+        "status": "failed",
+        "started_at": "2026-04-29T18:00:35+00:00",
+        "finished_at": "2026-04-29T18:00:39+00:00",
+        "total_findings": 0,
+        "processed_findings": 0
+      }
+    ],
+    "total": 2,
+    "offset": 0,
+    "limit": 20
+  },
+  "history_empty": {
+    "items": [],
+    "total": 0,
+    "offset": 0,
+    "limit": 20
+  }
+}

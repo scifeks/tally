@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "id": 4001,
+      "project_id": 2,
+      "scan_run_id": 1,
+      "format": "pdf",
+      "filename": "DVPA-Security-Assessment-2026-04-30.pdf",
+      "status": "done",
+      "pinned": false,
+      "file_size_bytes": 2487290,
+      "error": null,
+      "created_at": "2026-04-30T15:50:00+00:00",
+      "started_at": "2026-04-30T15:48:00+00:00",
+      "finished_at": "2026-04-30T15:50:00+00:00",
+      "download_url": "/api/v1/projects/2/reports/4001/download"
+    },
+    {
+      "id": 4002,
+      "project_id": 2,
+      "scan_run_id": 1001,
+      "format": "markdown",
+      "filename": "DVPA-Quick-Triage-2026-04-29.md",
+      "status": "done",
+      "pinned": true,
+      "file_size_bytes": 18420,
+      "error": null,
+      "created_at": "2026-04-29T22:30:00+00:00",
+      "started_at": "2026-04-29T22:28:00+00:00",
+      "finished_at": "2026-04-29T22:30:00+00:00",
+      "download_url": "/api/v1/projects/2/reports/4002/download"
+    }
+  ],
+  "total": 2,
+  "offset": 0,
+  "limit": 20
+}

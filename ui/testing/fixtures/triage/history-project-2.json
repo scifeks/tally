@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "scan_run_id": 2001,
+      "project_id": 7,
+      "status": "done",
+      "started_at": "2026-04-30T14:11:56+00:00",
+      "finished_at": "2026-04-30T14:18:42+00:00",
+      "total_findings": 188,
+      "processed_findings": 188
+    },
+    {
+      "scan_run_id": 2003,
+      "project_id": 7,
+      "status": "failed",
+      "started_at": "2026-04-29T18:00:35+00:00",
+      "finished_at": "2026-04-29T18:00:39+00:00",
+      "total_findings": 0,
+      "processed_findings": 0
+    }
+  ],
+  "total": 2,
+  "offset": 0,
+  "limit": 20
+}

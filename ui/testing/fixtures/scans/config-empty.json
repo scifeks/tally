@@ -1,0 +1,65 @@
+{
+  "repos": [],
+  "tools": [
+    {
+      "id": "semgrep",
+      "name": "semgrep",
+      "domain": "sast",
+      "enabled": true
+    },
+    {
+      "id": "gitleaks",
+      "name": "gitleaks",
+      "domain": "secrets",
+      "enabled": true
+    },
+    {
+      "id": "osv-scanner",
+      "name": "osv-scanner",
+      "domain": "sca",
+      "enabled": true
+    },
+    {
+      "id": "pip-audit",
+      "name": "pip-audit",
+      "domain": "sca",
+      "enabled": true
+    },
+    {
+      "id": "zap",
+      "name": "zap",
+      "domain": "web",
+      "enabled": true
+    },
+    {
+      "id": "noir",
+      "name": "noir",
+      "domain": "web",
+      "enabled": true
+    },
+    {
+      "id": "katana",
+      "name": "katana",
+      "domain": "web",
+      "enabled": true
+    },
+    {
+      "id": "dalfox",
+      "name": "dalfox",
+      "domain": "web",
+      "enabled": true
+    },
+    {
+      "id": "xsstrike",
+      "name": "xsstrike",
+      "domain": "web",
+      "enabled": true
+    }
+  ],
+  "domains": [
+    "sast",
+    "sca",
+    "web",
+    "secrets"
+  ]
+}

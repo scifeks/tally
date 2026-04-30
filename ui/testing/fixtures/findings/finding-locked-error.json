@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": "FINDING_LOCKED",
+    "message": "Finding 3 is currently held by job scan:S-1",
+    "details": {
+      "conflicting_ids": [
+        3
+      ],
+      "holders": {
+        "3": "scan:S-1"
+      }
+    }
+  }
+}

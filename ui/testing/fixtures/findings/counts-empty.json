@@ -1,0 +1,57 @@
+{
+  "by_severity": {
+    "informational": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "critical": 0
+  },
+  "by_domain": {},
+  "by_segment": {},
+  "by_repo": {},
+  "by_status": {
+    "active": 0,
+    "false_positive": 0,
+    "fixed": 0,
+    "wont_fix": 0
+  },
+  "by_tool": {},
+  "by_severity_status": {
+    "informational": {
+      "active": 0,
+      "false_positive": 0,
+      "fixed": 0,
+      "wont_fix": 0
+    },
+    "low": {
+      "active": 0,
+      "false_positive": 0,
+      "fixed": 0,
+      "wont_fix": 0
+    },
+    "medium": {
+      "active": 0,
+      "false_positive": 0,
+      "fixed": 0,
+      "wont_fix": 0
+    },
+    "high": {
+      "active": 0,
+      "false_positive": 0,
+      "fixed": 0,
+      "wont_fix": 0
+    },
+    "critical": {
+      "active": 0,
+      "false_positive": 0,
+      "fixed": 0,
+      "wont_fix": 0
+    }
+  },
+  "total": 0,
+  "scans_count": 0,
+  "repos_count": 0,
+  "urls_count": 0,
+  "last_scan_at": null,
+  "last_triage_at": null
+}

@@ -1,0 +1,3475 @@
+{
+  "items": [
+    {
+      "id": 51,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/sqli_blind/source/high.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 14,
+        "col_end": 86,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "7ef049aab5112af3bb76293f8efd5b3252ac0b0f16f5d96ffde00bce4b064b5f",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 52,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/sqli_blind/source/high.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 33,
+        "line_end": 33,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 14,
+        "col_end": 86,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "74e3b6ecfc108eb6b730f89784be55e5c0a92a23e168ba0d775cee49289781a2",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 53,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/sqli_blind/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 14,
+        "col_end": 78,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "5676c96d8f1df18ae0439a63772d28daf53fc7190cb68afd22c8f17f13291840",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 54,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/sqli_blind/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 32,
+        "line_end": 32,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 14,
+        "col_end": 78,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "0def138a1c77174c1d9b37ffcbe58906b919ba1974d4c086349e3b2d8e6afc3f",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 55,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/sqli_blind/source/medium.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 34,
+        "line_end": 34,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 14,
+        "col_end": 76,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "8131ab990d688e2bde7ae2624545d388aae798ad3c8481e97e4be4814b89c201",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 56,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/vulnerabilities/upload/source/impossible.php",
+      "rule_id": "php.lang.security.unlink-use.unlink-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Using user input when deleting files with `unlink()` is potentially dangerous. A malicious actor could use this to modify or access files they have no right to.",
+      "package_version": null,
+      "cwe": [
+        "CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 51,
+        "line_end": 51,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 4,
+        "col_end": 24,
+        "owasp": [
+          "A05:2017 - Broken Access Control",
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://www.php.net/manual/en/function.unlink",
+          "https://owasp.org/www-project-top-ten/2017/A5_2017-Broken_Access_Control.html"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "af563681caaed3882b669029fc218c9ece6521bd821c58da00bf3583caf5becd",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 57,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/view_help.php",
+      "rule_id": "php.lang.security.eval-use.eval-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Evaluating non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 20,
+        "line_end": 20,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 3,
+        "col_end": 112,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://www.php.net/manual/en/function.eval",
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/NoEvalsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "317c0941f90e3729480b5dcb359c7ec39daecc28969d97fdfb9bff5265751ca5",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 58,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/view_help.php",
+      "rule_id": "php.lang.security.eval-use.eval-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Evaluating non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T13:05:44.946807+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+        "col_start": 3,
+        "col_end": 122,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://www.php.net/manual/en/function.eval",
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/NoEvalsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T13:05:48.614494+00:00",
+      "last_seen": "2026-04-30T13:05:48.614494+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "7b9a409e47794cef2cebeb5cb0b6e19333f0e74ead1c564de3b2d336487ec81e",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 59,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/docker-compose.yml",
+      "rule_id": "yaml.docker-compose.security.no-new-privileges.no-new-privileges",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Service 'redis' allows for privilege escalation via setuid or setgid binaries. Add 'no-new-privileges:true' in 'security_opt' to prevent this.",
+      "package_version": null,
+      "cwe": [
+        "CWE-732: Incorrect Permission Assignment for Critical Resource"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 3,
+        "col_end": 8,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "docker-compose"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://raesene.github.io/blog/2019/06/01/docker-capabilities-and-no-new-privs/",
+          "https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-4-add-no-new-privileges-flag"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "ff3fe55e850ca3205da4a9ebcf6c99e88b69329f2bd29641cba56740f76e9994",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 60,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/docker-compose.yml",
+      "rule_id": "yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Service 'redis' is running with a writable root filesystem. This may allow malicious applications to download and run additional payloads, or modify container files. If an application inside a container has to save something temporarily consider using a tmpfs. Add 'read_only: true' to this service to prevent this.",
+      "package_version": null,
+      "cwe": [
+        "CWE-732: Incorrect Permission Assignment for Critical Resource"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 3,
+        "col_end": 8,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "docker-compose"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://docs.docker.com/compose/compose-file/compose-file-v3/#domainname-hostname-ipc-mac_address-privileged-read_only-shm_size-stdin_open-tty-user-working_dir",
+          "https://blog.atomist.com/security-of-docker-kubernetes/",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-8-set-filesystem-and-volumes-to-read-only"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "1ce517d218859ebab2ab53f8e098d7c4e59b46c6b36d58eb397a656740488dec",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 61,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/sqli/dao/student.py",
+      "rule_id": "python.lang.security.audit.formatted-sql-query.formatted-sql-query",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected possible formatted SQL query. Use parameterized queries instead.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 45,
+        "line_end": 45,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 19,
+        "col_end": 33,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "python"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://stackoverflow.com/questions/775296/mysql-parameterized-queries"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "835626557b4fd45a8dc3235c9cd5178a916f73a789c9a593e71ff38f8876eeaf",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 62,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/sqli/dao/student.py",
+      "rule_id": "python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw query safely, prepared statement should be used. SQLAlchemy provides TextualSQL to easily used prepared statement with named parameters. For complex SQL composition, use SQL Expression Language or Schema Definition Language. In most cases, SQLAlchemy ORM will be a better option.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 45,
+        "line_end": 45,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 19,
+        "col_end": 33,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "sqlalchemy"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql",
+          "https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_quick_guide.htm",
+          "https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-more-specific-text-with-table-expression-literal-column-and-expression-column"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "2e6daa3524e54f5aa6cce5bf1a6a8dff01182a570a3205599a254258e7c0d91d",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 63,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/sqli/dao/user.py",
+      "rule_id": "python.lang.security.audit.md5-used-as-password.md5-used-as-password",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "It looks like MD5 is used as a password hash. MD5 is not considered a secure password hash because it can be cracked by an attacker in a short amount of time. Use a suitable password hashing function such as scrypt. You can use `hashlib.scrypt`.",
+      "package_version": null,
+      "cwe": [
+        "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 41,
+        "line_end": 41,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 33,
+        "col_end": 74,
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "owasp_name": "[\"Cryptographic Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "pycryptodome",
+          "hashlib",
+          "md5"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "LOW",
+        "references": [
+          "https://tools.ietf.org/html/rfc6151",
+          "https://crypto.stackexchange.com/questions/44151/how-does-the-flame-malware-take-advantage-of-md5-collision",
+          "https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html",
+          "https://security.stackexchange.com/questions/211/how-to-securely-hash-passwords",
+          "https://github.com/returntocorp/semgrep-rules/issues/1609",
+          "https://docs.python.org/3/library/hashlib.html#hashlib.scrypt"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "bbf211a9a32906d3e181d67fb830007128942c34fb7c33e01276f7bb695424e3",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 64,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "RegExp() called with a `t` function argument, this might allow an attacker to cause a Regular Expression Denial-of-Service (ReDoS) within your application as RegExP blocks the main thread. For this reason, it is recommended to use hardcoded regexes instead. If your regex is run on user-controlled input, consider performing input validation or use a regex checking/sanitization library such as https://www.npmjs.com/package/recheck to verify that the regex does not appear vulnerable to ReDoS.",
+      "package_version": null,
+      "cwe": [
+        "CWE-1333: Inefficient Regular Expression Complexity"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 565,
+        "line_end": 565,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 94,
+        "col_end": 158,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "73f86819e5c480cc8efe4c0dbba4677e874da7a49b6e0db630d0f1eff06eb1c4",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 65,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected string concatenation with a non-literal variable in a util.format / console.log function. If an attacker injects a format specifier in the string, it will forge the log message. Try to use constant values for the format string.",
+      "package_version": null,
+      "cwe": [
+        "CWE-134: Use of Externally-Controlled Format String"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 645,
+        "line_end": 645,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 318,
+        "col_end": 353,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/134.html"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "80cd5d71b1decae35859a2216dbb488e10738df841f8a50c0cea39178c40c955",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 66,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected string concatenation with a non-literal variable in a util.format / console.log function. If an attacker injects a format specifier in the string, it will forge the log message. Try to use constant values for the format string.",
+      "package_version": null,
+      "cwe": [
+        "CWE-134: Use of Externally-Controlled Format String"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 661,
+        "line_end": 661,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 184,
+        "col_end": 246,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/134.html"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "9a4e768505c3fec397d8634caacb79d673c3a01307863eeaa7ff441f207ba8ec",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 67,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected string concatenation with a non-literal variable in a util.format / console.log function. If an attacker injects a format specifier in the string, it will forge the log message. Try to use constant values for the format string.",
+      "package_version": null,
+      "cwe": [
+        "CWE-134: Use of Externally-Controlled Format String"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 699,
+        "line_end": 699,
+        "timestamp": "2026-04-30T13:05:50.120314+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_130550.stdout",
+        "col_start": 157,
+        "col_end": 211,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/134.html"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T13:06:07.260188+00:00",
+      "last_seen": "2026-04-30T13:06:07.260188+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "7547298133f0575f4f3e4d0e130a8e1270fb4f19156e3db753d0e3bdd452a901",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 68,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/.github/workflows/update-challenges-ebook.yml",
+      "rule_id": "yaml.github-actions.security.run-shell-injection.run-shell-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 22,
+        "line_end": 25,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 7,
+        "col_end": 120,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "github-actions"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://docs.github.com/en/actions/learn-github-actions/security-hardening-for-github-actions#understanding-the-risk-of-script-injections",
+          "https://securitylab.github.com/research/github-actions-untrusted-input/"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "1d26d8fa1bd03f95ab6ae02045ec7578331077288363579e8154482ec25a2798",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 69,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/data/static/codefixes/dbSchemaChallenge_1.ts",
+      "rule_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 5,
+        "line_end": 5,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 28,
+        "col_end": 162,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "6bf4384a3e78cf062e63db125a77107fea0e1dec8b3bb86e0b3e42230d875cc5",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 70,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/data/static/codefixes/dbSchemaChallenge_3.ts",
+      "rule_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 28,
+        "col_end": 159,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "83db590b2834b5918bb75bc79f08dce9304b698ffa121ea4f55f9d0f43e39086",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 71,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/data/static/codefixes/restfulXssChallenge_2.ts",
+      "rule_id": "javascript.audit.detect-replaceall-sanitization.detect-replaceall-sanitization",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a call to `replaceAll()` in an attempt to HTML escape the string `tableData[i].description`. Manually sanitizing input through a manually built list can be circumvented in many situations, and it's better to use a well known sanitization library such as `sanitize-html` or `DOMPurify`.",
+      "package_version": null,
+      "cwe": [
+        "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 49,
+        "line_end": 49,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 34,
+        "col_end": 82,
+        "owasp": [
+          "A07:2017 - Cross-Site Scripting (XSS)",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript",
+          "typescript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.npmjs.com/package/dompurify",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "35cbf0b79f7212509314724f22c3b9a506cdfafa81821ffe926813944f6443af",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 72,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/data/static/codefixes/restfulXssChallenge_2.ts",
+      "rule_id": "javascript.audit.detect-replaceall-sanitization.detect-replaceall-sanitization",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a call to `replaceAll()` in an attempt to HTML escape the string `tableData[i].description.replaceAll('<', '&lt;')`. Manually sanitizing input through a manually built list can be circumvented in many situations, and it's better to use a well known sanitization library such as `sanitize-html` or `DOMPurify`.",
+      "package_version": null,
+      "cwe": [
+        "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 49,
+        "line_end": 49,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 34,
+        "col_end": 106,
+        "owasp": [
+          "A07:2017 - Cross-Site Scripting (XSS)",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript",
+          "typescript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.npmjs.com/package/dompurify",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "35cbf0b79f7212509314724f22c3b9a506cdfafa81821ffe926813944f6443af",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 73,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/data/static/codefixes/unionSqlInjectionChallenge_1.ts",
+      "rule_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 6,
+        "line_end": 6,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 28,
+        "col_end": 159,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "f65c397c5cbb8251ae2da62f5f8e03945316c9ffe39c399fce231223464daf35",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 74,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/data/static/codefixes/unionSqlInjectionChallenge_3.ts",
+      "rule_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 10,
+        "line_end": 10,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 28,
+        "col_end": 159,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "423b37adb7c63913ee9371cf6cda265ca4e990f75aabc6e780f49d8c02fb428f",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 75,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/data/static/users.yml",
+      "rule_id": "generic.secrets.security.detected-generic-secret.detected-generic-secret",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Generic Secret detected",
+      "package_version": null,
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 151,
+        "line_end": 151,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 7,
+        "col_end": 47,
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "owasp_name": "[\"Identification and Authentication Failures\", \"Authentication Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "secrets"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "8915e4155792fc2795dda53c0567d5d9e7b4803ec6caf70d9e48c3c19d61a181",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 76,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/frontend/src/app/app.guard.spec.ts",
+      "rule_id": "generic.secrets.security.detected-jwt-token.detected-jwt-token",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "JWT token detected",
+      "package_version": null,
+      "cwe": [
+        "CWE-321: Use of Hard-coded Cryptographic Key"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 38,
+        "line_end": 38,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 36,
+        "col_end": 148,
+        "owasp": [
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "owasp_name": "[\"Cryptographic Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "secrets",
+          "jwt"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://semgrep.dev/blog/2020/hardcoded-secrets-unverified-tokens-and-other-common-jwt-mistakes/"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "4fb0c30edcd0fc9580625e1d04a1e2eee7171b0ac73e79e4e0f3002b938a6c0f",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 77,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/frontend/src/app/last-login-ip/last-login-ip.component.spec.ts",
+      "rule_id": "generic.secrets.security.detected-jwt-token.detected-jwt-token",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "JWT token detected",
+      "package_version": null,
+      "cwe": [
+        "CWE-321: Use of Hard-coded Cryptographic Key"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 61,
+        "line_end": 61,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 36,
+        "col_end": 120,
+        "owasp": [
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "owasp_name": "[\"Cryptographic Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "secrets",
+          "jwt"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://semgrep.dev/blog/2020/hardcoded-secrets-unverified-tokens-and-other-common-jwt-mistakes/"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "0974ce69cd553ba5ba11d8816d8d356dc118879e4d9779b87cad29a2b52d035a",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 78,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/frontend/src/app/last-login-ip/last-login-ip.component.spec.ts",
+      "rule_id": "generic.secrets.security.detected-jwt-token.detected-jwt-token",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "JWT token detected",
+      "package_version": null,
+      "cwe": [
+        "CWE-321: Use of Hard-coded Cryptographic Key"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 67,
+        "line_end": 67,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 36,
+        "col_end": 89,
+        "owasp": [
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "owasp_name": "[\"Cryptographic Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "secrets",
+          "jwt"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://semgrep.dev/blog/2020/hardcoded-secrets-unverified-tokens-and-other-common-jwt-mistakes/"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "f3a8b4c3fc64ea22e4a582e78a478ac92620711f48273d5e0b572d5e0ac9f9e9",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 79,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/frontend/src/hacking-instructor/helpers/helpers.ts",
+      "rule_id": "javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Possibility of prototype polluting function detected. By adding or modifying attributes of an object prototype, it is possible to create attributes that exist on every object, or replace critical attributes with malicious ones. This can be problematic if the software depends on existence or non-existence of certain attributes, or uses pre-defined attributes of object prototype (such as hasOwnProperty, toString or valueOf). Possible mitigations might be: freezing the object prototype, using an object without prototypes (via Object.create(null) ), blocking modifications of attributes that resolve to object prototype, using Map instead of object.",
+      "package_version": null,
+      "cwe": [
+        "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 49,
+        "line_end": 49,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 9,
+        "col_end": 54,
+        "owasp": [
+          "A08:2021 - Software and Data Integrity Failures",
+          "A08:2025 - Software or Data Integrity Failures"
+        ],
+        "owasp_name": "[\"Software and Data Integrity Failures\", \"Software or Data Integrity Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "typescript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://github.com/HoLyVieR/prototype-pollution-nsec18/blob/master/paper/JavaScript_prototype_pollution_attack_in_NodeJS.pdf"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "9c0afdbc86cdb8e7b681149c0d46ae260118663adbc6db1918a818e768f3e930",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 80,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/lib/codingChallenges.ts",
+      "rule_id": "javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "RegExp() called with a `challengeKey` function argument, this might allow an attacker to cause a Regular Expression Denial-of-Service (ReDoS) within your application as RegExP blocks the main thread. For this reason, it is recommended to use hardcoded regexes instead. If your regex is run on user-controlled input, consider performing input validation or use a regex checking/sanitization library such as https://www.npmjs.com/package/recheck to verify that the regex does not appear vulnerable to ReDoS.",
+      "package_version": null,
+      "cwe": [
+        "CWE-1333: Inefficient Regular Expression Complexity"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 76,
+        "line_end": 76,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 9,
+        "col_end": 67,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "774bc3d7d8448f3fb26d340143607b1dc1d464c839eda73a52045e1e4740334e",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 81,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/lib/codingChallenges.ts",
+      "rule_id": "javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "RegExp() called with a `challengeKey` function argument, this might allow an attacker to cause a Regular Expression Denial-of-Service (ReDoS) within your application as RegExP blocks the main thread. For this reason, it is recommended to use hardcoded regexes instead. If your regex is run on user-controlled input, consider performing input validation or use a regex checking/sanitization library such as https://www.npmjs.com/package/recheck to verify that the regex does not appear vulnerable to ReDoS.",
+      "package_version": null,
+      "cwe": [
+        "CWE-1333: Inefficient Regular Expression Complexity"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 78,
+        "line_end": 78,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 16,
+        "col_end": 77,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "3f896d9b285202c334da4c40dd9c5568e67719540d676c715507de2fc28a93d3",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 82,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/lib/insecurity.ts",
+      "rule_id": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+      "package_version": null,
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 44,
+        "line_end": 44,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 39,
+        "col_end": 94,
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "owasp_name": "[\"Identification and Authentication Failures\", \"Authentication Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "crypto",
+          "hmac"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://rules.sonarsource.com/javascript/RSPEC-2068",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#key-management"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "c557dc26fd668110e8204a002720abe66d764d757f0bcebdfcef8094302e10ae",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 83,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "confirmed",
+      "file": "/lib/insecurity.ts",
+      "rule_id": "javascript.jsonwebtoken.security.jwt-hardcode.hardcoded-jwt-secret",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "A hard-coded credential was detected. It is not recommended to store credentials in source-code, as this risks secrets being leaked and used by either an internal or external malicious adversary. It is recommended to use environment variables to securely provide credentials or retrieve credentials from a secure vault or HSM (Hardware Security Module).",
+      "package_version": null,
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 56,
+        "line_end": 56,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 56,
+        "col_end": 66,
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "owasp_name": "[\"Identification and Authentication Failures\", \"Authentication Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "jwt",
+          "javascript",
+          "secrets"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "1afe83ccec05ead482299a8826553f217131ff8d2c6221c41db221fa3ca412c1",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 84,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/lib/insecurity.ts",
+      "rule_id": "javascript.lang.security.audit.hardcoded-hmac-key.hardcoded-hmac-key",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a hardcoded hmac key. Avoid hardcoding secrets and consider using an alternate option such as reading the secret from a config file or using an environment variable.",
+      "package_version": null,
+      "cwe": [
+        "CWE-798: Use of Hard-coded Credentials"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 152,
+        "line_end": 152,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 16,
+        "col_end": 55,
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "owasp_name": "[\"Identification and Authentication Failures\", \"Authentication Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "crypto",
+          "hmac"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://rules.sonarsource.com/javascript/RSPEC-2068",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#key-management"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "167f3d6c083db587edf6a2cda5625f87e691afddefb00a51685b462786d758d4",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 85,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/routes/b2bOrder.ts",
+      "rule_id": "javascript.express.security.audit.express-detect-notevil-usage.express-detect-notevil-usage",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected usage of the `notevil` package, which is unmaintained and has vulnerabilities. Using any sort of `eval()` functionality can be very dangerous, but if you must, the `eval` package is an up to date alternative. Be sure that only trusted input reaches an `eval()` function.",
+      "package_version": null,
+      "cwe": [
+        "CWE-1104: Use of Unmaintained Third Party Components"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 23,
+        "line_end": 23,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 9,
+        "col_end": 80,
+        "owasp": [
+          "A06:2021 - Vulnerable and Outdated Components",
+          "A03:2025 - Software Supply Chain Failures"
+        ],
+        "owasp_name": "[\"Vulnerable and Outdated Components\", \"Software Supply Chain Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript",
+          "typescript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/mmckegg/notevil"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "c33962daac19b6bb956b18a64c01151ce66e47559a3f69138da1f73f17cfa794",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 86,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/routes/captcha.ts",
+      "rule_id": "javascript.browser.security.eval-detected.eval-detected",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected the use of eval(). eval() can be dangerous if used to evaluate dynamic content. If this content can be input from outside the program, this may be a code injection vulnerability. Ensure evaluated content is not definable by external sources.",
+      "package_version": null,
+      "cwe": [
+        "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 36,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "browser"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "7797b685c9c1abc7d9bdca0dbb7e8cce8f08dae0b4b98634ad71651db59f9e14",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 87,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/routes/chatbot.ts",
+      "rule_id": "javascript.express.security.injection.raw-html-format.raw-html-format",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into the host portion of this manually-constructed HTML. This can introduce a Cross-Site-Scripting (XSS) vulnerability if this comes from user-provided input. Consider using a sanitization library such as DOMPurify to sanitize the HTML within.",
+      "package_version": null,
+      "cwe": [
+        "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 205,
+        "line_end": 205,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 46,
+        "col_end": 56,
+        "owasp": [
+          "A07:2017 - Cross-Site Scripting (XSS)",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "4d32b2d63e0be6efcdf1c9c6647e879512633dc2457bfc85870ce31e369db3c3",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 88,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/routes/currentUser.ts",
+      "rule_id": "javascript.express.security.audit.remote-property-injection.remote-property-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Bracket object notation with user input is present, this might allow an attacker to access all properties of the object and even it's prototype. Use literal values for object properties.",
+      "package_version": null,
+      "cwe": [
+        "CWE-522: Insufficiently Protected Credentials"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 31,
+        "line_end": 31,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 15,
+        "col_end": 76,
+        "owasp": [
+          "A02:2017 - Broken Authentication",
+          "A04:2021 - Insecure Design",
+          "A06:2025 - Insecure Design"
+        ],
+        "owasp_name": "[\"Insecure Design\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://github.com/nodesecurity/eslint-plugin-security/blob/3c7522ca1be800353513282867a1034c795d9eb4/docs/the-dangers-of-square-bracket-notation.md"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "9e468c9eae746935daefa42d6757e2516e7bc9c96f9d0fc1e52e76223a5ce7fc",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 89,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/routes/fileServer.ts",
+      "rule_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The application processes user-input, this is passed to res.sendFile which can allow an attacker to arbitrarily read files on the system through path traversal. It is recommended to perform input validation in addition to canonicalizing the path. This allows you to validate the path against the intended directory it should be accessing.",
+      "package_version": null,
+      "cwe": [
+        "CWE-73: External Control of File Name or Path"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 33,
+        "line_end": 33,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 46,
+        "owasp": [
+          "A04:2021 - Insecure Design",
+          "A06:2025 - Insecure Design"
+        ],
+        "owasp_name": "[\"Insecure Design\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "7623fe872e28ddb0324b285dd410004a6946bfafa3c7b4d198d25c4d6a37049b",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 90,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/routes/fileUpload.ts",
+      "rule_id": "javascript.express.security.audit.express-libxml-vm-noent.express-libxml-vm-noent",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected use of parseXml() function with the `noent` field set to `true`. This can lead to an XML External Entities (XXE) attack if untrusted data is passed into it.",
+      "package_version": null,
+      "cwe": [
+        "CWE-611: Improper Restriction of XML External Entity Reference"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 83,
+        "line_end": 83,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 24,
+        "col_end": 140,
+        "owasp": [
+          "A04:2017 - XML External Entities (XXE)",
+          "A05:2021 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "56348a4642c3c47d286f3e560e622cf47597316538aa58ffda5365454ce9bc90",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 91,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/routes/keyServer.ts",
+      "rule_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The application processes user-input, this is passed to res.sendFile which can allow an attacker to arbitrarily read files on the system through path traversal. It is recommended to perform input validation in addition to canonicalizing the path. This allows you to validate the path against the intended directory it should be accessing.",
+      "package_version": null,
+      "cwe": [
+        "CWE-73: External Control of File Name or Path"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 14,
+        "line_end": 14,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 57,
+        "owasp": [
+          "A04:2021 - Insecure Design",
+          "A06:2025 - Insecure Design"
+        ],
+        "owasp_name": "[\"Insecure Design\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "591db4c07b216b8111179612c59a788cfb38b23d525c8effce255069e9679b71",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 92,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/routes/logfileServer.ts",
+      "rule_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The application processes user-input, this is passed to res.sendFile which can allow an attacker to arbitrarily read files on the system through path traversal. It is recommended to perform input validation in addition to canonicalizing the path. This allows you to validate the path against the intended directory it should be accessing.",
+      "package_version": null,
+      "cwe": [
+        "CWE-73: External Control of File Name or Path"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 14,
+        "line_end": 14,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 47,
+        "owasp": [
+          "A04:2021 - Insecure Design",
+          "A06:2025 - Insecure Design"
+        ],
+        "owasp_name": "[\"Insecure Design\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "43df012336578dc7630ade6430427fd7106c6201def4a0dc64bb23c3222ddeaa",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 93,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/routes/login.ts",
+      "rule_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 34,
+        "line_end": 34,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 28,
+        "col_end": 169,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "d86e2e514f2d9d31adfbef88a2d203f6d5ef1ab4a2192b79bca904fc21335f4c",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 94,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/routes/quarantineServer.ts",
+      "rule_id": "javascript.express.security.audit.express-res-sendfile.express-res-sendfile",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The application processes user-input, this is passed to res.sendFile which can allow an attacker to arbitrarily read files on the system through path traversal. It is recommended to perform input validation in addition to canonicalizing the path. This allows you to validate the path against the intended directory it should be accessing.",
+      "package_version": null,
+      "cwe": [
+        "CWE-73: External Control of File Name or Path"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 14,
+        "line_end": 14,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 57,
+        "owasp": [
+          "A04:2021 - Insecure Design",
+          "A06:2025 - Insecure Design"
+        ],
+        "owasp_name": "[\"Insecure Design\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "98f779028e26e1c915cc7ade15dbb84d490a84edb79730026cbf3690e760a9c4",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 95,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "confirmed",
+      "file": "/routes/redirect.ts",
+      "rule_id": "javascript.express.security.audit.express-open-redirect.express-open-redirect",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The application redirects to a URL specified by user-supplied input `query` that is not validated. This could redirect users to malicious locations. Consider using an allow-list approach to validate URLs, or warn users they are being redirected to a third-party website.",
+      "package_version": null,
+      "cwe": [
+        "CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 19,
+        "line_end": 19,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 25,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "90e837f43c3bf6e1233ad15139c9872eb496718d3736926e06db44b8a362222c",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 96,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/routes/search.ts",
+      "rule_id": "javascript.sequelize.security.audit.sequelize-injection-express.express-sequelize-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected a sequelize statement that is tainted by user-input. This could lead to SQL injection if the variable is user-controlled and is not properly sanitized. In order to prevent SQL injection, it is recommended to use parameterized queries or prepared statements.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 23,
+        "line_end": 23,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 28,
+        "col_end": 159,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "express"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://sequelize.org/docs/v6/core-concepts/raw-queries/#replacements"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "9bd85a700c3b6411f71868bafb123f2742466e813579e93d00151d3df8ae00ca",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 97,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/routes/userProfile.ts",
+      "rule_id": "javascript.browser.security.eval-detected.eval-detected",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected the use of eval(). eval() can be dangerous if used to evaluate dynamic content. If this content can be input from outside the program, this may be a code injection vulnerability. Ensure evaluated content is not definable by external sources.",
+      "package_version": null,
+      "cwe": [
+        "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 62,
+        "line_end": 62,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 30,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "browser"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "45a6d25419dae1f467a4581fae2faf5816e10928ac8f54defdacdcce11606ca2",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 98,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/routes/userProfile.ts",
+      "rule_id": "javascript.lang.security.audit.code-string-concat.code-string-concat",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Found data from an Express or Next web request flowing to `eval`. If this data is user-controllable this can lead to execution of arbitrary system commands in the context of your application process. Avoid `eval` whenever possible.",
+      "package_version": null,
+      "cwe": [
+        "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 62,
+        "line_end": 62,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 20,
+        "col_end": 30,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "node.js",
+          "Express",
+          "Next.js"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval",
+          "https://nodejs.org/api/child_process.html#child_processexeccommand-options-callback",
+          "https://www.stackhawk.com/blog/nodejs-command-injection-examples-and-prevention/",
+          "https://ckarande.gitbooks.io/owasp-nodegoat-tutorial/content/tutorial/a1_-_server_side_js_injection.html"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "c374597460129c2e2d3ce8c1dad68d6975ad7571b69d5e6b57ad7365582c75e9",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 99,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/routes/videoHandler.ts",
+      "rule_id": "javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Cannot determine what 'subs' is and it is used with a '<script>' tag. This could be susceptible to cross-site scripting (XSS). Ensure 'subs' is not externally controlled, or sanitize this data.",
+      "package_version": null,
+      "cwe": [
+        "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 58,
+        "line_end": 58,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 90,
+        "col_end": 94,
+        "owasp": [
+          "A07:2017 - Cross-Site Scripting (XSS)",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.developsec.com/2017/11/09/xss-in-a-script-tag/",
+          "https://github.com/juice-shop/juice-shop/blob/1ceb8751e986dacd3214a618c37e7411be6bc11a/routes/videoHandler.ts#L68"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "9fbb31e913a2862cef38b48627aca67b903625ba2769f1ab55b0799803abf0ad",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    },
+    {
+      "id": 100,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/routes/videoHandler.ts",
+      "rule_id": "javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Cannot determine what 'subs' is and it is used with a '<script>' tag. This could be susceptible to cross-site scripting (XSS). Ensure 'subs' is not externally controlled, or sanitize this data.",
+      "package_version": null,
+      "cwe": [
+        "CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "juice-shop",
+        "line_start": 71,
+        "line_end": 71,
+        "timestamp": "2026-04-30T13:06:07.435480+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/juice-shop_2026-04-30_130607.stdout",
+        "col_start": 165,
+        "col_end": 169,
+        "owasp": [
+          "A07:2017 - Cross-Site Scripting (XSS)",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.developsec.com/2017/11/09/xss-in-a-script-tag/",
+          "https://github.com/juice-shop/juice-shop/blob/1ceb8751e986dacd3214a618c37e7411be6bc11a/routes/videoHandler.ts#L68"
+        ],
+        "enriched": false,
+        "repo_id": 3,
+        "repo": "juice-shop"
+      },
+      "first_seen": "2026-04-30T13:06:32.929424+00:00",
+      "last_seen": "2026-04-30T13:06:32.929424+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 3,
+      "id_fingerprint": "73e880e30cfe7830ae169bf4d97eff61d9e3253f61d356f24808fae76c397811",
+      "is_locked": false,
+      "lock_holder": null,
+      "project_id": 2
+    }
+  ],
+  "total": 568,
+  "offset": 50,
+  "limit": 50
+}
