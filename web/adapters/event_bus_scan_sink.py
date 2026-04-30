@@ -19,7 +19,8 @@ import contextlib
 import dataclasses
 from datetime import UTC, datetime
 
-from domain.pipeline.scan_events import ScanEvent, event_type_name
+from application.tools.scan_run_registry import get_scan_run_registry
+from domain.pipeline.scan_events import ScanEvent, ToolStarted, event_type_name
 from infrastructure.events.bus import EventBus
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.types import BusEvent
@@ -45,6 +46,14 @@ class EventBusScanSink:
         self._job_id = job_id
 
     def emit(self, event: ScanEvent) -> None:
+        # Mirror ToolStarted into the run registry so SSE subscribers
+        # connecting mid-scan see the active (repo, tool) in the
+        # snapshot frame instead of waiting for the next event.
+        if isinstance(event, ToolStarted) and event.run_id is not None:
+            with contextlib.suppress(Exception):
+                get_scan_run_registry().set_current(
+                    event.run_id, repo=event.repo, tool=event.tool
+                )
         bus_event = BusEvent(
             event_id=new_event_id(),
             job_id=self._job_id,

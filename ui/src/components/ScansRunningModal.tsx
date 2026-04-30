@@ -1,36 +1,90 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal, ModalButton } from './Modal'
-import { useProjects, useScanHistory } from '@/lib/api'
+import { useProjects, useProjectMeta, useScanHistory } from '@/lib/api'
+import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
 import { useUI } from '@/lib/store'
-import type { Scan } from '@/lib/types'
+import type { ScanLogEvent } from '@/lib/types'
 import { cn, formatRelative } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
 
-/**
- * TODO [BACKEND]: Replace this simulation with real SSE subscription.
- * Mocks the "live" streaming feel by ticking progress forward on an interval.
- * The real app will replace this with an SSE subscription via useScanEvents().
- */
-function useSimulatedProgress(running: Scan[]) {
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    if (running.length === 0) return
-    const h = window.setInterval(() => setTick(t => t + 1), 1500)
-    return () => window.clearInterval(h)
-  }, [running.length])
-  return tick
-}
+// Tool-unit events that advance the per-run progress bar. tool_skipped
+// counts because that slot in the n*y grid is "done", just not run.
+const COMPLETION_EVENT_TYPES: ReadonlySet<ScanLogEvent['type']> = new Set([
+  'tool_completed',
+  'tool_failed',
+  'tool_skipped',
+])
+
+const TERMINAL_EVENT_TYPES: ReadonlySet<ScanLogEvent['type']> = new Set([
+  'run_completed',
+  'run_cancelled',
+  'run_failed',
+])
 
 export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const projectIdNum = activeProjectId ?? 0
+  const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
-  // TODO [BACKEND]: These hooks return mock data. Replace with real API calls.
   const { data: projects = [] } = useProjects()
-  const { data: scans = [] } = useScanHistory(activeProjectId ?? 0)
+  const { data: scans = [] } = useScanHistory(projectIdNum)
+  const { data: projectMeta } = useProjectMeta(projectIdParam)
 
   const running = scans.filter(s => s.status === 'running')
-  const tick = useSimulatedProgress(running)
+
+  const [completedByRun, setCompletedByRun] = useState<Record<number, number>>({})
+  const [finishedRuns, setFinishedRuns] = useState<Record<number, true>>({})
+  const [currentByRun, setCurrentByRun] = useState<Record<number, { repo: string; tool: string }>>(
+    {}
+  )
+
+  const handleEvent = useCallback((event: ScanLogEvent) => {
+    if (TERMINAL_EVENT_TYPES.has(event.type)) {
+      setFinishedRuns(prev => ({ ...prev, [event.runId]: true }))
+      return
+    }
+    if (event.type === 'tool_started' && event.repo && event.tool) {
+      const repo = event.repo
+      const tool = event.tool
+      setCurrentByRun(prev => ({ ...prev, [event.runId]: { repo, tool } }))
+      return
+    }
+    if (COMPLETION_EVENT_TYPES.has(event.type)) {
+      setCompletedByRun(prev => ({
+        ...prev,
+        [event.runId]: (prev[event.runId] ?? 0) + 1,
+      }))
+    }
+  }, [])
+
+  const handleSnapshot = useCallback((snap: SnapshotPayload) => {
+    // Seed currentByRun from the snapshot frame so a mid-scan
+    // subscriber sees the active (repo, tool) immediately rather
+    // than waiting for the next tool_started event. The backend
+    // mirrors each tool_started into the run registry.
+    if (!snap.activeRuns) return
+    setCurrentByRun(prev => {
+      const next = { ...prev }
+      for (const r of snap.activeRuns ?? []) {
+        if (r.repo && r.tool && next[r.runId] === undefined) {
+          next[r.runId] = { repo: r.repo, tool: r.tool }
+        }
+      }
+      return next
+    })
+  }, [])
+
+  // Single SSE subscription for the active project — events fan out to
+  // all running cards by runId. Subscribed whenever the modal is open
+  // (not gated on running.length > 0) so we don't miss the first
+  // tool_started event when a scan begins *after* the modal opens.
+  // The snapshot frame additionally seeds currentByRun for scans that
+  // were already running at connect time.
+  useScanEvents(projectIdNum, handleEvent, {
+    enabled: open && projectIdNum > 0,
+    onSnapshot: handleSnapshot,
+  })
 
   return (
     <Modal
@@ -64,11 +118,22 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
           </div>
           {running.map(s => {
             const project = projects.find(p => p.id === s.projectId)
-            // Indeterminate progress — real per-run progress arrives via SSE
-            // snapshot frames, which the running indicator does not subscribe to.
-            const simulated = Math.min(95, ((tick * 2) % 90) + 5)
+            const n = s.repoIds.length || projectMeta?.repoCount || 0
+            const y = s.toolIds.length || projectMeta?.enabledTools?.length || 0
+            const total = n * y
+            const completed = completedByRun[s.id] ?? 0
+            const progress = finishedRuns[s.id]
+              ? 100
+              : total > 0
+                ? Math.min(95, (completed / total) * 100)
+                : 0
             const domainsLabel = s.domains.length > 0 ? s.domains.join(', ') : '—'
-            const toolsLabel = s.toolIds.length > 0 ? s.toolIds.join(', ') : '—'
+            const current = currentByRun[s.id]
+            const toolsLabel = current
+              ? `${current.repo}/${current.tool}`
+              : s.toolIds.length > 0
+                ? s.toolIds.join(', ')
+                : '—'
             return (
               <div key={s.id} className="border border-border bg-background">
                 <div className="flex items-center gap-3 px-3 h-8 border-b border-border">
@@ -93,7 +158,7 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
                       {toolsLabel}
                     </div>
                   </div>
-                  <ProgressBar value={simulated} />
+                  <ProgressBar value={progress} />
                   <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
                     <span>scan in progress</span>
                     <span className="text-dim">sse://tally/scans/events?run_id={s.id}</span>
@@ -113,7 +178,7 @@ function ProgressBar({ value }: { value: number }) {
   return (
     <div className="relative h-2 w-full border border-border bg-muted overflow-hidden">
       <div
-        className={cn('h-full bg-accent transition-[width] duration-500 ease-linear')}
+        className={cn('h-full bg-accent transition-[width] duration-[2000ms] ease-out')}
         style={{ width: `${pct}%` }}
       />
       {/* Scanline sweep to reinforce the live feel */}

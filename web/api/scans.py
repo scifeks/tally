@@ -571,6 +571,7 @@ async def _build_snapshot(
         "run_id": run_id,
         "project_id": project_id,
     }
+    registry = get_scan_run_registry()
     if run_id is not None:
         repo = _make_run_repo(row)
         bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
@@ -578,17 +579,31 @@ async def _build_snapshot(
             scan_row, tool_rows = bundle
             if scan_row.project_id == project_id:
                 progress = _build_progress(scan_row, tool_rows)
+                handle = registry.get(run_id)
                 payload.update(
                     status=scan_row.status,
                     progress=progress.progress,
                     current_segment=None,
                     segment_label=None,
+                    current_repo=handle.current_repo if handle else None,
+                    current_tool=handle.current_tool if handle else None,
                     tool_runs=[_tool_run_to_item(r).model_dump() for r in tool_rows],
                     project_id=scan_row.project_id,
                 )
     else:
-        active_handles = get_scan_run_registry().list_for_project(project_id)
+        active_handles = registry.list_for_project(project_id)
         payload["active_run_ids"] = [h.run_id for h in active_handles]
+        # Sibling field carrying the most recent (repo, tool) per active
+        # run so a mid-scan SSE subscriber can render the live label
+        # immediately instead of waiting for the next tool_started event.
+        payload["active_runs"] = [
+            {
+                "run_id": h.run_id,
+                "repo": h.current_repo,
+                "tool": h.current_tool,
+            }
+            for h in active_handles
+        ]
 
     return BusEvent(
         event_id=new_event_id(),

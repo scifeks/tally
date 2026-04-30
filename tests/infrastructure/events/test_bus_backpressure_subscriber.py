@@ -20,11 +20,21 @@ async def test_drop_oldest_subscriber_receives_most_recent():
     bus = EventBus()
     await bus.register_job("j1", "scan", subscriber_size=4)
     _, q = await bus.subscribe("j1")
+    # Capture before close_job — the dispatcher pops the job from
+    # bus._jobs when it processes EOS. Awaiting the dispatcher below
+    # lets it fully drain into the subscriber queue before we consume,
+    # which is what exercises drop-oldest: with the per-event yield
+    # in _dispatch (added to avoid SSE batching), a same-coroutine
+    # consumer would otherwise interleave and the queue would never
+    # fill up.
+    dispatcher = bus._jobs["j1"].dispatcher
+    assert dispatcher is not None
 
     events = [_ev("j1", i) for i in range(10)]
     for ev in events:
         await bus.publish(ev)
     await bus.close_job("j1")
+    await dispatcher
 
     received = []
     while True:

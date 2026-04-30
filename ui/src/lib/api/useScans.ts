@@ -344,24 +344,42 @@ function mapScanEvent(type: ScanLogEventType, data: ScanEventPayloadApi): ScanLo
   }
 }
 
+export interface ActiveRunSnapshot {
+  runId: number
+  repo: string | null
+  tool: string | null
+}
+
 export interface SnapshotPayload {
   runId: number | null
   projectId: number | null
   activeRunIds?: number[]
+  activeRuns?: ActiveRunSnapshot[]
   status?: string
   progress?: number
   currentSegment?: string | null
   segmentLabel?: string | null
+  currentRepo?: string | null
+  currentTool?: string | null
+}
+
+interface ActiveRunSnapshotApi {
+  run_id: number
+  repo: string | null
+  tool: string | null
 }
 
 interface SnapshotPayloadApi {
   run_id: number | null
   project_id: number | null
   active_run_ids?: number[]
+  active_runs?: ActiveRunSnapshotApi[]
   status?: string
   progress?: number
   current_segment?: string | null
   segment_label?: string | null
+  current_repo?: string | null
+  current_tool?: string | null
 }
 
 function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
@@ -369,10 +387,17 @@ function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
     runId: data.run_id,
     projectId: data.project_id,
     activeRunIds: data.active_run_ids,
+    activeRuns: data.active_runs?.map(r => ({
+      runId: r.run_id,
+      repo: r.repo,
+      tool: r.tool,
+    })),
     status: data.status,
     progress: data.progress,
     currentSegment: data.current_segment,
     segmentLabel: data.segment_label,
+    currentRepo: data.current_repo,
+    currentTool: data.current_tool,
   }
 }
 

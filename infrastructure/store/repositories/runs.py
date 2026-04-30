@@ -157,6 +157,24 @@ class RunRepository:
                 (count, run_id),
             )
 
+    def mark_stale_runs_failed(self) -> int:
+        """Mark every ``running``/``cancelling`` row as ``failed``.
+
+        Used at server start to clean up rows whose owning process is
+        gone — Tier-1 lock guarantees only one scan is live at a time,
+        so any persisted-as-running row from a prior process is stale.
+        Returns the row count updated.
+        """
+        ts = datetime.now(UTC).isoformat()
+        with self._factory.connect() as conn:
+            cur = conn.execute(
+                "UPDATE scan_runs SET status = 'failed', finished_at = ?"
+                " WHERE status IN ('running', 'cancelling')"
+                "   AND finished_at IS NULL",
+                (ts,),
+            )
+            return cur.rowcount
+
     def get(self, run_id: int) -> ScanRunRow | None:
         with self._factory.connect() as conn:
             row = conn.execute(
