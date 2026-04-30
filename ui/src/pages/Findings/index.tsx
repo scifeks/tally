@@ -9,6 +9,8 @@ import {
   type FindingSortKey,
 } from '@/lib/api'
 import { FindingMutationErrorModal } from '@/components/FindingMutationErrorModal'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
+import { useProjects } from '@/lib/api'
 import { useUI } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import type { Severity } from '@/lib/types'
@@ -40,6 +42,8 @@ export default function Findings() {
   const toggleSelected = useUI(s => s.toggleSelected)
   const setSelected = useUI(s => s.setSelected)
   const clearSelected = useUI(s => s.clearSelected)
+
+  const { data: projects = [] } = useProjects()
 
   const [filters, setFilters] = useState<Filters>(emptyFilters)
   const [sort, setSort] = useState<SortState>(null)
@@ -172,6 +176,10 @@ export default function Findings() {
     obs.observe(el)
     return () => obs.disconnect()
   }, [findingsQuery])
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
+  }
 
   return (
     <div className="h-full flex flex-col min-h-0">

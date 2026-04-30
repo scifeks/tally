@@ -3,9 +3,10 @@ import { Search, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { useUI } from '@/lib/store'
-import { useUrlLists } from '@/lib/api'
+import { useProjects, useUrlLists } from '@/lib/api'
 import type { UrlEntry } from '@/lib/types'
 import { Panel } from '@/components/tty'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 // ─── Column config ──────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ const COLUMNS: ColumnDef[] = [
 
 export default function UrlLists() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const { data: projects = [] } = useProjects()
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
   const {
@@ -165,6 +167,10 @@ export default function UrlLists() {
     obs.observe(el)
     return () => obs.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
+  }
 
   return (
     <div className="h-full flex flex-col min-h-0">

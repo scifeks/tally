@@ -100,7 +100,7 @@ export function TopBar() {
           <div className="flex-1 flex items-center gap-4 px-4 text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
             <span className="text-dim">tally://console</span>
             <span className="hidden lg:inline text-dim">
-              session: <span className="text-muted-foreground tabular-nums">0x7f3a</span>
+              session: <span className="text-muted-foreground tabular-nums">0x7A69</span>
             </span>
           </div>
 

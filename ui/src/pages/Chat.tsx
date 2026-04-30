@@ -15,6 +15,7 @@ import {
 } from '@/lib/api'
 import type { ChatMessage, ChatSession, ChatStreamEvent } from '@/lib/types'
 import { ChatMutationErrorModal } from '@/components/ChatMutationErrorModal'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 interface StreamingOverlay {
   userMessageId: number
@@ -126,7 +127,7 @@ export default function Chat() {
   const queryClient = useQueryClient()
 
   const { data: projects = [] } = useProjects()
-  const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0]
+  const activeProject = projects.find(p => p.id === activeProjectId)
 
   const { data: sessions } = useChatSessions(activeProjectId)
   const createSession = useCreateChatSession()
@@ -294,6 +295,10 @@ export default function Chat() {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
   }
 
   const hasNoSessions = sessions.length === 0

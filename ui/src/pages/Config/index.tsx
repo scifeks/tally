@@ -15,6 +15,7 @@ import { ConfigPanel } from './ConfigPanel'
 import { ProjectInfoSection } from './ProjectInfoSection'
 import { RepositorySection } from './RepositorySection'
 import { ToolOverridesSection } from './ToolOverridesSection'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 // ─── Main Config Page ─────────────────────────────────────────────────────────
 
@@ -36,6 +37,10 @@ export default function Config() {
   const deleteToolOverride = useDeleteToolOverride()
 
   const project = projects.find(p => p.id === activeProjectId)
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
+  }
 
   return (
     <div className="h-full flex flex-col min-h-0 p-4 gap-4">

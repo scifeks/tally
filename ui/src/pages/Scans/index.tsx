@@ -16,6 +16,7 @@ import { RadarSweep } from './RadarSweep'
 import { LogRow } from './LogRow'
 import { HistoryTable } from './HistoryTable'
 import { ScanMutationErrorModal } from '@/components/ScanMutationErrorModal'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 const SEGMENT_LABEL: Record<Segment, string> = {
   sast: 'SAST',
@@ -223,6 +224,10 @@ export default function Scans() {
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
+  }
 
   const formatElapsed = (sec: number) => {
     const m = Math.floor(sec / 60)

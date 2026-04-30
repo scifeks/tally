@@ -28,6 +28,7 @@ import type { BatchDisplay } from './BatchRow'
 import { LogRow } from './LogRow'
 import { TriageMutationErrorModal } from '@/components/TriageMutationErrorModal'
 import { TriagePromptInjectionWarningModal } from '@/components/TriagePromptInjectionWarningModal'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 interface ResumeState {
   scanRunId: number
@@ -358,6 +359,10 @@ export default function Triage() {
     statusLabel === 'failed' && 'text-crit',
     statusLabel === 'idle' && 'text-muted-foreground'
   )
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
+  }
 
   return (
     <div className="h-full flex flex-col min-h-0 p-4 gap-4">
