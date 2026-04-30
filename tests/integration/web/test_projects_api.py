@@ -220,8 +220,8 @@ class TestProjectInfoV1:
         data = resp.json()
         assert data["id"] == project_id
         for field in (
-            "company",
-            "department",
+            "company_name",
+            "department_name",
             "abbreviation",
             "path",
             "repo_count",
@@ -251,8 +251,8 @@ class TestProjectInfoPatchV1:
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["company"] == "New Co"
-        assert data["department"] == "Engineering"
+        assert data["company_name"] == "New Co"
+        assert data["department_name"] == "Engineering"
         assert data["abbreviation"] == "NEW"
         # Persists across reads.
         resp2 = await client.get(f"/api/v1/projects/{project_id}/info")
@@ -269,8 +269,8 @@ class TestProjectInfoPatchV1:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["company"] == "Only Co"
-        assert data["department"] == "Security"
+        assert data["company_name"] == "Only Co"
+        assert data["department_name"] == "Security"
         assert data["abbreviation"] == "TP"
 
     async def test_patch_rejects_abbreviation_too_long(
@@ -310,8 +310,8 @@ class TestProjectInfoPatchV1:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["company"] == "Acme Corp"
-        assert data["department"] == "Security"
+        assert data["company_name"] == "Acme Corp"
+        assert data["department_name"] == "Security"
         assert data["abbreviation"] == "TP"
 
 

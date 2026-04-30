@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "name": "acme-platform",
+  "code": "ACM",
+  "company_name": "ACME Corporation",
+  "department_name": "Security",
+  "abbreviation": "ACM",
+  "created_at": "2024-01-15T10:30:00Z",
+  "path": "/opt/tally/projects/acme-platform",
+  "repo_count": 14,
+  "finding_count": 220
+}

@@ -5,7 +5,7 @@ export type Segment = 'sast' | 'web' | 'secrets' | 'sca'
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
 /**
- * Free-form string on purpose — analysts may target protocols we don't know
+ * Free-form string on purpose - analysts may target protocols we don't know
  * about yet (ws/wss, ftp, smb, sip, coap, ...). Backend is the source of truth.
  */
 export type UrlProtocol = string
@@ -58,7 +58,7 @@ export interface Finding {
   domain: 'code' | 'web'
   severity: Severity
   status: Status
-  /** confidence label — confirmed / probable / potential / false_positive. */
+  /** confidence label - confirmed / probable / potential / false_positive. */
   confidence: string
   /** Backend always returns an array (possibly empty) for finding_type. */
   findingType: string[]
@@ -70,12 +70,12 @@ export interface Finding {
   line?: number
   /** Backend always returns an array (possibly empty) for cwe. */
   cwe: string[]
-  /** Free-form analyst notes — editable in the detail panel. */
+  /** Free-form analyst notes - editable in the detail panel. */
   notes?: string
   discoveredAt: string
   triagedAt?: string
   triagedBy?: 'claude-code' | 'analyst_web'
-  /** Live lock state — true while a scan/triage job holds the row. */
+  /** Live lock state - true while a scan/triage job holds the row. */
   isLocked: boolean
   /** Identifier of the job currently holding the lock, when locked. */
   lockHolder: string | null
@@ -533,7 +533,7 @@ export type ChatMessageRole = 'user' | 'assistant'
  *
  * `model` is null on user turns and the LLM provider's model id on assistant
  * turns. `citations` is reserved for the future RAG citations surface
- * (chat-history.md decision 10) — always `null` in v1.
+ * (chat-history.md decision 10) - always `null` in v1.
  */
 export interface ChatMessage {
   /** Numeric SQLite primary key. */
@@ -546,7 +546,7 @@ export interface ChatMessage {
   model: string | null
   /** ISO-8601 timestamp; backend column name is `created_at`. */
   timestamp: string
-  /** Reserved for future RAG citations surface — always null in v1. */
+  /** Reserved for future RAG citations surface - always null in v1. */
   citations: null
   /** UI-only: true while the assistant turn is streaming tokens. */
   isStreaming?: boolean
@@ -562,7 +562,7 @@ export interface ChatSession {
   id: number
   /** Numeric project id (matches backend `project_id: int`). */
   projectId: number
-  /** Server-set timestamp title — never null. */
+  /** Server-set timestamp title - never null. */
   title: string
   createdAt: string
   /** Null until the first message is sent. */
@@ -624,7 +624,7 @@ export type ChatStreamEvent =
 
 /**
  * 202 response from `POST .../sessions/:sid/messages`. The assistant id is
- * always null here — the SPA learns it from the `stream_end` SSE event.
+ * always null here - the SPA learns it from the `stream_end` SSE event.
  */
 export interface ChatSendMessageResponse {
   userMessageId: number
@@ -635,7 +635,7 @@ export interface ChatSendMessageResponse {
 
 /**
  * 202 response from `POST .../sessions/:sid/cancel`. `cancelledMessageId` is
- * always null in v1 — the assistant id is only assigned at stream_end.
+ * always null in v1 - the assistant id is only assigned at stream_end.
  */
 export interface ChatCancelResponse {
   sessionId: number
@@ -656,8 +656,8 @@ export type RepoLocationMode = 'local' | 'docker'
  * Full model for Add/Edit repository form.
  */
 export interface RepositoryConfig {
-  id: string
-  projectId: string
+  id: number
+  projectId: number
   name: string
   /** At least one required. library is mutually exclusive with api/ui. */
   types: RepoType[]
@@ -738,19 +738,44 @@ export interface ToolOverrideConfig {
 }
 
 /**
- * Project information for the config page.
- * Some fields are editable, some are read-only.
+ * Project information for the config page. Mirrors the backend
+ * `ProjectInfoResponse` (canonical snake_case field names from
+ * `core/config/schemas/project_config.py::ProjectConfig`). Only
+ * `companyName`, `departmentName`, and `abbreviation` are mutable
+ * via PATCH; everything else is read-only display.
  */
 export interface ProjectInfo {
-  id: string
+  id: number
   name: string
   code: string
-  company?: string
-  department?: string
-  abbreviation?: string
+  companyName: string
+  departmentName: string
+  abbreviation: string
   createdAt: string
   /** Read-only derived data */
   path: string
   repoCount: number
   findingCount: number
+}
+
+/** PATCH body for `useUpdateProjectInfo` - only the three mutable fields. */
+export interface ProjectInfoUpdate {
+  companyName?: string
+  departmentName?: string
+  abbreviation?: string
+}
+
+/**
+ * PATCH body for `useUpdateRepoAuth`. Mirrors the backend
+ * `RepoAuthPatchRequest`. All fields optional; provided values
+ * overwrite the auth block. Write-only - never echoed by GET.
+ */
+export interface RepositoryAuthUpdate {
+  loginUrl?: string
+  usernameField?: string
+  passwordField?: string
+  extraFields?: Record<string, string>
+  credentialsEnv?: string
+  username?: string
+  password?: string
 }

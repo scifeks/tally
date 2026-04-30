@@ -4,14 +4,14 @@
  * Project-scoped PATCH against
  * `/api/v1/projects/:projectId/findings/:findingId`.
  *
- * Behaviour:
+ * Behavior:
  *  - **Optimistic.** `onMutate` snapshots every cached page of
  *    `['findings', projectId, *]` and patches the matching row in place
  *    so the UI reflects the edit before the network resolves.
  *  - **Rollback + error modal on failure.** On error the snapshot is
  *    restored AND the global `findingMutationError` slice is populated so
  *    the user sees a modal explaining the rollback (especially for
- *    `FINDING_LOCKED` 409s — the analyst can't be allowed to silently
+ *    `FINDING_LOCKED` 409s - the analyst can't be allowed to silently
  *    miss an unsaved edit).
  *  - **Counts invalidation.** When the canonical response shows that
  *    `severity` or `status` actually changed, invalidate

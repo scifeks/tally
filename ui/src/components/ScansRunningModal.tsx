@@ -75,7 +75,7 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
     })
   }, [])
 
-  // Single SSE subscription for the active project — events fan out to
+  // Single SSE subscription for the active project - events fan out to
   // all running cards by runId. Subscribed whenever the modal is open
   // (not gated on running.length > 0) so we don't miss the first
   // tool_started event when a scan begins *after* the modal opens.
@@ -127,19 +127,19 @@ export function ScansRunningModal({ open, onClose }: { open: boolean; onClose: (
               : total > 0
                 ? Math.min(95, (completed / total) * 100)
                 : 0
-            const domainsLabel = s.domains.length > 0 ? s.domains.join(', ') : '—'
+            const domainsLabel = s.domains.length > 0 ? s.domains.join(', ') : '-'
             const current = currentByRun[s.id]
             const toolsLabel = current
               ? `${current.repo}/${current.tool}`
               : s.toolIds.length > 0
                 ? s.toolIds.join(', ')
-                : '—'
+                : '-'
             return (
               <div key={s.id} className="border border-border bg-background">
                 <div className="flex items-center gap-3 px-3 h-8 border-b border-border">
                   <span className="text-dim tabular-nums text-[11px]">{s.id}</span>
                   <span className="text-[11px] text-primary font-bold tty-glow">
-                    {project?.code ?? '—'}
+                    {project?.code ?? '-'}
                   </span>
                   <span className="text-[11px] text-foreground truncate">{project?.name}</span>
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">

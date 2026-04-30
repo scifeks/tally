@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react'
 /**
  * One-time warning shown the first time the user starts (or resumes, or
  * single-finding-triages) a triage run. The triage worker shells out to
- * `claude --print` and feeds it raw finding metadata — strings that may
+ * `claude --print` and feeds it raw finding metadata - strings that may
  * have been crafted by an attacker (e.g., a malicious page crawled by ZAP
  * could embed prompt-injection payloads in the URL or response body).
  *

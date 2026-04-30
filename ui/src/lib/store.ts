@@ -59,6 +59,14 @@ interface UIState {
   setChatMutationError: (err: ApiErrorPayload | null) => void
 
   /**
+   * Surface Config-page mutation failures (project info PATCH,
+   * repository CRUD + auth PATCH, tool override CRUD). Cleared by the
+   * modal's dismiss button. Not persisted.
+   */
+  configMutationError: ApiErrorPayload | null
+  setConfigMutationError: (err: ApiErrorPayload | null) => void
+
+  /**
    * One-time prompt-injection acknowledgement flag. The user must accept
    * the warning modal before any triage action (start / resume / single-
    * finding triage from the Findings detail panel) can fire. Persisted to
@@ -107,6 +115,9 @@ export const useUI = create<UIState>()(
       chatMutationError: null,
       setChatMutationError: err => set({ chatMutationError: err }),
 
+      configMutationError: null,
+      setConfigMutationError: err => set({ configMutationError: err }),
+
       triageInjectionAcked: false,
       setTriageInjectionAcked: acked => set({ triageInjectionAcked: acked }),
 
@@ -115,7 +126,7 @@ export const useUI = create<UIState>()(
     }),
     {
       // Storage key kept for legacy reasons (it's been written by older
-      // builds). activeProjectId is intentionally NOT persisted — every
+      // builds). activeProjectId is intentionally NOT persisted - every
       // fresh page load should land on the no-project-selected state so
       // the user can't mistakenly act on the wrong project after a
       // restart. Only the prompt-injection ack survives.

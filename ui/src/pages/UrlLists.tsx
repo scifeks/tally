@@ -132,7 +132,7 @@ export default function UrlLists() {
       setSortDir('asc')
       return
     }
-    // same column — cycle asc → desc → off
+    // same column - cycle asc → desc → off
     if (sortDir === 'asc') setSortDir('desc')
     else if (sortDir === 'desc') {
       setSortKey(null)
@@ -151,7 +151,7 @@ export default function UrlLists() {
     overscan: 12,
   })
 
-  // Infinite-scroll sentinel — fetch the next page when the bottom marker
+  // Infinite-scroll sentinel - fetch the next page when the bottom marker
   // enters the viewport.
   const sentinelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -174,7 +174,7 @@ export default function UrlLists() {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* Filter row: [SEARCH] — only rendered when there are URLs to search */}
+      {/* Filter row: [SEARCH] - only rendered when there are URLs to search */}
       {total > 0 && (
         <div className="flex items-stretch h-9 border-b border-border-strong bg-background shrink-0">
           {/* SEARCH */}

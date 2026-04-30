@@ -1,9 +1,9 @@
 /**
- * Document.cookie reader. JS-only — never touches localStorage / sessionStorage.
+ * Document.cookie reader. JS-only - never touches localStorage / sessionStorage.
  *
  * Used by `apiFetch` to read the JS-readable `tally_csrf` cookie set by the
  * backend during the handshake. The auth session cookie (`tally_session`)
- * is HttpOnly and is therefore NOT readable here — it travels with every
+ * is HttpOnly and is therefore NOT readable here - it travels with every
  * fetch automatically because we always send `credentials: "include"`.
  */
 export function readCookie(name: string): string | null {

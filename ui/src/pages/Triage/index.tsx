@@ -174,7 +174,7 @@ export default function Triage() {
   }, [])
 
   const handleEvent = useCallback((event: TriageLogEvent) => {
-    // batch_progress is high-frequency — never appended to the log array
+    // batch_progress is high-frequency - never appended to the log array
     // (latest-value-wins per the §12.7 mandate). The summary endpoint
     // already exposes the run-level processed/total fields the page reads.
     if (event.type === 'batch_progress') return
@@ -431,7 +431,7 @@ export default function Triage() {
               failure that left batches in a resumable state) */}
           {showResumeAffordance && (
             <div className="text-xs text-high" data-testid="triage-resume-note">
-              last run failed at finding #{resume.failedAtFindingId ?? '?'} — {resume.error}
+              last run failed at finding #{resume.failedAtFindingId ?? '?'} - {resume.error}
             </div>
           )}
 

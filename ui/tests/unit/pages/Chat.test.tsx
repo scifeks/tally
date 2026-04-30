@@ -52,7 +52,7 @@ afterEach(() => {
 
 // ─── Session list rendering ────────────────────────────────────────────────
 
-describe('Chat page — session list', () => {
+describe('Chat page - session list', () => {
   it('renders project-1 sessions and auto-selects the first one', async () => {
     useUI.setState({ activeProjectId: 1 })
     renderChat()
@@ -74,7 +74,7 @@ describe('Chat page — session list', () => {
 
 // ─── Persisted message rendering ───────────────────────────────────────────
 
-describe('Chat page — persisted messages', () => {
+describe('Chat page - persisted messages', () => {
   it('renders the 4 turns from session 101 fixture', async () => {
     useUI.setState({ activeProjectId: 1 })
     renderChat()
@@ -90,7 +90,7 @@ describe('Chat page — persisted messages', () => {
 
 // ─── Send + stream golden path ─────────────────────────────────────────────
 
-describe('Chat page — send + stream golden path', () => {
+describe('Chat page - send + stream golden path', () => {
   it('sends a message, streams tokens, and reconciles after stream_end', async () => {
     useUI.setState({ activeProjectId: 1 })
 
@@ -149,14 +149,14 @@ describe('Chat page — send + stream golden path', () => {
       })
     })
     // After stream_end, the streamingOverlay clears and persisted query
-    // is invalidated — UI returns to "CONNECTED" state.
+    // is invalidated - UI returns to "CONNECTED" state.
     await waitFor(() => expect(screen.getByText(/CONNECTED/i)).toBeInTheDocument())
   })
 })
 
 // ─── Cancel flow ───────────────────────────────────────────────────────────
 
-describe('Chat page — cancel flow', () => {
+describe('Chat page - cancel flow', () => {
   it('hits the cancel endpoint and clears overlay on stream_cancelled', async () => {
     useUI.setState({ activeProjectId: 1 })
     let cancelCalled = false
@@ -207,7 +207,7 @@ describe('Chat page — cancel flow', () => {
 
 // ─── Delete flow ───────────────────────────────────────────────────────────
 
-describe('Chat page — delete flow', () => {
+describe('Chat page - delete flow', () => {
   it('deletes a session and clears active when the deleted session was active', async () => {
     useUI.setState({ activeProjectId: 1 })
     let deleted = false
@@ -234,7 +234,7 @@ describe('Chat page — delete flow', () => {
 
 // ─── Expired session error flow ────────────────────────────────────────────
 
-describe('Chat page — expired session', () => {
+describe('Chat page - expired session', () => {
   it('shows the chat-action-failed modal when sending to an expired session', async () => {
     useUI.setState({ activeProjectId: 1 })
 
@@ -254,7 +254,7 @@ describe('Chat page — expired session', () => {
 
 // ─── Create new session ────────────────────────────────────────────────────
 
-describe('Chat page — new session button', () => {
+describe('Chat page - new session button', () => {
   it('creates a new session and switches to it', async () => {
     useUI.setState({ activeProjectId: 1 })
 

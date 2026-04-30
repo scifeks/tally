@@ -168,9 +168,9 @@ export function FindingDetailPanel({
         )}
         <Field
           label="type"
-          value={finding.findingType.length > 0 ? finding.findingType.join(', ') : '—'}
+          value={finding.findingType.length > 0 ? finding.findingType.join(', ') : '-'}
         />
-        <Field label="cwe" value={finding.cwe.length > 0 ? finding.cwe.join(', ') : '—'} />
+        <Field label="cwe" value={finding.cwe.length > 0 ? finding.cwe.join(', ') : '-'} />
 
         {/* Editable notes */}
         <div>

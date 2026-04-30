@@ -1,6 +1,6 @@
 /**
  * Full-screen, non-dismissable modal shown when the backend rejects a
- * request with 401. The user cannot recover in-tab — the desktop entry
+ * request with 401. The user cannot recover in-tab - the desktop entry
  * point requires re-running `tally ui` to mint a fresh handshake.
  */
 

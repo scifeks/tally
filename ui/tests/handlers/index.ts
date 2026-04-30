@@ -46,6 +46,16 @@ import chatMessagesEmptyFixture from '../fixtures/chat-messages-empty.json'
 import chatCreateSession201Fixture from '../fixtures/chat-create-session-201.json'
 import chatSendMessage202Fixture from '../fixtures/chat-send-message-202.json'
 import chatCancel202Fixture from '../fixtures/chat-cancel-202.json'
+import configProjectInfo1Fixture from '../fixtures/config-project-info-1.json'
+import configProjectInfo2Fixture from '../fixtures/config-project-info-2.json'
+import configProjectInfo3Fixture from '../fixtures/config-project-info-3.json'
+import configRepositoriesProject1Fixture from '../fixtures/config-repositories-project-1.json'
+import configRepositoriesProject2Fixture from '../fixtures/config-repositories-project-2.json'
+import configRepositoriesEmptyFixture from '../fixtures/config-repositories-empty.json'
+import configToolCatalogFixture from '../fixtures/config-tool-catalog.json'
+import configToolOverridesProject1Fixture from '../fixtures/config-tool-overrides-project-1.json'
+import configToolOverridesProject2Fixture from '../fixtures/config-tool-overrides-project-2.json'
+import configToolOverridesEmptyFixture from '../fixtures/config-tool-overrides-empty.json'
 const reportDraftDownloadMarkdown = `# Executive Summary
 
 This is a sample reviewed draft section served as \`text/markdown\`.
@@ -182,6 +192,61 @@ const CHAT_MESSAGES_FIXTURES: Record<string, ChatMessagesFixture> = {
   '101': chatMessagesSession101Fixture as ChatMessagesFixture,
 }
 
+interface ProjectInfoFixture {
+  id: number
+  name: string
+  code: string
+  company_name: string
+  department_name: string
+  abbreviation: string
+  created_at: string
+  path: string
+  repo_count: number
+  finding_count: number
+}
+
+const PROJECT_INFO_FIXTURES: Record<string, ProjectInfoFixture> = {
+  '1': configProjectInfo1Fixture as ProjectInfoFixture,
+  '2': configProjectInfo2Fixture as ProjectInfoFixture,
+  '3': configProjectInfo3Fixture as ProjectInfoFixture,
+}
+
+interface RepositoriesPage {
+  items: Array<Record<string, unknown> & { id: number }>
+  total: number
+  offset: number
+  limit: number
+}
+
+const REPOSITORIES_FIXTURES: Record<string, RepositoriesPage> = {
+  '1': configRepositoriesProject1Fixture as RepositoriesPage,
+  '2': configRepositoriesProject2Fixture as RepositoriesPage,
+  '3': configRepositoriesEmptyFixture as RepositoriesPage,
+}
+
+interface ToolOverridesFixture {
+  items: Array<Record<string, unknown> & { tool_id: string }>
+  total: number
+}
+
+const TOOL_OVERRIDES_FIXTURES: Record<string, ToolOverridesFixture> = {
+  '1': configToolOverridesProject1Fixture as ToolOverridesFixture,
+  '2': configToolOverridesProject2Fixture as ToolOverridesFixture,
+  '3': configToolOverridesEmptyFixture as ToolOverridesFixture,
+}
+
+/**
+ * Config test trigger ids:
+ *   projectId 99   → PATCH /info → 422 VALIDATION_ERROR
+ *   projectId 98   → GET /info → 404 NOT_FOUND
+ *   repoId    999  → DELETE /repositories/:id → 404 NOT_FOUND
+ *   toolId    "missing" → PUT/DELETE override → 404 NOT_FOUND
+ */
+const CONFIG_PROJECT_INFO_VALIDATION = '99'
+const CONFIG_PROJECT_INFO_NOT_FOUND = '98'
+const CONFIG_REPO_NOT_FOUND = '999'
+const CONFIG_TOOL_OVERRIDE_NOT_FOUND = 'missing'
+
 function errorEnvelope(
   status: number,
   code: string,
@@ -200,8 +265,8 @@ interface FindingsPage {
 
 /**
  * Slice the populated fixture by query params so tests can assert that
- * the FE forwards the right server-side filters. Honours offset, limit,
- * severity, status, segment, tool, and search. Sort/order are honoured
+ * the FE forwards the right server-side filters. Honors offset, limit,
+ * severity, status, segment, tool, and search. Sort/order are honored
  * only insofar as the response is left in fixture order.
  */
 function buildFindingsResponse(url: URL, base: FindingsPage): FindingsPage {
@@ -594,6 +659,169 @@ export const handlers = [
       return HttpResponse.json(chatCancel202Fixture, { status: 202 })
     }
   ),
+
+  // ─── Config ───────────────────────────────────────────────────────────────
+  http.get('/api/v1/projects/:projectId/info', ({ params }) => {
+    if (params.projectId === CONFIG_PROJECT_INFO_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+    }
+    const fixture = PROJECT_INFO_FIXTURES[params.projectId as string]
+    if (!fixture) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+    }
+    return HttpResponse.json(fixture)
+  }),
+  http.patch('/api/v1/projects/:projectId/info', async ({ params, request }) => {
+    if (params.projectId === CONFIG_PROJECT_INFO_VALIDATION) {
+      return errorEnvelope(
+        422,
+        'VALIDATION_ERROR',
+        'abbreviation must be at most 3 characters',
+        { field: 'abbreviation' }
+      )
+    }
+    const fixture = PROJECT_INFO_FIXTURES[params.projectId as string]
+    if (!fixture) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+    }
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    if (typeof body.abbreviation === 'string' && body.abbreviation.length > 3) {
+      return errorEnvelope(
+        422,
+        'VALIDATION_ERROR',
+        'abbreviation must be at most 3 characters',
+        { field: 'abbreviation' }
+      )
+    }
+    return HttpResponse.json({
+      ...fixture,
+      company_name:
+        typeof body.company_name === 'string' ? body.company_name : fixture.company_name,
+      department_name:
+        typeof body.department_name === 'string'
+          ? body.department_name
+          : fixture.department_name,
+      abbreviation:
+        typeof body.abbreviation === 'string' ? body.abbreviation : fixture.abbreviation,
+    })
+  }),
+
+  http.get('/api/v1/projects/:projectId/repositories', ({ params, request }) => {
+    const fixture =
+      REPOSITORIES_FIXTURES[params.projectId as string] ??
+      (configRepositoriesEmptyFixture as RepositoriesPage)
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 500)
+    const slice = fixture.items.slice(offset, offset + limit)
+    return HttpResponse.json({ items: slice, total: fixture.total, offset, limit })
+  }),
+  http.post('/api/v1/projects/:projectId/repositories', async ({ request }) => {
+    const form = await request.formData()
+    const payloadRaw = form.get('payload')
+    if (typeof payloadRaw !== 'string') {
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'payload is required', {
+        field: 'payload',
+      })
+    }
+    const payload = JSON.parse(payloadRaw) as Record<string, unknown>
+    return HttpResponse.json(
+      {
+        id: 9001,
+        uuid: '99999999-aaaa-4bbb-8ccc-dddddddddddd',
+        name: payload.name ?? '',
+        type: payload.type ?? [],
+        path: payload.path ?? '',
+        docker_path: payload.docker_path ?? '',
+        container_name: payload.container_name ?? '',
+        languages: payload.languages ?? [],
+        base_urls: payload.base_urls ?? [],
+        test_dirs: payload.test_dirs ?? [],
+        ignore_dirs: payload.ignore_dirs ?? [],
+        dependencies_file: payload.dependencies_file ?? '',
+        crawl_enabled: payload.crawl_enabled ?? false,
+        xsstrike_crawl_level: 10,
+        xsstrike_headers: {},
+        dalfox_headers: {},
+        katana_headless: payload.katana_headless ?? false,
+        katana_depth: payload.katana_depth ?? 10,
+        katana_headers: {},
+      },
+      { status: 201 }
+    )
+  }),
+  http.patch(
+    '/api/v1/projects/:projectId/repositories/:repoId/auth',
+    () => new HttpResponse(null, { status: 204 })
+  ),
+  http.get('/api/v1/projects/:projectId/repositories/:repoId', ({ params }) => {
+    const fixture = REPOSITORIES_FIXTURES[params.projectId as string]
+    if (!fixture) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+    }
+    const repoId = Number(params.repoId)
+    const repo = fixture.items.find(item => item.id === repoId)
+    if (!repo) {
+      return errorEnvelope(404, 'NOT_FOUND', 'repository not found')
+    }
+    return HttpResponse.json(repo)
+  }),
+  http.patch(
+    '/api/v1/projects/:projectId/repositories/:repoId',
+    async ({ params, request }) => {
+      const fixture = REPOSITORIES_FIXTURES[params.projectId as string]
+      if (!fixture) {
+        return errorEnvelope(404, 'NOT_FOUND', 'project not found')
+      }
+      const repoId = Number(params.repoId)
+      const repo = fixture.items.find(item => item.id === repoId)
+      if (!repo) {
+        return errorEnvelope(404, 'NOT_FOUND', 'repository not found')
+      }
+      const form = await request.formData()
+      const payloadRaw = form.get('payload')
+      if (typeof payloadRaw !== 'string') {
+        return errorEnvelope(422, 'VALIDATION_ERROR', 'payload is required', {
+          field: 'payload',
+        })
+      }
+      const payload = JSON.parse(payloadRaw) as Record<string, unknown>
+      return HttpResponse.json({ ...repo, ...payload })
+    }
+  ),
+  http.delete('/api/v1/projects/:projectId/repositories/:repoId', ({ params }) => {
+    if (params.repoId === CONFIG_REPO_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'repository not found')
+    }
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.get('/api/v1/tools/catalog', () => HttpResponse.json(configToolCatalogFixture)),
+  http.get('/api/v1/projects/:projectId/tools/overrides', ({ params }) => {
+    const fixture =
+      TOOL_OVERRIDES_FIXTURES[params.projectId as string] ?? configToolOverridesEmptyFixture
+    return HttpResponse.json(fixture)
+  }),
+  http.post('/api/v1/projects/:projectId/tools/overrides', async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    return HttpResponse.json(body, { status: 201 })
+  }),
+  http.put(
+    '/api/v1/projects/:projectId/tools/overrides/:toolId',
+    async ({ params, request }) => {
+      if (params.toolId === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
+        return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
+      }
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+      return HttpResponse.json({ tool_id: params.toolId, ...body })
+    }
+  ),
+  http.delete('/api/v1/projects/:projectId/tools/overrides/:toolId', ({ params }) => {
+    if (params.toolId === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
+    }
+    return new HttpResponse(null, { status: 204 })
+  }),
 ]
 
 export const server = setupServer(...handlers)

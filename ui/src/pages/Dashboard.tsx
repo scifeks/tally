@@ -39,7 +39,6 @@ export default function Dashboard() {
       limit: 10,
     },
   })
-  // GET /api/v1/projects/:id/scans — TODO [BACKEND]: still mock; Phase 11.7
   const { data: scans = [] } = useScanHistory(activeProjectId ?? 0)
 
   // useMemo must run before the early return below to keep hook order stable
@@ -49,7 +48,7 @@ export default function Dashboard() {
     [scans, activeProjectId]
   )
 
-  // Initial app load: no project picked yet — show selection state.
+  // Initial app load: no project picked yet - show selection state.
   if (!activeProjectId) {
     return <NoProjectSelectedState projects={projects} />
   }
@@ -161,16 +160,16 @@ export default function Dashboard() {
                     >
                       <div className="text-dim tabular-nums">{s.id}</div>
                       <div className="uppercase text-muted-foreground text-[11px] truncate">
-                        {s.domains.length > 0 ? s.domains.join(', ') : '—'}
+                        {s.domains.length > 0 ? s.domains.join(', ') : '-'}
                       </div>
                       <div className="text-foreground truncate">
-                        {s.toolIds.length > 0 ? s.toolIds.join(', ') : '—'}
+                        {s.toolIds.length > 0 ? s.toolIds.join(', ') : '-'}
                       </div>
                       <div>
                         <ScanStatus status={s.status} />
                       </div>
                       <div className="text-right tabular-nums text-muted-foreground">
-                        {s.findingsCount ?? '—'}
+                        {s.findingsCount ?? '-'}
                       </div>
                       <div className="text-right text-muted-foreground tabular-nums">
                         {formatRelative(s.startedAt)}
@@ -415,7 +414,7 @@ function EmptyProjectState({
     {
       done: false,
       label: 'start your first scan',
-      desc: "ingestion + enrichment can take a while — that's normal",
+      desc: "ingestion + enrichment can take a while - that's normal",
       to: '/scans',
       icon: <Play className="h-4 w-4" />,
     },
@@ -470,7 +469,7 @@ function EmptyProjectState({
 
         <div className="border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground leading-relaxed">
           <span className="text-dim">{'// '}</span>
-          scans can take significant time on first run — repositories are cloned, targets are
+          scans can take significant time on first run - repositories are cloned, targets are
           crawled, and results are enriched before findings appear. you can leave this page; results
           stream in live.
         </div>

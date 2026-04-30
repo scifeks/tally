@@ -410,7 +410,7 @@ function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
  *
  * `enrichment_progress` events MUST be rendered by the page consumer in
  * a single state slot (latest-value-wins); never appended to a logs array.
- * That's a §12.7 mandate from the roadmap — repeated enrichment ticks would
+ * That's a §12.7 mandate from the roadmap - repeated enrichment ticks would
  * otherwise grow the log unbounded.
  */
 export function useScanEvents(
