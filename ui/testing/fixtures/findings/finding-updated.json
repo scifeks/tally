@@ -1,0 +1,70 @@
+{
+  "id": 1,
+  "run_id": 1,
+  "tool": "semgrep",
+  "domain": "code",
+  "segment": "sast",
+  "finding_type": [
+    "vulnerability"
+  ],
+  "severity": "high",
+  "confidence": "confirmed",
+  "file": "/.github/workflows/docker-image.yml",
+  "rule_id": "yaml.github-actions.security.run-shell-injection.run-shell-injection",
+  "url": null,
+  "vulnerability_id": null,
+  "package_name": null,
+  "ecosystem": null,
+  "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+  "package_version": null,
+  "cwe": [
+    "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+  ],
+  "enriched": 0,
+  "meta": {
+    "profile": "dvwa",
+    "line_start": 28,
+    "line_end": 44,
+    "timestamp": "2026-04-30T13:05:44.946807+00:00",
+    "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
+    "col_start": 7,
+    "col_end": 2,
+    "owasp": [
+      "A01:2017 - Injection",
+      "A03:2021 - Injection",
+      "A05:2025 - Injection"
+    ],
+    "owasp_name": "[\"Injection\"]",
+    "fingerprint": "requires login",
+    "category": "security",
+    "technology": [
+      "github-actions"
+    ],
+    "subcategory": [
+      "vuln"
+    ],
+    "likelihood": "HIGH",
+    "impact": "HIGH",
+    "references": [
+      "https://docs.github.com/en/actions/learn-github-actions/security-hardening-for-github-actions#understanding-the-risk-of-script-injections",
+      "https://securitylab.github.com/research/github-actions-untrusted-input/"
+    ],
+    "enriched": false,
+    "repo_id": 1,
+    "repo": "dvwa"
+  },
+  "first_seen": "2026-04-30T13:05:48.614494+00:00",
+  "last_seen": "2026-04-30T13:05:48.614494+00:00",
+  "seen_count": 1,
+  "status": "fixed",
+  "triaged_at": "2026-04-30T16:00:00+00:00",
+  "triaged_by": "analyst_web",
+  "should_report": 0,
+  "business_impact": null,
+  "tal_id": null,
+  "repo_id": 1,
+  "id_fingerprint": "fb2ee284cd2ac1ac6db3b76cddea8b8617e4fafa7949f7b40422dc37b37d10e8",
+  "is_locked": false,
+  "lock_holder": null,
+  "project_id": 2
+}

@@ -1,0 +1,77 @@
+{
+  "items": [
+    {
+      "id": "semgrep",
+      "name": "semgrep",
+      "domain": "sast",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "Pattern-based static analysis for security and code quality."
+    },
+    {
+      "id": "gitleaks",
+      "name": "gitleaks",
+      "domain": "secrets",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "Detects hardcoded secrets in git history."
+    },
+    {
+      "id": "osv-scanner",
+      "name": "osv-scanner",
+      "domain": "sca",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "OSV-database lockfile scanner for vulnerable dependencies."
+    },
+    {
+      "id": "pip-audit",
+      "name": "pip-audit",
+      "domain": "sca",
+      "supports_local": true,
+      "supports_docker": false,
+      "description": "Audits Python environments against PyPA's vulnerability database."
+    },
+    {
+      "id": "zap",
+      "name": "zap",
+      "domain": "web",
+      "supports_local": false,
+      "supports_docker": true,
+      "description": "OWASP ZAP active web application scanner."
+    },
+    {
+      "id": "noir",
+      "name": "noir",
+      "domain": "web",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "Source-aware endpoint discovery from web framework code."
+    },
+    {
+      "id": "katana",
+      "name": "katana",
+      "domain": "web",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "Browser-based web crawler producing OAS3 endpoint maps."
+    },
+    {
+      "id": "dalfox",
+      "name": "dalfox",
+      "domain": "web",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "XSS scanner with parameter mining and DOM analysis."
+    },
+    {
+      "id": "xsstrike",
+      "name": "xsstrike",
+      "domain": "web",
+      "supports_local": true,
+      "supports_docker": true,
+      "description": "XSS detection with polyglot payloads, WAF fingerprinting, and confidence scoring."
+    }
+  ],
+  "total": 9
+}

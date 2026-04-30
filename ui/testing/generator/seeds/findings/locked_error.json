@@ -1,0 +1,12 @@
+{
+  "error": {
+    "code": "FINDING_LOCKED",
+    "message": "Finding {{int:locked_finding_id}} is currently held by job scan:S-{{int:scan_run_id_real}}",
+    "details": {
+      "conflicting_ids": ["{{int:locked_finding_id}}"],
+      "holders": {
+        "{{int:locked_finding_id}}": "scan:S-{{int:scan_run_id_real}}"
+      }
+    }
+  }
+}
