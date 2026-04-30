@@ -36,14 +36,8 @@ def _seed_global_config(base_path: str) -> None:
 
 
 def _seed_project_config(base_path: str, project_name: str) -> None:
-    """Write a minimal project.json so /scans/config can list repos.
-
-    Stamps a uuid into the seeded JSON and inserts the matching
-    ``repositories`` row so the repo surfaces with a real DB id from
-    the scan-config endpoint.
-    """
-    from uuid import uuid4
-
+    """Write a minimal project.json and seed a single repo row in the project DB."""
+    from core.config.schemas.repository import Repository
     from infrastructure.store.connection import ConnectionFactory
     from infrastructure.store.repositories.repositories import RepositoryRepository
 
@@ -53,23 +47,12 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
     project_dir = Path(base_path) / "projects" / project_name
     config_dir = project_dir / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    repo_uuid = str(uuid4())
     project_json = config_dir / "project.json"
     project_json.write_text(
         json.dumps(
             {
                 "project_name": project_name,
                 "created": "2026-04-25T00:00:00",
-                "repositories": [
-                    {
-                        "name": "test-repo",
-                        "uuid": repo_uuid,
-                        "type": ["api"],
-                        "path": str(repo_path),
-                        "languages": ["python"],
-                        "base_urls": [],
-                    }
-                ],
             }
         )
     )
@@ -77,7 +60,14 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
     sqlite_dir.mkdir(parents=True, exist_ok=True)
     factory = ConnectionFactory(sqlite_dir / "findings.db")
     factory.init_schema()
-    RepositoryRepository(factory).insert(uuid=repo_uuid, name="test-repo")
+    RepositoryRepository(factory).insert(
+        Repository(
+            name="test-repo",
+            type=["api"],
+            path=str(repo_path),
+            languages=["python"],
+        )
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -330,6 +320,7 @@ async def test_start_scan_soft_deleted_repo_422(
     active = repo_repo.list_active()
     assert active, "Expected at least one repo after seed"
     repo_id = active[0].id
+    assert repo_id is not None
 
     repo_repo.soft_delete(repo_id)
 

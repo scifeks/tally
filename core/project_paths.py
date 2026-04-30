@@ -62,7 +62,22 @@ class ProjectPaths:
         return self.root / "endpoints"
 
     def endpoint_dir(self, repo: str) -> Path:
+        """Return ``endpoints/<repo>/`` for JIT-rebuilt merged artifacts.
+
+        Phase 14.3 keys this dir on the integer repo id (callers pass
+        ``str(repo_id)``); ``merged_urls.txt`` and ``merged_oas3.json``
+        live inside it.
+        """
         return self.endpoints_dir / repo
+
+    def seed_upload_dir(self, repo_name: str, epoch: int) -> Path:
+        """Return ``endpoints/<repo_name>-<epoch>/`` for a user upload.
+
+        Each upload creates a fresh sibling dir so prior uploads aren't
+        clobbered; the most-recent path is persisted in
+        ``repositories.url_seed_file`` for future history features.
+        """
+        return self.endpoints_dir / f"{repo_name}-{epoch}"
 
     @property
     def endpoints_original_dir(self) -> Path:

@@ -1,6 +1,5 @@
 {
   "name": "dvwa",
-  "uuid": "d2d58577-aa07-494b-80aa-19a3cf4fbdb6",
   "type": [
     "ui",
     "api"

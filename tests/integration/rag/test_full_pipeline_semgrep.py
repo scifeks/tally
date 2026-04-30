@@ -91,7 +91,7 @@ class TestSemgrepFullPipeline:
         # Set up project directories so ConfigManager.load_repositories works
         pm = ProjectManager(base_path=str(tmp_path))
         pm.create_project_dirs(project_name)
-        pm.save_project(project_name, [])
+        pm.save_project(project_name)
 
         # Create SQLite store and a run to attach findings to
         run_repo, finding_repo, _, _ = make_store(str(tmp_path), project_name)

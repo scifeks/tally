@@ -240,17 +240,32 @@ class ConnectionFactory:
                     ON chat_messages (session_id, id);
 
                 CREATE TABLE IF NOT EXISTS repositories (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uuid        TEXT NOT NULL UNIQUE,
-                    name        TEXT NOT NULL,
-                    created_at  TEXT NOT NULL DEFAULT (
+                    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name                     TEXT NOT NULL,
+                    path                     TEXT NOT NULL DEFAULT '',
+                    docker_path              TEXT NOT NULL DEFAULT '',
+                    container_name           TEXT NOT NULL DEFAULT '',
+                    dependencies_file        TEXT NOT NULL DEFAULT '',
+                    crawl_enabled            INTEGER NOT NULL DEFAULT 1,
+                    xsstrike_crawl_level     INTEGER NOT NULL DEFAULT 10,
+                    katana_headless          INTEGER NOT NULL DEFAULT 0,
+                    katana_depth             INTEGER NOT NULL DEFAULT 5,
+                    type_json                TEXT NOT NULL DEFAULT '[]',
+                    languages_json           TEXT NOT NULL DEFAULT '[]',
+                    base_urls_json           TEXT NOT NULL DEFAULT '[]',
+                    test_dirs_json           TEXT NOT NULL DEFAULT '[]',
+                    ignore_dirs_json         TEXT NOT NULL DEFAULT '[]',
+                    xsstrike_headers_json    TEXT NOT NULL DEFAULT '{{}}',
+                    dalfox_headers_json      TEXT NOT NULL DEFAULT '{{}}',
+                    katana_headers_json      TEXT NOT NULL DEFAULT '{{}}',
+                    auth_json                TEXT,
+                    url_seed_file            TEXT,
+                    created_at               TEXT NOT NULL DEFAULT (
                         strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
                     ),
-                    deleted_at  TEXT
+                    deleted_at               TEXT
                 );
 
-                CREATE INDEX IF NOT EXISTS idx_repositories_uuid
-                    ON repositories (uuid);
                 CREATE INDEX IF NOT EXISTS idx_repositories_deleted
                     ON repositories (deleted_at);
 

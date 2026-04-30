@@ -1,7 +1,17 @@
-import { cn, formatRelative } from '@/lib/utils'
+import {
+  cn,
+  formatDate,
+  formatDateTime,
+  formatRelative,
+  formatTime,
+  parseIso,
+  toEpoch,
+} from '@/lib/utils'
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 const future = () => new Date(Date.now() + 60_000).toISOString()
+
+const INVALID_INPUTS = [null, undefined, '', 'not-a-date', '2026-13-99T99:99:99Z'] as const
 
 describe('cn', () => {
   it('merges class names', () => {
@@ -48,5 +58,68 @@ describe('formatRelative', () => {
 
   it('returns "1d ago" for exactly 24 hours ago', () => {
     expect(formatRelative(ago(24 * 3_600_000))).toBe('1d ago')
+  })
+
+  it.each(INVALID_INPUTS)('returns "—" for invalid input %p', input => {
+    expect(formatRelative(input)).toBe('—')
+  })
+})
+
+describe('parseIso', () => {
+  it('parses a valid ISO string into a Date', () => {
+    const d = parseIso('2026-04-26T10:00:00Z')
+    expect(d).toBeInstanceOf(Date)
+    expect(d?.toISOString()).toBe('2026-04-26T10:00:00.000Z')
+  })
+
+  it.each(INVALID_INPUTS)('returns null for invalid input %p', input => {
+    expect(parseIso(input)).toBeNull()
+  })
+})
+
+describe('formatDate', () => {
+  it('formats a valid ISO string', () => {
+    const out = formatDate('2026-04-26T10:00:00Z')
+    expect(out).not.toBe('—')
+    expect(out).not.toMatch(/NaN|Invalid/)
+  })
+
+  it.each(INVALID_INPUTS)('returns "—" for invalid input %p', input => {
+    expect(formatDate(input)).toBe('—')
+  })
+})
+
+describe('formatTime', () => {
+  it('formats a valid ISO string in 24h notation', () => {
+    const out = formatTime('2026-04-26T10:00:00Z')
+    expect(out).not.toBe('—')
+    expect(out).not.toMatch(/NaN|Invalid/)
+    expect(out).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  })
+
+  it.each(INVALID_INPUTS)('returns "—" for invalid input %p', input => {
+    expect(formatTime(input)).toBe('—')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('formats a valid ISO string', () => {
+    const out = formatDateTime('2026-04-26T10:00:00Z')
+    expect(out).not.toBe('—')
+    expect(out).not.toMatch(/NaN|Invalid/)
+  })
+
+  it.each(INVALID_INPUTS)('returns "—" for invalid input %p', input => {
+    expect(formatDateTime(input)).toBe('—')
+  })
+})
+
+describe('toEpoch', () => {
+  it('returns the epoch ms for a valid ISO string', () => {
+    expect(toEpoch('2026-04-26T10:00:00Z')).toBe(Date.UTC(2026, 3, 26, 10, 0, 0))
+  })
+
+  it.each(INVALID_INPUTS)('returns 0 for invalid input %p', input => {
+    expect(toEpoch(input)).toBe(0)
   })
 })

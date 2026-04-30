@@ -13,7 +13,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import type { ReportDraft } from '@/lib/types'
 import { downloadDraftSection } from '@/lib/api'
 import { SECTION_LABELS } from './constants'
@@ -207,13 +207,9 @@ export function DraftCard({
             <>
               <div className="flex items-center gap-4 mb-2 text-[10px] text-dim">
                 <span>{draft.wordCount} words</span>
-                {draft.generatedAt && (
-                  <span>Generated {new Date(draft.generatedAt).toLocaleDateString()}</span>
-                )}
+                {draft.generatedAt && <span>Generated {formatDate(draft.generatedAt)}</span>}
                 {draft.reviewedAt && (
-                  <span className="text-good">
-                    Reviewed {new Date(draft.reviewedAt).toLocaleDateString()}
-                  </span>
+                  <span className="text-good">Reviewed {formatDate(draft.reviewedAt)}</span>
                 )}
                 {draft.uploadedFilename && (
                   <span className="text-good">Uploaded: {draft.uploadedFilename}</span>

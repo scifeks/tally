@@ -10,7 +10,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
 import pytest
 
@@ -20,6 +19,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from application.url_inventory.service import UrlInventoryService  # noqa: E402
+from core.config.schemas.repository import Repository  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.url_inventory.entry import UrlFinding, UrlSource  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
@@ -50,7 +50,15 @@ def _seed_url_findings(tmp_path: Path) -> tuple[ConnectionFactory, int]:
     factory = ConnectionFactory(paths.findings_db)
     factory.init_schema()
     rr = RepositoryRepository(factory)
-    rid = rr.insert(uuid=str(uuid4()), name="alpha")
+    rid = rr.insert(
+        Repository(
+            name="alpha",
+            type=["api"],
+            languages=["python"],
+            docker_path="/app",
+            container_name="ctr",
+        )
+    )
     UrlInventoryService(UrlFindingRepository(factory)).ingest_user_file(
         repo_id=rid,
         file_path="/uploads/spec.json",

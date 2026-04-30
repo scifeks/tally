@@ -42,7 +42,7 @@ describe('useFindings', () => {
     expect(first.severity).toBe(populatedFixture.items[0].severity)
     expect(first.findingType).toEqual(populatedFixture.items[0].finding_type)
     expect(first.cwe).toEqual(populatedFixture.items[0].cwe)
-    expect(first.discoveredAt).toBe(populatedFixture.items[0].discovered_at)
+    expect(first.discoveredAt).toBe(populatedFixture.items[0].first_seen)
     expect(first.isLocked).toBe(populatedFixture.items[0].is_locked)
     expect(first.lockHolder).toBe(populatedFixture.items[0].lock_holder)
   })

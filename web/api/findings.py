@@ -318,7 +318,11 @@ def _repo_name_lookup(project_row: dict) -> dict[int, str]:
             return {}
         factory = ConnectionFactory(paths.findings_db)
         repo_repo = RepositoryRepository(factory)
-        return {r.id: r.name for r in repo_repo.list_active() if r.name}
+        return {
+            r.id: r.name
+            for r in repo_repo.list_active()
+            if r.name and isinstance(r.id, int)
+        }
     except Exception:
         return {}
 

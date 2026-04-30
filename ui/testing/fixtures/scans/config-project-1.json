@@ -2,28 +2,24 @@
   "repos": [
     {
       "id": 1,
-      "uuid": "d2d58577-aa07-494b-80aa-19a3cf4fbdb6",
       "name": "dvwa",
       "source": "local",
       "location": "/llm/code/repos/php/DVWA"
     },
     {
       "id": 2,
-      "uuid": "7f34afbd-c000-490a-9768-342a3f65b31c",
       "name": "dvpwa",
       "source": "local",
       "location": "/llm/code/repos/python/dvpwa"
     },
     {
       "id": 3,
-      "uuid": "e08a9e45-188b-428f-ae64-57d18e5af331",
       "name": "juice-shop",
       "source": "local",
       "location": "/llm/code/juice-shop"
     },
     {
       "id": 4,
-      "uuid": "c840af14-e2f0-44a0-bce8-826601fb980c",
       "name": "php-goof",
       "source": "local",
       "location": "/llm/code/repos/php/php-goof"

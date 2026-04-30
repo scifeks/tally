@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Settings, RotateCcw, Save } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import type { ProjectInfo, ProjectInfoUpdate } from '@/lib/types'
 import { SectionHeader } from './shared'
@@ -181,7 +181,7 @@ export function ProjectInfoSection({
           <div>
             <div className="block text-[10px] uppercase tracking-wider text-dim mb-1">Created</div>
             <div className="h-8 px-2 flex items-center bg-muted/30 border border-border/50 text-xs text-dim">
-              {new Date(projectInfo.createdAt).toLocaleDateString()}
+              {formatDate(projectInfo.createdAt)}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 from application.project.registry_service import ProjectRegistryService
-from core.config import ConfigManager, ProjectConfig, Repository
+from core.config import ConfigManager, ProjectConfig
 from core.project_paths import ProjectPaths
 
 
@@ -58,43 +58,23 @@ class ProjectManager:
         self.registry.deregister(project_name)
 
     def delete_repository(self, project_name: str, repo_name: str) -> None:
-        """Remove a repository from project_name by name."""
+        """Soft-delete a repository in *project_name* by name."""
+        from application.project.repositories_service import (
+            ProjectRepositoriesService,
+        )
+
         row = self.registry.resolve_by_name(project_name)
         if row is None or row.get("archived_at"):
             raise ValueError(f"Project '{project_name}' does not exist.")
-        with self.config.locked_project_config(project_name):
-            config = self.config.load_project_config(project_name)
-            if config is None:
-                raise ValueError(f"Project '{project_name}' not found.")
-            deleted_repo = next(
-                (r for r in config.repositories if r.name == repo_name), None
-            )
-            if deleted_repo is None:
-                raise ValueError(
-                    f"Repository '{repo_name}' not found in '{project_name}'."
-                )
-            if deleted_repo.uuid:
-                try:
-                    from infrastructure.store.connection import ConnectionFactory
-                    from infrastructure.store.repositories.repositories import (
-                        RepositoryRepository,
-                    )
-
-                    paths = ProjectPaths.from_registry_row(row)
-                    if paths.findings_db.exists():
-                        factory = ConnectionFactory(paths.findings_db)
-                        repo_repo = RepositoryRepository(factory)
-                        db_row = repo_repo.get_by_uuid_including_deleted(
-                            deleted_repo.uuid
-                        )
-                        if db_row is not None:
-                            repo_repo.soft_delete(db_row.id)
-                except Exception:
-                    pass
-            config.repositories = [
-                r for r in config.repositories if r.name != repo_name
-            ]
-            self.config.save_project_config(project_name, config)
+        service = ProjectRepositoriesService(self.registry, self.config)
+        project_id = int(row["id"])
+        target = next(
+            (r for r in service.list_active(project_id) if r.name == repo_name),
+            None,
+        )
+        if target is None or target.id is None:
+            raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
+        service.delete(project_id, target.id)
 
     # ------------------------------------------------------------------
     # Filesystem helpers
@@ -123,15 +103,18 @@ class ProjectManager:
     def save_project(
         self,
         name: str,
-        repositories: list[Repository],
         company_name: str = "",
         department_name: str = "",
         abbreviation: str = "",
     ) -> None:
+        """Persist project-level fields to project.json and register the project.
+
+        Per-repo data is owned by the SQLite ``repositories`` table; callers
+        that need to persist repos do so via ``ProjectRepositoriesService``.
+        """
         project_cfg = ProjectConfig(
             project_name=name,
             created=datetime.datetime.now().isoformat(),
-            repositories=repositories,
             company_name=company_name,
             department_name=department_name,
             abbreviation=abbreviation,

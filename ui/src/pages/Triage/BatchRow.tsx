@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatTime } from '@/lib/utils'
 import type { Segment, TriageBatchStatus } from '@/lib/types'
 
 const SEGMENT_LABEL: Record<Segment, string> = {
@@ -60,9 +60,7 @@ export function BatchRow({
         )}
         <span className="flex-1" />
         {batch.finishedAt && (
-          <span className="text-muted-foreground">
-            {new Date(batch.finishedAt).toLocaleTimeString('en-US', { hour12: false })}
-          </span>
+          <span className="text-muted-foreground">{formatTime(batch.finishedAt)}</span>
         )}
       </button>
       {expanded && (

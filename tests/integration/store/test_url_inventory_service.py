@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 
@@ -14,6 +13,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.url_inventory.service import UrlInventoryService  # noqa: E402
+from core.config.schemas.repository import Repository  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
@@ -27,6 +27,16 @@ from infrastructure.store.repositories.url_findings import (  # noqa: E402
 pytestmark = pytest.mark.integration
 
 
+def _repo(name: str) -> Repository:
+    return Repository(
+        name=name,
+        type=["api"],
+        languages=["python"],
+        docker_path="/app",
+        container_name="ctr",
+    )
+
+
 @pytest.fixture()
 def factory(tmp_path: Path) -> ConnectionFactory:
     f = ConnectionFactory(tmp_path / "findings.db")
@@ -37,7 +47,7 @@ def factory(tmp_path: Path) -> ConnectionFactory:
 @pytest.fixture()
 def repo_id(factory: ConnectionFactory) -> int:
     rr = RepositoryRepository(factory)
-    return rr.insert(uuid=str(uuid4()), name="alpha")
+    return rr.insert(_repo("alpha"))
 
 
 @pytest.fixture()
@@ -257,8 +267,8 @@ class TestCleanup:
         service: UrlInventoryService,
     ) -> None:
         rr = RepositoryRepository(factory)
-        rid_a = rr.insert(uuid=str(uuid4()), name="a")
-        rid_b = rr.insert(uuid=str(uuid4()), name="b")
+        rid_a = rr.insert(_repo("a"))
+        rid_b = rr.insert(_repo("b"))
         service.ingest_scan_source(
             repo_id=rid_a,
             run_id=None,

@@ -39,7 +39,6 @@ interface ProjectInfoApi {
 
 interface RepositoryApi {
   id: number
-  uuid: string
   name: string
   type: string[]
   path: string

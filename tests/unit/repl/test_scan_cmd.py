@@ -34,7 +34,6 @@ def _run(
     repl.base_path = "/tmp/test"
     repl.project_registry.resolve_by_name.return_value = {"id": 1}
     repos = repos or [_make_repo()]
-    repl.config.load_repositories.return_value = repos
 
     mock_summary = MagicMock(findings_by_tool={})
     mock_handle = MagicMock(run_id=1)
@@ -50,6 +49,7 @@ def _run(
             "application.repl.commands.scan_commands.get_scan_service",
             return_value=mock_service,
         ),
+        patch.object(ScanCommands, "_active_repos", return_value=repos),
     ):
         mock_reg.list_tool_names.return_value = tools
         sc.cmd_scan("scan", args)

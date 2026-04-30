@@ -7,9 +7,12 @@ from typing import TYPE_CHECKING
 from rich.panel import Panel
 from rich.table import Table
 
+from application.project.repositories_service import ProjectRepositoriesService
+
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
     from application.repl.interface import REPL
+    from core.config.schemas import Repository
 
 
 class ProjectCommands:
@@ -18,6 +21,16 @@ class ProjectCommands:
     def __init__(self, repl: REPL, help_renderer: HelpRenderer) -> None:
         self.repl = repl
         self.help_renderer = help_renderer
+
+    def _active_repos(self, project_name: str) -> list[Repository]:
+        """Return active repos for *project_name*, or ``[]`` if unknown."""
+        row = self.repl.project_registry.resolve_by_name(project_name)
+        if row is None:
+            return []
+        service = ProjectRepositoriesService(
+            self.repl.project_registry, self.repl.projects.config
+        )
+        return service.list_active(int(row["id"]))
 
     # ------------------------------------------------------------------
     # Grouped command entrypoints (scoped help or subcommand dispatch)
@@ -94,7 +107,7 @@ class ProjectCommands:
             repo_count = "0"
             if info:
                 created = info.created[:10]
-                repo_count = str(len(info.repositories))
+                repo_count = str(len(self._active_repos(name)))
 
             display_name = f"→ {name}" if name == active else name
             active_marker = "✓" if name == active else ""
@@ -196,7 +209,7 @@ class ProjectCommands:
             )
             return
 
-        repos = self.repl.projects.config.load_repositories(self.repl.active_project)
+        repos = self._active_repos(self.repl.active_project)
         if not repos:
             self.repl.console.print("[yellow]No repositories configured.[/yellow]")
             return
@@ -231,7 +244,7 @@ class ProjectCommands:
         """
         if not self.repl.active_project:
             return None
-        repos = self.repl.projects.config.load_repositories(self.repl.active_project)
+        repos = self._active_repos(self.repl.active_project)
         if arg.isdigit():
             target_id = int(arg)
             for r in repos:
@@ -312,14 +325,15 @@ class ProjectCommands:
             return
 
         created = info.created[:10] if len(info.created) >= 10 else info.created
+        repos = self._active_repos(self.repl.active_project)
         lines = [
             f"Created: {created}",
-            f"Repositories: {len(info.repositories)}",
+            f"Repositories: {len(repos)}",
         ]
-        if info.repositories:
+        if repos:
             lines.append("")
             lines.append("Repositories:")
-            for repo in info.repositories:
+            for repo in repos:
                 lang_str = ", ".join(repo.languages) if repo.languages else "none"
                 lines.append(f"  \u2022 {repo.name} ({lang_str})")
 

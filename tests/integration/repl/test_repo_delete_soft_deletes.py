@@ -1,21 +1,21 @@
-"""Integration test: delete_repository soft-deletes the DB row (F3)."""
+"""Integration test: delete_repository soft-deletes the DB row."""
 
 from __future__ import annotations
 
 import json
-import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from core.config.schemas.repository import Repository
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 
 pytestmark = pytest.mark.integration
 
 
-def _make_project_dir(tmp_path: Path, repo_uuid: str) -> Path:
+def _make_project_dir(tmp_path: Path) -> Path:
     proj_dir = tmp_path / "projects" / "testproject"
     (proj_dir / "config").mkdir(parents=True)
     project_config = {
@@ -24,15 +24,6 @@ def _make_project_dir(tmp_path: Path, repo_uuid: str) -> Path:
         "abbreviation": "TP",
         "company_name": "Acme",
         "department_name": "Security",
-        "repositories": [
-            {
-                "name": "myrepo",
-                "uuid": repo_uuid,
-                "type": ["api"],
-                "path": str(tmp_path),
-                "languages": ["python"],
-            }
-        ],
     }
     (proj_dir / "config" / "project.json").write_text(json.dumps(project_config))
 
@@ -47,8 +38,7 @@ def test_delete_repository_soft_deletes_db_row(tmp_path: Path) -> None:
     """ProjectManager.delete_repository stamps deleted_at on the DB row."""
     from application.project.manager import ProjectManager
 
-    repo_uuid = str(uuid.uuid4())
-    proj_dir = _make_project_dir(tmp_path, repo_uuid)
+    proj_dir = _make_project_dir(tmp_path)
 
     db_path = proj_dir / "sqlite" / "findings.db"
     db_path.parent.mkdir(parents=True)
@@ -56,10 +46,23 @@ def test_delete_repository_soft_deletes_db_row(tmp_path: Path) -> None:
     factory.init_schema()
 
     repo_repo = RepositoryRepository(factory)
-    repo_repo.insert(uuid=repo_uuid, name="myrepo")
+    repo_id = repo_repo.insert(
+        Repository(
+            name="myrepo",
+            type=["api"],
+            languages=["python"],
+            path=str(tmp_path),
+        )
+    )
 
     registry = MagicMock()
     registry.resolve_by_name.return_value = {
+        "id": 1,
+        "name": "testproject",
+        "path": str(proj_dir),
+        "archived_at": None,
+    }
+    registry.resolve_by_id.return_value = {
         "id": 1,
         "name": "testproject",
         "path": str(proj_dir),
@@ -69,9 +72,7 @@ def test_delete_repository_soft_deletes_db_row(tmp_path: Path) -> None:
     manager = ProjectManager(base_path=str(tmp_path), registry=registry)
     manager.delete_repository("testproject", "myrepo")
 
-    row = repo_repo.get_by_uuid_including_deleted(repo_uuid)
-    assert row is not None, "DB row should still exist after soft-delete"
-    assert row.deleted_at is not None, "deleted_at must be stamped after deletion"
-    assert repo_repo.get_by_uuid(repo_uuid) is None, (
-        "get_by_uuid must return None for soft-deleted repos"
+    assert repo_repo.is_deleted(repo_id), "deleted_at must be stamped after deletion"
+    assert repo_repo.get_by_name("myrepo") is None, (
+        "get_by_name must skip soft-deleted rows"
     )

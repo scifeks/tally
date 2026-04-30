@@ -146,18 +146,16 @@ class TestGetFindings:
         assert len(null_file_rows) >= 1
 
     def test_get_findings_repo_equality(self, tmp_path: Path) -> None:
-        import uuid as _uuid
-
         store = _make_store(tmp_path)
         with store._connect() as conn:
             cur1 = conn.execute(
-                "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
-                (str(_uuid.uuid4()), "myrepo"),
+                "INSERT INTO repositories (name) VALUES (?)",
+                ("myrepo",),
             )
             myrepo_id = cur1.lastrowid
             cur2 = conn.execute(
-                "INSERT INTO repositories (uuid, name) VALUES (?, ?)",
-                (str(_uuid.uuid4()), "otherrepo"),
+                "INSERT INTO repositories (name) VALUES (?)",
+                ("otherrepo",),
             )
             otherrepo_id = cur2.lastrowid
         run_id = store.create_run({})

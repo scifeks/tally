@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Square, RotateCcw, Brain, AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, toEpoch } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import { useUI } from '@/lib/store'
 import {
@@ -150,7 +150,7 @@ export default function Triage() {
       setElapsedSec(0)
       return
     }
-    const startedMs = new Date(currentRun.startedAt).getTime()
+    const startedMs = toEpoch(currentRun.startedAt)
     const tick = () => setElapsedSec(Math.max(0, Math.floor((Date.now() - startedMs) / 1000)))
     tick()
     timerRef.current = setInterval(tick, 1000)

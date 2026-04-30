@@ -71,10 +71,21 @@ class FindingUpdateService:
         try:
             if project_name is None or self._config_manager is None:
                 return (None, None)
-            config = self._config_manager.load_project_config(project_name)
-            if config is None:
+            from core.project_paths import ProjectPaths
+            from infrastructure.store.connection import ConnectionFactory
+            from infrastructure.store.repositories.repositories import (
+                RepositoryRepository,
+            )
+
+            paths = ProjectPaths.from_canonical(
+                self._config_manager.base_path, project_name
+            )
+            if not paths.findings_db.exists():
                 return (None, None)
-            repos = [r.model_dump() for r in config.repositories]
+            factory = ConnectionFactory(paths.findings_db)
+            factory.init_schema()
+            active = RepositoryRepository(factory).list_active()
+            repos = [r.model_dump() for r in active]
             return (
                 reconstruct_abs_path(file, repo_name, repos),
                 resolve_repo_path(repo_name, repos),

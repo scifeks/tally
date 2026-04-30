@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 import httpx
 import pytest
 import pytest_asyncio
 
+from core.config.schemas.repository import Repository
 from domain.url_inventory.entry import UrlFinding, UrlSource
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
@@ -23,24 +23,24 @@ _TEST_PORT = 12349
 _HANDSHAKE = "test-handshake-abc123xyz"
 
 
-def _project_config_with_repo(repo_uuid: str, repo_path: str) -> dict[str, Any]:
+def _project_config() -> dict[str, Any]:
     return {
         "project_name": "Test Project",
         "created": "2024-01-01T00:00:00",
         "abbreviation": "TP",
         "company_name": "Acme Corp",
         "department_name": "Security",
-        "repositories": [
-            {
-                "name": "alpha",
-                "uuid": repo_uuid,
-                "type": ["api"],
-                "path": repo_path,
-                "languages": ["python"],
-                "base_urls": ["http://localhost"],
-            }
-        ],
     }
+
+
+def _seed_repo(repo_path: str) -> Repository:
+    return Repository(
+        name="alpha",
+        type=["api"],
+        path=repo_path,
+        languages=["python"],
+        base_urls=["http://localhost"],
+    )
 
 
 async def _auth(client: httpx.AsyncClient) -> dict[str, str]:
@@ -67,15 +67,12 @@ async def url_list_client(tmp_path: Path):
     config_dir.mkdir(parents=True)
     (config_dir / "global.json").write_text("{}")
 
-    repo_uuid = str(uuid4())
     repo_path = tmp_path / "repo-src"
     repo_path.mkdir()
 
     proj_dir = tmp_path / "projects" / "testproject"
     (proj_dir / "config").mkdir(parents=True)
-    (proj_dir / "config" / "project.json").write_text(
-        json.dumps(_project_config_with_repo(repo_uuid, str(repo_path)))
-    )
+    (proj_dir / "config" / "project.json").write_text(json.dumps(_project_config()))
 
     db_path = proj_dir / "sqlite" / "findings.db"
     db_path.parent.mkdir(parents=True)
@@ -83,7 +80,7 @@ async def url_list_client(tmp_path: Path):
     factory.init_schema()
 
     rr = RepositoryRepository(factory)
-    repo_id = rr.insert(uuid=repo_uuid, name="alpha")
+    repo_id = rr.insert(_seed_repo(str(repo_path)))
 
     ufr = UrlFindingRepository(factory)
     ufr.insert_many(

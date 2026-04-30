@@ -28,7 +28,6 @@ import { useUI } from '../store'
 
 interface ScanConfigRepoApi {
   id: number
-  uuid: string
   name: string
   source: string
   location: string | null

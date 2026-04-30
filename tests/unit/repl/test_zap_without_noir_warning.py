@@ -22,7 +22,9 @@ from unittest.mock import MagicMock, patch
 from application.repl.commands.scan_commands import ScanCommands
 
 
-def _make_repl(repo_names: list[str] | None = None) -> MagicMock:
+def _make_repl(
+    repo_names: list[str] | None = None,
+) -> tuple[MagicMock, list[MagicMock]]:
     repl = MagicMock()
     repl.active_project = "DVPA"
     repl.base_path = "/tmp/tally"
@@ -33,12 +35,14 @@ def _make_repl(repo_names: list[str] | None = None) -> MagicMock:
         r.name = name
         r.crawl_enabled = True
         repos.append(r)
-    repl.config.load_repositories.return_value = repos
-    return repl
+    return repl, repos
 
 
 def _make_sc(repo_names: list[str] | None = None) -> ScanCommands:
-    return ScanCommands(_make_repl(repo_names))
+    repl, repos = _make_repl(repo_names)
+    sc = ScanCommands(repl)
+    sc._active_repos = MagicMock(return_value=repos)  # type: ignore[method-assign]
+    return sc
 
 
 # ---------------------------------------------------------------------------
@@ -86,10 +90,10 @@ class TestMaybeWarnDastWithoutDiscovery:
 
     def test_no_warning_when_crawl_disabled(self) -> None:
         """Repos with crawl_enabled=False are excluded from missing."""
-        repl = _make_repl()
-        r = repl.config.load_repositories.return_value[0]
-        r.crawl_enabled = False
+        repl, repos = _make_repl()
+        repos[0].crawl_enabled = False
         sc = ScanCommands(repl)
+        sc._active_repos = MagicMock(return_value=repos)  # type: ignore[method-assign]
         mock_input = MagicMock()
         with (
             patch.object(sc, "_repo_has_url_findings", return_value=False),
@@ -151,8 +155,9 @@ class TestMaybeWarnDastWithoutDiscovery:
         assert result is None
 
     def test_warning_printed_to_console(self) -> None:
-        repl = _make_repl()
+        repl, repos = _make_repl()
         sc = ScanCommands(repl)
+        sc._active_repos = MagicMock(return_value=repos)  # type: ignore[method-assign]
         with (
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", return_value="2"),
@@ -177,14 +182,14 @@ class TestCmdScanInnerWarning:
         user_input: str = "2",
         url_findings_exist: bool = False,
     ) -> MagicMock:
-        repl = _make_repl()
+        repl, _ = _make_repl()
         _repo = MagicMock()
         _repo.name = "dvna"
         _repo.crawl_enabled = True
-        repl.config.load_repositories.return_value = [_repo]
         repl.project_registry.resolve_by_name.return_value = {"id": 1}
 
         sc = ScanCommands(repl)
+        sc._active_repos = MagicMock(return_value=[_repo])  # type: ignore[method-assign]
 
         mock_summary = MagicMock(findings_by_tool={})
         mock_handle = MagicMock(run_id=1)

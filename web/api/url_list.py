@@ -22,7 +22,6 @@ from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.url_findings import UrlFindingRepository
-from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
 from web.api._redact import redact_exempt
@@ -255,28 +254,20 @@ async def regenerate_url_list(
     request: Request,
 ) -> JSONResponse:
     """Rebuild merged_urls.txt and merged_oas3.json for every active repo."""
-    from application.project.manager import ProjectManager
+    from application.project.repositories_service import ProjectRepositoriesService
 
     row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-    registry = request.app.state.project_registry
-    manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(row["name"])
-    if config is None:
-        raise NotFound(f"Project {project_id} not found")
 
     paths = ProjectPaths.from_registry_row(row)
-    url_repo, repo_repo = _make_repos(row)
+    url_repo, _ = _make_repos(row)
     service = UrlInventoryService(url_repo)
 
-    active_repos: list[tuple[int, str]] = []
-    for repo in config.repositories:
-        if not repo.uuid:
-            continue
-        db_row = repo_repo.get_by_uuid(repo.uuid)
-        if db_row is None or db_row.deleted_at is not None:
-            continue
-        active_repos.append((db_row.id, repo.uuid))
+    repo_service = ProjectRepositoriesService.from_request(request)
+    active_repos: list[tuple[int, str]] = [
+        (r.id, str(r.id))
+        for r in repo_service.list_active(project_id)
+        if r.id is not None
+    ]
 
     rebuilt = service.regenerate_artifacts_for_project(
         project_paths=paths,

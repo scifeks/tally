@@ -192,7 +192,6 @@ async def get_scans_config(
         repos.append(
             ScanConfigRepo(
                 id=r.id,
-                uuid=r.uuid or "",
                 name=r.name,
                 source=",".join(data.get("type", [])) or "unknown",
                 location=location,

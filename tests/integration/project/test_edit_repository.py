@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import datetime
 import shutil
 import sys
 from pathlib import Path
@@ -14,9 +13,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
+from application.project import ProjectManager, ProjectRepositoriesService  # noqa: E402
 from application.project.wizard import InteractiveProjectWizard  # noqa: E402
-from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.config.schemas import Repository  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -44,19 +43,18 @@ def _make_repo(**kwargs: object) -> Repository:
         "languages": ["python"],
     }
     defaults.update(kwargs)
-    return Repository.new(**defaults)
+    return Repository(**defaults)  # type: ignore[arg-type]
 
 
 class TestEditRepository:
     def _setup_project(self, base_path: Path, repo: Repository) -> ProjectManager:
         pm = _make_pm(base_path)
         pm.create_project_dirs("test-project")
-        pc = ProjectConfig(
-            project_name="test-project",
-            created=datetime.datetime.now().isoformat(),
-            repositories=[repo],
-        )
-        pm.config.save_project_config("test-project", pc)
+        pm.save_project("test-project")
+        row = pm.registry.resolve_by_name("test-project")
+        assert row is not None
+        service = ProjectRepositoriesService(pm.registry, pm.config)
+        service.create(int(row["id"]), repo)
         return pm
 
     def test_edit_docker_to_local(self, tmp_path: Path) -> None:

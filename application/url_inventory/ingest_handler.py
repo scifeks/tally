@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers import KatanaProvider, NoirProvider
 from application.url_inventory.service import UrlInventoryService
-from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.url_inventory.entry import UrlTool
 from infrastructure.store.connection import ConnectionFactory
@@ -65,8 +64,8 @@ class UrlInventoryIngestHandler:
             factory = ConnectionFactory(paths.findings_db)
             factory.init_schema()
             repo_repo = RepositoryRepository(factory)
-            db_row = repo_repo.get_by_name(event.repo)
-            if db_row is None or db_row.deleted_at is not None:
+            repo = repo_repo.get_by_name(event.repo)
+            if repo is None or repo.id is None:
                 logger.warning(
                     "UrlInventoryIngestHandler: no active repositories row "
                     "for %r in project %r; skipping ingest",
@@ -74,19 +73,7 @@ class UrlInventoryIngestHandler:
                     event.project_name,
                 )
                 return
-            repo_id = db_row.id
-            repo_uuid = db_row.uuid
-
-            manager = ConfigManager(event.base_path)
-            config = manager.load_project_config(event.project_name)
-            if config is None:
-                return
-            repo = next(
-                (r for r in config.repositories if r.uuid == repo_uuid),
-                None,
-            )
-            if repo is None:
-                return
+            repo_id = repo.id
 
             provider_cls, url_tool = provider_cls_tool
             ctx = UrlProviderContext(
@@ -110,7 +97,7 @@ class UrlInventoryIngestHandler:
             service.regenerate_artifacts(
                 repo_id=repo_id,
                 project_paths=paths,
-                repo_dir_key=repo_uuid,
+                repo_dir_key=str(repo_id),
             )
         except Exception:
             logger.exception(

@@ -6,19 +6,17 @@ Covers:
 - ``edit_repository``, existing endpoint file, user replaces: warning shown
 - ``edit_repository``, existing endpoint file, user keeps: warning NOT shown
 
-Phase 9: "existing endpoint file" is detected by the presence of any
-file under ``endpoints/<repo.uuid>/user_uploads/`` (not by reading
-``Repository.oas3_path``, which no longer exists).
+"existing endpoint file" is detected via the repo's ``url_seed_file``
+DB column.
 """
 
 from __future__ import annotations
 
-import datetime
 import shutil
 import sys
+import time
 from pathlib import Path
 from unittest.mock import patch
-from uuid import uuid4
 
 import pytest
 
@@ -26,9 +24,12 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
+from application.project import (  # noqa: E402
+    ProjectManager,
+    ProjectRepositoriesService,
+)
 from application.project.wizard import InteractiveProjectWizard  # noqa: E402
-from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.config.schemas import Repository  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 
 pytestmark = pytest.mark.integration
@@ -58,7 +59,6 @@ def _make_pm(base_path: Path) -> ProjectManager:
 def _make_repo(**kwargs: object) -> Repository:
     defaults: dict[str, object] = {
         "name": "test-repo",
-        "uuid": str(uuid4()),
         "type": ["api"],
         "path": str(_TALLY_ROOT),
         "languages": ["python"],
@@ -67,13 +67,33 @@ def _make_repo(**kwargs: object) -> Repository:
     return Repository(**defaults)  # type: ignore[arg-type]
 
 
-def _seed_existing_upload(pm_base: Path, project_name: str, repo: Repository) -> None:
-    """Drop a stub file under ``endpoints/<uuid>/user_uploads/`` so the wizard
-    treats *repo* as already having an endpoint file."""
-    paths = ProjectPaths.from_canonical(pm_base, project_name)
-    upload_dir = paths.endpoint_dir(repo.uuid) / "user_uploads"
+def _setup_project_with_repo(
+    pm: ProjectManager, repo: Repository
+) -> tuple[int, Repository]:
+    pm.create_project_dirs("test-project")
+    pm.save_project("test-project")
+    row = pm.registry.resolve_by_name("test-project")
+    assert row is not None
+    project_id = int(row["id"])
+    service = ProjectRepositoriesService(pm.registry, pm.config)
+    persisted = service.create(project_id, repo)
+    return project_id, persisted
+
+
+def _seed_existing_upload(
+    pm: ProjectManager, project_id: int, repo: Repository
+) -> None:
+    """Drop a stub upload + record its path so the wizard treats *repo* as
+    already having an endpoint file."""
+    paths = ProjectPaths.from_canonical(pm.base_path, "test-project")
+    epoch = int(time.time())
+    upload_dir = paths.seed_upload_dir(repo.name, epoch)
     upload_dir.mkdir(parents=True, exist_ok=True)
-    (upload_dir / "api.json").write_text("{}", encoding="utf-8")
+    target = upload_dir / "api.json"
+    target.write_text("{}", encoding="utf-8")
+    assert repo.id is not None
+    service = ProjectRepositoriesService(pm.registry, pm.config)
+    service.record_seed_file(project_id, repo.id, str(target))
 
 
 class TestEndpointWarning:
@@ -106,17 +126,8 @@ class TestEndpointWarning:
     ) -> None:
         """Warning shown when editing a repo that has no current endpoint file."""
         repo = _make_repo(name="my-repo", path=str(tmp_path))
-        pm_base = tmp_path / "pm"
-        pm = _make_pm(pm_base)
-        pm.create_project_dirs("test-project")
-        pm.config.save_project_config(
-            "test-project",
-            ProjectConfig(
-                project_name="test-project",
-                created=datetime.datetime.now().isoformat(),
-                repositories=[repo],
-            ),
-        )
+        pm = _make_pm(tmp_path / "pm")
+        _setup_project_with_repo(pm, repo)
         # press Enter for everything (no endpoint file provided)
         inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
@@ -129,18 +140,9 @@ class TestEndpointWarning:
     ) -> None:
         """Warning shown when user chooses to replace an existing endpoint file."""
         repo = _make_repo(name="my-repo", path=str(tmp_path))
-        pm_base = tmp_path / "pm"
-        pm = _make_pm(pm_base)
-        pm.create_project_dirs("test-project")
-        pm.config.save_project_config(
-            "test-project",
-            ProjectConfig(
-                project_name="test-project",
-                created=datetime.datetime.now().isoformat(),
-                repositories=[repo],
-            ),
-        )
-        _seed_existing_upload(pm_base, "test-project", repo)
+        pm = _make_pm(tmp_path / "pm")
+        project_id, persisted = _setup_project_with_repo(pm, repo)
+        _seed_existing_upload(pm, project_id, persisted)
         # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs,
         # "y" to replace, then Enter to leave new path empty, then auth
         inputs = ["", "", "", "", "", "", "", "", "", "y", "", ""]
@@ -154,18 +156,9 @@ class TestEndpointWarning:
     ) -> None:
         """Warning NOT shown when user keeps the existing endpoint file."""
         repo = _make_repo(name="my-repo", path=str(tmp_path))
-        pm_base = tmp_path / "pm"
-        pm = _make_pm(pm_base)
-        pm.create_project_dirs("test-project")
-        pm.config.save_project_config(
-            "test-project",
-            ProjectConfig(
-                project_name="test-project",
-                created=datetime.datetime.now().isoformat(),
-                repositories=[repo],
-            ),
-        )
-        _seed_existing_upload(pm_base, "test-project", repo)
+        pm = _make_pm(tmp_path / "pm")
+        project_id, persisted = _setup_project_with_repo(pm, repo)
+        _seed_existing_upload(pm, project_id, persisted)
         # name, type, mode, path, langs, deps, urls, test_dirs, ignore_dirs, "n", auth
         inputs = ["", "", "", "", "", "", "", "", "", "n", ""]
         with patch("builtins.input", side_effect=inputs):

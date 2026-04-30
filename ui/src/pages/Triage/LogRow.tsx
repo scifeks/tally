@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils'
+import { cn, formatTime } from '@/lib/utils'
 import type { TriageLogEvent, TriageLogEventType } from '@/lib/types'
 
 const TYPE_STYLE: Record<TriageLogEventType, { color: string; prefix: string }> = {
@@ -15,7 +15,7 @@ const TYPE_STYLE: Record<TriageLogEventType, { color: string; prefix: string }> 
 }
 
 export function LogRow({ event }: { event: TriageLogEvent }) {
-  const time = new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false })
+  const time = formatTime(event.timestamp)
   const style = TYPE_STYLE[event.type]
 
   return (

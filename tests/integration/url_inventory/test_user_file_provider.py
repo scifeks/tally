@@ -28,7 +28,6 @@ def _make_repo(tmp_path: Path, *, base_urls: list[str] | None = None) -> Reposit
     repo_path.mkdir(exist_ok=True)
     return Repository(
         name="alpha",
-        uuid="11111111-1111-4111-8111-111111111111",
         type=["api"],
         path=str(repo_path),
         languages=["python"],

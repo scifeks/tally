@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.scan_types.models import ScanTypeConfig
+
+_LOAD_REPOS = "application.tools.scan_types.repo.load_active_repos"
 
 
 def _make_mock_repo(
@@ -50,10 +52,8 @@ def _make_mock_tool_obj(
     return t
 
 
-@pytest.fixture()
-def mock_config() -> Any:
+def _make_config() -> ScanTypeConfig:
     cm = MagicMock()
-    cm.load_repositories.return_value = [_make_mock_repo()]
     prompt = MagicMock()
     prompt.confirm.return_value = True
     prompt.approve_all_remaining.return_value = None
@@ -64,6 +64,11 @@ def mock_config() -> Any:
         run_id=1,
         prompt=prompt,
     )
+
+
+@pytest.fixture()
+def mock_config() -> Any:
+    return _make_config()
 
 
 @pytest.fixture()
@@ -89,9 +94,9 @@ class TestRepoScan:
     ) -> None:
         from application.tools.scan_types.repo import RepoScan
 
-        mock_config.config_manager.load_repositories.return_value = []
-        with pytest.raises(ValueError, match="missing"):
-            RepoScan("missing").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[]):
+            with pytest.raises(ValueError, match="missing"):
+                RepoScan("missing").execute(mock_config, mock_resources)
 
     def test_tool_not_registered_is_skipped(
         self,
@@ -105,7 +110,8 @@ class TestRepoScan:
         mock_resources.registry.get_tool.return_value = mock_tool
         mock_resources.registry.get_tool_config.return_value = None
 
-        summary = RepoScan("my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo()]):
+            summary = RepoScan("my-repo").execute(mock_config, mock_resources)
 
         assert summary.total_tools_skipped == 1
 
@@ -122,7 +128,8 @@ class TestRepoScan:
         mock_resources.registry.get_tool_config.return_value = MagicMock()
         mock_resources.factory.create.side_effect = Exception("bad")
 
-        summary = RepoScan("my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo()]):
+            summary = RepoScan("my-repo").execute(mock_config, mock_resources)
 
         assert summary.total_tools_skipped == 1
 
@@ -131,18 +138,7 @@ class TestRepoScan:
 
         # tmp_path is empty — no Python manifests present.
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
-        cm = MagicMock()
-        cm.load_repositories.return_value = [repo]
-        _prompt = MagicMock()
-        _prompt.confirm.return_value = True
-        _prompt.approve_all_remaining.return_value = None
-        config = ScanTypeConfig(
-            project_name="test",
-            base_path="/tmp",
-            config_manager=cm,
-            run_id=1,
-            prompt=_prompt,
-        )
+        config = _make_config()
         pip_audit = MagicMock()
         pip_audit.name = "pip-audit"
         pip_audit.scan_segment = "sca"
@@ -160,7 +156,8 @@ class TestRepoScan:
             display=MagicMock(),
         )
 
-        summary = RepoScan("my-repo").execute(config, resources)
+        with patch(_LOAD_REPOS, return_value=[repo]):
+            summary = RepoScan("my-repo").execute(config, resources)
 
         # pip-audit must not appear in the tool_set — manifest gate blocks it.
         assert summary.total_tools_run == 0
@@ -170,18 +167,7 @@ class TestRepoScan:
 
         (tmp_path / "requirements.txt").write_text("requests==2.28.0\n")
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
-        cm = MagicMock()
-        cm.load_repositories.return_value = [repo]
-        _prompt = MagicMock()
-        _prompt.confirm.return_value = True
-        _prompt.approve_all_remaining.return_value = None
-        config = ScanTypeConfig(
-            project_name="test",
-            base_path="/tmp",
-            config_manager=cm,
-            run_id=1,
-            prompt=_prompt,
-        )
+        config = _make_config()
         pip_audit = MagicMock()
         pip_audit.name = "pip-audit"
         pip_audit.scan_segment = "sca"
@@ -201,7 +187,8 @@ class TestRepoScan:
             display=MagicMock(),
         )
 
-        summary = RepoScan("my-repo").execute(config, resources)
+        with patch(_LOAD_REPOS, return_value=[repo]):
+            summary = RepoScan("my-repo").execute(config, resources)
 
         # Skipped due to "not registered", not manifest gate.
         assert summary.total_tools_skipped == 1
@@ -212,18 +199,7 @@ class TestRepoScan:
         # empty dir — no manifests — but semgrep is sast so manifest gate
         # must not apply.
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
-        cm = MagicMock()
-        cm.load_repositories.return_value = [repo]
-        _prompt = MagicMock()
-        _prompt.confirm.return_value = True
-        _prompt.approve_all_remaining.return_value = None
-        config = ScanTypeConfig(
-            project_name="test",
-            base_path="/tmp",
-            config_manager=cm,
-            run_id=1,
-            prompt=_prompt,
-        )
+        config = _make_config()
         semgrep = MagicMock()
         semgrep.name = "semgrep"
         semgrep.scan_segment = "sast"
@@ -241,7 +217,8 @@ class TestRepoScan:
             display=MagicMock(),
         )
 
-        summary = RepoScan("my-repo").execute(config, resources)
+        with patch(_LOAD_REPOS, return_value=[repo]):
+            summary = RepoScan("my-repo").execute(config, resources)
 
         # semgrep matched via language gate, skipped only because not
         # registered — not because of a manifest check.
@@ -252,18 +229,7 @@ class TestRepoScan:
 
         # empty dir — no manifests.
         repo = _make_mock_repo(name="my-repo", languages=[], path=str(tmp_path))
-        cm = MagicMock()
-        cm.load_repositories.return_value = [repo]
-        _prompt = MagicMock()
-        _prompt.confirm.return_value = True
-        _prompt.approve_all_remaining.return_value = None
-        config = ScanTypeConfig(
-            project_name="test",
-            base_path="/tmp",
-            config_manager=cm,
-            run_id=1,
-            prompt=_prompt,
-        )
+        config = _make_config()
         osv = MagicMock()
         osv.name = "osv-scanner"
         osv.scan_segment = "sca"
@@ -281,7 +247,8 @@ class TestRepoScan:
             display=MagicMock(),
         )
 
-        summary = RepoScan("my-repo").execute(config, resources)
+        with patch(_LOAD_REPOS, return_value=[repo]):
+            summary = RepoScan("my-repo").execute(config, resources)
 
         # always_run bypasses all gates; skipped only because not registered.
         assert summary.total_tools_skipped == 1
@@ -302,6 +269,7 @@ class TestRepoScan:
         created_tool.requires_base_urls = False
         mock_resources.factory.create.return_value = created_tool
 
-        summary = RepoScan("my-repo").execute(mock_config, mock_resources)
+        with patch(_LOAD_REPOS, return_value=[_make_mock_repo()]):
+            summary = RepoScan("my-repo").execute(mock_config, mock_resources)
 
         assert summary.total_tools_skipped == 1

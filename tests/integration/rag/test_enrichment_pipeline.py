@@ -87,7 +87,7 @@ def project_env(tmp_path: Path) -> dict:
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
-    pm.save_project(name, [])
+    pm.save_project(name)
     run_repo, finding_repo, _, _ = make_store(str(tmp_path), name)
     run_id = run_repo.create_run({})
     return {

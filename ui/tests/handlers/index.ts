@@ -746,7 +746,6 @@ export const handlers = [
     return HttpResponse.json(
       {
         id: 9001,
-        uuid: '99999999-aaaa-4bbb-8ccc-dddddddddddd',
         name: payload.name ?? '',
         type: payload.type ?? [],
         path: payload.path ?? '',

@@ -6,16 +6,30 @@ from typing import TYPE_CHECKING, Any, cast
 
 from application.tools.executor import ToolExecutor
 from application.tools.registry import ToolRegistry
+from core.project_paths import ProjectPaths
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.tools.wrappers.utils.manifest_check import (
     has_manifests_for_language,
 )
 
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
+    from core.config.schemas import Repository
+
+
+def load_active_repos(base_path: str, project_name: str) -> list[Repository]:
+    """Return active repos for the project, or ``[]`` if the DB is missing."""
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    if not paths.findings_db.exists():
+        return []
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    return RepositoryRepository(factory).list_active()
 
 
 def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
