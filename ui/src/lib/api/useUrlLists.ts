@@ -5,11 +5,8 @@
  * `GET /api/v1/projects/:id/url-list/entries`, mirroring the
  * offset+limit infinite-scroll pattern used by `useFindings`.
  *
- * Sort and search remain client-side; the page filters the loaded set
- * as the user scrolls more pages in.
- *
- * Returns a flattened `data: UrlEntry[]` (across all loaded pages) plus
- * `total` and the `useInfiniteQuery` pagination controls.
+ * Phase 12.2: filters, search, and sort are all server-side. Filter
+ * params are repeatable for multi-value selection.
  */
 
 import { useMemo } from 'react'
@@ -17,6 +14,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { apiFetch } from './client'
 import { REST_ENDPOINTS } from './config'
 import type { HttpMethod, UrlEntry, UrlProtocol } from '../types'
+import type { UrlListServerFilters } from './useUrlListsFilterOptions'
 
 interface UrlEntryApi {
   id: number
@@ -52,6 +50,9 @@ interface UrlListPage {
 
 const DEFAULT_LIMIT = 100
 
+export type UrlListSortKey = 'host' | 'path' | 'method' | 'port' | 'protocol' | 'repo'
+export type UrlListSortDir = 'asc' | 'desc'
+
 /**
  * Coerce the snake-cased UrlEntryApi into the camel-cased FE `UrlEntry`.
  * Exported so tests can verify the mapper directly.
@@ -76,10 +77,28 @@ export function mapUrlEntry(api: UrlEntryApi): UrlEntry {
   }
 }
 
-function buildUrl(projectId: string, offset: number, limit: number): string {
+function buildUrl(
+  projectId: string,
+  offset: number,
+  limit: number,
+  filters: UrlListServerFilters | undefined,
+  sort: UrlListSortKey | undefined,
+  order: UrlListSortDir | undefined
+): string {
   const params = new URLSearchParams()
   params.set('offset', String(offset))
   params.set('limit', String(limit))
+  if (filters) {
+    for (const v of filters.method ?? []) params.append('method', v)
+    for (const v of filters.protocol ?? []) params.append('protocol', v)
+    for (const v of filters.host ?? []) params.append('host', v)
+    for (const v of filters.port ?? []) params.append('port', String(v))
+    for (const v of filters.path ?? []) params.append('path', v)
+    for (const v of filters.repoId ?? []) params.append('repo_id', String(v))
+    if (filters.search) params.set('search', filters.search)
+  }
+  if (sort) params.set('sort', sort)
+  if (order) params.set('order', order)
   return `${REST_ENDPOINTS.urlListEntries(projectId)}?${params.toString()}`
 }
 
@@ -88,16 +107,22 @@ export interface UseUrlListsOptions {
   enabled?: boolean
   /** Page size override. Default 100, max 500 (backend-enforced). */
   limit?: number
+  /** Server-side filter set. Forwarded as repeatable query params. */
+  filters?: UrlListServerFilters
+  /** Server-side sort column. */
+  sort?: UrlListSortKey
+  /** Sort direction. */
+  order?: UrlListSortDir
 }
 
 export function useUrlLists(projectId: string, options: UseUrlListsOptions = {}) {
-  const { enabled = true, limit = DEFAULT_LIMIT } = options
+  const { enabled = true, limit = DEFAULT_LIMIT, filters, sort, order } = options
 
   const query = useInfiniteQuery({
-    queryKey: ['urlLists', projectId, limit] as const,
+    queryKey: ['urlLists', projectId, limit, filters ?? null, sort ?? null, order ?? null] as const,
     initialPageParam: 0,
     queryFn: async ({ pageParam }): Promise<UrlListPage> => {
-      const url = buildUrl(projectId, pageParam as number, limit)
+      const url = buildUrl(projectId, pageParam as number, limit, filters, sort, order)
       const data = await apiFetch<UrlListPageApi>(url)
       return {
         items: data.items.map(mapUrlEntry),

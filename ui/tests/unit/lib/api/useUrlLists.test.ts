@@ -113,6 +113,54 @@ describe('useUrlLists', () => {
     expect(params.get('offset')).toBe('0')
   })
 
+  it('forwards multi-value method filter as repeated query params', async () => {
+    let capturedUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/entries', ({ request }) => {
+        capturedUrl = new URL(request.url)
+        return HttpResponse.json({ items: [], total: 0, offset: 0, limit: 100 })
+      })
+    )
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () =>
+        useUrlLists('1', {
+          filters: { method: ['GET', 'POST'], repoId: [1, 2] },
+        }),
+      { wrapper }
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(capturedUrl).not.toBeNull()
+    expect(capturedUrl!.searchParams.getAll('method')).toEqual(['GET', 'POST'])
+    expect(capturedUrl!.searchParams.getAll('repo_id')).toEqual(['1', '2'])
+  })
+
+  it('forwards search, sort, and order params', async () => {
+    let capturedUrl: URL | null = null
+    server.use(
+      http.get('/api/v1/projects/:projectId/url-list/entries', ({ request }) => {
+        capturedUrl = new URL(request.url)
+        return HttpResponse.json({ items: [], total: 0, offset: 0, limit: 100 })
+      })
+    )
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () =>
+        useUrlLists('1', {
+          filters: { search: 'admin' },
+          sort: 'host',
+          order: 'desc',
+        }),
+      { wrapper }
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(capturedUrl!.searchParams.get('search')).toBe('admin')
+    expect(capturedUrl!.searchParams.get('sort')).toBe('host')
+    expect(capturedUrl!.searchParams.get('order')).toBe('desc')
+  })
+
   it('fetchNextPage appends the next page and clears hasNextPage at total', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useUrlLists('1'), { wrapper })

@@ -72,7 +72,16 @@ export type {
 export { useRuntimeDependencies, useInstalledTools } from './useRuntime'
 
 // URL List hooks
-export { useUrlLists } from './useUrlLists'
+export { useUrlLists, mapUrlEntry } from './useUrlLists'
+export type { UseUrlListsOptions, UrlListSortKey, UrlListSortDir } from './useUrlLists'
+export { useUrlListsFilterOptions } from './useUrlListsFilterOptions'
+export type {
+  UrlListFilterOption,
+  UrlListPortFilterOption,
+  UrlListRepoFilterOption,
+  UrlListFilterOptions,
+  UrlListServerFilters,
+} from './useUrlListsFilterOptions'
 
 // Report hooks
 export {

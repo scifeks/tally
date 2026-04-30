@@ -428,6 +428,31 @@ class FindingsFilterOptionsResponse(BaseModel):
     repo: list[RepoFilterOption]
 
 
+class UrlListPortFilterOption(BaseModel):
+    """Port dropdown option. ``value`` is an integer port number."""
+
+    value: int
+    count: int
+
+
+class UrlListFilterOptionsResponse(BaseModel):
+    """Per-dimension filter options for the URL Lists page (Phase 12.2).
+
+    Strict semantics (same as Findings): every dimension's counts apply
+    every active filter, including its own dimension's filter. Zero-count
+    options are omitted; every dimension key is always present (empty
+    list is allowed). ``port`` values are integers; ``repo`` entries
+    carry a ``label`` (repo name) since the filter param is ``repo_id``.
+    """
+
+    method: list[FilterOption]
+    protocol: list[FilterOption]
+    host: list[FilterOption]
+    port: list[UrlListPortFilterOption]
+    path: list[FilterOption]
+    repo: list[RepoFilterOption]
+
+
 # ---------------------------------------------------------------------------
 # Phase 5 — Scans
 # ---------------------------------------------------------------------------

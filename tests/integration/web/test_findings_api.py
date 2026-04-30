@@ -128,6 +128,17 @@ class TestGetFindings:
         assert response_no_match.status_code == 200
         assert response_no_match.json()["total"] == 0
 
+    async def test_search_matches_tool_column(self, app_client) -> None:
+        # The seeded finding has tool="semgrep". Pre-fix, search only matched
+        # description/url/file, so this query returned 0. Post-fix it matches
+        # the tool column.
+        client, _, _, _, _, project_id = app_client
+        response = await client.get(
+            f"/api/v1/projects/{project_id}/findings?search=semgrep"
+        )
+        assert response.status_code == 200
+        assert response.json()["total"] >= 1
+
     async def test_sort_by_severity_asc(self, app_client) -> None:
         client, _, _, _, _, project_id = app_client
         response = await client.get(

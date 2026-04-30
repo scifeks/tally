@@ -1,28 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import { useUI } from '@/lib/store'
-import { useProjects, useUrlLists } from '@/lib/api'
+import {
+  useProjects,
+  useUrlLists,
+  useUrlListsFilterOptions,
+  type UrlListServerFilters,
+  type UrlListSortKey,
+  type UrlListSortDir,
+} from '@/lib/api'
 import type { UrlEntry } from '@/lib/types'
 import { Panel } from '@/components/tty'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
+import { FilterHeader } from '@/components/FilterHeader'
+import type { FilterHeaderOption } from '@/components/FilterHeader'
 
-// ─── Column config ──────────────────────────────────────────────────────────
+// ─── Filter / sort state ────────────────────────────────────────────────────
 
-type SortDir = 'asc' | 'desc' | null
-type ColumnKey = 'method' | 'protocol' | 'host' | 'port' | 'path'
+type FilterDimension = 'method' | 'protocol' | 'host' | 'port' | 'path' | 'repo'
 
-interface ColumnDef {
-  key: ColumnKey
-  label: string
-  /** Width + alignment classes applied to both header and cell. */
-  cellClass: string
-  /** How to pull the sort-comparable value for this row. */
-  sortValue: (u: UrlEntry) => string | number
-  /** How to render the cell. Defaults to the raw field. */
-  render?: (u: UrlEntry) => React.ReactNode
-}
+type UrlListFilters = Record<FilterDimension, Set<string>> & { search: string }
+
+type SortState = { key: UrlListSortKey; dir: UrlListSortDir } | null
+
+const SEARCH_DEBOUNCE_MS = 250
+
+const emptyFilters = (): UrlListFilters => ({
+  method: new Set(),
+  protocol: new Set(),
+  host: new Set(),
+  port: new Set(),
+  path: new Set(),
+  repo: new Set(),
+  search: '',
+})
 
 const METHOD_COLORS: Record<string, string> = {
   GET: 'var(--color-low)',
@@ -34,12 +47,22 @@ const METHOD_COLORS: Record<string, string> = {
   OPTIONS: 'var(--color-muted-foreground)',
 }
 
+// ─── Column config ──────────────────────────────────────────────────────────
+
+interface ColumnDef {
+  key: FilterDimension
+  label: string
+  headerClass: string
+  cellClass: string
+  render: (u: UrlEntry) => React.ReactNode
+}
+
 const COLUMNS: ColumnDef[] = [
   {
     key: 'method',
-    label: 'METHOD',
+    label: 'method',
+    headerClass: 'w-[90px] shrink-0',
     cellClass: 'w-[90px] shrink-0',
-    sortValue: u => u.method,
     render: u => (
       <span
         className="inline-flex items-center justify-center h-5 px-1.5 text-[10px] font-bold uppercase tracking-wider border"
@@ -54,27 +77,38 @@ const COLUMNS: ColumnDef[] = [
   },
   {
     key: 'protocol',
-    label: 'PROTO',
-    cellClass: 'w-[70px] shrink-0 text-muted-foreground uppercase',
-    sortValue: u => u.protocol,
+    label: 'protocol',
+    headerClass: 'w-[100px] shrink-0',
+    cellClass: 'w-[100px] shrink-0 text-muted-foreground uppercase',
+    render: u => u.protocol,
   },
   {
     key: 'host',
-    label: 'HOST',
+    label: 'host',
+    headerClass: 'flex-1 min-w-[180px]',
     cellClass: 'flex-1 min-w-[180px] truncate',
-    sortValue: u => u.host,
+    render: u => u.host,
   },
   {
     key: 'port',
-    label: 'PORT',
+    label: 'port',
+    headerClass: 'w-[70px] shrink-0',
     cellClass: 'w-[70px] shrink-0 text-muted-foreground tabular-nums',
-    sortValue: u => u.port,
+    render: u => String(u.port),
   },
   {
     key: 'path',
-    label: 'PATH',
+    label: 'path',
+    headerClass: 'flex-[2] min-w-[240px]',
     cellClass: 'flex-[2] min-w-[240px] truncate text-primary',
-    sortValue: u => u.path,
+    render: u => u.path,
+  },
+  {
+    key: 'repo',
+    label: 'repo',
+    headerClass: 'w-[160px] shrink-0',
+    cellClass: 'w-[160px] shrink-0 text-muted-foreground truncate',
+    render: u => u.repoName,
   },
 ]
 
@@ -85,74 +119,114 @@ export default function UrlLists() {
   const { data: projects = [] } = useProjects()
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
 
+  const [filters, setFilters] = useState<UrlListFilters>(emptyFilters)
+  const [sort, setSort] = useState<SortState>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+
+  // Reset filters + sort on project change.
+  useEffect(() => {
+    setFilters(emptyFilters())
+    setSort(null)
+  }, [activeProjectId])
+
+  // Debounce the search box so a keystroke storm doesn't refetch on each char.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(filters.search), SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [filters.search])
+
+  const serverFilters: UrlListServerFilters = useMemo(() => {
+    const out: UrlListServerFilters = {}
+    if (filters.method.size > 0) out.method = Array.from(filters.method)
+    if (filters.protocol.size > 0) out.protocol = Array.from(filters.protocol)
+    if (filters.host.size > 0) out.host = Array.from(filters.host)
+    if (filters.port.size > 0) out.port = Array.from(filters.port).map(p => Number(p))
+    if (filters.path.size > 0) out.path = Array.from(filters.path)
+    if (filters.repo.size > 0) out.repoId = Array.from(filters.repo).map(r => Number(r))
+    if (debouncedSearch) out.search = debouncedSearch
+    return out
+  }, [filters, debouncedSearch])
+
   const {
     data: urls,
     total,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useUrlLists(projectIdParam)
+  } = useUrlLists(projectIdParam, {
+    filters: serverFilters,
+    sort: sort?.key,
+    order: sort?.dir,
+  })
 
-  const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState<ColumnKey | null>(null)
-  const [sortDir, setSortDir] = useState<SortDir>(null)
+  const filterOptionsQuery = useUrlListsFilterOptions(projectIdParam, serverFilters)
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return urls
-    const q = search.toLowerCase()
-    return urls.filter(u => {
-      return (
-        u.method.toLowerCase().includes(q) ||
-        u.protocol.toLowerCase().includes(q) ||
-        u.host.toLowerCase().includes(q) ||
-        u.path.toLowerCase().includes(q) ||
-        String(u.port).includes(q)
-      )
-    })
-  }, [urls, search])
-
-  // Apply sort only if user clicked a header. Otherwise preserve insertion
-  // order (i.e. whatever the API returned).
-  const sorted = useMemo(() => {
-    if (!sortKey || !sortDir) return filtered
-    const col = COLUMNS.find(c => c.key === sortKey)
-    if (!col) return filtered
-    const mul = sortDir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
-      const va = col.sortValue(a)
-      const vb = col.sortValue(b)
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul
-      return String(va).localeCompare(String(vb)) * mul
-    })
-  }, [filtered, sortKey, sortDir])
-
-  function cycleSort(key: ColumnKey) {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-      return
+  // Convert filter-options response into FilterHeader-shaped option arrays.
+  // Selected values that are no longer in the response must still render so
+  // the user can deselect them.
+  const optionsByDim = useMemo(() => {
+    const data = filterOptionsQuery.data
+    const build = (
+      apiOptions: { value: string | number; count: number; label?: string }[] | undefined,
+      selected: Set<string>,
+      formatLabel?: (v: string) => string
+    ): FilterHeaderOption[] => {
+      const entries = new Map<string, FilterHeaderOption>()
+      for (const opt of apiOptions ?? []) {
+        const value = String(opt.value)
+        const label = opt.label ?? formatLabel?.(value) ?? value
+        entries.set(value, { value, label, count: opt.count })
+      }
+      // Add selected values that didn't come back in the response (count = 0).
+      for (const v of selected) {
+        if (!entries.has(v)) {
+          const label = formatLabel?.(v) ?? v
+          entries.set(v, { value: v, label, count: 0 })
+        }
+      }
+      return Array.from(entries.values())
     }
-    // same column - cycle asc → desc → off
-    if (sortDir === 'asc') setSortDir('desc')
-    else if (sortDir === 'desc') {
-      setSortKey(null)
-      setSortDir(null)
-    } else {
-      setSortDir('asc')
+    return {
+      method: build(data?.method, filters.method),
+      protocol: build(data?.protocol, filters.protocol),
+      host: build(data?.host, filters.host),
+      port: build(data?.port, filters.port),
+      path: build(data?.path, filters.path),
+      repo: build(data?.repo, filters.repo),
     }
-  }
+  }, [filterOptionsQuery.data, filters])
+
+  const cycleSort = (key: UrlListSortKey) =>
+    setSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' }
+      if (prev.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+
+  const setDimFilter = (dim: FilterDimension, next: Set<string>) =>
+    setFilters(f => ({ ...f, [dim]: next }))
+
+  const hasAnyFilter =
+    filters.method.size > 0 ||
+    filters.protocol.size > 0 ||
+    filters.host.size > 0 ||
+    filters.port.size > 0 ||
+    filters.path.size > 0 ||
+    filters.repo.size > 0 ||
+    filters.search.length > 0
+
+  const clearAllFilters = () => setFilters(emptyFilters())
 
   // ─── Virtualized rows ─────────────────────────────────────────────────────
   const scrollRef = useRef<HTMLDivElement>(null)
   const rowVirtualizer = useVirtualizer({
-    count: sorted.length,
+    count: urls.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 32,
     overscan: 12,
   })
 
-  // Infinite-scroll sentinel - fetch the next page when the bottom marker
-  // enters the viewport.
+  // Infinite-scroll sentinel.
   const sentinelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = sentinelRef.current
@@ -172,12 +246,16 @@ export default function UrlLists() {
     return <NoProjectSelectedState projects={projects} />
   }
 
+  // The empty-state gate fires only when the unfiltered project has zero URLs.
+  // With any filter active we still render the table (which may show "no
+  // matches") so the user can adjust filters.
+  const showEmptyState = total === 0 && !hasAnyFilter
+
   return (
     <div className="h-full flex flex-col min-h-0">
-      {/* Filter row: [SEARCH] - only rendered when there are URLs to search */}
-      {total > 0 && (
+      {/* Filter row: server-side search + clear-all */}
+      {!showEmptyState && (
         <div className="flex items-stretch h-9 border-b border-border-strong bg-background shrink-0">
-          {/* SEARCH */}
           <div className="flex-1 min-w-0 flex items-center gap-2 px-4 focus-within:bg-muted/30 transition-colors">
             <Search className="h-4 w-4 text-accent shrink-0" />
             <span className="text-[10px] uppercase tracking-[0.25em] text-dim font-bold shrink-0">
@@ -187,15 +265,15 @@ export default function UrlLists() {
             </span>
             <span className="text-dim shrink-0">/</span>
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="method, host, path, port, protocol..."
+              value={filters.search}
+              onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+              placeholder="path substring..."
               className="bg-transparent outline-none text-sm flex-1 min-w-0 placeholder:text-dim text-foreground"
               aria-label="Search URLs"
             />
-            {search && (
+            {filters.search && (
               <button
-                onClick={() => setSearch('')}
+                onClick={() => setFilters(f => ({ ...f, search: '' }))}
                 className="text-dim hover:text-foreground shrink-0"
                 aria-label="Clear search"
               >
@@ -203,27 +281,22 @@ export default function UrlLists() {
               </button>
             )}
             <span className="text-[10px] text-dim uppercase tracking-wider hidden xl:inline shrink-0">
-              {search ? `matches: ${filtered.length}` : `${urls.length} of ${total} entries`}
+              {urls.length} of {total} loaded
             </span>
           </div>
-
-          {/* Clear sort pinned right when an ad-hoc sort is active */}
-          {sortKey && (
+          {hasAnyFilter && (
             <button
-              onClick={() => {
-                setSortKey(null)
-                setSortDir(null)
-              }}
+              onClick={clearAllFilters}
               className="shrink-0 flex items-center px-3 h-9 border-l border-border text-[10px] uppercase tracking-wider text-muted-foreground hover:text-accent hover:bg-muted/50 transition-colors"
             >
-              clear sort
+              clear filters
             </button>
           )}
         </div>
       )}
 
-      {/* ─── Table or empty state ──────────────────────────────────────────── */}
-      {total === 0 ? (
+      {/* Table or empty state */}
+      {showEmptyState ? (
         <EmptyState
           title="no urls yet"
           body="This project has no URLs in its URL list. Add entries manually or import a file to populate it before kicking off web scans."
@@ -231,42 +304,28 @@ export default function UrlLists() {
       ) : (
         <Panel className="m-3 flex-1 min-h-0">
           <div className="flex flex-col h-full min-h-0">
-            {/* Header row */}
-            <div className="flex items-center gap-3 px-3 h-8 border-b border-border bg-muted/30 shrink-0 text-[10px] uppercase tracking-[0.25em] text-muted-foreground font-bold">
-              {COLUMNS.map(col => {
-                const active = sortKey === col.key
-                const dir = active ? sortDir : null
-                const previewDir: SortDir = active ? null : 'asc'
-                return (
-                  <button
-                    key={col.key}
-                    onClick={() => cycleSort(col.key)}
-                    className={cn(
-                      'group flex items-center gap-1 text-left hover:text-foreground transition-colors',
-                      active && 'text-accent',
-                      col.cellClass
-                    )}
-                    title={`Sort by ${col.label.toLowerCase()}`}
-                  >
-                    <span>{col.label}</span>
-                    {dir === 'asc' && <ChevronUp className="h-3 w-3" />}
-                    {dir === 'desc' && <ChevronDown className="h-3 w-3" />}
-                    {!active && previewDir === 'asc' && (
-                      <ChevronUp
-                        className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity text-dim"
-                        aria-hidden
-                      />
-                    )}
-                  </button>
-                )
-              })}
+            {/* Header row with FilterHeader dropdowns per column */}
+            <div className="flex items-center gap-3 px-3 h-8 border-b border-border bg-muted/30 shrink-0">
+              {COLUMNS.map(col => (
+                <div key={col.key} className={cn('h-full flex items-center', col.headerClass)}>
+                  <FilterHeader
+                    label={col.label}
+                    sortDir={sort?.key === col.key ? sort.dir : null}
+                    onSort={() => cycleSort(col.key)}
+                    activeCount={filters[col.key].size}
+                    options={optionsByDim[col.key]}
+                    selected={filters[col.key]}
+                    onChange={next => setDimFilter(col.key, next)}
+                  />
+                </div>
+              ))}
             </div>
 
             {/* Virtualized body */}
             <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
-              {sorted.length === 0 ? (
+              {urls.length === 0 ? (
                 <div className="p-6 text-[12px] text-dim italic">
-                  no urls match the current search.
+                  no urls match the current filters.
                 </div>
               ) : (
                 <div
@@ -276,7 +335,7 @@ export default function UrlLists() {
                   }}
                 >
                   {rowVirtualizer.getVirtualItems().map(v => {
-                    const u = sorted[v.index]
+                    const u = urls[v.index]
                     return (
                       <div
                         key={u.id}
@@ -285,9 +344,7 @@ export default function UrlLists() {
                       >
                         {COLUMNS.map(col => (
                           <div key={col.key} className={cn('truncate', col.cellClass)}>
-                            {col.render
-                              ? col.render(u)
-                              : String(u[col.key as keyof UrlEntry] ?? '')}
+                            {col.render(u)}
                           </div>
                         ))}
                       </div>
@@ -295,7 +352,6 @@ export default function UrlLists() {
                   })}
                 </div>
               )}
-              {/* Sentinel: triggers fetchNextPage when scrolled into view */}
               <div ref={sentinelRef} aria-hidden className="h-1" />
             </div>
 
@@ -309,10 +365,10 @@ export default function UrlLists() {
                 {!isFetchingNextPage && !hasNextPage && total > 0 && (
                   <span className="text-muted-foreground ml-2">{'// end of list'}</span>
                 )}
-                {sortKey && sortDir && (
+                {sort && (
                   <span className="text-muted-foreground ml-2">
                     {'// sorted by '}
-                    {sortKey} {sortDir}
+                    {sort.key} {sort.dir}
                   </span>
                 )}
               </span>

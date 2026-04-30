@@ -208,10 +208,10 @@ class TestPagination:
         self, url_repo: UrlFindingRepository, repo_id: int
     ) -> None:
         url_repo.insert_many([_scan(repo_id, path=f"/api/{i}") for i in range(15)])
-        rows, total = url_repo.list_paginated(repo_id=repo_id, offset=0, limit=10)
+        rows, total = url_repo.list_paginated(repo_id=[repo_id], offset=0, limit=10)
         assert total == 15
         assert len(rows) == 10
-        page2, _ = url_repo.list_paginated(repo_id=repo_id, offset=10, limit=10)
+        page2, _ = url_repo.list_paginated(repo_id=[repo_id], offset=10, limit=10)
         assert len(page2) == 5
 
     def test_filter_by_source(
@@ -221,7 +221,7 @@ class TestPagination:
         url_repo.insert_many(
             [_user(repo_id, file_path="/uploads/x.json", path="/user")]
         )
-        scan_only, _ = url_repo.list_paginated(repo_id=repo_id, source=UrlSource.SCAN)
+        scan_only, _ = url_repo.list_paginated(repo_id=[repo_id], source=UrlSource.SCAN)
         assert {r.path for r in scan_only} == {"/scan"}
 
     def test_search_path_substring(
@@ -234,9 +234,36 @@ class TestPagination:
                 _scan(repo_id, path="/admin"),
             ]
         )
-        rows, total = url_repo.list_paginated(repo_id=repo_id, search="/api/")
+        rows, total = url_repo.list_paginated(repo_id=[repo_id], search="/api/")
         assert total == 2
         assert {r.path for r in rows} == {"/api/users", "/api/orders"}
+
+    def test_search_spans_method_protocol_host_path_repo(
+        self,
+        factory: ConnectionFactory,
+        url_repo: UrlFindingRepository,
+    ) -> None:
+        rr = RepositoryRepository(factory)
+        repo_a = rr.insert(uuid=str(uuid4()), name="acme-api")
+        repo_b = rr.insert(uuid=str(uuid4()), name="other-svc")
+        url_repo.insert_many(
+            [
+                _scan(repo_a, method="GET", host="api.example.com", path="/u"),
+                _scan(repo_a, method="POST", host="juice-shop.local", path="/x"),
+                _scan(repo_b, method="DELETE", host="other.example.com", path="/d"),
+            ]
+        )
+        # method match
+        _, total_get = url_repo.list_paginated(search="GET")
+        assert total_get == 1
+        # host match (unique substring)
+        rows_juice, total_juice = url_repo.list_paginated(search="juice")
+        assert total_juice == 1
+        assert rows_juice[0].host == "juice-shop.local"
+        # repo-name match
+        rows_repo, total_repo = url_repo.list_paginated(search="acme")
+        assert total_repo == 2
+        assert all(r.repo_id == repo_a for r in rows_repo)
 
     def test_excludes_soft_deleted_repos(
         self, factory: ConnectionFactory, url_repo: UrlFindingRepository
@@ -251,6 +278,142 @@ class TestPagination:
         rows, total = url_repo.list_paginated(offset=0, limit=100)
         assert total == 1
         assert {r.path for r in rows} == {"/a"}
+
+
+class TestFilterOptions:
+    def test_empty_table_returns_empty_dims(
+        self, url_repo: UrlFindingRepository
+    ) -> None:
+        out = url_repo.filter_options({})
+        assert out == {
+            "method": [],
+            "protocol": [],
+            "host": [],
+            "port": [],
+            "path": [],
+            "repo": [],
+        }
+
+    def test_no_filters_returns_all_dims_populated(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [
+                _scan(repo_id, method="GET", path="/a"),
+                _scan(repo_id, method="POST", path="/a"),
+                _scan(repo_id, method="GET", path="/b"),
+            ]
+        )
+        out = url_repo.filter_options({})
+        method_values = {item["value"]: item["count"] for item in out["method"]}
+        assert method_values == {"GET": 2, "POST": 1}
+        assert out["protocol"] == [{"value": "https", "count": 3}]
+        assert out["port"] == [{"value": 443, "count": 3}]
+        path_values = {item["value"]: item["count"] for item in out["path"]}
+        assert path_values == {"/a": 2, "/b": 1}
+
+    def test_strict_semantics_dim_reflects_own_filter(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [
+                _scan(repo_id, method="GET", path="/a"),
+                _scan(repo_id, method="GET", path="/b"),
+                _scan(repo_id, method="POST", path="/a"),
+            ]
+        )
+        out = url_repo.filter_options({"method": ["GET"]})
+        # Strict: with method=GET applied, only GET shows in `method` dim.
+        assert out["method"] == [{"value": "GET", "count": 2}]
+        # Other dims also reflect the GET filter.
+        path_values = {item["value"]: item["count"] for item in out["path"]}
+        assert path_values == {"/a": 1, "/b": 1}
+
+    def test_zero_count_options_omitted(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [_scan(repo_id, method="GET", host="api.acme.io", path="/x")]
+        )
+        out = url_repo.filter_options({"host": ["nowhere.invalid"]})
+        # Filter matches nothing — every dim is [].
+        assert out == {
+            "method": [],
+            "protocol": [],
+            "host": [],
+            "port": [],
+            "path": [],
+            "repo": [],
+        }
+
+    def test_repo_dim_returns_value_label_count(
+        self, factory: ConnectionFactory, url_repo: UrlFindingRepository
+    ) -> None:
+        rr = RepositoryRepository(factory)
+        a_id = rr.insert(uuid=str(uuid4()), name="alpha-repo")
+        b_id = rr.insert(uuid=str(uuid4()), name="beta-repo")
+        url_repo.insert_many(
+            [
+                _scan(a_id, path="/x"),
+                _scan(a_id, path="/y"),
+                _scan(b_id, path="/z"),
+            ]
+        )
+        out = url_repo.filter_options({})
+        repo_by_label = {item["label"]: item for item in out["repo"]}
+        assert repo_by_label["alpha-repo"] == {
+            "value": a_id,
+            "label": "alpha-repo",
+            "count": 2,
+        }
+        assert repo_by_label["beta-repo"] == {
+            "value": b_id,
+            "label": "beta-repo",
+            "count": 1,
+        }
+
+    def test_port_dim_returns_int_values(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [
+                _scan(repo_id, port=443, path="/a"),
+                _scan(repo_id, port=8080, path="/b"),
+            ]
+        )
+        out = url_repo.filter_options({})
+        ports = {item["value"]: item["count"] for item in out["port"]}
+        assert ports == {443: 1, 8080: 1}
+        for item in out["port"]:
+            assert isinstance(item["value"], int)
+
+    def test_multi_filter_intersect(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [
+                _scan(repo_id, method="GET", host="a.io", path="/x"),
+                _scan(repo_id, method="GET", host="b.io", path="/x"),
+                _scan(repo_id, method="POST", host="a.io", path="/x"),
+            ]
+        )
+        out = url_repo.filter_options({"method": ["GET"], "host": ["a.io"]})
+        assert out["method"] == [{"value": "GET", "count": 1}]
+        assert out["host"] == [{"value": "a.io", "count": 1}]
+        assert out["path"] == [{"value": "/x", "count": 1}]
+
+    def test_excludes_soft_deleted_repos(
+        self, factory: ConnectionFactory, url_repo: UrlFindingRepository
+    ) -> None:
+        rr = RepositoryRepository(factory)
+        active_id = rr.insert(uuid=str(uuid4()), name="active")
+        deleted_id = rr.insert(uuid=str(uuid4()), name="deleted")
+        url_repo.insert_many([_scan(active_id, path="/a")])
+        url_repo.insert_many([_scan(deleted_id, path="/d")])
+        rr.soft_delete(deleted_id)
+        out = url_repo.filter_options({})
+        assert out["path"] == [{"value": "/a", "count": 1}]
+        assert {item["label"] for item in out["repo"]} == {"active"}
 
 
 class TestForeignKeys:

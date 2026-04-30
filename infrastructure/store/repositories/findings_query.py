@@ -135,8 +135,12 @@ class FindingQueryBuilder:
 
         if self._search:
             term = f"%{self._search}%"
-            where_parts.append("(description LIKE ? OR url LIKE ? OR file LIKE ?)")
-            params.extend([term, term, term])
+            where_parts.append(
+                "(json_extract(meta, '$.title') LIKE ?"
+                " OR tool LIKE ? OR description LIKE ?"
+                " OR url LIKE ? OR file LIKE ? OR cwe LIKE ?)"
+            )
+            params.extend([term] * 6)
 
         return where_parts, params
 

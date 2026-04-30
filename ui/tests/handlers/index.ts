@@ -15,6 +15,8 @@ import findingUpdatedFixture from '../fixtures/finding-updated.json'
 import urlListProject1Fixture from '../fixtures/url-list-project-1.json'
 import urlListProject2Fixture from '../fixtures/url-list-project-2.json'
 import urlListEmptyFixture from '../fixtures/url-list-empty.json'
+import urlListFilterOptionsPopulatedFixture from '../fixtures/url-list-filter-options-populated.json'
+import urlListFilterOptionsEmptyFixture from '../fixtures/url-list-filter-options-empty.json'
 import scanConfigProject1Fixture from '../fixtures/scan-config-project-1.json'
 import scanConfigProject2Fixture from '../fixtures/scan-config-project-2.json'
 import scanConfigEmptyFixture from '../fixtures/scan-config-empty.json'
@@ -349,6 +351,13 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? 100)
     const slice = (fixture as UrlListPage).items.slice(offset, offset + limit)
     return HttpResponse.json({ items: slice, total: fixture.total, offset, limit })
+  }),
+  http.get('/api/v1/projects/:projectId/url-list/filter-options', ({ params }) => {
+    const fixture =
+      params.projectId === '3'
+        ? urlListFilterOptionsEmptyFixture
+        : urlListFilterOptionsPopulatedFixture
+    return HttpResponse.json(fixture)
   }),
   http.get('/api/v1/projects/:projectId/scans/config', ({ params }) => {
     const fixture = SCAN_CONFIG_FIXTURES[params.projectId as string] ?? scanConfigEmptyFixture
