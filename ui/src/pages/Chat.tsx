@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Send, Square, Plus, Trash2, MessageSquare, Loader2 } from 'lucide-react'
+import { Send, Square, Plus, Trash2, MessageSquare, Loader2, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUI } from '@/lib/store'
 import {
@@ -180,13 +180,22 @@ export default function Chat() {
         case 'stream_end':
           if (activeProjectId !== null && activeSessionId !== null) {
             queryClient.invalidateQueries({
-              queryKey: ['chat', activeProjectId, 'messages', activeSessionId],
-            })
-            queryClient.invalidateQueries({
               queryKey: ['chat', activeProjectId, 'sessions'],
             })
+            // Wait for the messages refetch to resolve before clearing the
+            // overlay. If the overlay clears first the cached persisted
+            // messages still lag behind, leaving a render where the just-
+            // sent user prompt momentarily disappears or — when the
+            // persisted user-message id differs from the POST-returned one
+            // — duplicates beside the streamed copy.
+            void queryClient
+              .refetchQueries({
+                queryKey: ['chat', activeProjectId, 'messages', activeSessionId],
+              })
+              .finally(() => setStreamingOverlay(null))
+          } else {
+            setStreamingOverlay(null)
           }
-          setStreamingOverlay(null)
           break
         case 'stream_cancelled':
           setStreamingOverlay(null)
@@ -205,7 +214,16 @@ export default function Chat() {
 
   const messages: ChatMessage[] = useMemo(() => {
     if (!streamingOverlay || activeSessionId === null) return persistedMessages
-    const filtered = persistedMessages.filter(m => m.id !== streamingOverlay.userMessageId)
+    // Defensive dedup: drop any persisted user message that matches the
+    // overlay either by id (the happy path) or by role+content (fallback
+    // in case the persisted id and the POST-returned user_message_id ever
+    // drift). Without this fallback, a mismatched id would render the
+    // user's prompt twice once the persisted refetch arrives.
+    const filtered = persistedMessages.filter(
+      m =>
+        m.id !== streamingOverlay.userMessageId &&
+        !(m.role === 'user' && m.content === streamingOverlay.userContent)
+    )
     const overlay: ChatMessage[] = [
       {
         id: streamingOverlay.userMessageId,
@@ -374,17 +392,25 @@ export default function Chat() {
           ) : (
             <>
               <div className="flex-1 p-4 overflow-hidden">
-                <div className="relative h-full border-2 border-primary/30 bg-background">
-                  <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-accent" />
-                  <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-accent" />
-                  <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-accent" />
-                  <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-accent" />
+                <div className="relative h-full border-2 border-primary/30 bg-background flex flex-col">
+                  <div className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-accent pointer-events-none" />
+                  <div className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-accent pointer-events-none" />
+                  <div className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-accent pointer-events-none" />
+                  <div className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-accent pointer-events-none" />
 
-                  <div className="absolute top-0 left-0 right-0 px-4 py-1.5 bg-muted/50 border-b border-border flex items-center justify-between">
+                  <div className="shrink-0 px-4 py-1.5 bg-muted/50 border-b border-border flex items-center justify-between">
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="text-dim">SESSION:</span>
                       <span className="text-muted-foreground font-mono">{activeSessionId}</span>
-                      {sessionExpired && <span className="text-warn font-mono">[SEALED]</span>}
+                      {sessionExpired && (
+                        <span
+                          className="flex items-center gap-1 px-1.5 py-0.5 bg-warn/30 border border-warn text-warn font-bold uppercase tracking-wider"
+                          data-testid="sealed-badge"
+                        >
+                          <Lock className="h-3 w-3" />
+                          Sealed
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {isStreaming ? (
@@ -401,7 +427,32 @@ export default function Chat() {
                     </div>
                   </div>
 
-                  <div className="absolute top-8 bottom-0 left-0 right-0 overflow-y-auto px-4 py-4">
+                  {sessionExpired && (
+                    <div
+                      className="shrink-0 px-4 py-3 bg-warn/10 border-b border-warn/40 flex items-start gap-3"
+                      data-testid="sealed-banner"
+                    >
+                      <Lock className="h-4 w-4 text-warn shrink-0 mt-0.5" />
+                      <div className="flex-1 text-[11px]">
+                        <div className="text-warn font-bold uppercase tracking-wider">
+                          Session sealed
+                        </div>
+                        <div className="text-muted-foreground mt-1 leading-relaxed">
+                          A scan ran since this chat started, so the findings it references may have
+                          changed. Start a new chat to continue your investigation.
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleNewSession}
+                        disabled={createSession.isPending || activeProjectId === null}
+                        className="shrink-0 px-3 py-1 border border-accent text-accent hover:bg-accent/10 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        New Chat
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
                     {isLoadingMessages ? (
                       <div className="flex items-center justify-center h-full">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -430,61 +481,83 @@ export default function Chat() {
               </div>
 
               <div className="shrink-0 p-4 pt-0">
-                <div className="flex items-end gap-2 border border-border bg-muted/30 p-2">
-                  <span className="text-accent text-sm font-bold pb-1.5">&gt;</span>
-                  <textarea
-                    ref={inputRef}
-                    value={inputValue}
-                    onChange={e => setInputValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={
-                      sessionExpired
-                        ? 'session sealed - start a new chat'
-                        : 'Ask about your security findings...'
-                    }
-                    disabled={inputDisabled}
-                    rows={1}
-                    className={cn(
-                      'flex-1 bg-transparent text-foreground text-[12px] placeholder:text-muted-foreground resize-none outline-none',
-                      'min-h-[24px] max-h-[120px]',
-                      inputDisabled && 'opacity-50'
-                    )}
-                    style={{ height: 'auto' }}
-                    onInput={e => {
-                      const target = e.target as HTMLTextAreaElement
-                      target.style.height = 'auto'
-                      target.style.height = `${Math.min(target.scrollHeight, 120)}px`
-                    }}
-                  />
-                  {isStreaming ? (
+                {sessionExpired ? (
+                  <div
+                    className="flex items-center gap-3 border-2 border-warn/60 bg-warn/10 px-4 py-3"
+                    data-testid="sealed-input-panel"
+                  >
+                    <Lock className="h-5 w-5 text-warn shrink-0" />
+                    <div className="flex-1 text-[11px]">
+                      <div className="text-warn font-bold uppercase tracking-wider">
+                        Read-only — session sealed
+                      </div>
+                      <div className="text-muted-foreground mt-0.5">
+                        Start a new chat to continue your investigation.
+                      </div>
+                    </div>
                     <button
-                      onClick={handleCancel}
-                      className="shrink-0 p-2 bg-crit/20 border border-crit text-crit hover:bg-crit/30 transition-colors"
-                      title="Stop generation"
-                      aria-label="cancel stream"
+                      onClick={handleNewSession}
+                      disabled={createSession.isPending || activeProjectId === null}
+                      className="shrink-0 px-3 py-1.5 bg-accent/20 border border-accent text-accent hover:bg-accent/30 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Square className="h-4 w-4" />
+                      Start New Chat
                     </button>
-                  ) : (
-                    <button
-                      onClick={handleSend}
-                      disabled={!inputValue.trim() || inputDisabled}
-                      className={cn(
-                        'shrink-0 p-2 border transition-colors',
-                        inputValue.trim() && !inputDisabled
-                          ? 'bg-accent/20 border-accent text-accent hover:bg-accent/30'
-                          : 'bg-muted border-border text-muted-foreground cursor-not-allowed'
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-end gap-2 border border-border bg-muted/30 p-2">
+                      <span className="text-accent text-sm font-bold pb-1.5">&gt;</span>
+                      <textarea
+                        ref={inputRef}
+                        value={inputValue}
+                        onChange={e => setInputValue(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Ask about your security findings..."
+                        disabled={inputDisabled}
+                        rows={1}
+                        className={cn(
+                          'flex-1 bg-transparent text-foreground text-[12px] placeholder:text-muted-foreground resize-none outline-none',
+                          'min-h-[24px] max-h-[120px]',
+                          inputDisabled && 'opacity-50'
+                        )}
+                        style={{ height: 'auto' }}
+                        onInput={e => {
+                          const target = e.target as HTMLTextAreaElement
+                          target.style.height = 'auto'
+                          target.style.height = `${Math.min(target.scrollHeight, 120)}px`
+                        }}
+                      />
+                      {isStreaming ? (
+                        <button
+                          onClick={handleCancel}
+                          className="shrink-0 p-2 bg-crit/20 border border-crit text-crit hover:bg-crit/30 transition-colors"
+                          title="Stop generation"
+                          aria-label="cancel stream"
+                        >
+                          <Square className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleSend}
+                          disabled={!inputValue.trim() || inputDisabled}
+                          className={cn(
+                            'shrink-0 p-2 border transition-colors',
+                            inputValue.trim() && !inputDisabled
+                              ? 'bg-accent/20 border-accent text-accent hover:bg-accent/30'
+                              : 'bg-muted border-border text-muted-foreground cursor-not-allowed'
+                          )}
+                          title="Send message"
+                          aria-label="send message"
+                        >
+                          <Send className="h-4 w-4" />
+                        </button>
                       )}
-                      title="Send message"
-                      aria-label="send message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="mt-1 text-[9px] text-muted-foreground">
-                  Press Enter to send, Shift+Enter for new line
-                </div>
+                    </div>
+                    <div className="mt-1 text-[9px] text-muted-foreground">
+                      Press Enter to send, Shift+Enter for new line
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
