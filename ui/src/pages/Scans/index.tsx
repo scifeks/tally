@@ -74,6 +74,33 @@ export default function Scans() {
     setSkipEnrichment(false)
   }, [activeProjectId])
 
+  // Tool ↔ domain compatibility. Selecting domains restricts the tools list
+  // to those whose `segment` is in the selected set; with no domains chosen,
+  // every configured tool is compatible.
+  const compatibleToolIds = useMemo(() => {
+    if (selectedDomains.size === 0) {
+      return new Set(configuredTools.map(t => t.id))
+    }
+    return new Set(configuredTools.filter(t => selectedDomains.has(t.segment)).map(t => t.id))
+  }, [configuredTools, selectedDomains])
+
+  // Drop selected/skip tools that fall outside the currently compatible set
+  // when the domain selection changes. The size guard avoids a render when
+  // no pruning is needed.
+  useEffect(() => {
+    if (selectedDomains.size === 0) return
+    setSelectedTools(prev => {
+      const next = new Set<string>()
+      for (const id of prev) if (compatibleToolIds.has(id)) next.add(id)
+      return next.size === prev.size ? prev : next
+    })
+    setSkipTools(prev => {
+      const next = new Set<string>()
+      for (const id of prev) if (compatibleToolIds.has(id)) next.add(id)
+      return next.size === prev.size ? prev : next
+    })
+  }, [compatibleToolIds, selectedDomains])
+
   // Build scan options from state
   const buildScanOptions = useCallback((): ScanOptions => {
     const opts: ScanOptions = {}
@@ -249,7 +276,7 @@ export default function Scans() {
   const failures = logs.filter(e => e.type === 'tool_failed').length
 
   return (
-    <div className="h-full flex flex-col min-h-0 p-4 gap-4">
+    <div className="h-full flex flex-col overflow-y-auto p-4 gap-4">
       <ScanMutationErrorModal />
       {/* Header row: radar + controls + stats */}
       <div className="flex items-start gap-6 shrink-0">
@@ -506,9 +533,11 @@ export default function Scans() {
                   ) : (
                     configuredTools.map(t => {
                       const isSelected = selectedTools.has(t.id)
+                      const isCompatible = compatibleToolIds.has(t.id)
                       return (
                         <button
                           key={t.id}
+                          disabled={!isCompatible}
                           onClick={() => {
                             const next = new Set(selectedTools)
                             if (isSelected) next.delete(t.id)
@@ -517,9 +546,11 @@ export default function Scans() {
                           }}
                           className={cn(
                             'w-full flex items-center justify-between px-2 h-6 text-[10px] transition-colors',
-                            isSelected
-                              ? 'bg-accent/20 text-accent'
-                              : 'hover:bg-muted/30 text-muted-foreground'
+                            !isCompatible && 'opacity-40 cursor-not-allowed',
+                            isCompatible &&
+                              (isSelected
+                                ? 'bg-accent/20 text-accent'
+                                : 'hover:bg-muted/30 text-muted-foreground')
                           )}
                         >
                           <span className="flex items-center gap-2">
@@ -531,7 +562,14 @@ export default function Scans() {
                             />
                             {t.name}
                           </span>
-                          <span className="uppercase text-[9px] text-dim">{t.segment}</span>
+                          <span
+                            className={cn(
+                              'uppercase text-[9px]',
+                              !isCompatible ? 'text-muted-foreground font-bold' : 'text-dim'
+                            )}
+                          >
+                            {t.segment}
+                          </span>
                         </button>
                       )
                     })
@@ -540,6 +578,12 @@ export default function Scans() {
                 <div className="text-[10px] text-dim mt-1">
                   Leave empty to run all enabled tools
                 </div>
+                {selectedDomains.size > 0 && (
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {configuredTools.length - compatibleToolIds.size} tool(s) disabled by domain
+                    filter
+                  </div>
+                )}
               </div>
 
               {/* Skip tools multi-select */}
@@ -555,9 +599,11 @@ export default function Scans() {
                       .filter(t => t.enabled)
                       .map(t => {
                         const isSelected = skipTools.has(t.id)
+                        const isCompatible = compatibleToolIds.has(t.id)
                         return (
                           <button
                             key={t.id}
+                            disabled={!isCompatible}
                             onClick={() => {
                               const next = new Set(skipTools)
                               if (isSelected) next.delete(t.id)
@@ -566,13 +612,22 @@ export default function Scans() {
                             }}
                             className={cn(
                               'w-full flex items-center justify-between px-2 h-6 text-[10px] transition-colors',
-                              isSelected
-                                ? 'bg-crit/20 text-crit'
-                                : 'hover:bg-muted/30 text-muted-foreground'
+                              !isCompatible && 'opacity-40 cursor-not-allowed',
+                              isCompatible &&
+                                (isSelected
+                                  ? 'bg-crit/20 text-crit'
+                                  : 'hover:bg-muted/30 text-muted-foreground')
                             )}
                           >
                             <span>{t.name}</span>
-                            <span className="uppercase text-[9px] text-dim">{t.segment}</span>
+                            <span
+                              className={cn(
+                                'uppercase text-[9px]',
+                                !isCompatible ? 'text-muted-foreground font-bold' : 'text-dim'
+                              )}
+                            >
+                              {t.segment}
+                            </span>
                           </button>
                         )
                       })
@@ -581,6 +636,12 @@ export default function Scans() {
                 <div className="text-[10px] text-dim mt-1">
                   Exclude tools from an otherwise full scan
                 </div>
+                {selectedDomains.size > 0 && (
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {configuredTools.filter(t => t.enabled && !compatibleToolIds.has(t.id)).length}{' '}
+                    tool(s) disabled by domain filter
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -609,7 +670,7 @@ export default function Scans() {
       {activeTab === 'live' ? (
         <Panel
           title="scan log"
-          className="flex-1 min-h-0"
+          className="flex-1 min-h-[400px]"
           bodyClassName="overflow-auto bg-background"
         >
           {logs.length === 0 && runStatus === 'idle' ? (
@@ -646,7 +707,7 @@ export default function Scans() {
           )}
         </Panel>
       ) : (
-        <Panel title="scan history" className="flex-1 min-h-0" bodyClassName="flex flex-col">
+        <Panel title="scan history" className="flex-1 min-h-[400px]" bodyClassName="flex flex-col">
           <HistoryTable projectId={projectIdNum} />
         </Panel>
       )}
