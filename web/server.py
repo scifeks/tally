@@ -17,9 +17,12 @@ from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
 from application.rag.engine import RAGEngine
 from application.runtime.dependency_service import RuntimeDependencyService
+from core.project_paths import ProjectPaths
 from infrastructure.events.bus import EventBus
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
+from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.project_registry import ProjectRegistryRepository
+from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
@@ -45,6 +48,34 @@ from web.middleware.security_headers import SecurityHeadersMiddleware
 from web.middleware.session_auth import SessionAuthMiddleware
 
 logger = logging.getLogger(__name__)
+
+
+def _mark_stale_scans_failed(project_registry: ProjectRegistryService) -> None:
+    """Mark every ``running``/``cancelling`` scan_runs row as ``failed``.
+
+    Tier-1 lock guarantees only one scan is live per process at a time,
+    so any persisted-as-running row at boot belongs to a prior process
+    that is no longer here. Iterates every active project's findings DB
+    and sweeps once. Errors per-project are logged and skipped — one
+    bad project must not block startup.
+    """
+    for project in project_registry.list_active():
+        try:
+            paths = ProjectPaths.from_registry_row(project)
+            if not paths.findings_db.exists():
+                continue
+            repo = RunRepository(ConnectionFactory(paths.findings_db))
+            count = repo.mark_stale_runs_failed()
+            if count:
+                logger.info(
+                    "marked %d stale scan_runs as failed in project %s",
+                    count,
+                    project.get("name"),
+                )
+        except Exception:
+            logger.exception(
+                "stale-scan cleanup failed for project %s", project.get("name")
+            )
 
 
 @asynccontextmanager
@@ -111,6 +142,8 @@ def create_app(
     project_registry = ProjectRegistryService(registry_repo)
     project_registry.sync(base_path)
     app.state.project_registry = project_registry
+
+    _mark_stale_scans_failed(project_registry)
 
     app.state.rag_engine_cache = {}
 

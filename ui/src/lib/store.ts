@@ -114,11 +114,13 @@ export const useUI = create<UIState>()(
       setTriageRunStatus: status => set({ triageRunStatus: status }),
     }),
     {
-      // Storage key pre-dates the additional persisted flags below; kept
-      // unchanged to avoid resetting users' active-project selection.
+      // Storage key kept for legacy reasons (it's been written by older
+      // builds). activeProjectId is intentionally NOT persisted — every
+      // fresh page load should land on the no-project-selected state so
+      // the user can't mistakenly act on the wrong project after a
+      // restart. Only the prompt-injection ack survives.
       name: 'tally-ui-active-project',
       partialize: s => ({
-        activeProjectId: s.activeProjectId,
         triageInjectionAcked: s.triageInjectionAcked,
       }),
     }
