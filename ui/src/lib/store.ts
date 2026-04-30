@@ -2,6 +2,26 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ApiErrorPayload, Segment, TriagePageStatus } from './types'
 
+const PERSIST_KEY = 'tally-ui-active-project'
+
+// Run synchronously at module load, before `create()` builds the store and
+// `persist` rehydrates from localStorage. The REPL's `ui serve` always opens
+// the SPA with `?fresh=1`; reloads do not. Stripping the param prevents a
+// later F5 from re-triggering the clear.
+if (typeof window !== 'undefined') {
+  try {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('fresh')) {
+      url.searchParams.delete('fresh')
+      window.history.replaceState({}, '', url.toString())
+      window.localStorage.removeItem(PERSIST_KEY)
+    }
+  } catch {
+    // localStorage / URL access can fail in private modes; reload-without-
+    // clear is acceptable degraded behavior.
+  }
+}
+
 interface UIState {
   /** null means no project selected yet (initial app load state) */
   activeProjectId: number | null
@@ -125,13 +145,11 @@ export const useUI = create<UIState>()(
       setTriageRunStatus: status => set({ triageRunStatus: status }),
     }),
     {
-      // Storage key kept for legacy reasons (it's been written by older
-      // builds). activeProjectId is intentionally NOT persisted - every
-      // fresh page load should land on the no-project-selected state so
-      // the user can't mistakenly act on the wrong project after a
-      // restart. Only the prompt-injection ack survives.
-      name: 'tally-ui-active-project',
+      // activeProjectId persists across browser reloads; the `?fresh=1`
+      // query param appended by `ui serve` clears it at module load.
+      name: PERSIST_KEY,
       partialize: s => ({
+        activeProjectId: s.activeProjectId,
         triageInjectionAcked: s.triageInjectionAcked,
       }),
     }
