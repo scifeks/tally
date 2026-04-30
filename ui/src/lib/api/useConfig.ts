@@ -57,6 +57,7 @@ interface RepositoryApi {
   katana_headless: boolean
   katana_depth: number
   katana_headers: Record<string, string>
+  endpoint_file: string | null
 }
 
 interface RepositoryListResponseApi {
@@ -116,7 +117,7 @@ function mapRepository(api: RepositoryApi, projectId: number): RepositoryConfig 
   const docker = api.container_name
     ? { containerName: api.container_name, mountPoint: api.docker_path }
     : undefined
-  return {
+  const result: RepositoryConfig = {
     id: api.id,
     projectId,
     name: api.name,
@@ -134,6 +135,8 @@ function mapRepository(api: RepositoryApi, projectId: number): RepositoryConfig 
       crawlDepth: api.katana_depth,
     },
   }
+  if (api.endpoint_file) result.endpointFile = api.endpoint_file
+  return result
 }
 
 function toRepositoryPayload(repo: RepositoryConfig): Record<string, unknown> {

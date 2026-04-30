@@ -28,6 +28,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from application.locking import JobBusy
+from application.project.repositories_service import ProjectRepositoriesService
 from application.tools.registry import discover_tools, tool_registry
 from application.tools.scan_run_registry import get_scan_run_registry
 from application.tools.scan_service import get_scan_service
@@ -182,20 +183,10 @@ async def get_scans_config(
     # before reading so domain mappings reflect the project's commands.json.
     discover_tools(base_path, project_name=project_name)
 
-    from application.project.manager import ProjectManager
-
-    registry = request.app.state.project_registry
-    manager = ProjectManager(base_path, registry=registry)
-    # ``load_repositories`` joins the per-project ``repositories`` table to
-    # populate ``Repository.id``; ``get_project_info``'s direct JSON load
-    # does not. Use the joined view so we don't drop everything as id=None.
-    repo_models = manager.config.load_repositories(project_name)
+    repo_service = ProjectRepositoriesService.from_request(request)
     repos: list[ScanConfigRepo] = []
-    for r in repo_models:
-        if not isinstance(r.id, int):
-            # Repo lacks a DB row (sync hasn't run, or repo soft-deleted);
-            # exclude rather than expose with a placeholder id.
-            continue
+    for r in repo_service.list_active(project_id):
+        assert isinstance(r.id, int)  # list_active filters to DB-resident repos
         data = r.model_dump()
         location = "docker" if data.get("container_name") else "local"
         repos.append(
@@ -350,11 +341,21 @@ async def start_scan(
     base_path: str = request.app.state.base_path
 
     discover_tools(base_path, project_name=project_name)
-    _validate_repo_ids(request, project_name, body.repoIds)
+    repo_lookup = ProjectRepositoriesService.from_request(request).find_by_ids(
+        project_id, body.repoIds
+    )
+    if repo_lookup.missing:
+        raise ValidationError(
+            f"unknown repo ids: {repo_lookup.missing}",
+            details={
+                "unknown": repo_lookup.missing,
+                "available": repo_lookup.available,
+            },
+        )
     _validate_tool_ids(body.toolIds + body.skipToolIds)
     _validate_domains(body.domains)
 
-    repo_names = _repo_ids_to_names(request, project_name, body.repoIds)
+    repo_names = [repo_lookup.found[rid].name for rid in body.repoIds]
 
     paths = ProjectPaths.from_registry_row(row)
     sink = EventBusScanSink(request.app.state.event_bus)
@@ -478,63 +479,6 @@ async def get_scan(
 # ---------------------------------------------------------------------------
 # More helpers (after route declarations to keep the public surface visible)
 # ---------------------------------------------------------------------------
-
-
-def _validate_repo_ids(
-    request: Request, project_name: str, repo_ids: list[int]
-) -> None:
-    """Validate that every requested ``repo_id`` is an active repo in the project.
-
-    Phase 9: requests carry integer DB ids (from ``ScanConfigRepo.id``);
-    validation joins against the per-project ``repositories`` table to
-    confirm each id exists and is not soft-deleted.
-    """
-    if not repo_ids:
-        return
-    base_path: str = request.app.state.base_path
-    registry = request.app.state.project_registry
-    from application.project.manager import ProjectManager
-
-    manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(project_name)
-    if config is None:
-        raise NotFound(f"Project {project_name!r} not found")
-    valid_ids = {r.id for r in config.repositories if isinstance(r.id, int)}
-    missing = [rid for rid in repo_ids if rid not in valid_ids]
-    if missing:
-        raise ValidationError(
-            f"unknown repo ids: {missing}",
-            details={
-                "unknown": missing,
-                "available": sorted(valid_ids),
-            },
-        )
-
-
-def _repo_ids_to_names(
-    request: Request, project_name: str, repo_ids: list[int]
-) -> list[str]:
-    """Translate request-side integer ``repo_id``s into REPL-shaped names.
-
-    The internal scan orchestrator and run repository still address repos
-    by name. After ``_validate_repo_ids`` succeeds, this helper produces
-    the matching name list in the same order, dropping any id that fails
-    to resolve (defensive — should not happen post-validation).
-    """
-    if not repo_ids:
-        return []
-    base_path: str = request.app.state.base_path
-    registry = request.app.state.project_registry
-    from application.project.manager import ProjectManager
-
-    manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(project_name)
-    if config is None:
-        return []
-    name_by_id: dict[int, str] = {
-        r.id: r.name for r in config.repositories if isinstance(r.id, int)
-    }
-    return [name_by_id[rid] for rid in repo_ids if rid in name_by_id]
 
 
 def _validate_tool_ids(tool_ids: list[str]) -> None:

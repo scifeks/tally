@@ -55,11 +55,28 @@ class TestCapabilities:
         assert resp.status_code == 200
         assert resp.json()["max_report_history"] == 10
 
-    async def test_chat_enabled_false_when_no_config(self, app_client) -> None:
-        """Default fixture has no config/global.json so loading raises and
-        the service falls back to chat_enabled=False."""
-        client, *_ = app_client
-        resp = await client.get("/api/v1/capabilities")
+    async def test_chat_enabled_false_when_no_config(self, tmp_path: Path) -> None:
+        """When config/global.json is missing, capabilities falls back to
+        chat_enabled=False (FileNotFoundError swallowed inside the service)."""
+        db_path = tmp_path / "projects" / "p1" / "sqlite" / "findings.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        ConnectionFactory(db_path).init_schema()
+        app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url=f"http://127.0.0.1:{TEST_PORT}",
+        ) as client:
+            exch = await client.post(
+                "/api/v1/auth/exchange",
+                json={"token": HANDSHAKE},
+                headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+            )
+            assert exch.status_code == 200
+            for name, value in exch.cookies.items():
+                client.cookies.delete(name, domain="127.0.0.1")
+                client.cookies.set(name, value)
+            resp = await client.get("/api/v1/capabilities")
         assert resp.status_code == 200
         assert resp.json()["chat_enabled"] is False
 

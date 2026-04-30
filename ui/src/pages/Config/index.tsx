@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useUI } from '@/lib/store'
 import {
   useProjects,
@@ -38,6 +39,10 @@ export default function Config() {
   const saveToolOverride = useSaveToolOverride()
   const deleteToolOverride = useDeleteToolOverride()
 
+  // Bumped after a successful repo save so RepositorySection knows when
+  // it's safe to clear the file input ref (blob-detach race fix).
+  const [repoSaveCompletedAt, setRepoSaveCompletedAt] = useState<number | null>(null)
+
   const project = projects.find(p => p.id === activeProjectId)
 
   if (activeProjectId === null) {
@@ -77,13 +82,17 @@ export default function Config() {
             repositories={repositories}
             projectId={projectId}
             onSave={(repo, isNew, endpointFile) =>
-              saveRepository.mutate({ projectId, repo, isNew, endpointFile })
+              saveRepository.mutate(
+                { projectId, repo, isNew, endpointFile },
+                { onSuccess: () => setRepoSaveCompletedAt(Date.now()) }
+              )
             }
             onDelete={repoId => deleteRepository.mutate({ projectId, repoId })}
             onUpdateAuth={(repoId, auth) => updateRepoAuth.mutate({ projectId, repoId, auth })}
             isSaving={saveRepository.isPending}
             isSavingAuth={updateRepoAuth.isPending}
             authSavedAt={updateRepoAuth.isSuccess ? Date.now() : null}
+            saveCompletedAt={repoSaveCompletedAt}
           />
 
           <ToolOverridesSection

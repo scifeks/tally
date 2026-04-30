@@ -764,6 +764,7 @@ export const handlers = [
         katana_headless: payload.katana_headless ?? false,
         katana_depth: payload.katana_depth ?? 10,
         katana_headers: {},
+        endpoint_file: null,
       },
       { status: 201 }
     )

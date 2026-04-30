@@ -37,5 +37,19 @@ describe('useRepository', () => {
     expect(result.current.data?.baseUrls).toEqual(['http://localhost:8080'])
     expect(result.current.data?.locationMode).toBe('local')
     expect(result.current.data).not.toHaveProperty('auth')
+    // endpoint_file is null in the fixture, so the camelCase field is absent.
+    expect(result.current.data?.endpointFile).toBeUndefined()
+  })
+
+  it('maps endpoint_file → endpointFile when the API supplies a value', async () => {
+    server.use(
+      http.get('/api/v1/projects/1/repositories/42', () =>
+        HttpResponse.json({ ...repoFixture, endpoint_file: 'spec.json' })
+      )
+    )
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRepository(1, 42), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
+    expect(result.current.data?.endpointFile).toBe('spec.json')
   })
 })

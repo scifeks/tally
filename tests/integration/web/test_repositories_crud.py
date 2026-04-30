@@ -356,6 +356,7 @@ class TestRepositoryEndpointFileMultipart:
             / "api.json"
         )
         assert upload.exists()
+        assert repo["endpoint_file"] == "api.json"
 
     async def test_patch_endpoint_file_replaces_rows(
         self, repo_crud_client, tmp_path: Path
@@ -420,6 +421,53 @@ class TestRepositoryEndpointFileMultipart:
             / "second.json"
         )
         assert upload.exists()
+        assert patch.json()["endpoint_file"] == "second.json"
+
+    async def test_get_repository_detail_returns_endpoint_file_when_present(
+        self, repo_crud_client
+    ) -> None:
+        """GET detail surfaces the basename of the user-uploaded file."""
+        client, headers, project_id, repo_path = repo_crud_client
+        post = await client.post(
+            f"/api/v1/projects/{project_id}/repositories",
+            files={
+                "payload": (None, _basic_payload("with-seed", repo_path)),
+                "endpoint_file": (
+                    "spec.json",
+                    self._oas3_with_path("/x"),
+                    "application/json",
+                ),
+            },
+            headers=headers,
+        )
+        assert post.status_code == 201, post.text
+        repo_id = post.json()["id"]
+
+        resp = await client.get(f"/api/v1/projects/{project_id}/repositories/{repo_id}")
+        assert resp.status_code == 200
+        assert resp.json()["endpoint_file"] == "spec.json"
+
+        list_resp = await client.get(f"/api/v1/projects/{project_id}/repositories")
+        assert list_resp.status_code == 200
+        item = next(r for r in list_resp.json()["items"] if r["id"] == repo_id)
+        assert item["endpoint_file"] == "spec.json"
+
+    async def test_get_repository_detail_returns_null_when_no_upload(
+        self, repo_crud_client
+    ) -> None:
+        """GET detail returns ``endpoint_file: None`` for a bare repo."""
+        client, headers, project_id, repo_path = repo_crud_client
+        post = await client.post(
+            f"/api/v1/projects/{project_id}/repositories",
+            data={"payload": _basic_payload("bare", repo_path)},
+            headers=headers,
+        )
+        repo_id = post.json()["id"]
+        assert post.json()["endpoint_file"] is None
+
+        resp = await client.get(f"/api/v1/projects/{project_id}/repositories/{repo_id}")
+        assert resp.status_code == 200
+        assert resp.json()["endpoint_file"] is None
 
 
 class TestPatchRepositoryAuth:

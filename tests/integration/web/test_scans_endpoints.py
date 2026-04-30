@@ -248,16 +248,56 @@ async def test_start_scan_409_when_busy(app_client, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_start_scan_accepts_valid_repo_id(
+    app_client, monkeypatch, tmp_path
+) -> None:
+    """An active repo_id starts a scan and is translated to the repo name."""
+    from infrastructure.store.repositories.repositories import RepositoryRepository
+
+    client, _fid, _rag, factory, muth, project_id = app_client
+    _seed_project_config(str(tmp_path), "testproject")
+    spawned: list[dict[str, Any]] = []
+    monkeypatch.setattr(
+        "application.tools.scan_service.ScanService._run_worker",
+        lambda self, **kw: spawned.append(kw),
+    )
+
+    repo_repo = RepositoryRepository(factory)
+    active = repo_repo.list_active()
+    assert active, "Expected at least one repo after seed"
+    seeded_id = active[0].id
+    seeded_name = active[0].name
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/scans",
+        json={"repoIds": [seeded_id]},
+        headers=muth,
+    )
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert body["status"] == "queued"
+    assert len(spawned) == 1
+    assert spawned[0]["repo_ids"] == (seeded_name,)
+
+
+@pytest.mark.asyncio
 async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) -> None:
-    client, _fid, _rag, _factory, muth, project_id = app_client
+    from infrastructure.store.repositories.repositories import RepositoryRepository
+
+    client, _fid, _rag, factory, muth, project_id = app_client
     _seed_project_config(str(tmp_path), "testproject")
     monkeypatch.setattr(
         "application.tools.scan_service.ScanService._run_worker",
         lambda self, **kw: None,
     )
 
+    repo_repo = RepositoryRepository(factory)
+    active = repo_repo.list_active()
+    assert active, "Expected at least one repo after seed"
+    seeded_id = active[0].id
+
     # Phase 9: repoIds is list[int]. Send an integer id that doesn't exist
-    # in the active repositories table to trigger _validate_repo_ids.
+    # in the active repositories table.
     resp = await client.post(
         f"/api/v1/projects/{project_id}/scans",
         json={"repoIds": [99999]},
@@ -267,13 +307,16 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
     body = resp.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert 99999 in body["error"]["details"]["unknown"]
+    # The seeded active repo must surface in `available` — proves the
+    # validator's positive set is wired (the regression covered by 12.3).
+    assert seeded_id in body["error"]["details"]["available"]
 
 
 @pytest.mark.asyncio
 async def test_start_scan_soft_deleted_repo_422(
     app_client, monkeypatch, tmp_path
 ) -> None:
-    """Soft-deleted repos are rejected by _validate_repo_ids with 422 (F4)."""
+    """Soft-deleted repos are rejected with 422 (F4)."""
     from infrastructure.store.repositories.repositories import RepositoryRepository
 
     client, _fid, _rag, factory, muth, project_id = app_client
@@ -299,6 +342,9 @@ async def test_start_scan_soft_deleted_repo_422(
     body = resp.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert repo_id in body["error"]["details"]["unknown"]
+    # The only seeded repo is now soft-deleted, so available must not
+    # include it (and is otherwise empty in this fixture).
+    assert repo_id not in body["error"]["details"]["available"]
 
 
 @pytest.mark.asyncio

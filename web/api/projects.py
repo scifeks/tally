@@ -230,11 +230,40 @@ def _make_repo_repo(row: dict) -> RepositoryRepository:
     return RepositoryRepository(factory)
 
 
-def _serialize_repo(repo: Repository, repo_id: int | None) -> dict:
-    """Dump a Repository to a JSON dict; strip auth; carry id."""
+def _existing_endpoint_file(paths: ProjectPaths, repo: Repository) -> str | None:
+    """Return the basename of the most-recent file under
+    ``endpoints/<repo.uuid>/user_uploads/`` if any, else ``None``.
+
+    Phase 9 stores user-uploaded endpoint specs under that directory; the
+    presence of a file is the authoritative signal that a seed file is
+    configured for the repo. Multiple files can coexist (replace-by-basename
+    semantics); return the one most recently written.
+    """
+    if not repo.uuid:
+        return None
+    upload_dir = paths.endpoints_dir / repo.uuid / "user_uploads"
+    if not upload_dir.exists():
+        return None
+    candidates = [p for p in upload_dir.iterdir() if p.is_file()]
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda p: p.stat().st_mtime)
+    return latest.name
+
+
+def _serialize_repo(
+    repo: Repository,
+    repo_id: int | None,
+    *,
+    paths: ProjectPaths | None = None,
+) -> dict:
+    """Dump a Repository to a JSON dict; strip auth; carry id and seed file."""
     data = repo.model_dump()
     data.pop("auth", None)
     data["id"] = repo_id
+    data["endpoint_file"] = (
+        _existing_endpoint_file(paths, repo) if paths is not None else None
+    )
     return data
 
 
@@ -255,6 +284,7 @@ async def list_repositories(
     config = manager.get_project_info(row["name"])
     if config is None:
         raise NotFound(f"Project {project_id} not found")
+    paths = ProjectPaths.from_registry_row(row)
     repo_repo = _make_repo_repo(row)
     repos = config.repositories
     total = len(repos)
@@ -270,7 +300,7 @@ async def list_repositories(
         # DB name is the source of truth: name-only PATCHes rename the DB
         # row without rewriting project.json (Phase 9 / C4 dual-write rule).
         display = repo.model_copy(update={"name": db_row.name}) if db_row else repo
-        items.append(_serialize_repo(display, repo_id))
+        items.append(_serialize_repo(display, repo_id, paths=paths))
     return JSONResponse(
         content={
             "items": items,
@@ -310,7 +340,8 @@ async def get_repository_detail(
 
     # DB name is the source of truth (Phase 9 / C4 dual-write rule).
     display = config_repo.model_copy(update={"name": db_row.name})
-    return JSONResponse(content=_serialize_repo(display, db_row.id))
+    paths = ProjectPaths.from_registry_row(row)
+    return JSONResponse(content=_serialize_repo(display, db_row.id, paths=paths))
 
 
 def _parse_payload(payload: str | None) -> dict[str, Any]:
@@ -363,7 +394,10 @@ async def create_repository(
     if endpoint_file is not None and endpoint_file.filename:
         await _ingest_endpoint_file(row, repo, repo_id, endpoint_file)
 
-    return JSONResponse(status_code=201, content=_serialize_repo(repo, repo_id))
+    paths = ProjectPaths.from_registry_row(row)
+    return JSONResponse(
+        status_code=201, content=_serialize_repo(repo, repo_id, paths=paths)
+    )
 
 
 @v1_router.patch("/{project_id}/repositories/{repo_id}")
@@ -426,7 +460,8 @@ async def patch_repository(
     if endpoint_file is not None and endpoint_file.filename:
         await _ingest_endpoint_file(row, updated, repo_id, endpoint_file)
 
-    return JSONResponse(content=_serialize_repo(updated, repo_id))
+    paths = ProjectPaths.from_registry_row(row)
+    return JSONResponse(content=_serialize_repo(updated, repo_id, paths=paths))
 
 
 @v1_router.delete("/{project_id}/repositories/{repo_id}", status_code=204)

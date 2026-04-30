@@ -46,6 +46,7 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof Repository
     isSaving: false,
     isSavingAuth: false,
     authSavedAt: null,
+    saveCompletedAt: null,
     ...overrides,
   }
   return { ...render(<RepositorySection {...props} />), props }
@@ -167,6 +168,50 @@ describe('RepositorySection', () => {
     const [, isNew, endpointFile] = onSave.mock.calls[0]
     expect(isNew).toBe(false)
     expect(endpointFile).toBe(file)
+    // Regression for the empty-multipart bug: clearing the file input
+    // synchronously detaches the underlying blob in Chrome before the
+    // async mutation reads it. The section must leave the file ref
+    // intact until the parent fires saveCompletedAt.
+    expect(fileInput.files?.length).toBe(1)
+    expect(fileInput.files?.[0]).toBe(file)
+  })
+
+  it('clears the staged file once saveCompletedAt fires', async () => {
+    const repoFile = new File(['{"swagger":"2.0"}'], 'spec.json', {
+      type: 'application/json',
+    })
+    const { rerender, props } = renderSection({ saveCompletedAt: null })
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    const fileInput = screen.getByLabelText(/endpoint file/i) as HTMLInputElement
+    await userEvent.upload(fileInput, repoFile)
+    expect(fileInput.files?.length).toBe(1)
+    rerender(<RepositorySection {...props} saveCompletedAt={Date.now()} />)
+    expect(fileInput.files?.length).toBe(0)
+  })
+
+  it('shows the existing seed file affordance when set and no fresh upload is staged', () => {
+    const reposWithSeed: RepositoryConfig[] = [
+      { ...repos[0], endpointFile: 'existing.json' },
+    ]
+    renderSection({ repositories: reposWithSeed })
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    expect(
+      screen.getByText(/current: existing\.json\. uploading a new file will replace it\./i)
+    ).toBeInTheDocument()
+  })
+
+  it('hides the existing seed file affordance once a fresh file is staged', async () => {
+    const reposWithSeed: RepositoryConfig[] = [
+      { ...repos[0], endpointFile: 'existing.json' },
+    ]
+    renderSection({ repositories: reposWithSeed })
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    const fresh = new File(['{}'], 'fresh.json', { type: 'application/json' })
+    const fileInput = screen.getByLabelText(/endpoint file/i) as HTMLInputElement
+    await userEvent.upload(fileInput, fresh)
+    expect(
+      screen.queryByText(/current: existing\.json\./i)
+    ).not.toBeInTheDocument()
   })
 
   it('calls onSave with isNew=true when creating a new repository', () => {
