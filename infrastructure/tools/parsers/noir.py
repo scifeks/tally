@@ -29,33 +29,27 @@ from urllib.parse import urlparse
 
 from domain.tools.base import ToolResult
 
+# Re-exported from the domain so legacy callers (tests, ``count_findings``)
+# can keep importing from here. The canonical rule and its application
+# both live in the application/domain layers — this module is just a
+# stable import surface.
+from domain.url_inventory.vendor_filter import VENDOR_INDICATORS
+from domain.url_inventory.vendor_filter import (
+    is_vendor_path as is_vendor_or_dependency_path,
+)
+
 # HTTP methods recognised as OAS3 path-item operations.
 _OAS3_METHODS: frozenset[str] = frozenset(
     {"get", "post", "put", "delete", "patch", "head", "options", "trace"}
 )
 
-# Path segments that indicate vendor/dependency directories.
-# Shared with NoirHandler.normalize and BaseNoirTool.count_findings so the
-# vendor-exclusion logic is applied consistently.
-VENDOR_INDICATORS: frozenset[str] = frozenset(
-    {
-        "/vendor/",
-        "/node_modules/",
-        "/venv/",
-        "/.venv/",
-        "/site-packages/",
-        "/__pycache__/",
-        "/.git/",
-        "/build/",
-        "/dist/",
-    }
-)
-
-
-def is_vendor_or_dependency_path(path: str) -> bool:
-    """Return True if *path* looks like a vendor/dependency directory path."""
-    path_lower = path.lower()
-    return any(indicator in path_lower for indicator in VENDOR_INDICATORS)
+__all__ = [
+    "NoirHandler",
+    "VENDOR_INDICATORS",
+    "is_vendor_or_dependency_path",
+    "parse_noir_json",
+    "parse_noir_json_string",
+]
 
 
 # ---------------------------------------------------------------------------

@@ -23,10 +23,6 @@ from typing import Any
 from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-from infrastructure.tools.dependency_detection import (
-    build_exclude_path_prefixes,
-    detect_dependency_dirs,
-)
 from infrastructure.tools.parsers.noir import (
     parse_noir_json,
     parse_noir_json_string,
@@ -232,14 +228,11 @@ class BaseNoirTool(ToolInterface):
         output_file = str(output_dir / f"{context.repo.name}_{ts}_oas3.json")
 
         techs = _compute_noir_techs(context.repo.languages or [])
-        dep_dirs = detect_dependency_dirs(Path(repo_path))
-        exclude_path_prefixes = build_exclude_path_prefixes(dep_dirs)
 
         kwargs: dict[str, object] = {
             "source_path": repo_path,
             "output_file": output_file,
             "techs": techs,
-            "exclude_path_prefixes": exclude_path_prefixes,
         }
 
         pass_env: dict[str, str] | None = None

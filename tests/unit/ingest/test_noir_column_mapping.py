@@ -2,14 +2,14 @@
 
 Phase 9 routes Noir output into ``url_findings`` via
 ``UrlInventoryIngestHandler``; ``NoirHandler.normalize`` is therefore a
-no-op. The pieces that survive — vendor-path filtering inside
-``parse_output``, and the ``_uri_only`` URL canonicalizer — still need
-direct coverage.
+no-op. Vendor-path filtering moved to the application core
+(``iter_oas3_rows``); the parser module now re-exports
+``is_vendor_path`` under the legacy alias so any in-tree caller still
+works. The ``_uri_only`` URL canonicalizer still needs direct
+coverage.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 from domain.tools.base import ToolResult
 from infrastructure.tools.parsers.noir import (
@@ -19,7 +19,6 @@ from infrastructure.tools.parsers.noir import (
 from infrastructure.tools.parsers.noir import (
     is_vendor_or_dependency_path as _is_vendor_or_dependency_path,
 )
-from infrastructure.tools.wrappers.local.noir import NoirLocalTool
 
 _TIMESTAMP = "2026-04-03T00:00:00"
 
@@ -62,8 +61,16 @@ class TestNoirHandlerNormalize:
         assert handler.normalize(_make_result([]), profile="myrepo") == []
 
 
-class TestVendorPathFilter:
-    """Vendor/dependency paths are filtered inside ``parse_output``."""
+class TestVendorPathFilterAlias:
+    """The parser module re-exports the domain rule under the legacy alias.
+
+    The actual filter now runs at ``iter_oas3_rows`` (application core);
+    the alias survives so any in-tree caller still importing from the
+    parser module keeps working. Direct rule coverage lives in
+    ``tests/unit/domain/test_vendor_filter.py`` and the end-to-end
+    ingest behaviour is covered in
+    ``tests/unit/application/test_oas3_to_findings.py``.
+    """
 
     _VENDOR_PATHS = [
         "/vendor/lib/router.php",
@@ -92,31 +99,6 @@ class TestVendorPathFilter:
     def test_legit_not_detected(self) -> None:
         for path in self._LEGIT_PATHS:
             assert not _is_vendor_or_dependency_path(path), f"False positive: {path!r}"
-
-    def test_vendor_paths_filtered_in_parse_output(self, tmp_path: Path) -> None:
-        """Vendor paths are excluded in parse_output."""
-        import json
-
-        endpoints = [
-            {"path": "/api/users", "method": "get", "parameters": []},
-            {
-                "path": "/vendor/sabberworm/php-css-parser/src/Renderable.php",
-                "method": "post",
-                "parameters": [],
-            },
-        ]
-        oas3 = {
-            "openapi": "3.0.0",
-            "paths": {ep["path"]: {ep["method"]: {}} for ep in endpoints},
-        }
-        report = tmp_path / "report.json"
-        report.write_text(json.dumps(oas3))
-
-        tool = NoirLocalTool()
-        tool._last_report_path = report
-        parsed = tool.parse_output("", {})
-        assert len(parsed["endpoints"]) == 1
-        assert parsed["endpoints"][0]["path"] == "/api/users"
 
 
 class TestUriOnlyHelper:

@@ -9,8 +9,13 @@ write it to stdout.  This follows the same pattern as ``GitleaksLocalTool``:
 ``build_command`` stores the report path in ``self._last_report_path`` and
 ``parse_output`` reads from it.
 
-The OAS3 file is **not** deleted after parsing because ZAP consumes it in the
-next pipeline stage via its ``-openapifile`` flag (see ``ZAPLocalTool``).
+The OAS3 file is **not** deleted after parsing because the URL-inventory
+ingest handler reads it via ``output_files['oas3']``.  The on-disk file
+is the raw Noir output — vendor-path filtering is applied in the
+application core (see ``application.url_inventory.providers
+._oas3_to_findings.iter_oas3_rows``) at ingest time, so vendor URLs
+never enter ``url_findings`` and the rebuilt merged OAS3 (consumed by
+ZAP / XSStrike / DalFox) inherits the filter.
 """
 
 from __future__ import annotations
@@ -20,7 +25,6 @@ from pathlib import Path
 from typing import Any
 
 from infrastructure.tools.parsers.noir import (
-    is_vendor_or_dependency_path,
     parse_noir_json,
     parse_noir_json_string,
 )
@@ -34,9 +38,6 @@ class NoirLocalTool(BaseNoirTool):
     def __init__(self, config=None) -> None:
         # Stores the OAS3 output path between build_command and parse_output.
         self._last_report_path: Path | None = None
-        # Stores detected dependency path prefixes between build_command and
-        # parse_output.
-        self._exclude_path_prefixes: list[str] = []
 
     @property
     def command(self) -> str:
@@ -81,11 +82,6 @@ class NoirLocalTool(BaseNoirTool):
         raw_techs = kwargs.get("techs")
         techs: list[str] = list(raw_techs) if isinstance(raw_techs, list) else []
 
-        raw_prefixes = kwargs.get("exclude_path_prefixes")
-        self._exclude_path_prefixes = (
-            list(raw_prefixes) if isinstance(raw_prefixes, list) else []
-        )
-
         cmd = [
             "noir",
             "-b",
@@ -119,8 +115,12 @@ class NoirLocalTool(BaseNoirTool):
         2. The stdout file saved by the executor (unusual, but safe fallback).
         3. The raw output string.
 
-        Empty OAS3 files (zero paths) are deleted so ZAP does not import an
-        empty spec.  ZAP will fall back to spider-only mode via ``-quickurl``.
+        Empty OAS3 files (zero paths) are deleted so the ingest handler
+        does not import an empty spec.
+
+        Vendor / dependency path filtering happens at the URL-inventory
+        ingest boundary (``iter_oas3_rows``), not here. The wrapper's
+        only job is to surface Noir's raw output.
         """
         try:
             if self._last_report_path is not None and self._last_report_path.exists():
@@ -131,8 +131,6 @@ class NoirLocalTool(BaseNoirTool):
                     parsed = parse_noir_json(json_path)
                 else:
                     parsed = parse_noir_json_string(output)
-
-            parsed = self._filter_dependency_endpoints(parsed)
 
             if (
                 not parsed.get("endpoints")
@@ -149,32 +147,3 @@ class NoirLocalTool(BaseNoirTool):
             return parsed
         finally:
             self._last_report_path = None
-            self._exclude_path_prefixes = []
-
-    def _filter_dependency_endpoints(self, parsed: dict) -> dict:
-        """Remove dependency/vendor endpoints from parsed OAS3 data.
-
-        Applies dynamic prefixes detected from the repo's package manager files
-        first, then falls back to the static vendor-indicator list.  Updates
-        ``summary.total_endpoints`` to match the filtered count.
-        """
-        endpoints = parsed.get("endpoints", [])
-        filtered = [
-            ep for ep in endpoints if not self._is_excluded_path(ep.get("path") or "")
-        ]
-        if len(filtered) == len(endpoints):
-            return parsed
-        parsed = dict(parsed)
-        parsed["endpoints"] = filtered
-        summary = dict(parsed.get("summary") or {})
-        summary["total_endpoints"] = len(filtered)
-        parsed["summary"] = summary
-        return parsed
-
-    def _is_excluded_path(self, path: str) -> bool:
-        """Return True if the endpoint path should be excluded."""
-        path_lower = path.lower()
-        for prefix in self._exclude_path_prefixes:
-            if prefix.lower() in path_lower:
-                return True
-        return is_vendor_or_dependency_path(path)
