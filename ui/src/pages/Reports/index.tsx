@@ -23,6 +23,7 @@ import type {
   ReportGenerationStatus,
 } from '@/lib/types'
 import { ReportMutationErrorModal } from '@/components/ReportMutationErrorModal'
+import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 import { SECTION_ORDER, FORMAT_OPTIONS, TESTING_TYPE_OPTIONS } from './constants'
 import { PrinterAnimation } from './PrinterAnimation'
 import { DraftCard } from './DraftCard'
@@ -213,6 +214,10 @@ export default function Reports() {
     setRunId(null)
     setLogs([])
   }, [])
+
+  if (activeProjectId === null) {
+    return <NoProjectSelectedState projects={projects} />
+  }
 
   const isRunning = generationStatus === 'generating'
 
