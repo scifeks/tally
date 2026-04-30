@@ -236,6 +236,7 @@ class RepositoryItem(BaseModel):
     container_name: str | None = None
     languages: list[str]
     base_urls: list[str]
+    endpoint_file: str | None = None
 
 
 class RepoAuthPatchRequest(BaseModel):

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ComponentType, ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
 
 // ─── Section Header ───────────────────────────────────────────────────────────
@@ -44,7 +45,12 @@ export function TagInput({
   const addTag = () => {
     const tag = input.trim()
     if (tag && !value.includes(tag)) {
-      onChange([...value, tag])
+      // flushSync forces the parent's setState to render synchronously
+      // so a sibling click (e.g. Save) sees the committed value rather
+      // than the pre-blur form snapshot from React 18's auto-batching.
+      flushSync(() => {
+        onChange([...value, tag])
+      })
     }
     setInput('')
   }

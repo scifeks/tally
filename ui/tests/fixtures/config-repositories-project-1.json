@@ -19,7 +19,8 @@
       "dalfox_headers": {},
       "katana_headless": false,
       "katana_depth": 10,
-      "katana_headers": {}
+      "katana_headers": {},
+      "endpoint_file": null
     },
     {
       "id": 102,
@@ -40,7 +41,8 @@
       "dalfox_headers": {},
       "katana_headless": false,
       "katana_depth": 8,
-      "katana_headers": {}
+      "katana_headers": {},
+      "endpoint_file": null
     }
   ],
   "total": 2,

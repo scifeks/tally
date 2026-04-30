@@ -41,6 +41,7 @@ export function RepositorySection({
   isSaving,
   isSavingAuth,
   authSavedAt,
+  saveCompletedAt,
 }: {
   repositories: RepositoryConfig[]
   projectId: number
@@ -51,6 +52,12 @@ export function RepositorySection({
   isSavingAuth: boolean
   /** Set to a fresh timestamp after a successful auth save; used to flash a "Saved" affordance. */
   authSavedAt: number | null
+  /**
+   * Bumped to a fresh timestamp after a successful repo save. The section
+   * defers clearing the file input ref until this fires so the underlying
+   * blob stays valid through the async multipart serialisation.
+   */
+  saveCompletedAt: number | null
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [form, setForm] = useState<Partial<RepositoryConfig>>({})
@@ -98,12 +105,20 @@ export function RepositorySection({
   const handleSave = () => {
     if (!form.name) return
     const repo = { ...form, projectId } as RepositoryConfig
+    // Do not touch endpointFileUpload or the DOM file ref here — Chrome
+    // detaches the underlying blob when the input's value is cleared, and
+    // the mutation reads the bytes asynchronously. The parent triggers
+    // cleanup via the saveCompletedAt prop after the request settles.
     onSave(repo, isNewRepo, endpointFileUpload)
     if (isNewRepo) setSelectedId(null)
-    setEndpointFileUpload(null)
-    if (fileInputRef.current) fileInputRef.current.value = ''
     setIsDirty(false)
   }
+
+  useEffect(() => {
+    if (saveCompletedAt === null) return
+    setEndpointFileUpload(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [saveCompletedAt])
 
   const handleReset = () => {
     if (isNewRepo) {
@@ -412,6 +427,11 @@ export function RepositorySection({
                   }}
                   className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
                 />
+                {form.endpointFile && !endpointFileUpload && (
+                  <div className="text-[9px] text-accent mt-1">
+                    Current: {form.endpointFile}. Uploading a new file will replace it.
+                  </div>
+                )}
                 <div className="text-[9px] text-dim mt-1">
                   OpenAPI, Swagger, Postman, HAR, or Katana JSONL
                 </div>

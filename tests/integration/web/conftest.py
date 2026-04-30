@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -14,6 +15,24 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
 from web.server import create_app
+
+
+def _seed_global_config(base_path: Path) -> None:
+    """Write a minimal ``<base>/config/global.json`` so ConfigManager loads."""
+    config_dir = base_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "global.json").write_text(
+        json.dumps(
+            {
+                "ollama": {"model": "test-model", "host": "http://localhost:11434"},
+                "ollama_embedding": {
+                    "model": "test-embed",
+                    "host": "http://localhost:11434",
+                },
+            }
+        )
+    )
+
 
 TEST_PORT = 12345
 HANDSHAKE = "test-handshake-abc123xyz"
@@ -61,6 +80,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
 @pytest_asyncio.fixture()
 async def app_client(tmp_path: Path):
     """Yield (client, finding_id, rag_mock, factory, mut_headers, project_id)."""
+    _seed_global_config(tmp_path)
     # DB must live at the canonical path the registry resolves to.
     db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
