@@ -1,4 +1,4 @@
-"""End-to-end retrieval tests for gitleaks → ChromaDB → QueryEngine.
+"""End-to-end retrieval tests for gitleaks -> ChromaDB -> QueryEngine.
 
 Requires Ollama running and configured.
 """
@@ -7,28 +7,32 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
 from application.rag.ingestor import ToolHandlerFactory
+from application.rag.knowledge_base import FindingKnowledgeBase
+from application.rag.query import QueryEngine
 from domain.tools.base import ToolResult
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
 from infrastructure.tools.parsers.gitleaks import parse_gitleaks_json
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ingest"
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _parse_fixture(filename: str) -> dict:
     return parse_gitleaks_json(_FIXTURES / filename)
-
-
-_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _make_gitleaks_result(
@@ -45,7 +49,25 @@ def _make_gitleaks_result(
     )
 
 
-def _ingest_to_chroma(engine: RAGEngine, result: ToolResult, profile: str) -> None:
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
+
+
+def _ingest_to_chroma(
+    kb: FindingKnowledgeBase, result: ToolResult, profile: str
+) -> None:
     """Normalize rows and add rendered text to ChromaDB."""
     handler = ToolHandlerFactory.load(result.tool_name)
     if handler is None or not result.parsed_data:
@@ -54,9 +76,11 @@ def _ingest_to_chroma(engine: RAGEngine, result: ToolResult, profile: str) -> No
     if not rows:
         return
     texts = [handler.render(row) for row in rows]
-    metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+    metadatas: list[Mapping[str, Any]] = [
+        {"tool": row["tool"], "profile": row["profile"]} for row in rows
+    ]
     ids = [row["fingerprint"] for row in rows]
-    engine.add_documents(texts, metadatas, ids)
+    kb.add_findings(documents=texts, metadatas=metadatas, ids=ids)
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -111,43 +135,33 @@ class TestGitleaksRetrieval:
         self, project_env: dict, dir_parsed_data: dict
     ) -> None:
         """Searching for a rule_id value returns the expected document in top-5."""
-        from application.rag.query import QueryEngine
-
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
         try:
-            _ingest_to_chroma(engine, result, profile="test-repo")
-            qe = QueryEngine(engine)
-            results = qe.search("aws-access-token")
+            _ingest_to_chroma(kb, result, profile="test-repo")
+            results = QueryEngine(kb).search("aws-access-token")
             assert results, "Expected at least one search result"
-            found_tools = [r["metadata"]["tool"] for r in results]
+            found_tools = [r["metadata"]["tool"] for r in results if r["metadata"]]
             assert "gitleaks" in found_tools
         finally:
-            engine.close()
+            kb.close()
 
     @requires_ollama
     def test_tool_filter_detection(
         self, project_env: dict, dir_parsed_data: dict
     ) -> None:
         """Querying 'what did gitleaks find?' applies tool filter in ChromaDB."""
-        from application.rag.query import QueryEngine
-
         result = _make_gitleaks_result(dir_parsed_data)
-        engine = RAGEngine(
-            project_name=project_env["project_name"],
-            base_path=str(project_env["base_path"]),
-        )
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
         try:
-            _ingest_to_chroma(engine, result, profile="test-repo")
-            qe = QueryEngine(engine)
-            results = qe.search("what did gitleaks find?")
+            _ingest_to_chroma(kb, result, profile="test-repo")
+            results = QueryEngine(kb).search("what did gitleaks find?")
             assert results, "Expected results for tool-specific query"
             for r in results:
-                assert r["metadata"]["tool"] == "gitleaks", (
-                    f"Tool filter failed — got tool={r['metadata']['tool']!r}"
+                meta = r["metadata"]
+                assert meta is not None
+                assert meta["tool"] == "gitleaks", (
+                    f"Tool filter failed - got tool={meta['tool']!r}"
                 )
         finally:
-            engine.close()
+            kb.close()

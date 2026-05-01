@@ -37,6 +37,7 @@ from application.ports.chat_event_sink import (
     NullChatStreamSink,
 )
 from application.ports.llm_provider import LLMProvider
+from application.ports.vector_index import VectorMatch
 from domain.pipeline.chat_events import (
     ChatStreamCancelled,
     ChatStreamCompleted,
@@ -97,7 +98,7 @@ class ChatRetriever(Protocol):
     """Subset of ``QueryEngine`` used by the chat service.
 
     Lets tests inject a fake retriever without standing up a real
-    ChromaDB / RAGEngine. Production callers pass a regular
+    ChromaDB or knowledge base. Production callers pass a regular
     ``application.rag.query.QueryEngine`` — its real ``search`` is
     structurally compatible with this Protocol.
     """
@@ -107,7 +108,7 @@ class ChatRetriever(Protocol):
         raw_input: str = "",
         n_results: int = 20,
         query: Any = None,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[VectorMatch]: ...
 
 
 @dataclass(frozen=True)

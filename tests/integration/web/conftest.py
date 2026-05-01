@@ -96,14 +96,12 @@ async def app_client(tmp_path: Path):
         row = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()
     finding_id: int = row["id"]
 
-    rag_mock = MagicMock()
-    rag_mock.get_documents = MagicMock(
-        return_value={"ids": ["doc-1"], "metadatas": [{}]}
-    )
+    kb_mock = MagicMock()
+    kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]
 
     app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
-    # Seed the per-project RAG cache directly so chroma sync uses the mock.
-    app.state.rag_engine_cache = {"testproject": rag_mock}
+    # Seed the per-project knowledge base cache so chroma sync uses the mock.
+    app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     _bus = EventBus()
     await _bus.register_job("finding", "finding")
@@ -123,4 +121,4 @@ async def app_client(tmp_path: Path):
         base_url=f"http://127.0.0.1:{TEST_PORT}",
     ) as client:
         mut_headers = await _authenticate(client)
-        yield client, finding_id, rag_mock, factory, mut_headers, project_id
+        yield client, finding_id, kb_mock, factory, mut_headers, project_id

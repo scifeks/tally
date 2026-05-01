@@ -3,28 +3,28 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
 from application.rag.ingestor import ToolHandlerFactory
+from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.query import QueryEngine
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 _TIMESTAMP = "2024-01-01T00:00:00"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -86,8 +86,20 @@ def _make_gitleaks_result() -> ToolResult:
     )
 
 
-def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
-    return RAGEngine(project_name=project_name, base_path=str(base_path))
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 def _ingest(
@@ -105,20 +117,17 @@ def _ingest(
     rows = handler.normalize(result, profile=profile)
     if not rows:
         return []
-    engine = _make_rag_engine(base_path, project_name)
+    kb = _make_kb(base_path, project_name)
     try:
         texts = [handler.render(row) for row in rows]
-        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        metadatas: list[Mapping[str, Any]] = [
+            {"tool": row["tool"], "profile": row["profile"]} for row in rows
+        ]
         ids = [row["fingerprint"] for row in rows]
-        engine.add_documents(texts, metadatas, ids)
+        kb.add_findings(documents=texts, metadatas=metadatas, ids=ids)
     finally:
-        engine.close()
+        kb.close()
     return rows
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -133,35 +142,30 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-# ---------------------------------------------------------------------------
-# Scenario 5a – Search unit  (@requires_ollama, no gitleaks, not slow)
-# ---------------------------------------------------------------------------
-
-
 @requires_ollama
 class TestSearchUnit:
     def test_search_empty_collection_returns_empty(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
         try:
-            assert QueryEngine(engine).search("anything") == []
+            assert QueryEngine(kb).search("anything") == []
         finally:
-            engine.close()
+            kb.close()
 
     def test_search_blank_query_returns_empty(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
         try:
-            assert QueryEngine(engine).search("   ") == []
+            assert QueryEngine(kb).search("   ") == []
         finally:
-            engine.close()
+            kb.close()
 
     def test_search_results_have_required_keys(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_gitleaks_result())
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            results = QueryEngine(engine).search("aws-access-token")
+            results = QueryEngine(kb).search("aws-access-token")
         finally:
-            engine.close()
+            kb.close()
         assert len(results) > 0
         for r in results:
             assert "document" in r
@@ -171,24 +175,26 @@ class TestSearchUnit:
     def test_search_results_sorted_by_distance(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_gitleaks_result())
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            results = QueryEngine(engine).search("secret detected")
+            results = QueryEngine(kb).search("secret detected")
         finally:
-            engine.close()
-        distances = [r["distance"] for r in results]
+            kb.close()
+        distances = [r["distance"] for r in results if r["distance"] is not None]
         assert distances == sorted(distances)
 
     def test_tool_filter_fires_for_gitleaks_query(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_gitleaks_result())
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            results = QueryEngine(engine).search("what did gitleaks find?")
+            results = QueryEngine(kb).search("what did gitleaks find?")
         finally:
-            engine.close()
+            kb.close()
         assert len(results) > 0
         for r in results:
-            assert r["metadata"]["tool"] == "gitleaks", (
-                f"Expected tool=gitleaks, got {r['metadata']['tool']}"
+            meta = r["metadata"]
+            assert meta is not None
+            assert meta["tool"] == "gitleaks", (
+                f"Expected tool=gitleaks, got {meta['tool']}"
             )

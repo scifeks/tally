@@ -82,11 +82,11 @@ async def tools_v1_client(tmp_path: Path):
     factory = ConnectionFactory(db_path)
     factory.init_schema()
 
-    rag_mock = MagicMock()
-    rag_mock.get_documents = MagicMock(return_value={"ids": [], "metadatas": []})
+    kb_mock = MagicMock()
+    kb_mock.get.return_value = []
 
     app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
-    app.state.rag_engine_cache = {"testproject": rag_mock}
+    app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None

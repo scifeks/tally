@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from application.ports.filters import Filter
 from application.rag.search_parser import (
     SearchQuery,
     combine_clauses,
@@ -161,7 +162,7 @@ class _SqliteStrategy:
 
 class _ChromaDBStrategy:
     def __init__(self) -> None:
-        self._filter_clauses: list[dict] = []
+        self._filter_clauses: list[Filter] = []
 
     def handle_flag(
         self,

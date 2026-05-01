@@ -80,12 +80,11 @@ def _seed_url_findings(tmp_path: Path) -> tuple[ConnectionFactory, int]:
     return factory, rid
 
 
-def _make_rag_engine(doc_count: int = 5) -> MagicMock:
-    engine = MagicMock()
-    engine.count_documents.return_value = doc_count
-    engine.delete_findings.return_value = doc_count
-    engine.get_documents.return_value = {"ids": [f"id-{i}" for i in range(doc_count)]}
-    return engine
+def _make_kb(doc_count: int = 5) -> MagicMock:
+    kb = MagicMock()
+    kb.count.return_value = doc_count
+    kb.delete_findings.return_value = doc_count
+    return kb
 
 
 def test_full_purge_clears_url_findings(tmp_path: Path) -> None:
@@ -97,7 +96,7 @@ def test_full_purge_clears_url_findings(tmp_path: Path) -> None:
 
     cmd = PurgeCommand(_make_repl(tmp_path))
     with (
-        patch.object(cmd, "_get_rag_engine", return_value=_make_rag_engine(0)),
+        patch.object(cmd, "_get_knowledge_base", return_value=_make_kb(0)),
         patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
@@ -120,7 +119,7 @@ def test_tool_purge_does_not_touch_url_findings(tmp_path: Path) -> None:
 
     cmd = PurgeCommand(_make_repl(tmp_path))
     with (
-        patch.object(cmd, "_get_rag_engine", return_value=_make_rag_engine(2)),
+        patch.object(cmd, "_get_knowledge_base", return_value=_make_kb(2)),
         patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):

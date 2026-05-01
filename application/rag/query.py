@@ -1,15 +1,14 @@
-"""Semantic search and RAG-augmented chat over a project's ChromaDB collection."""
+"""Semantic search and RAG-augmented chat over a project's knowledge base."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from application.ports.llm_provider import LLMProvider
+from application.ports.vector_index import VectorMatch
+from application.rag.knowledge_base import FindingKnowledgeBase
+from application.rag.search_parser import SearchQuery, parse_search_query
 from core.config.manager import ConfigManager
-
-from .engine import RAGEngine
-from .search_parser import SearchQuery, parse_search_query
 
 logger = logging.getLogger(__name__)
 
@@ -38,49 +37,39 @@ _CHAT_PROMPT_TEMPLATE = (
 
 
 class QueryEngine:
-    """Semantic search and LLM chat over a project's ChromaDB collection."""
+    """Semantic search and LLM chat over a project's finding knowledge base."""
 
     def __init__(
         self,
-        rag_engine: RAGEngine,
+        knowledge_base: FindingKnowledgeBase,
         llm_provider: LLMProvider | None = None,
     ) -> None:
         """Initialise the query engine.
 
         Args:
-            rag_engine:   Initialised RAGEngine for the current project.
-            llm_provider: LLMProvider override; falls back to the engine's
-                          chat_provider if None.
+            knowledge_base: Project-scoped FindingKnowledgeBase.
+            llm_provider:   LLMProvider override; falls back to the knowledge
+                            base's chat_provider if None.
         """
-        self._engine = rag_engine
-        self._provider: LLMProvider = llm_provider or rag_engine.chat_provider
+        self._kb = knowledge_base
+        self._provider: LLMProvider = llm_provider or knowledge_base.chat_provider
 
-        # Load known tool names from commands.json at runtime — no hardcoded list.
-        config_manager = ConfigManager(str(rag_engine.base_path))
+        config_manager = ConfigManager(str(knowledge_base.base_path))
         commands = config_manager.load_commands_config()
         self._known_tools: frozenset[str] = (
             frozenset(commands.keys()) if commands else frozenset()
         )
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def search(
         self,
         raw_input: str = "",
         n_results: int = _DEFAULT_N_RESULTS,
         query: SearchQuery | None = None,
-    ) -> list[dict[str, Any]]:
-        """Run semantic or metadata-only search, return results.
+    ) -> list[VectorMatch]:
+        """Run semantic or metadata-only search and return matching findings.
 
-        Each result dict has keys: 'document' (str), 'metadata' (dict),
-        'distance' (float | None). Distance is None for metadata-only searches.
-
-        When query is provided it bypasses parse_search_query entirely.
-        The n_results parameter is used by chat() to override the page size for
-        context retrieval. When called from cmd_search, n_results is the default
-        and pagination is driven by the SearchQuery object.
+        When query is provided it bypasses parse_search_query. The n_results
+        parameter overrides page_size for context retrieval (used by chat()).
 
         Raises:
             SearchValidationError: Propagated to caller for user-friendly display.
@@ -90,63 +79,38 @@ class QueryEngine:
                 return []
             query = parse_search_query(raw_input, self._known_tools)
 
-        total = self._engine.count_documents()
+        total = self._kb.count()
         if total == 0:
             return []
 
-        # chat() passes n_results to override page_size for context retrieval
         page_size = n_results if n_results != _DEFAULT_N_RESULTS else query.page_size
         page = query.page
         offset = (page - 1) * page_size
 
         if query.is_semantic:
-            # ChromaDB query has no native offset — fetch page*page_size, then slice.
+            assert query.semantic_text is not None
+            # No native offset for ranked queries; fetch page*page_size, then slice.
             fetch_n = min(page_size * page, total)
-            kwargs: dict[str, Any] = {
-                "query_texts": [query.semantic_text],
-                "n_results": fetch_n,
-                "include": ["documents", "metadatas", "distances"],
-            }
-            if query.where_filter:
-                kwargs["where"] = query.where_filter
-            raw = self._engine.query_collection(**kwargs)
-            docs = (raw.get("documents") or [[]])[0]
-            metas = (raw.get("metadatas") or [[]])[0]
-            dists = (raw.get("distances") or [[]])[0]
-            all_results = [
-                {"document": doc, "metadata": meta or {}, "distance": dist}
-                for doc, meta, dist in zip(docs, metas, dists)
-            ]
-            all_results.sort(key=lambda r: r["distance"])
-            return all_results[offset : offset + page_size]
-        else:
-            # Metadata-only — use collection.get() with native limit+offset.
-            kwargs_get: dict[str, Any] = {
-                "include": ["documents", "metadatas"],
-                "limit": min(page_size, total),
-                "offset": offset,
-            }
-            if query.where_filter:
-                kwargs_get["where"] = query.where_filter
-            raw_get = self._engine.get_documents(**kwargs_get)
-            docs_g = raw_get.get("documents") or []
-            metas_g = raw_get.get("metadatas") or []
-            return [
-                {"document": doc, "metadata": meta or {}, "distance": None}
-                for doc, meta in zip(docs_g, metas_g)
-            ]
+            matches = self._kb.find_relevant(
+                query.semantic_text,
+                n_results=fetch_n,
+                filter=query.where_filter,
+            )
+            matches.sort(
+                key=lambda m: (
+                    m["distance"] if m["distance"] is not None else float("inf")
+                )
+            )
+            return matches[offset : offset + page_size]
+
+        return self._kb.find_by_filter(
+            filter=query.where_filter,
+            limit=min(page_size, total),
+            offset=offset,
+        )
 
     def chat(self, message: str, n_context: int = _DEFAULT_N_RESULTS) -> str:
-        """RAG-augmented chat: retrieve context then query the LLM.
-
-        Args:
-            message:   User's question or message.
-            n_context: Maximum context chunks for unfiltered queries. When a
-                       tool filter is detected, all docs for that tool are used.
-
-        Returns:
-            LLM response string.
-        """
+        """RAG-augmented chat: retrieve context then query the LLM."""
         if not message.strip():
             return "Please provide a message."
 
@@ -158,13 +122,14 @@ class QueryEngine:
             return "No relevant findings found for your query."
 
         context_lines = []
-        for i, r in enumerate(results, 1):
-            meta = r["metadata"]
+        for i, match in enumerate(results, 1):
+            meta = match.get("metadata") or {}
             tool = meta.get("tool", "")
             profile = meta.get("profile", "")
             repo_part = f" repo={profile}" if profile else ""
             label = f"[{tool}{repo_part}]" if (tool or profile) else ""
-            context_lines.append(f"{i}. {label} {r['document']}")
+            document = match.get("document") or ""
+            context_lines.append(f"{i}. {label} {document}")
         context = "\n".join(context_lines)
 
         prompt = _CHAT_PROMPT_TEMPLATE.format(context=context, question=message)

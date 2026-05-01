@@ -8,21 +8,20 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
+from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.query import QueryEngine
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+_TIMESTAMP = "2024-01-01T00:00:00"
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -79,13 +78,25 @@ def _make_gitleaks_result() -> ToolResult:
             },
         },
         output_files={},
-        timestamp=RAGEngine.now_iso(),
+        timestamp=_TIMESTAMP,
         duration_seconds=0.1,
     )
 
 
-def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
-    return RAGEngine(project_name=project_name, base_path=str(base_path))
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 def _run_pipeline(
@@ -113,11 +124,6 @@ def _run_pipeline(
     return ids
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture()
 def project_env(tmp_path: Path) -> dict:
     """Minimal project environment under tmp_path (no data)."""
@@ -130,42 +136,36 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-# ---------------------------------------------------------------------------
-# Scenario 6a – Chat unit  (@requires_ollama, no gitleaks, not slow)
-# ---------------------------------------------------------------------------
-
-
 @requires_ollama
 class TestChatUnit:
     def test_chat_no_data_returns_informative_message(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
         try:
-            response = QueryEngine(engine).chat("what secrets were found?")
+            response = QueryEngine(kb).chat("what secrets were found?")
         finally:
-            engine.close()
+            kb.close()
         assert isinstance(response, str)
         assert "No relevant findings" in response
 
     def test_chat_blank_message_returns_prompt(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
         try:
-            response = QueryEngine(engine).chat("   ")
+            response = QueryEngine(kb).chat("   ")
         finally:
-            engine.close()
+            kb.close()
         assert "Please provide a message" in response
 
     def test_chat_with_data_returns_non_empty_string(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         ids = _run_pipeline(base, name, _make_gitleaks_result(), profile="my-test-repo")
         assert len(ids) > 0, "pipeline produced 0 SQLite rows for gitleaks"
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            assert engine.count_documents() == len(ids), (
-                f"ChromaDB doc count {engine.count_documents()} "
-                f"!= SQLite row count {len(ids)}"
+            assert kb.count() == len(ids), (
+                f"ChromaDB doc count {kb.count()} != SQLite row count {len(ids)}"
             )
-            response = QueryEngine(engine).chat("what secrets were detected?")
+            response = QueryEngine(kb).chat("what secrets were detected?")
         finally:
-            engine.close()
+            kb.close()
         assert isinstance(response, str)
         assert len(response) > 0

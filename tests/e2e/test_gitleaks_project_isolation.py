@@ -3,27 +3,27 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
 from application.rag.ingestor import ToolHandlerFactory
+from application.rag.knowledge_base import FindingKnowledgeBase
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 _TIMESTAMP = "2024-01-01T00:00:00"
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -85,8 +85,20 @@ def _make_gitleaks_result() -> ToolResult:
     )
 
 
-def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
-    return RAGEngine(project_name=project_name, base_path=str(base_path))
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 def _ingest(
@@ -104,20 +116,17 @@ def _ingest(
     rows = handler.normalize(result, profile=profile)
     if not rows:
         return []
-    engine = _make_rag_engine(base_path, project_name)
+    kb = _make_kb(base_path, project_name)
     try:
         texts = [handler.render(row) for row in rows]
-        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        metadatas: list[Mapping[str, Any]] = [
+            {"tool": row["tool"], "profile": row["profile"]} for row in rows
+        ]
         ids = [row["fingerprint"] for row in rows]
-        engine.add_documents(texts, metadatas, ids)
+        kb.add_findings(documents=texts, metadatas=metadatas, ids=ids)
     finally:
-        engine.close()
+        kb.close()
     return rows
-
-
-# ---------------------------------------------------------------------------
-# Scenario 8 – Project isolation  (@requires_ollama)
-# ---------------------------------------------------------------------------
 
 
 @requires_ollama
@@ -132,21 +141,21 @@ class TestProjectIsolation:
 
     def test_new_project_starts_empty(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
-        engine_a = _make_rag_engine(tmp_path, "proj-a")
-        engine_b = _make_rag_engine(tmp_path, "proj-b")
+        kb_a = _make_kb(tmp_path, "proj-a")
+        kb_b = _make_kb(tmp_path, "proj-b")
         try:
-            assert engine_a.collection_name != engine_b.collection_name
-            assert engine_b.count_documents() == 0
+            assert kb_a.project_name != kb_b.project_name
+            assert kb_b.count() == 0
         finally:
-            engine_a.close()
-            engine_b.close()
+            kb_a.close()
+            kb_b.close()
 
     def test_ingest_does_not_leak_to_other_project(self, tmp_path: Path) -> None:
         self._make_two_projects(tmp_path)
         rows = _ingest(tmp_path, "proj-a", _make_gitleaks_result())
         assert len(rows) >= 1
-        engine_b = _make_rag_engine(tmp_path, "proj-b")
+        kb_b = _make_kb(tmp_path, "proj-b")
         try:
-            assert engine_b.count_documents() == 0
+            assert kb_b.count() == 0
         finally:
-            engine_b.close()
+            kb_b.close()

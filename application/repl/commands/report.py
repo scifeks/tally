@@ -12,7 +12,7 @@ from core.project_paths import ProjectPaths
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from application.rag.engine import RAGEngine
+    from application.rag.knowledge_base import FindingKnowledgeBase
     from application.repl.interface import REPL
 
 
@@ -169,8 +169,8 @@ class ReportCommand:
             )
             return
 
-        rag_engine = self._get_rag_engine()
-        if rag_engine is None:
+        kb = self._get_knowledge_base()
+        if kb is None:
             return
 
         if output_path is None:
@@ -186,7 +186,7 @@ class ReportCommand:
         _, finding_repo, _, _ = make_store(
             self.repl.base_path, self.repl.active_project
         )
-        generator = ReportGenerator(rag_engine, self.repl.active_project, finding_repo)
+        generator = ReportGenerator(kb, self.repl.active_project, finding_repo)
 
         with self.repl.console.status(f"Generating {fmt} report..."):
             generator.generate(output_format=fmt, output_path=output_path)
@@ -365,15 +365,28 @@ class ReportCommand:
             return False
         return True
 
-    def _get_rag_engine(self) -> RAGEngine | None:
-        """Create and return a RAGEngine for the active project, or None on error."""
-        from application.rag import RAGEngine
+    def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
+        """Build a FindingKnowledgeBase for the active project, or None on error."""
+        from application.rag.knowledge_base import FindingKnowledgeBase
+        from infrastructure.embedding.factory import get_embedding_provider
+        from infrastructure.llm.factory import get_llm_provider
+        from infrastructure.vector.factory import make_chromadb_vector_index
 
         assert self.repl.active_project is not None
+        base = Path(self.repl.base_path)
         try:
-            return RAGEngine(
+            embedding_provider = get_embedding_provider(base)
+            chat_provider = get_llm_provider("chat", base)
+            vector_index = make_chromadb_vector_index(
                 project_name=self.repl.active_project,
-                base_path=self.repl.base_path,
+                base_path=base,
+                embedding_provider=embedding_provider,
+            )
+            return FindingKnowledgeBase(
+                vector_index=vector_index,
+                chat_provider=chat_provider,
+                project_name=self.repl.active_project,
+                base_path=base,
             )
         except RuntimeError as exc:
             self.repl.console.print(f"[red]RAG error:[/red] {exc}")

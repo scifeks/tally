@@ -105,13 +105,11 @@ async def projects_v1_client(tmp_path: Path):
     run_id = run_repo.create_run({})
     finding_repo.insert_findings(run_id, [_BASE_FINDING])
 
-    rag_mock = MagicMock()
-    rag_mock.get_documents = MagicMock(
-        return_value={"ids": ["doc-1"], "metadatas": [{}]}
-    )
+    kb_mock = MagicMock()
+    kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]
 
     app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
-    app.state.rag_engine_cache = {"testproject": rag_mock}
+    app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None

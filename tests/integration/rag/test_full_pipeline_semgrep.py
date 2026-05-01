@@ -1,19 +1,21 @@
 """Integration test: full semgrep pipeline end-to-end.
 
-Exercises IngestHandler → EnrichmentHandler (LLM mocked) →
-ChromaDBHandler → RAG query against a real SQLite database and a
-real ChromaDB instance.  No external network services are used.
+Exercises IngestHandler -> EnrichmentHandler (LLM mocked) ->
+ChromaDBHandler -> RAG query against a real SQLite database and a
+real ChromaDB instance. No external network services are used.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+import struct
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
@@ -21,19 +23,29 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.pipeline.factory import PipelineFactory  # noqa: E402
+from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
-from application.rag.engine import RAGEngine  # noqa: E402
 from application.rag.enrichment import EnrichmentPipeline  # noqa: E402
+from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
+from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import ToolCompleted  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
+from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+_DIM = 8
+
+
+class _DeterministicEmbedding(EmbeddingProvider):
+    def is_available(self) -> bool:
+        return True
+
+    def embed(self, text: str, **kwargs: Any) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -68,39 +80,47 @@ def _make_semgrep_result() -> ToolResult:
     )
 
 
-# ---------------------------------------------------------------------------
-# Test class
-# ---------------------------------------------------------------------------
+def _build_test_kb(project_name: str, base_path: Path) -> FindingKnowledgeBase:
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    paths.chroma_db.mkdir(parents=True, exist_ok=True)
+    chat_provider: Any = object()
+    vector_index = ChromaDBVectorIndex(
+        chroma_path=paths.chroma_db,
+        collection_name=f"findings_{project_name}",
+        embedding_provider=_DeterministicEmbedding(),
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 class TestSemgrepFullPipeline:
     def test_semgrep_full_pipeline_ingest_enrich_query(self, tmp_path: Path) -> None:
-        """Full pipeline: ToolCompleted → SQLite → LLM enrich → ChromaDB → query.
+        """Full pipeline: ToolCompleted -> SQLite -> LLM enrich -> ChromaDB -> query.
 
         Steps verified:
         1. IngestHandler normalizes and writes 1 semgrep finding to SQLite.
         2. EnrichmentHandler calls the (mocked) LLM and writes risk_type to
            the finding's metadata; enriched flag becomes 1.
         3. ChromaDBHandler upserts the enriched row into ChromaDB.
-        4. RAGEngine.query_collection() returns ≥1 result whose tool
+        4. KnowledgeBase.find_relevant() returns >=1 result whose tool
            metadata equals "semgrep".
         """
         project_name = "test-semgrep-pipeline"
         _write_global_config(tmp_path)
 
-        # Set up project directories so ConfigManager.load_repositories works
         pm = ProjectManager(base_path=str(tmp_path))
         pm.create_project_dirs(project_name)
         pm.save_project(project_name)
 
-        # Create SQLite store and a run to attach findings to
         run_repo, finding_repo, _, _ = make_store(str(tmp_path), project_name)
         run_id = run_repo.create_run({})
 
-        # Wire the event bus
         bus = PipelineFactory.create()
 
-        # Build event
         result = _make_semgrep_result()
         event = ToolCompleted(
             result=result,
@@ -110,24 +130,19 @@ class TestSemgrepFullPipeline:
             base_path=str(tmp_path),
         )
 
-        default_fn = ef.DefaultEmbeddingFunction()
         with (
             patch.object(
                 EnrichmentPipeline,
                 "_call_per_field",
                 return_value={"risk_type": "sql_injection"},
             ),
-            patch.object(
-                RAGEngine,
-                "_build_embedding_function",
-                return_value=default_fn,
+            patch(
+                "application.pipeline.handlers._build_knowledge_base",
+                side_effect=_build_test_kb,
             ),
         ):
             bus.dispatch(event)
 
-        # ------------------------------------------------------------------
-        # Assert SQLite state
-        # ------------------------------------------------------------------
         findings = finding_repo.get_all_findings()
         assert len(findings) == 1, f"expected 1 finding in SQLite, got {len(findings)}"
         row = findings[0]
@@ -137,22 +152,14 @@ class TestSemgrepFullPipeline:
             f"risk_type not written to meta: {meta}"
         )
 
-        # ------------------------------------------------------------------
-        # Assert ChromaDB state via a fresh query engine
-        # ------------------------------------------------------------------
-        with patch.object(
-            RAGEngine, "_build_embedding_function", return_value=default_fn
-        ):
-            query_engine = RAGEngine(project_name=project_name, base_path=str(tmp_path))
+        kb = _build_test_kb(project_name, tmp_path)
+        try:
+            results = kb.find_relevant("sql injection", n_results=5)
+        finally:
+            kb.close()
 
-        results = query_engine.query_collection(
-            query_texts=["sql injection"], n_results=5
-        )
-
-        docs = results.get("documents", [[]])[0]
-        metadatas = results.get("metadatas", [[]])[0]
-
-        assert len(docs) >= 1, "ChromaDB returned no documents"
-        assert metadatas[0]["tool"] == "semgrep", (
-            f"expected tool=semgrep in metadata, got: {metadatas[0]}"
+        assert len(results) >= 1, "ChromaDB returned no documents"
+        assert results[0]["metadata"] is not None
+        assert results[0]["metadata"]["tool"] == "semgrep", (
+            f"expected tool=semgrep in metadata, got: {results[0]['metadata']}"
         )

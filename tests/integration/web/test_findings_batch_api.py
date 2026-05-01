@@ -62,9 +62,9 @@ async def batch_client(tmp_path: Path):
             for r in conn.execute("SELECT id FROM findings ORDER BY id").fetchall()
         ]
 
-    rag_mock = MagicMock()
+    kb_mock = MagicMock()
     app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
-    app.state.rag_engine_cache = {"testproject": rag_mock}
+    app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     _bus = EventBus()
     await _bus.register_job("finding", "finding")

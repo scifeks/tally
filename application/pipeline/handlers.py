@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 from application.rag.ingestor import (
     ToolHandlerFactory,
     filter_code_rows,
 )
+from application.rag.knowledge_base import FindingKnowledgeBase
 from core.project_paths import ProjectPaths
 from domain.pipeline.events import (
     EventBus,
@@ -17,14 +19,18 @@ from domain.pipeline.events import (
     ToolCompleted,
 )
 from domain.pipeline.fingerprint import compute_fingerprint
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
+from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from rich.console import Console
 
-    from application.rag.engine import RAGEngine
     from core.config.schemas import Repository
 
 logger = logging.getLogger(__name__)
@@ -40,31 +46,50 @@ def _load_active_repos(base_path: str, project_name: str) -> list[Repository]:
     return RepositoryRepository(factory).list_active()
 
 
+def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
+
+
 class BaseHandler:
-    """Shared RAGEngine cache and ChromaDB persistence used by pipeline steps."""
+    """Shared FindingKnowledgeBase cache for ChromaDB persistence."""
 
     def __init__(self) -> None:
-        self._engines: dict[str, RAGEngine] = {}
+        self._knowledge_bases: dict[str, FindingKnowledgeBase] = {}
 
-    def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
+    def _get_knowledge_base(
+        self, project_name: str, base_path: str
+    ) -> FindingKnowledgeBase:
+        from pathlib import Path
+
         key = f"{project_name}:{base_path}"
-        if key not in self._engines:
-            from application.rag.engine import RAGEngine
-
-            self._engines[key] = RAGEngine(
-                project_name=project_name,
-                base_path=base_path,
+        if key not in self._knowledge_bases:
+            self._knowledge_bases[key] = _build_knowledge_base(
+                project_name, Path(base_path)
             )
-        return self._engines[key]
+        return self._knowledge_bases[key]
 
     def _persist_to_chromadb(
         self, ids: list[int], project_name: str, base_path: str
     ) -> None:
         """Write findings to ChromaDB by their SQLite IDs."""
         try:
-            engine = self._get_engine(project_name, base_path)
+            kb = self._get_knowledge_base(project_name, base_path)
         except Exception as exc:
-            logger.warning("%s: RAGEngine init failed: %s", type(self).__name__, exc)
+            logger.warning(
+                "%s: knowledge base init failed: %s", type(self).__name__, exc
+            )
             return
 
         try:
@@ -74,7 +99,7 @@ class BaseHandler:
             for row in rows:
                 grouped[(row["tool"], row["profile"])].append(row)
             for (tool, profile), group_rows in grouped.items():
-                engine.delete_findings(tool, profile)
+                kb.delete_findings(tool, profile)
                 handler = ToolHandlerFactory.load(tool)
                 if handler is None:
                     continue
@@ -82,9 +107,11 @@ class BaseHandler:
                     f"Repository: {profile} | {handler.render(row)}"
                     for row in group_rows
                 ]
-                metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
+                metadatas: list[Mapping[str, Any]] = [
+                    {"tool": tool, "profile": profile} for _ in group_rows
+                ]
                 doc_ids = [str(row["id"]) for row in group_rows]
-                engine.add_documents(texts=texts, metadatas=metadatas, ids=doc_ids)
+                kb.add_findings(documents=texts, metadatas=metadatas, ids=doc_ids)
         except Exception as exc:
             logger.error("%s: ChromaDB write error: %s", type(self).__name__, exc)
 

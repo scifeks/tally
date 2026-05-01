@@ -1,0 +1,69 @@
+"""VectorIndex port: storage-agnostic seam over a project's vector store."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, Protocol, TypedDict
+
+from application.ports.filters import Filter
+
+
+class VectorMatch(TypedDict):
+    """Result row from a query or get on the vector store.
+
+    Adapters populate every key on every row. ``document`` and ``metadata``
+    are None when the underlying engine omits them; ``distance`` is None for
+    non-ranked reads (``get``).
+    """
+
+    id: str
+    document: str | None
+    metadata: Mapping[str, Any] | None
+    distance: float | None
+
+
+class VectorIndexError(RuntimeError):
+    """Raised by VectorIndex implementations when an operation fails.
+
+    Subclasses RuntimeError so existing call sites that catch RuntimeError
+    around vector-store construction continue to work.
+    """
+
+
+class VectorIndex(Protocol):
+    """Project-scoped vector store seam.
+
+    Implementations embed documents internally; callers pass raw text plus
+    application-shaped Filter expressions. Storage-engine DSL stays in the
+    adapter.
+    """
+
+    def upsert(
+        self,
+        documents: list[str],
+        metadatas: list[Mapping[str, Any]],
+        ids: list[str],
+    ) -> None: ...
+
+    def query(
+        self,
+        text: str,
+        *,
+        n_results: int,
+        filter: Filter | None = None,
+    ) -> list[VectorMatch]: ...
+
+    def get(
+        self,
+        *,
+        filter: Filter | None = None,
+        ids: list[str] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[VectorMatch]: ...
+
+    def count(self, filter: Filter | None = None) -> int: ...
+
+    def delete(self, ids: list[str]) -> None: ...
+
+    def close(self) -> None: ...
