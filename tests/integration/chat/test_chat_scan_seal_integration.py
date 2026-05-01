@@ -70,7 +70,11 @@ def _empty_summary() -> ScanSummary:
 
 
 def _build_orchestrator(
-    *, project_id: int, tmp_path: Path, project_name: str = "testproject"
+    *,
+    project_id: int,
+    tmp_path: Path,
+    factory: ConnectionFactory,
+    project_name: str = "testproject",
 ) -> ScanOrchestrator:
     prompt = MagicMock()
     executor = ToolExecutor(
@@ -86,6 +90,7 @@ def _build_orchestrator(
         event_bus=bus,
         prompt=prompt,
         project_id=project_id,
+        chat_session_repo=ChatSessionRepository(factory),
     )
 
 
@@ -103,12 +108,14 @@ def test_orchestrator_seals_active_sessions_on_successful_scan(
 ) -> None:
     """A successful _run() seals every active chat session for the project."""
     project_id = 17
-    paths, factory = _setup_db(tmp_path)
+    _, factory = _setup_db(tmp_path)
     repo = ChatSessionRepository(factory)
     s1 = repo.create(project_id=project_id, title="alive-1")
     s2 = repo.create(project_id=project_id, title="alive-2")
 
-    orch = _build_orchestrator(project_id=project_id, tmp_path=tmp_path)
+    orch = _build_orchestrator(
+        project_id=project_id, tmp_path=tmp_path, factory=factory
+    )
     summary = orch._run(_empty_summary)
     assert summary is not None  # _run returns the summary
 
@@ -122,12 +129,14 @@ def test_orchestrator_does_not_seal_other_projects(tmp_path: Path) -> None:
     """Sealing only touches sessions belonging to the scanned project."""
     project_id = 17
     other_id = 18
-    paths, factory = _setup_db(tmp_path)
+    _, factory = _setup_db(tmp_path)
     repo = ChatSessionRepository(factory)
     own = repo.create(project_id=project_id, title="own")
     other = repo.create(project_id=other_id, title="other")
 
-    orch = _build_orchestrator(project_id=project_id, tmp_path=tmp_path)
+    orch = _build_orchestrator(
+        project_id=project_id, tmp_path=tmp_path, factory=factory
+    )
     orch._run(_empty_summary)
 
     own_row = repo.get(own)
@@ -143,7 +152,9 @@ def test_orchestrator_does_not_seal_when_scan_fails(tmp_path: Path) -> None:
     repo = ChatSessionRepository(factory)
     sid = repo.create(project_id=project_id, title="kept-on-failure")
 
-    orch = _build_orchestrator(project_id=project_id, tmp_path=tmp_path)
+    orch = _build_orchestrator(
+        project_id=project_id, tmp_path=tmp_path, factory=factory
+    )
 
     def _explode() -> ScanSummary:
         raise RuntimeError("boom")
@@ -213,7 +224,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
 async def test_post_message_after_seal_returns_409(tmp_path: Path) -> None:
     """After sealing, POST to a sealed session returns 409 CHAT_SESSION_EXPIRED."""
     get_chat_run_registry().reset()
-    paths, factory = _setup_db(tmp_path)
+    _, factory = _setup_db(tmp_path)
 
     app = create_app(str(tmp_path), HANDSHAKE, port=12345)
     project_id = app.state.project_registry.register("testproject", str(tmp_path))
@@ -221,7 +232,9 @@ async def test_post_message_after_seal_returns_409(tmp_path: Path) -> None:
     repo = ChatSessionRepository(factory)
     sid = repo.create(project_id=project_id, title="will-seal")
 
-    orch = _build_orchestrator(project_id=project_id, tmp_path=tmp_path)
+    orch = _build_orchestrator(
+        project_id=project_id, tmp_path=tmp_path, factory=factory
+    )
     orch._run(_empty_summary)
 
     transport = httpx.ASGITransport(app=app)

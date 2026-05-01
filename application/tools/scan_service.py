@@ -44,6 +44,7 @@ from core.project_paths import ProjectPaths
 from domain.pipeline import scan_events as se
 from domain.tools.scan_types import ScanSummary
 from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 from infrastructure.store.repositories.runs import RunRepository
 
 if TYPE_CHECKING:
@@ -119,6 +120,7 @@ class ScanService:
         try:
             factory = ConnectionFactory(paths.findings_db)
             run_repo = RunRepository(factory)
+            chat_session_repo = ChatSessionRepository(factory)
             run_id = run_repo.create(
                 project_id=project_id,
                 repo_ids=list(repo_ids),
@@ -159,6 +161,7 @@ class ScanService:
                 "console": console,
                 "cancel_token": cancel_token,
                 "run_repo": run_repo,
+                "chat_session_repo": chat_session_repo,
             },
             name=f"scan-run-{run_id}",
             daemon=True,
@@ -186,6 +189,7 @@ class ScanService:
         console: Console | None,
         cancel_token: CancellationToken,
         run_repo: RunRepository,
+        chat_session_repo: ChatSessionRepository,
     ) -> None:
         # Imports deferred to thread entry to avoid circular-import risk
         # and to keep module import side-effects minimal.
@@ -224,6 +228,7 @@ class ScanService:
                 cancel_token=cancel_token,
                 run_repository=run_repo,
                 project_id=project_id,
+                chat_session_repo=chat_session_repo,
             )
             setup_ok = True
 

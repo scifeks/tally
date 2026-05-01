@@ -30,7 +30,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from application.ports.chat_event_sink import (
     ChatStreamSink,
@@ -45,13 +45,15 @@ from domain.pipeline.chat_events import (
     ChatStreamStarted,
     ChatToken,
 )
-from infrastructure.store.repositories.chat_messages import (
-    ChatMessageRepository,
-    ChatMessageRow,
-)
-from infrastructure.store.repositories.chat_sessions import (
-    ChatSessionRepository,
-)
+
+if TYPE_CHECKING:
+    from application.ports.chat_message_repository import (
+        ChatMessageRepositoryPort,
+    )
+    from application.ports.chat_session_repository import (
+        ChatSessionRepositoryPort,
+    )
+    from domain.chat.entry import ChatMessageRow
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +123,8 @@ class ChatRequest:
 async def stream_chat(
     request: ChatRequest,
     *,
-    session_repo: ChatSessionRepository,
-    message_repo: ChatMessageRepository,
+    session_repo: ChatSessionRepositoryPort,
+    message_repo: ChatMessageRepositoryPort,
     query_engine: ChatRetriever,
     provider: LLMProvider,
     model_name: str | None = None,
@@ -198,8 +200,8 @@ async def _stream_tokens(
     messages: list[dict[str, str]],
     provider: LLMProvider,
     sink: ChatStreamSink,
-    message_repo: ChatMessageRepository,
-    session_repo: ChatSessionRepository,
+    message_repo: ChatMessageRepositoryPort,
+    session_repo: ChatSessionRepositoryPort,
     user_message_id: int,
     model_name: str | None,
 ) -> AsyncIterator[str]:

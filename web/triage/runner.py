@@ -156,3 +156,8 @@ def _run_triage(
                 "lock holder mismatch on triage scan_run_id=%d release",
                 scan_run_id,
             )
+        except KeyError:
+            logger.warning(
+                "triage lock already released for scan_run_id=%d",
+                scan_run_id,
+            )

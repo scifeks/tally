@@ -9,9 +9,11 @@ parent session is deleted.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from application.ports.chat_message_repository import ChatMessageRepositoryPort
+from domain.chat.entry import ChatMessageRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
@@ -20,17 +22,7 @@ if TYPE_CHECKING:
 CHAT_ROLES = ("user", "assistant")
 
 
-@dataclass(frozen=True)
-class ChatMessageRow:
-    id: int
-    session_id: int
-    role: str
-    content: str
-    model: str | None
-    created_at: str
-
-
-class ChatMessageRepository:
+class ChatMessageRepository(ChatMessageRepositoryPort):
     """Append-only access to the ``chat_messages`` table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:

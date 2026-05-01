@@ -369,9 +369,16 @@ class PurgeCommand:
             return 0
         try:
             from application.chat.sealing import purge_chat_for_project
+            from infrastructure.store.connection import ConnectionFactory
+            from infrastructure.store.repositories.chat_sessions import (
+                ChatSessionRepository,
+            )
 
             paths = _project_paths(self.repl)
-            return purge_chat_for_project(project_id, paths=paths)
+            factory = ConnectionFactory(paths.findings_db)
+            factory.init_schema()
+            session_repo = ChatSessionRepository(factory)
+            return purge_chat_for_project(project_id, session_repo=session_repo)
         except Exception as exc:
             self.repl.console.print(f"[yellow]Chat purge warning:[/yellow] {exc}")
             return 0
