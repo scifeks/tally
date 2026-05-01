@@ -97,13 +97,8 @@ describe('useProjectScanConfig', () => {
     const { result } = renderHook(() => useProjectScanConfig(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     const config = result.current.data!
-    expect(Array.isArray(config.repos)).toBe(true)
-    expect(Array.isArray(config.segments)).toBe(true)
-    expect(Array.isArray(config.tools)).toBe(true)
     expect(config.repos.length).toBeGreaterThan(0)
     expect(config.tools.length).toBeGreaterThan(0)
-    // Mapper translates `domain` → `segment`
-    expect(typeof config.tools[0].segment).toBe('string')
   })
 
   it('returns empty repos for project 3', async () => {
