@@ -128,8 +128,8 @@ describe('Reports page - generate flow', () => {
     renderReports()
 
     const btn = await screen.findByTestId('report-generate-button')
-    // Project 1 has 3/6 ready (executive_summary=draft, risk_level=reviewed,
-    // critical_issues=draft), so PDF should gate.
+    // Project 1 has 3/6 ready (executive-summary=draft, risk-level=reviewed,
+    // critical-issues=draft), so PDF should gate.
     await waitFor(() =>
       expect(screen.getByText(/3 of 6 sections ready/i)).toBeInTheDocument()
     )
@@ -202,13 +202,13 @@ describe('Reports page - draft generation', () => {
     const user = userEvent.setup()
     renderReports()
 
-    // The improvement_points section is `not_generated` in fixture-1 so the
+    // The improvement-points section is `not_generated` in fixture-1 so the
     // Generate button (not the Regenerate icon) is rendered.
-    const generateBtn = await screen.findByTestId('report-draft-improvement_points-generate')
+    const generateBtn = await screen.findByTestId('report-draft-improvement-points-generate')
     await user.click(generateBtn)
 
     await waitFor(() => expect(body).not.toBeNull())
-    expect(body).toMatchObject({ section: 'improvement_points', force: false })
+    expect(body).toMatchObject({ section: 'improvement-points', force: false })
   })
 
   it('surfaces 409 JOB_ALREADY_RUNNING through the report-mutation-error modal', async () => {
@@ -218,7 +218,7 @@ describe('Reports page - draft generation', () => {
     const user = userEvent.setup()
     renderReports()
 
-    const generateBtn = await screen.findByTestId('report-draft-executive_summary-generate')
+    const generateBtn = await screen.findByTestId('report-draft-executive-summary-generate')
     await user.click(generateBtn)
 
     expect(
@@ -234,7 +234,7 @@ describe('Reports page - DraftCard download + delete', () => {
     let calledUrl: string | null = null
     server.use(
       http.get(
-        '/api/v1/projects/1/reports/drafts/executive_summary/download',
+        '/api/v1/projects/1/reports/drafts/executive-summary/download',
         ({ request }) => {
           calledUrl = request.url
           return new HttpResponse('# hi', {
@@ -248,8 +248,8 @@ describe('Reports page - DraftCard download + delete', () => {
     const user = userEvent.setup()
     renderReports()
 
-    await user.click(await screen.findByTestId('report-draft-executive_summary-download'))
-    await waitFor(() => expect(calledUrl).toContain('reports/drafts/executive_summary/download'))
+    await user.click(await screen.findByTestId('report-draft-executive-summary-download'))
+    await waitFor(() => expect(calledUrl).toContain('reports/drafts/executive-summary/download'))
   })
 
   it('Delete button confirms then issues DELETE', async () => {
@@ -258,7 +258,7 @@ describe('Reports page - DraftCard download + delete', () => {
     let deleted = false
     server.use(
       http.delete(
-        '/api/v1/projects/1/reports/drafts/executive_summary',
+        '/api/v1/projects/1/reports/drafts/executive-summary',
         () => {
           deleted = true
           return new HttpResponse(null, { status: 204 })
@@ -270,7 +270,7 @@ describe('Reports page - DraftCard download + delete', () => {
     const user = userEvent.setup()
     renderReports()
 
-    await user.click(await screen.findByTestId('report-draft-executive_summary-delete'))
+    await user.click(await screen.findByTestId('report-draft-executive-summary-delete'))
     await waitFor(() => expect(deleted).toBe(true))
     confirmSpy.mockRestore()
   })
@@ -280,7 +280,7 @@ describe('Reports page - DraftCard download + delete', () => {
     let deleted = false
     server.use(
       http.delete(
-        '/api/v1/projects/1/reports/drafts/executive_summary',
+        '/api/v1/projects/1/reports/drafts/executive-summary',
         () => {
           deleted = true
           return new HttpResponse(null, { status: 204 })
@@ -290,7 +290,7 @@ describe('Reports page - DraftCard download + delete', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const user = userEvent.setup()
     renderReports()
-    await user.click(await screen.findByTestId('report-draft-executive_summary-delete'))
+    await user.click(await screen.findByTestId('report-draft-executive-summary-delete'))
     // No way to deterministically assert "didn't fire"; settle the queue and check.
     await new Promise(r => setTimeout(r, 30))
     expect(deleted).toBe(false)
@@ -338,7 +338,7 @@ describe('Reports page - draft SSE → log surface', () => {
         id: 'd-1',
         run_id: 0,
         timestamp: '2026-04-28T12:00:00+00:00',
-        section: 'executive_summary',
+        section: 'executive-summary',
         // Use a string that can't collide with DraftCard's "Draft Ready" badge
         // (the project-1 fixture has 2 sections in `draft` status).
         message: 'compiled the executive summary content',

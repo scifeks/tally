@@ -1,0 +1,93 @@
+{
+  "severity": [
+    {
+      "value": "medium",
+      "count": 42
+    },
+    {
+      "value": "high",
+      "count": 52
+    },
+    {
+      "value": "critical",
+      "count": 1
+    },
+    {
+      "value": "low",
+      "count": 5
+    }
+  ],
+  "status": [
+    {
+      "value": "false_positive",
+      "count": 3
+    },
+    {
+      "value": "fixed",
+      "count": 3
+    },
+    {
+      "value": "wont_fix",
+      "count": 2
+    },
+    {
+      "value": "active",
+      "count": 92
+    }
+  ],
+  "confidence": [
+    {
+      "value": "potential",
+      "count": 49
+    },
+    {
+      "value": "probable",
+      "count": 42
+    },
+    {
+      "value": "confirmed",
+      "count": 9
+    }
+  ],
+  "domain": [
+    {
+      "value": "code",
+      "count": 100
+    }
+  ],
+  "segment": [
+    {
+      "value": "sast",
+      "count": 100
+    }
+  ],
+  "tool": [
+    {
+      "value": "semgrep",
+      "count": 100
+    }
+  ],
+  "finding_type": [
+    {
+      "value": "vulnerability",
+      "count": 100
+    }
+  ],
+  "repo": [
+    {
+      "value": 2,
+      "label": "dvpwa",
+      "count": 9
+    },
+    {
+      "value": 1,
+      "label": "dvwa",
+      "count": 63
+    },
+    {
+      "value": 3,
+      "label": "juice-shop",
+      "count": 28
+    }
+  ]
+}

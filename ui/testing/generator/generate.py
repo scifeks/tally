@@ -30,6 +30,7 @@ from web.api.schemas import (  # noqa: E402
     ChatSessionsListResponse,
     ChatSessionSummary,
     FindingsCountsResponse,
+    FindingsFilterOptionsResponse,
     FindingsListResponse,
     ProjectInfoResponse,
     ProjectListResponse,
@@ -46,6 +47,7 @@ from web.api.schemas import (  # noqa: E402
     TriageDetailResponse,
     TriageRunSummary,
     TriagesListResponse,
+    UrlListFilterOptionsResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -100,6 +102,48 @@ def _validate(model: type, payload: Any) -> None:
     model.model_validate(payload)
 
 
+_REPO_JSON_COLS = (
+    "type",
+    "languages",
+    "base_urls",
+    "test_dirs",
+    "ignore_dirs",
+    "xsstrike_headers",
+    "dalfox_headers",
+    "katana_headers",
+    "auth",
+)
+
+
+def _repo_row_to_dict(row: dict) -> dict:
+    """Hydrate a ``repositories`` SQLite row into a Repository-shaped dict.
+
+    JSON columns (``*_json``) are decoded; auth ``null`` becomes ``None``;
+    integer flags are coerced to ``bool``. ``url_seed_file`` is preserved
+    so the response serialiser can derive ``endpoint_file``.
+    """
+    out: dict = {
+        "id": int(row["id"]),
+        "name": row["name"],
+        "path": row.get("path", "") or "",
+        "docker_path": row.get("docker_path", "") or "",
+        "container_name": row.get("container_name", "") or "",
+        "dependencies_file": row.get("dependencies_file", "") or "",
+        "crawl_enabled": bool(row.get("crawl_enabled", 1)),
+        "xsstrike_crawl_level": int(row.get("xsstrike_crawl_level", 10)),
+        "katana_headless": bool(row.get("katana_headless", 0)),
+        "katana_depth": int(row.get("katana_depth", 5)),
+        "url_seed_file": row.get("url_seed_file"),
+    }
+    for key in _REPO_JSON_COLS:
+        raw = row.get(f"{key}_json")
+        if raw is None or raw == "":
+            out[key] = None if key == "auth" else []
+        else:
+            out[key] = json.loads(raw)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Context
 # ---------------------------------------------------------------------------
@@ -122,13 +166,21 @@ def build_context() -> dict[str, Any]:
             )
         )
     projects = [dict(r) for r in projects_rows]
-    if len(projects) < 2:
-        raise RuntimeError(
-            f"tally.db has fewer than 2 active projects ({len(projects)})"
-        )
-    # The first two active rows become project-1 and project-2.
+    if not projects:
+        raise RuntimeError("tally.db has no active projects")
     project_1 = projects[0]
-    project_2 = projects[1]
+    if len(projects) >= 2:
+        project_2 = projects[1]
+    else:
+        # Only one real project — synthesize a project-2 placeholder so the
+        # second-tenant fixtures still render. Distinct id avoids cross-fixture
+        # collisions; payload otherwise mirrors project-1.
+        project_2 = {
+            **project_1,
+            "id": int(project_1["id"]) + 1,
+            "name": f"{project_1['name']}-alt",
+        }
+        projects.append(project_2)
 
     print("Loading DVPA project.json...")
     dvpa_project = _read_json(DVPA_PROJECT_JSON)
@@ -137,12 +189,7 @@ def build_context() -> dict[str, Any]:
     with _open_ro(DVPA_DB) as f_conn:
         finding_rows = [dict(r) for r in f_conn.execute("SELECT * FROM findings")]
         url_rows = [dict(r) for r in f_conn.execute("SELECT * FROM url_findings")]
-        repo_rows = [
-            dict(r)
-            for r in f_conn.execute(
-                "SELECT id, uuid, name, created_at, deleted_at FROM repositories"
-            )
-        ]
+        repo_rows = [dict(r) for r in f_conn.execute("SELECT * FROM repositories")]
         scan_run_rows = [dict(r) for r in f_conn.execute("SELECT * FROM scan_runs")]
         run_tool_rows = [dict(r) for r in f_conn.execute("SELECT * FROM run_tools")]
 
@@ -407,6 +454,71 @@ def _by_segment_ids(serialised: list[dict]) -> dict[str, list[int]]:
     return out
 
 
+def _count_pairs(values: Iterable[Any]) -> list[dict]:
+    counts: dict[Any, int] = defaultdict(int)
+    for v in values:
+        if v is None or v == "":
+            continue
+        counts[v] += 1
+    return [{"value": v, "count": c} for v, c in counts.items() if c > 0]
+
+
+def produce_findings_filter_options(ctx: dict, findings_meta: dict) -> None:
+    """Emit findings/filter-options-{empty,populated}.json.
+
+    Mirrors ``GET /findings/filter-options``: per-dimension value+count
+    lists derived from the published page-1 + page-2 fixtures.
+    """
+    print("Producing findings/filter-options...")
+    rows = findings_meta["p1_serialised"][:100]
+    repo_name_by_id = {int(r["id"]): r["name"] for r in ctx["repo_rows"]}
+
+    repo_counts: dict[int, int] = defaultdict(int)
+    for r in rows:
+        rid = r.get("repo_id")
+        if isinstance(rid, int):
+            repo_counts[rid] += 1
+
+    # finding_type is a list-typed column — flatten before counting.
+    finding_types: list[str] = []
+    for r in rows:
+        for ft in r.get("finding_type") or []:
+            finding_types.append(ft)
+
+    populated = {
+        "severity": _count_pairs(r.get("severity") for r in rows),
+        "status": _count_pairs(r.get("status") for r in rows),
+        "confidence": _count_pairs(r.get("confidence") for r in rows),
+        "domain": _count_pairs(r.get("domain") for r in rows),
+        "segment": _count_pairs(r.get("segment") for r in rows),
+        "tool": _count_pairs(r.get("tool") for r in rows),
+        "finding_type": _count_pairs(finding_types),
+        "repo": [
+            {
+                "value": rid,
+                "label": repo_name_by_id.get(rid, str(rid)),
+                "count": count,
+            }
+            for rid, count in repo_counts.items()
+        ],
+    }
+    _validate(FindingsFilterOptionsResponse, populated)
+    _write_fixture("findings/filter-options-populated.json", populated)
+
+    empty = {
+        "severity": [],
+        "status": [],
+        "confidence": [],
+        "domain": [],
+        "segment": [],
+        "tool": [],
+        "finding_type": [],
+        "repo": [],
+    }
+    _validate(FindingsFilterOptionsResponse, empty)
+    _write_fixture("findings/filter-options-empty.json", empty)
+
+
 # ---------------------------------------------------------------------------
 # URL findings
 # ---------------------------------------------------------------------------
@@ -465,6 +577,61 @@ def produce_url_findings(ctx: dict) -> None:
     )
 
 
+def produce_url_list_filter_options(ctx: dict) -> None:
+    """Emit url_findings/filter-options-{empty,populated}.json.
+
+    Mirrors ``GET /url-list/filter-options``: per-dimension counts over
+    the active url-row set. ``port`` carries integer values without a
+    label; ``repo`` carries (id, name) pairs.
+    """
+    print("Producing url_findings/filter-options...")
+    rows = ctx["url_rows"]
+    repo_name_by_id = {int(r["id"]): r["name"] for r in ctx["repo_rows"]}
+
+    port_counts: dict[int, int] = defaultdict(int)
+    for r in rows:
+        port = r.get("port")
+        if isinstance(port, int):
+            port_counts[port] += 1
+
+    repo_counts: dict[int, int] = defaultdict(int)
+    for r in rows:
+        rid = r.get("repo_id")
+        if isinstance(rid, int):
+            repo_counts[rid] += 1
+
+    populated = {
+        "method": _count_pairs(r.get("method") for r in rows),
+        "protocol": _count_pairs(r.get("protocol") for r in rows),
+        "host": _count_pairs(r.get("host") for r in rows),
+        "port": [
+            {"value": port, "count": count} for port, count in port_counts.items()
+        ],
+        "path": _count_pairs(r.get("path") for r in rows),
+        "repo": [
+            {
+                "value": rid,
+                "label": repo_name_by_id.get(rid, str(rid)),
+                "count": count,
+            }
+            for rid, count in repo_counts.items()
+        ],
+    }
+    _validate(UrlListFilterOptionsResponse, populated)
+    _write_fixture("url_findings/filter-options-populated.json", populated)
+
+    empty = {
+        "method": [],
+        "protocol": [],
+        "host": [],
+        "port": [],
+        "path": [],
+        "repo": [],
+    }
+    _validate(UrlListFilterOptionsResponse, empty)
+    _write_fixture("url_findings/filter-options-empty.json", empty)
+
+
 # ---------------------------------------------------------------------------
 # Scans
 # ---------------------------------------------------------------------------
@@ -505,10 +672,10 @@ def _enrich_real_scan(ctx: dict) -> dict:
     tools = sorted({t["tool"] for t in ctx["tool_runs"] if t.get("tool")})
     domains = sorted({t["domain"] for t in ctx["tool_runs"] if t.get("domain")})
     repos_active = [r for r in ctx["repo_rows"] if r.get("deleted_at") in (None, "")]
-    repo_uuids = [r["uuid"] for r in repos_active]
+    repo_names = [r["name"] for r in repos_active]
     base["tool_ids"] = tools
     base["domains"] = domains
-    base["repo_ids"] = repo_uuids
+    base["repo_ids"] = repo_names
     return base
 
 
@@ -585,22 +752,24 @@ def produce_scans(ctx: dict) -> None:
 
 
 def _build_scan_config_repos(ctx: dict) -> list[dict]:
-    """Construct ScanConfigRepo entries from repositories table + project.json."""
+    """Construct ScanConfigRepo entries from the repositories table.
+
+    Mirrors ``web/api/scans.py:get_scans_config`` — ``source`` is the
+    comma-joined repo type list (e.g. ``"ui,api"``) and ``location`` is
+    ``"docker"`` when a container is configured else ``"local"``.
+    """
     repos = []
-    by_uuid = {r["uuid"]: r for r in ctx["dvpa_project"]["repositories"]}
     for db_row in ctx["repo_rows"]:
         if db_row.get("deleted_at"):
             continue
-        cfg = by_uuid.get(db_row["uuid"], {})
-        path = cfg.get("path", "")
-        # source/location are FE display strings; pick "local" since paths are local.
+        repo = _repo_row_to_dict(db_row)
+        types = repo.get("type") or []
         repos.append(
             {
-                "id": int(db_row["id"]),
-                "uuid": db_row["uuid"],
-                "name": db_row["name"],
-                "source": "local",
-                "location": path or db_row["uuid"],
+                "id": repo["id"],
+                "name": repo["name"],
+                "source": ",".join(types) or "unknown",
+                "location": "docker" if repo.get("container_name") else "local",
             }
         )
     return repos
@@ -611,24 +780,25 @@ def _build_scan_config_repos(ctx: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _serialise_repository(cfg_repo: dict, db_id: int | None) -> dict:
-    """Mirror web.api.projects._serialize_repo: drop auth, inject id."""
-    data = {k: v for k, v in cfg_repo.items() if k != "auth"}
-    data["id"] = db_id
-    # Defaults expected by the FE that aren't present in older project.json files.
-    data.setdefault("test_dirs", data.pop("test_dirs", []))
+def _serialise_repository(repo: dict) -> dict:
+    """Mirror ``web.api.projects._serialize_repo``: drop ``auth``, inject
+    ``id`` + ``endpoint_file``.
+
+    ``repo`` is the Repository-shape dict returned by ``_repo_row_to_dict``.
+    """
+    data = {k: v for k, v in repo.items() if k != "auth"}
+    seed = data.pop("url_seed_file", None)
+    data["endpoint_file"] = Path(seed).name if seed else None
     return data
 
 
 def produce_repositories(ctx: dict) -> None:
     print("Producing config/repositories...")
-    by_uuid_db = {r["uuid"]: r for r in ctx["repo_rows"] if not r.get("deleted_at")}
-    items = []
-    for cfg_repo in ctx["dvpa_project"]["repositories"]:
-        db_row = by_uuid_db.get(cfg_repo["uuid"])
-        if db_row is None:
-            continue
-        items.append(_serialise_repository(cfg_repo, int(db_row["id"])))
+    items = [
+        _serialise_repository(_repo_row_to_dict(row))
+        for row in ctx["repo_rows"]
+        if not row.get("deleted_at")
+    ]
 
     envelope_p1 = {
         "items": items,
@@ -932,7 +1102,9 @@ def main() -> int:
     _ = (ScanCancelResponse,)
 
     findings_meta = produce_findings(ctx)
+    produce_findings_filter_options(ctx, findings_meta)
     produce_url_findings(ctx)
+    produce_url_list_filter_options(ctx)
     produce_scans(ctx)
     produce_repositories(ctx)
     produce_project_info(ctx, findings_meta)

@@ -3,26 +3,26 @@
     {
       "id": 1,
       "name": "dvwa",
-      "source": "local",
-      "location": "/llm/code/repos/php/DVWA"
+      "source": "ui,api",
+      "location": "docker"
     },
     {
       "id": 2,
       "name": "dvpwa",
-      "source": "local",
-      "location": "/llm/code/repos/python/dvpwa"
+      "source": "api,ui",
+      "location": "docker"
     },
     {
       "id": 3,
       "name": "juice-shop",
-      "source": "local",
-      "location": "/llm/code/juice-shop"
+      "source": "api,ui",
+      "location": "local"
     },
     {
       "id": 4,
       "name": "php-goof",
-      "source": "local",
-      "location": "/llm/code/repos/php/php-goof"
+      "source": "api,ui",
+      "location": "docker"
     }
   ],
   "tools": [

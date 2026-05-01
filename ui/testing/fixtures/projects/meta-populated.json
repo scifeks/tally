@@ -3,8 +3,8 @@
   "name": "DVPA",
   "code": "DVP",
   "repo_count": 4,
-  "url_list_count": 269,
-  "finding_count": 568,
+  "url_list_count": 307,
+  "finding_count": 572,
   "enabled_tools": [
     "dalfox",
     "gitleaks",

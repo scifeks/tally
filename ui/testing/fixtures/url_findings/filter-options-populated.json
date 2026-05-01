@@ -1,0 +1,1118 @@
+{
+  "method": [
+    {
+      "value": "GET",
+      "count": 269
+    },
+    {
+      "value": "POST",
+      "count": 34
+    },
+    {
+      "value": "PUT",
+      "count": 2
+    },
+    {
+      "value": "DELETE",
+      "count": 2
+    }
+  ],
+  "protocol": [
+    {
+      "value": "http",
+      "count": 307
+    }
+  ],
+  "host": [
+    {
+      "value": "localhost",
+      "count": 280
+    },
+    {
+      "value": "juice-shop.justinc.srv",
+      "count": 23
+    },
+    {
+      "value": "127.0.0.1",
+      "count": 4
+    }
+  ],
+  "port": [
+    {
+      "value": 8080,
+      "count": 24
+    },
+    {
+      "value": 80,
+      "count": 253
+    },
+    {
+      "value": 4280,
+      "count": 3
+    },
+    {
+      "value": 3000,
+      "count": 23
+    },
+    {
+      "value": 8000,
+      "count": 4
+    }
+  ],
+  "path": [
+    {
+      "value": "/",
+      "count": 5
+    },
+    {
+      "value": "/courses/",
+      "count": 1
+    },
+    {
+      "value": "/students/",
+      "count": 1
+    },
+    {
+      "value": "/static/js/init.js",
+      "count": 1
+    },
+    {
+      "value": "/static/js/jquery-3.2.1.min.js",
+      "count": 1
+    },
+    {
+      "value": "/static/js/materialize.min.js",
+      "count": 1
+    },
+    {
+      "value": "/static/css/materialize.min.css",
+      "count": 1
+    },
+    {
+      "value": "/static/js/'+o[l]+'",
+      "count": 1
+    },
+    {
+      "value": "/static/css/github.com/necolas/normalize.css",
+      "count": 1
+    },
+    {
+      "value": "/static/js/'+c+'",
+      "count": 1
+    },
+    {
+      "value": "/static/css/pickadate.js",
+      "count": 1
+    },
+    {
+      "value": "/students/7",
+      "count": 1
+    },
+    {
+      "value": "/students/5",
+      "count": 1
+    },
+    {
+      "value": "/students/4",
+      "count": 1
+    },
+    {
+      "value": "/students/8",
+      "count": 1
+    },
+    {
+      "value": "/students/3",
+      "count": 1
+    },
+    {
+      "value": "/students/6",
+      "count": 1
+    },
+    {
+      "value": "/students/2",
+      "count": 1
+    },
+    {
+      "value": "/students/1",
+      "count": 1
+    },
+    {
+      "value": "/courses/3",
+      "count": 1
+    },
+    {
+      "value": "/courses/2",
+      "count": 1
+    },
+    {
+      "value": "/courses/1",
+      "count": 1
+    },
+    {
+      "value": "/Windows/system.ini",
+      "count": 1
+    },
+    {
+      "value": "/etc/passwd",
+      "count": 1
+    },
+    {
+      "value": "/a",
+      "count": 2
+    },
+    {
+      "value": "/nth",
+      "count": 2
+    },
+    {
+      "value": "/0x",
+      "count": 2
+    },
+    {
+      "value": "/b",
+      "count": 2
+    },
+    {
+      "value": "/this",
+      "count": 2
+    },
+    {
+      "value": "/e",
+      "count": 2
+    },
+    {
+      "value": "/h",
+      "count": 2
+    },
+    {
+      "value": "/dvwa/css/login.css",
+      "count": 1
+    },
+    {
+      "value": "/login.php",
+      "count": 2
+    },
+    {
+      "value": "/instructions.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/change_user_details.php",
+      "count": 1
+    },
+    {
+      "value": "/logout.php",
+      "count": 1
+    },
+    {
+      "value": "/phpinfo.php",
+      "count": 1
+    },
+    {
+      "value": "/security.php",
+      "count": 2
+    },
+    {
+      "value": "/setup.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/bootstrap.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/gen_openapi.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/public/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/GenericController.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/HealthController.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/Helpers.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/Login.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/LoginController.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/api/src/Order.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/OrderController.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/Token.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/User.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/src/UserController.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/get_user_data.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csp/source/jsonp_impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/authbypass/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/log_viewer.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/bac/source/view_source.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/brute/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/brute/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/brute/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/brute/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/brute/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/brute/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/captcha/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/captcha/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/captcha/source/high.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/captcha/source/impossible.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/captcha/source/low.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/captcha/source/medium.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/cryptography/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/check_token_high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/check_token_impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/download_ecb_attack.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/download_oracle_attack.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/ecb_attack.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/low.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/medium.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/oracle_attack.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/token_library_high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/token_library_impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/cryptography/source/xor_theory.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csp/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csp/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csp/source/high.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/csp/source/impossible.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/csp/source/jsonp.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csp/source/low.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/sqli/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csp/source/medium.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/csrf/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csrf/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csrf/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csrf/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csrf/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csrf/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/csrf/test_credentials.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/exec/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/exec/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/exec/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/exec/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/exec/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/exec/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/file1.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/file2.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/file3.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/file4.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/include.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/fi/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/javascript/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/javascript/index.php",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/javascript/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/javascript/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/javascript/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/javascript/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/source/info.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/open_redirect/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/session-input.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli/test.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/cookie-input.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/sqli_blind/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/upload/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/upload/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/upload/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/upload/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/upload/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/upload/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/view_help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/view_source.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/view_source_all.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/weak_id/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/weak_id/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/weak_id/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/weak_id/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/weak_id/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/weak_id/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_d/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_d/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_d/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_d/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_d/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_d/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_r/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_r/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_r/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_r/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_r/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_r/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_s/help/help.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_s/index.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_s/source/high.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_s/source/impossible.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_s/source/low.php",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/xss_s/source/medium.php",
+      "count": 1
+    },
+    {
+      "value": "/about.php",
+      "count": 1
+    },
+    {
+      "value": "/dvwa/includes/DBMS/MySQL.php",
+      "count": 1
+    },
+    {
+      "value": "/dvwa/includes/DBMS/PGSQL.php",
+      "count": 1
+    },
+    {
+      "value": "/dvwa/includes/dvwaPage.inc.php",
+      "count": 1
+    },
+    {
+      "value": "/dvwa/includes/Parsedown.php",
+      "count": 1
+    },
+    {
+      "value": "/external/recaptcha/recaptchalib.php",
+      "count": 1
+    },
+    {
+      "value": "/hackable/flags/fi.php",
+      "count": 1
+    },
+    {
+      "value": "/index.php",
+      "count": 3
+    },
+    {
+      "value": "/vulnerabilities/api/v2/health/echo",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/v2/health/connectivity",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/v2/health/status",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/v2/health/ping",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/v2/login/login",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/v2/login/check_token",
+      "count": 1
+    },
+    {
+      "value": "/vulnerabilities/api/v2/order/{id}",
+      "count": 3
+    },
+    {
+      "value": "/vulnerabilities/api/v2/order/",
+      "count": 2
+    },
+    {
+      "value": "/vulnerabilities/api/v2/user/{id}",
+      "count": 3
+    },
+    {
+      "value": "/vulnerabilities/api/v2/user/",
+      "count": 2
+    },
+    {
+      "value": "/styles.css",
+      "count": 1
+    },
+    {
+      "value": "/runtime.js",
+      "count": 1
+    },
+    {
+      "value": "/polyfills.js",
+      "count": 1
+    },
+    {
+      "value": "/vendor.js",
+      "count": 1
+    },
+    {
+      "value": "/main.js",
+      "count": 1
+    },
+    {
+      "value": "/socket.io/",
+      "count": 2
+    },
+    {
+      "value": "/assets/i18n/%7B%7BblueSky%7D%7D",
+      "count": 1
+    },
+    {
+      "value": "/assets/i18n/%7B%7Breddit%7D%7D",
+      "count": 1
+    },
+    {
+      "value": "/assets/i18n/%7B%7Bquestionnaire%7D%7D",
+      "count": 1
+    },
+    {
+      "value": "/assets/i18n/en.json",
+      "count": 1
+    },
+    {
+      "value": "/rest/admin/application-version",
+      "count": 1
+    },
+    {
+      "value": "/rest/admin/%5C%22/",
+      "count": 1
+    },
+    {
+      "value": "/rest/admin/application-configuration",
+      "count": 1
+    },
+    {
+      "value": "/rest/languages",
+      "count": 1
+    },
+    {
+      "value": "/rest/products/%5C%22/",
+      "count": 1
+    },
+    {
+      "value": "/rest/products/search",
+      "count": 1
+    },
+    {
+      "value": "/api/Challenges/",
+      "count": 1
+    },
+    {
+      "value": "/api/Quantitys/",
+      "count": 1
+    },
+    {
+      "value": "/%27+k%28n%5B11%5D%7C%7Cf%5Bg.toLowerCase%28%29%5D%29+%27",
+      "count": 1
+    },
+    {
+      "value": "/'+k(n[8])+'",
+      "count": 1
+    },
+    {
+      "value": "/tutorial.js",
+      "count": 1
+    },
+    {
+      "value": "/pdf.php",
+      "count": 2
+    },
+    {
+      "value": "/tasks.php",
+      "count": 3
+    },
+    {
+      "value": "/db.php",
+      "count": 1
+    },
+    {
+      "value": "/exploits/gotcha_font.php",
+      "count": 1
+    },
+    {
+      "value": "/exploits/rshell_font.php",
+      "count": 1
+    },
+    {
+      "value": "/func.php",
+      "count": 1
+    },
+    {
+      "value": "/mail.php",
+      "count": 2
+    },
+    {
+      "value": "/usersearch",
+      "count": 2
+    },
+    {
+      "value": "/ping",
+      "count": 2
+    },
+    {
+      "value": "/bulkproducts",
+      "count": 2
+    },
+    {
+      "value": "/products",
+      "count": 2
+    },
+    {
+      "value": "/modifyproduct",
+      "count": 2
+    },
+    {
+      "value": "/useredit",
+      "count": 2
+    },
+    {
+      "value": "/calc",
+      "count": 2
+    },
+    {
+      "value": "/admin",
+      "count": 1
+    },
+    {
+      "value": "/admin/usersapi",
+      "count": 1
+    },
+    {
+      "value": "/admin/users",
+      "count": 1
+    },
+    {
+      "value": "/redirect",
+      "count": 1
+    },
+    {
+      "value": "/bulkproductslegacy",
+      "count": 1
+    },
+    {
+      "value": "/login",
+      "count": 2
+    },
+    {
+      "value": "/learn/vulnerability/{vuln}",
+      "count": 1
+    },
+    {
+      "value": "/learn",
+      "count": 1
+    },
+    {
+      "value": "/register",
+      "count": 2
+    },
+    {
+      "value": "/logout",
+      "count": 1
+    },
+    {
+      "value": "/forgotpw",
+      "count": 2
+    },
+    {
+      "value": "/resetpw",
+      "count": 2
+    }
+  ],
+  "repo": [
+    {
+      "value": 2,
+      "label": "dvpwa",
+      "count": 31
+    },
+    {
+      "value": 1,
+      "label": "dvwa",
+      "count": 239
+    },
+    {
+      "value": 3,
+      "label": "juice-shop",
+      "count": 23
+    },
+    {
+      "value": 4,
+      "label": "php-goof",
+      "count": 14
+    }
+  ]
+}

@@ -420,12 +420,12 @@ export type ReportFormat = 'pdf' | 'markdown' | 'html' | 'json'
 export type TestingType = 'white_box' | 'grey_box' | 'black_box'
 
 export type ReportDraftSection =
-  | 'executive_summary'
-  | 'risk_level'
-  | 'critical_issues'
-  | 'improvement_points'
-  | 'scope_methodology'
-  | 'general_recommendations'
+  | 'executive-summary'
+  | 'risk-level'
+  | 'critical-issues'
+  | 'improvement-points'
+  | 'scope-and-methodology'
+  | 'general-recommendations'
 
 export type ReportDraftStatus = 'not_generated' | 'generating' | 'draft' | 'reviewed' | 'failed'
 

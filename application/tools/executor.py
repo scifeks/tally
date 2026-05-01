@@ -9,6 +9,10 @@ from time import perf_counter
 from typing import Any, NamedTuple
 
 from application.locking.cancellation import CancellationToken, no_op_token
+from application.ports.progress_reporter import (
+    NullProgressReporter,
+    ProgressReporter,
+)
 from application.ports.user_prompt import UserPromptPort
 from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
@@ -69,10 +73,12 @@ class ToolExecutor:
         project_name: str,
         base_path: Path,
         prompt: UserPromptPort,
+        reporter: ProgressReporter | None = None,
     ) -> None:
         self.project_name = project_name
         self.base_path = Path(base_path)
         self._prompt = prompt
+        self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._sudo_approved = False
         self._cancel_token: CancellationToken = no_op_token()
 
@@ -175,7 +181,7 @@ class ToolExecutor:
             _log.exception("Tool %s: parse_output raised an exception", tool.name)
 
         status = "✓ Complete" if success else "✗ Failed "
-        print(f"    {status} (exit {proc.returncode}, {duration}s)")
+        self._reporter.report(f"    {status} (exit {proc.returncode}, {duration}s)")
         _log.info(
             "Tool %s: exit=%d duration=%.1fs", tool.name, proc.returncode, duration
         )
@@ -231,16 +237,16 @@ class ToolExecutor:
         return path
 
     def _prompt_approval(self, tool_name: str, cmd: list[str]) -> bool:
-        print()
-        print("!!HUMAN APPROVAL REQUIRED!!")
-        print(f"Tool:    {tool_name}")
-        print(f"Command: {' '.join(cmd)}")
+        self._reporter.report("")
+        self._reporter.report("!!HUMAN APPROVAL REQUIRED!!")
+        self._reporter.report(f"Tool:    {tool_name}")
+        self._reporter.report(f"Command: {' '.join(cmd)}")
         return self._prompt.confirm("Approve execution?")
 
     def _prompt_sudo(self, tool_name: str, sudo_cmd: list[str]) -> bool:
-        print()
-        print(f"[{tool_name}] This scan type requires root privileges.")
-        print(f"Command: {' '.join(sudo_cmd)}")
+        self._reporter.report("")
+        self._reporter.report(f"[{tool_name}] This scan type requires root privileges.")
+        self._reporter.report(f"Command: {' '.join(sudo_cmd)}")
         return self._prompt.confirm("Retry with sudo?")
 
     @staticmethod
@@ -255,13 +261,12 @@ class ToolExecutor:
             duration_seconds=0.0,
         )
 
-    @staticmethod
     def _timeout_result(
-        tool_name: str, timestamp: str, start: float, timeout: int
+        self, tool_name: str, timestamp: str, start: float, timeout: int
     ) -> ToolResult:
         duration = round(perf_counter() - start, 3)
         _log.error("Tool %s: timed out after %ds", tool_name, timeout)
-        print(f"    ✗ Failed  (timeout after {timeout}s)")
+        self._reporter.report(f"    ✗ Failed  (timeout after {timeout}s)")
         return ToolResult(
             tool_name=tool_name,
             success=False,
@@ -369,11 +374,11 @@ class ToolExecutor:
         except subprocess.TimeoutExpired:
             return self._timeout_result(tool_name, timestamp, start, timeout)
         except FileNotFoundError:
-            print("    ✗ Failed  (command not found)")
+            self._reporter.report("    ✗ Failed  (command not found)")
             _log.error("Tool %s: command not found: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Command not found: {cmd[0]!r}")
         except PermissionError:
-            print("    ✗ Failed  (permission denied)")
+            self._reporter.report("    ✗ Failed  (permission denied)")
             _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
 
@@ -390,7 +395,9 @@ class ToolExecutor:
                     return self._timeout_result(tool_name, timestamp, start, timeout)
                 except FileNotFoundError:
                     su_cmd = ["su", "-c", shlex.join(cmd)]
-                    print("    (sudo not found, retrying with su -c...)")
+                    self._reporter.report(
+                        "    (sudo not found, retrying with su -c...)"
+                    )
                     start = perf_counter()
                     try:
                         proc = self._run_subprocess(su_cmd, timeout, cwd, env)
@@ -399,7 +406,9 @@ class ToolExecutor:
                             tool_name, timestamp, start, timeout
                         )
                     except (FileNotFoundError, PermissionError):
-                        print("    ✗ Failed  (elevated privileges not available)")
+                        self._reporter.report(
+                            "    ✗ Failed  (elevated privileges not available)"
+                        )
                         _log.error(
                             "Tool %s: elevated privileges unavailable", tool_name
                         )
@@ -410,7 +419,7 @@ class ToolExecutor:
                             " (sudo and su both failed)",
                         )
                 except PermissionError:
-                    print("    ✗ Failed  (permission denied)")
+                    self._reporter.report("    ✗ Failed  (permission denied)")
                     _log.error("Tool %s: permission denied running sudo", tool_name)
                     return self._failure(
                         tool_name, timestamp, "Permission denied running sudo"

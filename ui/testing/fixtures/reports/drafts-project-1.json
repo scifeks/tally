@@ -1,9 +1,9 @@
 {
   "drafts": [
     {
-      "section": "executive_summary",
+      "section": "executive-summary",
       "status": "draft",
-      "generated_at": "2026-04-30T13:17:18.984999+00:00",
+      "generated_at": "2026-04-30T23:02:16.579444+00:00",
       "reviewed_at": null,
       "preview": "This security assessment of the DVPA program identified 568 findings across web, SAST, SCA, and secrets domains. 5 critical and 236 high-severity issues require immediate attention.",
       "word_count": 412,
@@ -11,9 +11,9 @@
       "error": null
     },
     {
-      "section": "risk_level",
+      "section": "risk-level",
       "status": "reviewed",
-      "generated_at": "2026-04-30T13:17:18.984999+00:00",
+      "generated_at": "2026-04-30T23:02:16.579444+00:00",
       "reviewed_at": "2026-04-30T15:45:00+00:00",
       "preview": "Overall risk: HIGH. Driven by reflected and stored XSS in DVWA + Juice Shop, plus an AWS access key in committed PHP-Goof config.",
       "word_count": 268,
@@ -21,7 +21,7 @@
       "error": null
     },
     {
-      "section": "general_recommendations",
+      "section": "general-recommendations",
       "status": "failed",
       "generated_at": null,
       "reviewed_at": null,
