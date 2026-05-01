@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from application.locking import FindingsBusy, LockRegistry, get_registry
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.findings import FindingRepository
+    from application.ports.finding_repository import FindingRepositoryPort
 
 
 @dataclass
@@ -24,7 +24,7 @@ class BulkUpdateResult:
 class FindingAnalystService:
     def __init__(
         self,
-        repo: FindingRepository,
+        repo: FindingRepositoryPort,
         registry: LockRegistry | None = None,
     ) -> None:
         self._repo = repo

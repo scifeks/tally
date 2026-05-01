@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from application.rag.ingestor import ToolHandlerFactory
 from application.rag.knowledge_base import FindingKnowledgeBase
-from infrastructure.store import FindingRepository
+
+if TYPE_CHECKING:
+    from application.ports.finding_repository import FindingRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +17,7 @@ logger = logging.getLogger(__name__)
 def sync_finding_to_chroma(
     finding_id: int,
     knowledge_base: FindingKnowledgeBase | None,
-    finding_repo: FindingRepository,
+    finding_repo: FindingRepositoryPort,
 ) -> None:
     """Best-effort ChromaDB upsert after a SQLite analyst PATCH.
 

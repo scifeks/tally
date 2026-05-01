@@ -9,11 +9,10 @@ from typing import TYPE_CHECKING
 
 from domain.tools.constants import CONFIDENCE_LEVELS, FINDING_TYPES, SEVERITY_LEVELS
 
-# todo: This clase
 if TYPE_CHECKING:
+    from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.finding_repository import FindingRepositoryPort
     from core.config.manager import ConfigManager
-    from infrastructure.store.repositories.audit import AuditRepository
-    from infrastructure.store.repositories.findings import FindingRepository
 
 
 def reconstruct_abs_path(
@@ -50,8 +49,8 @@ class FindingUpdateService:
 
     def __init__(
         self,
-        finding_repo: FindingRepository,
-        audit_repo: AuditRepository,
+        finding_repo: FindingRepositoryPort,
+        audit_repo: AuditRepositoryPort,
         config_manager: ConfigManager | None = None,
     ) -> None:
         self._finding_repo = finding_repo

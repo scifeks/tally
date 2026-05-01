@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.findings import FindingRepository
+    from application.ports.finding_repository import FindingRepositoryPort
 
 from application.reporting.risk_level import RiskCounts
 from domain.findings.severity import Severity
@@ -26,7 +26,7 @@ _CONFIDENCE_ORDER: dict[str, int] = {
 class DraftQueryService:
     """Queries and aggregates filtered findings for report draft generation."""
 
-    def __init__(self, finding_repo: FindingRepository) -> None:
+    def __init__(self, finding_repo: FindingRepositoryPort) -> None:
         self._repo = finding_repo
 
     def get_filtered_findings(self, skip_triage: bool = False) -> list[dict[str, Any]]:

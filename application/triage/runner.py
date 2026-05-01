@@ -40,7 +40,7 @@ except FileNotFoundError:
     SESSION_TIMEOUT_SECONDS = MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.audit import AuditRepository
+    from application.ports.audit_repository import AuditRepositoryPort
     from infrastructure.store.repositories.runs import RunRepository
     from infrastructure.store.repositories.triage import TriageBatchRepository
 
@@ -82,7 +82,7 @@ class TriageRunner:
         project: str,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        audit_repo: AuditRepository,
+        audit_repo: AuditRepositoryPort,
         app_root: Path,
         registry: LockRegistry | None = None,
         *,

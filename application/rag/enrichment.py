@@ -25,8 +25,8 @@ from .prompts import get_dedicated_prompt
 
 if TYPE_CHECKING:
     from application.locking.cancellation import CancellationToken
+    from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.scan_event_sink import ScanEventSink
-    from infrastructure.store.repositories.findings import FindingRepository
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ class EnrichmentPipeline:
 
     def __init__(
         self,
-        finding_repo: FindingRepository,
+        finding_repo: FindingRepositoryPort,
         console: Console | None = None,
         base_path: str = ".",
         run_id: int | None = None,

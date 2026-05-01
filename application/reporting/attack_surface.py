@@ -9,7 +9,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.findings import FindingRepository
+    from application.ports.finding_repository import FindingRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class AttackSurfaceBuilder:
     - Dependency Surface — which ecosystems were audited per repo
     """
 
-    def __init__(self, finding_repo: FindingRepository) -> None:
+    def __init__(self, finding_repo: FindingRepositoryPort) -> None:
         self._repo = finding_repo
 
     # ------------------------------------------------------------------ #
