@@ -143,3 +143,7 @@ def _run_draft(
             logger.warning(
                 "lock holder mismatch on draft run %r release", request.section
             )
+        except KeyError:
+            logger.warning(
+                "report lock already released for draft run %r", request.section
+            )

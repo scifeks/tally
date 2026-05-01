@@ -77,12 +77,16 @@ def _seed_expired(
 
 
 def test_seal_marks_all_active_sessions_expired(tmp_path: Path) -> None:
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     project_id = 1
     active = _seed_active(factory, project_id=project_id, n=5)
 
-    seal_sessions_for_project(project_id, paths=paths, retention_count=100)
+    seal_sessions_for_project(
+        project_id,
+        session_repo=ChatSessionRepository(factory),
+        retention_count=100,
+    )
 
     for sid in active:
         row = repo.get(sid)
@@ -92,13 +96,17 @@ def test_seal_marks_all_active_sessions_expired(tmp_path: Path) -> None:
 
 def test_seal_skips_already_expired_rows(tmp_path: Path) -> None:
     """Already-expired rows preserve their original expired_at timestamp."""
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     project_id = 1
     expired_ids = _seed_expired(factory, project_id=project_id, n=3)
     original_timestamps = {sid: repo.get(sid).expired_at for sid in expired_ids}  # type: ignore[union-attr]
 
-    seal_sessions_for_project(project_id, paths=paths, retention_count=100)
+    seal_sessions_for_project(
+        project_id,
+        session_repo=ChatSessionRepository(factory),
+        retention_count=100,
+    )
 
     for sid in expired_ids:
         row = repo.get(sid)
@@ -108,7 +116,7 @@ def test_seal_skips_already_expired_rows(tmp_path: Path) -> None:
 
 def test_seal_with_retention_sweep_drops_oldest_expired(tmp_path: Path) -> None:
     """With retention_count=K, only the K most-recent expired sessions survive."""
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     msgs = ChatMessageRepository(factory)
     project_id = 1
@@ -118,7 +126,11 @@ def test_seal_with_retention_sweep_drops_oldest_expired(tmp_path: Path) -> None:
     # Add a message to the oldest so we can prove cascade-delete worked.
     msgs.append(session_id=expired_ids[0], role="user", content="oldest user")
 
-    seal_sessions_for_project(project_id, paths=paths, retention_count=2)
+    seal_sessions_for_project(
+        project_id,
+        session_repo=ChatSessionRepository(factory),
+        retention_count=2,
+    )
 
     # Oldest 3 deleted (5 - keep=2 = 3); newest 2 survive.
     surviving = repo.list_for_project(project_id)
@@ -130,12 +142,16 @@ def test_seal_with_retention_sweep_drops_oldest_expired(tmp_path: Path) -> None:
 
 def test_seal_retention_zero_keeps_every_expired_session(tmp_path: Path) -> None:
     """retention_count=0 disables the sweep — every expired session survives."""
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     project_id = 1
     expired_ids = _seed_expired(factory, project_id=project_id, n=4)
 
-    seal_sessions_for_project(project_id, paths=paths, retention_count=0)
+    seal_sessions_for_project(
+        project_id,
+        session_repo=ChatSessionRepository(factory),
+        retention_count=0,
+    )
 
     surviving_ids = sorted(r.id for r in repo.list_for_project(project_id))
     assert surviving_ids == sorted(expired_ids)
@@ -145,12 +161,16 @@ def test_seal_followed_by_tight_sweep_keeps_only_retention_count(
     tmp_path: Path,
 ) -> None:
     """Sealing converts active→expired, then sweep prunes to retention_count."""
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     project_id = 1
     active_ids = _seed_active(factory, project_id=project_id, n=3)
 
-    seal_sessions_for_project(project_id, paths=paths, retention_count=1)
+    seal_sessions_for_project(
+        project_id,
+        session_repo=ChatSessionRepository(factory),
+        retention_count=1,
+    )
 
     surviving = repo.list_for_project(project_id, include_expired=True)
     surviving_ids = sorted(r.id for r in surviving)
@@ -160,13 +180,17 @@ def test_seal_followed_by_tight_sweep_keeps_only_retention_count(
 
 
 def test_seal_negative_retention_raises(tmp_path: Path) -> None:
-    paths, _ = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     with pytest.raises(ValueError):
-        seal_sessions_for_project(1, paths=paths, retention_count=-1)
+        seal_sessions_for_project(
+            1,
+            session_repo=ChatSessionRepository(factory),
+            retention_count=-1,
+        )
 
 
 def test_purge_hard_deletes_all_sessions_and_messages(tmp_path: Path) -> None:
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     msgs = ChatMessageRepository(factory)
     project_id = 1
@@ -176,7 +200,9 @@ def test_purge_hard_deletes_all_sessions_and_messages(tmp_path: Path) -> None:
     for sid in active_ids + expired_ids:
         msgs.append(session_id=sid, role="user", content=f"hi-{sid}")
 
-    deleted = purge_chat_for_project(project_id, paths=paths)
+    deleted = purge_chat_for_project(
+        project_id, session_repo=ChatSessionRepository(factory)
+    )
     assert deleted == 4
 
     assert repo.list_for_project(project_id, include_expired=True) == []
@@ -185,7 +211,7 @@ def test_purge_hard_deletes_all_sessions_and_messages(tmp_path: Path) -> None:
 
 
 def test_purge_leaves_other_projects_untouched(tmp_path: Path) -> None:
-    paths, factory = _setup(tmp_path)
+    _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     keep_project = 1
     purge_project = 2
@@ -193,7 +219,7 @@ def test_purge_leaves_other_projects_untouched(tmp_path: Path) -> None:
     keep_ids = _seed_active(factory, project_id=keep_project, n=3)
     _seed_active(factory, project_id=purge_project, n=2)
 
-    purge_chat_for_project(purge_project, paths=paths)
+    purge_chat_for_project(purge_project, session_repo=ChatSessionRepository(factory))
 
     surviving = repo.list_for_project(keep_project, include_expired=True)
     assert sorted(r.id for r in surviving) == sorted(keep_ids)

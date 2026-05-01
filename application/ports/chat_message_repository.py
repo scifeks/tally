@@ -1,0 +1,35 @@
+"""Persistence port for the ``chat_messages`` table.
+
+Concrete implementation lives at
+``infrastructure.store.repositories.chat_messages.ChatMessageRepository``.
+Returned rows are domain types (`domain.chat.entry.ChatMessageRow`) so
+the port boundary stays free of infrastructure dataclasses.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from domain.chat.entry import ChatMessageRow
+
+
+class ChatMessageRepositoryPort(Protocol):
+    def append(
+        self,
+        *,
+        session_id: int,
+        role: str,
+        content: str,
+        model: str | None = None,
+    ) -> int: ...
+    def list_for_session(self, session_id: int) -> list[ChatMessageRow]: ...
+    def list_for_session_paginated(
+        self,
+        session_id: int,
+        *,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[ChatMessageRow], int]: ...
+    def count_for_session(self, session_id: int) -> int: ...
+    def last_created_at(self, session_id: int) -> str | None: ...

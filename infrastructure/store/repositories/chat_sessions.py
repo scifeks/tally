@@ -13,25 +13,17 @@ at connection init via ``PRAGMA foreign_keys=ON``).
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from application.ports.chat_session_repository import ChatSessionRepositoryPort
+from domain.chat.entry import ChatSessionRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
 
-@dataclass(frozen=True)
-class ChatSessionRow:
-    id: int
-    project_id: int
-    title: str
-    created_at: str
-    updated_at: str
-    expired_at: str | None
-
-
-class ChatSessionRepository:
+class ChatSessionRepository(ChatSessionRepositoryPort):
     """CRUD + retention helpers for the project-scoped ``chat_sessions`` table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:

@@ -29,6 +29,9 @@ from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from application.ports.chat_session_repository import (
+        ChatSessionRepositoryPort,
+    )
     from infrastructure.store.repositories.runs import RunRepository
 
 logger = logging.getLogger(__name__)
@@ -90,6 +93,7 @@ class ScanOrchestrator:
         cancel_token: CancellationToken | None = None,
         run_repository: RunRepository | None = None,
         project_id: int | None = None,
+        chat_session_repo: ChatSessionRepositoryPort | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -103,6 +107,7 @@ class ScanOrchestrator:
         self._cancel_token: CancellationToken = cancel_token or no_op_token()
         self._run_repository = run_repository
         self._project_id = project_id
+        self._chat_session_repo = chat_session_repo
 
         # Plumb cancellation into the executor so subprocess waits abort.
         if hasattr(tool_executor, "set_cancel_token"):
@@ -225,22 +230,19 @@ class ScanOrchestrator:
         """Run Phase 8.10 chat-session sealing + retention sweep.
 
         Best-effort: a chat-DB hiccup must never mask a successful scan
-        result. Skipped when no project_id was provided (legacy entry
-        points that predate the project registry wiring).
+        result. Skipped when the caller did not supply a chat session
+        repo (legacy entry points that predate the project registry
+        wiring) or when no project_id was provided.
         """
-        if self._project_id is None:
+        if self._project_id is None or self._chat_session_repo is None:
             return
         try:
             from application.chat.sealing import seal_sessions_for_project
-            from core.project_paths import ProjectPaths
 
             global_config = self._config.load_global_config()
-            paths = ProjectPaths.from_canonical(
-                str(self.executor.base_path), self.project_name
-            )
             seal_sessions_for_project(
                 self._project_id,
-                paths=paths,
+                session_repo=self._chat_session_repo,
                 retention_count=global_config.chat_session_retention_count,
             )
         except Exception:

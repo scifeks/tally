@@ -34,19 +34,14 @@ from application.chat.service import (
 )
 from application.rag.query import QueryEngine
 from core.project_paths import ProjectPaths
+from domain.chat.entry import ChatMessageRow, ChatSessionRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
 from infrastructure.llm.factory import get_llm_provider
 from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.chat_messages import (
-    ChatMessageRepository,
-    ChatMessageRow,
-)
-from infrastructure.store.repositories.chat_sessions import (
-    ChatSessionRepository,
-    ChatSessionRow,
-)
+from infrastructure.store.repositories.chat_messages import ChatMessageRepository
+from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 from web.adapters.chat_run_registry import get_chat_run_registry
 from web.adapters.event_bus_chat_sink import EventBusChatSink
 from web.api._errors import Conflict, NotFound, ValidationError

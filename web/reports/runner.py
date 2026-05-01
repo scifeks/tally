@@ -175,6 +175,8 @@ def _run_report(
             lock_registry.release_job("report", holder_token)
         except HolderMismatch:
             logger.warning("lock holder mismatch on report run %d release", report_id)
+        except KeyError:
+            logger.warning("report lock already released for run %d", report_id)
 
 
 def _enforce_retention(
