@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.embedding import OllamaEmbeddingAdapter
+from infrastructure.embedding.ollama_embedding_adapter import OllamaEmbeddingAdapter
 
 _URL = "http://localhost:11434"
 _MODEL = "nomic-embed-text:latest"

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.llm.claude_adapter import ClaudeAdapter
+from infrastructure.llm.claude_adapter import ClaudeAdapter
 
 _MODEL = "claude-opus-4-5"
 _API_KEY = "test-key-abc"
@@ -14,7 +14,7 @@ _API_KEY = "test-key-abc"
 
 @pytest.fixture()
 def adapter() -> ClaudeAdapter:
-    with patch("core.llm.claude_adapter.anthropic.Anthropic"):
+    with patch("infrastructure.llm.claude_adapter.anthropic.Anthropic"):
         inst = ClaudeAdapter(
             api_key=_API_KEY,
             model=_MODEL,

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from application.ports.embedding_provider import EmbeddingProvider
 from core.config.manager import ConfigManager
 
-from .base import EmbeddingProvider
 from .ollama_embedding_adapter import OllamaEmbeddingAdapter
 
 

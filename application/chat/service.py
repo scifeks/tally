@@ -36,7 +36,7 @@ from application.ports.chat_event_sink import (
     ChatStreamSink,
     NullChatStreamSink,
 )
-from core.llm.base import LLMProvider
+from application.ports.llm_provider import LLMProvider
 from domain.pipeline.chat_events import (
     ChatStreamCancelled,
     ChatStreamCompleted,

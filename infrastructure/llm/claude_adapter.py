@@ -7,7 +7,7 @@ from typing import Any
 
 import anthropic
 
-from .base import LLMAdapterError, LLMProvider
+from application.ports.llm_provider import LLMAdapterError, LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,6 @@ class ClaudeAdapter(LLMProvider):
         max_tokens: int,
         timeout_seconds: int = 60,
     ) -> None:
-        # Resolve key at construction time; stored for is_available() check.
         self._resolved_key = os.environ.get("ANTHROPIC_API_KEY") or api_key or ""
         self._model = model
         self._max_tokens = max_tokens

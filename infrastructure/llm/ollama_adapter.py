@@ -10,15 +10,7 @@ from typing import Any
 
 import ollama
 
-# Moved to infrastructure layer; re-exported for backward compatibility.
-from infrastructure.llm.ollama_utils import (
-    get_ollama_models as get_ollama_models,
-)
-from infrastructure.llm.ollama_utils import (
-    verify_ollama_available as verify_ollama_available,
-)
-
-from .base import LLMAdapterError, LLMProvider
+from application.ports.llm_provider import LLMAdapterError, LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +87,7 @@ class OllamaAdapter(LLMProvider):
         Raises:
             LLMAdapterError: For any error raised by the Ollama SDK,
                 including connection failures and protocol errors. Sync
-                ``chat()`` keeps its existing pass-through behaviour.
+                ``chat()`` keeps its existing pass-through behavior.
         """
         async_client = ollama.AsyncClient(host=self._base_url)
         options = self._build_options(kwargs)

@@ -33,11 +33,11 @@ from application.chat.service import (
     stream_chat,
 )
 from application.rag.query import QueryEngine
-from core.llm.factory import get_llm_provider
 from core.project_paths import ProjectPaths
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
+from infrastructure.llm.factory import get_llm_provider
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.chat_messages import (
     ChatMessageRepository,

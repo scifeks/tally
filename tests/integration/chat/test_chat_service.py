@@ -28,7 +28,7 @@ from application.chat.service import (  # noqa: E402
     stream_chat,
 )
 from application.ports.chat_event_sink import ChatStreamSink  # noqa: E402
-from core.llm.base import LLMAdapterError, LLMProvider  # noqa: E402
+from application.ports.llm_provider import LLMAdapterError, LLMProvider  # noqa: E402
 from domain.pipeline.chat_events import (  # noqa: E402
     ChatEvent,
     ChatStreamCancelled,

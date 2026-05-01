@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from core.embedding import OllamaEmbeddingAdapter, get_embedding_provider
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.embedding.ollama_embedding_adapter import OllamaEmbeddingAdapter
 
 _URL = "http://localhost:11434"
 _MODEL = "nomic-embed-text:latest"

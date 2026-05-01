@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from .base import EmbeddingProvider
+from application.ports.embedding_provider import EmbeddingProvider
 
 
 class OllamaEmbeddingAdapter(EmbeddingProvider):

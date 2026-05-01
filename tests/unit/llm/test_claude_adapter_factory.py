@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from core.llm.claude_adapter import ClaudeAdapter
-from core.llm.factory import get_llm_provider
+from infrastructure.llm.claude_adapter import ClaudeAdapter
+from infrastructure.llm.factory import get_llm_provider
 
 _MODEL = "claude-opus-4-5"
 _API_KEY = "test-key-abc"
@@ -43,7 +43,7 @@ def _write_global_config(base_path: Path, overrides: dict | None = None) -> None
 class TestFactory:
     def test_factory_resolves_claude(self, tmp_path: Path) -> None:
         _write_global_config(tmp_path)
-        with patch("core.llm.claude_adapter.anthropic.Anthropic"):
+        with patch("infrastructure.llm.claude_adapter.anthropic.Anthropic"):
             provider = get_llm_provider("chat", tmp_path)
         assert isinstance(provider, ClaudeAdapter)
 

@@ -30,9 +30,9 @@ from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.risk_level import compute_risk_level
 from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
-from core.llm.factory import get_llm_provider
 from core.project_paths import ProjectPaths
 from domain.pipeline.report_events import DraftCompleted, DraftFailed, DraftStarted
+from infrastructure.llm.factory import get_llm_provider
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
