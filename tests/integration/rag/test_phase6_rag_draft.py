@@ -11,6 +11,19 @@ import pytest
 from application.project import ProjectManager
 from application.reporting.draft_orchestrator import DraftRequest, run_draft
 from application.reporting.risk_level import RiskCounts
+from domain.findings.entry import Finding
+
+
+def _seed_finding() -> Finding:
+    return Finding(
+        id=1,
+        fingerprint=None,
+        run_id=None,
+        tool=None,
+        domain=None,
+        segment=None,
+    )
+
 
 pytestmark = pytest.mark.integration
 
@@ -115,7 +128,7 @@ class TestPhase6RagDraft:
                 MagicMock(),
                 MagicMock(),
             )
-            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
@@ -181,7 +194,7 @@ class TestPhase6RagDraft:
                 MagicMock(),
                 MagicMock(),
             )
-            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
@@ -250,7 +263,7 @@ class TestPhase6RagDraft:
                 MagicMock(),
                 MagicMock(),
             )
-            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS

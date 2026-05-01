@@ -3,17 +3,19 @@
 Concrete implementation lives at
 ``infrastructure.store.repositories.findings.FindingRepository``.
 
-Read methods on this port currently return ``dict[str, Any]`` to match
-the existing repository contract. This is a transitional shape: a
-follow-up slice will introduce a ``Finding`` domain dataclass and
-move JSON parsing and severity-rank translation out of the web and
-MCP adapters into an application service. Until then, callers
-continue to consume raw row dicts.
+Read methods return parsed ``domain.findings.entry.Finding`` instances
+(JSON columns deserialised, severity translated from integer rank to
+lowercase label). The Chroma-compatible methods ``search``,
+``get_by_ids``, and ``get_all_findings_deserialized`` continue to
+return dicts shaped for the vector store.
 """
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from domain.findings.entry import Finding
 
 
 class FindingRepositoryPort(Protocol):
@@ -23,7 +25,7 @@ class FindingRepositoryPort(Protocol):
     def get_tool_meta_keys(
         self, tool_name: str, sample: int = 200
     ) -> tuple[int, set[str]]: ...
-    def get_finding(self, finding_id: int) -> dict | None: ...
+    def get_finding(self, finding_id: int) -> Finding | None: ...
     def get_findings(
         self,
         tools: list[str] | None = None,
@@ -33,7 +35,7 @@ class FindingRepositoryPort(Protocol):
         require_file: bool = False,
         limit: int = 10,
         offset: int = 0,
-    ) -> list[dict]: ...
+    ) -> list[Finding]: ...
     def count_findings(
         self,
         tools: list[str] | None = None,
@@ -56,9 +58,9 @@ class FindingRepositoryPort(Protocol):
         *,
         source: str = "auto_triage",
     ) -> bool: ...
-    def get_reportable_findings(self) -> list[dict]: ...
-    def get_findings_marked_for_report(self) -> list[dict]: ...
-    def get_all_findings(self) -> list[dict]: ...
+    def get_reportable_findings(self) -> list[Finding]: ...
+    def get_findings_marked_for_report(self) -> list[Finding]: ...
+    def get_all_findings(self) -> list[Finding]: ...
     def get_all_findings_deserialized(self) -> list[dict]: ...
     def update_analyst_fields(
         self,
@@ -86,7 +88,7 @@ class FindingRepositoryPort(Protocol):
         source: str = "llm_inference",
     ) -> None: ...
     def search(self, filters: dict) -> list[dict]: ...
-    def search_raw(self, filters: dict) -> list[dict]: ...
+    def search_raw(self, filters: dict) -> list[Finding]: ...
     def search_count(self, filters: dict) -> int: ...
     def count_aggregates(self) -> dict: ...
     def distinct_facet_values(self) -> dict: ...

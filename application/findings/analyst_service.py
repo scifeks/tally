@@ -9,6 +9,7 @@ from application.locking import FindingsBusy, LockRegistry, get_registry
 
 if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
+    from domain.findings.entry import Finding
 
 
 @dataclass
@@ -30,7 +31,7 @@ class FindingAnalystService:
         self._repo = repo
         self._registry = registry if registry is not None else get_registry()
 
-    def get_finding(self, finding_id: int) -> dict | None:
+    def get_finding(self, finding_id: int) -> Finding | None:
         return self._repo.get_finding(finding_id)
 
     def get_findings(
@@ -41,7 +42,7 @@ class FindingAnalystService:
         segments: list[str] | None = None,
         limit: int = 10_000,
         offset: int = 0,
-    ) -> list[dict]:
+    ) -> list[Finding]:
         return self._repo.get_findings(
             tools=tools,
             domain=domain,
@@ -140,7 +141,7 @@ class FindingAnalystService:
             result.updated.append(finding_id)
         return result
 
-    def search_raw(self, filters: dict) -> list[dict]:
+    def search_raw(self, filters: dict) -> list[Finding]:
         return self._repo.search_raw(filters)
 
     def search_count(self, filters: dict) -> int:

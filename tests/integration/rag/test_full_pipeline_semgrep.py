@@ -8,7 +8,6 @@ real ChromaDB instance. No external network services are used.
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 import struct
 import sys
@@ -146,8 +145,8 @@ class TestSemgrepFullPipeline:
         findings = finding_repo.get_all_findings()
         assert len(findings) == 1, f"expected 1 finding in SQLite, got {len(findings)}"
         row = findings[0]
-        assert row["enriched"] == 1, "finding must be marked enriched=1"
-        meta = json.loads(row["meta"] or "{}")
+        assert row.enriched is True, "finding must be marked enriched"
+        meta = row.meta
         assert meta.get("risk_type") == "sql_injection", (
             f"risk_type not written to meta: {meta}"
         )

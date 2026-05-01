@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from application.findings.updater import FindingUpdateService
@@ -26,17 +26,6 @@ def init(ctx: FindingsContext, config_manager: ConfigManager | None = None) -> N
     )
 
 
-def _parse_row(row: dict) -> dict:
-    """JSON-parse meta, finding_type, and cwe columns in-place."""
-    if isinstance(row.get("meta"), str):
-        row["meta"] = json.loads(row["meta"])
-    if isinstance(row.get("finding_type"), str):
-        row["finding_type"] = json.loads(row["finding_type"])
-    if isinstance(row.get("cwe"), str):
-        row["cwe"] = json.loads(row["cwe"])
-    return row
-
-
 async def get_finding(finding_id: int) -> dict:
     """Retrieve a single finding by its primary-key ID.
 
@@ -44,16 +33,17 @@ async def get_finding(finding_id: int) -> dict:
         finding_id: The integer primary key of the finding row.
 
     Returns:
-        A dict representation of the finding row with JSON columns parsed.
+        A dict representation of the finding with JSON columns parsed and
+        ``abs_path`` / ``repo_path`` resolved against the project's repos.
 
     Raises:
         ValueError: If no finding with the given ID exists.
     """
     assert _ctx is not None
-    row = await asyncio.to_thread(_ctx.finding_repo.get_finding, finding_id)
-    if row is None:
+    finding = await asyncio.to_thread(_ctx.finding_repo.get_finding, finding_id)
+    if finding is None:
         raise ValueError(f"Finding {finding_id} not found")
-    row = _parse_row(row)
+    row: dict = asdict(finding)
     assert _service is not None
     abs_path, repo_path = _service.resolve_finding_paths(
         row.get("file"), row.get("repo"), _ctx.project_name

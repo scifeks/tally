@@ -515,5 +515,5 @@ class TestGetFindingsMarkedForReport:
                 (triaged_excluded,),
             )
 
-        result_ids = {f["id"] for f in repo.get_findings_marked_for_report()}
+        result_ids = {f.id for f in repo.get_findings_marked_for_report()}
         assert result_ids == {untriaged_marked, triaged_marked}

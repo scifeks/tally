@@ -126,8 +126,8 @@ class TestIngestHandlerPhase2:
         )
         findings = finding_repo.get_all_findings()
         assert len(findings) >= 1
-        assert all(f["tool"] == "gitleaks" for f in findings)
-        assert all(f["domain"] == "code" for f in findings)
+        assert all(f.tool == "gitleaks" for f in findings)
+        assert all(f.domain == "code" for f in findings)
 
     def test_chromadb_not_written_after_tool_completed(
         self, project_env: dict, gitleaks_result: ToolResult
@@ -220,7 +220,7 @@ class TestIngestHandlerPhase2:
         for finding_id in ids:
             row = finding_repo.get_finding(finding_id)
             assert row is not None
-            assert row["tool"] == "gitleaks"
+            assert row.tool == "gitleaks"
 
     def test_zap_findings_have_repo_populated(
         self, project_env: dict, zap_result: ToolResult

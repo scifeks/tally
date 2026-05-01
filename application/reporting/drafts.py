@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from application.ports.llm_provider import LLMProvider
+    from domain.findings.entry import Finding
 
 from application.reporting.risk_level import RiskLevel
 from domain.findings.severity import Severity
@@ -199,16 +200,16 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
         return self._call_llm(self._build_prompt(context))
 
     def _build_prompt(self, ctx: dict[str, Any]) -> str:
-        findings: list[dict[str, Any]] = ctx["top_findings"]
+        findings: list[Finding] = ctx["top_findings"]
 
         entries: list[str] = []
         for f in findings:
-            tal_id = f.get("tal_id") or "(no finding ID)"
-            severity = (f.get("severity") or "").capitalize()
-            confidence = (f.get("confidence") or "").capitalize()
-            description = f.get("description") or "(no description)"
-            business_impact = f.get("business_impact") or ""
-            tool = f.get("tool") or ""
+            tal_id = f.tal_id or "(no finding ID)"
+            severity = (f.severity or "").capitalize()
+            confidence = (f.confidence or "").capitalize()
+            description = f.description or "(no description)"
+            business_impact = f.business_impact or ""
+            tool = f.tool or ""
 
             lines = [
                 f"Finding ID: {tal_id}",
@@ -371,7 +372,7 @@ class GeneralRecommendationsGenerator(SectionDraftGenerator):
 
     def _build_prompt(self, ctx: dict[str, Any]) -> str:
         groups: list[tuple[str, int]] = ctx["risk_type_groups"]
-        recurring_by_rt: dict[str, list[dict[str, Any]]] = ctx["recurring_by_risk_type"]
+        recurring_by_rt: dict[str, list[Finding]] = ctx["recurring_by_risk_type"]
         sev_dist = ctx["sev_dist"]
         improvement_draft: str | None = ctx.get("improvement_points_draft")
 

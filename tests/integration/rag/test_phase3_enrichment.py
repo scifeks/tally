@@ -146,7 +146,7 @@ class TestPhase3EnrichmentWritesToSQLite:
 
         row = finding_repo.get_finding(fid)
         assert row is not None
-        assert row["enriched"] == 1
+        assert row.enriched is True
 
     def test_enrichment_fields_written_to_meta(self, store_env: dict) -> None:
         """LLM-returned fields like risk_type land in the meta blob."""
@@ -169,7 +169,7 @@ class TestPhase3EnrichmentWritesToSQLite:
 
         row = finding_repo.get_finding(fid)
         assert row is not None
-        meta = json.loads(row["meta"] or "{}")
+        meta = row.meta
         assert meta["risk_type"] == "xss"
         assert meta["remediation"] == "Encode output."
 
@@ -194,7 +194,7 @@ class TestPhase3EnrichmentWritesToSQLite:
 
         row = finding_repo.get_finding(fid)
         assert row is not None
-        assert row["description"] == "SQL injection in login form."
+        assert row.description == "SQL injection in login form."
 
 
 class TestPhase3ToolBypass:
@@ -267,8 +267,8 @@ class TestPhase3UpdateEnrichmentFields:
 
         row = finding_repo.get_finding(fid)
         assert row is not None
-        assert row["enriched"] == 1
-        assert row["last_seen"] is not None
+        assert row.enriched is True
+        assert row.last_seen is not None
 
     def test_update_enrichment_fields_meta_merged(self, store_env: dict) -> None:
         """update_enrichment_fields merges into existing meta blob."""
@@ -282,7 +282,7 @@ class TestPhase3UpdateEnrichmentFields:
 
         row = finding_repo.get_finding(fid)
         assert row is not None
-        meta = json.loads(row["meta"] or "{}")
+        meta = row.meta
         assert meta["owasp_name"] == "Injection"
 
     def test_update_enrichment_fields_missing_id_is_noop(self, store_env: dict) -> None:
