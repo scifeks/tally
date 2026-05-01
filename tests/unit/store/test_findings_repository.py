@@ -476,3 +476,44 @@ class TestFilterOptionsRepoLabel:
         assert isinstance(entry["value"], int)
         assert entry["label"] == "myrepo"
         assert entry["count"] == 2
+
+
+class TestGetFindingsMarkedForReport:
+    def test_returns_should_report_rows_regardless_of_triage(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {"tool": "t", "domain": "code", "severity": "high", "url": "u1"},
+                {"tool": "t", "domain": "code", "severity": "high", "url": "u2"},
+                {"tool": "t", "domain": "code", "severity": "high", "url": "u3"},
+            ],
+        )
+        with factory.connect() as conn:
+            ids = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT id FROM findings ORDER BY id"
+                ).fetchall()
+            ]
+            untriaged_marked, triaged_marked, triaged_excluded = ids
+            conn.execute(
+                "UPDATE findings SET should_report = 1 WHERE id = ?",
+                (untriaged_marked,),
+            )
+            conn.execute(
+                "UPDATE findings SET should_report = 1, "
+                "triaged_by = 'analyst', triaged_at = '2026-01-01T00:00:00Z' "
+                "WHERE id = ?",
+                (triaged_marked,),
+            )
+            conn.execute(
+                "UPDATE findings SET should_report = 0, "
+                "triaged_by = 'analyst', triaged_at = '2026-01-01T00:00:00Z' "
+                "WHERE id = ?",
+                (triaged_excluded,),
+            )
+
+        result_ids = {f["id"] for f in repo.get_findings_marked_for_report()}
+        assert result_ids == {untriaged_marked, triaged_marked}

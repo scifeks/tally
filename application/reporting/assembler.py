@@ -95,12 +95,16 @@ class ReportAssembler:
         prompt: UserPromptPort,
         testing_type: str = "white_box",
         engagement_date: str | None = None,
+        company_name_override: str | None = None,
+        skip_triage: bool = False,
     ) -> None:
         self._project = project
         self._base_path = Path(base_path)
         self._prompt = prompt
         self._testing_type = testing_type
         self._engagement_date = engagement_date
+        self._company_name_override = company_name_override
+        self._skip_triage = skip_triage
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -132,7 +136,8 @@ class ReportAssembler:
         engagement_type = _TESTING_TYPE_LABELS.get(
             self._testing_type, self._testing_type
         )
-        company_name = config.company_name or "[Company Name]"
+        override = (self._company_name_override or "").strip()
+        company_name = override or config.company_name or "[Company Name]"
         prefix = resolve_prefix(
             config.abbreviation, manager.global_config.report_finding_prefix
         )
@@ -163,7 +168,7 @@ class ReportAssembler:
         # -- Segment 4: vulnerability distribution chart ------------------
         _, finding_repo, _, _ = make_store(self._base_path, self._project)
         query_svc = DraftQueryService(finding_repo)
-        filtered = query_svc.get_filtered_findings()
+        filtered = query_svc.get_findings_for_report(skip_triage=self._skip_triage)
         sev_counts = query_svc.severity_distribution(filtered)
         chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
         vuln_distribution_chart_html = chart_html

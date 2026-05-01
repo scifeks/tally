@@ -43,6 +43,24 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(result, [{"id": 2}])
 
     # ------------------------------------------------------------------ #
+    # get_findings_for_report
+    # ------------------------------------------------------------------ #
+
+    def test_get_findings_for_report_default_uses_reportable_query(self) -> None:
+        self.repo.get_reportable_findings.return_value = [{"id": 1}]
+        result = self.svc.get_findings_for_report()
+        self.repo.get_reportable_findings.assert_called_once()
+        self.repo.get_findings_marked_for_report.assert_not_called()
+        self.assertEqual(result, [{"id": 1}])
+
+    def test_get_findings_for_report_skip_triage_uses_marked_query(self) -> None:
+        self.repo.get_findings_marked_for_report.return_value = [{"id": 2}]
+        result = self.svc.get_findings_for_report(skip_triage=True)
+        self.repo.get_findings_marked_for_report.assert_called_once()
+        self.repo.get_reportable_findings.assert_not_called()
+        self.assertEqual(result, [{"id": 2}])
+
+    # ------------------------------------------------------------------ #
     # severity_distribution
     # ------------------------------------------------------------------ #
 

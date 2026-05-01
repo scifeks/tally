@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -349,6 +351,117 @@ async def test_generate_validates_format(app_client) -> None:
         headers=mut_headers,
     )
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /reports/generate — body propagation into the assembler
+# ---------------------------------------------------------------------------
+
+
+async def _wait_for_assembler_call(mock_class: MagicMock, timeout: float = 5.0) -> None:
+    """Poll until the patched ReportAssembler class is invoked once."""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if mock_class.call_count >= 1:
+            return
+        await asyncio.sleep(0.02)
+    raise AssertionError(
+        f"ReportAssembler was not called within {timeout}s "
+        f"(call_count={mock_class.call_count})"
+    )
+
+
+def _patch_assembler(monkeypatch) -> MagicMock:
+    """Replace ReportAssembler with a Mock returning bytes from render_pdf.
+
+    Returns the patched class so callers can inspect its constructor kwargs.
+    The mock is patched on the source module because ``_run_pdf`` lazy-imports
+    via ``from application.reporting import assembler as assembler_mod``.
+    """
+    instance = MagicMock()
+    instance.render_pdf.return_value = b"fake-pdf-bytes"
+    mock_class = MagicMock(return_value=instance)
+    monkeypatch.setattr("application.reporting.assembler.ReportAssembler", mock_class)
+    return mock_class
+
+
+@pytest.mark.asyncio
+async def test_generate_passes_company_name_override_to_assembler(
+    app_client, monkeypatch
+) -> None:
+    client, *_, mut_headers, project_id = app_client
+    mock_class = _patch_assembler(monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/generate",
+        json={"format": "pdf", "company_name": "ACME"},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 202
+
+    await _wait_for_assembler_call(mock_class)
+    kwargs = mock_class.call_args.kwargs
+    assert kwargs["company_name_override"] == "ACME"
+    assert kwargs["skip_triage"] is False
+
+
+@pytest.mark.asyncio
+async def test_generate_passes_company_name_camel_case_alias(
+    app_client, monkeypatch
+) -> None:
+    client, *_, mut_headers, project_id = app_client
+    mock_class = _patch_assembler(monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/generate",
+        json={"format": "pdf", "companyName": "ACME"},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 202
+
+    await _wait_for_assembler_call(mock_class)
+    kwargs = mock_class.call_args.kwargs
+    assert kwargs["company_name_override"] == "ACME"
+
+
+@pytest.mark.asyncio
+async def test_generate_passes_skip_triage_true_to_assembler(
+    app_client, monkeypatch
+) -> None:
+    client, *_, mut_headers, project_id = app_client
+    mock_class = _patch_assembler(monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/generate",
+        json={"format": "pdf", "skip_triage": True},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 202
+
+    await _wait_for_assembler_call(mock_class)
+    kwargs = mock_class.call_args.kwargs
+    assert kwargs["skip_triage"] is True
+    assert kwargs["company_name_override"] is None
+
+
+@pytest.mark.asyncio
+async def test_generate_defaults_when_neither_field_sent(
+    app_client, monkeypatch
+) -> None:
+    client, *_, mut_headers, project_id = app_client
+    mock_class = _patch_assembler(monkeypatch)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/generate",
+        json={"format": "pdf"},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 202
+
+    await _wait_for_assembler_call(mock_class)
+    kwargs = mock_class.call_args.kwargs
+    assert kwargs["company_name_override"] is None
+    assert kwargs["skip_triage"] is False
 
 
 # ---------------------------------------------------------------------------

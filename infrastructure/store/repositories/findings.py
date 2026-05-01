@@ -453,6 +453,18 @@ class FindingRepository:
             rows = conn.execute(sql).fetchall()
         return [dict(r) for r in rows]
 
+    def get_findings_marked_for_report(self) -> list[dict]:
+        """Return findings where should_report = 1, regardless of triage.
+
+        Used by the report-assembly path when the caller has opted out of
+        the triage-column requirement but still wants only findings the
+        analyst has marked for inclusion.
+        """
+        sql = "SELECT * FROM findings WHERE should_report = 1"
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [dict(r) for r in rows]
+
     def get_all_findings(self) -> list[dict]:
         """Return all findings with no triage filter."""
         with self._factory.connect() as conn:

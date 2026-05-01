@@ -687,6 +687,14 @@ class ReportGenerateRequest(BaseModel):
         default=False,
         validation_alias=AliasChoices("force_overwrite", "forceOverwrite"),
     )
+    company_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("company_name", "companyName"),
+    )
+    skip_triage: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("skip_triage", "skipTriage"),
+    )
 
     @field_validator("format")
     @classmethod
