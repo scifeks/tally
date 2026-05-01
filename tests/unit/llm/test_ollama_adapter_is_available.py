@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.llm.ollama_adapter import OllamaAdapter
+from infrastructure.llm.ollama_adapter import OllamaAdapter
 
 _URL = "http://localhost:11434"
 _MODEL = "qwen3:14b"

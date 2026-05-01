@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from application.ports.llm_provider import LLMProvider
 from core.config.manager import ConfigManager
 
-from .base import LLMProvider
 from .claude_adapter import ClaudeAdapter
 from .ollama_adapter import OllamaAdapter
 

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich.console import Console
 
-from core.llm import LLMProvider, get_llm_provider
+from application.ports.llm_provider import LLMProvider
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
@@ -18,6 +18,7 @@ from domain.tools.constants import (
     SEVERITY_LEVELS,
 )
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
+from infrastructure.llm.factory import get_llm_provider
 
 from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt

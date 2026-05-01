@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core.llm.factory import get_llm_provider
-from core.llm.ollama_adapter import OllamaAdapter
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.llm.ollama_adapter import OllamaAdapter
 
 _OLLAMA_URL = "http://localhost:11434"
 

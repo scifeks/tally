@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from core.llm.factory import get_llm_provider
+from infrastructure.llm.factory import get_llm_provider
 
 _OLLAMA_URL = "http://localhost:11434"
 

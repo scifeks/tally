@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from application.ports.llm_provider import LLMProvider
 from core.config.manager import ConfigManager
-from core.llm import LLMProvider
 
 from .engine import RAGEngine
 from .search_parser import SearchQuery, parse_search_query

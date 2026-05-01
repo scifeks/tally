@@ -11,10 +11,12 @@ import chromadb
 from chromadb.api import ClientAPI
 from chromadb.api.types import Documents, Embeddable, EmbeddingFunction, Embeddings
 
+from application.ports.embedding_provider import EmbeddingProvider
+from application.ports.llm_provider import LLMProvider
 from core.config.manager import ConfigManager
-from core.embedding import EmbeddingProvider, get_embedding_provider
-from core.llm import LLMProvider, get_llm_provider
 from core.project_paths import ProjectPaths
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
 from infrastructure.llm.ollama_utils import (
     get_ollama_models as get_ollama_models,
 )  # re-export

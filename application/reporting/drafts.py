@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.llm.base import LLMProvider
+    from application.ports.llm_provider import LLMProvider
 
 from application.reporting.risk_level import RiskLevel
 from domain.findings.severity import Severity

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from core.llm.base import LLMAdapterError
-from core.llm.ollama_adapter import OllamaAdapter
+from application.ports.llm_provider import LLMAdapterError
+from infrastructure.llm.ollama_adapter import OllamaAdapter
 
 _URL = "http://localhost:11434"
 _MODEL = "qwen3:14b"

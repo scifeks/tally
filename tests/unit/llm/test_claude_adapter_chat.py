@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import anthropic
 import pytest
 
-from core.llm.base import LLMAdapterError
-from core.llm.claude_adapter import ClaudeAdapter
+from application.ports.llm_provider import LLMAdapterError
+from infrastructure.llm.claude_adapter import ClaudeAdapter
 
 _MODEL = "claude-opus-4-5"
 _API_KEY = "test-key-abc"
@@ -38,7 +38,7 @@ def _mock_response(text: str) -> MagicMock:
 
 @pytest.fixture()
 def adapter() -> ClaudeAdapter:
-    with patch("core.llm.claude_adapter.anthropic.Anthropic"):
+    with patch("infrastructure.llm.claude_adapter.anthropic.Anthropic"):
         inst = ClaudeAdapter(
             api_key=_API_KEY,
             model=_MODEL,
