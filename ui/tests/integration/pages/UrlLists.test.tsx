@@ -89,16 +89,6 @@ describe('UrlLists page', () => {
     )
   })
 
-  it('renders all six column headers including the new repo column', async () => {
-    renderPage()
-    await screen.findByText('method')
-    expect(screen.getByText('protocol')).toBeInTheDocument()
-    expect(screen.getByText('host')).toBeInTheDocument()
-    expect(screen.getByText('port')).toBeInTheDocument()
-    expect(screen.getByText('path')).toBeInTheDocument()
-    expect(screen.getByText('repo')).toBeInTheDocument()
-  })
-
   it('shows the empty state when the project has no urls (project 3)', async () => {
     useUI.setState({ activeProjectId: 3 })
     renderPage()

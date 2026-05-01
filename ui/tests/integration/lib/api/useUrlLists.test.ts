@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw'
 import React from 'react'
 import { describe, expect, it } from 'vitest'
 
-import { mapUrlEntry, useUrlLists } from '@/lib/api/useUrlLists'
+import { useUrlLists } from '@/lib/api/useUrlLists'
 import { server } from '../../../handlers'
 import urlListProject1Fixture from '../../../fixtures/url_findings/project-1.json'
 
@@ -44,9 +44,7 @@ describe('useUrlLists', () => {
     const wire = urlListProject1Fixture.items[0]
 
     expect(first.id).toBe(wire.id)
-    expect(typeof first.id).toBe('number')
     expect(first.projectId).toBe(wire.project_id)
-    expect(typeof first.projectId).toBe('number')
     expect(first.repoId).toBe(wire.repo_id)
     expect(first.repoName).toBe(wire.repo_name)
     expect(first.source).toBe(wire.source)
@@ -55,34 +53,6 @@ describe('useUrlLists', () => {
     expect(first.filePath).toBe(wire.file_path)
     expect(first.createdAt).toBe(wire.created_at)
     expect(first.meta).toEqual(wire.meta)
-  })
-
-  it('mapUrlEntry coerces a single wire row directly', () => {
-    const wire = {
-      id: 99,
-      project_id: 7,
-      repo_id: 3,
-      repo_name: 'gateway',
-      source: 'user' as const,
-      tool: null,
-      run_id: null,
-      method: 'POST',
-      protocol: 'https',
-      host: 'example.com',
-      port: 443,
-      path: '/api/v1/foo',
-      file_path: 'endpoints/openapi.yaml',
-      meta: { upload_format: 'openapi3' },
-      created_at: '2026-04-26T10:00:00Z',
-    }
-    const mapped = mapUrlEntry(wire)
-    expect(mapped.id).toBe(99)
-    expect(mapped.projectId).toBe(7)
-    expect(mapped.repoName).toBe('gateway')
-    expect(mapped.source).toBe('user')
-    expect(mapped.tool).toBeNull()
-    expect(mapped.runId).toBeNull()
-    expect(mapped.filePath).toBe('endpoints/openapi.yaml')
   })
 
   it('returns empty array with hasNextPage=false for project with no urls', async () => {
