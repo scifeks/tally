@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from application.ports.finding_repository import FindingRepositoryPort
+from domain.findings.entry import Finding
 from domain.findings.severity import Severity
 from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
@@ -253,18 +254,18 @@ class FindingRepository(FindingRepositoryPort):
                 pass
         return count, keys
 
-    def get_finding(self, finding_id: int) -> dict | None:
-        """Return a single finding row by primary key, or None if not found."""
+    def _get_row(self, finding_id: int) -> dict | None:
+        """Return the raw findings row dict by primary key, or None."""
         with self._factory.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM findings WHERE id = ?", (finding_id,)
             ).fetchone()
-        if row is None:
-            return None
-        result = dict(row)
-        if result.get("severity") is not None:
-            result["severity"] = Severity.from_rank(int(result["severity"])).label
-        return result
+        return dict(row) if row is not None else None
+
+    def get_finding(self, finding_id: int) -> Finding | None:
+        """Return a single finding by primary key, or None if not found."""
+        row = self._get_row(finding_id)
+        return Finding.from_row(row) if row is not None else None
 
     def _build_findings_filter(
         self,
@@ -304,7 +305,7 @@ class FindingRepository(FindingRepositoryPort):
         require_file: bool = False,
         limit: int = 10,
         offset: int = 0,
-    ) -> list[dict]:
+    ) -> list[Finding]:
         """Return findings matching optional filters, capped at *limit* rows."""
         where, base_params = self._build_findings_filter(
             tools=tools,
@@ -321,7 +322,7 @@ class FindingRepository(FindingRepositoryPort):
         )
         with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
 
     def count_findings(
         self,
@@ -391,7 +392,7 @@ class FindingRepository(FindingRepositoryPort):
         """
         from datetime import UTC, datetime
 
-        row = self.get_finding(finding_id)
+        row = self._get_row(finding_id)
         if row is None:
             raise ValueError(f"Finding {finding_id} not found")
         previous_confidence = row["confidence"]
@@ -441,7 +442,7 @@ class FindingRepository(FindingRepositoryPort):
             )
         return True
 
-    def get_reportable_findings(self) -> list[dict]:
+    def get_reportable_findings(self) -> list[Finding]:
         """Return findings where triaged_by IS NOT NULL and should_report = 1.
 
         These are the findings that have been confirmed by triage and are
@@ -452,9 +453,9 @@ class FindingRepository(FindingRepositoryPort):
         )
         with self._factory.connect() as conn:
             rows = conn.execute(sql).fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
 
-    def get_findings_marked_for_report(self) -> list[dict]:
+    def get_findings_marked_for_report(self) -> list[Finding]:
         """Return findings where should_report = 1, regardless of triage.
 
         Used by the report-assembly path when the caller has opted out of
@@ -464,17 +465,19 @@ class FindingRepository(FindingRepositoryPort):
         sql = "SELECT * FROM findings WHERE should_report = 1"
         with self._factory.connect() as conn:
             rows = conn.execute(sql).fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
 
-    def get_all_findings(self) -> list[dict]:
+    def get_all_findings(self) -> list[Finding]:
         """Return all findings with no triage filter."""
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM findings").fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
 
     def get_all_findings_deserialized(self) -> list[dict]:
         """Return all findings with no triage filter, deserialised."""
-        return [deserialise_row(row) for row in self.get_all_findings()]
+        with self._factory.connect() as conn:
+            rows = conn.execute("SELECT * FROM findings").fetchall()
+        return [deserialise_row(r) for r in rows]
 
     def update_analyst_fields(
         self,
@@ -500,7 +503,7 @@ class FindingRepository(FindingRepositoryPort):
         """
         from datetime import UTC, datetime
 
-        row = self.get_finding(finding_id)
+        row = self._get_row(finding_id)
         if row is None:
             return False
 
@@ -674,7 +677,7 @@ class FindingRepository(FindingRepositoryPort):
         """
         from datetime import UTC, datetime
 
-        row = self.get_finding(finding_id)
+        row = self._get_row(finding_id)
         if row is None:
             return
 
@@ -742,16 +745,16 @@ class FindingRepository(FindingRepositoryPort):
             for row in rows
         ]
 
-    def search_raw(self, filters: dict) -> list[dict]:
-        """Execute a structured SQL search; return raw row dicts.
+    def search_raw(self, filters: dict) -> list[Finding]:
+        """Execute a structured SQL search; return parsed Finding rows.
 
-        Unlike ``search()``, rows are not deserialised — callers receive
-        plain ``dict(row)`` values with severity as an integer rank.
+        Unlike ``search()``, rows are not wrapped in ChromaDB-shaped
+        result envelopes — callers receive ``Finding`` instances.
         """
         sql, params = FindingQueryBuilder(filters).build()
         with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
-        return [dict(row) for row in rows]
+        return [Finding.from_row(row) for row in rows]
 
     def search_count(self, filters: dict) -> int:
         """Return the total row count matching *filters* (no pagination)."""

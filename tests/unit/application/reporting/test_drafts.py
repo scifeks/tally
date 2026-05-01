@@ -18,6 +18,21 @@ from application.reporting.drafts import (
     ScopeMethodologyGenerator,
 )
 from application.reporting.risk_level import RiskCounts, RiskLevel
+from domain.findings.entry import Finding
+
+
+def _make_finding(**kwargs: Any) -> Finding:
+    defaults: dict[str, Any] = {
+        "id": 0,
+        "fingerprint": None,
+        "run_id": None,
+        "tool": None,
+        "domain": None,
+        "segment": None,
+    }
+    defaults.update(kwargs)
+    return Finding(**defaults)
+
 
 _ZERO_RISK_COUNTS = RiskCounts(
     confirmed_critical=0,
@@ -216,22 +231,22 @@ class TestCriticalIssuesGenerator:
     def _ctx_with_findings(self) -> dict:
         ctx = _base_ctx()
         ctx["top_findings"] = [
-            {
-                "tal_id": "ACM-001",
-                "severity": "critical",
-                "confidence": "confirmed",
-                "description": "SQL injection in login endpoint",
-                "business_impact": "Full database compromise",
-                "tool": "semgrep",
-            },
-            {
-                "tal_id": "ACM-002",
-                "severity": "high",
-                "confidence": "probable",
-                "description": "Hardcoded credentials in config",
-                "business_impact": "",
-                "tool": "",
-            },
+            _make_finding(
+                tal_id="ACM-001",
+                severity="critical",
+                confidence="confirmed",
+                description="SQL injection in login endpoint",
+                business_impact="Full database compromise",
+                tool="semgrep",
+            ),
+            _make_finding(
+                tal_id="ACM-002",
+                severity="high",
+                confidence="probable",
+                description="Hardcoded credentials in config",
+                business_impact="",
+                tool="",
+            ),
         ]
         return ctx
 
@@ -268,12 +283,12 @@ class TestCriticalIssuesGenerator:
     def test_fallback_tal_id_when_missing(self, tmp_path: Path) -> None:
         ctx = _base_ctx()
         ctx["top_findings"] = [
-            {
-                "tal_id": None,
-                "severity": "high",
-                "confidence": "confirmed",
-                "description": "Some issue",
-            }
+            _make_finding(
+                tal_id=None,
+                severity="high",
+                confidence="confirmed",
+                description="Some issue",
+            )
         ]
         assert "(no finding ID)" in self._gen(tmp_path)._build_prompt(ctx)
 

@@ -242,7 +242,7 @@ class TestEnrichmentPipeline:
             pipeline.enrich([seeded_env["zap_id"]])
         row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
         assert row is not None
-        assert row["enriched"] == 1
+        assert row.enriched is True
 
     def test_enriched_fields_written_to_metadata(
         self, pipeline: EnrichmentPipeline, seeded_env: dict
@@ -254,7 +254,7 @@ class TestEnrichmentPipeline:
             pipeline.enrich([seeded_env["zap_id"]])
         row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
         assert row is not None
-        meta = json.loads(row["meta"] or "{}")
+        meta = row.meta
         assert meta.get("owasp_name") == "Injection"
 
     def test_invalid_json_leaves_enriched_false(
@@ -268,7 +268,7 @@ class TestEnrichmentPipeline:
             pipeline.enrich([seeded_env["zap_id"]])
         row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
         assert row is not None
-        assert row["enriched"] == 0
+        assert row.enriched is False
 
     def test_pipeline_continues_after_one_failure(self, project_env: dict) -> None:
         finding_repo = project_env["finding_repo"]
@@ -313,7 +313,7 @@ class TestEnrichmentPipeline:
         enriched = [
             r
             for fid in ids
-            if (r := finding_repo.get_finding(fid)) and r["enriched"] == 1
+            if (r := finding_repo.get_finding(fid)) and r.enriched is True
         ]
         assert len(enriched) >= 1
 
@@ -497,12 +497,12 @@ class TestEnrichmentPipeline:
 
         row = finding_repo.get_finding(ids[0])
         assert row is not None
-        meta = json.loads(row["meta"] or "{}")
+        meta = row.meta
         assert meta.get("remediation") == "fix it"
         assert meta.get("risk_type") is None
         # Per-field exceptions are caught inside _call_per_field; the future
-        # resolves successfully so had_errors stays False and enriched=1.
-        assert row["enriched"] == 1
+        # resolves successfully so had_errors stays False and enriched=True.
+        assert row.enriched is True
         assert p.had_errors is False
 
     # ------------------------------------------------------------------
@@ -546,5 +546,5 @@ class TestEnrichmentPipeline:
         assert p.had_errors is False
         row = finding_repo.get_finding(ids[0])
         assert row is not None
-        # update_enrichment_fields always writes enriched=1
-        assert row["enriched"] == 1
+        # update_enrichment_fields always writes enriched=True
+        assert row.enriched is True

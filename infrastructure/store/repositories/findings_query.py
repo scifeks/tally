@@ -40,7 +40,9 @@ class FindingQueryBuilder:
                file, rule_id, url,
                vulnerability_id, package_name, ecosystem,
                description, package_version, cwe, enriched, meta,
-               first_seen, last_seen, status
+               first_seen, last_seen, seen_count, status,
+               triaged_at, triaged_by, should_report,
+               business_impact, tal_id
         FROM findings
     """
 

@@ -1,8 +1,9 @@
-"""Report assembler — builds a ReportContext and renders it to PDF."""
+"""Report assembler: builds a ReportContext and renders it to PDF."""
 
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -11,7 +12,7 @@ import jinja2
 
 from application.reporting.attack_surface import AttackSurfaceBuilder
 from application.reporting.charts import get_chart_renderer
-from application.reporting.draft_query import DraftQueryService, _parse_meta
+from application.reporting.draft_query import DraftQueryService
 from application.reporting.findings_builder import FindingsBuilder
 from application.reporting.pdf import get_pdf_renderer
 from application.reporting.resolver import DraftResolver
@@ -37,7 +38,7 @@ _TESTING_TYPE_LABELS: dict[str, str] = {
     "black_box": "Black Box",
 }
 
-# Ordered TOC entries — (display title, section id).
+# Ordered TOC entries: (display title, section id).
 _TOC_ENTRIES: list[tuple[str, str]] = [
     ("Executive Summary", "#exec-summary"),
     ("Scope &amp; Methodology", "#scope-methodology"),
@@ -177,15 +178,14 @@ class ReportAssembler:
         attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
 
         # -- Segment 5: Finding ID assignment ---------------------------------
-        code_findings_raw = filtered
         code_sorted = sorted(
-            code_findings_raw,
+            filtered,
             key=lambda f: (
-                _SEVERITY_RANKS.get((f.get("severity") or "").lower(), 99),
-                (_parse_meta(f).get("title") or f.get("rule_id") or "").lower(),
+                _SEVERITY_RANKS.get((f.severity or "").lower(), 99),
+                (f.meta.get("title") or f.rule_id or "").lower(),
             ),
         )
-        code_with_ids = assign_tal_ids(code_sorted, prefix=prefix)
+        code_with_ids = assign_tal_ids([asdict(f) for f in code_sorted], prefix=prefix)
         finding_repo.reset_tal_ids()
         finding_repo.bulk_update_tal_ids(
             [(f["tal_id"], f["id"]) for f in code_with_ids]

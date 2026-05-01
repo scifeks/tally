@@ -23,6 +23,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from domain.findings.entry import Finding  # noqa: E402
 from web.api.findings import _serialise_finding  # noqa: E402
 from web.api.schemas import (  # noqa: E402
     ChatMessageSendResponse,
@@ -292,7 +293,7 @@ def _serialise_findings(rows: list[dict], project_id: int) -> list[dict]:
     """Run the production serializer over rows and inject project_id."""
     out: list[dict] = []
     for row in rows:
-        serial = _serialise_finding(row)
+        serial = _serialise_finding(Finding.from_row(row))
         serial["project_id"] = project_id
         out.append(serial)
     return out

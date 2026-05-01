@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from collections.abc import AsyncIterator
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -16,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from application.findings.analyst_service import FindingAnalystService
 from application.locking import FindingsBusy, LockQueryService
 from core.project_paths import ProjectPaths
+from domain.findings.entry import Finding
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
 from infrastructure.events.ids import new_event_id
@@ -49,67 +51,26 @@ router = APIRouter()
 _TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
 
 
-def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
-    """Serialise a raw SQLite findings row for the API response.
+def _serialise_finding(finding: Finding) -> dict[str, Any]:
+    """Serialise a Finding for the API response.
 
-    Steps applied:
-    - Parse the ``meta`` JSON blob to a dict; strip all ``type_*`` flags.
-    - Parse ``finding_type`` and ``cwe`` JSON array strings to lists.
-    - Translate severity integer rank to label.
-    - Expose the named ``fingerprint`` column as ``id_fingerprint`` to avoid
-      collision with semgrep's scanner fingerprint stored in ``meta``.
-    - Annotate ``is_locked`` and ``lock_holder`` from the live registry.
+    The named ``fingerprint`` column is exposed as ``id_fingerprint`` so it
+    cannot collide with semgrep's scanner fingerprint stored in ``meta``.
+    ``type_*`` flags written by the ChromaDB ingestor are stripped from
+    ``meta`` before the response leaves the adapter. ``is_locked`` and
+    ``lock_holder`` reflect live state from the lock registry.
     """
-    result: dict[str, Any] = dict(row)
+    result: dict[str, Any] = asdict(finding)
+    result["meta"] = {
+        k: v for k, v in result["meta"].items() if not _TYPE_FLAG_RE.match(k)
+    }
+    result["id_fingerprint"] = result.pop("fingerprint")
+    result["enriched"] = 1 if result["enriched"] else 0
+    result["should_report"] = 1 if result["should_report"] else 0
 
-    # Parse meta JSON blob.
-    try:
-        meta: dict[str, Any] = json.loads(result.get("meta") or "{}")
-    except (json.JSONDecodeError, TypeError):
-        meta = {}
-
-    # Strip ChromaDB-only type_* flags.
-    meta = {k: v for k, v in meta.items() if not _TYPE_FLAG_RE.match(k)}
-    result["meta"] = meta
-
-    # Parse finding_type JSON array string → list.
-    ft_raw = result.get("finding_type")
-    if ft_raw:
-        try:
-            result["finding_type"] = json.loads(ft_raw)
-        except (json.JSONDecodeError, TypeError):
-            result["finding_type"] = []
-    else:
-        result["finding_type"] = []
-
-    # Parse cwe JSON array string → list.
-    cwe_raw = result.get("cwe")
-    if cwe_raw:
-        try:
-            result["cwe"] = json.loads(cwe_raw)
-        except (json.JSONDecodeError, TypeError):
-            result["cwe"] = []
-    else:
-        result["cwe"] = []
-
-    # Translate severity integer rank to label (search_raw returns raw ranks).
-    sev_raw = result.get("severity")
-    if isinstance(sev_raw, int):
-        result["severity"] = Severity.from_rank(sev_raw).label
-
-    # Rename named fingerprint column to id_fingerprint.
-    result["id_fingerprint"] = result.pop("fingerprint", None)
-
-    # Annotate live lock state from the registry.
-    finding_id: int | None = result.get("id")
-    if finding_id is not None:
-        svc = LockQueryService()
-        result["is_locked"] = svc.is_finding_locked(finding_id)
-        result["lock_holder"] = svc.finding_lock_holder(finding_id)
-    else:
-        result["is_locked"] = False
-        result["lock_holder"] = None
-
+    svc = LockQueryService()
+    result["is_locked"] = svc.is_finding_locked(finding.id)
+    result["lock_holder"] = svc.finding_lock_holder(finding.id)
     return result
 
 

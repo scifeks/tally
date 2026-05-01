@@ -28,7 +28,7 @@ from application.reporting.blurbs import load_blurb
 from application.reporting.draft_query import DraftQueryService
 from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.risk_level import compute_risk_level
-from application.reporting.tal_id import assign_tal_ids, resolve_prefix
+from application.reporting.tal_id import assign_tal_ids_to_findings, resolve_prefix
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.pipeline.report_events import DraftCompleted, DraftFailed, DraftStarted
@@ -42,6 +42,7 @@ from infrastructure.vector.factory import make_chromadb_vector_index
 if TYPE_CHECKING:
     from application.ports.user_prompt import UserPromptPort
     from core.config.schemas import Repository
+    from domain.findings.entry import Finding
     from infrastructure.store.repositories.drafts import DraftRecord, DraftRepository
 
 
@@ -231,7 +232,7 @@ def _generate(
         project_cfg.abbreviation if project_cfg else "",
         config.global_config.report_finding_prefix,
     )
-    findings = assign_tal_ids(findings, prefix=prefix)
+    findings = assign_tal_ids_to_findings(findings, prefix=prefix)
 
     context = _build_context(
         section=section,
@@ -328,7 +329,7 @@ def _build_rag_query(section: str, context: dict[str, Any]) -> str | None:
 def _build_context(
     section: str,
     query: DraftQueryService,
-    findings: list[dict[str, Any]],
+    findings: list[Finding],
     sev_dist: dict[str, int],
     conf_dist: dict[str, int],
     risk_counts: Any,

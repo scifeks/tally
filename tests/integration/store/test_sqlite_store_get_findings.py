@@ -119,14 +119,14 @@ class TestGetFindings:
         store = _make_store(tmp_path)
         _seed_gf(store)
         rows = store.get_findings(segments=["sast"], limit=100)
-        assert all(r["segment"] == "sast" for r in rows)
+        assert all(r.segment == "sast" for r in rows)
         assert len(rows) >= 1
 
     def test_get_findings_no_segment_filter_returns_all(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         _seed_gf(store)
         rows = store.get_findings(segments=None, limit=100)
-        segments = {r["segment"] for r in rows}
+        segments = {r.segment for r in rows}
         assert "sast" in segments
         assert "secrets" in segments
 
@@ -134,7 +134,7 @@ class TestGetFindings:
         store = _make_store(tmp_path)
         _seed_gf(store)
         rows = store.get_findings(require_file=True, limit=100)
-        assert all(r["file"] for r in rows)
+        assert all(r.file for r in rows)
 
     def test_get_findings_require_file_false_includes_nulls(
         self, tmp_path: Path
@@ -142,7 +142,7 @@ class TestGetFindings:
         store = _make_store(tmp_path)
         _seed_gf(store)
         rows = store.get_findings(require_file=False, limit=100)
-        null_file_rows = [r for r in rows if not r["file"]]
+        null_file_rows = [r for r in rows if not r.file]
         assert len(null_file_rows) >= 1
 
     def test_get_findings_repo_equality(self, tmp_path: Path) -> None:
@@ -167,9 +167,9 @@ class TestGetFindings:
             ],
         )
         rows = store.get_findings(limit=100)
-        myrepo_rows = [r for r in rows if r["repo_id"] == myrepo_id]
+        myrepo_rows = [r for r in rows if r.repo_id == myrepo_id]
         assert len(myrepo_rows) == 1
-        assert myrepo_rows[0]["repo_id"] == myrepo_id
+        assert myrepo_rows[0].repo_id == myrepo_id
 
     def test_get_findings_status_filter(self, tmp_path: Path) -> None:
         """get_findings(status=...) returns only findings with that status."""
@@ -186,10 +186,10 @@ class TestGetFindings:
             conn.execute("UPDATE findings SET status='triaged' WHERE tool='semgrep'")
         rows = store.get_findings(status="triaged", limit=100)
         assert len(rows) >= 1
-        assert all(r["status"] == "triaged" for r in rows)
+        assert all(r.status == "triaged" for r in rows)
         rows_active = store.get_findings(status="active", limit=100)
         for r in rows_active:
-            assert r["status"] != "triaged"
+            assert r.status != "triaged"
 
     def test_get_findings_domain_filter(self, tmp_path: Path) -> None:
         """get_findings(domain=...) returns only findings with that domain."""
@@ -197,10 +197,10 @@ class TestGetFindings:
         _seed_gf(store)
         rows = store.get_findings(domain="sca", limit=100)
         assert len(rows) >= 1
-        assert all(r["domain"] == "sca" for r in rows)
+        assert all(r.domain == "sca" for r in rows)
         rows_code = store.get_findings(domain="code", limit=100)
         assert len(rows_code) >= 1
-        assert all(r["domain"] == "code" for r in rows_code)
+        assert all(r.domain == "code" for r in rows_code)
 
     def test_get_findings_combined_filters(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
@@ -220,9 +220,9 @@ class TestGetFindings:
             require_file=True,
             limit=100,
         )
-        assert all(r["tool"] == "semgrep" for r in rows)
-        assert all(r["segment"] in ("sast", "sca", "api") for r in rows)
-        assert all(r["file"] for r in rows)
+        assert all(r.tool == "semgrep" for r in rows)
+        assert all(r.segment in ("sast", "sca", "api") for r in rows)
+        assert all(r.file for r in rows)
 
 
 class TestPagination:
@@ -246,7 +246,7 @@ class TestPagination:
         all_rows = store.get_findings(limit=100, offset=0)
         offset_rows = store.get_findings(limit=100, offset=2)
         assert len(offset_rows) == len(all_rows) - 2
-        assert [r["id"] for r in offset_rows] == [r["id"] for r in all_rows[2:]]
+        assert [r.id for r in offset_rows] == [r.id for r in all_rows[2:]]
 
     def test_order_is_stable_id_desc(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
@@ -257,8 +257,8 @@ class TestPagination:
         )
         rows_a = store.get_findings(limit=100)
         rows_b = store.get_findings(limit=100)
-        assert [r["id"] for r in rows_a] == [r["id"] for r in rows_b]
-        ids = [r["id"] for r in rows_a]
+        assert [r.id for r in rows_a] == [r.id for r in rows_b]
+        ids = [r.id for r in rows_a]
         assert ids == sorted(ids, reverse=True)
 
     def test_count_findings_matches_total(self, tmp_path: Path) -> None:
@@ -299,7 +299,7 @@ class TestPagination:
             rows = store.get_findings(limit=page_size, offset=offset)
             if not rows:
                 break
-            collected.extend(r["id"] for r in rows)
+            collected.extend(r.id for r in rows)
             offset += page_size
         assert len(collected) == total
         assert len(set(collected)) == total
