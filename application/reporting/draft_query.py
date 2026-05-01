@@ -48,6 +48,26 @@ class DraftQueryService:
             return self._repo.get_all_findings()
         return self._repo.get_reportable_findings()
 
+    def get_findings_for_report(
+        self, skip_triage: bool = False
+    ) -> list[dict[str, Any]]:
+        """Return findings eligible for inclusion in a generated report.
+
+        ``should_report = 1`` is always required. ``skip_triage`` only
+        relaxes the requirement for non-null triage columns:
+
+        * ``skip_triage=False`` — triaged_by IS NOT NULL AND should_report = 1
+        * ``skip_triage=True``  — should_report = 1 (triage columns ignored)
+
+        Distinct from :meth:`get_filtered_findings`, which is used by the
+        LLM draft path and intentionally returns all findings when
+        ``skip_triage=True`` because drafts run before triage sets
+        ``should_report``.
+        """
+        if skip_triage:
+            return self._repo.get_findings_marked_for_report()
+        return self._repo.get_reportable_findings()
+
     def severity_distribution(self, findings: list[dict[str, Any]]) -> dict[str, int]:
         """Return count per severity tier."""
         dist: dict[str, int] = {

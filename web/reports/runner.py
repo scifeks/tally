@@ -49,6 +49,8 @@ class WebReportRequest:
     engagement_date: str | None
     output_path: str
     force_overwrite: bool
+    company_name: str | None
+    skip_triage: bool
 
 
 def start_report_thread(
@@ -129,6 +131,8 @@ def _run_report(
         testing_type=request.testing_type,
         engagement_date=request.engagement_date,
         force_overwrite=request.force_overwrite,
+        company_name_override=request.company_name,
+        skip_triage=request.skip_triage,
         report_id=report_id,
         project_id=project_id,
     )

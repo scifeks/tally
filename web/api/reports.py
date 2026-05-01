@@ -296,6 +296,8 @@ async def generate_report(
         engagement_date=body.engagement_date,
         output_path=str(output_path),
         force_overwrite=body.force_overwrite,
+        company_name=body.company_name,
+        skip_triage=body.skip_triage,
     )
 
     try:

@@ -62,6 +62,8 @@ class ReportRequest:
     testing_type: str = "white_box"
     engagement_date: str | None = None
     force_overwrite: bool = False
+    company_name_override: str | None = None
+    skip_triage: bool = False
     report_id: int = 0
     project_id: int | None = None
 
@@ -236,6 +238,8 @@ def _run_pdf(
         prompt=prompt,
         testing_type=request.testing_type,
         engagement_date=request.engagement_date,
+        company_name_override=request.company_name_override,
+        skip_triage=request.skip_triage,
     )
 
     _emit_step(sink, request, "build_context", 33, started=True)
