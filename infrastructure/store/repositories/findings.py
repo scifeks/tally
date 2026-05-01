@@ -6,6 +6,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from application.ports.finding_repository import FindingRepositoryPort
 from domain.findings.severity import Severity
 from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
@@ -36,7 +37,7 @@ _ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 
-class FindingRepository:
+class FindingRepository(FindingRepositoryPort):
     """CRUD and search operations for the findings table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:

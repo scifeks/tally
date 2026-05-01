@@ -1,13 +1,17 @@
 """Report generation from aggregated RAG findings."""
 
+from __future__ import annotations
+
 import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from domain.findings.severity import Severity
-from infrastructure.store import FindingRepository
+
+if TYPE_CHECKING:
+    from application.ports.finding_repository import FindingRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +22,7 @@ class ReportGenerator:
     """Generates security reports from findings stored in the RAG engine."""
 
     def __init__(
-        self, rag_engine: object, project: str, finding_repo: FindingRepository
+        self, rag_engine: object, project: str, finding_repo: FindingRepositoryPort
     ) -> None:
         self._engine = rag_engine
         self.project = project

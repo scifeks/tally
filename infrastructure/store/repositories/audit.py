@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from application.ports.audit_repository import AuditRepositoryPort
+
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
 
-class AuditRepository:
+class AuditRepository(AuditRepositoryPort):
     """Manages the tool_audit_log table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:

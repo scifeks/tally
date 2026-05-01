@@ -3,24 +3,16 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import Any
 
+from application.ports.finding_history_repository import (
+    FindingHistoryRepositoryPort,
+)
+from domain.findings.entry import HistoryRow
 from infrastructure.store.connection import ConnectionFactory
 
 
-@dataclass(frozen=True)
-class HistoryRow:
-    id: int
-    finding_id: int
-    timestamp: str
-    before_values: dict[str, Any]
-    after_values: dict[str, Any]
-    inference_context: dict[str, Any] | None
-    source: str
-
-
-class FindingHistoryRepository:
+class FindingHistoryRepository(FindingHistoryRepositoryPort):
     """Read-only access to the finding_history table.
 
     Write path (inserts) is handled inside FindingRepository's update methods
