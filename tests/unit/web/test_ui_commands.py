@@ -107,7 +107,10 @@ class TestServeCommand:
         assert opened_url.endswith("&fresh=1")
 
     @patch("uvicorn.run", side_effect=OSError("address already in use"))
-    @patch("application.repl.commands.ui_commands.UiCommands._wait_for_port")
+    @patch(
+        "application.repl.commands.ui_commands.UiCommands._wait_for_port",
+        return_value=False,
+    )
     @patch("application.repl.commands.ui_commands.UiCommands._start_vite")
     def test_serve_prints_error_if_api_server_fails(
         self, _mock_start_vite, _mock_wait, _mock_uvicorn_run, tmp_path, capsys
@@ -121,7 +124,10 @@ class TestServeCommand:
         assert "already in use" in out or "failed to start" in out
 
     @patch("uvicorn.run")
-    @patch("application.repl.commands.ui_commands.UiCommands._wait_for_port")
+    @patch(
+        "application.repl.commands.ui_commands.UiCommands._wait_for_port",
+        return_value=False,
+    )
     @patch("application.repl.commands.ui_commands.UiCommands._start_vite")
     def test_cmd_serve_blocks_on_main_thread(
         self, _mock_start_vite, _mock_wait, mock_uvicorn_run, tmp_path
@@ -173,7 +179,10 @@ class TestServeCommand:
         mock_atexit.assert_called_once_with(cmds._stop_vite)
 
     @patch("uvicorn.run")
-    @patch("application.repl.commands.ui_commands.UiCommands._wait_for_port")
+    @patch(
+        "application.repl.commands.ui_commands.UiCommands._wait_for_port",
+        return_value=False,
+    )
     @patch("application.repl.commands.ui_commands.UiCommands._start_vite")
     def test_stop_flag_no_longer_recognized(
         self, _mock_start_vite, _mock_wait, mock_uvicorn_run, tmp_path
