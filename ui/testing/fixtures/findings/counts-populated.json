@@ -2,33 +2,33 @@
   "by_severity": {
     "informational": 1,
     "low": 235,
-    "medium": 193,
+    "medium": 197,
     "high": 127,
     "critical": 12
   },
   "by_domain": {
-    "code": 268,
-    "web": 300
+    "code": 273,
+    "web": 299
   },
   "by_segment": {
-    "sast": 112,
+    "sast": 117,
     "sca": 108,
     "secrets": 48,
-    "web": 300
+    "web": 299
   },
   "by_repo": {},
   "by_status": {
-    "active": 539,
+    "active": 543,
     "false_positive": 11,
     "fixed": 11,
     "wont_fix": 7
   },
   "by_tool": {
-    "semgrep": 112,
+    "semgrep": 117,
     "osv-scanner": 68,
     "pip-audit": 40,
     "gitleaks": 48,
-    "zap": 292,
+    "zap": 291,
     "dalfox": 4,
     "xsstrike": 4
   },
@@ -40,21 +40,21 @@
       "wont_fix": 0
     },
     "low": {
-      "active": 228,
-      "false_positive": 2,
+      "active": 226,
+      "false_positive": 4,
       "fixed": 3,
       "wont_fix": 2
     },
     "medium": {
-      "active": 183,
-      "false_positive": 4,
-      "fixed": 4,
+      "active": 189,
+      "false_positive": 3,
+      "fixed": 3,
       "wont_fix": 2
     },
     "high": {
       "active": 115,
-      "false_positive": 5,
-      "fixed": 4,
+      "false_positive": 4,
+      "fixed": 5,
       "wont_fix": 3
     },
     "critical": {
@@ -64,10 +64,10 @@
       "wont_fix": 0
     }
   },
-  "total": 568,
+  "total": 572,
   "scans_count": 1,
   "repos_count": 4,
-  "urls_count": 269,
-  "last_scan_at": "2026-04-30T13:17:18.984999+00:00",
+  "urls_count": 307,
+  "last_scan_at": "2026-04-30T23:02:16.579444+00:00",
   "last_triage_at": "2026-04-30T15:30:00+00:00"
 }

@@ -1,14 +1,20 @@
 {
   "items": [
     {
+      "id": 1,
       "name": "dvwa",
+      "path": "/llm/code/repos/php/DVWA",
+      "docker_path": "/var/www/html",
+      "container_name": "dvwa-dvwa-1",
+      "dependencies_file": "",
+      "crawl_enabled": true,
+      "xsstrike_crawl_level": 10,
+      "katana_headless": false,
+      "katana_depth": 5,
       "type": [
         "ui",
         "api"
       ],
-      "path": "/llm/code/repos/php/DVWA",
-      "docker_path": "/var/www/html",
-      "container_name": "dvwa-dvwa-1",
       "languages": [
         "python",
         "javascript/typescript",
@@ -17,29 +23,31 @@
       "base_urls": [
         "http://localhost:4280"
       ],
+      "test_dirs": [
+        "tests",
+        "vendor"
+      ],
       "ignore_dirs": [],
-      "dependencies_file": "",
-      "crawl_enabled": true,
-      "xsstrike_crawl_level": 10,
       "xsstrike_headers": {},
       "dalfox_headers": {},
-      "katana_headless": false,
-      "katana_depth": 5,
       "katana_headers": {},
-      "id": 1,
-      "test_dirs": [
-        "tests"
-      ]
+      "endpoint_file": "dvna_oas3.json"
     },
     {
+      "id": 2,
       "name": "dvpwa",
+      "path": "/llm/code/repos/python/dvpwa",
+      "docker_path": "/app",
+      "container_name": "dvpwa-sqli-1",
+      "dependencies_file": "/app/requirements.txt",
+      "crawl_enabled": true,
+      "xsstrike_crawl_level": 10,
+      "katana_headless": false,
+      "katana_depth": 5,
       "type": [
         "api",
         "ui"
       ],
-      "path": "/llm/code/repos/python/dvpwa",
-      "docker_path": "/app",
-      "container_name": "dvpwa-sqli-1",
       "languages": [
         "python",
         "javascript/typescript"
@@ -47,27 +55,28 @@
       "base_urls": [
         "http://localhost:8080"
       ],
+      "test_dirs": [],
       "ignore_dirs": [],
-      "dependencies_file": "/app/requirements.txt",
-      "crawl_enabled": true,
-      "xsstrike_crawl_level": 10,
       "xsstrike_headers": {},
       "dalfox_headers": {},
-      "katana_headless": false,
-      "katana_depth": 5,
       "katana_headers": {},
-      "id": 2,
-      "test_dirs": []
+      "endpoint_file": null
     },
     {
+      "id": 3,
       "name": "juice-shop",
+      "path": "/llm/code/juice-shop",
+      "docker_path": "",
+      "container_name": "",
+      "dependencies_file": "",
+      "crawl_enabled": true,
+      "xsstrike_crawl_level": 10,
+      "katana_headless": true,
+      "katana_depth": 5,
       "type": [
         "api",
         "ui"
       ],
-      "path": "/llm/code/juice-shop",
-      "docker_path": "",
-      "container_name": "",
       "languages": [
         "python",
         "javascript/typescript",
@@ -77,48 +86,44 @@
       "base_urls": [
         "http://juice-shop.justinc.srv:3000/"
       ],
+      "test_dirs": [
+        "test"
+      ],
       "ignore_dirs": [
         "node_modules"
       ],
+      "xsstrike_headers": {},
+      "dalfox_headers": {},
+      "katana_headers": {},
+      "endpoint_file": null
+    },
+    {
+      "id": 4,
+      "name": "php-goof",
+      "path": "/llm/code/repos/php/php-goof",
+      "docker_path": "/app",
+      "container_name": "php-goof-app-1",
       "dependencies_file": "",
       "crawl_enabled": true,
       "xsstrike_crawl_level": 10,
-      "xsstrike_headers": {},
-      "dalfox_headers": {},
-      "katana_headless": true,
+      "katana_headless": false,
       "katana_depth": 5,
-      "katana_headers": {},
-      "id": 3,
-      "test_dirs": [
-        "test"
-      ]
-    },
-    {
-      "name": "php-goof",
       "type": [
         "api",
         "ui"
       ],
-      "path": "/llm/code/repos/php/php-goof",
-      "docker_path": "/app",
-      "container_name": "php-goof-app-1",
       "languages": [
         "php"
       ],
       "base_urls": [
         "http://127.0.0.1:8000/"
       ],
+      "test_dirs": [],
       "ignore_dirs": [],
-      "dependencies_file": "",
-      "crawl_enabled": true,
-      "xsstrike_crawl_level": 10,
       "xsstrike_headers": {},
       "dalfox_headers": {},
-      "katana_headless": false,
-      "katana_depth": 5,
       "katana_headers": {},
-      "id": 4,
-      "test_dirs": []
+      "endpoint_file": null
     }
   ],
   "total": 4,

@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
+from application.ports.progress_reporter import ProgressReporter
 from application.ports.scan_event_sink import ScanEventSink
 from application.ports.user_prompt import UserPromptPort
 from application.tools.executor import ToolExecutor
@@ -94,6 +95,7 @@ class ScanService:
         skip_tool_ids: tuple[str, ...] = (),
         skip_enrichment: bool = False,
         prompt: UserPromptPort,
+        reporter: ProgressReporter | None = None,
         event_sink: ScanEventSink | None = None,
         console: Console | None = None,
         run_args: dict[str, Any] | None = None,
@@ -152,6 +154,7 @@ class ScanService:
                 "skip_tool_ids": skip_tool_ids,
                 "skip_enrichment": skip_enrichment,
                 "prompt": prompt,
+                "reporter": reporter,
                 "event_sink": event_sink,
                 "console": console,
                 "cancel_token": cancel_token,
@@ -178,6 +181,7 @@ class ScanService:
         skip_tool_ids: tuple[str, ...],
         skip_enrichment: bool,
         prompt: UserPromptPort,
+        reporter: ProgressReporter | None,
         event_sink: ScanEventSink | None,
         console: Console | None,
         cancel_token: CancellationToken,
@@ -198,6 +202,7 @@ class ScanService:
                 project_name=project_name,
                 base_path=Path(base_path),
                 prompt=prompt,
+                reporter=reporter,
             )
             pipeline_bus = PipelineFactory.create(
                 console=console,

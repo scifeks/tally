@@ -517,7 +517,7 @@ export const handlers = [
     ({ params }) => {
       // Return 404 for the failed section in fixture-1 to exercise the
       // not-yet-generated path. All others get the sample markdown body.
-      if (params.projectId === '1' && params.section === 'general_recommendations') {
+      if (params.projectId === '1' && params.section === 'general-recommendations') {
         return errorEnvelope(404, 'NOT_FOUND', 'draft not generated')
       }
       return new HttpResponse(reportDraftDownloadMarkdown, {

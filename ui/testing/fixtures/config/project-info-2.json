@@ -1,12 +1,12 @@
 {
-  "id": 7,
-  "name": "Tally",
-  "code": "TAL",
-  "company_name": "Tally",
+  "id": 3,
+  "name": "DVPA-alt",
+  "code": "DVP",
+  "company_name": "DVPA-alt",
   "department_name": "",
-  "abbreviation": "TAL",
+  "abbreviation": "DVP",
   "created_at": "2026-04-25T03:06:56Z",
-  "path": "/llm/code/tally/projects/Tally",
+  "path": "/llm/code/tally/projects/DVPA",
   "repo_count": 4,
-  "finding_count": 568
+  "finding_count": 572
 }

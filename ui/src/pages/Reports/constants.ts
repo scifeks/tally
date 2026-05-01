@@ -1,21 +1,21 @@
 import type { ReportDraftSection, ReportFormat, TestingType } from '@/lib/types'
 
 export const SECTION_LABELS: Record<ReportDraftSection, string> = {
-  executive_summary: 'Executive Summary',
-  risk_level: 'Risk Level Assessment',
-  critical_issues: 'Critical Issues',
-  improvement_points: 'Improvement Points',
-  scope_methodology: 'Scope & Methodology',
-  general_recommendations: 'General Recommendations',
+  'executive-summary': 'Executive Summary',
+  'risk-level': 'Risk Level Assessment',
+  'critical-issues': 'Critical Issues',
+  'improvement-points': 'Improvement Points',
+  'scope-and-methodology': 'Scope & Methodology',
+  'general-recommendations': 'General Recommendations',
 }
 
 export const SECTION_ORDER: ReportDraftSection[] = [
-  'executive_summary',
-  'risk_level',
-  'critical_issues',
-  'improvement_points',
-  'scope_methodology',
-  'general_recommendations',
+  'executive-summary',
+  'risk-level',
+  'critical-issues',
+  'improvement-points',
+  'scope-and-methodology',
+  'general-recommendations',
 ]
 
 export const FORMAT_OPTIONS: { value: ReportFormat; label: string; requiresDrafts: boolean }[] = [

@@ -60,11 +60,11 @@ describe('useReportDrafts', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const drafts = result.current.data ?? []
     expect(drafts).toHaveLength(6)
-    const exec = drafts.find(d => d.section === 'executive_summary')
+    const exec = drafts.find(d => d.section === 'executive-summary')
     expect(exec?.status).toBe('draft')
     expect(exec?.wordCount).toBe(450)
     expect(exec?.generatedAt).toBe('2026-04-28T10:00:00+00:00')
-    expect(drafts.find(d => d.section === 'risk_level')?.uploadedFilename).toBe(
+    expect(drafts.find(d => d.section === 'risk-level')?.uploadedFilename).toBe(
       'risk-level-reviewed.md'
     )
   })
@@ -145,7 +145,7 @@ describe('useGenerateDraft', () => {
         body = (await request.json()) as Record<string, unknown>
         return HttpResponse.json(
           {
-            section: 'executive_summary',
+            section: 'executive-summary',
             status: 'generating',
             generated_at: null,
             reviewed_at: null,
@@ -164,12 +164,12 @@ describe('useGenerateDraft', () => {
     await act(async () => {
       resolved = await result.current.mutateAsync({
         projectId: 1,
-        section: 'executive_summary',
+        section: 'executive-summary',
         force: true,
       })
     })
-    expect(body).toEqual({ section: 'executive_summary', force: true })
-    expect(resolved).toMatchObject({ section: 'executive_summary', status: 'generating' })
+    expect(body).toEqual({ section: 'executive-summary', force: true })
+    expect(resolved).toMatchObject({ section: 'executive-summary', status: 'generating' })
   })
 
   it('routes a 409 JOB_ALREADY_RUNNING through setReportMutationError', async () => {
@@ -177,7 +177,7 @@ describe('useGenerateDraft', () => {
     const { result } = renderHook(() => useGenerateDraft(), { wrapper })
     await act(async () => {
       await result.current
-        .mutateAsync({ projectId: 99, section: 'executive_summary' })
+        .mutateAsync({ projectId: 99, section: 'executive-summary' })
         .catch(() => undefined)
     })
     const err = useUI.getState().reportMutationError
@@ -202,7 +202,7 @@ describe('useGenerateDraft', () => {
     const { result } = renderHook(() => useGenerateDraft(), { wrapper })
     await act(async () => {
       await result.current
-        .mutateAsync({ projectId: 1, section: 'executive_summary' })
+        .mutateAsync({ projectId: 1, section: 'executive-summary' })
         .catch(() => undefined)
     })
     expect(useUI.getState().reportMutationError?.code).toBe('VALIDATION_ERROR')
@@ -225,7 +225,7 @@ describe('useUploadDraft', () => {
           calledMethod = request.method
           contentType = request.headers.get('Content-Type')
           return HttpResponse.json({
-            section: 'risk_level',
+            section: 'risk-level',
             status: 'reviewed',
             generated_at: null,
             reviewed_at: '2026-04-28T13:00:00+00:00',
@@ -241,7 +241,7 @@ describe('useUploadDraft', () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useUploadDraft(), { wrapper })
     await act(async () => {
-      await result.current.mutateAsync({ projectId: 1, section: 'risk_level', file })
+      await result.current.mutateAsync({ projectId: 1, section: 'risk-level', file })
     })
     expect(calledMethod).toBe('POST')
     expect(contentType).toMatch(/^multipart\/form-data/)
@@ -265,7 +265,7 @@ describe('useDeleteDraft', () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useDeleteDraft(), { wrapper })
     await act(async () => {
-      await result.current.mutateAsync({ projectId: 1, section: 'critical_issues' })
+      await result.current.mutateAsync({ projectId: 1, section: 'critical-issues' })
     })
     expect(calledMethod).toBe('DELETE')
   })
@@ -451,22 +451,22 @@ describe('useReportDraftEvents', () => {
     renderHook(
       () =>
         useReportDraftEvents(1, e => seen.push(e), {
-          section: 'executive_summary',
+          section: 'executive-summary',
         }),
       { wrapper }
     )
     await waitFor(() => expect(MockEventSource.instances.length).toBe(1))
     const es = MockEventSource.instances[0]
-    expect(es.url).toContain('/projects/1/reports/drafts/events?section=executive_summary')
+    expect(es.url).toContain('/projects/1/reports/drafts/events?section=executive-summary')
     es.emitTyped('draft_completed', {
       id: 'd-1',
       run_id: 7,
       timestamp: '2026-04-28T12:00:10+00:00',
-      section: 'executive_summary',
+      section: 'executive-summary',
       message: 'done',
     })
     expect(seen).toHaveLength(1)
-    expect(seen[0]).toMatchObject({ type: 'draft_completed', section: 'executive_summary' })
+    expect(seen[0]).toMatchObject({ type: 'draft_completed', section: 'executive-summary' })
   })
 })
 
@@ -487,7 +487,7 @@ describe('downloadDraftSection', () => {
         }
       )
     )
-    await downloadDraftSection(1, 'executive_summary')
+    await downloadDraftSection(1, 'executive-summary')
     expect(acceptHeader).toBe('text/markdown')
   })
 })

@@ -18,8 +18,11 @@ project JSON. It writes only to `ui/testing/fixtures/`.
 ## Layout
 
 - `generate.py` — orchestrator. Builds a single context dict from
-  `tally.db` + `projects/DVPA/sqlite/findings.db` +
-  `projects/DVPA/config/project.json`, then runs domain producers.
+  `tally.db` + `projects/DVPA/sqlite/findings.db` (per-repo config
+  hydrates from the SQLite `repositories` table) plus
+  `projects/DVPA/config/project.json` for project-level metadata
+  (`company_name`, `department_name`, `abbreviation`), then runs
+  domain producers.
 - `seeds/` — hand-authored data the DB lacks. Two flavors:
   - **DB-row shape** (for findings the DB doesn't have — dalfox,
     xsstrike — and synthetic extra scan runs). These run through the

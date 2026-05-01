@@ -7,54 +7,55 @@
   "finding_type": [
     "vulnerability"
   ],
-  "severity": "high",
-  "confidence": "confirmed",
-  "file": "/.github/workflows/docker-image.yml",
-  "rule_id": "yaml.github-actions.security.run-shell-injection.run-shell-injection",
+  "severity": "medium",
+  "confidence": "potential",
+  "file": "/docker-compose.yml",
+  "rule_id": "yaml.docker-compose.security.no-new-privileges.no-new-privileges",
   "url": null,
   "vulnerability_id": null,
   "package_name": null,
   "ecosystem": null,
-  "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+  "description": "Service 'redis' allows for privilege escalation via setuid or setgid binaries. Add 'no-new-privileges:true' in 'security_opt' to prevent this.",
   "package_version": null,
   "cwe": [
-    "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+    "CWE-732: Incorrect Permission Assignment for Critical Resource"
   ],
   "enriched": 0,
   "meta": {
-    "profile": "dvwa",
-    "line_start": 28,
-    "line_end": 44,
-    "timestamp": "2026-04-30T13:05:44.946807+00:00",
-    "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_130544.stdout",
-    "col_start": 7,
-    "col_end": 2,
+    "profile": "dvpwa",
+    "line_start": 11,
+    "line_end": 11,
+    "timestamp": "2026-04-30T22:50:38.327720+00:00",
+    "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+    "col_start": 3,
+    "col_end": 8,
     "owasp": [
-      "A01:2017 - Injection",
-      "A03:2021 - Injection",
-      "A05:2025 - Injection"
+      "A05:2021 - Security Misconfiguration",
+      "A06:2017 - Security Misconfiguration",
+      "A02:2025 - Security Misconfiguration"
     ],
-    "owasp_name": "[\"Injection\"]",
+    "owasp_name": "[\"Security Misconfiguration\"]",
     "fingerprint": "requires login",
     "category": "security",
     "technology": [
-      "github-actions"
+      "docker-compose"
     ],
     "subcategory": [
-      "vuln"
+      "audit"
     ],
-    "likelihood": "HIGH",
+    "likelihood": "LOW",
     "impact": "HIGH",
     "references": [
-      "https://docs.github.com/en/actions/learn-github-actions/security-hardening-for-github-actions#understanding-the-risk-of-script-injections",
-      "https://securitylab.github.com/research/github-actions-untrusted-input/"
+      "https://raesene.github.io/blog/2019/06/01/docker-capabilities-and-no-new-privs/",
+      "https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt",
+      "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-4-add-no-new-privileges-flag"
     ],
     "enriched": false,
-    "repo_id": 1,
-    "repo": "dvwa"
+    "repo_id": 2,
+    "repo": "dvpwa"
   },
-  "first_seen": "2026-04-30T13:05:48.614494+00:00",
-  "last_seen": "2026-04-30T13:05:48.614494+00:00",
+  "first_seen": "2026-04-30T22:50:55.313870+00:00",
+  "last_seen": "2026-04-30T22:50:55.313870+00:00",
   "seen_count": 1,
   "status": "fixed",
   "triaged_at": "2026-04-30T16:00:00+00:00",
@@ -62,8 +63,8 @@
   "should_report": 0,
   "business_impact": null,
   "tal_id": null,
-  "repo_id": 1,
-  "id_fingerprint": "fb2ee284cd2ac1ac6db3b76cddea8b8617e4fafa7949f7b40422dc37b37d10e8",
+  "repo_id": 2,
+  "id_fingerprint": "ff3fe55e850ca3205da4a9ebcf6c99e88b69329f2bd29641cba56740f76e9994",
   "is_locked": false,
   "lock_holder": null,
   "project_id": 2

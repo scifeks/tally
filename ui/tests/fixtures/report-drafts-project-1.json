@@ -1,7 +1,7 @@
 {
   "drafts": [
     {
-      "section": "executive_summary",
+      "section": "executive-summary",
       "status": "draft",
       "generated_at": "2026-04-28T10:00:00+00:00",
       "reviewed_at": null,
@@ -11,7 +11,7 @@
       "error": null
     },
     {
-      "section": "risk_level",
+      "section": "risk-level",
       "status": "reviewed",
       "generated_at": "2026-04-28T10:02:00+00:00",
       "reviewed_at": "2026-04-28T11:30:00+00:00",
@@ -21,7 +21,7 @@
       "error": null
     },
     {
-      "section": "critical_issues",
+      "section": "critical-issues",
       "status": "draft",
       "generated_at": "2026-04-28T10:05:00+00:00",
       "reviewed_at": null,
@@ -31,7 +31,7 @@
       "error": null
     },
     {
-      "section": "improvement_points",
+      "section": "improvement-points",
       "status": "not_generated",
       "generated_at": null,
       "reviewed_at": null,
@@ -41,7 +41,7 @@
       "error": null
     },
     {
-      "section": "scope_methodology",
+      "section": "scope-and-methodology",
       "status": "not_generated",
       "generated_at": null,
       "reviewed_at": null,
@@ -51,7 +51,7 @@
       "error": null
     },
     {
-      "section": "general_recommendations",
+      "section": "general-recommendations",
       "status": "failed",
       "generated_at": null,
       "reviewed_at": null,

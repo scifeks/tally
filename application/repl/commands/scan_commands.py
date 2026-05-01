@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
+from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
@@ -203,6 +204,7 @@ class ScanCommands:
                 skip_tool_ids=tuple(skip_tools),
                 skip_enrichment=skip_enrichment,
                 prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
+                reporter=StdoutProgressReporter(),
                 console=self.repl.console,
                 run_args={"args": args},
             )
@@ -294,6 +296,7 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
             prompt=RichConsolePromptAdapter(),
+            reporter=StdoutProgressReporter(),
         )
         result = executor.execute(
             tool,

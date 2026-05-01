@@ -41,8 +41,10 @@ class TestExecutorErrorPaths:
     # _timeout_result
     # ------------------------------------------------------------------
 
-    def test_timeout_result_returns_failed_tool_result(self) -> None:
-        result = ToolExecutor._timeout_result(
+    def test_timeout_result_returns_failed_tool_result(
+        self, executor: ToolExecutor
+    ) -> None:
+        result = executor._timeout_result(
             "mytool", "2024-01-01T00:00:00", perf_counter() - 1.0, 300
         )
         assert isinstance(result, ToolResult)
@@ -50,8 +52,10 @@ class TestExecutorErrorPaths:
         assert result.tool_name == "mytool"
         assert "300" in result.output
 
-    def test_timeout_result_duration_is_nonnegative(self) -> None:
-        result = ToolExecutor._timeout_result(
+    def test_timeout_result_duration_is_nonnegative(
+        self, executor: ToolExecutor
+    ) -> None:
+        result = executor._timeout_result(
             "mytool", "2024-01-01T00:00:00", perf_counter() - 1.0, 300
         )
         assert result.duration_seconds >= 0.0
@@ -117,3 +121,62 @@ class TestExecutorErrorPaths:
             )
         assert not isinstance(result, ToolResult)
         assert hasattr(result, "proc")
+
+
+class _RecordingReporter:
+    """Test double that records every report() call."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def report(self, message: str) -> None:
+        self.messages.append(message)
+
+
+class TestExecutorReporterWiring:
+    """Cover the ProgressReporter port hook in ToolExecutor."""
+
+    def test_default_reporter_is_silent(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # No reporter → executor must use NullProgressReporter.
+        executor = ToolExecutor("p", tmp_path, NoApprovalPromptAdapter())
+        with patch.object(
+            executor,
+            "_run_subprocess",
+            side_effect=FileNotFoundError("nope"),
+        ):
+            executor._run_with_escalation(
+                ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            )
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_injected_reporter_receives_failure_message(self, tmp_path: Path) -> None:
+        reporter = _RecordingReporter()
+        executor = ToolExecutor(
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            reporter=reporter,
+        )
+        with patch.object(
+            executor,
+            "_run_subprocess",
+            side_effect=FileNotFoundError("nope"),
+        ):
+            executor._run_with_escalation(
+                ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            )
+        assert reporter.messages == ["    ✗ Failed  (command not found)"]
+
+    def test_timeout_routes_through_reporter(self, tmp_path: Path) -> None:
+        reporter = _RecordingReporter()
+        executor = ToolExecutor(
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            reporter=reporter,
+        )
+        executor._timeout_result("mytool", "ts", perf_counter() - 1.0, 300)
+        assert reporter.messages == ["    ✗ Failed  (timeout after 300s)"]

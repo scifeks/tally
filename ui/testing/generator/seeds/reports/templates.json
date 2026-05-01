@@ -3,7 +3,7 @@
   "drafts_project_1": {
     "drafts": [
       {
-        "section": "executive_summary",
+        "section": "executive-summary",
         "status": "draft",
         "generated_at": "{{str:scan_finished_at}}",
         "reviewed_at": null,
@@ -13,7 +13,7 @@
         "error": null
       },
       {
-        "section": "risk_level",
+        "section": "risk-level",
         "status": "reviewed",
         "generated_at": "{{str:scan_finished_at}}",
         "reviewed_at": "2026-04-30T15:45:00+00:00",
@@ -23,7 +23,7 @@
         "error": null
       },
       {
-        "section": "general_recommendations",
+        "section": "general-recommendations",
         "status": "failed",
         "generated_at": null,
         "reviewed_at": null,
@@ -57,7 +57,7 @@
   "drafts_project_2": {
     "drafts": [
       {
-        "section": "executive_summary",
+        "section": "executive-summary",
         "status": "not_generated",
         "generated_at": null,
         "reviewed_at": null,
@@ -67,7 +67,7 @@
         "error": null
       },
       {
-        "section": "risk_level",
+        "section": "risk-level",
         "status": "not_generated",
         "generated_at": null,
         "reviewed_at": null,
@@ -155,7 +155,7 @@
     "download_url": null
   },
   "draft_start_202": {
-    "section": "executive_summary",
+    "section": "executive-summary",
     "status": "generating",
     "generated_at": null,
     "reviewed_at": null,
@@ -165,7 +165,7 @@
     "error": null
   },
   "draft_upload_200": {
-    "section": "executive_summary",
+    "section": "executive-summary",
     "status": "reviewed",
     "generated_at": "{{str:scan_finished_at}}",
     "reviewed_at": "2026-04-30T17:00:00+00:00",
