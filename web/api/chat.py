@@ -398,18 +398,18 @@ async def send_chat_message(
 
     # Local import: web.server imports this module's v1_router during
     # app construction, so a top-level import would be circular.
-    from web.server import get_rag_engine
+    from web.server import get_knowledge_base
 
-    rag_engine = await asyncio.to_thread(
-        get_rag_engine, request.app, project_name, base_path
+    knowledge_base = await asyncio.to_thread(
+        get_knowledge_base, request.app, project_name, base_path
     )
-    if rag_engine is None:
+    if knowledge_base is None:
         raise ValidationError(
             "RAG engine unavailable for this project; "
             "ChromaDB or embedding provider is not reachable",
             details={"project_id": project_id, "code": "RAG_UNAVAILABLE"},
         )
-    query_engine = QueryEngine(rag_engine)
+    query_engine = QueryEngine(knowledge_base)
 
     provider = await asyncio.to_thread(get_llm_provider, "chat", base_path)
     model_name = provider.model

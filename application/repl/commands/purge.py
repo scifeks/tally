@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING
 
 from rich.markup import escape
 
+from application.ports.filters import Eq
 from application.tools.registry import tool_registry
 from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
-    from application.rag.engine import RAGEngine
+    from application.rag.knowledge_base import FindingKnowledgeBase
     from application.repl.interface import REPL
 
 
@@ -105,11 +106,11 @@ class PurgeCommand:
                 )
                 return
 
-        rag_engine = self._get_rag_engine()
-        if rag_engine is None:
+        kb = self._get_knowledge_base()
+        if kb is None:
             return
 
-        count = self._count_matching(rag_engine, tools=tools)
+        count = self._count_matching(kb, tools=tools)
         sqlite_count = self._count_sqlite_findings(tools=tools)
         has_outputs = self._has_tool_output_files(tools=tools)
         has_reports = tools is None and not keep_reports and self._has_report_files()
@@ -164,9 +165,9 @@ class PurgeCommand:
         total_deleted = 0
         if tools is not None:
             for t in tools:
-                total_deleted += rag_engine.delete_findings(tool=t)
+                total_deleted += kb.delete_findings(tool=t)
         else:
-            total_deleted = rag_engine.delete_findings(tool=None)
+            total_deleted = kb.delete_findings(tool=None)
         self._delete_tool_output_files(tools=tools)
         # Chat purge runs before _purge_sqlite — full-wipe deletes the
         # findings.db file outright, so going through the chat helper
@@ -307,22 +308,20 @@ class PurgeCommand:
 
     def _count_matching(
         self,
-        rag_engine: RAGEngine,
+        kb: FindingKnowledgeBase,
         tools: list[str] | None,
     ) -> int:
         """Return the count of documents that match the given filters."""
         if tools is not None:
             total = 0
             for t in tools:
-                where: dict[str, str] = {"tool": t}
                 try:
-                    result = rag_engine.get_documents(where=where, include=[])  # type: ignore[arg-type]
-                    total += len(result.get("ids") or [])
+                    total += kb.count(Eq("tool", t))
                 except Exception:
                     pass
             return total
 
-        return rag_engine.count_documents()
+        return kb.count()
 
     def _resolve_project_id(self) -> int | None:
         """Resolve the active project's id via the registry, or None on miss."""
@@ -421,15 +420,30 @@ class PurgeCommand:
         except Exception as exc:
             self.repl.console.print(f"[yellow]SQLite purge warning:[/yellow] {exc}")
 
-    def _get_rag_engine(self) -> RAGEngine | None:
-        """Create and return a RAGEngine for the active project, or None on error."""
-        from application.rag import RAGEngine
+    def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
+        """Build a FindingKnowledgeBase for the active project, or None on error."""
+        from pathlib import Path
+
+        from application.rag.knowledge_base import FindingKnowledgeBase
+        from infrastructure.embedding.factory import get_embedding_provider
+        from infrastructure.llm.factory import get_llm_provider
+        from infrastructure.vector.factory import make_chromadb_vector_index
 
         assert self.repl.active_project is not None
+        base = Path(self.repl.base_path)
         try:
-            return RAGEngine(
+            embedding_provider = get_embedding_provider(base)
+            chat_provider = get_llm_provider("chat", base)
+            vector_index = make_chromadb_vector_index(
                 project_name=self.repl.active_project,
-                base_path=self.repl.base_path,
+                base_path=base,
+                embedding_provider=embedding_provider,
+            )
+            return FindingKnowledgeBase(
+                vector_index=vector_index,
+                chat_provider=chat_provider,
+                project_name=self.repl.active_project,
+                base_path=base,
             )
         except RuntimeError as exc:
             self.repl.console.print(f"[red]RAG error:[/red] {exc}")

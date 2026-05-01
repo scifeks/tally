@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from application.locking.cancellation import CancellationToken
 from application.ports.draft_event_sink import DraftEventSink, NullDraftEventSink
-from application.rag.engine import RAGEngine
+from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.query import QueryEngine
 from application.reporting.blurbs import load_blurb
 from application.reporting.draft_query import DraftQueryService
@@ -32,10 +32,12 @@ from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.pipeline.report_events import DraftCompleted, DraftFailed, DraftStarted
+from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.llm.factory import get_llm_provider
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
+from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
     from application.ports.user_prompt import UserPromptPort
@@ -247,10 +249,20 @@ def _generate(
     )
 
     _check_cancel(token, section)
-    rag_engine = RAGEngine(
-        project_name=request.project, base_path=str(request.base_path)
+    embedding_provider = get_embedding_provider(request.base_path)
+    chat_provider = get_llm_provider("chat", request.base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=request.project,
+        base_path=request.base_path,
+        embedding_provider=embedding_provider,
     )
-    query_engine = QueryEngine(rag_engine)
+    kb = FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=request.project,
+        base_path=request.base_path,
+    )
+    query_engine = QueryEngine(kb)
     try:
         rag_query = _build_rag_query(section, context)
         if rag_query:
@@ -258,13 +270,13 @@ def _generate(
                 n = _SECTION_RAG_N_RESULTS.get(section, 20)
                 results = query_engine.search(rag_query, n_results=n)
                 context["rag_context"] = "\n\n".join(
-                    r["document"] for r in results if r.get("document")
+                    doc for r in results if (doc := r.get("document"))
                 )
             except Exception as exc:
                 logger.warning("ChromaDB query failed for %r: %s", section, exc)
                 context["rag_context"] = ""
     finally:
-        rag_engine.close()
+        kb.close()
 
     _check_cancel(token, section)
     content = generator.generate(context)

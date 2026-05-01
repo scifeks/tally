@@ -540,12 +540,14 @@ async def patch_finding(
         raise NotFound("Finding not found")
 
     serialised = _serialise_finding(finding)
-    from web.server import get_rag_engine
+    from web.server import get_knowledge_base
 
-    rag_engine = get_rag_engine(request.app, row["name"], request.app.state.base_path)
+    knowledge_base = get_knowledge_base(
+        request.app, row["name"], request.app.state.base_path
+    )
     sync_finding_to_chroma(
         finding_id=finding_id,
-        rag_engine=rag_engine,
+        knowledge_base=knowledge_base,
         finding_repo=repo,
     )
 

@@ -63,9 +63,9 @@ class TestReportCommand:
         tmp_path: Path,
     ) -> None:
         mock_repl.base_path = str(tmp_path)
-        mock_rag = MagicMock()
+        mock_kb = MagicMock()
         with (
-            patch.object(ReportCommand, "_get_rag_engine", return_value=mock_rag),
+            patch.object(ReportCommand, "_get_knowledge_base", return_value=mock_kb),
             patch("application.reporting.generator.ReportGenerator") as mock_gen_cls,
         ):
             cmd.execute("report", ["--format=markdown"])

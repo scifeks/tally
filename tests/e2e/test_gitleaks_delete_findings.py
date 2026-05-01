@@ -8,9 +8,12 @@ from pathlib import Path
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
+from application.rag.knowledge_base import FindingKnowledgeBase
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e
@@ -50,8 +53,20 @@ def _write_commands_config(base_path: Path) -> None:
     )
 
 
-def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
-    return RAGEngine(project_name=project_name, base_path=str(base_path))
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -76,18 +91,20 @@ def project_env(tmp_path: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
+_FIXED_TIMESTAMP = "2024-01-01T00:00:00"
+
+
 @requires_ollama
 class TestDeleteFindings:
-    def _add_docs(self, engine: RAGEngine, profile: str, ids: list[str]) -> None:
-        ts = RAGEngine.now_iso()
-        engine.add_documents(
-            texts=[f"Secret in repo ({profile})" for _ in ids],
+    def _add_docs(self, kb: FindingKnowledgeBase, profile: str, ids: list[str]) -> None:
+        kb.add_findings(
+            documents=[f"Secret in repo ({profile})" for _ in ids],
             metadatas=[
                 {
                     "tool": "gitleaks",
                     "profile": profile,
                     "finding_type": "secret",
-                    "timestamp": ts,
+                    "timestamp": _FIXED_TIMESTAMP,
                 }
                 for _ in ids
             ],
@@ -95,41 +112,41 @@ class TestDeleteFindings:
         )
 
     def test_delete_by_tool_and_profile(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
-        self._add_docs(engine, "my-repo", ["doc-a", "doc-b"])
-        assert engine.count_documents() == 2
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
+        self._add_docs(kb, "my-repo", ["doc-a", "doc-b"])
+        assert kb.count() == 2
 
-        deleted = engine.delete_findings("gitleaks", "my-repo")
+        deleted = kb.delete_findings("gitleaks", "my-repo")
 
         assert deleted == 2
-        assert engine.count_documents() == 0
+        assert kb.count() == 0
 
     def test_delete_scoped_to_profile_leaves_others(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
-        self._add_docs(engine, "repo-a", ["a-1"])
-        self._add_docs(engine, "repo-b", ["b-1"])
-        assert engine.count_documents() == 2
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
+        self._add_docs(kb, "repo-a", ["a-1"])
+        self._add_docs(kb, "repo-b", ["b-1"])
+        assert kb.count() == 2
 
-        deleted = engine.delete_findings("gitleaks", "repo-a")
+        deleted = kb.delete_findings("gitleaks", "repo-a")
 
         assert deleted == 1
-        assert engine.count_documents() == 1
+        assert kb.count() == 1
 
     def test_delete_by_tool_only_removes_all_profiles(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
-        self._add_docs(engine, "repo-a", ["a-1"])
-        self._add_docs(engine, "repo-b", ["b-1"])
-        assert engine.count_documents() == 2
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
+        self._add_docs(kb, "repo-a", ["a-1"])
+        self._add_docs(kb, "repo-b", ["b-1"])
+        assert kb.count() == 2
 
-        deleted = engine.delete_findings("gitleaks")
+        deleted = kb.delete_findings("gitleaks")
 
         assert deleted == 2
-        assert engine.count_documents() == 0
+        assert kb.count() == 0
 
     def test_delete_nonexistent_returns_zero(self, project_env: dict) -> None:
-        engine = _make_rag_engine(project_env["base_path"], project_env["project_name"])
-        assert engine.count_documents() == 0
+        kb = _make_kb(project_env["base_path"], project_env["project_name"])
+        assert kb.count() == 0
 
-        deleted = engine.delete_findings("gitleaks", "my-repo")
+        deleted = kb.delete_findings("gitleaks", "my-repo")
 
         assert deleted == 0

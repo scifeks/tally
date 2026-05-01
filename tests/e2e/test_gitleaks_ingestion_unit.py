@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
 from application.rag.ingestor import ToolHandlerFactory
+from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.query import QueryEngine
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_ollama
 
 pytestmark = pytest.mark.e2e
@@ -86,8 +91,20 @@ def _make_gitleaks_result() -> ToolResult:
     )
 
 
-def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
-    return RAGEngine(project_name=project_name, base_path=str(base_path))
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 def _ingest(
@@ -105,14 +122,16 @@ def _ingest(
     rows = handler.normalize(result, profile=profile)
     if not rows:
         return []
-    engine = _make_rag_engine(base_path, project_name)
+    kb = _make_kb(base_path, project_name)
     try:
         texts = [handler.render(row) for row in rows]
-        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        metadatas: list[Mapping[str, Any]] = [
+            {"tool": row["tool"], "profile": row["profile"]} for row in rows
+        ]
         ids = [row["fingerprint"] for row in rows]
-        engine.add_documents(texts, metadatas, ids)
+        kb.add_findings(documents=texts, metadatas=metadatas, ids=ids)
     finally:
-        engine.close()
+        kb.close()
     return rows
 
 
@@ -151,13 +170,13 @@ class TestIngestionUnit:
     def test_stats_shows_gitleaks_documents(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_gitleaks_result())
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            stats = engine.get_stats()
+            stats = kb.compute_stats()
         finally:
-            engine.close()
-        assert stats["total_documents"] > 0
-        assert "gitleaks" in stats["by_tool"]
+            kb.close()
+        assert stats.total_documents > 0
+        assert "gitleaks" in stats.by_tool
 
     def test_failed_result_not_ingested(self, project_env: dict) -> None:
         failed = ToolResult(
@@ -188,12 +207,14 @@ class TestIngestionUnit:
     def test_secret_value_not_in_document_text(self, project_env: dict) -> None:
         base, name = project_env["base_path"], project_env["project_name"]
         _ingest(base, name, _make_gitleaks_result())
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            results = QueryEngine(engine).search("aws-access-token")
+            results = QueryEngine(kb).search("aws-access-token")
         finally:
-            engine.close()
+            kb.close()
         for r in results:
-            assert "AKIAXYZ3FGHLMN2PQRST" not in r["document"], (
+            doc = r["document"]
+            assert doc is not None
+            assert "AKIAXYZ3FGHLMN2PQRST" not in doc, (
                 "Secret value must not appear in stored document text"
             )

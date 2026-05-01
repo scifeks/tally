@@ -525,7 +525,7 @@ class TestPatchFinding:
             headers=mut_headers,
         )
         assert response.status_code == 200
-        assert rag_mock.add_documents.called
+        assert rag_mock.add_findings.called
 
     async def test_chroma_sync_upserts_on_severity_change(self, app_client) -> None:
         client, finding_id, rag_mock, _, mut_headers, project_id = app_client
@@ -535,7 +535,7 @@ class TestPatchFinding:
             headers=mut_headers,
         )
         assert response.status_code == 200
-        assert rag_mock.add_documents.called
+        assert rag_mock.add_findings.called
 
     async def test_chroma_sync_upserts_on_should_report_change(
         self, app_client
@@ -547,11 +547,11 @@ class TestPatchFinding:
             headers=mut_headers,
         )
         assert response.status_code == 200
-        assert rag_mock.add_documents.called
+        assert rag_mock.add_findings.called
 
     async def test_chroma_sync_failure_returns_200(self, app_client) -> None:
         client, finding_id, rag_mock, _, mut_headers, project_id = app_client
-        rag_mock.add_documents.side_effect = Exception("chroma error")
+        rag_mock.add_findings.side_effect = Exception("chroma error")
         response = await client.patch(
             f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"severity": "low"},

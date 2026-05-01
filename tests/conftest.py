@@ -16,8 +16,8 @@ import shutil
 
 import pytest
 
-from application.rag.engine import verify_ollama_available
 from core.config import ConfigManager
+from infrastructure.llm.ollama_utils import verify_ollama_available
 
 
 def pytest_configure(config: pytest.Config) -> None:

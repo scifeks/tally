@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import shutil
+import struct
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
@@ -15,8 +16,10 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.pipeline.handlers import IngestHandler  # noqa: E402
+from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
-from application.rag.engine import RAGEngine  # noqa: E402
+from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
+from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import (  # noqa: E402
     EventBus,
     IngestCompleted,
@@ -27,6 +30,19 @@ from infrastructure.store import make_store  # noqa: E402
 from infrastructure.tools.parsers.gitleaks import (  # noqa: E402
     parse_gitleaks_json,
 )
+from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
+
+_DIM = 8
+
+
+class _DeterministicEmbedding(EmbeddingProvider):
+    def is_available(self) -> bool:
+        return True
+
+    def embed(self, text: str, **kwargs: Any) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
+
 
 pytestmark = pytest.mark.integration
 
@@ -127,15 +143,26 @@ class TestIngestHandlerPhase2:
         )
         handler.handle(event)
 
-        default_fn = ef.DefaultEmbeddingFunction()
-        with patch.object(
-            RAGEngine, "_build_embedding_function", return_value=default_fn
-        ):
-            engine = RAGEngine(
-                project_name=project_env["project_name"],
-                base_path=str(project_env["base_path"]),
-            )
-        assert engine.count_documents() == 0
+        paths = ProjectPaths.from_canonical(
+            project_env["base_path"], project_env["project_name"]
+        )
+        paths.chroma_db.mkdir(parents=True, exist_ok=True)
+        chat_provider: Any = object()
+        vector_index = ChromaDBVectorIndex(
+            chroma_path=paths.chroma_db,
+            collection_name=f"findings_{project_env['project_name']}",
+            embedding_provider=_DeterministicEmbedding(),
+        )
+        kb = FindingKnowledgeBase(
+            vector_index=vector_index,
+            chat_provider=chat_provider,
+            project_name=project_env["project_name"],
+            base_path=project_env["base_path"],
+        )
+        try:
+            assert kb.count() == 0
+        finally:
+            kb.close()
 
     def test_second_ingest_adds_new_rows(
         self, project_env: dict, gitleaks_result: ToolResult

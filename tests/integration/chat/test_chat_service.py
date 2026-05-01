@@ -29,6 +29,7 @@ from application.chat.service import (  # noqa: E402
 )
 from application.ports.chat_event_sink import ChatStreamSink  # noqa: E402
 from application.ports.llm_provider import LLMAdapterError, LLMProvider  # noqa: E402
+from application.ports.vector_index import VectorMatch  # noqa: E402
 from domain.pipeline.chat_events import (  # noqa: E402
     ChatEvent,
     ChatStreamCancelled,
@@ -99,7 +100,7 @@ class FakeProvider(LLMProvider):
 class FakeQueryEngine:
     """Stand-in for ``QueryEngine`` exposing only ``search``."""
 
-    def __init__(self, results: list[dict[str, Any]] | None = None) -> None:
+    def __init__(self, results: list[VectorMatch] | None = None) -> None:
         self.results = results or []
         self.calls: list[tuple[str, int]] = []
 
@@ -108,7 +109,7 @@ class FakeQueryEngine:
         raw_input: str = "",
         n_results: int = 20,
         query: Any = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[VectorMatch]:
         self.calls.append((raw_input, n_results))
         return list(self.results)
 
@@ -163,7 +164,14 @@ async def test_happy_path_streams_tokens_and_persists_assistant_turn(
 ) -> None:
     provider = FakeProvider(["Hel", "lo,", " world"])
     qe = FakeQueryEngine(
-        [{"document": "SQLi finding", "metadata": {"tool": "semgrep"}}]
+        [
+            {
+                "id": "1",
+                "document": "SQLi finding",
+                "metadata": {"tool": "semgrep"},
+                "distance": 0.1,
+            }
+        ]
     )
     sink = CapturingSink()
     request = ChatRequest(
@@ -212,7 +220,14 @@ async def test_retrieval_called_with_user_message_and_top_n(
 ) -> None:
     provider = FakeProvider(["ok"])
     qe = FakeQueryEngine(
-        [{"document": "Critical RCE", "metadata": {"tool": "zap", "profile": "web"}}]
+        [
+            {
+                "id": "1",
+                "document": "Critical RCE",
+                "metadata": {"tool": "zap", "profile": "web"},
+                "distance": 0.1,
+            }
+        ]
     )
     request = ChatRequest(
         session_id=seed_session, project_id=42, user_message="Audit the API"

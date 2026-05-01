@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+import struct
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
@@ -16,12 +18,44 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
+from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
-from application.rag.engine import RAGEngine  # noqa: E402
+from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
+from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import IngestCompleted  # noqa: E402
 from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
+from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
+
+_DIM = 8
+
+
+class _DeterministicEmbedding(EmbeddingProvider):
+    def is_available(self) -> bool:
+        return True
+
+    def embed(self, text: str, **kwargs: Any) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
+
+
+def _build_test_kb(project_name: str, base_path: Path) -> FindingKnowledgeBase:
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    paths.chroma_db.mkdir(parents=True, exist_ok=True)
+    chat_provider: Any = object()
+    vector_index = ChromaDBVectorIndex(
+        chroma_path=paths.chroma_db,
+        collection_name=f"findings_{project_name}",
+        embedding_provider=_DeterministicEmbedding(),
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
+
 
 pytestmark = pytest.mark.integration
 
@@ -403,20 +437,21 @@ class TestEnrichmentPipeline:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        default_fn = ef.DefaultEmbeddingFunction()
         handler = PersistOnlyStrategy()
-        with patch.object(
-            RAGEngine, "_build_embedding_function", return_value=default_fn
+        with patch(
+            "application.pipeline.handlers._build_knowledge_base",
+            side_effect=_build_test_kb,
         ):
             handler.handle(event)
-            engine = RAGEngine(
-                project_name=project_env["project_name"],
-                base_path=str(project_env["base_path"]),
-            )
 
-        assert engine.count_documents() == 1
-        metadatas = engine.get_all_metadatas()
-        assert metadatas[0]["tool"] == "gitleaks"
+        kb = _build_test_kb(project_env["project_name"], project_env["base_path"])
+        try:
+            assert kb.count() == 1
+            results = kb.find_by_filter(filter=None, limit=10, offset=0)
+            assert results[0]["metadata"] is not None
+            assert results[0]["metadata"]["tool"] == "gitleaks"
+        finally:
+            kb.close()
 
     # ------------------------------------------------------------------
     # PIPE-3: single per-field failure leaves other fields intact

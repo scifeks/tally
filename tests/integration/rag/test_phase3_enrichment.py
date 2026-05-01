@@ -197,29 +197,6 @@ class TestPhase3EnrichmentWritesToSQLite:
         assert row["description"] == "SQL injection in login form."
 
 
-class TestPhase3NoChromaDBWrites:
-    def test_enrich_does_not_call_rag_engine(self, store_env: dict) -> None:
-        """EnrichmentPipeline.enrich() never touches RAGEngine or ChromaDB."""
-        finding_repo = store_env["finding_repo"]
-        run_id = store_env["run_id"]
-        fid = _seed_finding(finding_repo, run_id, "semgrep")
-
-        mock_llm = MagicMock()
-        pipeline = EnrichmentPipeline(
-            finding_repo=finding_repo,
-            base_path=store_env["base_path"],
-            llm_provider=mock_llm,
-        )
-
-        with patch(
-            "application.rag.enrichment.EnrichmentPipeline._call_per_field",
-            return_value={"risk_type": "xss"},
-        ):
-            with patch("application.rag.engine.RAGEngine") as mock_engine_cls:
-                pipeline.enrich([fid])
-                mock_engine_cls.assert_not_called()
-
-
 class TestPhase3ToolBypass:
     def test_nmap_no_llm_calls(self, store_env: dict) -> None:
         """nmap findings bypass LLM enrichment (should_enrich=False)."""

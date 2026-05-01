@@ -15,15 +15,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
-from application.rag.engine import RAGEngine
+from application.rag.knowledge_base import FindingKnowledgeBase
 from application.runtime.dependency_service import RuntimeDependencyService
 from core.project_paths import ProjectPaths
+from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.events.bus import EventBus
+from infrastructure.llm.factory import get_llm_provider
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
+from infrastructure.vector.factory import make_chromadb_vector_index
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
 from web.api.auth import router as auth_router
@@ -115,8 +118,8 @@ def create_app(
 
     The server is project-agnostic: every domain endpoint takes
     ``:project_id`` in the path and resolves it against the project
-    registry per request. RAGEngine instances are lazily built and
-    cached per project.
+    registry per request. FindingKnowledgeBase instances are lazily
+    built and cached per project.
 
     Args:
         base_path: Tally base directory (same as ``ConfigManager.base_path``).
@@ -145,7 +148,7 @@ def create_app(
 
     _mark_stale_scans_failed(project_registry)
 
-    app.state.rag_engine_cache = {}
+    app.state.knowledge_base_cache = {}
 
     app.state.installed_tools = InstalledToolsProbe()
 
@@ -220,28 +223,41 @@ def create_app(
     return app
 
 
-def get_rag_engine(app: FastAPI, project_name: str, base_path: str) -> RAGEngine | None:
-    """Lazily build and cache a RAGEngine per project_name.
+def get_knowledge_base(
+    app: FastAPI, project_name: str, base_path: str
+) -> FindingKnowledgeBase | None:
+    """Lazily build and cache a FindingKnowledgeBase per project_name.
 
     Returns None if construction fails (e.g. ChromaDB or Ollama
     unavailable); callers must handle that as 'sync skipped'.
     """
-    cache: dict[str, RAGEngine | None] = app.state.rag_engine_cache
+    cache: dict[str, FindingKnowledgeBase | None] = app.state.knowledge_base_cache
     if project_name in cache:
         return cache[project_name]
+    base = Path(base_path)
     try:
-        engine: RAGEngine | None = RAGEngine(
-            project_name=project_name, base_path=base_path
+        embedding_provider = get_embedding_provider(base)
+        chat_provider = get_llm_provider("chat", base)
+        vector_index = make_chromadb_vector_index(
+            project_name=project_name,
+            base_path=base,
+            embedding_provider=embedding_provider,
         )
-    except Exception as exc:  # noqa: BLE001
+        kb: FindingKnowledgeBase | None = FindingKnowledgeBase(
+            vector_index=vector_index,
+            chat_provider=chat_provider,
+            project_name=project_name,
+            base_path=base,
+        )
+    except (RuntimeError, OSError, ImportError) as exc:
         logger.warning(
-            "RAGEngine init failed for %s — Chroma sync disabled: %s",
+            "knowledge base init failed for %s; Chroma sync disabled: %s",
             project_name,
             exc,
         )
-        engine = None
-    cache[project_name] = engine
-    return engine
+        kb = None
+    cache[project_name] = kb
+    return kb
 
 
 # todo: Add cross-midnight rollover, rquest-ID inner layer correlation

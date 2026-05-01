@@ -85,9 +85,9 @@ def test_valid_tool_accepted_by_purge(mock_reg):
     repl = MagicMock()
     repl.active_project = "proj"
     pc = PurgeCommand(repl)
-    mock_rag = MagicMock()
-    mock_rag._collection = None  # _count_matching returns 0 → exits early
-    pc._get_rag_engine = MagicMock(return_value=mock_rag)
+    mock_kb = MagicMock()
+    mock_kb.count.return_value = 0  # exits early after no-match check
+    pc._get_knowledge_base = MagicMock(return_value=mock_kb)
     pc.cmd_purge("purge", [f"--tool={_VALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Unknown tool" in p for p in printed)

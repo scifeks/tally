@@ -165,12 +165,12 @@ class TestCmdPurgeMergedPrompt:
 
         repl = _make_repl(tmp_path, project_name)
         mock_rag = MagicMock()
-        mock_rag.count_documents.return_value = 1
+        mock_rag.count.return_value = 1
         mock_rag.delete_findings.return_value = 1
 
         pc = PurgeCommand(repl)
         with (
-            patch.object(pc, "_get_rag_engine", return_value=mock_rag),
+            patch.object(pc, "_get_knowledge_base", return_value=mock_rag),
             patch("builtins.input", side_effect=["y", "n"]),
             patch.object(pc, "_count_sqlite_findings", return_value=0),
             patch.object(pc, "_purge_sqlite"),
@@ -197,12 +197,12 @@ class TestCmdPurgeMergedPrompt:
 
         repl = _make_repl(tmp_path, project_name)
         mock_rag = MagicMock()
-        mock_rag.count_documents.return_value = 1
+        mock_rag.count.return_value = 1
         mock_rag.delete_findings.return_value = 1
 
         pc = PurgeCommand(repl)
         with (
-            patch.object(pc, "_get_rag_engine", return_value=mock_rag),
+            patch.object(pc, "_get_knowledge_base", return_value=mock_rag),
             patch("builtins.input", side_effect=["y", "y"]),
             patch.object(pc, "_count_sqlite_findings", return_value=0),
             patch.object(pc, "_purge_sqlite"),

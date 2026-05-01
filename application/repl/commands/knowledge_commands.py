@@ -8,7 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from application.rag.engine import RAGEngine
+    from application.rag.knowledge_base import FindingKnowledgeBase
     from application.rag.query import QueryEngine
     from application.repl.interface import REPL
 
@@ -141,12 +141,12 @@ class KnowledgeCommands:
             )
             return
 
-        rag_engine = self._get_rag_engine()
-        if rag_engine is None:
+        kb = self._get_knowledge_base()
+        if kb is None:
             return
 
-        stats = rag_engine.get_stats()
-        total = stats.get("total_documents", 0)
+        stats = kb.compute_stats()
+        total = stats.total_documents
 
         if total == 0:
             self.repl.console.print("[yellow]No data ingested yet.[/yellow]")
@@ -158,19 +158,17 @@ class KnowledgeCommands:
 
         table.add_row("Total Documents", str(total))
 
-        for tool, count in sorted(stats.get("by_tool", {}).items()):
+        for tool, count in sorted(stats.by_tool.items()):
             table.add_row(f"  {tool}", str(count))
 
-        by_severity = stats.get("by_severity", {})
-        if by_severity:
+        if stats.by_severity:
             table.add_section()
-            for severity, count in sorted(by_severity.items()):
+            for severity, count in sorted(stats.by_severity.items()):
                 table.add_row(f"  Severity: {severity}", str(count))
 
-        last_updated = stats.get("last_updated")
-        if last_updated:
+        if stats.last_updated:
             table.add_section()
-            table.add_row("Last Updated", last_updated[:19].replace("T", " "))
+            table.add_row("Last Updated", stats.last_updated[:19].replace("T", " "))
 
         self.repl.console.print(table)
 
@@ -178,15 +176,30 @@ class KnowledgeCommands:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _get_rag_engine(self) -> RAGEngine | None:
-        """Create and return a RAGEngine for the active project, or None on error."""
-        from application.rag import RAGEngine
+    def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
+        """Build a FindingKnowledgeBase for the active project, or None on error."""
+        from pathlib import Path
+
+        from application.rag.knowledge_base import FindingKnowledgeBase
+        from infrastructure.embedding.factory import get_embedding_provider
+        from infrastructure.llm.factory import get_llm_provider
+        from infrastructure.vector.factory import make_chromadb_vector_index
 
         assert self.repl.active_project is not None
+        base = Path(self.repl.base_path)
         try:
-            return RAGEngine(
+            embedding_provider = get_embedding_provider(base)
+            chat_provider = get_llm_provider("chat", base)
+            vector_index = make_chromadb_vector_index(
                 project_name=self.repl.active_project,
-                base_path=self.repl.base_path,
+                base_path=base,
+                embedding_provider=embedding_provider,
+            )
+            return FindingKnowledgeBase(
+                vector_index=vector_index,
+                chat_provider=chat_provider,
+                project_name=self.repl.active_project,
+                base_path=base,
             )
         except RuntimeError as exc:
             self.repl.console.print(f"[red]RAG error:[/red] {exc}")
@@ -199,10 +212,10 @@ class KnowledgeCommands:
         """Create and return a QueryEngine for the active project, or None on error."""
         from application.rag.query import QueryEngine
 
-        rag_engine = self._get_rag_engine()
-        if rag_engine is None:
+        kb = self._get_knowledge_base()
+        if kb is None:
             return None
-        return QueryEngine(rag_engine)
+        return QueryEngine(kb)
 
     def _cmd_show_fields(self, args: list[str]) -> None:
         """Handle search --show-fields --tool=<name>."""
