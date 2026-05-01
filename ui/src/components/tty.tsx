@@ -97,7 +97,13 @@ export function Metric({
 export function Bar({ value, max, className }: { value: number; max: number; className?: string }) {
   const pct = max === 0 ? 0 : Math.min(100, (value / max) * 100)
   return (
-    <div className={cn('h-1.5 w-full bg-muted border border-border', className)}>
+    <div
+      role="progressbar"
+      aria-valuenow={pct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className={cn('h-1.5 w-full bg-muted border border-border', className)}
+    >
       <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
     </div>
   )

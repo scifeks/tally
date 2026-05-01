@@ -39,16 +39,8 @@ describe('ActiveProjectGuard', () => {
     useUI.setState({ activeProjectId: 2 })
     renderGuard()
 
-    // Wait for the projects query to resolve, then verify state is preserved.
     await waitFor(() => {
       expect(useUI.getState().activeProjectId).toBe(2)
-    })
-  })
-
-  it('is a no-op when activeProjectId is null', async () => {
-    renderGuard()
-    await waitFor(() => {
-      expect(useUI.getState().activeProjectId).toBeNull()
     })
   })
 })

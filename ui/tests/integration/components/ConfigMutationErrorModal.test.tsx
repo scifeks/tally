@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
 import { useUI } from '@/lib/store'
 import type { ApiErrorPayload } from '@/lib/types'
@@ -77,10 +78,11 @@ describe('ConfigMutationErrorModal', () => {
     expect(screen.getByText(/500/)).toBeInTheDocument()
   })
 
-  it('clears the slice when dismiss is clicked', () => {
+  it('clears the slice when dismiss is clicked', async () => {
+    const user = userEvent.setup()
     setError({ code: 'NOT_FOUND', message: '', details: {}, status: 404 })
     render(<ConfigMutationErrorModal />)
-    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+    await user.click(screen.getByRole('button', { name: /dismiss/i }))
     expect(useUI.getState().configMutationError).toBeNull()
   })
 })
