@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { mapUrlEntry, useUrlLists } from '@/lib/api/useUrlLists'
 import { server } from '../../../handlers'
-import urlListProject1Fixture from '../../../fixtures/url-list-project-1.json'
+import urlListProject1Fixture from '../../../fixtures/url_findings/project-1.json'
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -31,7 +31,7 @@ describe('useUrlLists', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toHaveLength(100)
-    expect(result.current.total).toBe(180)
+    expect(result.current.total).toBe(307)
     expect(result.current.hasNextPage).toBe(true)
   })
 
@@ -173,8 +173,8 @@ describe('useUrlLists', () => {
       await result.current.fetchNextPage()
     })
 
-    await waitFor(() => expect(result.current.data.length).toBe(180))
-    expect(result.current.hasNextPage).toBe(false)
-    expect(result.current.total).toBe(180)
+    await waitFor(() => expect(result.current.data.length).toBe(200))
+    expect(result.current.hasNextPage).toBe(true)
+    expect(result.current.total).toBe(307)
   })
 })

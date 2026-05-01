@@ -1,10 +1,10 @@
-"""Generate UI test fixtures in ui/testing/fixtures/ from real DB data.
+"""Generate UI test fixtures in ui/tests/fixtures/ from real DB data.
 
 Run from the repo root:
-    python ui/testing/generator/generate.py
+    python ui/tests/generator/generate.py
 
 Read-only with respect to all SQLite databases and the project JSON.
-Writes only to ui/testing/fixtures/.
+Writes only to ui/tests/fixtures/.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ SEEDS_DIR = THIS_DIR / "seeds"
 TALLY_DB = _REPO_ROOT / "tally.db"
 DVPA_DB = _REPO_ROOT / "projects" / "DVPA" / "sqlite" / "findings.db"
 DVPA_PROJECT_JSON = _REPO_ROOT / "projects" / "DVPA" / "config" / "project.json"
-OUTPUT_DIR = _REPO_ROOT / "ui" / "testing" / "fixtures"
+OUTPUT_DIR = _REPO_ROOT / "ui" / "tests" / "fixtures"
 
 
 # ---------------------------------------------------------------------------

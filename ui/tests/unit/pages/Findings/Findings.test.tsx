@@ -12,8 +12,8 @@ import { __setEventSourceFactory } from '@/lib/api/sse'
 import { server } from '../../../handlers'
 import { setCookie, clearAllCookies } from '../../../helpers/cookies'
 import { MockEventSource } from '../../../helpers/sse'
-import populatedFixture from '../../../fixtures/findings-populated.json'
-import findingUpdatedFixture from '../../../fixtures/finding-updated.json'
+import populatedFixture from '../../../fixtures/findings/populated.json'
+import findingUpdatedFixture from '../../../fixtures/findings/finding-updated.json'
 
 class StubIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null = null
@@ -70,8 +70,10 @@ afterEach(() => {
 describe('Findings page - server-driven list', () => {
   it('renders the loaded total in the footer once findings resolve', async () => {
     renderPage()
-    // SAST count from fixture: 2 items (1001, 1002).
-    await waitFor(() => expect(screen.getByText(/loaded/i).textContent ?? '').toMatch(/2.+of.+2/))
+    // All 50 page-1 items are SAST; with segment=sast the filtered total is 50.
+    await waitFor(() =>
+      expect(screen.getByText(/loaded/i).textContent ?? '').toMatch(/50.+of.+50/)
+    )
   })
 
   it('renders the cwe column header (commit column was removed)', async () => {

@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest'
 
 import { useFindings } from '@/lib/api/useFindings'
 import { server } from '../../../handlers'
-import populatedFixture from '../../../fixtures/findings-populated.json'
-import page2Fixture from '../../../fixtures/findings-page-2.json'
+import populatedFixture from '../../../fixtures/findings/populated.json'
+import page2Fixture from '../../../fixtures/findings/page-2.json'
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

@@ -1,6 +1,6 @@
 # UI fixture generator
 
-Generates UI test fixtures in `ui/testing/fixtures/` from real scan
+Generates UI test fixtures in `ui/tests/fixtures/` from real scan
 data in `projects/DVPA/sqlite/findings.db` plus hand-authored seed
 files for the dimensions the real DB does not cover.
 
@@ -8,12 +8,12 @@ files for the dimensions the real DB does not cover.
 
 ```bash
 cd /llm/code/tally
-python ui/testing/generator/generate.py
-python ui/testing/generator/check_coverage.py
+python ui/tests/generator/generate.py
+python ui/tests/generator/check_coverage.py
 ```
 
 The script is read-only with respect to all SQLite databases and the
-project JSON. It writes only to `ui/testing/fixtures/`.
+project JSON. It writes only to `ui/tests/fixtures/`.
 
 ## Layout
 

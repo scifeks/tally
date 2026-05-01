@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { useProjectMeta } from '@/lib/api/useProjectMeta'
 import { ApiError } from '@/lib/api/client'
 import { server } from '../../../handlers'
-import populatedFixture from '../../../fixtures/project-meta-populated.json'
+import populatedFixture from '../../../fixtures/projects/meta-populated.json'
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

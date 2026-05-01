@@ -57,8 +57,8 @@ describe('useChatSessions', () => {
     expect(result.current.total).toBe(3)
     const first = result.current.data[0]
     expect(first.id).toBe(101)
-    expect(first.projectId).toBe(1)
-    expect(first.title).toBe('2026-04-28 10:00')
+    expect(first.projectId).toBe(2)
+    expect(first.title).toBe('Triage walkthrough — XSS findings')
     expect(first.expiredAt).toBeNull()
     expect(result.current.data[2].expiredAt).toBe('2026-04-26T11:45:00+00:00')
   })

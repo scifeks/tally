@@ -1,7 +1,7 @@
 """Coverage + cross-reference checks for the generated fixture tree.
 
 Run after generate.py:
-    python ui/testing/generator/check_coverage.py
+    python ui/tests/generator/check_coverage.py
 
 Fails (non-zero exit) if:
 - findings/populated.json is missing any canonical severity / status /
