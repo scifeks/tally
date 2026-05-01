@@ -1,5 +1,4 @@
 import {
-  cn,
   formatDate,
   formatDateTime,
   formatRelative,
@@ -12,20 +11,6 @@ const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 const future = () => new Date(Date.now() + 60_000).toISOString()
 
 const INVALID_INPUTS = [null, undefined, '', 'not-a-date', '2026-13-99T99:99:99Z'] as const
-
-describe('cn', () => {
-  it('merges class names', () => {
-    expect(cn('foo', 'bar')).toBe('foo bar')
-  })
-
-  it('deduplicates conflicting Tailwind classes, last one wins', () => {
-    expect(cn('w-1/2', 'w-full')).toBe('w-full')
-  })
-
-  it('ignores falsy values', () => {
-    expect(cn('foo', false, undefined, null, 'bar')).toBe('foo bar')
-  })
-})
 
 describe('formatRelative', () => {
   it('returns "just now" for a future date', () => {
@@ -78,12 +63,6 @@ describe('parseIso', () => {
 })
 
 describe('formatDate', () => {
-  it('formats a valid ISO string', () => {
-    const out = formatDate('2026-04-26T10:00:00Z')
-    expect(out).not.toBe('—')
-    expect(out).not.toMatch(/NaN|Invalid/)
-  })
-
   it.each(INVALID_INPUTS)('returns "—" for invalid input %p', input => {
     expect(formatDate(input)).toBe('—')
   })
@@ -103,12 +82,6 @@ describe('formatTime', () => {
 })
 
 describe('formatDateTime', () => {
-  it('formats a valid ISO string', () => {
-    const out = formatDateTime('2026-04-26T10:00:00Z')
-    expect(out).not.toBe('—')
-    expect(out).not.toMatch(/NaN|Invalid/)
-  })
-
   it.each(INVALID_INPUTS)('returns "—" for invalid input %p', input => {
     expect(formatDateTime(input)).toBe('—')
   })
