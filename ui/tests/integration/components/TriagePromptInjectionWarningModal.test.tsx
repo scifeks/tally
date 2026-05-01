@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { TriagePromptInjectionWarningModal } from '@/components/TriagePromptInjectionWarningModal'
 import { useUI } from '@/lib/store'
 
@@ -38,7 +39,8 @@ describe('TriagePromptInjectionWarningModal', () => {
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
   })
 
-  it('persists triageInjectionAcked and fires onAccept when the user accepts', () => {
+  it('persists triageInjectionAcked and fires onAccept when the user accepts', async () => {
+    const user = userEvent.setup()
     const onAccept = vi.fn()
     const onCancel = vi.fn()
     render(
@@ -48,13 +50,14 @@ describe('TriagePromptInjectionWarningModal', () => {
         onCancel={onCancel}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /accept & continue/i }))
+    await user.click(screen.getByRole('button', { name: /accept & continue/i }))
     expect(useUI.getState().triageInjectionAcked).toBe(true)
     expect(onAccept).toHaveBeenCalledTimes(1)
     expect(onCancel).not.toHaveBeenCalled()
   })
 
-  it('does not set the ack flag when the user cancels', () => {
+  it('does not set the ack flag when the user cancels', async () => {
+    const user = userEvent.setup()
     const onAccept = vi.fn()
     const onCancel = vi.fn()
     render(
@@ -64,13 +67,14 @@ describe('TriagePromptInjectionWarningModal', () => {
         onCancel={onCancel}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
     expect(useUI.getState().triageInjectionAcked).toBe(false)
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(onAccept).not.toHaveBeenCalled()
   })
 
-  it('treats Escape as cancel (no ack mutation)', () => {
+  it('treats Escape as cancel (no ack mutation)', async () => {
+    const user = userEvent.setup()
     const onAccept = vi.fn()
     const onCancel = vi.fn()
     render(
@@ -80,7 +84,7 @@ describe('TriagePromptInjectionWarningModal', () => {
         onCancel={onCancel}
       />
     )
-    fireEvent.keyDown(document, { key: 'Escape' })
+    await user.keyboard('{Escape}')
     expect(useUI.getState().triageInjectionAcked).toBe(false)
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(onAccept).not.toHaveBeenCalled()

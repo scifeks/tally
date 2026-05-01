@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { SessionExpiredModal } from '@/components/SessionExpiredModal'
 
 describe('SessionExpiredModal', () => {
@@ -18,9 +19,10 @@ describe('SessionExpiredModal', () => {
     expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument()
   })
 
-  it('Escape keypress on the modal does not unmount it', () => {
+  it('Escape keypress on the modal does not unmount it', async () => {
+    const user = userEvent.setup()
     render(<SessionExpiredModal />)
-    fireEvent.keyDown(document, { key: 'Escape' })
+    await user.keyboard('{Escape}')
     expect(screen.getByTestId('session-expired-modal')).toBeInTheDocument()
   })
 })

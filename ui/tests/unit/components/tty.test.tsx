@@ -44,27 +44,23 @@ describe('Panel', () => {
 })
 
 describe('Bar', () => {
-  function getInnerWidth(container: HTMLElement) {
-    return (container.querySelector('.bg-primary') as HTMLElement).style.width
-  }
-
-  it('renders inner div at 50% width when value=50 and max=100', () => {
-    const { container } = render(<Bar value={50} max={100} />)
-    expect(getInnerWidth(container)).toBe('50%')
+  it('exposes 50% progress when value=50 and max=100', () => {
+    render(<Bar value={50} max={100} />)
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
   })
 
-  it('renders inner div at 0% width when value=0', () => {
-    const { container } = render(<Bar value={0} max={100} />)
-    expect(getInnerWidth(container)).toBe('0%')
+  it('exposes 0% progress when value=0', () => {
+    render(<Bar value={0} max={100} />)
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
   })
 
-  it('renders inner div at 100% width when value=max', () => {
-    const { container } = render(<Bar value={100} max={100} />)
-    expect(getInnerWidth(container)).toBe('100%')
+  it('exposes 100% progress when value=max', () => {
+    render(<Bar value={100} max={100} />)
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
   })
 
-  it('renders 0% when max is 0 to avoid division by zero', () => {
-    const { container } = render(<Bar value={0} max={0} />)
-    expect(getInnerWidth(container)).toBe('0%')
+  it('exposes 0% when max is 0 to avoid division by zero', () => {
+    render(<Bar value={0} max={0} />)
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
   })
 })

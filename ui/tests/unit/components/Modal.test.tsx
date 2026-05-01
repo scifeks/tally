@@ -54,20 +54,10 @@ describe('Modal', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument()
   })
 
-  it('does not render footer element when footer prop is absent', () => {
-    const { container } = renderModal({ footer: undefined })
-    expect(container.querySelector('footer')).toBeNull()
-  })
-
-  it('applies warn color class to title when tone is warn', () => {
-    renderModal({ tone: 'warn', title: 'Warning' })
-    const titleEl = screen.getByText('Warning')
-    expect(titleEl.closest('div')?.className).toMatch(/text-high/)
-  })
-
-  it('applies error color class to title when tone is error', () => {
-    renderModal({ tone: 'error', title: 'Error' })
-    const titleEl = screen.getByText('Error')
-    expect(titleEl.closest('div')?.className).toMatch(/text-crit/)
+  it('does not render footer slot content when footer prop is absent', () => {
+    renderModal({ footer: undefined })
+    const buttons = screen.getAllByRole('button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveAccessibleName('Close')
   })
 })

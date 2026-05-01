@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { TriageMutationErrorModal } from '@/components/TriageMutationErrorModal'
 import { useUI } from '@/lib/store'
 import type { ApiErrorPayload } from '@/lib/types'
@@ -115,14 +116,15 @@ describe('TriageMutationErrorModal', () => {
     expect(screen.getByText(/500/)).toBeInTheDocument()
   })
 
-  it('clears the slice when dismiss is clicked', () => {
+  it('clears the slice when dismiss is clicked', async () => {
+    const user = userEvent.setup()
     setError({
       code: 'JOB_ALREADY_RUNNING',
       message: 'a triage job is already running',
       status: 409,
     })
     render(<TriageMutationErrorModal />)
-    fireEvent.click(screen.getByRole('button', { name: /dismiss/i }))
+    await user.click(screen.getByRole('button', { name: /dismiss/i }))
     expect(useUI.getState().triageMutationError).toBeNull()
   })
 })
