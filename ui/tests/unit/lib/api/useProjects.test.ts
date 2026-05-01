@@ -16,7 +16,7 @@ describe('useProjects', () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useProjects(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toHaveLength(3)
+    expect(result.current.data).toHaveLength(2)
   })
 
   it('each project has id (number), name, and code fields', async () => {

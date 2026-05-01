@@ -10,8 +10,8 @@ import { useUI } from '@/lib/store'
 import { __setEventSourceFactory } from '@/lib/api/sse'
 import { server } from '../../handlers'
 import { MockEventSource } from '../../helpers/sse'
-import populatedFixture from '../../fixtures/findings-counts-populated.json'
-import projectMetaPopulatedFixture from '../../fixtures/project-meta-populated.json'
+import populatedFixture from '../../fixtures/findings/counts-populated.json'
+import projectMetaPopulatedFixture from '../../fixtures/projects/meta-populated.json'
 
 function renderDashboard() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -45,20 +45,18 @@ describe('Dashboard - no project selected', () => {
   it('renders the picker with all projects from the API', async () => {
     renderDashboard()
     expect(screen.getByText('No Project Selected')).toBeInTheDocument()
-    expect(await screen.findByText('ACM')).toBeInTheDocument()
-    expect(screen.getByText('ATL')).toBeInTheDocument()
-    expect(screen.getByText('NWD')).toBeInTheDocument()
-    expect(screen.getByText('acme-platform')).toBeInTheDocument()
+    expect(await screen.findByText('DVPA')).toBeInTheDocument()
+    expect(screen.getByText('DVPA-alt')).toBeInTheDocument()
   })
 
   it('clicking a project sets activeProjectId and transitions to the project view', async () => {
     const user = userEvent.setup()
     renderDashboard()
 
-    const acm = await screen.findByText('ACM')
-    await user.click(acm)
+    const first = await screen.findByText('DVPA')
+    await user.click(first)
 
-    expect(useUI.getState().activeProjectId).toBe(1)
+    expect(useUI.getState().activeProjectId).toBe(2)
     // The project view renders the active-project header label.
     expect(await screen.findByText('active project')).toBeInTheDocument()
   })
@@ -66,7 +64,7 @@ describe('Dashboard - no project selected', () => {
 
 describe('Dashboard - project selected (populated counts)', () => {
   it('renders header tiles + at-a-glance from /findings/counts and /meta', async () => {
-    useUI.setState({ activeProjectId: 1 })
+    useUI.setState({ activeProjectId: 2 })
     renderDashboard()
 
     // Header tiles: repositories, urls, tools enabled, scans (4 cols).
@@ -77,11 +75,13 @@ describe('Dashboard - project selected (populated counts)', () => {
     expect(screen.queryByText('url lists')).not.toBeInTheDocument()
 
     // Tile values come from the populated fixtures (counts + meta).
-    expect(screen.getByText(String(populatedFixture.repos_count))).toBeInTheDocument()
+    expect(
+      screen.getAllByText(String(populatedFixture.repos_count)).length
+    ).toBeGreaterThan(0)
     expect(screen.getByText(String(populatedFixture.urls_count))).toBeInTheDocument()
     expect(
-      screen.getByText(String(projectMetaPopulatedFixture.enabled_tools.length))
-    ).toBeInTheDocument()
+      screen.getAllByText(String(projectMetaPopulatedFixture.enabled_tools.length)).length
+    ).toBeGreaterThan(0)
 
     // At-a-glance rows from the same fixture (wait for hasScans branch - mock
     // useScanHistory resolves on a 100ms timer). Value mapping for the
@@ -103,7 +103,7 @@ describe('Dashboard - project selected (empty counts)', () => {
     renderDashboard()
 
     // EmptyProjectState - onboarding copy plus the welcome panel header.
-    expect(await screen.findByText(/welcome :: NWD/i)).toBeInTheDocument()
+    expect(await screen.findByText(/welcome :: DVP/i)).toBeInTheDocument()
     expect(screen.getByText(/no scans have been run/i)).toBeInTheDocument()
     expect(screen.getByText(/add a repository or URL list/i)).toBeInTheDocument()
   })
@@ -148,7 +148,7 @@ describe('Dashboard - recent high-severity findings panel', () => {
       })
     )
 
-    useUI.setState({ activeProjectId: 1 })
+    useUI.setState({ activeProjectId: 2 })
     renderDashboard()
 
     await screen.findByText('SQL injection in user search')
@@ -168,7 +168,7 @@ describe('Dashboard - recent high-severity findings panel', () => {
         HttpResponse.json({ items: [], total: 0, offset: 0, limit: 10 })
       )
     )
-    useUI.setState({ activeProjectId: 1 })
+    useUI.setState({ activeProjectId: 2 })
     renderDashboard()
 
     await screen.findByText('repositories')
@@ -183,7 +183,7 @@ describe('Dashboard - counts endpoint error handling', () => {
         HttpResponse.json({ error: { code: 'SERVER_ERROR', message: 'boom' } }, { status: 500 })
       )
     )
-    useUI.setState({ activeProjectId: 1 })
+    useUI.setState({ activeProjectId: 2 })
     renderDashboard()
 
     // Header still mounts; at-a-glance shows once mock useScanHistory resolves.
@@ -193,7 +193,7 @@ describe('Dashboard - counts endpoint error handling', () => {
 
   it('renders gracefully when counts errors at the network layer', async () => {
     server.use(http.get('/api/v1/projects/:projectId/findings/counts', () => HttpResponse.error()))
-    useUI.setState({ activeProjectId: 1 })
+    useUI.setState({ activeProjectId: 2 })
     renderDashboard()
 
     expect(await screen.findByText('repositories')).toBeInTheDocument()

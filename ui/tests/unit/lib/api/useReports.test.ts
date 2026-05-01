@@ -54,16 +54,16 @@ afterEach(() => {
 // ─── useReportDrafts ────────────────────────────────────────────────────────
 
 describe('useReportDrafts', () => {
-  it('resolves with the project-1 fixture (6 sections, mapped)', async () => {
+  it('resolves with the project-1 fixture (5 sections, mapped)', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useReportDrafts(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const drafts = result.current.data ?? []
-    expect(drafts).toHaveLength(6)
+    expect(drafts).toHaveLength(5)
     const exec = drafts.find(d => d.section === 'executive-summary')
     expect(exec?.status).toBe('draft')
-    expect(exec?.wordCount).toBe(450)
-    expect(exec?.generatedAt).toBe('2026-04-28T10:00:00+00:00')
+    expect(exec?.wordCount).toBe(412)
+    expect(exec?.generatedAt).toBe('2026-04-30T23:02:16.579444+00:00')
     expect(drafts.find(d => d.section === 'risk-level')?.uploadedFilename).toBe(
       'risk-level-reviewed.md'
     )
@@ -79,14 +79,14 @@ describe('useReportDrafts', () => {
 // ─── useReportHistory ───────────────────────────────────────────────────────
 
 describe('useReportHistory', () => {
-  it('returns project-1 history with the entry mapped to integer ids', async () => {
+  it('returns project-1 history with entries mapped to integer ids', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useReportHistory(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toHaveLength(1)
-    expect(result.current.total).toBe(1)
+    expect(result.current.data).toHaveLength(2)
+    expect(result.current.total).toBe(2)
     expect(result.current.data[0].id).toBe(4001)
-    expect(result.current.data[0].projectId).toBe(1)
+    expect(result.current.data[0].projectId).toBe(2)
   })
 
   it('is empty for project 2', async () => {
@@ -124,7 +124,7 @@ describe('useLatestReport', () => {
     const { result } = renderHook(() => useLatestReport(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data?.id).toBe(4001)
-    expect(result.current.data?.projectId).toBe(1)
+    expect(result.current.data?.projectId).toBe(2)
   })
 
   it('treats 404 as a null result (no history yet)', async () => {
@@ -369,9 +369,9 @@ describe('useCancelReport', () => {
     const { result } = renderHook(() => useCancelReport(), { wrapper })
     let resp: unknown = null
     await act(async () => {
-      resp = await result.current.mutateAsync({ projectId: 1, reportId: 5001 })
+      resp = await result.current.mutateAsync({ projectId: 1, reportId: 4003 })
     })
-    expect(resp).toEqual({ id: 5001, status: 'cancelling' })
+    expect(resp).toEqual({ id: 4003, status: 'cancelling' })
   })
 
   it('routes 409 REPORT_NOT_CANCELLABLE through the report-mutation slice', async () => {

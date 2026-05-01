@@ -10,7 +10,7 @@ import { useUI } from '@/lib/store'
 import { __setEventSourceFactory } from '@/lib/api/sse'
 import { server } from '../../handlers'
 import { MockEventSource } from '../../helpers/sse'
-import claudeMissingFixture from '../../fixtures/runtime-dependencies-claude-missing.json'
+import claudeMissingFixture from '../../fixtures/runtime/deps-claude-missing.json'
 
 const PERSIST_KEY = 'tally-ui-active-project'
 
@@ -55,9 +55,8 @@ describe('TopBar - project switcher', () => {
     renderTopBar()
 
     await user.click(screen.getByRole('button', { name: /select project/i }))
-    expect(await screen.findByText('ACM')).toBeInTheDocument()
-    expect(screen.getByText('ATL')).toBeInTheDocument()
-    expect(screen.getByText('NWD')).toBeInTheDocument()
+    expect(await screen.findByText('DVPA')).toBeInTheDocument()
+    expect(screen.getByText('DVPA-alt')).toBeInTheDocument()
   })
 
   it('first selection sets activeProjectId without showing the confirm modal', async () => {
@@ -65,44 +64,44 @@ describe('TopBar - project switcher', () => {
     renderTopBar()
 
     await user.click(screen.getByRole('button', { name: /select project/i }))
-    const acm = await screen.findByText('ACM')
-    await user.click(acm)
+    const first = await screen.findByText('DVPA')
+    await user.click(first)
 
-    expect(useUI.getState().activeProjectId).toBe(1)
+    expect(useUI.getState().activeProjectId).toBe(2)
     expect(screen.queryByText(/confirm switch/i)).not.toBeInTheDocument()
   })
 
   it('subsequent selection opens the confirm modal; confirming switches', async () => {
-    useUI.setState({ activeProjectId: 1 })
+    useUI.setState({ activeProjectId: 2 })
     const user = userEvent.setup()
     renderTopBar()
 
     // Open the dropdown using the visible-project switcher button.
-    const switcher = await screen.findByRole('button', { name: /acme-platform/i })
+    const switcher = await screen.findByRole('button', { name: /DVPA/i })
     await user.click(switcher)
-    const atl = await screen.findByText('atlas-api')
-    await user.click(atl)
+    const alt = await screen.findByText('DVPA-alt')
+    await user.click(alt)
 
     // Confirm modal renders the destination project name.
     expect(await screen.findByText(/confirm switch/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /confirm/i }))
 
-    expect(useUI.getState().activeProjectId).toBe(2)
+    expect(useUI.getState().activeProjectId).toBe(3)
   })
 })
 
 describe('TopBar - persisted activeProjectId', () => {
   it('rehydrates a valid persisted ID across remount', async () => {
-    useUI.setState({ activeProjectId: 2 })
+    useUI.setState({ activeProjectId: 3 })
     const { unmount } = renderTopBar()
-    expect(await screen.findByText('atlas-api')).toBeInTheDocument()
+    expect(await screen.findByText('DVPA-alt')).toBeInTheDocument()
     unmount()
 
     // Active project state is in the singleton store; it should still hold
-    // value 2 after the second mount renders.
+    // value 3 after the second mount renders.
     renderTopBar()
-    expect(await screen.findByText('atlas-api')).toBeInTheDocument()
-    expect(useUI.getState().activeProjectId).toBe(2)
+    expect(await screen.findByText('DVPA-alt')).toBeInTheDocument()
+    expect(useUI.getState().activeProjectId).toBe(3)
   })
 })
 

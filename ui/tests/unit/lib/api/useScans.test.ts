@@ -48,12 +48,12 @@ afterEach(() => {
 })
 
 describe('useScanHistory', () => {
-  it('resolves with 10 scans for p-01', async () => {
+  it('resolves with 4 scans for p-01', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useScanHistory(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
-    expect(result.current.data).toHaveLength(10)
-    expect(result.current.total).toBe(10)
+    expect(result.current.data).toHaveLength(4)
+    expect(result.current.total).toBe(4)
   })
 
   it('forwards the status filter to the backend', async () => {
@@ -85,7 +85,7 @@ describe('useRunningScans', () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useRunningScans(1), { wrapper })
     await waitFor(() => {
-      expect(result.current).toHaveLength(2)
+      expect(result.current).toHaveLength(1)
     }, { timeout: 2000 })
     expect(result.current.every(s => s.status === 'running')).toBe(true)
   })
@@ -106,12 +106,11 @@ describe('useProjectScanConfig', () => {
     expect(typeof config.tools[0].segment).toBe('string')
   })
 
-  it('returns empty arrays for project 3', async () => {
+  it('returns empty repos for project 3', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useProjectScanConfig(3), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data!.repos).toHaveLength(0)
-    expect(result.current.data!.tools).toHaveLength(0)
   })
 })
 

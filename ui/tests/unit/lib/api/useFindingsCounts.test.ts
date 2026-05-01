@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { useFindingsCounts } from '@/lib/api/useFindingsCounts'
 import { ApiError } from '@/lib/api/client'
 import { server } from '../../../handlers'
-import populatedFixture from '../../../fixtures/findings-counts-populated.json'
+import populatedFixture from '../../../fixtures/findings/counts-populated.json'
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

@@ -50,14 +50,14 @@ afterEach(() => {
 // ─── useTriageHistory ───────────────────────────────────────────────────────
 
 describe('useTriageHistory', () => {
-  it('resolves with the project-1 fixture (7 runs)', async () => {
+  it('resolves with the project-1 fixture (3 runs)', async () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useTriageHistory(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
-    expect(result.current.data).toHaveLength(7)
-    expect(result.current.total).toBe(7)
+    expect(result.current.data).toHaveLength(3)
+    expect(result.current.total).toBe(3)
     // Mapper translates scan_run_id → scanRunId
-    expect(result.current.data[0].scanRunId).toBe(2003)
+    expect(result.current.data[0].scanRunId).toBe(1)
   })
 
   it('returns an empty list for project 3', async () => {
@@ -100,7 +100,7 @@ describe('useActiveTriage', () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useActiveTriage(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
-    expect(result.current.data?.scanRunId).toBe(2010)
+    expect(result.current.data?.scanRunId).toBe(1)
     expect(result.current.data?.status).toBe('running')
   })
 
@@ -119,7 +119,7 @@ describe('useLatestTriage', () => {
     const { wrapper } = makeWrapper()
     const { result } = renderHook(() => useLatestTriage(1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
-    expect(result.current.data?.scanRunId).toBe(2003)
+    expect(result.current.data?.scanRunId).toBe(1)
     expect(result.current.data?.status).toBe('done')
   })
 
@@ -136,11 +136,11 @@ describe('useLatestTriage', () => {
 describe('useTriageRun', () => {
   it('resolves with batches for an existing run', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useTriageRun(1, 2010), { wrapper })
+    const { result } = renderHook(() => useTriageRun(1, 1), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data?.batches).toHaveLength(4)
+    expect(result.current.data?.batches).toHaveLength(3)
     expect(result.current.data?.batches?.[0].id).toBe(7001)
-    expect(result.current.data?.batches?.[0].findingIds).toEqual([101, 102, 103, 104, 105])
+    expect(result.current.data?.batches?.[0].findingIds).toEqual([1, 2, 3, 4, 5])
   })
 
   it('stays disabled when scanRunId is null', () => {
@@ -282,9 +282,9 @@ describe('useCancelTriage', () => {
     const mut = renderHook(() => useCancelTriage(), { wrapper })
     let resolved: unknown
     await act(async () => {
-      resolved = await mut.result.current.mutateAsync({ projectId: 1, scanRunId: 2010 })
+      resolved = await mut.result.current.mutateAsync({ projectId: 1, scanRunId: 1 })
     })
-    expect(resolved).toMatchObject({ scan_run_id: 2010, status: 'cancelling' })
+    expect(resolved).toMatchObject({ scan_run_id: 1, status: 'cancelling' })
   })
 
   it('routes a 409 TRIAGE_NOT_CANCELLABLE into the error slice', async () => {

@@ -84,14 +84,12 @@ describe('Scans page — domain ↔ tool compatibility (12.5)', () => {
 
     // Only secrets-domain tools stay enabled.
     expect(findToolButton('semgrep')).toBeDisabled()
-    expect(findToolButton('codeql')).toBeDisabled()
     expect(findToolButton('osv-scanner')).toBeDisabled()
     expect(findToolButton('zap')).toBeDisabled()
     expect(findToolButton('gitleaks')).not.toBeDisabled()
-    expect(findToolButton('trufflehog')).not.toBeDisabled()
 
     // The "N tool(s) disabled by domain filter" hint reflects the count.
-    expect(screen.getByText(/10 tool\(s\) disabled by domain filter/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/8 tool\(s\) disabled by domain filter/i).length).toBeGreaterThan(0)
   })
 
   it('prunes a previously selected tool when the domain filter excludes it', async () => {

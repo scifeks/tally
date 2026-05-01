@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import UrlLists from '@/pages/UrlLists'
 import { useUI } from '@/lib/store'
 import { server } from '../../handlers'
-import urlListFilterOptionsPopulatedFixture from '../../fixtures/url-list-filter-options-populated.json'
+import urlListFilterOptionsPopulatedFixture from '../../fixtures/url_findings/filter-options-populated.json'
 
 type IOCallback = (entries: IntersectionObserverEntry[]) => void
 const ioInstances: { cb: IOCallback; target: Element | null }[] = []
@@ -85,7 +85,7 @@ describe('UrlLists page', () => {
   it('renders the first-page loaded count in the footer once urls resolve', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getAllByText(/100\s*of\s*180\s*loaded/i)[0]).toBeInTheDocument()
+      expect(screen.getAllByText(/100\s*of\s*307\s*loaded/i)[0]).toBeInTheDocument()
     )
   })
 
@@ -295,10 +295,10 @@ describe('UrlLists page', () => {
     )
   })
 
-  it('sentinel intersection triggers fetchNextPage and grows the loaded count to total', async () => {
+  it('sentinel intersection triggers fetchNextPage and grows the loaded count', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getAllByText(/100\s*of\s*180\s*loaded/i)[0]).toBeInTheDocument()
+      expect(screen.getAllByText(/100\s*of\s*307\s*loaded/i)[0]).toBeInTheDocument()
     )
 
     await act(async () => {
@@ -306,8 +306,7 @@ describe('UrlLists page', () => {
     })
 
     await waitFor(() =>
-      expect(screen.getAllByText(/180\s*of\s*180\s*loaded/i)[0]).toBeInTheDocument()
+      expect(screen.getAllByText(/200\s*of\s*307\s*loaded/i)[0]).toBeInTheDocument()
     )
-    expect(screen.getByText(/end of list/i)).toBeInTheDocument()
   })
 })

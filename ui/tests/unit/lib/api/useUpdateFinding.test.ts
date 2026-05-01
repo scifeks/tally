@@ -9,9 +9,9 @@ import { useFindings, mapFinding } from '@/lib/api/useFindings'
 import { useUI } from '@/lib/store'
 import { server } from '../../../handlers'
 import { setCookie, clearAllCookies } from '../../../helpers/cookies'
-import populatedFixture from '../../../fixtures/findings-populated.json'
-import findingUpdatedFixture from '../../../fixtures/finding-updated.json'
-import findingLockedFixture from '../../../fixtures/finding-locked-error.json'
+import populatedFixture from '../../../fixtures/findings/populated.json'
+import findingUpdatedFixture from '../../../fixtures/findings/finding-updated.json'
+import findingLockedFixture from '../../../fixtures/findings/finding-locked-error.json'
 
 interface ProviderArgs {
   client: QueryClient
@@ -59,14 +59,14 @@ describe('useUpdateFinding', () => {
     act(() => {
       mutHook.result.current.mutate({
         projectId: '1',
-        id: 1001,
+        id: 1,
         patch: { status: 'fixed' },
       })
     })
 
     // Cache reflects optimistic patch even before network resolves.
     await waitFor(() => {
-      const optimistic = list.result.current.data.find(f => f.id === 1001)
+      const optimistic = list.result.current.data.find(f => f.id === 1)
       expect(optimistic?.status).toBe('fixed')
     })
     expect(mutHook.result.current.isPending).toBe(true)
@@ -74,7 +74,7 @@ describe('useUpdateFinding', () => {
     // Resolve the network and confirm canonical row replaces optimistic.
     release()
     await waitFor(() => expect(mutHook.result.current.isSuccess).toBe(true))
-    const canonical = list.result.current.data.find(f => f.id === 1001)
+    const canonical = list.result.current.data.find(f => f.id === 1)
     expect(canonical).toEqual(mapFinding(findingUpdatedFixture as never))
   })
 
@@ -93,7 +93,7 @@ describe('useUpdateFinding', () => {
     await act(async () => {
       await mutHook.result.current.mutateAsync({
         projectId: '1',
-        id: 1001, // active in fixture, fixed in finding-updated → status changed
+        id: 1, // false_positive in fixture, fixed in finding-updated → status changed
         patch: { status: 'fixed' },
       })
     })
@@ -133,7 +133,7 @@ describe('useUpdateFinding', () => {
     await act(async () => {
       await mutHook.result.current.mutateAsync({
         projectId: '1',
-        id: 1001,
+        id: 1,
         patch: { notes: 'Updated note only' },
       })
     })
@@ -153,8 +153,8 @@ describe('useUpdateFinding', () => {
 
     const list = renderHook(() => useFindings({ projectId: '1' }), { wrapper })
     await waitFor(() => expect(list.result.current.isSuccess).toBe(true))
-    const beforePatch = list.result.current.data.find(f => f.id === 1003)
-    expect(beforePatch?.status).toBe('active')
+    const beforePatch = list.result.current.data.find(f => f.id === 3)
+    expect(beforePatch?.status).toBe('wont_fix')
 
     server.use(
       http.patch('/api/v1/projects/:projectId/findings/:findingId', () =>
@@ -167,7 +167,7 @@ describe('useUpdateFinding', () => {
       try {
         await mutHook.result.current.mutateAsync({
           projectId: '1',
-          id: 1003,
+          id: 3,
           patch: { status: 'fixed' },
         })
       } catch {
@@ -177,12 +177,12 @@ describe('useUpdateFinding', () => {
 
     await waitFor(() => expect(mutHook.result.current.isError).toBe(true))
 
-    const restored = list.result.current.data.find(f => f.id === 1003)
-    expect(restored?.status).toBe('active')
+    const restored = list.result.current.data.find(f => f.id === 3)
+    expect(restored?.status).toBe('wont_fix')
 
     const err = useUI.getState().findingMutationError
     expect(err?.code).toBe('FINDING_LOCKED')
-    expect(err?.message).toContain('1003')
+    expect(err?.message).toContain('Finding 3')
   })
 
   it('rolls back and reports a generic 500 error', async () => {
@@ -193,7 +193,7 @@ describe('useUpdateFinding', () => {
 
     const list = renderHook(() => useFindings({ projectId: '1' }), { wrapper })
     await waitFor(() => expect(list.result.current.isSuccess).toBe(true))
-    const original = list.result.current.data.find(f => f.id === 1001)?.status
+    const original = list.result.current.data.find(f => f.id === 1)?.status
 
     server.use(
       http.patch('/api/v1/projects/:projectId/findings/:findingId', () =>
@@ -209,7 +209,7 @@ describe('useUpdateFinding', () => {
       try {
         await mutHook.result.current.mutateAsync({
           projectId: '1',
-          id: 1001,
+          id: 1,
           patch: { status: 'fixed' },
         })
       } catch {
@@ -218,7 +218,7 @@ describe('useUpdateFinding', () => {
     })
 
     await waitFor(() => expect(mutHook.result.current.isError).toBe(true))
-    expect(list.result.current.data.find(f => f.id === 1001)?.status).toBe(original)
+    expect(list.result.current.data.find(f => f.id === 1)?.status).toBe(original)
     expect(useUI.getState().findingMutationError?.code).toBe('SERVER_ERROR')
   })
 })

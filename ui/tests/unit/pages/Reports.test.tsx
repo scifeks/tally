@@ -128,10 +128,10 @@ describe('Reports page - generate flow', () => {
     renderReports()
 
     const btn = await screen.findByTestId('report-generate-button')
-    // Project 1 has 3/6 ready (executive-summary=draft, risk-level=reviewed,
-    // critical-issues=draft), so PDF should gate.
+    // Project 1 has 2/5 ready (executive-summary=draft, risk-level=reviewed),
+    // so PDF should gate.
     await waitFor(() =>
-      expect(screen.getByText(/3 of 6 sections ready/i)).toBeInTheDocument()
+      expect(screen.getByText(/2 of 6 sections ready/i)).toBeInTheDocument()
     )
     expect(btn).toBeDisabled()
   })

@@ -7,8 +7,8 @@ import { useFindings } from '@/lib/api/useFindings'
 import { useFindingsEvents } from '@/lib/api/useFindingsEvents'
 import { __setEventSourceFactory } from '@/lib/api/sse'
 import { MockEventSource } from '../../../helpers/sse'
-import populatedFixture from '../../../fixtures/findings-populated.json'
-import findingUpdatedFixture from '../../../fixtures/finding-updated.json'
+import populatedFixture from '../../../fixtures/findings/populated.json'
+import findingUpdatedFixture from '../../../fixtures/findings/finding-updated.json'
 
 function makeWrapper() {
   const client = new QueryClient({
@@ -51,7 +51,7 @@ describe('useFindingsEvents', () => {
 
     const list = renderHook(() => useFindings({ projectId: '1' }), { wrapper })
     await waitFor(() => expect(list.result.current.isSuccess).toBe(true))
-    expect(list.result.current.data.find(f => f.id === 1001)?.status).toBe('active')
+    expect(list.result.current.data.find(f => f.id === 1)?.status).toBe('false_positive')
 
     renderHook(() => useFindingsEvents('1'), { wrapper })
 
@@ -61,7 +61,7 @@ describe('useFindingsEvents', () => {
     })
 
     await waitFor(() =>
-      expect(list.result.current.data.find(f => f.id === 1001)?.status).toBe('fixed')
+      expect(list.result.current.data.find(f => f.id === 1)?.status).toBe('fixed')
     )
     void client
   })
@@ -113,7 +113,7 @@ describe('useFindingsEvents', () => {
     })
 
     await waitFor(() =>
-      expect(list.result.current.data.find(f => f.id === 1001)?.notes).toBe('note only')
+      expect(list.result.current.data.find(f => f.id === 1)?.notes).toBe('note only')
     )
 
     const countsCalls = invalidate.mock.calls.filter(call => {

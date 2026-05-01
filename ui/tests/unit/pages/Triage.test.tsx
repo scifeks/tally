@@ -11,7 +11,7 @@ import { __setEventSourceFactory } from '@/lib/api/sse'
 import { server } from '../../handlers'
 import { MockEventSource } from '../../helpers/sse'
 import { setCookie, clearAllCookies } from '../../helpers/cookies'
-import runtimeDepsClaudeMissing from '../../fixtures/runtime-dependencies-claude-missing.json'
+import runtimeDepsClaudeMissing from '../../fixtures/runtime/deps-claude-missing.json'
 
 function renderTriage() {
   const qc = new QueryClient({
@@ -146,10 +146,10 @@ describe('Triage page - active run', () => {
     useUI.setState({ activeProjectId: 1, triageInjectionAcked: true })
     let cancelCalled = false
     server.use(
-      http.post('/api/v1/projects/1/triage/2010/cancel', () => {
+      http.post('/api/v1/projects/1/triage/1/cancel', () => {
         cancelCalled = true
         return HttpResponse.json(
-          { scan_run_id: 2010, status: 'cancelling' },
+          { scan_run_id: 1, status: 'cancelling' },
           { status: 202 }
         )
       })

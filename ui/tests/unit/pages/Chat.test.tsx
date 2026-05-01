@@ -57,9 +57,9 @@ describe('Chat page - session list', () => {
     useUI.setState({ activeProjectId: 1 })
     renderChat()
     await waitFor(() =>
-      expect(screen.getByText(/^2026-04-28 10:00$/)).toBeInTheDocument()
+      expect(screen.getByText(/Triage walkthrough — XSS findings/)).toBeInTheDocument()
     )
-    expect(screen.getByText(/^2026-04-27 14:00$/)).toBeInTheDocument()
+    expect(screen.getByText(/Investigating gitleaks AWS key/)).toBeInTheDocument()
     expect(screen.getByText(/sealed/i)).toBeInTheDocument()
   })
 
@@ -79,12 +79,12 @@ describe('Chat page - persisted messages', () => {
     useUI.setState({ activeProjectId: 1 })
     renderChat()
     await waitFor(() =>
-      expect(screen.getByText(/What does finding 42 mean\?/i)).toBeInTheDocument()
+      expect(screen.getByText(/most severe XSS finding/i)).toBeInTheDocument()
     )
     expect(
-      screen.getByText(/Finding 42 is a SQL injection vulnerability/i)
+      screen.getByText(/dalfox-detected reflected XSS/i)
     ).toBeInTheDocument()
-    expect(screen.getByText(/How do I fix it\?/i)).toBeInTheDocument()
+    expect(screen.getByText(/Are there any in php-goof\?/i)).toBeInTheDocument()
   })
 })
 
@@ -99,7 +99,7 @@ describe('Chat page - send + stream golden path', () => {
 
     // Wait for sessions + messages to load.
     await waitFor(() =>
-      expect(screen.getByText(/What does finding 42 mean\?/i)).toBeInTheDocument()
+      expect(screen.getByText(/most severe XSS finding/i)).toBeInTheDocument()
     )
 
     const textarea = screen.getByPlaceholderText(/Ask about your security findings/i)
@@ -171,7 +171,7 @@ describe('Chat page - cancel flow', () => {
     renderChat()
 
     await waitFor(() =>
-      expect(screen.getByText(/What does finding 42 mean\?/i)).toBeInTheDocument()
+      expect(screen.getByText(/most severe XSS finding/i)).toBeInTheDocument()
     )
 
     const textarea = screen.getByPlaceholderText(/Ask about your security findings/i)
@@ -222,7 +222,7 @@ describe('Chat page - delete flow', () => {
     renderChat()
 
     await waitFor(() =>
-      expect(screen.getByText(/^2026-04-28 10:00$/)).toBeInTheDocument()
+      expect(screen.getByText(/Triage walkthrough — XSS findings/)).toBeInTheDocument()
     )
 
     const sessionRow = screen.getByTestId('chat-session-101')
@@ -242,7 +242,7 @@ describe('Chat page - sealed session UX (12.7)', () => {
     renderChat()
 
     await waitFor(() =>
-      expect(screen.getByText(/^2026-04-25 09:00$/)).toBeInTheDocument()
+      expect(screen.getByText(/Old session about pip-audit/)).toBeInTheDocument()
     )
     await user.click(screen.getByTestId('chat-session-103'))
 
@@ -274,7 +274,7 @@ describe('Chat page - sealed session UX (12.7)', () => {
 
     renderChat()
     await waitFor(() =>
-      expect(screen.getByText(/What does finding 42 mean\?/i)).toBeInTheDocument()
+      expect(screen.getByText(/most severe XSS finding/i)).toBeInTheDocument()
     )
 
     expect(screen.queryByTestId('sealed-badge')).not.toBeInTheDocument()
@@ -506,7 +506,7 @@ describe('Chat page - new session button', () => {
     const user = userEvent.setup()
     renderChat()
     await waitFor(() =>
-      expect(screen.getByText(/^2026-04-28 10:00$/)).toBeInTheDocument()
+      expect(screen.getByText(/Triage walkthrough — XSS findings/)).toBeInTheDocument()
     )
     await user.click(screen.getByRole('button', { name: /New Chat/i }))
     await waitFor(() => expect(posted).toBe(true))

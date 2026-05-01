@@ -1,9 +1,0 @@
-{
-  "scan_run_id": 2010,
-  "project_id": 1,
-  "status": "running",
-  "started_at": "2026-04-28T11:00:00+00:00",
-  "finished_at": null,
-  "total_findings": 18,
-  "processed_findings": 7
-}
