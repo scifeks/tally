@@ -226,8 +226,8 @@ describe('Chat page - delete flow', () => {
     )
 
     const sessionRow = screen.getByTestId('chat-session-101')
-    const deleteBtn = sessionRow.querySelector('button[aria-label="delete session"]')!
-    await user.click(deleteBtn as HTMLElement)
+    const deleteBtn = within(sessionRow).getByRole('button', { name: /delete session/i })
+    await user.click(deleteBtn)
     await waitFor(() => expect(deleted).toBe(true))
   })
 })
