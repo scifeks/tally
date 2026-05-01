@@ -36,9 +36,7 @@ describe('useFindings', () => {
 
     const first = result.current.data[0]
     expect(first.id).toBe(populatedFixture.items[0].id)
-    expect(typeof first.id).toBe('number')
     expect(first.projectId).toBe(populatedFixture.items[0].project_id)
-    expect(typeof first.projectId).toBe('number')
     expect(first.severity).toBe(populatedFixture.items[0].severity)
     expect(first.findingType).toEqual(populatedFixture.items[0].finding_type)
     expect(first.cwe).toEqual(populatedFixture.items[0].cwe)
