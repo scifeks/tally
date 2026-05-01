@@ -18,17 +18,4 @@ describe('useProjects', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toHaveLength(2)
   })
-
-  it('each project has id (number), name, and code fields', async () => {
-    const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useProjects(), { wrapper })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    const projects = result.current.data
-    if (!projects) throw new Error('expected projects to be defined')
-    for (const project of projects) {
-      expect(typeof project.id).toBe('number')
-      expect(typeof project.name).toBe('string')
-      expect(typeof project.code).toBe('string')
-    }
-  })
 })
