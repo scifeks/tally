@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.config.mcp_defaults import load_mcp_defaults
 from application.locking import FindingsBusy
 
 from .runner import TriageRunner
@@ -75,7 +76,6 @@ def run_triage_for_project(
     from infrastructure.store import make_store
 
     run_repo, _, triage_repo, audit_repo = make_store(root, project)
-    from application.config.mcp_defaults import load_mcp_defaults
 
     _, _, session_timeout_seconds = load_mcp_defaults(str(root))
     runner = TriageRunner(
@@ -123,7 +123,6 @@ def resume_triage_for_project(
 
     run_repo, _, triage_repo, audit_repo = make_store(root, project)
     triage_repo.reset_for_resume(scan_run_id)
-    from application.config.mcp_defaults import load_mcp_defaults
 
     _, _, session_timeout_seconds = load_mcp_defaults(str(root))
     runner = TriageRunner(
