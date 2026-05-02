@@ -25,6 +25,7 @@ from infrastructure.store.repositories.repositories import RepositoryRepository
 if TYPE_CHECKING:
     from fastapi import Request
 
+    from application.ports.project_repo_repository import ProjectRepoRepositoryPort
     from application.project.registry_service import ProjectRegistryService
 
 
@@ -198,7 +199,7 @@ class ProjectRepositoriesService:
             raise ProjectNotFound(f"Project {project_id} not found")
         return ProjectPaths.from_registry_row(row)
 
-    def _repo_repo(self, project_id: int) -> RepositoryRepository:
+    def _repo_repo(self, project_id: int) -> ProjectRepoRepositoryPort:
         paths = self._project_paths(project_id)
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
         factory = ConnectionFactory(paths.findings_db)

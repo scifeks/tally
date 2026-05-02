@@ -1,9 +1,9 @@
-"""RepositoryRepository — manages the per-project ``repositories`` table.
+"""RepositoryRepository: manages the per-project ``repositories`` table.
 
 Phase 14.3: the SQLite ``repositories`` table is the sole source of truth
 for per-repo config. Each row carries every field of the
-``Repository`` pydantic model — scalars as typed columns, list/dict
-fields and the ``auth`` block as TEXT-as-JSON columns — plus a stable
+``Repository`` pydantic model (scalars as typed columns; list/dict
+fields and the ``auth`` block as TEXT-as-JSON columns) plus a stable
 integer ``id``, a mutable ``name``, a ``url_seed_file`` path, and the
 ``created_at`` / ``deleted_at`` lifecycle stamps.
 
@@ -17,6 +17,7 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from application.ports.project_repo_repository import ProjectRepoRepositoryPort
 from core.config.schemas.repository import RepoAuth, Repository
 
 if TYPE_CHECKING:
@@ -77,7 +78,7 @@ def _row_to_repository(row: sqlite3.Row) -> Repository:
 
 
 def _repository_to_row(repo: Repository) -> dict[str, Any]:
-    """Serialise a Repository for INSERT / UPDATE."""
+    """Serialize a Repository for INSERT / UPDATE."""
     auth_dump = repo.auth.model_dump() if repo.auth is not None else None
     return {
         "name": repo.name,
@@ -102,7 +103,7 @@ def _repository_to_row(repo: Repository) -> dict[str, Any]:
     }
 
 
-class RepositoryRepository:
+class RepositoryRepository(ProjectRepoRepositoryPort):
     """CRUD for the ``repositories`` table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
@@ -204,7 +205,7 @@ class RepositoryRepository:
             )
 
     def rename(self, repo_id: int, new_name: str) -> None:
-        """Mutate just the ``name`` column for *repo_id*."""
+        """Mutate the ``name`` column for *repo_id*."""
         with self._factory.connect() as conn:
             conn.execute(
                 "UPDATE repositories SET name = ? WHERE id = ?",
