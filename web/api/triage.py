@@ -291,7 +291,7 @@ async def start_triage(
         )
 
     row = _resolve_project(request, project_id)
-    project_name: str = row["name"]
+    project_name: str = row.name
     base_path: str = request.app.state.base_path
 
     service = _service(request, project_id)
@@ -420,7 +420,7 @@ async def resume_triage(
         )
 
     row = _resolve_project(request, project_id)
-    project_name: str = row["name"]
+    project_name: str = row.name
     base_path: str = request.app.state.base_path
 
     service = _service(request, project_id)

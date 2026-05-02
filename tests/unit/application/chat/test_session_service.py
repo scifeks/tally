@@ -14,6 +14,7 @@ from application.chat.session_service import (
     ProjectNotFound,
 )
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
+from domain.projects.entry import ProjectRow
 
 
 class _StubSessionRepo:
@@ -260,12 +261,13 @@ class TestChatSessionService:
             ChatSessionService.from_request(request, 7)  # type: ignore[arg-type]
 
     def test_from_request_raises_when_project_archived(self) -> None:
-        archived = {
-            "id": 7,
-            "name": "p",
-            "path": "/tmp/p",
-            "archived_at": "2026-05-01T00:00:00Z",
-        }
+        archived = ProjectRow(
+            id=7,
+            name="p",
+            path="/tmp/p",
+            created_at="2026-05-01T00:00:00Z",
+            archived_at="2026-05-01T00:00:00Z",
+        )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         request = SimpleNamespace(
             app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))

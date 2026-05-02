@@ -94,7 +94,7 @@ def get_installed_tools(request: Request) -> InstalledToolsResponse:
     The probe runs once per process lifetime; the result is cached. The
     SPA uses this to gate UI affordances (e.g. hide tools from the scan
     picker when their binary isn't installed) before any project is
-    selected. Auth-only — no project context required.
+    selected. Auth-only; no project context required.
     """
     port = request.app.state.installed_tools
     return InstalledToolsResponse(installed=sorted(port.installed()))
@@ -111,7 +111,7 @@ async def get_tool_overrides(
     """Return project-level tool config overrides from commands.json."""
     registry = request.app.state.project_registry
     row = registry.resolve_by_id(project_id)
-    if row is None or row.get("archived_at"):
+    if row is None or row.archived_at:
         raise NotFound(f"Project {project_id} not found")
 
     paths = ProjectPaths.from_registry_row(row)
@@ -213,7 +213,7 @@ async def create_tool_override(
     """Create a new project-scoped tool override in commands.json."""
     registry = request.app.state.project_registry
     row = registry.resolve_by_id(project_id)
-    if row is None or row.get("archived_at"):
+    if row is None or row.archived_at:
         raise NotFound(f"Project {project_id} not found")
 
     paths = ProjectPaths.from_registry_row(row)
@@ -238,7 +238,7 @@ async def create_tool_override(
         data[body.tool_id] = entry_dict
         atomic_write_text(override_path, json.dumps(data, indent=2))
 
-    _refresh_registry(request, row["name"])
+    _refresh_registry(request, row.name)
     return _to_response_item(body.tool_id, entry)
 
 
@@ -255,7 +255,7 @@ async def replace_tool_override(
     """Replace an existing project-scoped tool override."""
     registry = request.app.state.project_registry
     row = registry.resolve_by_id(project_id)
-    if row is None or row.get("archived_at"):
+    if row is None or row.archived_at:
         raise NotFound(f"Project {project_id} not found")
 
     paths = ProjectPaths.from_registry_row(row)
@@ -280,7 +280,7 @@ async def replace_tool_override(
         data[tool_id] = entry_dict
         atomic_write_text(override_path, json.dumps(data, indent=2))
 
-    _refresh_registry(request, row["name"])
+    _refresh_registry(request, row.name)
     return _to_response_item(tool_id, entry)
 
 
@@ -296,7 +296,7 @@ async def delete_tool_override(
     """Delete a project-scoped tool override."""
     registry = request.app.state.project_registry
     row = registry.resolve_by_id(project_id)
-    if row is None or row.get("archived_at"):
+    if row is None or row.archived_at:
         raise NotFound(f"Project {project_id} not found")
 
     paths = ProjectPaths.from_registry_row(row)
@@ -309,5 +309,5 @@ async def delete_tool_override(
         del data[tool_id]
         atomic_write_text(override_path, json.dumps(data, indent=2))
 
-    _refresh_registry(request, row["name"])
+    _refresh_registry(request, row.name)
     return Response(status_code=204)

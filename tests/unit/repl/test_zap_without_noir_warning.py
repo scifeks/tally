@@ -1,7 +1,7 @@
 """Tests for the DAST-without-discovery warning in ScanCommands.
 
-Phase 9: discovery presence is now determined by ``_repo_has_url_findings``
-(SQLite ``url_findings`` query), not by reading ``repo.oas3_path`` /
+Discovery presence is determined by ``_repo_has_url_findings`` (SQLite
+``url_findings`` query), not by reading ``repo.oas3_path`` /
 ``repo.merged_oas3_path``. These tests stub that probe.
 
 Covers:
@@ -20,6 +20,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from application.repl.commands.scan_commands import ScanCommands
+from domain.projects.entry import ProjectRow
 
 
 def _make_repl(
@@ -186,7 +187,9 @@ class TestCmdScanInnerWarning:
         _repo = MagicMock()
         _repo.name = "dvna"
         _repo.crawl_enabled = True
-        repl.project_registry.resolve_by_name.return_value = {"id": 1}
+        repl.project_registry.resolve_by_name.return_value = ProjectRow(
+            id=1, name="proj", path="/tmp/test", created_at="2026-05-02T00:00:00Z"
+        )
 
         sc = ScanCommands(repl)
         sc._active_repos = MagicMock(return_value=[_repo])  # type: ignore[method-assign]

@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.config.schemas.repository import Repository
+from domain.projects.entry import ProjectRow
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 
@@ -56,18 +57,14 @@ def test_delete_repository_soft_deletes_db_row(tmp_path: Path) -> None:
     )
 
     registry = MagicMock()
-    registry.resolve_by_name.return_value = {
-        "id": 1,
-        "name": "testproject",
-        "path": str(proj_dir),
-        "archived_at": None,
-    }
-    registry.resolve_by_id.return_value = {
-        "id": 1,
-        "name": "testproject",
-        "path": str(proj_dir),
-        "archived_at": None,
-    }
+    project_row = ProjectRow(
+        id=1,
+        name="testproject",
+        path=str(proj_dir),
+        created_at="2024-01-01T00:00:00Z",
+    )
+    registry.resolve_by_name.return_value = project_row
+    registry.resolve_by_id.return_value = project_row
 
     manager = ProjectManager(base_path=str(tmp_path), registry=registry)
     manager.delete_repository("testproject", "myrepo")

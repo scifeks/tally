@@ -118,8 +118,8 @@ def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> b
     """Return whether live crawling (Katana / Noir) should be enabled.
 
     Only prompts when *base_urls* is non-empty and an endpoint file is
-    configured — in that case the user chooses whether to also run live
-    crawlers on top of the static file.  In all other situations crawling
+    configured; in that case the user chooses whether to also run live
+    crawlers on top of the static file. In all other situations crawling
     is enabled by default and no prompt is shown.
     """
     if not base_urls or not has_endpoint_file:
@@ -153,7 +153,7 @@ def _interview_auth(
         default=current.login_url if current else "",
     )
     if not login_url:
-        print("  Login URL required — skipping auth config.")
+        print("  Login URL required; skipping auth config.")
         return None
 
     username_field = _prompt(
@@ -242,9 +242,9 @@ class InteractiveProjectWizard:
 
     def _project_id(self, project_name: str) -> int:
         row = self._manager.registry.resolve_by_name(project_name)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' does not exist.")
-        return int(row["id"])
+        return row.id
 
     def create_project(self) -> str | None:
         """Run interactive interview to create a new project.
@@ -497,8 +497,8 @@ class InteractiveProjectWizard:
                 ", ".join(existing.ignore_dirs) if existing.ignore_dirs else ""
             )
             ignore_dirs_input = _prompt(
-                "  Ignore dir names (e.g. vendor, node_modules, mocks"
-                " — comma-separated, optional)",
+                "  Ignore dir names (e.g. vendor, node_modules, mocks;"
+                " comma-separated, optional)",
                 default=current_ignore,
             )
             ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
@@ -542,7 +542,7 @@ class InteractiveProjectWizard:
                     allow_keep=False,
                 )
 
-            # crawl_enabled — only asked when base URLs and endpoint file
+            # crawl_enabled is only asked when base URLs and endpoint file
             # are both configured. Treat any prior or pending endpoint file
             # as "endpoint file present" for the prompt logic.
             has_endpoint_file = bool(pending_endpoint_file) or had_existing_endpoint
@@ -551,7 +551,7 @@ class InteractiveProjectWizard:
                 has_endpoint_file=has_endpoint_file,
             )
 
-            # Katana crawler options — skipped when crawling is disabled
+            # Katana crawler options are skipped when crawling is disabled
             if crawl_enabled and base_urls:
                 from core.detection.spa import detect_spa
 
@@ -613,9 +613,9 @@ class InteractiveProjectWizard:
     ) -> bool:
         """Return True if the repo has a user-uploaded endpoint file recorded.
 
-        Phase 14.3: the DB column ``url_seed_file`` is the source of truth.
-        ``paths`` is unused but preserved for callsite symmetry with the
-        rest of the wizard.
+        The DB column ``url_seed_file`` is the source of truth. ``paths``
+        is unused but preserved for callsite symmetry with the rest of
+        the wizard.
         """
         del paths
         return repo.url_seed_file is not None
@@ -626,10 +626,10 @@ class InteractiveProjectWizard:
         """Prompt for an endpoint-file path; validate that the path exists.
 
         Returns the resolved source path string when the user supplies a
-        valid path, or ``None`` when the user skips (or — when
-        *allow_keep* is True — chooses to keep the existing file).
-        Format detection is deferred to the actual ingest helper, which
-        runs the converter pipeline and surfaces any format errors.
+        valid path, or ``None`` when the user skips (or, when *allow_keep*
+        is True, chooses to keep the existing file). Format detection is
+        deferred to the actual ingest helper, which runs the converter
+        pipeline and surfaces any format errors.
         """
         from infrastructure.endpoints.converters.detector import FormatDetector
 
@@ -784,7 +784,7 @@ class InteractiveProjectWizard:
             " (press Enter to keep current value)...\n"
         )
         try:
-            # Company Name — required
+            # Company Name (required)
             while True:
                 val = _prompt("  Company Name", default=config.company_name)
                 if val:
@@ -792,12 +792,12 @@ class InteractiveProjectWizard:
                     break
                 print("  Company Name is required.")
 
-            # Department Name — optional
+            # Department Name (optional)
             department_name = _prompt(
                 "  Department Name (optional)", default=config.department_name
             )
 
-            # Abbreviation — keep / replace / clear
+            # Abbreviation: keep / replace / clear
             current_abbrev = config.abbreviation
             if current_abbrev:
                 hint = (
@@ -989,8 +989,8 @@ class InteractiveProjectWizard:
 
         # Ignore dir names
         ignore_dirs_input = _prompt(
-            "  Ignore dir names (e.g. vendor, node_modules, mocks"
-            " — comma-separated, optional)"
+            "  Ignore dir names (e.g. vendor, node_modules, mocks;"
+            " comma-separated, optional)"
         )
         ignore_dirs = [d.strip() for d in ignore_dirs_input.split(",") if d.strip()]
 
@@ -1034,13 +1034,13 @@ class InteractiveProjectWizard:
                 if choice in ("s", "skip", ""):
                     break
 
-        # crawl_enabled — only asked when base URLs and endpoint file are
+        # crawl_enabled is only asked when base URLs and endpoint file are
         # both configured
         crawl_enabled = _interview_crawl_enabled(
             base_urls=base_urls, has_endpoint_file=bool(oas3_path)
         )
 
-        # Katana crawler options — skipped when crawling is disabled
+        # Katana crawler options are skipped when crawling is disabled
         if crawl_enabled and base_urls:
             from core.detection.spa import detect_spa
 

@@ -1,8 +1,12 @@
-"""Project path conventions — single source for `projects/<name>/...` layout."""
+"""Project path conventions: single source for `projects/<name>/...` layout."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from domain.projects.entry import ProjectRow
 
 
 class ProjectPaths:
@@ -64,9 +68,8 @@ class ProjectPaths:
     def endpoint_dir(self, repo: str) -> Path:
         """Return ``endpoints/<repo>/`` for JIT-rebuilt merged artifacts.
 
-        Phase 14.3 keys this dir on the integer repo id (callers pass
-        ``str(repo_id)``); ``merged_urls.txt`` and ``merged_oas3.json``
-        live inside it.
+        Keyed on the integer repo id (callers pass ``str(repo_id)``).
+        ``merged_urls.txt`` and ``merged_oas3.json`` live inside it.
         """
         return self.endpoints_dir / repo
 
@@ -88,9 +91,9 @@ class ProjectPaths:
         return self.root / "sessions"
 
     @classmethod
-    def from_registry_row(cls, row: dict) -> ProjectPaths:
+    def from_registry_row(cls, row: ProjectRow) -> ProjectPaths:
         """Build a ProjectPaths from a registry result row."""
-        return cls(Path(row["path"]))
+        return cls(Path(row.path))
 
     @classmethod
     def projects_dir(cls, base_path: Path | str) -> Path:

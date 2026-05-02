@@ -26,6 +26,7 @@ from application.ports.triage_agent import (  # noqa: E402
     TriageSessionResult,
 )
 from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
+from domain.triage.entry import TriageBatchRow  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
@@ -395,7 +396,7 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
     original_claim = runner._triage_repo.claim_batch
     claim_calls: list[object] = []
 
-    def spy_claim(run_id: int) -> dict | None:
+    def spy_claim(run_id: int) -> TriageBatchRow | None:
         result = original_claim(run_id)
         claim_calls.append(result)
         return result

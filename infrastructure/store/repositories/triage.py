@@ -103,11 +103,10 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             )
         return len(batches)
 
-    def claim_batch(self, run_id: int) -> dict | None:
-        """Atomically claims the next pending batch for *run_id*.
+    def claim_batch(self, run_id: int) -> TriageBatchRow | None:
+        """Atomically claim the next pending batch for *run_id*.
 
-        Returns the batch row as a dict (with JSON columns parsed) or None
-        if no claimable batch exists.
+        Returns ``None`` if no claimable batch exists.
         """
         with self._factory.connect() as conn:
             row = conn.execute(
@@ -131,10 +130,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             ).fetchone()
         if row is None:
             return None
-        result = dict(row)
-        result["batch_data"] = json.loads(result["batch_data"])
-        result["finding_ids"] = json.loads(result["finding_ids"])
-        return result
+        return _row_to_triage_batch(row)
 
     def complete_batch(self, batch_id: int, status: str) -> None:
         """Sets status and completed_at on the given batch."""
@@ -202,10 +198,6 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             for r in rows
             if r["tool"] not in skip_tools
         ]
-
-    # ------------------------------------------------------------------
-    # Phase 6: query/aggregation helpers for the API surface
-    # ------------------------------------------------------------------
 
     def cancel_remaining(self, run_id: int) -> int:
         """Mark remaining pending/in_progress batches as cancelled.

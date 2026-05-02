@@ -15,7 +15,7 @@ def list_project_locks(project_id: int, request: Request) -> dict:
     """Return current lock state for the given project."""
     registry = request.app.state.project_registry
     row = registry.resolve_by_id(project_id)
-    if row is None or row.get("archived_at"):
+    if row is None or row.archived_at:
         raise NotFound(f"Project {project_id} not found")
 
     svc = LockQueryService()

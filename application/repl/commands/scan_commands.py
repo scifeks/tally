@@ -41,7 +41,7 @@ class ScanCommands:
         service = ProjectRepositoriesService(
             self.repl.project_registry, self.repl.config
         )
-        return service.list_active(int(row["id"]))
+        return service.list_active(row.id)
 
     # ------------------------------------------------------------------
     # Commands
@@ -243,7 +243,7 @@ class ScanCommands:
         row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
         if row is None:
             raise ValueError(f"project not found: {self.repl.active_project}")
-        return int(row["id"])
+        return row.id
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
         """``run <tool> [--timeout <seconds>] [args...]``.

@@ -49,7 +49,7 @@ class ConfigManager:
         """Resolve a project's on-disk root via the registry, with fallback."""
         if self._registry is not None:
             row = self._registry.resolve_by_name(project_name)
-            if row is not None and not row.get("archived_at"):
+            if row is not None and not row.archived_at:
                 return ProjectPaths.from_registry_row(row)
         return ProjectPaths(self.projects_dir / project_name)
 

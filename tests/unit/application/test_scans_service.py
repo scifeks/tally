@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from application.scans.scans_service import ProjectNotFound, ScansService
+from domain.projects.entry import ProjectRow
 
 
 class _StubRunRepo:
@@ -20,10 +21,10 @@ class _StubRunRepo:
 
 
 class _StubProjectRegistry:
-    def __init__(self, projects: list[dict] | None = None) -> None:
+    def __init__(self, projects: list[ProjectRow] | None = None) -> None:
         self._projects = projects or []
 
-    def list_active(self) -> list[dict]:
+    def list_active(self) -> list[ProjectRow]:
         return list(self._projects)
 
 
@@ -42,12 +43,13 @@ class TestScansService:
             ScansService.from_request(request, 7)  # type: ignore[arg-type]
 
     def test_from_request_raises_when_project_archived(self) -> None:
-        archived = {
-            "id": 7,
-            "name": "p",
-            "path": "/tmp/p",
-            "archived_at": "2026-05-01T00:00:00Z",
-        }
+        archived = ProjectRow(
+            id=7,
+            name="p",
+            path="/tmp/p",
+            created_at="2026-05-01T00:00:00Z",
+            archived_at="2026-05-01T00:00:00Z",
+        )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         request = SimpleNamespace(
             app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))

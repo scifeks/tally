@@ -1,4 +1,4 @@
-"""Project API endpoints — v1 versioned routes.
+"""Project API endpoints, v1 versioned routes.
 
 The server is project-agnostic: ``/api/v1/projects`` returns the full
 project list (auth-only); per-project routes resolve their target via
@@ -17,16 +17,28 @@ from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from application.findings.findings_service import (
+    FindingsService,
+)
+from application.findings.findings_service import (
+    ProjectNotFound as FindingsProjectNotFound,
+)
 from application.project.manager import ProjectManager
 from application.project.repositories_service import (
     DuplicateRepositoryName,
     ProjectRepositoriesService,
     RepositoryNotFound,
 )
+from application.url_inventory.url_list_service import (
+    ProjectNotFound as UrlListProjectNotFound,
+)
+from application.url_inventory.url_list_service import (
+    UrlListService,
+)
 from core.config.manager import ConfigManager
 from core.config.schemas import Repository
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
+from domain.projects.entry import ProjectRow
 from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -45,27 +57,20 @@ from web.api.schemas import (
 v1_router = APIRouter()
 
 
-def _count_url_findings(paths: ProjectPaths) -> int:
-    """Count active url_findings rows; returns 0 on any error or missing DB."""
-    if not paths.findings_db.exists():
-        return 0
+def _findings_service(request: Request, project_id: int) -> FindingsService:
+    """Build a FindingsService for *project_id* or raise 404."""
     try:
-        factory = ConnectionFactory(paths.findings_db)
-        with factory.connect() as conn:
-            cur = conn.execute(
-                "SELECT name FROM sqlite_master "
-                "WHERE type='table' AND name='url_findings'"
-            )
-            if cur.fetchone() is None:
-                return 0
-            row = conn.execute(
-                "SELECT COUNT(*) FROM url_findings uf "
-                "JOIN repositories r ON r.id = uf.repo_id "
-                "WHERE r.deleted_at IS NULL"
-            ).fetchone()
-            return int(row[0]) if row else 0
-    except Exception:
-        return 0
+        return FindingsService.from_request(request, project_id)
+    except FindingsProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
+
+
+def _url_list_service(request: Request, project_id: int) -> UrlListService:
+    """Build a UrlListService for *project_id* or raise 404."""
+    try:
+        return UrlListService.from_request(request, project_id)
+    except UrlListProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
 
 def _load_project_tool_ids(commands_path: Path) -> list[str]:
@@ -78,22 +83,6 @@ def _load_project_tool_ids(commands_path: Path) -> list[str]:
     except (OSError, json.JSONDecodeError):
         return []
     return sorted(data.keys())
-
-
-async def _count_findings(paths: ProjectPaths) -> int:
-    if not paths.findings_db.exists():
-        return 0
-    factory = ConnectionFactory(paths.findings_db)
-
-    def _query(f: ConnectionFactory) -> int:
-        try:
-            with f.connect() as conn:
-                row = conn.execute("SELECT COUNT(*) FROM findings").fetchone()
-                return row[0]
-        except Exception:
-            return 0
-
-    return await asyncio.to_thread(_query, factory)
 
 
 def _service_from_request(request: Request) -> ProjectRepositoriesService:
@@ -120,12 +109,12 @@ async def list_projects(
     manager = ProjectManager(base_path, registry=registry)
     items: list[ProjectListItem] = []
     for row in registry.list_active():
-        config = manager.get_project_info(row["name"])
+        config = manager.get_project_info(row.name)
         if config is None:
             continue
         items.append(
             ProjectListItem(
-                id=int(row["id"]),
+                id=row.id,
                 name=config.project_name,
                 code=config.abbreviation,
                 created_at=config.created,
@@ -149,17 +138,20 @@ async def get_project_meta(
     base_path: str = request.app.state.base_path
     registry = request.app.state.project_registry
     manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(row["name"])
+    config = manager.get_project_info(row.name)
     if config is None:
         raise NotFound(f"Project {project_id} not found")
     paths = ProjectPaths.from_registry_row(row)
-    finding_count = await _count_findings(paths)
-    url_list_count = await asyncio.to_thread(_count_url_findings, paths)
+
+    findings_service = _findings_service(request, project_id)
+    url_list_service = _url_list_service(request, project_id)
+    finding_count = await asyncio.to_thread(findings_service.count_findings)
+    url_list_count = await asyncio.to_thread(url_list_service.count_active_url_findings)
     enabled_tools = await asyncio.to_thread(_load_project_tool_ids, paths.commands_json)
-    service = _service_from_request(request)
-    repo_count = await asyncio.to_thread(_count_active_repos, service, project_id)
+    repo_service = _service_from_request(request)
+    repo_count = await asyncio.to_thread(_count_active_repos, repo_service, project_id)
     return ProjectMetaResponse(
-        id=int(row["id"]),
+        id=row.id,
         name=config.project_name,
         code=config.abbreviation,
         repo_count=repo_count,
@@ -170,14 +162,14 @@ async def get_project_meta(
 
 
 def _build_project_info_response(
-    row: dict,
+    row: ProjectRow,
     config,
     finding_count: int,
     repo_count: int,
 ) -> ProjectInfoResponse:
     paths = ProjectPaths.from_registry_row(row)
     return ProjectInfoResponse(
-        id=int(row["id"]),
+        id=row.id,
         name=config.project_name,
         code=config.abbreviation,
         company_name=config.company_name,
@@ -199,13 +191,13 @@ async def get_project_info_endpoint(
     base_path: str = request.app.state.base_path
     registry = request.app.state.project_registry
     manager = ProjectManager(base_path, registry=registry)
-    config = manager.get_project_info(row["name"])
+    config = manager.get_project_info(row.name)
     if config is None:
         raise NotFound(f"Project {project_id} not found")
-    paths = ProjectPaths.from_registry_row(row)
-    finding_count = await _count_findings(paths)
-    service = _service_from_request(request)
-    repo_count = await asyncio.to_thread(_count_active_repos, service, project_id)
+    findings_service = _findings_service(request, project_id)
+    finding_count = await asyncio.to_thread(findings_service.count_findings)
+    repo_service = _service_from_request(request)
+    repo_count = await asyncio.to_thread(_count_active_repos, repo_service, project_id)
     return _build_project_info_response(row, config, finding_count, repo_count)
 
 
@@ -217,7 +209,7 @@ async def patch_project_info(
 ) -> ProjectInfoResponse:
     row = _resolve_project(request, project_id)
     base_path: str = request.app.state.base_path
-    project_name = row["name"]
+    project_name = row.name
     manager = ConfigManager(base_path)
 
     update: dict[str, str] = {}
@@ -234,10 +226,10 @@ async def patch_project_info(
             config = config.model_copy(update=update)
             manager.save_project_config(project_name, config)
 
-    paths = ProjectPaths.from_registry_row(row)
-    finding_count = await _count_findings(paths)
-    service = _service_from_request(request)
-    repo_count = await asyncio.to_thread(_count_active_repos, service, project_id)
+    findings_service = _findings_service(request, project_id)
+    finding_count = await asyncio.to_thread(findings_service.count_findings)
+    repo_service = _service_from_request(request)
+    repo_count = await asyncio.to_thread(_count_active_repos, repo_service, project_id)
     return _build_project_info_response(row, config, finding_count, repo_count)
 
 
@@ -435,8 +427,6 @@ async def _ingest_endpoint_file(
     """
     from application.url_inventory.ports import UrlProviderContext
     from application.url_inventory.providers.user_file import UserFileProvider
-    from application.url_inventory.service import UrlInventoryService
-    from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
     if repo.id is None:
         raise ApiValidationError("Repository must be persisted before upload")
@@ -450,21 +440,19 @@ async def _ingest_endpoint_file(
     dest = upload_dir / (endpoint_file.filename or "upload.json")
     dest.write_bytes(await endpoint_file.read())
 
-    service = _service_from_request(request)
-    service.record_seed_file(project_id, repo_id, str(dest))
+    repo_service = _service_from_request(request)
+    repo_service.record_seed_file(project_id, repo_id, str(dest))
 
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    inventory = UrlInventoryService(UrlFindingRepository(factory))
+    url_list_service = _url_list_service(request, project_id)
     ctx = UrlProviderContext(
         repo=repo,
         repo_id=repo_id,
         base_path=str(paths.root.parent.parent),
-        project_name=row["name"],
+        project_name=row.name,
         run_id=None,
     )
     entries = list(UserFileProvider().provide(ctx, file_path=str(dest)))
-    inventory.ingest_user_file(
+    url_list_service.inventory.ingest_user_file(
         repo_id=repo_id,
         file_path=str(dest),
         entries=entries,

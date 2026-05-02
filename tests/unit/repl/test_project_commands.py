@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from application.repl.commands.project_commands import ProjectCommands
+from domain.projects.entry import ProjectRow
 
 
 class TestProjectCommands(unittest.TestCase):
@@ -106,8 +107,18 @@ class TestProjectCommands(unittest.TestCase):
 
     def test_cmd_projects_with_projects_prints_table(self) -> None:
         self.repl.project_registry.list_active.return_value = [
-            {"id": 1, "name": "proj-a", "path": "/p/a", "archived_at": None},
-            {"id": 2, "name": "proj-b", "path": "/p/b", "archived_at": None},
+            ProjectRow(
+                id=1,
+                name="proj-a",
+                path="/p/a",
+                created_at="2026-01-01T00:00:00Z",
+            ),
+            ProjectRow(
+                id=2,
+                name="proj-b",
+                path="/p/b",
+                created_at="2026-01-01T00:00:00Z",
+            ),
         ]
         info = MagicMock()
         info.created = "2026-01-01T00:00:00"

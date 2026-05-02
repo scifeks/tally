@@ -304,7 +304,7 @@ async def send_chat_message(
       session is in flight.
     """
     row = _resolve_project(request, project_id)
-    project_name: str = row["name"]
+    project_name: str = row.name
     base_path: str = request.app.state.base_path
 
     service = _service(request, project_id)

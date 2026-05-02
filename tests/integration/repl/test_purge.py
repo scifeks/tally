@@ -13,6 +13,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
+from domain.projects.entry import ProjectRow  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -266,7 +267,7 @@ def test_purge_tool_calls_delete_findings_with_tool(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Zero documents — no prompt shown
+# Zero documents: no prompt shown
 # ---------------------------------------------------------------------------
 
 
@@ -390,7 +391,7 @@ def test_tool_purge_does_not_delete_reports(tmp_path: Path) -> None:
 def test_full_purge_missing_reports_dir_does_not_raise(tmp_path: Path) -> None:
     proj_dir = tmp_path / "projects" / "testproj"
     proj_dir.mkdir(parents=True)
-    # No reports/ dir created — should not crash
+    # No reports/ dir created; should not crash
     _run_purge([], tmp_path=tmp_path)
 
 
@@ -510,7 +511,7 @@ def test_purge_proceeds_when_only_tool_outputs_exist(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 8.10 / Q15 — chat data is hard-deleted on full purge
+# Chat data is hard-deleted on full purge
 # ---------------------------------------------------------------------------
 
 
@@ -563,7 +564,14 @@ def test_full_purge_hard_deletes_chat_sessions_and_messages(
     sids, _ = _seed_chat_data(tmp_path, "testproj", project_id=project_id, n_sessions=2)
 
     repl = _make_repl(tmp_path)
-    repl.project_registry.resolve_by_name = MagicMock(return_value={"id": project_id})
+    repl.project_registry.resolve_by_name = MagicMock(
+        return_value=ProjectRow(
+            id=project_id,
+            name="testproj",
+            path=str(tmp_path / "projects" / "testproj"),
+            created_at="2026-01-01T00:00:00Z",
+        )
+    )
     cmd = PurgeCommand(repl)
     engine = _make_rag_engine(0)
     engine.count_documents.return_value = 0
@@ -592,7 +600,7 @@ def test_full_purge_hard_deletes_chat_sessions_and_messages(
 
 
 def test_tool_filtered_purge_does_not_touch_chat(tmp_path: Path) -> None:
-    """`purge --tool=...` must not delete chat data — Q15 is full-purge only."""
+    """`purge --tool=...` must not delete chat data; full-purge only."""
     from infrastructure.store.connection import ConnectionFactory
     from infrastructure.store.repositories.chat_sessions import (
         ChatSessionRepository,
@@ -602,7 +610,14 @@ def test_tool_filtered_purge_does_not_touch_chat(tmp_path: Path) -> None:
     sids, _ = _seed_chat_data(tmp_path, "testproj", project_id=project_id, n_sessions=2)
 
     repl = _make_repl(tmp_path)
-    repl.project_registry.resolve_by_name = MagicMock(return_value={"id": project_id})
+    repl.project_registry.resolve_by_name = MagicMock(
+        return_value=ProjectRow(
+            id=project_id,
+            name="testproj",
+            path=str(tmp_path / "projects" / "testproj"),
+            created_at="2026-01-01T00:00:00Z",
+        )
+    )
     cmd = PurgeCommand(repl)
     engine = _make_rag_engine(2)
     with (
