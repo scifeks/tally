@@ -10,6 +10,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from application.tools.scan_types.full import FullScan
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
 
 
@@ -20,7 +21,7 @@ def _make_config(**overrides) -> ScanTypeConfig:
     defaults: dict = dict(
         project_name="proj",
         base_path="/tmp/proj",
-        config_manager=MagicMock(),
+        tool_config=ToolExecutionConfig(noir_provider=None),
         run_id=None,
         prompt=prompt,
     )

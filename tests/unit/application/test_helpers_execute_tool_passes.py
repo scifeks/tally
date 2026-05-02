@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from application.tools.scan_types.execution import execute_tool_passes
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.scan_types.models import ScanTypeConfig
 
 
@@ -21,7 +22,7 @@ def _make_config(prompt: MagicMock | None = None, **overrides) -> ScanTypeConfig
     defaults: dict = dict(
         project_name="proj",
         base_path="/tmp/proj",
-        config_manager=MagicMock(),
+        tool_config=ToolExecutionConfig(noir_provider=None),
         run_id=1,
         prompt=prompt or _make_prompt(),
     )

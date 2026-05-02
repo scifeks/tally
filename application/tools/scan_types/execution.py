@@ -77,7 +77,7 @@ def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
 
 
 def make_context(
-    config_manager: ConfigManager,
+    tool_config: ToolExecutionConfig,
     project_name: str,
     base_path: str,
     registry: ToolRegistry,
@@ -88,7 +88,7 @@ def make_context(
         project_name=project_name,
         base_path=base_path,
         repo=repo,
-        tool_config=_build_tool_execution_config(config_manager),
+        tool_config=tool_config,
         registry=registry,
         is_docker=(command_config.location == "docker" if command_config else False),
         execution_mode="scan",

@@ -63,7 +63,10 @@ def _make_orchestrator(
         "gitleaks",
         "zap",
     ]
-    with patch("core.config.manager.ConfigManager"):
+    with (
+        patch("core.config.manager.ConfigManager"),
+        patch("application.tools.orchestrator._build_tool_execution_config"),
+    ):
         return ScanOrchestrator(
             project="test-project",
             tool_registry=tool_registry,
