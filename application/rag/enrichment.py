@@ -8,9 +8,8 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
-from rich.console import Console
-
 from application.ports.llm_provider import LLMProvider
+from application.ports.progress_reporter import NullProgressReporter, ProgressReporter
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
@@ -232,7 +231,7 @@ class EnrichmentPipeline:
     def __init__(
         self,
         finding_repo: FindingRepositoryPort,
-        console: Console | None = None,
+        reporter: ProgressReporter | None = None,
         base_path: str = ".",
         run_id: int | None = None,
         llm_provider: LLMProvider | None = None,
@@ -244,7 +243,7 @@ class EnrichmentPipeline:
         from application.ports.scan_event_sink import NullScanEventSink
 
         self._finding_repo = finding_repo
-        self._console = console
+        self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._base_path = base_path
         self._run_id = run_id
         self._llm_provider = llm_provider  # resolved lazily on first _call_llm
@@ -344,11 +343,7 @@ class EnrichmentPipeline:
             for future in as_completed(future_to_row):
                 row = future_to_row[future]
                 completed += 1
-                if self._console:
-                    self._console.print(
-                        f"[dim]    Enriching findings... {completed}/{n_work}[/dim]",
-                        end="\r",
-                    )
+                self._reporter.report(f"    Enriching findings... {completed}/{n_work}")
                 self._event_sink.emit(
                     se.EnrichmentProgress(
                         run_id=self._run_id or 0,
@@ -372,7 +367,7 @@ class EnrichmentPipeline:
                     cancelled = True
                     break
 
-        # Phase 3: SQLite writes (sequential — avoids write contention).
+        # Phase 3: SQLite writes (sequential to avoid write contention).
         # Runs even on cancel so already-completed work isn't lost.
         for row, validated_fields in updates:
             self._finding_repo.update_enrichment_fields(
@@ -385,13 +380,9 @@ class EnrichmentPipeline:
             raise ScanCancelled
 
         enriched_count = len(updates) + auto_enriched
-        if self._console:
-            self._console.print()  # newline after \r progress
-            msg = (
-                f"[dim]    Enrichment complete."
-                f" {enriched_count}/{total} findings enriched.[/dim]"
-            )
-            self._console.print(msg)
+        self._reporter.report(
+            f"    Enrichment complete. {enriched_count}/{total} findings enriched."
+        )
         self._event_sink.emit(
             se.EnrichmentComplete(
                 run_id=self._run_id or 0,
@@ -429,11 +420,11 @@ class EnrichmentPipeline:
         """Determine the enrichment plan for a document.
 
         Returns:
-            ``(legacy_fields, None)`` — batch path: a list of field names to
+            ``(legacy_fields, None)``: batch path; a list of field names to
                 enrich together in one LLM call over the full chunk text.
-            ``(None, specs)`` — per-field path: a list of FieldEnrichmentSpec
+            ``(None, specs)``: per-field path; a list of FieldEnrichmentSpec
                 to call individually.
-            ``([], None)`` — nothing to enrich (skip entirely).
+            ``([], None)``: nothing to enrich (skip entirely).
         """
         tool = metadata.get("tool", "")
         handler = ToolHandlerFactory.load(tool)
@@ -557,7 +548,7 @@ class EnrichmentPipeline:
         return legacy_fields or []
 
     # ------------------------------------------------------------------
-    # Legacy batch path (unchanged — retained for tools without enrichment_fields)
+    # Legacy batch path: retained for tools without enrichment_fields
     # ------------------------------------------------------------------
 
     def _call_llm(

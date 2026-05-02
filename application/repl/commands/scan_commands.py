@@ -206,7 +206,6 @@ class ScanCommands:
                 skip_enrichment=skip_enrichment,
                 prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
                 reporter=StdoutProgressReporter(),
-                console=self.repl.console,
                 run_args={"args": args},
             )
         except JobBusy as exc:
