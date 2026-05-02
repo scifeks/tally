@@ -54,7 +54,9 @@ _TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
 def _service(request: Request, project_id: int) -> FindingsService:
     """Build a FindingsService for *project_id* or raise 404."""
     try:
-        return FindingsService.from_request(request, project_id)
+        return FindingsService.for_project(
+            request.app.state.project_registry, project_id
+        )
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 

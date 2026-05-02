@@ -14,10 +14,9 @@ from infrastructure.store.repositories.drafts import DraftRepository
 from infrastructure.store.repositories.reports import ReportRepository
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.draft_repository import DraftRepositoryPort
     from application.ports.report_repository import ReportRepositoryPort
+    from application.project.registry_service import ProjectRegistryService
 
 
 class ProjectNotFound(LookupError):
@@ -36,8 +35,11 @@ class ReportsService:
         self._draft_repo = draft_repo
 
     @classmethod
-    def from_request(cls, request: Request, project_id: int) -> Self:
-        registry = request.app.state.project_registry
+    def for_project(
+        cls,
+        registry: ProjectRegistryService,
+        project_id: int,
+    ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")

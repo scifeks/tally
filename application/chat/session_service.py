@@ -17,10 +17,9 @@ from infrastructure.store.repositories.chat_messages import ChatMessageRepositor
 from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.chat_message_repository import ChatMessageRepositoryPort
     from application.ports.chat_session_repository import ChatSessionRepositoryPort
+    from application.project.registry_service import ProjectRegistryService
     from domain.chat.entry import ChatMessageRow, ChatSessionRow
 
 
@@ -40,8 +39,11 @@ class ChatSessionService:
         self._message_repo = message_repo
 
     @classmethod
-    def from_request(cls, request: Request, project_id: int) -> Self:
-        registry = request.app.state.project_registry
+    def for_project(
+        cls,
+        registry: ProjectRegistryService,
+        project_id: int,
+    ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")

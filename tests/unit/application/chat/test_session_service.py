@@ -252,15 +252,12 @@ class TestChatSessionService:
         assert last_at == "2026-05-02T01:00:00Z"
         assert count == 4
 
-    def test_from_request_raises_when_project_missing(self) -> None:
+    def test_for_project_raises_when_project_missing(self) -> None:
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
-        )
         with pytest.raises(ProjectNotFound):
-            ChatSessionService.from_request(request, 7)  # type: ignore[arg-type]
+            ChatSessionService.for_project(registry, 7)  # type: ignore[arg-type]
 
-    def test_from_request_raises_when_project_archived(self) -> None:
+    def test_for_project_raises_when_project_archived(self) -> None:
         archived = ProjectRow(
             id=7,
             name="p",
@@ -269,11 +266,8 @@ class TestChatSessionService:
             archived_at="2026-05-01T00:00:00Z",
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
-        )
         with pytest.raises(ProjectNotFound):
-            ChatSessionService.from_request(request, 7)  # type: ignore[arg-type]
+            ChatSessionService.for_project(registry, 7)  # type: ignore[arg-type]
 
     def test_session_repo_and_message_repo_properties_expose_handles(self) -> None:
         session_repo = _StubSessionRepo()

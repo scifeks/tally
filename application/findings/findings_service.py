@@ -20,8 +20,6 @@ from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.repositories import RepositoryRepository
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.finding_history_repository import (
         FindingHistoryRepositoryPort,
     )
@@ -29,6 +27,7 @@ if TYPE_CHECKING:
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
+    from application.project.registry_service import ProjectRegistryService
 
 
 class ProjectNotFound(LookupError):
@@ -56,8 +55,11 @@ class FindingsService:
         self._findings_db_exists = findings_db_exists
 
     @classmethod
-    def from_request(cls, request: Request, project_id: int) -> Self:
-        registry = request.app.state.project_registry
+    def for_project(
+        cls,
+        registry: ProjectRegistryService,
+        project_id: int,
+    ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")

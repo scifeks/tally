@@ -100,15 +100,12 @@ def _build(
 
 
 class TestFindingsService:
-    def test_from_request_raises_when_project_missing(self) -> None:
+    def test_for_project_raises_when_project_missing(self) -> None:
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
-        )
         with pytest.raises(ProjectNotFound):
-            FindingsService.from_request(request, 7)  # type: ignore[arg-type]
+            FindingsService.for_project(registry, 7)  # type: ignore[arg-type]
 
-    def test_from_request_raises_when_project_archived(self) -> None:
+    def test_for_project_raises_when_project_archived(self) -> None:
         archived = ProjectRow(
             id=7,
             name="p",
@@ -117,11 +114,8 @@ class TestFindingsService:
             archived_at="2026-05-01T00:00:00Z",
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
-        )
         with pytest.raises(ProjectNotFound):
-            FindingsService.from_request(request, 7)  # type: ignore[arg-type]
+            FindingsService.for_project(registry, 7)  # type: ignore[arg-type]
 
     def test_repo_name_lookup_returns_empty_when_findings_db_missing(self) -> None:
         project_repo = _StubProjectRepo(rows=[_Repo(id=1, name="r1")])

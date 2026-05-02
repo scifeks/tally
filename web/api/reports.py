@@ -59,7 +59,9 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> ReportsService:
     """Build a ReportsService for *project_id* or raise 404."""
     try:
-        return ReportsService.from_request(request, project_id)
+        return ReportsService.for_project(
+            request.app.state.project_registry, project_id
+        )
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 

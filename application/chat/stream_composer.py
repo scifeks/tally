@@ -2,8 +2,8 @@
 
 Resolves the project, looks up its knowledge base, builds the per-turn
 ``QueryEngine``, and acquires the chat ``LLMProvider``. The route
-calls ``ChatStreamComposer.from_request(request, project_id)`` and
-reads ready-to-use objects off the returned instance.
+calls ``ChatStreamComposer.for_project(...)`` and reads ready-to-use
+objects off the returned instance.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from application.rag.query import QueryEngine
 from infrastructure.llm.factory import get_llm_provider
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.llm_provider import LLMProvider
+    from application.project.registry_service import ProjectRegistryService
+    from application.rag.knowledge_base import FindingKnowledgeBase
 
 
 class RagUnavailable(RuntimeError):
@@ -39,14 +39,19 @@ class ChatStreamComposer:
         self._model_name = model_name
 
     @classmethod
-    def from_request(cls, request: Request, project_id: int) -> Self:
-        registry = request.app.state.project_registry
+    def for_project(
+        cls,
+        registry: ProjectRegistryService,
+        knowledge_base_cache: dict[str, FindingKnowledgeBase | None],
+        base_path: str,
+        project_id: int,
+    ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")
-        base_path: str = request.app.state.base_path
-        cache = request.app.state.knowledge_base_cache
-        knowledge_base = get_or_build_knowledge_base(cache, row.name, base_path)
+        knowledge_base = get_or_build_knowledge_base(
+            knowledge_base_cache, row.name, base_path
+        )
         if knowledge_base is None:
             raise RagUnavailable(
                 "RAG engine unavailable for this project; "
