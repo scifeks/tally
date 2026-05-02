@@ -44,7 +44,7 @@ export function EmptyFindingsState({ segment }: { segment: Segment }) {
               </span>
             </Link>
             <Link
-              to="/config/tools"
+              to="/config"
               className="flex items-center gap-2 border border-border text-foreground px-3 py-2 hover:bg-muted"
             >
               <Wrench className="h-3.5 w-3.5" />

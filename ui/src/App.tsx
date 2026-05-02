@@ -8,7 +8,6 @@ import Triage from './pages/Triage'
 import Reports from './pages/Reports'
 import Chat from './pages/Chat'
 import Config from './pages/Config'
-import Placeholder from './pages/Placeholder'
 
 export default function App() {
   return (
@@ -22,10 +21,6 @@ export default function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="chat" element={<Chat />} />
         <Route path="config" element={<Config />} />
-        <Route
-          path="*"
-          element={<Placeholder title="404 :: not found" hint="Route does not exist." />}
-        />
       </Route>
     </Routes>
   )

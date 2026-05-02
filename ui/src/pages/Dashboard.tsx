@@ -85,9 +85,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex-1 grid grid-cols-4 divide-x divide-border">
-              <SummaryStat label="repositories" value={reposCount} href="/config/repositories" />
+              <SummaryStat label="repositories" value={reposCount} href="/config" />
               <SummaryStat label="urls" value={urlsCount} href="/urls" />
-              <SummaryStat label="tools enabled" value={enabledToolsCount} href="/config/tools" />
+              <SummaryStat label="tools enabled" value={enabledToolsCount} href="/config" />
               <SummaryStat
                 label="scans"
                 value={projectScans.length}
@@ -398,14 +398,14 @@ function EmptyProjectState({
       done: hasMeta,
       label: 'add a repository or URL list',
       desc: 'define what to scan',
-      to: '/config/repositories',
+      to: '/config',
       icon: <GitBranch className="h-4 w-4" />,
     },
     {
       done: false,
       label: 'enable tools',
       desc: 'pick your SAST / WEB / SECRETS / SCA scanners',
-      to: '/config/tools',
+      to: '/config',
       icon: <Wrench className="h-4 w-4" />,
     },
     {
