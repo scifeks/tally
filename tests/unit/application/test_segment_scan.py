@@ -7,10 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.exceptions import InvalidSegmentError
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 

@@ -3,13 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from domain.tools.base import ToolResult
-
-if TYPE_CHECKING:
-    from application.ports.user_prompt import UserPromptPort
-    from domain.tools.execution_config import ToolExecutionConfig
 
 SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web"]
 
@@ -23,17 +18,6 @@ class ScanSummary:
     duration_seconds: float
     findings_ingested: int
     findings_by_tool: dict[str, int] = field(default_factory=dict)
-
-
-@dataclass
-class ScanTypeConfig:
-    project_name: str
-    base_path: str
-    tool_config: ToolExecutionConfig
-    run_id: int | None
-    prompt: UserPromptPort
-    remaining_peers: int = 0
-    project_id: int | None = None
 
 
 @dataclass

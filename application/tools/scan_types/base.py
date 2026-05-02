@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
+from application.tools.scan_types.models import ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
-
-if TYPE_CHECKING:
-    from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
 
 
 class ScanType(ABC):

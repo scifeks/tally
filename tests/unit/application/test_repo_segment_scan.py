@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 

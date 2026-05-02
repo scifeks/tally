@@ -1,4 +1,4 @@
-"""RepoSegmentScan — runs a set of tools on every configured repository."""
+"""RepoSegmentScan: runs a set of tools on every configured repository."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, cast
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import (
     dispatch_and_count_ingested,
     execute_tool_passes,
@@ -17,13 +18,13 @@ from application.tools.scan_types.execution import (
     normalize_success,
     should_skip_sca_tool,
 )
+from application.tools.scan_types.models import ScanTypeConfig
 from core.detection.noir import noir_skip_reason
 from domain.pipeline import scan_events as se
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
-from domain.tools.scan_types.base import ScanType
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class RepoSegmentScan(ScanType):
                 _invocation += 1
 
                 if self.segment_name == "sca":
-                    # Gate on manifest presence — not language detection.
+                    # Gate on manifest presence, not language detection.
                     tool_inst_check: Any = registry.get_tool(tool_name)
                     skip_sca, skip_reason = should_skip_sca_tool(tool_inst_check, repo)
                     if skip_sca:

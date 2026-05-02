@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 _LOAD_REPOS = "application.tools.scan_types.tool_on_repo.load_active_repos"
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)

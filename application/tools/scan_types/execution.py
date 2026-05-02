@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 from application.tools.executor import ToolExecutor
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.models import ScanTypeConfig
 from core.project_paths import ProjectPaths
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext, ToolInterface
-from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
+from domain.tools.scan_types.models import SEGMENT_ORDER
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.tools.wrappers.utils.manifest_check import (

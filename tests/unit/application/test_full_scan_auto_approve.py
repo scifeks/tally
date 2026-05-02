@@ -10,8 +10,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from application.tools.scan_types.full import FullScan
+from application.tools.scan_types.models import ScanTypeConfig
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
+from domain.tools.scan_types.models import SEGMENT_ORDER
 
 
 def _make_config(**overrides) -> ScanTypeConfig:
