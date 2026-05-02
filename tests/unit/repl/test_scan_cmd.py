@@ -9,6 +9,7 @@ the orchestrator-level fan-out (which is covered separately).
 from unittest.mock import MagicMock, patch
 
 from application.repl.commands.scan_commands import ScanCommands
+from domain.projects.entry import ProjectRow
 
 MOCK_TOOLS = ["gitleaks", "semgrep", "nmap", "zap", "pip-audit"]
 
@@ -32,7 +33,9 @@ def _run(
     repl = MagicMock()
     repl.active_project = active_project
     repl.base_path = "/tmp/test"
-    repl.project_registry.resolve_by_name.return_value = {"id": 1}
+    repl.project_registry.resolve_by_name.return_value = ProjectRow(
+        id=1, name=active_project, path="/tmp/test", created_at="2026-05-02T00:00:00Z"
+    )
     repos = repos or [_make_repo()]
 
     mock_summary = MagicMock(findings_by_tool={})

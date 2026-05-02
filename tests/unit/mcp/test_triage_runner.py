@@ -17,6 +17,7 @@ from application.ports.triage_agent import (  # noqa: E402
     TriageSessionResult,
 )
 from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
+from domain.triage.entry import TriageBatchRow  # noqa: E402
 
 
 class _StubTriageAgent(TriageAgentPort):
@@ -96,15 +97,21 @@ def _make_mock_tool(name: str, *, skip: bool, scan_segment: str = "sast") -> Mag
     return t
 
 
-def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> dict:
-    return {
-        "id": batch_id,
-        "finding_ids": finding_ids,
-        "batch_data": [
+def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow:
+    return TriageBatchRow(
+        id=batch_id,
+        run_id=1,
+        finding_ids=finding_ids,
+        batch_data=[
             {"id": fid, "tool": "semgrep", "file": f"src/file{fid}.py"}
             for fid in finding_ids
         ],
-    }
+        status="pending",
+        run_attempts=0,
+        created_at=None,
+        started_at=None,
+        completed_at=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -275,14 +282,20 @@ def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
 
 def test_run_skips_skip_strategy_tools(tmp_path: Path) -> None:
     runner, store, _ = _make_runner(tmp_path)
-    nmap_batch = {
-        "id": 1,
-        "finding_ids": [1, 2],
-        "batch_data": [
+    nmap_batch = TriageBatchRow(
+        id=1,
+        run_id=1,
+        finding_ids=[1, 2],
+        batch_data=[
             {"id": 1, "tool": "nmap"},
             {"id": 2, "tool": "nmap"},
         ],
-    }
+        status="pending",
+        run_attempts=0,
+        created_at=None,
+        started_at=None,
+        completed_at=None,
+    )
     store.claim_batch.side_effect = [nmap_batch, None]
     mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
@@ -406,12 +419,18 @@ def test_run_dry_run_does_not_start_mcp(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_nmap_batch(batch_id: int, finding_ids: list[int]) -> dict:
-    return {
-        "id": batch_id,
-        "finding_ids": finding_ids,
-        "batch_data": [{"id": fid, "tool": "nmap"} for fid in finding_ids],
-    }
+def _make_nmap_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow:
+    return TriageBatchRow(
+        id=batch_id,
+        run_id=1,
+        finding_ids=finding_ids,
+        batch_data=[{"id": fid, "tool": "nmap"} for fid in finding_ids],
+        status="pending",
+        run_attempts=0,
+        created_at=None,
+        started_at=None,
+        completed_at=None,
+    )
 
 
 def test_run_batch_loop_skip_completes_without_handler(tmp_path: Path) -> None:

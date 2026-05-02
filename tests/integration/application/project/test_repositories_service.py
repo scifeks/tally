@@ -13,6 +13,7 @@ from application.project.repositories_service import (
 )
 from core.config import Repository
 from core.config.manager import ConfigManager
+from domain.projects.entry import ProjectRow
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 
@@ -30,10 +31,10 @@ def _make_repo(*, name: str) -> Repository:
 
 
 class _FakeRegistry:
-    def __init__(self, rows: dict[int, dict[str, object]]) -> None:
+    def __init__(self, rows: dict[int, ProjectRow]) -> None:
         self._rows = rows
 
-    def resolve_by_id(self, project_id: int) -> dict[str, object] | None:
+    def resolve_by_id(self, project_id: int) -> ProjectRow | None:
         return self._rows.get(project_id)
 
 
@@ -55,14 +56,25 @@ def beta_path(tmp_path: Path) -> Path:
 def registry(alpha_path: Path, beta_path: Path) -> _FakeRegistry:
     return _FakeRegistry(
         rows={
-            1: {"id": 1, "name": "alpha", "path": str(alpha_path), "archived_at": None},
-            2: {"id": 2, "name": "beta", "path": str(beta_path), "archived_at": None},
-            99: {
-                "id": 99,
-                "name": "archived-proj",
-                "path": str(alpha_path),
-                "archived_at": "2026-01-01",
-            },
+            1: ProjectRow(
+                id=1,
+                name="alpha",
+                path=str(alpha_path),
+                created_at="2026-01-01T00:00:00Z",
+            ),
+            2: ProjectRow(
+                id=2,
+                name="beta",
+                path=str(beta_path),
+                created_at="2026-01-01T00:00:00Z",
+            ),
+            99: ProjectRow(
+                id=99,
+                name="archived-proj",
+                path=str(alpha_path),
+                created_at="2026-01-01T00:00:00Z",
+                archived_at="2026-01-01",
+            ),
         }
     )
 

@@ -1,14 +1,7 @@
 """Persistence port for the ``url_findings`` table.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.url_findings.UrlFindingRepository``.
 Read methods return ``domain.url_inventory.entry.UrlFinding`` so the
 port boundary stays free of infrastructure types.
-
-Relocated from ``application/url_inventory/ports.py`` in Slice 9
-(A5e); the move co-locates this port with the rest of
-``application/ports/`` and expands the surface to cover every public
-method on the concrete repository.
 """
 
 from __future__ import annotations
@@ -47,3 +40,4 @@ class UrlFindingRepositoryPort(Protocol):
         limit: int = 100,
     ) -> tuple[list[UrlFinding], int]: ...
     def filter_options(self, filters: dict[str, Any]) -> dict: ...
+    def count_active(self) -> int: ...

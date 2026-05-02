@@ -1,7 +1,7 @@
 """Scan endpoints (config, start, history, detail, cancel, SSE,
 progress).
 
-Endpoint surface (all project-scoped after Phase 6.8):
+Endpoint surface (all project-scoped):
 
 - ``GET    /api/v1/projects/{project_id}/scans/config``
 - ``GET    /api/v1/projects/{project_id}/scans``               (history list)
@@ -12,8 +12,8 @@ Endpoint surface (all project-scoped after Phase 6.8):
 - ``GET    /api/v1/projects/{project_id}/scans/{run_id}/progress``
 - ``POST   /api/v1/projects/{project_id}/scans/{run_id}/cancel``
 
-Route ordering (Phase 4 lesson): literal-segment routes are decorated
-**before** parameterized routes so Starlette doesn't shadow them.
+Literal-segment routes are decorated before parameterized routes so
+Starlette doesn't shadow them.
 """
 
 from __future__ import annotations
@@ -175,7 +175,7 @@ async def get_scans_config(
     row = _resolve_project(request, project_id)
 
     base_path: str = request.app.state.base_path
-    project_name: str = row["name"]
+    project_name: str = row.name
 
     # Tool registry is process-shared; rediscover with this project's overrides
     # before reading so domain mappings reflect the project's commands.json.
@@ -334,7 +334,7 @@ async def start_scan(
     Returns 409 ``JOB_ALREADY_RUNNING`` if another scan is in progress.
     """
     row = _resolve_project(request, project_id)
-    project_name: str = row["name"]
+    project_name: str = row.name
     base_path: str = request.app.state.base_path
 
     discover_tools(base_path, project_name=project_name)

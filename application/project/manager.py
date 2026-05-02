@@ -30,7 +30,7 @@ class ProjectManager:
 
     def list_projects(self) -> list[str]:
         """Return sorted list of active project names from the registry."""
-        return [row["name"] for row in self.registry.list_active()]
+        return [row.name for row in self.registry.list_active()]
 
     def switch_project(self, project_name: str) -> None:
         """Validate that project_name exists in the registry and is not archived.
@@ -39,7 +39,7 @@ class ProjectManager:
         in-memory active-project state after this returns successfully.
         """
         row = self.registry.resolve_by_name(project_name)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' does not exist.")
         self.projects_dir.mkdir(parents=True, exist_ok=True)
 
@@ -50,9 +50,9 @@ class ProjectManager:
     def delete_project(self, project_name: str) -> None:
         """Delete a project and all its data from disk + registry."""
         row = self.registry.resolve_by_name(project_name)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' not found.")
-        project_dir = Path(row["path"])
+        project_dir = Path(row.path)
         if project_dir.exists():
             shutil.rmtree(project_dir)
         self.registry.deregister(project_name)
@@ -64,10 +64,10 @@ class ProjectManager:
         )
 
         row = self.registry.resolve_by_name(project_name)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' does not exist.")
         service = ProjectRepositoriesService(self.registry, self.config)
-        project_id = int(row["id"])
+        project_id = row.id
         target = next(
             (r for r in service.list_active(project_id) if r.name == repo_name),
             None,

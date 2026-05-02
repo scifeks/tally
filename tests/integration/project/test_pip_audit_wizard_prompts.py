@@ -55,7 +55,7 @@ def _make_repo(**kwargs: object) -> Repository:
 
 class TestInterviewSingleRepoDependenciesFile:
     def test_python_local_repo_with_dependencies_file(self, tmp_path: Path) -> None:
-        """User provides a local dependencies file path — stored on the repo."""
+        """User provides a local dependencies file path; stored on the repo."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -81,7 +81,7 @@ class TestInterviewSingleRepoDependenciesFile:
         assert repo.dependencies_file == "requirements.txt"
 
     def test_python_local_repo_no_dependencies_file(self, tmp_path: Path) -> None:
-        """User skips the dependencies file prompt — field is empty."""
+        """User skips the dependencies file prompt; field is empty."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -107,7 +107,7 @@ class TestInterviewSingleRepoDependenciesFile:
         assert repo.dependencies_file == ""
 
     def test_python_docker_repo_with_dependencies_file(self, tmp_path: Path) -> None:
-        """User provides a container-path dependencies file — stored on the repo."""
+        """User provides a container-path dependencies file; stored on the repo."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -135,7 +135,7 @@ class TestInterviewSingleRepoDependenciesFile:
         assert repo.dependencies_file == "/app/requirements.txt"
 
     def test_python_docker_repo_no_dependencies_file(self, tmp_path: Path) -> None:
-        """Docker repo with no dependencies file — falls back to full env scan."""
+        """Docker repo with no dependencies file falls back to full env scan."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -196,11 +196,11 @@ class TestEditRepositoryDependenciesFile:
         pm.save_project("test-project")
         row = pm.registry.resolve_by_name("test-project")
         assert row is not None
-        ProjectRepositoriesService(pm.registry, pm.config).create(int(row["id"]), repo)
+        ProjectRepositoriesService(pm.registry, pm.config).create(row.id, repo)
         return pm
 
     def test_edit_sets_dependencies_file(self, tmp_path: Path) -> None:
-        """User sets a dependencies file during edit — stored on the repo."""
+        """User sets a dependencies file during edit; stored on the repo."""
         repo = _make_repo(name="my-repo")
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults except dependencies_file.

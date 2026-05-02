@@ -154,6 +154,6 @@ class TestEndpointFileWizard:
         row = pm.registry.resolve_by_name("test-project")
         assert row is not None
         service = ProjectRepositoriesService(pm.registry, pm.config)
-        repos = service.list_active(int(row["id"]))
+        repos = service.list_active(row.id)
         assert any(r.name == "my-repo" for r in repos)
         assert _count_url_findings(base_path, repo.id) == 0

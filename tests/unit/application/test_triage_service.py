@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from application.triage.triage_service import ProjectNotFound, TriageService
+from domain.projects.entry import ProjectRow
 
 
 class _StubRunRepo:
@@ -52,12 +53,13 @@ class TestTriageService:
             TriageService.from_request(request, 7)  # type: ignore[arg-type]
 
     def test_from_request_raises_when_project_archived(self) -> None:
-        archived = {
-            "id": 7,
-            "name": "p",
-            "path": "/tmp/p",
-            "archived_at": "2026-05-01T00:00:00Z",
-        }
+        archived = ProjectRow(
+            id=7,
+            name="p",
+            path="/tmp/p",
+            created_at="2026-05-01T00:00:00Z",
+            archived_at="2026-05-01T00:00:00Z",
+        )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         request = SimpleNamespace(
             app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 
+from domain.triage.entry import TriageBatchRow
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.triage import TriageBatchRepository
@@ -45,9 +46,9 @@ class TestAtomicBatchClaim:
         run_id = _seed_batch(factory, run_repo)
         result = triage_repo.claim_batch(run_id)
         assert result is not None
-        assert result["status"] == "in_progress"
-        assert result["run_attempts"] == 1
-        assert result["started_at"] is not None
+        assert result.status == "in_progress"
+        assert result.run_attempts == 1
+        assert result.started_at is not None
 
     def test_two_concurrent_claims_no_duplication(
         self,
@@ -58,7 +59,7 @@ class TestAtomicBatchClaim:
         audit_repo: object,
     ) -> None:
         run_id = _seed_batch(factory, run_repo)
-        results: list[dict | None] = [None, None]
+        results: list[TriageBatchRow | None] = [None, None]
 
         def _claim(idx: int) -> None:
             results[idx] = triage_repo.claim_batch(run_id)
@@ -108,12 +109,12 @@ class TestAtomicBatchClaim:
         batch = triage_repo.claim_batch(run_id)
         assert batch is not None
 
-        triage_repo.complete_batch(batch["id"], "success")
+        triage_repo.complete_batch(batch.id, "success")
 
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
-                (batch["id"],),
+                (batch.id,),
             ).fetchone()
         assert row["status"] == "success"
         assert row["completed_at"] is not None
@@ -130,12 +131,12 @@ class TestAtomicBatchClaim:
         batch = triage_repo.claim_batch(run_id)
         assert batch is not None
 
-        triage_repo.complete_batch(batch["id"], "failed")
+        triage_repo.complete_batch(batch.id, "failed")
 
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
-                (batch["id"],),
+                (batch.id,),
             ).fetchone()
         assert row["status"] == "failed"
         assert row["completed_at"] is not None
@@ -156,4 +157,4 @@ class TestAtomicBatchClaim:
 
         result_b = triage_repo.claim_batch(run_b)
         assert result_b is not None
-        assert result_b["run_id"] == run_b
+        assert result_b.run_id == run_b

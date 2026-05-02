@@ -13,6 +13,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from domain.triage.entry import TriageBatchRow  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 from infrastructure.store.repositories.triage import TriageBatchRepository  # noqa: E402
@@ -70,9 +71,9 @@ class TestClaimAndComplete:
         run_id = _seed_batch(factory, run_repo)
         result = repo.claim_batch(run_id)
         assert result is not None
-        assert result["status"] == "in_progress"
-        assert result["run_attempts"] == 1
-        assert result["started_at"] is not None
+        assert result.status == "in_progress"
+        assert result.run_attempts == 1
+        assert result.started_at is not None
 
     def test_two_concurrent_claims_no_duplication(
         self,
@@ -81,7 +82,7 @@ class TestClaimAndComplete:
         run_repo: RunRepository,
     ) -> None:
         run_id = _seed_batch(factory, run_repo)
-        results: list[dict | None] = [None, None]
+        results: list[TriageBatchRow | None] = [None, None]
 
         def _claim(idx: int) -> None:
             results[idx] = repo.claim_batch(run_id)
@@ -120,11 +121,11 @@ class TestClaimAndComplete:
         run_id = _seed_batch(factory, run_repo)
         batch = repo.claim_batch(run_id)
         assert batch is not None
-        repo.complete_batch(batch["id"], "success")
+        repo.complete_batch(batch.id, "success")
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
-                (batch["id"],),
+                (batch.id,),
             ).fetchone()
         assert row["status"] == "success"
         assert row["completed_at"] is not None
@@ -138,10 +139,10 @@ class TestClaimAndComplete:
         run_id = _seed_batch(factory, run_repo)
         batch = repo.claim_batch(run_id)
         assert batch is not None
-        repo.complete_batch(batch["id"], "failed")
+        repo.complete_batch(batch.id, "failed")
         with factory.connect() as conn:
             row = conn.execute(
-                "SELECT status FROM triage_batches WHERE id = ?", (batch["id"],)
+                "SELECT status FROM triage_batches WHERE id = ?", (batch.id,)
             ).fetchone()
         assert row["status"] == "failed"
 
@@ -156,4 +157,4 @@ class TestClaimAndComplete:
         assert repo.claim_batch(run_a) is None
         result_b = repo.claim_batch(run_b)
         assert result_b is not None
-        assert result_b["run_id"] == run_b
+        assert result_b.run_id == run_b

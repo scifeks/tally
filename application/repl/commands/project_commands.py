@@ -30,14 +30,14 @@ class ProjectCommands:
         service = ProjectRepositoriesService(
             self.repl.project_registry, self.repl.projects.config
         )
-        return service.list_active(int(row["id"]))
+        return service.list_active(row.id)
 
     # ------------------------------------------------------------------
     # Grouped command entrypoints (scoped help or subcommand dispatch)
     # ------------------------------------------------------------------
 
     def cmd_project(self, _cmd: str, args: list[str]) -> None:
-        """project [add|switch|list|info] — project management."""
+        """project [add|switch|list|info]: project management."""
         if not args:
             self.help_renderer.render("project")
             return
@@ -61,7 +61,7 @@ class ProjectCommands:
             )
 
     def cmd_repo(self, _cmd: str, args: list[str]) -> None:
-        """repo [add|delete|edit|list] — repository management."""
+        """repo [add|delete|edit|list]: repository management."""
         if not args:
             self.help_renderer.render("repo")
             return
@@ -101,7 +101,7 @@ class ProjectCommands:
         table.add_column("Active", style="green", justify="center")
 
         for row in rows:
-            name = row["name"]
+            name = row.name
             info = self.repl.projects.get_project_info(name)
             created = ""
             repo_count = "0"
@@ -111,9 +111,7 @@ class ProjectCommands:
 
             display_name = f"→ {name}" if name == active else name
             active_marker = "✓" if name == active else ""
-            table.add_row(
-                str(row["id"]), display_name, created, repo_count, active_marker
-            )
+            table.add_row(str(row.id), display_name, created, repo_count, active_marker)
 
         self.repl.console.print(table)
 
@@ -138,7 +136,7 @@ class ProjectCommands:
             self.repl.active_project = name
 
     def cmd_delete_project(self, _cmd: str, args: list[str]) -> None:
-        """project delete <name> — delete a project and all its data."""
+        """project delete <name>: delete a project and all its data."""
         if not args:
             self.repl.console.print("[yellow]Usage:[/yellow] project delete <name>")
             return
@@ -171,7 +169,7 @@ class ProjectCommands:
             )
 
     def cmd_edit_project(self, _cmd: str, args: list[str]) -> None:
-        """project edit [<name>] — edit project-level settings interactively.
+        """project edit [<name>]: edit project-level settings interactively.
 
         If <name> is omitted and there is an active project, edits that project.
         """
@@ -234,10 +232,10 @@ class ProjectCommands:
     def _resolve_repo_arg(self, arg: str) -> str | None:
         """Translate ``arg`` (id or name) into the canonical repo name.
 
-        Phase 9: ``repo edit`` / ``repo delete`` accept either the
-        integer DB id (e.g. ``repo edit 3``) or the repo name. This
-        helper centralises resolution so the wizard / project-manager
-        callees keep their name-based contract intact.
+        ``repo edit`` and ``repo delete`` accept either the integer DB id
+        (e.g. ``repo edit 3``) or the repo name. This helper centralizes
+        resolution so the wizard and project-manager callees keep their
+        name-based contract intact.
 
         Returns the repo name on success or ``None`` when the argument
         doesn't match any active repository.

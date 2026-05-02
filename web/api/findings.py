@@ -463,7 +463,7 @@ async def patch_finding(
     from web.server import get_knowledge_base
 
     knowledge_base = get_knowledge_base(
-        request.app, row["name"], request.app.state.base_path
+        request.app, row.name, request.app.state.base_path
     )
     sync_finding_to_chroma(
         finding_id=finding_id,

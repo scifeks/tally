@@ -5,9 +5,8 @@ API and CLI adapters call this service rather than reaching across into
 The service composes those collaborators internally so the adapter only
 depends on this single application boundary.
 
-Phase 14.3: the SQLite ``repositories`` table is the sole source of truth
-for per-repo config; this service is the single write surface for that
-table.
+The SQLite ``repositories`` table is the sole source of truth for per-repo
+config; this service is the single write surface for that table.
 """
 
 from __future__ import annotations
@@ -189,13 +188,13 @@ class ProjectRepositoriesService:
     # ------------------------------------------------------------------
     def _project_name(self, project_id: int) -> str:
         row = self._registry.resolve_by_id(project_id)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ProjectNotFound(f"Project {project_id} not found")
-        return row["name"]
+        return row.name
 
     def _project_paths(self, project_id: int) -> ProjectPaths:
         row = self._registry.resolve_by_id(project_id)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ProjectNotFound(f"Project {project_id} not found")
         return ProjectPaths.from_registry_row(row)
 

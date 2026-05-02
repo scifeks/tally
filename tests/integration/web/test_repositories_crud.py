@@ -1,4 +1,4 @@
-"""Integration tests for repository CRUD endpoints (Phase 9.3)."""
+"""Integration tests for repository CRUD endpoints."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ async def repo_crud_client(tmp_path: Path):
     app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None
-    project_id = int(row["id"])
+    project_id = row.id
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

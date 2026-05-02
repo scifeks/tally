@@ -1,33 +1,28 @@
-"""Application service for findings persistence + analyst access.
+"""Application service for the URL list web surface.
 
-Owns per-request construction of the finding, history, and project-repo
-repos so route modules do not import infrastructure persistence directly.
-Composes a `FindingAnalystService` and exposes the history repo + a
-`repo_name_lookup()` helper that the routes need.
+Owns per-request construction of the URL finding repo, the project
+repo lookup, and the wrapping ``UrlInventoryService`` so route modules
+do not import infrastructure persistence directly.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Self
 
-from application.findings.analyst_service import FindingAnalystService
+from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.finding_history import (
-    FindingHistoryRepository,
-)
-from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.repositories import RepositoryRepository
+from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
 if TYPE_CHECKING:
     from fastapi import Request
 
-    from application.ports.finding_history_repository import (
-        FindingHistoryRepositoryPort,
-    )
-    from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
+    )
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
     )
 
 
@@ -35,22 +30,20 @@ class ProjectNotFound(LookupError):
     """Raised when a project_id has no active row in the registry."""
 
 
-class FindingsService:
-    """Findings-feature facade bound to a single project."""
+class UrlListService:
+    """URL list facade bound to a single project."""
 
     def __init__(
         self,
-        finding_repo: FindingRepositoryPort,
-        history_repo: FindingHistoryRepositoryPort,
+        url_repo: UrlFindingRepositoryPort,
         project_repo: ProjectRepoRepositoryPort,
-        analyst: FindingAnalystService,
+        inventory: UrlInventoryService,
         *,
         findings_db_exists: bool,
     ) -> None:
-        self._finding_repo = finding_repo
-        self._history_repo = history_repo
+        self._url_repo = url_repo
         self._project_repo = project_repo
-        self._analyst = analyst
+        self._inventory = inventory
         self._findings_db_exists = findings_db_exists
 
     @classmethod
@@ -61,43 +54,36 @@ class FindingsService:
             raise ProjectNotFound(f"project {project_id} not found")
         paths = ProjectPaths.from_registry_row(row)
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        # Capture before init_schema(): init creates the file, and
-        # repo_name_lookup needs to know whether the project has any
-        # persisted findings yet.
+        # Capture before init_schema(): init creates the file, and the
+        # defensive count helpers need to know whether the project has
+        # any persisted url_findings yet.
         findings_db_exists = paths.findings_db.exists()
         factory = ConnectionFactory(paths.findings_db)
         factory.init_schema()
-        finding_repo = FindingRepository(factory)
-        history_repo = FindingHistoryRepository(factory)
+        url_repo = UrlFindingRepository(factory)
         project_repo = RepositoryRepository(factory)
-        analyst = FindingAnalystService(finding_repo)
+        inventory = UrlInventoryService(url_repo)
         return cls(
-            finding_repo=finding_repo,
-            history_repo=history_repo,
+            url_repo=url_repo,
             project_repo=project_repo,
-            analyst=analyst,
+            inventory=inventory,
             findings_db_exists=findings_db_exists,
         )
 
     @property
-    def analyst(self) -> FindingAnalystService:
-        return self._analyst
+    def url_repo(self) -> UrlFindingRepositoryPort:
+        return self._url_repo
 
     @property
-    def finding_repo(self) -> FindingRepositoryPort:
-        return self._finding_repo
-
-    @property
-    def history_repo(self) -> FindingHistoryRepositoryPort:
-        return self._history_repo
+    def inventory(self) -> UrlInventoryService:
+        return self._inventory
 
     def repo_name_lookup(self) -> dict[int, str]:
         """Build ``{repo_id: repo_name}`` for the project's active repos.
 
         Returns ``{}`` when the findings DB has not been created yet
-        (a brand-new project hits the list route before any scan) or
-        when the underlying read raises. The defensive shape is
-        load-bearing for the list route.
+        or when the underlying read raises. The defensive shape is
+        load-bearing for the URL list routes.
         """
         if not self._findings_db_exists:
             return {}
@@ -110,8 +96,8 @@ class FindingsService:
         except Exception:
             return {}
 
-    def count_findings(self) -> int:
-        """Total count of rows in the findings table.
+    def count_active_url_findings(self) -> int:
+        """Count url_findings rows whose owning repo is not soft-deleted.
 
         Returns 0 when the findings DB has not been created yet or
         when the underlying read raises.
@@ -119,6 +105,6 @@ class FindingsService:
         if not self._findings_db_exists:
             return 0
         try:
-            return self._finding_repo.count_findings()
+            return self._url_repo.count_active()
         except Exception:
             return 0

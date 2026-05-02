@@ -1,10 +1,13 @@
-"""URL list API endpoints (Phase 9.5).
+"""URL list API endpoints.
 
 Read-flavored endpoints over the ``url_findings`` table:
-- ``GET /api/v1/projects/{project_id}/url-list/entries`` — paginated rows.
-- ``GET /api/v1/projects/{project_id}/url-list/export`` — csv/json/txt download.
-- ``POST /api/v1/projects/{project_id}/url-list/regenerate`` — rebuild
-  ``merged_urls.txt`` + ``merged_oas3.json`` on disk for every active repo.
+
+- ``GET /api/v1/projects/{project_id}/url-list/entries``: paginated rows.
+- ``GET /api/v1/projects/{project_id}/url-list/export``: csv/json/txt
+  download.
+- ``POST /api/v1/projects/{project_id}/url-list/regenerate``: rebuild
+  ``merged_urls.txt`` + ``merged_oas3.json`` on disk for every active
+  repo.
 """
 
 from __future__ import annotations
@@ -16,12 +19,13 @@ import json
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
 
-from application.url_inventory.service import UrlInventoryService
+from application.url_inventory.url_list_service import (
+    ProjectNotFound,
+    UrlListService,
+)
 from core.project_paths import ProjectPaths
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
-from infrastructure.store.repositories.url_findings import UrlFindingRepository
+from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
 from web.api._redact import redact_exempt
@@ -30,12 +34,12 @@ from web.api.schemas import UrlListFilterOptionsResponse
 url_list_v1_router = APIRouter()
 
 
-def _make_repos(row: dict) -> tuple[UrlFindingRepository, RepositoryRepository]:
-    paths = ProjectPaths.from_registry_row(row)
-    paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    return UrlFindingRepository(factory), RepositoryRepository(factory)
+def _service(request: Request, project_id: int) -> UrlListService:
+    """Build a UrlListService for *project_id* or raise 404."""
+    try:
+        return UrlListService.from_request(request, project_id)
+    except ProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
 
 def _row_to_dict(
@@ -98,9 +102,8 @@ async def list_url_entries(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> JSONResponse:
-    row = _resolve_project(request, project_id)
-    url_repo, repo_repo = _make_repos(row)
-    rows, total = url_repo.list_paginated(
+    service = _service(request, project_id)
+    rows, total = service.url_repo.list_paginated(
         repo_id=repo_id,
         source=_parse_source(source),
         tool=_parse_tool(tool),
@@ -115,12 +118,7 @@ async def list_url_entries(
         offset=offset,
         limit=limit,
     )
-    repo_ids = {r.repo_id for r in rows}
-    repo_name_by_id: dict[int, str] = {}
-    for rid in repo_ids:
-        db_row = repo_repo.get_by_id(rid)
-        if db_row is not None:
-            repo_name_by_id[rid] = db_row.name
+    repo_name_by_id = service.repo_name_lookup()
     items = [_row_to_dict(r, project_id, repo_name_by_id) for r in rows]
     return JSONResponse(
         content={
@@ -154,10 +152,9 @@ async def get_url_list_filter_options(
     Mirrors the filter query params of ``GET /url-list/entries``. Each
     dimension's counts apply every active filter (strict semantics) and
     zero-count options are omitted. Powers the URL Lists page filter
-    dropdowns (Phase 12.2).
+    dropdowns.
     """
-    row = _resolve_project(request, project_id)
-    url_repo, _ = _make_repos(row)
+    service = _service(request, project_id)
     filters: dict = {
         "repo_id": repo_id,
         "source": _parse_source(source),
@@ -169,7 +166,7 @@ async def get_url_list_filter_options(
         "path": path,
         "search": search,
     }
-    data = url_repo.filter_options(filters)
+    data = service.url_repo.filter_options(filters)
     return UrlListFilterOptionsResponse(**data)
 
 
@@ -184,15 +181,11 @@ async def export_url_list(
         raise ApiValidationError(f"Unsupported format: {format}")
 
     row = _resolve_project(request, project_id)
-    url_repo, repo_repo = _make_repos(row)
-    rows, _ = url_repo.list_paginated(offset=0, limit=10_000)
-    repo_name_by_id: dict[int, str] = {}
-    for rid in {r.repo_id for r in rows}:
-        db_row = repo_repo.get_by_id(rid)
-        if db_row is not None:
-            repo_name_by_id[rid] = db_row.name
+    service = _service(request, project_id)
+    rows, _ = service.url_repo.list_paginated(offset=0, limit=10_000)
+    repo_name_by_id = service.repo_name_lookup()
 
-    project_name = row["name"]
+    project_name = row.name
     filename = f"url-list-{project_name}.{format}"
 
     if format == "json":
@@ -257,10 +250,8 @@ async def regenerate_url_list(
     from application.project.repositories_service import ProjectRepositoriesService
 
     row = _resolve_project(request, project_id)
-
+    service = _service(request, project_id)
     paths = ProjectPaths.from_registry_row(row)
-    url_repo, _ = _make_repos(row)
-    service = UrlInventoryService(url_repo)
 
     repo_service = ProjectRepositoriesService.from_request(request)
     active_repos: list[tuple[int, str]] = [
@@ -269,7 +260,7 @@ async def regenerate_url_list(
         if r.id is not None
     ]
 
-    rebuilt = service.regenerate_artifacts_for_project(
+    rebuilt = service.inventory.regenerate_artifacts_for_project(
         project_paths=paths,
         active_repos=active_repos,
     )

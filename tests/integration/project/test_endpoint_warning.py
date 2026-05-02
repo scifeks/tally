@@ -74,7 +74,7 @@ def _setup_project_with_repo(
     pm.save_project("test-project")
     row = pm.registry.resolve_by_name("test-project")
     assert row is not None
-    project_id = int(row["id"])
+    project_id = row.id
     service = ProjectRepositoriesService(pm.registry, pm.config)
     persisted = service.create(project_id, repo)
     return project_id, persisted

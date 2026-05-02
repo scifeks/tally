@@ -355,9 +355,9 @@ class TriageRunner:
             if batch is None:
                 break
 
-            batch_id: int = batch["id"]
-            finding_ids: list[int] = batch["finding_ids"]
-            batch_data: list[dict] = batch["batch_data"]
+            batch_id = batch.id
+            finding_ids = batch.finding_ids
+            batch_data = batch.batch_data
 
             tool_name = batch_data[0]["tool"] if batch_data else None
             tool_obj = tool_registry.get_tool(tool_name or "") if tool_name else None

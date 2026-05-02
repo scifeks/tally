@@ -13,6 +13,7 @@ if str(_TALLY_ROOT) not in sys.path:
 from application.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from application.repl.commands.scan_commands import ScanCommands  # noqa: E402
+from domain.projects.entry import ProjectRow  # noqa: E402
 
 _VALID_TOOLS = ["semgrep", "gitleaks"]
 _INVALID_TOOL = "nonexistent-tool"
@@ -20,7 +21,7 @@ _VALID_TOOL = "semgrep"
 
 
 # ---------------------------------------------------------------------------
-# Invalid tool — all three commands reject it
+# Invalid tool: all three commands reject it
 # ---------------------------------------------------------------------------
 
 
@@ -57,7 +58,7 @@ def test_invalid_tool_rejected_by_search():
 
 
 # ---------------------------------------------------------------------------
-# Valid tool — none print "Unknown tool" / "Search error"
+# Valid tool: none print "Unknown tool" / "Search error"
 # ---------------------------------------------------------------------------
 
 
@@ -68,7 +69,9 @@ def test_valid_tool_accepted_by_scan(mock_get_service, mock_reg):
     repl = MagicMock()
     repl.active_project = "proj"
     repl.config.load_repositories.return_value = []
-    repl.project_registry.resolve_by_name.return_value = {"id": 1}
+    repl.project_registry.resolve_by_name.return_value = ProjectRow(
+        id=1, name="proj", path="/tmp/test", created_at="2026-05-02T00:00:00Z"
+    )
 
     mock_handle = MagicMock(run_id=1)
     mock_handle.result.result.return_value = MagicMock(findings_by_tool={})

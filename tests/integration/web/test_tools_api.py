@@ -90,7 +90,7 @@ async def tools_v1_client(tmp_path: Path):
 
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None
-    project_id = int(row["id"])
+    project_id = row.id
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(

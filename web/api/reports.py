@@ -23,6 +23,7 @@ from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.reports_service import ProjectNotFound, ReportsService
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
+from domain.projects.entry import ProjectRow
 from domain.reports.entry import REPORT_STATUSES, DraftRow, ReportRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
@@ -96,7 +97,7 @@ def _validate_status(status: str | None) -> None:
         )
 
 
-def _resolve_reports_dir(row: dict) -> Path:
+def _resolve_reports_dir(row: ProjectRow) -> Path:
     paths = ProjectPaths.from_registry_row(row)
     return paths.reports_dir.resolve()
 
@@ -214,7 +215,7 @@ async def generate_report(
     progress.
     """
     row = _resolve_project(request, project_id)
-    project_name: str = row["name"]
+    project_name: str = row.name
     base_path: str = request.app.state.base_path
 
     service = _service(request, project_id)
@@ -353,7 +354,7 @@ class _DraftStartRequest(BaseModel):
     force: bool = False
 
 
-def _resolve_drafts_dir(row: dict) -> Path:
+def _resolve_drafts_dir(row: ProjectRow) -> Path:
     paths = ProjectPaths.from_registry_row(row)
     return paths.reports_draft_dir.resolve()
 
@@ -436,7 +437,7 @@ async def start_draft(
     try:
         start_draft_thread(
             base_path=base_path,
-            project_name=row["name"],
+            project_name=row.name,
             project_id=project_id,
             request=web_req,
             holder_token=holder,

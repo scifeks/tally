@@ -11,6 +11,7 @@ from pathlib import Path
 from application.ports.project_registry_repository import (
     ProjectRegistryRepositoryPort,
 )
+from domain.projects.entry import ProjectRow
 
 
 class ProjectRegistryRepository(ProjectRegistryRepositoryPort):
@@ -69,39 +70,39 @@ class ProjectRegistryRepository(ProjectRegistryRepositoryPort):
                     ON projects (archived_at);
             """)
 
-    def list_active(self) -> list[dict]:
+    def list_active(self) -> list[ProjectRow]:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT id, name, path, created_at, archived_at "
                 "FROM projects WHERE archived_at IS NULL ORDER BY name"
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_project(r) for r in rows]
 
-    def list_all(self) -> list[dict]:
+    def list_all(self) -> list[ProjectRow]:
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT id, name, path, created_at, archived_at "
                 "FROM projects ORDER BY name"
             ).fetchall()
-        return [dict(r) for r in rows]
+        return [_row_to_project(r) for r in rows]
 
-    def get_by_id(self, project_id: int) -> dict | None:
+    def get_by_id(self, project_id: int) -> ProjectRow | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT id, name, path, created_at, archived_at "
                 "FROM projects WHERE id = ?",
                 (project_id,),
             ).fetchone()
-        return dict(row) if row else None
+        return _row_to_project(row) if row else None
 
-    def get_by_name(self, name: str) -> dict | None:
+    def get_by_name(self, name: str) -> ProjectRow | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT id, name, path, created_at, archived_at "
                 "FROM projects WHERE name = ?",
                 (name,),
             ).fetchone()
-        return dict(row) if row else None
+        return _row_to_project(row) if row else None
 
     def insert(self, name: str, path: str) -> int:
         with self._connect() as conn:
@@ -136,7 +137,7 @@ class ProjectRegistryRepository(ProjectRegistryRepositoryPort):
     def sync_from_filesystem(self, base_path: str) -> None:
         """Reconcile registry rows with directories under <base_path>/projects/."""
         on_disk = _scan_projects_dir(Path(base_path))
-        existing = {row["name"]: row for row in self.list_all()}
+        existing = {row.name: row for row in self.list_all()}
         now = _utc_iso_now()
 
         with self._connect() as conn:
@@ -147,24 +148,34 @@ class ProjectRegistryRepository(ProjectRegistryRepositoryPort):
                         "INSERT INTO projects (name, path) VALUES (?, ?)",
                         (name, abs_path),
                     )
-                elif row["archived_at"] is not None:
+                elif row.archived_at is not None:
                     conn.execute(
                         "UPDATE projects SET archived_at = NULL, path = ? "
                         "WHERE name = ?",
                         (abs_path, name),
                     )
-                elif row["path"] != abs_path:
+                elif row.path != abs_path:
                     conn.execute(
                         "UPDATE projects SET path = ? WHERE name = ?",
                         (abs_path, name),
                     )
 
             for name, row in existing.items():
-                if name not in on_disk and row["archived_at"] is None:
+                if name not in on_disk and row.archived_at is None:
                     conn.execute(
                         "UPDATE projects SET archived_at = ? WHERE name = ?",
                         (now, name),
                     )
+
+
+def _row_to_project(row: sqlite3.Row) -> ProjectRow:
+    return ProjectRow(
+        id=int(row["id"]),
+        name=str(row["name"]),
+        path=str(row["path"]),
+        created_at=str(row["created_at"]),
+        archived_at=row["archived_at"],
+    )
 
 
 def _utc_iso_now() -> str:

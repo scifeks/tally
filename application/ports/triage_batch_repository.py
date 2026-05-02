@@ -1,16 +1,4 @@
-"""Persistence port for the ``triage_batches`` table.
-
-Concrete implementation lives at
-``infrastructure.store.repositories.triage.TriageBatchRepository``.
-Read methods return domain row dataclasses
-(``domain.triage.entry.TriageBatchRow`` / ``TriageRunSummary``) so the
-port boundary stays free of infrastructure dataclasses.
-
-``claim_batch`` returns ``dict | None`` as a transitional shape; its
-fields match ``TriageBatchRow`` exactly. Promotion to a dataclass is
-deferred to an A5c-followup slice that migrates the runner consumer
-and the integration suite from dict subscripting to attribute access.
-"""
+"""Persistence port for the ``triage_batches`` table."""
 
 from __future__ import annotations
 
@@ -24,7 +12,7 @@ class TriageBatchRepositoryPort(Protocol):
     def create_batches(
         self, run_id: int, tool: str, repo: str, segment: str
     ) -> int: ...
-    def claim_batch(self, run_id: int) -> dict | None: ...
+    def claim_batch(self, run_id: int) -> TriageBatchRow | None: ...
     def complete_batch(self, batch_id: int, status: str) -> None: ...
     def reset_stale_batches(self, run_id: int) -> int: ...
     def reset_for_resume(self, run_id: int) -> int: ...

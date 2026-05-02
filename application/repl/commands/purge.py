@@ -59,7 +59,7 @@ class PurgeCommand:
     # ------------------------------------------------------------------
 
     def cmd_purge(self, _cmd: str, args: list[str]) -> None:
-        """purge [--tool=<tool,...>] [--keep-reports]  — delete findings."""
+        """purge [--tool=<tool,...>] [--keep-reports]: delete findings."""
         tool_val: str | None = None
         keep_reports: bool = False
         unrecognized: list[str] = []
@@ -114,8 +114,7 @@ class PurgeCommand:
         sqlite_count = self._count_sqlite_findings(tools=tools)
         has_outputs = self._has_tool_output_files(tools=tools)
         has_reports = tools is None and not keep_reports and self._has_report_files()
-        # Chat purge runs only on the full-purge path (no --tool filter),
-        # mirroring decisions.md Q15.
+        # Chat purge runs only on the full-purge path (no --tool filter).
         chat_count = self._count_chat_sessions() if tools is None else 0
         url_count = self._count_url_findings() if tools is None else 0
 
@@ -169,10 +168,10 @@ class PurgeCommand:
         else:
             total_deleted = kb.delete_findings(tool=None)
         self._delete_tool_output_files(tools=tools)
-        # Chat purge runs before _purge_sqlite — full-wipe deletes the
+        # Chat purge runs before _purge_sqlite. Full-wipe deletes the
         # findings.db file outright, so going through the chat helper
-        # first keeps the explicit application-layer semantics
-        # (decisions.md Q15) regardless of how the SQLite wipe is done.
+        # first keeps the explicit application-layer semantics regardless
+        # of how the SQLite wipe is done.
         chat_deleted = self._purge_chat() if tools is None else 0
         self._purge_sqlite(tools=tools)
         if tools is None and not keep_reports:
@@ -332,10 +331,7 @@ class PurgeCommand:
             return None
         if row is None:
             return None
-        try:
-            return int(row["id"])
-        except (KeyError, TypeError, ValueError):
-            return None
+        return row.id
 
     def _count_chat_sessions(self) -> int:
         """Return the chat session count for the active project, or 0 on error."""
@@ -359,7 +355,7 @@ class PurgeCommand:
             return 0
 
     def _purge_chat(self) -> int:
-        """Hard-delete every chat session for the active project (Q15).
+        """Hard-delete every chat session for the active project.
 
         Returns the number of sessions deleted. Failures are surfaced as
         a warning; the rest of the purge continues.

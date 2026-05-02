@@ -54,7 +54,7 @@ class TestEditRepository:
         row = pm.registry.resolve_by_name("test-project")
         assert row is not None
         service = ProjectRepositoriesService(pm.registry, pm.config)
-        service.create(int(row["id"]), repo)
+        service.create(row.id, repo)
         return pm
 
     def test_edit_docker_to_local(self, tmp_path: Path) -> None:
@@ -83,7 +83,7 @@ class TestEditRepository:
         repo_dir.mkdir()
         repo = _make_repo(name="my-repo", path=str(repo_dir))
         pm = self._setup_project(tmp_path / "pm", repo)
-        # Press Enter for everything — keep existing values
+        # Press Enter for everything to keep existing values
         # (extra "" for endpoint file prompt, then auth)
         inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):

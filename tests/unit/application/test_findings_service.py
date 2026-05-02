@@ -13,6 +13,7 @@ from application.findings.findings_service import (
     FindingsService,
     ProjectNotFound,
 )
+from domain.projects.entry import ProjectRow
 
 
 @dataclass
@@ -28,6 +29,27 @@ class _StubFindingRepo:
         raise AssertionError(
             "FindingsService unit tests should not invoke FindingRepositoryPort"
         )
+
+
+class _CountingFindingRepo:
+    def __init__(
+        self,
+        *,
+        total: int = 0,
+        raises: Exception | None = None,
+    ) -> None:
+        self._total = total
+        self._raises = raises
+        self.count_findings_calls = 0
+
+    def count_findings(self) -> int:
+        self.count_findings_calls += 1
+        if self._raises is not None:
+            raise self._raises
+        return self._total
+
+    def __getattr__(self, _name: str) -> Any:
+        raise AssertionError("Only count_findings is exercised by these tests")
 
 
 class _StubHistoryRepo:
@@ -85,12 +107,13 @@ class TestFindingsService:
             FindingsService.from_request(request, 7)  # type: ignore[arg-type]
 
     def test_from_request_raises_when_project_archived(self) -> None:
-        archived = {
-            "id": 7,
-            "name": "p",
-            "path": "/tmp/p",
-            "archived_at": "2026-05-01T00:00:00Z",
-        }
+        archived = ProjectRow(
+            id=7,
+            name="p",
+            path="/tmp/p",
+            created_at="2026-05-01T00:00:00Z",
+            archived_at="2026-05-01T00:00:00Z",
+        )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         request = SimpleNamespace(
             app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
@@ -134,3 +157,47 @@ class TestFindingsService:
     def test_history_repo_property_exposes_port(self) -> None:
         service, _ = _build()
         assert isinstance(service.history_repo, _StubHistoryRepo)
+
+    def test_count_findings_returns_zero_when_findings_db_missing(self) -> None:
+        finding_repo = _CountingFindingRepo(total=42)
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            findings_db_exists=False,
+        )
+        assert service.count_findings() == 0
+        assert finding_repo.count_findings_calls == 0
+
+    def test_count_findings_returns_zero_on_repo_exception(self) -> None:
+        finding_repo = _CountingFindingRepo(raises=RuntimeError("db gone"))
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            findings_db_exists=True,
+        )
+        assert service.count_findings() == 0
+
+    def test_count_findings_returns_underlying_value(self) -> None:
+        finding_repo = _CountingFindingRepo(total=17)
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            findings_db_exists=True,
+        )
+        assert service.count_findings() == 17
+        assert finding_repo.count_findings_calls == 1

@@ -65,17 +65,17 @@ class TestInsertAndLookup:
         new_id = repo.insert("foo", "/abs/path/foo")
         row = repo.get_by_id(new_id)
         assert row is not None
-        assert row["id"] == new_id
-        assert row["name"] == "foo"
-        assert row["path"] == "/abs/path/foo"
-        assert row["archived_at"] is None
-        assert row["created_at"] is not None
+        assert row.id == new_id
+        assert row.name == "foo"
+        assert row.path == "/abs/path/foo"
+        assert row.archived_at is None
+        assert row.created_at is not None
 
     def test_get_by_name_roundtrip(self, repo: ProjectRegistryRepository) -> None:
         new_id = repo.insert("bar", "/abs/path/bar")
         row = repo.get_by_name("bar")
         assert row is not None
-        assert row["id"] == new_id
+        assert row.id == new_id
 
     def test_get_unknown_returns_none(self, repo: ProjectRegistryRepository) -> None:
         assert repo.get_by_id(9999) is None
@@ -93,7 +93,7 @@ class TestArchiveLifecycle:
         repo.archive("foo")
         row = repo.get_by_name("foo")
         assert row is not None
-        assert row["archived_at"] is not None
+        assert row.archived_at is not None
 
     def test_list_active_excludes_archived(
         self, repo: ProjectRegistryRepository
@@ -101,7 +101,7 @@ class TestArchiveLifecycle:
         repo.insert("active1", "/p/a1")
         repo.insert("archived1", "/p/ar1")
         repo.archive("archived1")
-        names = [r["name"] for r in repo.list_active()]
+        names = [r.name for r in repo.list_active()]
         assert "active1" in names
         assert "archived1" not in names
 
@@ -109,7 +109,7 @@ class TestArchiveLifecycle:
         repo.insert("active1", "/p/a1")
         repo.insert("archived1", "/p/ar1")
         repo.archive("archived1")
-        names = [r["name"] for r in repo.list_all()]
+        names = [r.name for r in repo.list_all()]
         assert "active1" in names
         assert "archived1" in names
 
@@ -121,8 +121,8 @@ class TestArchiveLifecycle:
         repo.unarchive("foo", "/new/path")
         row = repo.get_by_name("foo")
         assert row is not None
-        assert row["archived_at"] is None
-        assert row["path"] == "/new/path"
+        assert row.archived_at is None
+        assert row.path == "/new/path"
 
 
 class TestRename:
@@ -134,8 +134,8 @@ class TestRename:
         assert repo.get_by_name("old") is None
         row = repo.get_by_name("new")
         assert row is not None
-        assert row["id"] == new_id
-        assert row["path"] == "/p/new"
+        assert row.id == new_id
+        assert row.path == "/p/new"
 
 
 class TestSyncFromFilesystem:
@@ -145,7 +145,7 @@ class TestSyncFromFilesystem:
         _seed_project_dir(tmp_path, "alpha")
         _seed_project_dir(tmp_path, "beta")
         repo.sync_from_filesystem(str(tmp_path))
-        names = sorted(r["name"] for r in repo.list_active())
+        names = sorted(r.name for r in repo.list_active())
         assert names == ["alpha", "beta"]
 
     def test_paths_are_absolute(
@@ -155,8 +155,8 @@ class TestSyncFromFilesystem:
         repo.sync_from_filesystem(str(tmp_path))
         row = repo.get_by_name("alpha")
         assert row is not None
-        assert Path(row["path"]).is_absolute()
-        assert Path(row["path"]) == (tmp_path / "projects" / "alpha").resolve()
+        assert Path(row.path).is_absolute()
+        assert Path(row.path) == (tmp_path / "projects" / "alpha").resolve()
 
     def test_skips_dirs_without_project_json(
         self, repo: ProjectRegistryRepository, tmp_path: Path
@@ -180,7 +180,7 @@ class TestSyncFromFilesystem:
         repo.sync_from_filesystem(str(tmp_path))
         seeded = repo.get_by_name("ghost")
         assert seeded is not None
-        assert seeded["archived_at"] is None
+        assert seeded.archived_at is None
 
         import shutil
 
@@ -188,7 +188,7 @@ class TestSyncFromFilesystem:
         repo.sync_from_filesystem(str(tmp_path))
         row = repo.get_by_name("ghost")
         assert row is not None
-        assert row["archived_at"] is not None
+        assert row.archived_at is not None
 
     def test_unarchives_reappeared_dirs(
         self, repo: ProjectRegistryRepository, tmp_path: Path
@@ -199,7 +199,7 @@ class TestSyncFromFilesystem:
         repo.sync_from_filesystem(str(tmp_path))
         row = repo.get_by_name("phoenix")
         assert row is not None
-        assert row["archived_at"] is None
+        assert row.archived_at is None
 
     def test_idempotent(self, repo: ProjectRegistryRepository, tmp_path: Path) -> None:
         _seed_project_dir(tmp_path, "alpha")
@@ -207,7 +207,7 @@ class TestSyncFromFilesystem:
         repo.sync_from_filesystem(str(tmp_path))
         repo.sync_from_filesystem(str(tmp_path))
         repo.sync_from_filesystem(str(tmp_path))
-        names = sorted(r["name"] for r in repo.list_active())
+        names = sorted(r.name for r in repo.list_active())
         assert names == ["alpha", "beta"]
 
     def test_no_projects_dir_is_safe(
@@ -224,4 +224,4 @@ class TestSyncFromFilesystem:
         repo.sync_from_filesystem(str(tmp_path))
         row = repo.get_by_name("alpha")
         assert row is not None
-        assert Path(row["path"]) == (tmp_path / "projects" / "alpha").resolve()
+        assert Path(row.path) == (tmp_path / "projects" / "alpha").resolve()

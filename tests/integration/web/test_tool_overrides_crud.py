@@ -1,4 +1,4 @@
-"""Integration tests for tool override CRUD endpoints (Phase 9.4)."""
+"""Integration tests for tool override CRUD endpoints."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ async def overrides_client(tmp_path: Path):
     app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None
-    project_id = int(row["id"])
+    project_id = row.id
     override_path = proj_dir / "config" / "commands.json"
 
     transport = httpx.ASGITransport(app=app)

@@ -309,6 +309,16 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             "repo": repo_dim,
         }
 
+    def count_active(self) -> int:
+        """Count rows whose owning repository is not soft-deleted."""
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM url_findings uf"
+                " JOIN repositories r ON r.id = uf.repo_id"
+                " WHERE r.deleted_at IS NULL"
+            ).fetchone()
+        return int(row[0]) if row else 0
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

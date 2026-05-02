@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from application.ports.project_registry_repository import (
         ProjectRegistryRepositoryPort,
     )
+    from domain.projects.entry import ProjectRow
 
 
 class ProjectRegistryService:
@@ -25,13 +26,13 @@ class ProjectRegistryService:
         """Verify the registry DB is reachable. Raises on failure."""
         self._repo.ping()
 
-    def list_active(self) -> list[dict]:
+    def list_active(self) -> list[ProjectRow]:
         return self._repo.list_active()
 
-    def resolve_by_id(self, project_id: int) -> dict | None:
+    def resolve_by_id(self, project_id: int) -> ProjectRow | None:
         return self._repo.get_by_id(project_id)
 
-    def resolve_by_name(self, name: str) -> dict | None:
+    def resolve_by_name(self, name: str) -> ProjectRow | None:
         return self._repo.get_by_name(name)
 
     def register(self, name: str, base_path: str) -> int:
@@ -40,10 +41,10 @@ class ProjectRegistryService:
         existing = self._repo.get_by_name(name)
         if existing is None:
             return self._repo.insert(name, canonical)
-        if existing.get("archived_at") is not None:
+        if existing.archived_at is not None:
             self._repo.unarchive(name, canonical)
-            return int(existing["id"])
-        return int(existing["id"])
+            return existing.id
+        return existing.id
 
     def deregister(self, name: str) -> None:
         self._repo.archive(name)

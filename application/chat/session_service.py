@@ -43,7 +43,7 @@ class ChatSessionService:
     def from_request(cls, request: Request, project_id: int) -> Self:
         registry = request.app.state.project_registry
         row = registry.resolve_by_id(project_id)
-        if row is None or row.get("archived_at"):
+        if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")
         paths = ProjectPaths.from_registry_row(row)
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
