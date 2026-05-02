@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 
 import Root from '@/Root'
@@ -53,9 +53,11 @@ describe('Root', () => {
       )
     )
 
-    await expect(apiFetch('/api/v1/__probe-401')).rejects.toMatchObject({
-      code: 'UNAUTHENTICATED',
-      status: 401,
+    await act(async () => {
+      await expect(apiFetch('/api/v1/__probe-401')).rejects.toMatchObject({
+        code: 'UNAUTHENTICATED',
+        status: 401,
+      })
     })
 
     expect(await screen.findByTestId('session-expired-modal')).toBeInTheDocument()
