@@ -1,4 +1,4 @@
-"""ReportRepository — manages the ``reports`` table (Phase 7.1).
+"""ReportRepository: manages the ``reports`` table (Phase 7.1).
 
 Reports are file-based artifacts produced by the report orchestrator.
 Each row tracks one generation run: queued → running → done/failed/
@@ -12,9 +12,11 @@ project-scoped via its ``ConnectionFactory``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from application.ports.report_repository import ReportRepositoryPort
+from domain.reports.entry import ReportRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
@@ -32,24 +34,7 @@ REPORT_STATUSES = (
 RETENTION_TIERS = ("auto", "pinned")
 
 
-@dataclass(frozen=True)
-class ReportRow:
-    id: int
-    project_id: int | None
-    scan_run_id: int | None
-    format: str
-    filename: str
-    filepath: str
-    status: str
-    retention_tier: str
-    file_size_bytes: int | None
-    error: str | None
-    created_at: str | None
-    started_at: str | None
-    finished_at: str | None
-
-
-class ReportRepository:
+class ReportRepository(ReportRepositoryPort):
     """CRUD + retention helpers for the project-scoped ``reports`` table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
@@ -191,7 +176,7 @@ class ReportRepository:
         return _row_to_report(row) if row else None
 
     # ------------------------------------------------------------------
-    # Phase 7.2 — retention sweep
+    # Phase 7.2: retention sweep
     # ------------------------------------------------------------------
     def select_for_retention(
         self,

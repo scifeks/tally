@@ -40,10 +40,11 @@ from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
+    from application.ports.draft_repository import DraftRepositoryPort
     from application.ports.user_prompt import UserPromptPort
     from core.config.schemas import Repository
     from domain.findings.entry import Finding
-    from infrastructure.store.repositories.drafts import DraftRecord, DraftRepository
+    from domain.reports.entry import DraftRow
 
 
 def _active_repos(base_path: str, project_name: str) -> list[Repository]:
@@ -93,7 +94,7 @@ def run_draft(
     request: DraftRequest,
     *,
     prompt: UserPromptPort,
-    repo: DraftRepository,
+    repo: DraftRepositoryPort,
     event_sink: DraftEventSink | None = None,
     cancel_token: CancellationToken | None = None,
 ) -> Path:
@@ -123,7 +124,7 @@ def run_draft(
             f"Draft already exists at {draft_path}. Use force=True to overwrite."
         )
 
-    prior_row: DraftRecord | None = repo.get(section)
+    prior_row: DraftRow | None = repo.get(section)
     repo.upsert_generating(section)
 
     sink.emit(
