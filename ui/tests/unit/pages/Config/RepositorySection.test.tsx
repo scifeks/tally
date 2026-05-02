@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RepositorySection } from '@/pages/Config/RepositorySection'
 import type { RepositoryConfig } from '@/lib/types'
@@ -60,38 +60,39 @@ describe('RepositorySection', () => {
     ).toBeInTheDocument()
   })
 
-  it('populates form fields when an existing repository is selected', () => {
+  it('populates form fields when an existing repository is selected', async () => {
+    const user = userEvent.setup()
     renderSection()
-    const select = screen.getByRole('combobox')
-    fireEvent.change(select, { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     expect(screen.getByLabelText(/^name/i)).toHaveValue('dvwa')
     expect(screen.getByLabelText(/local path/i)).toHaveValue('/opt/repos/dvwa')
   })
 
-  it('hides the auth section when creating a new repository', () => {
+  it('hides the auth section when creating a new repository', async () => {
+    const user = userEvent.setup()
     renderSection()
-    fireEvent.click(screen.getByRole('button', { name: /new/i }))
+    await user.click(screen.getByRole('button', { name: /new/i }))
     expect(screen.queryByLabelText(/login url/i)).not.toBeInTheDocument()
   })
 
-  it('shows the auth section when editing an existing repository', () => {
+  it('shows the auth section when editing an existing repository', async () => {
+    const user = userEvent.setup()
     renderSection()
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     expect(screen.getByLabelText(/login url/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
   })
 
-  it('calls onUpdateAuth with the auth payload when Save Auth is clicked', () => {
+  it('calls onUpdateAuth with the auth payload when Save Auth is clicked', async () => {
+    const user = userEvent.setup()
     const onUpdateAuth = vi.fn()
     renderSection({ onUpdateAuth })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
-    fireEvent.change(screen.getByLabelText(/login url/i), {
-      target: { value: 'https://x.test/login' },
-    })
-    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'alice' } })
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'secret' } })
-    fireEvent.click(screen.getByRole('button', { name: /save auth/i }))
+    await user.selectOptions(screen.getByRole('combobox'), '101')
+    await user.type(screen.getByLabelText(/login url/i), 'https://x.test/login')
+    await user.type(screen.getByLabelText(/username/i), 'alice')
+    await user.type(screen.getByLabelText(/password/i), 'secret')
+    await user.click(screen.getByRole('button', { name: /save auth/i }))
     expect(onUpdateAuth).toHaveBeenCalledTimes(1)
     expect(onUpdateAuth).toHaveBeenCalledWith(101, {
       loginUrl: 'https://x.test/login',
@@ -100,131 +101,136 @@ describe('RepositorySection', () => {
     })
   })
 
-  it('disables the Save Auth button until a login URL is entered', () => {
+  it('disables the Save Auth button until a login URL is entered', async () => {
+    const user = userEvent.setup()
     renderSection()
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     expect(screen.getByRole('button', { name: /save auth/i })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText(/login url/i), {
-      target: { value: 'https://x.test/login' },
-    })
+    await user.type(screen.getByLabelText(/login url/i), 'https://x.test/login')
     expect(screen.getByRole('button', { name: /save auth/i })).toBeEnabled()
   })
 
   describe('authSavedAt', () => {
-    beforeEach(() => {
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date('2026-04-29T12:00:00Z'))
-    })
-    afterEach(() => vi.useRealTimers())
+    const PINNED_NOW = new Date('2026-04-29T12:00:00Z').getTime()
+    let nowSpy: ReturnType<typeof vi.spyOn>
 
-    it('flashes a "Saved" affordance when authSavedAt is fresh', () => {
-      const now = Date.now()
-      renderSection({ authSavedAt: now - 100 })
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    beforeEach(() => {
+      nowSpy = vi.spyOn(Date, 'now').mockReturnValue(PINNED_NOW)
+    })
+    afterEach(() => nowSpy.mockRestore())
+
+    it('flashes a "Saved" affordance when authSavedAt is fresh', async () => {
+      const user = userEvent.setup()
+      renderSection({ authSavedAt: PINNED_NOW - 100 })
+      await user.selectOptions(screen.getByRole('combobox'), '101')
       expect(screen.getByText(/saved/i)).toBeInTheDocument()
     })
 
-    it('does not show the affordance for stale timestamps', () => {
-      const now = Date.now()
-      renderSection({ authSavedAt: now - 5_000 })
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    it('does not show the affordance for stale timestamps', async () => {
+      const user = userEvent.setup()
+      renderSection({ authSavedAt: PINNED_NOW - 5_000 })
+      await user.selectOptions(screen.getByRole('combobox'), '101')
       expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument()
     })
   })
 
   it('confirms before deleting and calls onDelete with the selected id', async () => {
+    const user = userEvent.setup()
     const onDelete = vi.fn()
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderSection({ onDelete })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+    await user.selectOptions(screen.getByRole('combobox'), '101')
+    await user.click(screen.getByRole('button', { name: /delete/i }))
     expect(confirmSpy).toHaveBeenCalled()
     expect(onDelete).toHaveBeenCalledWith(101)
     confirmSpy.mockRestore()
   })
 
   it('does not delete when confirm is dismissed', async () => {
+    const user = userEvent.setup()
     const onDelete = vi.fn()
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderSection({ onDelete })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+    await user.selectOptions(screen.getByRole('combobox'), '101')
+    await user.click(screen.getByRole('button', { name: /delete/i }))
     expect(onDelete).not.toHaveBeenCalled()
     confirmSpy.mockRestore()
   })
 
   it('passes the selected file to onSave when present', async () => {
+    const user = userEvent.setup()
     const onSave = vi.fn()
     renderSection({ onSave })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     const file = new File(['{"swagger":"2.0"}'], 'spec.json', { type: 'application/json' })
     const fileInput = screen.getByLabelText(/endpoint file/i) as HTMLInputElement
-    await userEvent.upload(fileInput, file)
+    await user.upload(fileInput, file)
     const saveBtn = within(
       screen.getByRole('button', { name: /^save$/i }).parentElement as HTMLElement
     ).getByRole('button', { name: /^save$/i })
-    fireEvent.click(saveBtn)
+    await user.click(saveBtn)
     expect(onSave).toHaveBeenCalledTimes(1)
     const [, isNew, endpointFile] = onSave.mock.calls[0]
     expect(isNew).toBe(false)
     expect(endpointFile).toBe(file)
-    // Regression for the empty-multipart bug: clearing the file input
-    // synchronously detaches the underlying blob in Chrome before the
-    // async mutation reads it. The section must leave the file ref
-    // intact until the parent fires saveCompletedAt.
+    // Regression for an empty-multipart bug. Clearing the file input
+    // synchronously detaches the underlying blob in Chrome before the async
+    // mutation reads it, so the section keeps the file ref until the parent
+    // fires saveCompletedAt.
     expect(fileInput.files?.length).toBe(1)
     expect(fileInput.files?.[0]).toBe(file)
   })
 
   it('clears the staged file once saveCompletedAt fires', async () => {
+    const user = userEvent.setup()
     const repoFile = new File(['{"swagger":"2.0"}'], 'spec.json', {
       type: 'application/json',
     })
     const { rerender, props } = renderSection({ saveCompletedAt: null })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     const fileInput = screen.getByLabelText(/endpoint file/i) as HTMLInputElement
-    await userEvent.upload(fileInput, repoFile)
+    await user.upload(fileInput, repoFile)
     expect(fileInput.files?.length).toBe(1)
     rerender(<RepositorySection {...props} saveCompletedAt={Date.now()} />)
     expect(fileInput.files?.length).toBe(0)
   })
 
-  it('shows the existing seed file affordance when set and no fresh upload is staged', () => {
+  it('shows the existing seed file affordance when set and no fresh upload is staged', async () => {
+    const user = userEvent.setup()
     const reposWithSeed: RepositoryConfig[] = [
       { ...repos[0], endpointFile: 'existing.json' },
     ]
     renderSection({ repositories: reposWithSeed })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     expect(
       screen.getByText(/current: existing\.json\. uploading a new file will replace it\./i)
     ).toBeInTheDocument()
   })
 
   it('hides the existing seed file affordance once a fresh file is staged', async () => {
+    const user = userEvent.setup()
     const reposWithSeed: RepositoryConfig[] = [
       { ...repos[0], endpointFile: 'existing.json' },
     ]
     renderSection({ repositories: reposWithSeed })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '101' } })
+    await user.selectOptions(screen.getByRole('combobox'), '101')
     const fresh = new File(['{}'], 'fresh.json', { type: 'application/json' })
     const fileInput = screen.getByLabelText(/endpoint file/i) as HTMLInputElement
-    await userEvent.upload(fileInput, fresh)
+    await user.upload(fileInput, fresh)
     expect(
       screen.queryByText(/current: existing\.json\./i)
     ).not.toBeInTheDocument()
   })
 
-  it('calls onSave with isNew=true when creating a new repository', () => {
+  it('calls onSave with isNew=true when creating a new repository', async () => {
+    const user = userEvent.setup()
     const onSave = vi.fn()
     renderSection({ onSave })
-    fireEvent.click(screen.getByRole('button', { name: /new/i }))
-    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'newrepo' } })
-    // Toggle a type
-    fireEvent.click(screen.getByRole('button', { name: /^api$/i }))
-    fireEvent.change(screen.getByLabelText(/local path/i), {
-      target: { value: '/opt/repos/newrepo' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await user.click(screen.getByRole('button', { name: /new/i }))
+    await user.type(screen.getByLabelText(/^name/i), 'newrepo')
+    await user.click(screen.getByRole('button', { name: /^api$/i }))
+    await user.type(screen.getByLabelText(/local path/i), '/opt/repos/newrepo')
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
     expect(onSave).toHaveBeenCalledTimes(1)
     const [repo, isNew] = onSave.mock.calls[0]
     expect(isNew).toBe(true)
