@@ -1,4 +1,4 @@
-"""Phase 7 — Report endpoints (history, latest, generate, cancel,
+"""Phase 7 report endpoints (history, latest, generate, cancel,
 pin/delete, download, SSE).
 
 Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §11``:
@@ -13,7 +13,7 @@ Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §11``:
 - ``DELETE /api/v1/projects/{project_id}/reports/{report_id}``
 
 Route ordering: literal-segment routes (``.../latest``, ``.../events``,
-``.../generate``) registered before parameterised routes
+``.../generate``) registered before parameterized routes
 (``.../{report_id}``).
 """
 
@@ -34,15 +34,15 @@ from application.locking import JobBusy, get_registry
 from application.reporting.drafts import SECTION_REGISTRY
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
+from domain.reports.entry import DraftRow, ReportRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
 from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.drafts import DraftRecord, DraftRepository
+from infrastructure.store.repositories.drafts import DraftRepository
 from infrastructure.store.repositories.reports import (
     REPORT_STATUSES,
     ReportRepository,
-    ReportRow,
 )
 from web.adapters.draft_run_registry import get_draft_run_registry
 from web.adapters.report_run_registry import get_report_run_registry
@@ -358,7 +358,7 @@ async def list_reports(
 
 
 # ---------------------------------------------------------------------------
-# Draft routes — literal-segment, registered before /{report_id}
+# Draft routes (literal-segment, registered before /{report_id})
 # ---------------------------------------------------------------------------
 
 _DRAFT_MIME_ALLOWLIST = frozenset(
@@ -383,7 +383,7 @@ def _resolve_drafts_dir(row: dict) -> Path:
 
 def _draft_section_summary(
     section: str,
-    record: DraftRecord | None,
+    record: DraftRow | None,
     draft_dir: Path,
 ) -> dict[str, Any]:
     status = record.status if record else "not_generated"
@@ -614,7 +614,7 @@ async def delete_draft(
     section: str,
     request: Request,
 ) -> None:
-    """Delete a draft section. Idempotent — 204 even if not present."""
+    """Delete a draft section. Idempotent: 204 even if not present."""
     if section not in SECTION_REGISTRY:
         raise ValidationError(
             f"unknown section {section!r}",
@@ -635,7 +635,7 @@ async def delete_draft(
 
 
 # ---------------------------------------------------------------------------
-# Parameterised routes
+# Parameterized routes
 # ---------------------------------------------------------------------------
 
 

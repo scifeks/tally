@@ -1,4 +1,4 @@
-"""DraftRepository — manages the ``drafts`` table (Phase 7.5).
+"""DraftRepository: manages the ``drafts`` table (Phase 7.5).
 
 Each row tracks one draft section: generating → draft (LLM-written) or
 reviewed (user-uploaded). The table lives in the per-project ``findings.db``
@@ -9,9 +9,11 @@ alongside the ``reports`` table; no ``project_id`` column is needed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from application.ports.draft_repository import DraftRepositoryPort
+from domain.reports.entry import DraftRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
@@ -20,16 +22,7 @@ if TYPE_CHECKING:
 DRAFT_STATUSES = ("generating", "draft", "reviewed")
 
 
-@dataclass(frozen=True)
-class DraftRecord:
-    section: str
-    status: str
-    original_filename: str | None
-    generated_at: str | None
-    reviewed_at: str | None
-
-
-class DraftRepository:
+class DraftRepository(DraftRepositoryPort):
     """CRUD for the project-scoped ``drafts`` table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
@@ -39,14 +32,14 @@ class DraftRepository:
     # Queries
     # ------------------------------------------------------------------
 
-    def get(self, section: str) -> DraftRecord | None:
+    def get(self, section: str) -> DraftRow | None:
         with self._factory.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM drafts WHERE section = ?", (section,)
             ).fetchone()
         return _row_to_draft(row) if row else None
 
-    def list_all(self) -> list[DraftRecord]:
+    def list_all(self) -> list[DraftRow]:
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM drafts ORDER BY section").fetchall()
         return [_row_to_draft(r) for r in rows]
@@ -101,7 +94,7 @@ class DraftRepository:
                 (section, original_filename, ts),
             )
 
-    def restore(self, section: str, prior: DraftRecord | None) -> None:
+    def restore(self, section: str, prior: DraftRow | None) -> None:
         """Revert *section* to *prior* after a failed generation.
 
         If *prior* is ``None`` the row is deleted (section returns to
@@ -133,8 +126,8 @@ class DraftRepository:
             conn.execute("DELETE FROM drafts WHERE section = ?", (section,))
 
 
-def _row_to_draft(row: Any) -> DraftRecord:
-    return DraftRecord(
+def _row_to_draft(row: Any) -> DraftRow:
+    return DraftRow(
         section=row["section"],
         status=row["status"],
         original_filename=row["original_filename"],
