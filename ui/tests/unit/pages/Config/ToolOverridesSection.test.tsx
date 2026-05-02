@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ToolOverridesSection } from '@/pages/Config/ToolOverridesSection'
 import type { ToolCatalogEntry, ToolOverrideConfig } from '@/lib/types'
@@ -53,10 +53,11 @@ describe('ToolOverridesSection', () => {
     expect(optionTexts).not.toContain('Semgrep')
   })
 
-  it('populates the form when an existing override is selected', () => {
+  it('populates the form when an existing override is selected', async () => {
+    const user = userEvent.setup()
     renderSection()
     const overrideSelect = screen.getAllByRole('combobox')[0] as HTMLSelectElement
-    fireEvent.change(overrideSelect, { target: { value: 'semgrep' } })
+    await user.selectOptions(overrideSelect, 'semgrep')
     expect(screen.getByText(/overrides global default/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/container name/i)).toHaveValue('semgrep-runner')
     expect(screen.getByLabelText(/tool path in container/i)).toHaveValue(
@@ -64,19 +65,16 @@ describe('ToolOverridesSection', () => {
     )
   })
 
-  it('calls onSave with isNew=true for a new override', () => {
+  it('calls onSave with isNew=true for a new override', async () => {
+    const user = userEvent.setup()
     const onSave = vi.fn()
     renderSection({ onSave })
-    // Pick from "Add Override" dropdown.
     const addSelect = screen.getAllByRole('combobox').find(el =>
       Array.from((el as HTMLSelectElement).options).some(o => o.text.includes('Add'))
     ) as HTMLSelectElement
-    fireEvent.change(addSelect, { target: { value: 'gitleaks' } })
-    // Default location is 'local'; fill in path.
-    fireEvent.change(screen.getByLabelText(/^path/i), {
-      target: { value: '/opt/tools/gitleaks' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await user.selectOptions(addSelect, 'gitleaks')
+    await user.type(screen.getByLabelText(/^path/i), '/opt/tools/gitleaks')
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
     expect(onSave).toHaveBeenCalledTimes(1)
     const [override, isNew] = onSave.mock.calls[0]
     expect(isNew).toBe(true)
@@ -85,14 +83,15 @@ describe('ToolOverridesSection', () => {
     expect(override.path).toBe('/opt/tools/gitleaks')
   })
 
-  it('calls onSave with isNew=false when updating an existing override', () => {
+  it('calls onSave with isNew=false when updating an existing override', async () => {
+    const user = userEvent.setup()
     const onSave = vi.fn()
     renderSection({ onSave })
-    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'semgrep' } })
-    fireEvent.change(screen.getByLabelText(/tool path in container/i), {
-      target: { value: '/new/path' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await user.selectOptions(screen.getAllByRole('combobox')[0], 'semgrep')
+    const toolPath = screen.getByLabelText(/tool path in container/i)
+    await user.clear(toolPath)
+    await user.type(toolPath, '/new/path')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
     expect(onSave).toHaveBeenCalledTimes(1)
     const [override, isNew] = onSave.mock.calls[0]
     expect(isNew).toBe(false)
@@ -100,22 +99,24 @@ describe('ToolOverridesSection', () => {
   })
 
   it('confirms before deleting and calls onDelete with the tool id', async () => {
+    const user = userEvent.setup()
     const onDelete = vi.fn()
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderSection({ onDelete })
-    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'semgrep' } })
-    await userEvent.click(screen.getByRole('button', { name: /remove override/i }))
+    await user.selectOptions(screen.getAllByRole('combobox')[0], 'semgrep')
+    await user.click(screen.getByRole('button', { name: /remove override/i }))
     expect(confirmSpy).toHaveBeenCalled()
     expect(onDelete).toHaveBeenCalledWith('semgrep')
     confirmSpy.mockRestore()
   })
 
-  it('disables Docker mode for tools that do not support it', () => {
+  it('disables Docker mode for tools that do not support it', async () => {
+    const user = userEvent.setup()
     renderSection({ overrides: [] })
     const addSelect = screen.getAllByRole('combobox').find(el =>
       Array.from((el as HTMLSelectElement).options).some(o => o.text.includes('Add'))
     ) as HTMLSelectElement
-    fireEvent.change(addSelect, { target: { value: 'katana' } })
+    await user.selectOptions(addSelect, 'katana')
     expect(screen.getByRole('button', { name: /docker/i })).toBeDisabled()
     expect(screen.getByText(/does not support docker mode/i)).toBeInTheDocument()
   })

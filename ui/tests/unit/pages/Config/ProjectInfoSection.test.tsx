@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ProjectInfoSection } from '@/pages/Config/ProjectInfoSection'
 import type { ProjectInfo, ProjectInfoUpdate } from '@/lib/types'
 
@@ -26,12 +27,10 @@ describe('ProjectInfoSection', () => {
 
   it('does not render an editable input for project name or path', () => {
     render(<ProjectInfoSection projectInfo={projectInfo} onSave={vi.fn()} isSaving={false} />)
-    // No <input> with the project name's value - only the editable trio.
     expect(screen.queryByDisplayValue('acme-platform')).not.toBeInTheDocument()
     expect(
       screen.queryByDisplayValue('/opt/tally/projects/acme-platform')
     ).not.toBeInTheDocument()
-    // But the values are still visible as text.
     expect(screen.getByText('acme-platform')).toBeInTheDocument()
     expect(screen.getByText('/opt/tally/projects/acme-platform')).toBeInTheDocument()
   })
@@ -41,23 +40,26 @@ describe('ProjectInfoSection', () => {
     expect(screen.getByRole('button', { name: /update/i })).toBeDisabled()
   })
 
-  it('sends only the changed fields when Update is clicked', () => {
+  it('sends only the changed fields when Update is clicked', async () => {
+    const user = userEvent.setup()
     const onSave = vi.fn<(updates: ProjectInfoUpdate) => void>()
     render(<ProjectInfoSection projectInfo={projectInfo} onSave={onSave} isSaving={false} />)
 
-    fireEvent.change(screen.getByLabelText(/company name/i), {
-      target: { value: 'New Co' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /update/i }))
+    const companyName = screen.getByLabelText(/company name/i)
+    await user.clear(companyName)
+    await user.type(companyName, 'New Co')
+    await user.click(screen.getByRole('button', { name: /update/i }))
 
     expect(onSave).toHaveBeenCalledTimes(1)
     expect(onSave).toHaveBeenCalledWith({ companyName: 'New Co' })
   })
 
-  it('uppercases the abbreviation and limits it to 3 characters', () => {
+  it('uppercases the abbreviation and limits it to 3 characters', async () => {
+    const user = userEvent.setup()
     render(<ProjectInfoSection projectInfo={projectInfo} onSave={vi.fn()} isSaving={false} />)
     const abbr = screen.getByLabelText(/abbreviation/i) as HTMLInputElement
-    fireEvent.change(abbr, { target: { value: 'xy' } })
+    await user.clear(abbr)
+    await user.type(abbr, 'xy')
     expect(abbr.value).toBe('XY')
     expect(abbr.maxLength).toBe(3)
   })
@@ -67,9 +69,12 @@ describe('ProjectInfoSection', () => {
     expect(screen.getByText(/loading project info/i)).toBeInTheDocument()
   })
 
-  it('reflects saving state on the Update button', () => {
+  it('reflects saving state on the Update button', async () => {
+    const user = userEvent.setup()
     render(<ProjectInfoSection projectInfo={projectInfo} onSave={vi.fn()} isSaving={true} />)
-    fireEvent.change(screen.getByLabelText(/company name/i), { target: { value: 'X' } })
+    const companyName = screen.getByLabelText(/company name/i)
+    await user.clear(companyName)
+    await user.type(companyName, 'X')
     expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled()
   })
 })
