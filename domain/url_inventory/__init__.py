@@ -1,4 +1,4 @@
-"""Domain types for the per-project URL inventory (Phase 9)."""
+"""Domain types for the per-project URL inventory."""
 
 from domain.url_inventory.entry import (
     UrlFinding,

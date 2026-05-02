@@ -10,10 +10,8 @@ Usage:
 import json
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
 # Paste of parser logic from core/parsers/gitleaks.py
 # (copied verbatim so this script is self-contained)
-# ---------------------------------------------------------------------------
 
 
 def _redact_secret(secret: str) -> str:
@@ -109,9 +107,7 @@ def combine_gitleaks_results(dir_data: dict, git_data: dict) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
 
 DIR_FILE = Path("/tmp/gitleaks_dir.json")
 GIT_FILE = Path("/tmp/gitleaks_git.json")
@@ -119,7 +115,7 @@ GIT_FILE = Path("/tmp/gitleaks_git.json")
 
 def load_file(path: Path) -> dict:
     if not path.exists():
-        print(f"  WARNING: {path} does not exist — skipping")
+        print(f"  WARNING: {path} does not exist (skipping)")
         return {}
     print(f"  Loading {path} ({path.stat().st_size:,} bytes)")
     return parse_gitleaks_json(path)

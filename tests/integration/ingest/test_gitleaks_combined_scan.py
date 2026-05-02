@@ -59,7 +59,7 @@ def combined_parsed_data(dir_parsed_data: dict, git_parsed_data: dict) -> dict:
 
 class TestGitleaksCombinedScan:
     def test_combined_count(self, combined_parsed_data: dict) -> None:
-        """Normalized row count equals len(combined['secrets'])."""
+        """Normalized output count matches combined secrets."""
         handler = ToolHandlerFactory.load("gitleaks")
         assert handler is not None
         n = len(combined_parsed_data["secrets"])
@@ -68,7 +68,7 @@ class TestGitleaksCombinedScan:
         assert len(rows) == n
 
     def test_combined_metadata_fidelity(self, combined_parsed_data: dict) -> None:
-        """Every normalized row matches a combined secret by rule+file+line."""
+        """Every normalized row matches a combined secret by identity."""
         handler = ToolHandlerFactory.load("gitleaks")
         assert handler is not None
         result = _make_gitleaks_result(combined_parsed_data)
@@ -93,7 +93,7 @@ class TestGitleaksCombinedScan:
         dir_parsed_data: dict,
         git_parsed_data: dict,
     ) -> None:
-        """The shared finding appears exactly once after combine."""
+        """Shared findings deduplicate to a single row."""
         combined = combine_gitleaks_results(dir_parsed_data, git_parsed_data)
         shared_entries = [
             s

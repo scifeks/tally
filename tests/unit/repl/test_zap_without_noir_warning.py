@@ -46,9 +46,7 @@ def _make_sc(repo_names: list[str] | None = None) -> ScanCommands:
     return sc
 
 
-# ---------------------------------------------------------------------------
 # _maybe_warn_dast_without_discovery helpers
-# ---------------------------------------------------------------------------
 
 
 class TestMaybeWarnDastWithoutDiscovery:
@@ -171,9 +169,7 @@ class TestMaybeWarnDastWithoutDiscovery:
         assert "Warning" in printed or "warning" in printed.lower()
 
 
-# ---------------------------------------------------------------------------
 # Integration: _cmd_scan_inner respects the warning
-# ---------------------------------------------------------------------------
 
 
 class TestCmdScanInnerWarning:

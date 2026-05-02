@@ -154,8 +154,8 @@ class TestVendorFilterAtIngestBoundary:
 
 
 class TestNonVendorPathHandling:
-    """Sanity checks unrelated to the vendor filter — guard the rest of the
-    iterator's contract didn't drift when the filter was added."""
+    """Sanity checks unrelated to the vendor filter. Guard that the rest of
+    the iterator's contract didn't drift when the filter was added."""
 
     def test_path_with_no_methods_yields_nothing(self) -> None:
         ctx = _make_ctx(_make_repo())

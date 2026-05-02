@@ -127,9 +127,7 @@ class BaseNoirTool(ToolInterface):
     _candidate_commands: list[str] = ["noir"]
     _command_entry_type: str = "repo"
 
-    # ------------------------------------------------------------------
-    # ToolInterface — identity
-    # ------------------------------------------------------------------
+    # ToolInterface: identity
 
     @property
     def name(self) -> str:
@@ -146,17 +144,15 @@ class BaseNoirTool(ToolInterface):
     @property
     def description(self) -> str:
         return (
-            "OWASP Noir — attack surface detector that discovers API endpoints "
-            "by static analysis and emits an OAS3 spec for downstream DAST."
+            "OWASP Noir attack surface detector that discovers API endpoints "
+            "via static analysis and emits an OAS3 spec for downstream DAST."
         )
 
     @property
     def scan_segment(self) -> str:
         return "web"
 
-    # ------------------------------------------------------------------
-    # ToolInterface — behaviour flags
-    # ------------------------------------------------------------------
+    # ToolInterface: behaviour flags
 
     @property
     def skip(self) -> bool:
@@ -180,7 +176,7 @@ class BaseNoirTool(ToolInterface):
 
     @property
     def language_gates(self) -> list[str]:
-        # Language-agnostic — scans any source tree.
+        # Language-agnostic; scans any source tree.
         return []
 
     @property
@@ -200,9 +196,7 @@ class BaseNoirTool(ToolInterface):
     def supported_languages(self) -> list[str] | None:
         return self.language_gates or None
 
-    # ------------------------------------------------------------------
-    # ToolInterface — parse + execute
-    # ------------------------------------------------------------------
+    # ToolInterface: parse and execute
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse Noir output.

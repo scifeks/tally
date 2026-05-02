@@ -1,4 +1,4 @@
-"""OAS3 passthrough adapter — validates and normalises OAS3 files."""
+"""Validate and normalize OpenAPI 3.x files."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def _normalize_full_url_paths(doc: dict) -> dict:
 
 
 class OAS3PassthroughAdapter(ConverterAdapter):
-    """Adapter for files already in OAS3 format — normalises, validates, writes."""
+    """Normalize, validate, and write OAS3 files."""
 
     @property
     def supported_extensions(self) -> frozenset[str]:

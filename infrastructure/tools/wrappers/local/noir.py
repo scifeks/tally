@@ -1,4 +1,4 @@
-"""OWASP Noir local wrapper — endpoint discovery via static analysis.
+"""OWASP Noir local wrapper for endpoint discovery via static analysis.
 
 Invocation pattern
 ------------------
@@ -9,13 +9,13 @@ write it to stdout.  This follows the same pattern as ``GitleaksLocalTool``:
 ``build_command`` stores the report path in ``self._last_report_path`` and
 ``parse_output`` reads from it.
 
-The OAS3 file is **not** deleted after parsing because the URL-inventory
-ingest handler reads it via ``output_files['oas3']``.  The on-disk file
-is the raw Noir output — vendor-path filtering is applied in the
+The OAS3 file is not deleted after parsing because the URL-inventory
+ingest handler reads it via ``output_files['oas3']``. The on-disk file
+is the raw Noir output; vendor-path filtering is applied in the
 application core (see ``application.url_inventory.providers
-._oas3_to_findings.iter_oas3_rows``) at ingest time, so vendor URLs
-never enter ``url_findings`` and the rebuilt merged OAS3 (consumed by
-ZAP / XSStrike / DalFox) inherits the filter.
+._oas3_to_findings.iter_oas3_rows``) at ingest time. This ensures vendor
+URLs never enter ``url_findings`` and the rebuilt merged OAS3 (consumed by
+ZAP, XSStrike, DalFox) inherits the filter.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ class NoirLocalTool(BaseNoirTool):
                 The directory must already exist (created by
                 ``build_execution_passes``).
             techs (list[str]): Noir tech identifiers to pass via ``-t``.
-                Optional — when empty or absent, no ``-t`` flag is added.
+                When empty or absent, no ``-t`` flag is added.
         """
         source_path: str | None = (
             str(kwargs["source_path"]) if "source_path" in kwargs else None
@@ -75,7 +75,7 @@ class NoirLocalTool(BaseNoirTool):
         if not output_file:
             raise ValueError("output_file is required for noir")
 
-        # Resolve to an absolute path — Noir may cd internally.
+        # Resolve to an absolute path because Noir may cd internally.
         output_file = str(Path(output_file).resolve())
         self._last_report_path = Path(output_file)
 

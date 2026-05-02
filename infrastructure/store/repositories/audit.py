@@ -1,4 +1,4 @@
-"""AuditRepository — tool_audit_log write and read operations."""
+"""Persist and query tool invocation audit logs."""
 
 from __future__ import annotations
 

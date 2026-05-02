@@ -1,9 +1,7 @@
 """Port for the chat-side retrieval seam.
 
 Lets the chat service consume any retriever shape without coupling to
-``application.rag.query.QueryEngine``. Production passes the
-``QueryEngine`` directly; tests inject a stub that returns canned
-matches without standing up a real knowledge base.
+a specific implementation. Production uses QueryEngine; tests inject stubs.
 """
 
 from __future__ import annotations

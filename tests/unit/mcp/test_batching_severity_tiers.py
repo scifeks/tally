@@ -1,4 +1,4 @@
-"""Unit tests for compute_batches() — severity tiers and no-fill rules."""
+"""Unit tests for compute_batches(). Severity tiers and no-fill rules."""
 
 from __future__ import annotations
 

@@ -35,9 +35,7 @@ from urllib.parse import urlparse
 
 from domain.tools.base import ToolResult
 
-# ---------------------------------------------------------------------------
 # Parse functions (called by KatanaLocalTool.parse_output)
-# ---------------------------------------------------------------------------
 
 
 def parse_katana_jsonl(json_path: Path) -> dict[str, Any]:
@@ -80,9 +78,7 @@ def parse_katana_jsonl_string(jsonl: str) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_record(record: dict[str, Any]) -> dict[str, Any] | None:
@@ -119,9 +115,7 @@ def _parse_record(record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-# ---------------------------------------------------------------------------
 # Handler
-# ---------------------------------------------------------------------------
 
 
 class KatanaHandler:

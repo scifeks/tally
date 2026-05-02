@@ -11,15 +11,9 @@ from domain.tools.interface import ToolInterface
 class BaseDalFoxTool(ToolInterface):
     """Base class shared by local and Docker DalFox wrappers.
 
-    DalFox is an XSS scanner that uses headless Chrome via the chromedp Go
-    library.  It can render JavaScript, interact with SPAs, and discover XSS
-    vulnerabilities that tools like XSStrike miss.  It complements XSStrike
-    rather than replacing it: XSStrike excels at context-aware payload
-    generation against traditional server-rendered pages, while DalFox covers
-    the SPA gap.
-
-    Requires ``base_urls`` to be configured on the repository.  Scans are
-    skipped automatically by the orchestrator when no URLs are present.
+    Detects XSS in JavaScript-heavy applications and SPAs by rendering
+    pages with headless Chrome. Requires base_urls configured on the
+    repository; scans are skipped when none are present.
     """
 
     _candidate_commands: list[str] = ["dalfox"]

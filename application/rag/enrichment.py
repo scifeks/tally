@@ -29,10 +29,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Legacy batch-path prompt (used when builder has no enrichment_fields).
 # Sends full document text and requests all missing fields at once.
-# ---------------------------------------------------------------------------
 
 _USER_PROMPT_TEMPLATE = (
     "You are a security finding classifier. You output only valid JSON.\n"
@@ -92,7 +90,7 @@ _SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _OWASP_FIELD_DEFINITION = (
     "- owasp_name: The OWASP Top 10 category Name that best describes this finding.\n"
     '  Return ONLY a value from the "Name" column of the tables below'
-    " — copied exactly.\n"
+    " (copied exactly).\n"
     "  Return null if you cannot confidently map this finding to any category.\n"
     "  Do not guess. Do not invent values.\n"
     "\n"
@@ -139,10 +137,8 @@ _OWASP_FIELD_DEFINITION = (
     "  | A10:2017  | Insufficient Logging and Monitoring           |\n"
 )
 
-# ---------------------------------------------------------------------------
 # Per-field path prompt (used when builder declares enrichment_fields).
 # Sends only the declared source_fields as context for a single field.
-# ---------------------------------------------------------------------------
 
 _FIELD_DEFINITIONS: dict[str, str] = {
     "risk_type": (
@@ -223,8 +219,8 @@ class EnrichmentPipeline:
     is present, the existing batch path fires: all missing fields are requested
     in a single call over the full chunk text.
 
-    LLM calls run concurrently via ThreadPoolExecutor (Phase 2).
-    SQLite writes are serialized after all LLM calls complete (Phase 3).
+    LLM calls run concurrently via ThreadPoolExecutor.
+    SQLite writes are serialized after all LLM calls complete.
     Skips findings already marked ``enriched = 1``.
     """
 
@@ -409,9 +405,7 @@ class EnrichmentPipeline:
         raw = self._call_llm(doc_text, metadata, legacy_fields)
         return self._validate_response(raw, legacy_fields)
 
-    # ------------------------------------------------------------------
     # Per-field enrichment path
-    # ------------------------------------------------------------------
 
     def _get_enrichment_plan(
         self,
@@ -547,9 +541,7 @@ class EnrichmentPipeline:
             return [s.field_name for s in specs]
         return legacy_fields or []
 
-    # ------------------------------------------------------------------
     # Legacy batch path: retained for tools without enrichment_fields
-    # ------------------------------------------------------------------
 
     def _call_llm(
         self, doc_text: str, metadata: dict[str, Any], fields: list[str]

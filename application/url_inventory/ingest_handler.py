@@ -1,13 +1,10 @@
-"""``UrlInventoryIngestHandler`` — scan-side URL ingest for Phase 9.
+"""Ingest URLs from Katana and Noir scan results into the url_findings table.
 
-Subscribes to ``ToolCompleted``. For Katana / Noir, locates the OAS3
-file produced by the wrapper (exposed via ``ToolResult.output_files['oas3']``),
-parses it through the matching ``UrlListProvider``, persists the rows into
-``url_findings`` via ``UrlInventoryService.ingest_scan_source``, and JIT-rebuilds
-``merged_urls.txt`` + ``merged_oas3.json`` so downstream DAST tools see the
-new URLs without re-reading source files.
-
-Replaces the legacy ``application/pipeline/url_handlers.py`` chain entirely.
+Subscribes to ``ToolCompleted``. For Katana/Noir, locates the OAS3 file
+produced by the wrapper, parses it through the matching ``UrlListProvider``,
+persists the rows into ``url_findings`` via ``UrlInventoryService.ingest_scan_source``,
+and rebuilds ``merged_urls.txt`` and ``merged_oas3.json`` just-in-time so
+downstream DAST tools see the new URLs.
 """
 
 from __future__ import annotations

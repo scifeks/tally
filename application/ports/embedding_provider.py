@@ -1,4 +1,4 @@
-"""EmbeddingProvider port — embedding adapter contract.
+"""Embedding adapter contract.
 
 Adapters:
   infrastructure/embedding/ollama_embedding_adapter.py  (local Ollama HTTP)

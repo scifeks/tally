@@ -24,7 +24,7 @@ class ToolOnAllReposScan(ScanType):
         start = perf_counter()
 
         resources.display.print_scan_header(
-            f"Repo Tool Scan: {config.project_name} — {self.tool_name}"
+            f"Repo Tool Scan: {config.project_name} | {self.tool_name}"
         )
 
         tool_inst = resources.registry.get_tool(self.tool_name)

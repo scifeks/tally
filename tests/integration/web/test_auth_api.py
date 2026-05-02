@@ -30,8 +30,7 @@ class TestExchange:
         assert resp.status_code == 401
 
     async def test_good_token_returns_csrf_cookie(self, app_client) -> None:
-        # The fixture already exchanged. Confirm the X-CSRF-Token header in
-        # mut_headers (sourced from the cookie) is non-empty.
+        # Confirm X-CSRF-Token header is non-empty after successful exchange.
         _, _, _, _, mut_headers, _ = app_client
         assert mut_headers["X-CSRF-Token"]
 

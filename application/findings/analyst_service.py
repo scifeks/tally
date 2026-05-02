@@ -1,4 +1,4 @@
-"""FindingAnalystService — application-layer facade for analyst-driven operations."""
+"""Read, search, and bulk-update findings under finding-id locks."""
 
 from __future__ import annotations
 
@@ -84,10 +84,9 @@ class FindingAnalystService:
         *,
         holder_token: str,
     ) -> bool:
-        """Write without acquiring the lock. Asserts *holder_token* already holds.
+        """Write under an already-held lock. Asserts *holder_token* matches.
 
-        For callers (triage MCP) that pre-acquired the batch. Raises
-        HolderMismatch if the finding is held by a different token.
+        Raises HolderMismatch if the finding is held by a different token.
         """
         self._registry.assert_held_by(finding_id, holder_token)
         return self._repo.update_analyst_fields(finding_id, fields, source="web_ui")
@@ -129,7 +128,7 @@ class FindingAnalystService:
     ) -> BulkUpdateResult:
         """Pre-held bulk variant. Asserts *holder_token* holds each id.
 
-        Raises HolderMismatch (not skipped) — a mismatch is always a bug.
+        Raises HolderMismatch rather than skipping; a mismatch is always a bug.
         """
         result = BulkUpdateResult()
         for finding_id in ids:

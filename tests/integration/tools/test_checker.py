@@ -1,4 +1,4 @@
-"""Tests for core/startup/checker.py — no external binaries required."""
+"""Tests for startup checker without external binaries."""
 
 from __future__ import annotations
 

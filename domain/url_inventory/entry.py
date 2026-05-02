@@ -1,13 +1,9 @@
-"""URL inventory domain entity (Phase 9).
+"""URL inventory domain entity.
 
 A ``UrlFinding`` is one entry in the per-project URL inventory: either a
-URL discovered by a scan tool (Katana / Noir) or a URL ingested from a
+URL discovered by a scan tool (Katana / Noir) or ingested from a
 user-provided endpoint file (OAS3, Swagger, Postman, HAR, Katana JSONL).
-
-This is intentionally separate from the ``findings`` table — URL discovery
-and analyst-visible vulnerability findings are different concerns with
-different schemas, lifecycle rules, and consumers (scan-tool input vs.
-analyst inventory).
+Separate from the findings table with its own schema and lifecycle.
 """
 
 from __future__ import annotations
@@ -20,10 +16,10 @@ from typing import Any
 class UrlSource(StrEnum):
     """Origin of a URL row.
 
-    - ``SCAN`` — discovered by a scan tool (Katana / Noir).
-      ``tool`` is required and ``run_id`` carries the scan run.
-    - ``USER`` — ingested from a user-uploaded endpoint file.
-      ``tool`` is ``None`` and ``file_path`` points to the copy under
+    - ``SCAN``: discovered by a scan tool (Katana / Noir). ``tool`` is
+      required and ``run_id`` carries the scan run.
+    - ``USER``: ingested from a user-uploaded endpoint file. ``tool`` is
+      ``None`` and ``file_path`` points to the copy under
       ``projects/<p>/endpoints/<repo_uuid>/user_uploads/``.
     """
 

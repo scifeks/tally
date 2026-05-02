@@ -21,11 +21,6 @@ pytestmark = pytest.mark.e2e
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _write_global_config(base_path: Path) -> None:
     real_config = _TALLY_ROOT / "config" / "global.json"
     if not real_config.exists():
@@ -69,11 +64,6 @@ def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
     )
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture()
 def project_env(tmp_path: Path) -> dict:
     """Minimal project environment under tmp_path (no data)."""
@@ -84,11 +74,6 @@ def project_env(tmp_path: Path) -> dict:
     pm.create_project_dirs(name)
     pm.save_project(name)
     return {"base_path": tmp_path, "project_name": name}
-
-
-# ---------------------------------------------------------------------------
-# Scenario 4b – delete_findings  (@requires_ollama, no gitleaks, not slow)
-# ---------------------------------------------------------------------------
 
 
 _FIXED_TIMESTAMP = "2024-01-01T00:00:00"

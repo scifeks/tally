@@ -1,12 +1,10 @@
-"""Tests for the Noir parser/handler post-Phase-9.
+"""Tests for Noir parser/handler.
 
-Phase 9 routes Noir output into ``url_findings`` via
-``UrlInventoryIngestHandler``; ``NoirHandler.normalize`` is therefore a
-no-op. Vendor-path filtering moved to the application core
-(``iter_oas3_rows``); the parser module now re-exports
-``is_vendor_path`` under the legacy alias so any in-tree caller still
-works. The ``_uri_only`` URL canonicalizer still needs direct
-coverage.
+NoirHandler.normalize returns empty because URL routing is handled via
+UrlInventoryIngestHandler. Vendor-path filtering moved to application
+core; the parser re-exports the filter under a legacy alias for
+backward compatibility. The _uri_only URL canonicalizer requires
+direct test coverage.
 """
 
 from __future__ import annotations
@@ -50,7 +48,7 @@ _ENDPOINT = {
 
 
 class TestNoirHandlerNormalize:
-    """Phase 9: ``normalize`` returns ``[]`` regardless of input."""
+    """normalize returns [] regardless of input."""
 
     def test_normalize_returns_empty_for_real_endpoint(self) -> None:
         handler = NoirHandler()
@@ -62,15 +60,7 @@ class TestNoirHandlerNormalize:
 
 
 class TestVendorPathFilterAlias:
-    """The parser module re-exports the domain rule under the legacy alias.
-
-    The actual filter now runs at ``iter_oas3_rows`` (application core);
-    the alias survives so any in-tree caller still importing from the
-    parser module keeps working. Direct rule coverage lives in
-    ``tests/unit/domain/test_vendor_filter.py`` and the end-to-end
-    ingest behaviour is covered in
-    ``tests/unit/application/test_oas3_to_findings.py``.
-    """
+    """Vendor-path filtering re-exported under legacy alias."""
 
     _VENDOR_PATHS = [
         "/vendor/lib/router.php",

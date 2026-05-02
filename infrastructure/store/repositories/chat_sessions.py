@@ -1,13 +1,7 @@
-"""ChatSessionRepository — manages the ``chat_sessions`` table (Phase 8.1).
+"""Create, retrieve, and delete chat sessions scoped to a project.
 
-Each row represents one persistent UI chat session for a project.
-Sessions are ``active`` while ``expired_at`` is NULL and become read-only
-``expired`` archives once any scan run completes for the project (sealing
-is wired in Phase 8.10).
-
-Hard delete only: ``delete()`` removes the session and cascades to
-``chat_messages`` via ``ON DELETE CASCADE`` (FK enforcement is enabled
-at connection init via ``PRAGMA foreign_keys=ON``).
+Sessions are active while expired_at is NULL. Deletion cascades to
+chat_messages via foreign-key constraint.
 """
 
 from __future__ import annotations
@@ -24,14 +18,11 @@ if TYPE_CHECKING:
 
 
 class ChatSessionRepository(ChatSessionRepositoryPort):
-    """CRUD + retention helpers for the project-scoped ``chat_sessions`` table."""
+    """Create, read, and delete project-scoped chat sessions."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
     def create(self, *, project_id: int, title: str) -> int:
         now = datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
@@ -76,9 +67,6 @@ class ChatSessionRepository(ChatSessionRepositoryPort):
         with self._factory.connect() as conn:
             conn.execute("DELETE FROM chat_sessions WHERE id = ?", (session_id,))
 
-    # ------------------------------------------------------------------
-    # Queries
-    # ------------------------------------------------------------------
     def get(self, session_id: int) -> ChatSessionRow | None:
         with self._factory.connect() as conn:
             row = conn.execute(
@@ -157,9 +145,6 @@ class ChatSessionRepository(ChatSessionRepositoryPort):
             ).fetchall()
         return [_row_to_session(r) for r in rows]
 
-    # ------------------------------------------------------------------
-    # Phase 8.10 — retention sweep
-    # ------------------------------------------------------------------
     def select_for_retention(
         self,
         project_id: int,

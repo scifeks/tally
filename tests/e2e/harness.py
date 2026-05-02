@@ -1,4 +1,4 @@
-"""TallyHarness — drive the tally REPL via a PTY for debugging and e2e tests.
+"""Drive the tally REPL via a PTY for debugging and e2e tests.
 
 Usage (debugging, against the real repo):
 
@@ -38,10 +38,6 @@ from typing import cast
 
 import pexpect
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 TALLY_ROOT = Path(__file__).resolve().parents[2]
 _VENV_PYTHON = TALLY_ROOT / ".venv" / "bin" / "python3"
 _TALLY_SCRIPT = TALLY_ROOT / "tally.py"
@@ -55,19 +51,9 @@ _ANSI = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 PROMPT = r"__TALLY_PROMPT__"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _strip(text: str) -> str:
     """Remove ANSI escape codes and strip surrounding whitespace."""
     return _ANSI.sub("", text).strip()
-
-
-# ---------------------------------------------------------------------------
-# Harness
-# ---------------------------------------------------------------------------
 
 
 class TallyHarness:
@@ -87,10 +73,6 @@ class TallyHarness:
         self.base_path = base_path or TALLY_ROOT
         self.default_timeout = timeout
         self.child: pexpect.spawn | None = None
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
 
     def setup(self) -> None:
         """Prepare an isolated environment under self.base_path.
@@ -164,15 +146,11 @@ class TallyHarness:
     def __exit__(self, *_: object) -> None:
         self.teardown()
 
-    # ------------------------------------------------------------------
-    # Interaction
-    # ------------------------------------------------------------------
-
     def send(self, text: str) -> None:
         """Send a line of text to stdin without waiting for a response.
 
         Use this when the next output is a wizard prompt rather than the
-        REPL prompt — follow it with expect() or expect_prompt().
+        REPL prompt; follow it with expect() or expect_prompt().
         """
         assert self.child is not None, "Call spawn() first"
         self.child.sendline(text)
@@ -205,10 +183,6 @@ class TallyHarness:
         after = _strip(self.child.after if isinstance(self.child.after, str) else "")
         return before + after
 
-    # ------------------------------------------------------------------
-    # Inspection helpers
-    # ------------------------------------------------------------------
-
     def query_db(
         self,
         project: str,
@@ -217,8 +191,8 @@ class TallyHarness:
     ) -> list[dict]:
         """Execute SQL against a project's findings.db.
 
-        Returns a list of dicts (one per row).  The database must exist
-        — run at least one scan first if you need findings data.
+        Returns a list of dicts (one per row). The database must exist;
+        run at least one scan first if you need findings data.
 
         Example:
             rows = h.query_db(

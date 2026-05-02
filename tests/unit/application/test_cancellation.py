@@ -1,4 +1,4 @@
-"""Unit tests for the Phase 5.2 CancellationToken."""
+"""Unit tests for CancellationToken."""
 
 from __future__ import annotations
 

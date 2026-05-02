@@ -15,9 +15,7 @@ from web.adapters.triage_run_registry import get_triage_run_registry
 pytestmark = pytest.mark.integration
 
 
-# ---------------------------------------------------------------------------
 # Fixtures / helpers
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -79,9 +77,7 @@ def _seed_triage_batch(
         return cur.lastrowid
 
 
-# ---------------------------------------------------------------------------
 # GET /triage  (history)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -129,9 +125,7 @@ async def test_history_pagination(app_client) -> None:
     assert body["limit"] == 1
 
 
-# ---------------------------------------------------------------------------
 # GET /triage/{scan_run_id}  (detail)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -171,9 +165,7 @@ async def test_detail_404_when_no_triage_batches(app_client) -> None:
     assert resp.json()["error"]["code"] == "NOT_FOUND"
 
 
-# ---------------------------------------------------------------------------
 # POST /triage  (dispatch)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -202,7 +194,7 @@ async def test_start_triage_rejects_false_acknowledgement(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_start_triage_404_when_no_scan_runs(app_client, monkeypatch) -> None:
-    """If the project has no scan_runs, return 404 — nothing to triage."""
+    """If the project has no scan_runs, return 404; nothing to triage."""
     client, _fid, _rag, factory, mut_headers, project_id = app_client
 
     # Wipe any pre-existing scan_runs so latest_run_id() returns None.
@@ -229,7 +221,7 @@ async def test_start_triage_returns_202_and_acquires_slot(
 
     def fake_start_triage_thread(**kwargs):
         started.update(kwargs)
-        # don't release the lock — worker would normally hold then release
+        # don't release the lock; worker would normally hold then release
 
     monkeypatch.setattr("web.api.triage.start_triage_thread", fake_start_triage_thread)
 
@@ -265,9 +257,7 @@ async def test_start_triage_409_when_busy(app_client, monkeypatch) -> None:
     get_registry().release_job("triage", "test-other-holder")
 
 
-# ---------------------------------------------------------------------------
 # POST /triage/{scan_run_id}/cancel
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -318,9 +308,7 @@ async def test_cancel_active_returns_202_and_sets_token(app_client) -> None:
     assert token.is_set()
 
 
-# ---------------------------------------------------------------------------
 # Lifespan / event-bus
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -333,9 +321,7 @@ async def test_event_bus_has_triage_job_registered(app_client) -> None:
     await bus.unsubscribe("triage", sub_id)
 
 
-# ---------------------------------------------------------------------------
 # Repository helpers (fast unit-style smoke through the integration DB)
-# ---------------------------------------------------------------------------
 
 
 def test_summarize_for_run_empty_returns_none(app_client_sync) -> None:
@@ -398,11 +384,6 @@ def test_cancel_remaining_marks_in_flight(app_client_sync) -> None:
     assert summary.status == "cancelled"
     assert summary.counts_by_status["cancelled"] == 2
     assert summary.counts_by_status["completed"] == 1
-
-
-# ---------------------------------------------------------------------------
-# GET /triage/active  (Phase 6 — Deferred: currently-running)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -479,11 +460,6 @@ async def test_active_filters_other_projects(app_client) -> None:
     assert resp.json() is None
 
 
-# ---------------------------------------------------------------------------
-# GET /triage/latest  (Phase 6 — Deferred: most-recent run summary)
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_latest_404_when_no_history(app_client) -> None:
     client, *_, project_id = app_client
@@ -507,11 +483,6 @@ async def test_latest_returns_newest_run(app_client) -> None:
     assert body["project_id"] == project_id
     assert body["status"] == "running"
     assert body["total_findings"] == 2
-
-
-# ---------------------------------------------------------------------------
-# POST /triage/{scan_run_id}/resume  (Phase 6 — Deferred: explicit resume)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -619,9 +590,7 @@ async def test_resume_202_dispatches_with_explicit_scan_run_id(
     assert started["is_resume"] is True
 
 
-# ---------------------------------------------------------------------------
 # Repository: reset_for_resume
-# ---------------------------------------------------------------------------
 
 
 def test_reset_for_resume_flips_in_progress_and_failed(app_client_sync) -> None:

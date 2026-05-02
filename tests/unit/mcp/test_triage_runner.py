@@ -80,7 +80,13 @@ def _make_runner(
 
     triage_agent = agent if agent is not None else _StubTriageAgent(result=_ok_result())
     runner = TriageRunner(
-        project, store, store, store, tmp_path, triage_agent=triage_agent
+        project,
+        store,
+        store,
+        store,
+        tmp_path,
+        triage_agent=triage_agent,
+        session_timeout_seconds=300,
     )
     return runner, store, triage_agent  # type: ignore[return-value]
 
@@ -114,9 +120,7 @@ def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow
     )
 
 
-# ---------------------------------------------------------------------------
 # batch()
-# ---------------------------------------------------------------------------
 
 
 def test_batch_resets_stale_before_creating(tmp_path: Path) -> None:
@@ -188,9 +192,7 @@ def test_batch_error_raises_runtime_error(tmp_path: Path) -> None:
         runner.batch()
 
 
-# ---------------------------------------------------------------------------
 # _run_session()
-# ---------------------------------------------------------------------------
 
 
 def test_run_session_success(tmp_path: Path) -> None:
@@ -258,9 +260,7 @@ def test_run_session_passes_prompt_timeout_and_cwd_to_agent(tmp_path: Path) -> N
     assert cwd == tmp_path
 
 
-# ---------------------------------------------------------------------------
 # run()
-# ---------------------------------------------------------------------------
 
 
 def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
@@ -337,9 +337,7 @@ def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
     assert not (tmp_path / ".mcp.json").exists()
 
 
-# ---------------------------------------------------------------------------
 # run_dry_run()
-# ---------------------------------------------------------------------------
 
 
 def test_run_dry_run_calls_batch(tmp_path: Path) -> None:
@@ -418,9 +416,7 @@ def test_run_dry_run_does_not_start_mcp(tmp_path: Path) -> None:
     mock_write.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # _run_batch_loop()
-# ---------------------------------------------------------------------------
 
 
 def _make_nmap_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow:

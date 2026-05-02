@@ -1,16 +1,10 @@
 """Web adapter: project ScanEvents onto the async EventBus.
 
-Phase 5.2: scans run on a worker ``threading.Thread`` separate from the
-FastAPI asyncio loop, so we use ``publish_threadsafe`` to hop back into
-the bus's loop. Adapters never raise — bus publish failures (closed
-job, disconnected loop) are swallowed so a scan never fails because
-nothing is listening.
-
-The ``stream`` field on ``BusEvent`` is a ``Literal`` that already
-includes ``"scan"`` (see ``infrastructure/events/types.py``). All scan
-events publish under ``job_id="scan"`` so a single SSE subscriber on
-that job receives the full lifecycle stream and filters by
-``payload['project_id']`` / ``payload['run_id']``.
+Scans run on a worker thread separate from the FastAPI asyncio loop, so
+``publish_threadsafe`` hops back into the bus's loop. Bus publish failures
+are swallowed so a scan never fails when nothing listens. All scan events
+publish under ``job_id="scan"`` so a single SSE subscriber receives the
+full lifecycle stream.
 """
 
 from __future__ import annotations

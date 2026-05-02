@@ -1,9 +1,9 @@
-"""Integration tests for the Phase 8.4 / 8.5 chat session endpoints.
+"""Integration tests for chat session endpoints.
 
 Covers:
 
-- ``POST /api/v1/projects/{id}/chat/sessions`` — auth + CSRF + title.
-- ``GET  /api/v1/projects/{id}/chat/sessions`` — pagination + ordering.
+- ``POST /api/v1/projects/{id}/chat/sessions``: auth, CSRF, title.
+- ``GET  /api/v1/projects/{id}/chat/sessions``: pagination, ordering.
 """
 
 from __future__ import annotations
@@ -36,9 +36,7 @@ def _seed_session(
     return sid
 
 
-# ---------------------------------------------------------------------------
 # POST /chat/sessions  (8.4)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -126,9 +124,7 @@ async def test_create_session_unauthenticated_is_unauthorized(tmp_path) -> None:
     assert resp.status_code == 401
 
 
-# ---------------------------------------------------------------------------
 # GET /chat/sessions  (8.5)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

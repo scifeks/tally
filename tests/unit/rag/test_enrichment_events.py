@@ -91,7 +91,7 @@ def test_emission_carries_project_and_run_ids() -> None:
     )
 
     # Stub _get_enrichment_plan to return a single legacy field, and
-    # _call_llm_worker to return a valid dict — keeps Phase 2 simple.
+    # _call_llm_worker to return a valid dict; keeps Phase 2 simple.
     pipeline._get_enrichment_plan = lambda row: (["title"], None)  # type: ignore[method-assign]
     pipeline._call_llm_worker = lambda *a, **kw: {"title": "x"}  # type: ignore[method-assign]
 

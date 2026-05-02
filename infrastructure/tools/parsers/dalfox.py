@@ -23,9 +23,7 @@ _TYPE_CONFIDENCE: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Parse functions
-# ---------------------------------------------------------------------------
 
 
 def parse_dalfox_json(json_path: Path) -> dict[str, Any]:
@@ -61,9 +59,7 @@ def parse_dalfox_json_string(json_string: str) -> dict[str, Any]:
     return _parse_dalfox_data(data)
 
 
-# ---------------------------------------------------------------------------
 # Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
@@ -110,9 +106,7 @@ def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Handler
-# ---------------------------------------------------------------------------
 
 
 class DalFoxHandler:

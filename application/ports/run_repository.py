@@ -1,10 +1,7 @@
-"""Persistence port for the ``scan_runs`` and ``run_tools`` tables.
+"""Persistence port for the scan_runs and run_tools tables.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.runs.RunRepository``. Read methods
-return domain row dataclasses (``domain.scans.entry.ScanRunRow`` /
-``ToolRunRow``) so the port boundary stays free of infrastructure
-dataclasses.
+Read methods return domain row dataclasses. The port boundary stays free
+of infrastructure dataclasses.
 """
 
 from __future__ import annotations

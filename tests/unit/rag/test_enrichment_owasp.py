@@ -1,4 +1,4 @@
-"""Unit tests for owasp_name enrichment — native Semgrep mapping and validation."""
+"""Unit tests for owasp_name enrichment. Native Semgrep mapping and validation."""
 
 from __future__ import annotations
 
@@ -11,9 +11,7 @@ from application.rag.enrichment import EnrichmentPipeline
 from domain.tools.base import ToolResult
 from infrastructure.tools.parsers.semgrep import SemgrepHandler
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_semgrep_result(owasp: object = None) -> ToolResult:
@@ -47,9 +45,7 @@ def _pipeline() -> EnrichmentPipeline:
     return EnrichmentPipeline(finding_repo=MagicMock())
 
 
-# ---------------------------------------------------------------------------
 # Native Semgrep mapping
-# ---------------------------------------------------------------------------
 
 
 class TestSemgrepNativeMapping:
@@ -123,9 +119,7 @@ class TestSemgrepNativeMapping:
         assert isinstance(parsed, list)
 
 
-# ---------------------------------------------------------------------------
 # Enrichment pipeline: owasp_name in fields_to_enrich
-# ---------------------------------------------------------------------------
 
 
 class TestGetFieldsToEnrich:
@@ -182,9 +176,7 @@ class TestGetFieldsToEnrich:
         assert "owasp_name" in fields
 
 
-# ---------------------------------------------------------------------------
 # Enrichment pipeline: _validate_response
-# ---------------------------------------------------------------------------
 
 
 class TestValidateResponseOwaspName:
@@ -210,7 +202,7 @@ class TestValidateResponseOwaspName:
         assert "owasp_name" not in result
 
     def test_owasp_code_rejected(self) -> None:
-        """LLM should return the Name, not the code — reject codes."""
+        """LLM should return the Name, not the code; reject codes."""
         pipeline = _pipeline()
         result = pipeline._validate_response({"owasp_name": "A03:2021"}, ["owasp_name"])
         assert "owasp_name" not in result

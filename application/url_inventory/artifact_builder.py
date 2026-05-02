@@ -1,14 +1,10 @@
-"""Artifact builder — rebuild merged seeds.txt and merged_oas3.json from DB.
+"""Rebuild merged seeds.txt and merged_oas3.json from the URL inventory DB.
 
-Phase 9 replaces the file-merge model (read multiple OAS3 source files +
-emit one merged file per repo) with a DB-rebuild model: ``url_findings``
-rows are the source of truth, the on-disk artifacts are derived
-just-in-time before each scan tool that needs them.
-
-For OAS3 reconstruction, each row's ``meta.original_file`` carries the
-source-format fragment (an OAS3 operation object, a HAR entry, a Postman
-request) so we can faithfully rebuild the merged document without
-re-reading the user-uploaded source files.
+The ``url_findings`` table is the source of truth; on-disk artifacts are
+derived just-in-time before each scan tool that needs them. Each row's
+``meta.original_file`` carries the source-format fragment (an OAS3 operation
+object, a HAR entry, a Postman request) so the merged document can be
+rebuilt faithfully without re-reading the user-uploaded source files.
 """
 
 from __future__ import annotations

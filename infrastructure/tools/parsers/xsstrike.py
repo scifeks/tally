@@ -51,9 +51,7 @@ _RETIREJS_CVE_RE = re.compile(r"plugins\.retireJs\s+-\s+INFO\s+-\s+CVE:\s*(.+)")
 _RETIREJS_ANY_RE = re.compile(r"plugins\.retireJs\s+-\s+")
 
 
-# ---------------------------------------------------------------------------
 # Parse functions
-# ---------------------------------------------------------------------------
 
 
 def parse_xsstrike_log(log_path: Path) -> dict[str, Any]:
@@ -77,9 +75,7 @@ def parse_xsstrike_log_string(text: str) -> dict[str, Any]:
     return _parse_xsstrike_lines(lines)
 
 
-# ---------------------------------------------------------------------------
 # Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _strip_ansi(line: str) -> str:
@@ -111,7 +107,7 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
         # --- retireJs block parsing ---
         component_match = _RETIREJS_COMPONENT_RE.search(line)
         if component_match:
-            # New component block — flush any previous pending block first.
+            # New component block; flush any previous pending block first.
             _flush_retirejs(pending_retirejs, component_findings)
             raw_component = component_match.group(1).strip()
             # Split "jquery v3.2.1" → name="jquery", version="3.2.1"
@@ -125,7 +121,7 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
             continue
 
         if _RETIREJS_ANY_RE.search(line):
-            # We're inside a retireJs block — accumulate fields.
+            # We're inside a retireJs block; accumulate fields.
             loc_match = _RETIREJS_LOCATION_RE.search(line)
             if loc_match:
                 pending_retirejs["component_location"] = loc_match.group(1).strip()
@@ -146,11 +142,11 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
                 pending_retirejs["cve"] = cve_match.group(1).strip()
                 continue
 
-            # Other retireJs INFO lines (e.g. "Total vulnerabilities:") —
-            # ignore but stay in block.
+            # Other retireJs INFO lines (e.g. "Total vulnerabilities:").
+            # Ignore but stay in block.
             continue
 
-        # Non-retireJs line — flush any open retireJs block.
+        # Non-retireJs line; flush any open retireJs block.
         if pending_retirejs:
             _flush_retirejs(pending_retirejs, component_findings)
             pending_retirejs = {}
@@ -204,9 +200,7 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Handler
-# ---------------------------------------------------------------------------
 
 
 class XSSTrikeHandler:

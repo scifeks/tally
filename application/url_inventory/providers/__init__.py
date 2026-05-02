@@ -1,4 +1,4 @@
-"""URL list providers (Phase 9 Step 4)."""
+"""URL list providers."""
 
 from application.url_inventory.providers.katana import KatanaProvider
 from application.url_inventory.providers.noir import NoirProvider

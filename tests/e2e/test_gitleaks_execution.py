@@ -24,11 +24,6 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 slow = pytest.mark.slow
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _write_global_config(base_path: Path) -> None:
     real_config = _TALLY_ROOT / "config" / "global.json"
     if not real_config.exists():
@@ -109,9 +104,7 @@ def _run_scan(
     )
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -128,9 +121,7 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-# ---------------------------------------------------------------------------
 # Scenario 3 – Gitleaks scan execution  (@requires_gitleaks @slow)
-# ---------------------------------------------------------------------------
 
 
 @requires_gitleaks

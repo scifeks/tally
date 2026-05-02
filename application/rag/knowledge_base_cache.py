@@ -1,9 +1,7 @@
 """Per-project FindingKnowledgeBase cache lookup.
 
-Resolves the project-scoped knowledge base, building one on first access
-and reusing the cached instance on subsequent calls. Adapters (web,
-REPL) own the cache dict; this helper is the single place that knows
-how to build a knowledge base from infrastructure factories.
+Builds and caches knowledge bases on first access; adapters own the
+cache dict and call this helper as the single construction point.
 """
 
 from __future__ import annotations

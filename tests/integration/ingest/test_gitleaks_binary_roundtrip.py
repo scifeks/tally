@@ -69,7 +69,7 @@ def _make_gitleaks_result(
 
 @requires_gitleaks
 class TestGitleaksBinaryRoundTrip:
-    """Full chain: gitleaks binary → JSON → parser → normalize().
+    """Full chain: gitleaks binary to JSON to parser to normalize().
 
     These tests verify that field mappings are not broken end-to-end.
     They require ``gitleaks`` in PATH and are skipped otherwise.
@@ -94,7 +94,7 @@ class TestGitleaksBinaryRoundTrip:
             capture_output=True,
             cwd=str(repo),
         )
-        assert out.exists(), "gitleaks produced no output file — no findings detected"
+        assert out.exists(), "gitleaks produced no output file; no findings detected"
         raw = json.loads(out.read_text())
         assert len(raw) > 0, "Expected at least one finding from the synthetic repo"
 

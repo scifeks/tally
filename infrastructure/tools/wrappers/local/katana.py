@@ -1,4 +1,4 @@
-"""Katana local wrapper — runtime URL discovery via live crawling.
+"""Katana local wrapper for runtime URL discovery via live crawling.
 
 Invocation pattern
 ------------------
@@ -128,9 +128,9 @@ class KatanaLocalTool(BaseKatanaTool):
         except Exception:
             return None
 
-    # Hardcoded crawl ceilings — these prevent infinite/multi-hour hangs when
-    # headless Chrome stalls on a single page or cyclic parameterised routes
-    # produce near-unbounded link graphs.
+    # Crawl ceilings prevent infinite/multi-hour hangs when headless Chrome
+    # stalls on a single page or cyclic parameterised routes produce
+    # near-unbounded link graphs.
     _CRAWL_TIMEOUT_SECS = 15  # per-request HTTP timeout
     _CRAWL_CONCURRENCY = 10  # parallel browser/HTTP workers (-c)
     _CRAWL_PARALLELISM = 10  # parallel URL processing (-p)
@@ -183,7 +183,7 @@ class KatanaLocalTool(BaseKatanaTool):
             "-xhr",
             "-j",
             "-o", output_file,
-            # Hard ceilings — prevent infinite crawls on cyclic/parameterised apps
+            # Ceiling to prevent infinite crawls on cyclic/parameterised apps
             "-ct", str(max_duration),
             "-timeout", str(self._CRAWL_TIMEOUT_SECS),
             "-c", str(self._CRAWL_CONCURRENCY),
@@ -275,7 +275,7 @@ class KatanaLocalTool(BaseKatanaTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for Katana.
 
-        Skips (returns []) when ``repo.base_urls`` is empty — the generic
+        Skips (returns []) when ``repo.base_urls`` is empty; the generic
         orchestrator skip handles this, but we guard explicitly for safety.
         """
         assert context.repo is not None
@@ -283,7 +283,7 @@ class KatanaLocalTool(BaseKatanaTool):
 
         if not repo.base_urls:
             logger.info(
-                "Katana: no base_urls configured for %s — skipping",
+                "Katana: no base_urls configured for %s; skipping",
                 repo.name,
             )
             return []

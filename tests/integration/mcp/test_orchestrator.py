@@ -22,9 +22,7 @@ from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _init_store(db_path: Path) -> None:
@@ -38,7 +36,7 @@ def _seed_scan_run(db_path: Path) -> None:
 
     Phase 6: triage runs against the latest scan_run; the runner raises
     NoScanRunError if no scan_runs exist. These integration tests don't
-    care which scan_run id is used — they just need the lookup to
+    care which scan_run id is used; they just need the lookup to
     return something non-None.
     """
     conn = sqlite3.connect(str(db_path))
@@ -98,9 +96,7 @@ def _insert_audit_row(db_path: Path, tool_name: str, called_at: str) -> None:
     conn.close()
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -114,9 +110,7 @@ def project_db(tmp_path: Path):
     return project, tmp_path, db
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _run_with_root(project: str, tmp_root: Path) -> dict:
@@ -125,9 +119,7 @@ def _run_with_root(project: str, tmp_root: Path) -> dict:
         return run_triage(project)
 
 
-# ---------------------------------------------------------------------------
 # Tests
-# ---------------------------------------------------------------------------
 
 
 def test_all_skip_tools(project_db, caplog) -> None:
@@ -267,9 +259,7 @@ def test_standalone_import() -> None:
     assert callable(application.triage.orchestrator.run_triage)
 
 
-# ---------------------------------------------------------------------------
 # Batching phase tests
-# ---------------------------------------------------------------------------
 
 
 def test_stale_batches_for_current_run_are_reset(project_db) -> None:
@@ -366,7 +356,7 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
         db,
         [
             ("semgrep", "repo1", "sast"),
-            ("semgrep", "repo1", "sast"),  # duplicate — same combo
+            ("semgrep", "repo1", "sast"),  # duplicate; same combo
             ("zap", "repo1", "api"),
         ],
     )

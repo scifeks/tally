@@ -24,7 +24,7 @@ _KEY_MAP: dict[str, tuple[str, bool]] = {
     # Global
     "tool": ("tool", False),
     "domain": ("domain", False),
-    # "type" is handled specially — not in this dict
+    # "type" is handled specially; not in this dict
     "severity": ("severity", False),
     "confidence": ("confidence", False),
     "risk_type": ("risk_type", False),

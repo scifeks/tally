@@ -1,10 +1,10 @@
-"""Unit tests for ScanService — the single core port for starting a scan.
+"""Unit tests for ScanService. The single core port for starting a scan.
 
 The lock contract that previously lived in ScanOrchestrator now lives
 here: ScanService.start_scan acquires the Tier-1 ``scan`` slot in the
 calling thread (so JobBusy raises synchronously), creates the
 scan_runs row, and dispatches a worker thread. These tests cover the
-synchronous portion only — the worker is monkeypatched to a no-op so
+synchronous portion only; the worker is monkeypatched to a no-op so
 the lock stays held and we can assert behaviour cleanly.
 """
 

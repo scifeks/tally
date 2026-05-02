@@ -75,6 +75,9 @@ def run_triage_for_project(
     from infrastructure.store import make_store
 
     run_repo, _, triage_repo, audit_repo = make_store(root, project)
+    from application.config.mcp_defaults import load_mcp_defaults
+
+    _, _, session_timeout_seconds = load_mcp_defaults(str(root))
     runner = TriageRunner(
         project,
         run_repo,
@@ -86,6 +89,7 @@ def run_triage_for_project(
         project_id=project_id,
         scan_run_id=scan_run_id,
         triage_agent=ClaudeTriageAgent(),
+        session_timeout_seconds=session_timeout_seconds,
     )
     return dataclasses.asdict(_retry_once(runner.run))
 
@@ -119,6 +123,9 @@ def resume_triage_for_project(
 
     run_repo, _, triage_repo, audit_repo = make_store(root, project)
     triage_repo.reset_for_resume(scan_run_id)
+    from application.config.mcp_defaults import load_mcp_defaults
+
+    _, _, session_timeout_seconds = load_mcp_defaults(str(root))
     runner = TriageRunner(
         project,
         run_repo,
@@ -130,6 +137,7 @@ def resume_triage_for_project(
         project_id=project_id,
         scan_run_id=scan_run_id,
         triage_agent=ClaudeTriageAgent(),
+        session_timeout_seconds=session_timeout_seconds,
     )
     return dataclasses.asdict(_retry_once(runner.run))
 

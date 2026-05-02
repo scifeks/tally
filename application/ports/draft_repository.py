@@ -1,12 +1,7 @@
-"""Persistence port for the ``drafts`` table.
+"""Persistence port for the drafts table.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.drafts.DraftRepository``. Read
-methods return ``domain.reports.entry.DraftRow`` so the port boundary
-stays free of infrastructure dataclasses.
-
-A row's absence represents the ``not_generated`` state; ``get`` and
-``list_all`` reflect the persisted rows only.
+Read methods return DraftRow. A row's absence represents the not_generated
+state.
 """
 
 from __future__ import annotations

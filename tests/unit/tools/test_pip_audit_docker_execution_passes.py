@@ -61,7 +61,7 @@ def _make_context(repo: Repository, docker_path: str) -> ExecutionContext:
 
 class TestPipAuditDockerExecutionPasses:
     def test_cwd_is_none(self) -> None:
-        """Docker tools must not set cwd — the container path is not a local path."""
+        """Docker tools must not set cwd; the container path is not a local path."""
         repo = _make_repo("/llm/code/repos/python/dvpwa", "/app")
         ctx = _make_context(repo, "/app")
         tool = PipAuditDockerTool(_make_config())

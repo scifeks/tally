@@ -27,16 +27,14 @@ class ReportCommand:
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
 
-    # ------------------------------------------------------------------
     # Command entry point
-    # ------------------------------------------------------------------
 
     def execute(self, _cmd: str, args: list[str]) -> None:
         """Dispatch report subcommands: draft, shell, or full report (PDF default)."""
         if args and args[0] == "assemble":
             self.repl.console.print(
                 "[yellow]'report assemble' has been removed.[/yellow] "
-                "Use [cyan]report[/cyan] instead — PDF is now the default format."
+                "Use [cyan]report[/cyan] instead. PDF is now the default format."
             )
             return
         if args and args[0] == "draft":
@@ -47,9 +45,7 @@ class ReportCommand:
             return
         self._cmd_full_report(args)
 
-    # ------------------------------------------------------------------
     # Subcommands
-    # ------------------------------------------------------------------
 
     def _cmd_assemble(self, args: list[str]) -> None:
         """report assemble [--testing-type <type>]
@@ -63,16 +59,23 @@ class ReportCommand:
         Testing types: white_box, grey_box, black_box (default: white_box).
         Default output: projects/<project>/report/<project>-report.pdf.
         """
+        from application.ports.pdf_renderer import PdfRenderError
         from application.repl.adapters.rich_console_prompt import (
             RichConsolePromptAdapter,
         )
+        from application.reporting.assembler import TEMPLATES_DIR
         from application.reporting.orchestrator import (
             ReportOverwriteDenied,
             ReportRequest,
             run_report,
         )
-        from application.reporting.pdf import PDFRenderError
         from application.reporting.resolver import SectionMissingError
+        from infrastructure.reporting.jinja2_template_renderer import (
+            Jinja2TemplateRenderer,
+        )
+        from infrastructure.reporting.weasyprint_pdf_renderer import (
+            WeasyPrintPdfRenderer,
+        )
 
         testing_type, args = self._parse_value_flag(args, "--testing-type")
         engagement_date, args = self._parse_value_flag(args, "--engagement-date")
@@ -113,11 +116,16 @@ class ReportCommand:
         )
         try:
             with self.repl.console.status("Rendering PDF..."):
-                run_report(request, prompt=RichConsolePromptAdapter())
+                run_report(
+                    request,
+                    prompt=RichConsolePromptAdapter(),
+                    template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
+                    pdf_renderer=WeasyPrintPdfRenderer(),
+                )
         except SectionMissingError as exc:
             self.repl.console.print(f"[red]Section missing:[/red] {exc}")
             return
-        except PDFRenderError as exc:
+        except PdfRenderError as exc:
             self.repl.console.print(f"[red]PDF render error:[/red] {exc}")
             return
         except ReportOverwriteDenied as exc:
@@ -287,9 +295,15 @@ class ReportCommand:
         """
         from pathlib import Path
 
-        from application.reporting.assembler import ReportAssembler
-        from application.reporting.pdf import PDFRenderError
+        from application.ports.pdf_renderer import PdfRenderError
+        from application.reporting.assembler import TEMPLATES_DIR, ReportAssembler
         from application.reporting.resolver import SectionMissingError
+        from infrastructure.reporting.jinja2_template_renderer import (
+            Jinja2TemplateRenderer,
+        )
+        from infrastructure.reporting.weasyprint_pdf_renderer import (
+            WeasyPrintPdfRenderer,
+        )
 
         testing_type, args = self._parse_value_flag(args, "--testing-type")
         engagement_date, args = self._parse_value_flag(args, "--engagement-date")
@@ -313,6 +327,8 @@ class ReportCommand:
             project=self.repl.active_project,
             base_path=self.repl.base_path,
             prompt=RichConsolePromptAdapter(),
+            template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
+            pdf_renderer=WeasyPrintPdfRenderer(),
             testing_type=testing_type,
             engagement_date=engagement_date,
         )
@@ -326,16 +342,14 @@ class ReportCommand:
         try:
             with self.repl.console.status("Rendering PDF..."):
                 pdf_bytes = assembler.render_pdf(context)
-        except PDFRenderError as exc:
+        except PdfRenderError as exc:
             self.repl.console.print(f"[red]PDF render error:[/red] {exc}")
             return
 
         Path(output_path).write_bytes(pdf_bytes)
         self.repl.console.print(f"[green]Shell report saved:[/green] {output_path}")
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _check_drafts_present(self) -> bool:
         """Return True if every draft section has at least a draft or reviewed file.

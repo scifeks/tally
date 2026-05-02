@@ -13,9 +13,7 @@ from infrastructure.tools.parsers.noir import (
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
 
 
-# ---------------------------------------------------------------------------
-# parse_noir_json_string — edge cases
-# ---------------------------------------------------------------------------
+# parse_noir_json_string: edge cases
 
 
 class TestParseNoirJsonString:
@@ -60,9 +58,7 @@ class TestParseNoirJsonString:
         assert result["endpoints"] == []
 
 
-# ---------------------------------------------------------------------------
 # Endpoint extraction
-# ---------------------------------------------------------------------------
 
 
 class TestEndpointExtraction:
@@ -194,9 +190,7 @@ class TestEndpointExtraction:
         assert result["summary"]["total_endpoints"] == 1
 
 
-# ---------------------------------------------------------------------------
-# parse_noir_json — file-based path
-# ---------------------------------------------------------------------------
+# parse_noir_json: file-based path
 
 
 class TestParseNoirJsonFile:
@@ -223,9 +217,7 @@ class TestParseNoirJsonFile:
         assert result["endpoints"] == []
 
 
-# ---------------------------------------------------------------------------
 # Fixture-based smoke test
-# ---------------------------------------------------------------------------
 
 
 class TestFixtureIntegrity:

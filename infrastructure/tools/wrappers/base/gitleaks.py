@@ -62,7 +62,7 @@ class BaseGitleaksTool(ToolInterface):
 
     @property
     def timeout(self) -> int:
-        return 7200  # 2 hours — large repos with deep git history can be slow
+        return 7200  # Large repos with deep history may be slow
 
     @property
     def candidate_commands(self) -> list[str]:
@@ -78,9 +78,9 @@ class BaseGitleaksTool(ToolInterface):
         exclude = build_excluded_dirs(context.repo)
 
         shared_kwargs: dict[str, object] = {"repo_path": repo_path}
-        # Always exclude .git — the dir scan is a plain filesystem walk and
-        # would otherwise crawl .git/objects/pack files (potentially GBs of
-        # binary data). The git pass handles history via git's own traversal.
+        # Always exclude .git because the dir scan is a plain filesystem walk
+        # that would crawl .git/objects/pack (potentially GBs of binary data).
+        # The git pass handles history via git's own traversal.
         all_excludes = [".git"] + exclude
         patterns = "\n".join(f"**/{d}" for d in all_excludes) + "\n"
         if context.repo.docker_path and context.repo.path:

@@ -13,23 +13,21 @@ type JobKind = Literal["scan", "triage", "report"]
 class LockRegistry:
     """Process-global two-tier in-memory lock registry.
 
-    Tier 1 — Job slots: at most one of ``scan`` / ``triage`` / ``report``
-    active at a time. Starting a second instance of the same kind fails fast.
+    Tier 1 (job slots): at most one ``scan``, ``triage``, or ``report``
+    runs at a time. A second start of the same kind fails fast.
 
-    Tier 2 — Finding-id registry: atomic all-or-nothing acquisition over a
-    set of finding ids, sorted ascending to prevent ordering-based deadlocks.
+    Tier 2 (finding ids): atomic all-or-nothing claim over a set of ids,
+    sorted ascending so callers cannot deadlock by acquiring in different
+    orders.
 
-    A single ``threading.Lock`` guards both tiers. All public methods are
-    synchronous. Async callers wrap at the adapter boundary via
-    ``asyncio.to_thread`` if needed.
+    A single ``threading.Lock`` guards both tiers. Public methods are sync;
+    async callers wrap at the adapter boundary with ``asyncio.to_thread``.
     """
 
     def __init__(self) -> None:
         self._guard = threading.Lock()
         self._jobs: dict[str, str] = {}  # kind -> holder_token
         self._findings: dict[int, str] = {}  # finding_id -> holder_token
-
-    # ── Tier 1: job slots ────────────────────────────────────────────────────
 
     def acquire_job(self, kind: JobKind, holder_token: str) -> None:
         """Claim the single slot for *kind*. Raises :exc:`JobBusy` if held."""
@@ -55,8 +53,6 @@ class LockRegistry:
         """Return the current holder token for *kind*, or ``None``."""
         with self._guard:
             return self._jobs.get(kind)
-
-    # ── Tier 2: finding-id set ───────────────────────────────────────────────
 
     def acquire_findings(
         self,
@@ -130,8 +126,6 @@ class LockRegistry:
                 actual=actual or "<not held>",
             )
 
-    # ── Context managers ─────────────────────────────────────────────────────
-
     @contextmanager
     def job(self, kind: JobKind, holder_token: str) -> Iterator[None]:
         """Acquire a Tier-1 job slot and release it on context exit."""
@@ -155,8 +149,6 @@ class LockRegistry:
         finally:
             self.release_findings(ids, holder_token)
 
-    # ── Test fixture support ──────────────────────────────────────────────────
-
     def snapshot(self) -> tuple[dict[str, str], dict[int, str]]:
         """Return a shallow copy of current registry state for test isolation."""
         with self._guard:
@@ -177,8 +169,6 @@ class LockRegistry:
             self._jobs.clear()
             self._findings.clear()
 
-
-# ── Process-global singleton ──────────────────────────────────────────────────
 
 _registry: LockRegistry | None = None
 

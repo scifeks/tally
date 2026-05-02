@@ -1,4 +1,4 @@
-"""ProgressReporter — port for human-readable tool execution progress.
+"""Port for human-readable tool execution progress.
 
 Adapters:
   application/repl/adapters/stdout_progress_reporter.py  (REPL: stdout)

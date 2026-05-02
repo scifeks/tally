@@ -1,4 +1,4 @@
-"""Unit tests for Phase 5.2 ScanOrchestrator persistence + event emission."""
+"""Unit tests for ScanOrchestrator persistence and event emission."""
 
 from __future__ import annotations
 

@@ -258,17 +258,14 @@ async def _stream_tokens(
     )
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _retrieve_context(retriever: ChatRetriever, user_message: str) -> str:
     """Run per-turn retrieval; return formatted context lines or ''.
 
     Retrieval errors are logged and treated as "no context" rather than
-    failing the chat: the model can still answer from the conversation
-    state. Mirrors the defensive try/except in ``draft_orchestrator``.
+    failing the chat: the model can still answer from conversation state.
     """
     try:
         results = retriever.search(user_message, n_results=RETRIEVAL_N_RESULTS)

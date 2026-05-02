@@ -1,4 +1,4 @@
-"""Integration tests for IngestHandler — Phase 2 SQLite-first pipeline."""
+"""Integration tests for IngestHandler SQLite-first pipeline."""
 
 from __future__ import annotations
 

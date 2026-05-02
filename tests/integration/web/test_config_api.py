@@ -1,4 +1,4 @@
-"""Tests for GET /api/v1/config/field-specs — field configuration endpoint."""
+"""Tests for GET /api/v1/config/field-specs field configuration endpoint."""
 
 from __future__ import annotations
 

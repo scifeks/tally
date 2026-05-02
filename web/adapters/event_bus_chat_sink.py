@@ -1,26 +1,13 @@
-"""Web adapter: project ChatEvents onto the async EventBus (Phase 8.8).
+"""Web adapter: project ChatEvents onto the async EventBus.
 
 The chat application service emits domain ``ChatEvent``s through the
-``ChatStreamSink`` port (sync ``emit``). This adapter projects each
-event into a :class:`BusEvent` on the process-singleton :class:`EventBus`
-under ``stream="chat"`` so the SSE endpoint can fan it out to the SPA.
-
-Unlike the report / scan / triage runners (which are daemon threads),
-``application.chat.service.stream_chat`` is an async generator running
-on the FastAPI event loop. ``EventBus.publish_threadsafe`` is implemented
-via :func:`asyncio.run_coroutine_threadsafe`, which is safe from the
-same loop, so the sink can stay sync to match the Phase 8.2 port. The
-bus publish failure is swallowed (``contextlib.suppress``) so chat
-streaming never fails because nothing is listening.
-
-Field projection mirrors ``endpoints.md §15.4`` with two deliberate
-remaps: ``assistant_message_id -> message_id`` for the public payload
-shape, and ``ChatToken.token -> chunk`` so the wire payload does not
-collide with the ``token`` key in
-``infrastructure.security.redaction.SENSITIVE_KEYS`` (which would
-otherwise replace each LLM chunk with ``***REDACTED***`` at
-``format_sse_frame``). ``ChatStreamCompleted.content`` projects
-through unchanged.
+``ChatStreamSink`` port. This adapter projects each event into a
+:class:`BusEvent` on the process-singleton :class:`EventBus` under
+``stream="chat"`` so the SSE endpoint can fan it out to the SPA.
+Two deliberate field remaps occur: ``assistant_message_id`` to
+``message_id`` for the public payload shape, and ``ChatToken.token``
+to ``chunk`` to avoid collision with the ``token`` key in sensitive
+keys.
 """
 
 from __future__ import annotations
@@ -46,14 +33,11 @@ CHAT_STREAM = "chat"
 
 
 def _payload_for(event: ChatEvent) -> dict[str, Any]:
-    """Project a ChatEvent into the §15.4 SSE payload mapping.
+    """Project a ChatEvent into an SSE payload mapping.
 
-    Common fields: ``session_id``, ``project_id`` (kept for SSE filter),
-    ``message_id`` (= ``assistant_message_id`` — populated only on
-    ``stream_end``), ``user_message_id`` (kept for snapshot use).
-    Per-type extras: ``chunk`` (token chunk text), ``content`` (full
-    assistant turn), ``error`` + ``message`` (failure / cancellation
-    detail).
+    Common fields: ``session_id``, ``project_id``, ``message_id``
+    (from ``assistant_message_id``), ``user_message_id``. Per-type
+    extras: ``chunk``, ``content``, ``error``, ``message``.
     """
     base: dict[str, Any] = {
         "session_id": event.session_id,

@@ -69,7 +69,7 @@ class RepoSegmentScan(ScanType):
         repos = load_active_repos(config.base_path, config.project_name)
         if not repos:
             resources.display.print_status(
-                "[yellow]No repositories configured — skipping[/yellow]"
+                "[yellow]No repositories configured; skipping[/yellow]"
             )
             return ScanSummary(
                 total_tools_run=0,

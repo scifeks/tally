@@ -1,16 +1,10 @@
-"""ChatRunRegistry — process-singleton tracking active chat streams (Phase 8.8).
+"""Process-singleton tracking active chat streams.
 
-Mirrors :class:`web.adapters.report_run_registry.ReportRunRegistry` but
-holds an :class:`asyncio.Task` per in-flight stream rather than a
-``CancellationToken``. Chat cancellation flows through standard asyncio
-task cancellation (ADR-0017 D7): the cancel handler in Phase 8.9 looks
-up the task by ``session_id`` and calls ``task.cancel()``.
-
-Unlike reports / scans / triage, chat is **not** gated by a Tier-1
-``LockRegistry`` slot — the API allows multiple sessions to stream
-concurrently across projects. The implicit lock is "one in-flight
-stream per ``session_id``"; Phase 8.8's POST handler enforces it by
-checking ``get(session_id)`` before spawning the task.
+Holds an :class:`asyncio.Task` per in-flight stream. Chat cancellation
+flows through standard asyncio task cancellation by looking up the task
+by ``session_id`` and calling ``task.cancel()``. Multiple sessions may
+stream concurrently across projects; one in-flight stream per
+``session_id`` is enforced by the API.
 """
 
 from __future__ import annotations
@@ -70,7 +64,7 @@ class ChatRunRegistry:
             return list(self._handles.values())
 
     def reset(self) -> None:
-        """Test helper — drop all entries."""
+        """Test helper to drop all entries."""
         with self._lock:
             self._handles.clear()
 

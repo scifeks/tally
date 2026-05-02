@@ -1,4 +1,4 @@
-"""Unit tests for the ZAP JSON parser (infrastructure.tools.parsers.zap)."""
+"""Unit tests for the ZAP JSON parser."""
 
 from __future__ import annotations
 

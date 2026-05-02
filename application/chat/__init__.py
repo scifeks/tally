@@ -1,1 +1,1 @@
-"""Application-layer chat services (Phase 8.2)."""
+"""Application-layer chat services."""

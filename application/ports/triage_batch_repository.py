@@ -1,4 +1,4 @@
-"""Persistence port for the ``triage_batches`` table."""
+"""Persistence port for the triage_batches table."""
 
 from __future__ import annotations
 

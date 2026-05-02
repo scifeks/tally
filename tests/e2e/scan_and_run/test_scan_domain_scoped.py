@@ -11,7 +11,7 @@ pytestmark = pytest.mark.local_only
 
 @pytest.mark.slow
 @pytest.mark.skip(
-    reason="Runs all code-domain tools across all DVPA repos — too slow until "
+    reason="Runs all code-domain tools across all DVPA repos, too slow until "
     "synthetic test repos are in place"
 )
 def test_scan_domain_code(tally_harness_live: TallyHarness) -> None:

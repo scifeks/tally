@@ -1,8 +1,4 @@
-"""Regression guard: no input() calls below the adapter layer.
-
-Walks application/ and domain/ source trees and fails if any call to
-the builtin input() is found outside the explicitly whitelisted paths.
-"""
+"""Regression guard: no input() calls below the adapter layer."""
 
 from __future__ import annotations
 

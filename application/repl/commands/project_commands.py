@@ -32,9 +32,7 @@ class ProjectCommands:
         )
         return service.list_active(row.id)
 
-    # ------------------------------------------------------------------
     # Grouped command entrypoints (scoped help or subcommand dispatch)
-    # ------------------------------------------------------------------
 
     def cmd_project(self, _cmd: str, args: list[str]) -> None:
         """project [add|switch|list|info]: project management."""
@@ -80,9 +78,7 @@ class ProjectCommands:
                 "Type [bold]repo[/bold] for available subcommands"
             )
 
-    # ------------------------------------------------------------------
     # Commands
-    # ------------------------------------------------------------------
 
     def cmd_projects(self, _cmd: str, _args: list[str]) -> None:
         """List all projects in a Rich table."""
@@ -221,10 +217,10 @@ class ProjectCommands:
         table.add_column("Base URLs", style="white", overflow="fold")
 
         for repo in repos:
-            types = ", ".join(repo.type) if repo.type else "—"
-            langs = ", ".join(repo.languages) if repo.languages else "—"
-            urls = ", ".join(repo.base_urls) if repo.base_urls else "—"
-            id_str = str(repo.id) if isinstance(repo.id, int) else "—"
+            types = ", ".join(repo.type) if repo.type else "-"
+            langs = ", ".join(repo.languages) if repo.languages else "-"
+            urls = ", ".join(repo.base_urls) if repo.base_urls else "-"
+            id_str = str(repo.id) if isinstance(repo.id, int) else "-"
             table.add_row(id_str, repo.name, types, repo.path, langs, urls)
 
         self.repl.console.print(table)

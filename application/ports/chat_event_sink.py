@@ -1,15 +1,15 @@
-"""ChatStreamSink port — destination for chat lifecycle events (Phase 8.2).
+"""Destination for chat lifecycle events.
 
 The chat application service calls ``sink.emit(event)`` on every state
-transition (stream start, per-token, stream end / cancelled / failed).
+transition (stream start, per-token, stream end, cancelled, or failed).
 Concrete adapters decide what to do with the event:
 
 - Tests / REPL parity: ``NullChatStreamSink`` discards every event.
-- API adapter (Phase 8.8): ``EventBusChatSink`` projects each event into
+- API adapter: ``EventBusChatSink`` projects each event into
   a ``BusEvent(stream="chat", ...)`` and publishes it on the
   process-singleton ``EventBus`` for SSE fan-out.
 
-The Phase 8.2 service is HTTP/SSE-agnostic; the sink is the only seam
+The service is HTTP/SSE-agnostic; the sink is the only seam
 between the core and the eventual web adapter.
 """
 

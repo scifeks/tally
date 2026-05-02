@@ -1,9 +1,7 @@
-"""Persistence port for the ``chat_sessions`` table.
+"""Persistence port for the chat_sessions table.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.chat_sessions.ChatSessionRepository``.
-Returned rows are domain types (`domain.chat.entry.ChatSessionRow`) so
-the port boundary stays free of infrastructure dataclasses.
+Returned rows are domain types so the port boundary stays free of
+infrastructure dataclasses.
 """
 
 from __future__ import annotations

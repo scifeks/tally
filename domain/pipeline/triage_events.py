@@ -1,17 +1,11 @@
-"""Triage lifecycle events emitted by the triage runner (Phase 6.1).
+"""Triage lifecycle events.
 
-These events are domain-pure: they carry no transport concerns. The
-``TriageEventSink`` port (see ``application/ports/triage_event_sink.py``)
-turns them into either no-op REPL discards (REPL adapter) or async
+Domain-pure events with no transport concerns. The ``TriageEventSink``
+port turns them into either REPL discards (REPL adapter) or async
 ``BusEvent`` publishes for SSE fan-out (web adapter).
 
-A "triage run" is identified by ``scan_run_id`` — the integer primary
-key of the ``scan_runs`` row whose findings are being triaged. There is
-no separate triage_id; ``triage_batches.run_id`` is the same column.
-
-Field names match the SSE event payload catalogue in
-``docs/roadmap/ui-planning/API/endpoints.md §15.2`` so adapters can do a
-straight projection.
+A triage run is identified by ``scan_run_id`` (the primary key of the
+``scan_runs`` row whose findings are being triaged).
 """
 
 from __future__ import annotations

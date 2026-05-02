@@ -93,7 +93,7 @@ class BasePipAuditTool(ToolInterface):
             deps_file = find_or_generate_requirements(repo_path)
             if not deps_file:
                 logger.info(
-                    "pip-audit: no Python dependency file found in %r — skipping",
+                    "pip-audit: no Python dependency file found in %r; skipping",
                     repo_path,
                 )
                 return []

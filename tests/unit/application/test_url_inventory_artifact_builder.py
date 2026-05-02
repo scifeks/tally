@@ -86,7 +86,7 @@ class TestBuildOas3:
 
     def test_synthesizes_when_meta_lacks_oas3_keys(self) -> None:
         # meta.original_file present but not an OAS3 operation (e.g. HAR
-        # entry) — should fall back to synthesised stub.
+        # entry); should fall back to synthesised stub.
         doc = build_oas3(
             [_scan(method="GET", path="/p", meta={"original_file": {"har": True}})]
         )

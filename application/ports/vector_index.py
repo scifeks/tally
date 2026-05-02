@@ -9,12 +9,7 @@ from application.ports.filters import Filter
 
 
 class VectorMatch(TypedDict):
-    """Result row from a query or get on the vector store.
-
-    Adapters populate every key on every row. ``document`` and ``metadata``
-    are None when the underlying engine omits them; ``distance`` is None for
-    non-ranked reads (``get``).
-    """
+    """Result row from a query or get on the vector store."""
 
     id: str
     document: str | None
@@ -23,11 +18,7 @@ class VectorMatch(TypedDict):
 
 
 class VectorIndexError(RuntimeError):
-    """Raised by VectorIndex implementations when an operation fails.
-
-    Subclasses RuntimeError so existing call sites that catch RuntimeError
-    around vector-store construction continue to work.
-    """
+    """Raised by VectorIndex implementations when an operation fails."""
 
 
 class VectorIndex(Protocol):

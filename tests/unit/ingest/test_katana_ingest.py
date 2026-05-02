@@ -15,9 +15,7 @@ from infrastructure.tools.parsers.katana import (
 _TIMESTAMP = "2026-04-13T00:00:00"
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _katana_line(
@@ -58,9 +56,7 @@ def _make_result(endpoints: list[dict]) -> ToolResult:
     )
 
 
-# ---------------------------------------------------------------------------
 # parse_katana_jsonl_string
-# ---------------------------------------------------------------------------
 
 
 class TestParseKatanaJsonlString:
@@ -141,9 +137,7 @@ class TestParseKatanaJsonlString:
         assert result["endpoints"][0]["path"] == "/api/v1/users"
 
 
-# ---------------------------------------------------------------------------
 # parse_katana_jsonl (file-based)
-# ---------------------------------------------------------------------------
 
 
 class TestParseKatanaJsonl:
@@ -165,9 +159,7 @@ class TestParseKatanaJsonl:
         assert result["endpoints"] == []
 
 
-# ---------------------------------------------------------------------------
-# KatanaHandler — meta
-# ---------------------------------------------------------------------------
+# KatanaHandler: meta
 
 
 class TestKatanaHandlerMeta:
@@ -215,9 +207,7 @@ class TestKatanaHandlerMeta:
         assert meta["segment"] == "web"
 
 
-# ---------------------------------------------------------------------------
-# KatanaHandler — normalize
-# ---------------------------------------------------------------------------
+# KatanaHandler: normalize
 
 
 class TestKatanaHandlerNormalize:
@@ -247,9 +237,7 @@ class TestKatanaHandlerNormalize:
         assert handler.normalize(result, profile="p") == []
 
 
-# ---------------------------------------------------------------------------
-# KatanaHandler — fingerprint_key
-# ---------------------------------------------------------------------------
+# KatanaHandler: fingerprint_key
 
 
 class TestKatanaHandlerFingerprint:
@@ -272,9 +260,7 @@ class TestKatanaHandlerFingerprint:
         assert key1 != key2
 
 
-# ---------------------------------------------------------------------------
-# KatanaHandler — render
-# ---------------------------------------------------------------------------
+# KatanaHandler: render
 
 
 class TestKatanaHandlerRender:

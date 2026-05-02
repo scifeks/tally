@@ -30,10 +30,10 @@ def compute_risk_level(counts: RiskCounts) -> RiskLevel:
     """Apply risk level rules in order; return first match.
 
     Rules (evaluated top-to-bottom, first match wins):
-    1. Critical — any confirmed critical OR 3+ confirmed high.
-    2. High     — any confirmed high OR 5+ probable/confirmed medium.
-    3. Medium   — any probable/confirmed medium OR 3+ low.
-    4. Low      — everything else.
+    1. Critical: any confirmed critical or 3+ confirmed high
+    2. High: any confirmed high or 5+ probable/confirmed medium
+    3. Medium: any probable/confirmed medium or 3+ low
+    4. Low: everything else
     """
     if counts.confirmed_critical >= 1 or counts.confirmed_high >= 3:
         return RiskLevel.CRITICAL

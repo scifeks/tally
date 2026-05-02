@@ -20,7 +20,7 @@ async def test_drop_oldest_subscriber_receives_most_recent():
     bus = EventBus()
     await bus.register_job("j1", "scan", subscriber_size=4)
     _, q = await bus.subscribe("j1")
-    # Capture before close_job — the dispatcher pops the job from
+    # Capture before close_job; the dispatcher pops the job from
     # bus._jobs when it processes EOS. Awaiting the dispatcher below
     # lets it fully drain into the subscriber queue before we consume,
     # which is what exercises drop-oldest: with the per-event yield

@@ -1,11 +1,7 @@
 """SubprocessRunner port: spawn-and-wait seam over child processes.
 
-Adapters:
-  infrastructure/tools/runner.py::SubprocessRunner
-
 Owns process-group spawn, cancellation polling, signal escalation,
-and timeout enforcement so application services never touch
-``subprocess`` / ``os`` / ``signal`` directly.
+and timeout enforcement.
 """
 
 from __future__ import annotations

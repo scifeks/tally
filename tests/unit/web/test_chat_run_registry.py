@@ -1,8 +1,4 @@
-"""Unit tests for ChatRunRegistry (Phase 8.8).
-
-Mirrors ``tests/unit/web/test_report_run_registry.py`` style. Verifies
-register / unregister / get / list_for_project / list_all / reset.
-"""
+"""Unit tests for ChatRunRegistry."""
 
 from __future__ import annotations
 

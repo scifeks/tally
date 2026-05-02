@@ -55,10 +55,9 @@ class PipelineFactory:
 
         bus.subscribe(IngestCompleted, strategy.handle)
 
-        # URL discovery pipeline (Phase 9): single handler routes Katana / Noir
-        # output through ``UrlInventoryService`` (writes ``url_findings`` rows
-        # and rebuilds the merged seeds / OAS3 artifacts on disk for
-        # downstream DAST tools).
+        # URL discovery pipeline: routes Katana / Noir output through
+        # UrlInventoryService (writes url_findings rows, rebuilds merged
+        # seeds / OAS3 artifacts on disk for downstream DAST tools).
         url_inventory = UrlInventoryIngestHandler()
         bus.subscribe(ToolCompleted, url_inventory.handle)
 

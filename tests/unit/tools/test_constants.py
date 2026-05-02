@@ -1,4 +1,4 @@
-"""Tests for core/tools/constants.py — no external dependencies required."""
+"""Tests for core/tools/constants.py. No external dependencies required."""
 
 from domain.tools.constants import (
     BOOLEAN_TYPE_FIELDS,

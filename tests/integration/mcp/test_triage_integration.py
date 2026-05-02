@@ -35,9 +35,7 @@ from tally_mcp.tools import findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 _BASE_FINDING = {
     "tool": "semgrep",
@@ -168,13 +166,12 @@ def _make_runner_real(
         audit_repo,
         tmp_path,
         triage_agent=_StubTriageAgent(),
+        session_timeout_seconds=300,
     )
     return runner, factory, run_repo, finding_repo
 
 
-# ---------------------------------------------------------------------------
 # Group 1: .mcp.json structure
-# ---------------------------------------------------------------------------
 
 
 def test_mcp_json_server_type_is_stdio(tmp_path: Path) -> None:
@@ -228,9 +225,7 @@ def test_mcp_json_deny_star(tmp_path: Path) -> None:
     assert deny == ["*"]
 
 
-# ---------------------------------------------------------------------------
 # Group 2: End-to-end pipeline with real store + synthetic handler
-# ---------------------------------------------------------------------------
 
 
 def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
@@ -332,9 +327,7 @@ def test_pipeline_result_counts_match(tmp_path: Path) -> None:
     assert result.success == 1
 
 
-# ---------------------------------------------------------------------------
 # Group 3: Multi-batch regression (double-claiming fix)
-# ---------------------------------------------------------------------------
 
 
 def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:

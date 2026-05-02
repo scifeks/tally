@@ -1,9 +1,8 @@
-"""Web adapter: project DraftEvents onto the async EventBus (Phase 7.5).
+"""Web adapter: project DraftEvents onto the async EventBus.
 
-Draft generation runs on a worker ``threading.Thread`` separate from the
-FastAPI asyncio loop, so we use ``publish_threadsafe`` to hop back into
-the bus's loop. Adapters never raise — bus publish failures are swallowed
-so draft generation never fails because nothing is listening.
+Draft generation runs on a worker thread separate from the FastAPI asyncio
+loop, so ``publish_threadsafe`` hops back into the bus's loop. Bus publish
+failures are swallowed so draft generation never fails when nothing listens.
 """
 
 from __future__ import annotations

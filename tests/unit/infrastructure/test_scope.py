@@ -25,7 +25,7 @@ class TestScopeKey:
         assert scope_key("http://192.168.1.1:8888/foo") == ("192.168.1.1", 8888)
 
     def test_bare_host_with_port(self) -> None:
-        # No scheme — should be treated as http
+        # No scheme; should be treated as http
         assert scope_key("localhost:5000") == ("localhost", 5000)
 
     def test_unparseable_returns_none(self) -> None:

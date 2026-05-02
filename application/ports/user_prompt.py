@@ -1,4 +1,4 @@
-"""UserPromptPort — hexagonal port for interactive y/N confirmations.
+"""Hexagonal port for interactive y/N confirmations.
 
 Adapters:
   application/repl/adapters/rich_console_prompt.py  (REPL, reads stdin)

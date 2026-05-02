@@ -42,7 +42,7 @@ class ZAPDockerTool(BaseZapTool):
         Keyword Args:
             base_url (str): API base URL to scan. Required.
             endpoints (Dict): Endpoint map (informational only in quick-scan mode).
-            output_file (str): Ignored for docker — report is written inside container.
+            output_file (str): Ignored for Docker; report is written inside container.
         """
         base_url: str | None = kwargs.get("base_url")
         if not base_url:

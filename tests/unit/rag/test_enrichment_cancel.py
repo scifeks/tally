@@ -70,7 +70,7 @@ def test_cancel_during_phase2_raises_and_persists_completed_only() -> None:
 
 
 def test_cancel_before_phase2_raises_immediately() -> None:
-    """Token already set before enrich() — fires on first loop iteration."""
+    """Token already set before enrich(); fires on first loop iteration."""
     repo = MagicMock()
     repo.get_by_ids.return_value = [_row(1), _row(2)]
 

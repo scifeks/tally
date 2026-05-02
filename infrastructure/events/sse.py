@@ -7,12 +7,10 @@ from infrastructure.security.redaction import redact_config
 
 
 def format_sse_frame(event: BusEvent) -> str:
-    """Render a BusEvent as a fully-formed SSE frame string.
+    """Render a BusEvent as a fully-formed SSE frame with redacted payload.
 
-    Applies redact_config() to event.payload unconditionally before
-    serialising. Callers in Phases 5.5 / 6.5 / 7.6 / 8.9 MUST use this
-    helper — it is the single chokepoint for SSE-bound event bytes and
-    the only way redaction can be enforced by construction.
+    Applies redact_config() to event.payload before serialising to ensure
+    sensitive data is never sent over SSE.
     """
     safe_payload = redact_config(dict(event.payload))
     data = json.dumps(safe_payload)

@@ -1,10 +1,9 @@
-"""Integration tests for Phase 8.8 — POST chat message (start streamed turn).
+"""Integration tests for POST chat message (start streamed turn).
 
 Endpoint: ``POST /api/v1/projects/{project_id}/chat/sessions/{session_id}/messages``
 
 Uses a fake ``LLMProvider`` and a stubbed ``QueryEngine`` so the test
-doesn't need a live ChromaDB. The fake provider yields a deterministic
-token stream so tests can assert ordering and persistence behaviour.
+doesn't need a live ChromaDB.
 """
 
 from __future__ import annotations
@@ -24,9 +23,7 @@ from web.adapters.chat_run_registry import get_chat_run_registry
 pytestmark = pytest.mark.integration
 
 
-# ---------------------------------------------------------------------------
 # Fakes
-# ---------------------------------------------------------------------------
 
 
 class _FakeProvider:
@@ -63,7 +60,7 @@ class _FakeProvider:
 
 
 class _StubQueryEngine:
-    """No-op QueryEngine — returns an empty retrieval set."""
+    """No-op QueryEngine returning an empty retrieval set."""
 
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         return None
@@ -78,9 +75,7 @@ class _StubQueryEngine:
         return []
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _seed_session(
@@ -122,9 +117,7 @@ async def _wait_for_no_active_stream(session_id: int, *, timeout: float = 2.0) -
     raise AssertionError(f"chat task for session {session_id} never unregistered")
 
 
-# ---------------------------------------------------------------------------
 # Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)

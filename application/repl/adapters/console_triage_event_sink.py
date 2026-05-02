@@ -1,12 +1,7 @@
-"""REPL adapter: receives triage events but does not render them.
+"""REPL adapter: no-op triage event sink.
 
-The REPL has long-standing ``print()`` and logging output driven directly
-by ``application/triage/runner.py``. Phase 6.2 adds parallel event
-emission for the API surface; the REPL must remain byte-identical, so
-this sink simply discards events.
-
-If the REPL ever grows progress UI driven from semantic events
-(rather than direct prints), this is where it would live.
+The REPL output is driven by direct print() and logging. This sink
+discards events to keep the REPL output byte-identical.
 """
 
 from __future__ import annotations

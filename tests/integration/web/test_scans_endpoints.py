@@ -19,7 +19,7 @@ pytestmark = pytest.mark.integration
 
 
 def _seed_global_config(base_path: str) -> None:
-    """Write a minimal <base>/config/global.json — required by ConfigManager."""
+    """Write a minimal <base>/config/global.json required by ConfigManager."""
     config_dir = Path(base_path) / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "global.json").write_text(
@@ -96,9 +96,7 @@ def _seed_run(factory, *, project_id: int, **overrides: Any) -> int:
     )
 
 
-# ---------------------------------------------------------------------------
 # GET /scans/config
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -124,9 +122,7 @@ async def test_config_unknown_project_404(app_client) -> None:
     assert resp.json()["error"]["code"] == "NOT_FOUND"
 
 
-# ---------------------------------------------------------------------------
 # GET /scans (history list)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -182,9 +178,7 @@ async def test_list_scans_empty(app_client) -> None:
     assert body["items"] == []
 
 
-# ---------------------------------------------------------------------------
 # POST /scans (start)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -297,8 +291,8 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
     body = resp.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
     assert 99999 in body["error"]["details"]["unknown"]
-    # The seeded active repo must surface in `available` — proves the
-    # validator's positive set is wired (the regression covered by 12.3).
+    # The seeded active repo must surface in `available`; proves the
+    # validator's positive set is wired.
     assert seeded_id in body["error"]["details"]["available"]
 
 
@@ -354,9 +348,7 @@ async def test_start_scan_unknown_domain_422(app_client, monkeypatch) -> None:
     assert resp.status_code == 422
 
 
-# ---------------------------------------------------------------------------
 # GET /scans/{run_id} (detail)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -380,9 +372,7 @@ async def test_detail_404_for_missing_run(app_client) -> None:
     assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
 # POST /projects/{project_id}/scans/{run_id}/cancel
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -438,9 +428,7 @@ async def test_cancel_run_from_different_project_404(app_client) -> None:
     assert not token.is_set()
 
 
-# ---------------------------------------------------------------------------
 # POST /projects/{project_id}/scans/cancel-all
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -469,9 +457,7 @@ async def test_cancel_all_cancels_active_runs_for_project(
     assert not t3.is_set()
 
 
-# ---------------------------------------------------------------------------
 # GET /scans/{run_id}/progress
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -500,9 +486,7 @@ async def test_progress_404_for_missing_run(app_client) -> None:
     assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
 # GET /scans/events (SSE)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -511,7 +495,7 @@ async def test_sse_filters_events_by_project_id(app_client) -> None:
 
     Skips the HTTP transport because httpx's ASGI doesn't keep an SSE
     response open the way curl does. Instead we exercise the bus
-    subscribe/publish path directly — same code path the endpoint uses.
+    subscribe/publish path directly; same code path the endpoint uses.
     """
     client, *_ = app_client
     bus = client._transport.app.state.event_bus  # type: ignore[attr-defined]
@@ -564,9 +548,7 @@ async def test_sse_unknown_project_404(app_client) -> None:
     assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
 # Lifespan / event-bus registration
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

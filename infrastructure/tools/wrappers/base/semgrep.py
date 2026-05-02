@@ -101,5 +101,4 @@ class BaseSemgrepTool(ToolInterface):
             return summary["total_findings"]
         # fallback must not be removed
         result = len(parsed_data.get("findings", []))
-        # TODO: revisit when normalized schema is introduced
         return result

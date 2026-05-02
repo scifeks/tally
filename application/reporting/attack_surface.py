@@ -1,4 +1,4 @@
-"""Attack Surface Overview builder — three HTML recon tables for the report."""
+"""Build three HTML recon tables for the Attack Surface Overview section."""
 
 from __future__ import annotations
 
@@ -58,11 +58,10 @@ def _repo_label(finding: Finding) -> str:
 
 
 class AttackSurfaceBuilder:
-    """Builds the Attack Surface Overview HTML block for the report.
+    """Build the Attack Surface Overview HTML block for the report.
 
-    Two subsections:
-    - Repository Surface — which tool categories ran against each repo
-    - Dependency Surface — which ecosystems were audited per repo
+    Two subsections: Repository Surface (which tool categories ran per
+    repo) and Dependency Surface (which ecosystems were audited per repo).
     """
 
     def __init__(self, finding_repo: FindingRepositoryPort) -> None:

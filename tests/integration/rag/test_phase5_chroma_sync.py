@@ -1,4 +1,4 @@
-"""Phase 5 integration tests: sync_finding_to_chroma does a direct id-based upsert."""
+"""Integration tests: sync_finding_to_chroma does a direct id-based upsert."""
 
 from __future__ import annotations
 

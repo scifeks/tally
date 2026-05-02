@@ -14,9 +14,7 @@ from infrastructure.tools.wrappers.local.xsstrike import _recommended_thread_cou
 
 _JIT_PATCH_TARGET = "application.url_inventory.jit.jit_rebuild_artifacts"
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_config(
@@ -43,9 +41,7 @@ def _make_repo(**kwargs: Any) -> MagicMock:
     return repo
 
 
-# ---------------------------------------------------------------------------
-# build_command — basic flag assertions
-# ---------------------------------------------------------------------------
+# build_command: basic flag assertions
 
 
 class TestDockerBuildCommandFlags:
@@ -152,9 +148,7 @@ class TestDockerBuildCommandFlags:
         assert "/opt/xsstrike.py" in cmd
 
 
-# ---------------------------------------------------------------------------
-# build_execution_passes — config parity with local wrapper
-# ---------------------------------------------------------------------------
+# build_execution_passes: config parity with local wrapper
 
 
 class TestDockerBuildExecutionPasses:

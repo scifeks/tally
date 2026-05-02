@@ -1,4 +1,4 @@
-"""OAS2/Swagger adapter — converts Swagger 2.0 to OAS3 via swagger2openapi."""
+"""Convert Swagger 2.0 to OpenAPI 3.x using the swagger2openapi tool."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _parse_file(path: Path) -> dict:
 
 
 class OAS2Adapter(ConverterAdapter):
-    """Adapter for Swagger 2.0 files — converts to OAS3 via swagger2openapi."""
+    """Convert Swagger 2.0 to OAS3 using swagger2openapi."""
 
     @property
     def supported_extensions(self) -> frozenset[str]:

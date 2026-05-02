@@ -93,9 +93,7 @@ class TestReportCommand:
         mock_cls.assert_called_once()
         mock_cls.return_value.build_context.assert_called_once()
 
-    # ------------------------------------------------------------------
-    # _parse_value_flag — equals form (Bugs 5 & 6)
-    # ------------------------------------------------------------------
+    # _parse_value_flag: equals form (Bugs 5 & 6)
 
     def test_equals_form_extracts_value(self) -> None:
         result = ReportCommand._parse_value_flag(["--format=json"], "--format")
@@ -144,9 +142,7 @@ class TestReportCommand:
         mock_cls.return_value.build_context.assert_called_once()
         mock_cls.return_value.render_pdf.assert_called_once()
 
-    # ------------------------------------------------------------------
-    # report assemble — deprecated
-    # ------------------------------------------------------------------
+    # report assemble: deprecated
 
     def test_assemble_subcommand_shows_deprecation(
         self, cmd: ReportCommand, mock_repl: MagicMock
@@ -163,9 +159,7 @@ class TestReportCommand:
             cmd.execute("report", ["assemble"])
         mock_cls.assert_not_called()
 
-    # ------------------------------------------------------------------
     # SectionMissingError is shown for PDF assembly
-    # ------------------------------------------------------------------
 
     def test_pdf_default_shows_section_missing_error(
         self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
@@ -197,15 +191,13 @@ class TestReportCommand:
         printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
         assert "Section missing" in printed
 
-    # ------------------------------------------------------------------
     # _check_drafts_present
-    # ------------------------------------------------------------------
 
     def test_check_drafts_present_returns_false_when_sections_missing(
         self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
     ) -> None:
         mock_repl.base_path = str(tmp_path)
-        # No draft files created — all sections missing
+        # No draft files created; all sections missing
         result = cmd._check_drafts_present()
         assert result is False
         printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
@@ -239,16 +231,14 @@ class TestReportCommand:
         self, cmd: ReportCommand, mock_repl: MagicMock, tmp_path: Path
     ) -> None:
         mock_repl.base_path = str(tmp_path)
-        # No draft files — _check_drafts_present should block assembly
+        # No draft files; _check_drafts_present should block assembly
         with patch("application.reporting.assembler.ReportAssembler") as mock_cls:
             cmd.execute("report", [])
         mock_cls.assert_not_called()
         printed = " ".join(str(c) for c in mock_repl.console.print.call_args_list)
         assert "report draft" in printed
 
-    # ------------------------------------------------------------------
-    # report draft — no-section generates all sections
-    # ------------------------------------------------------------------
+    # report draft: no-section generates all sections
 
     def test_draft_no_section_calls_generate_for_every_section(
         self, cmd: ReportCommand, mock_repl: MagicMock

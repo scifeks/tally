@@ -1,12 +1,8 @@
 """Application-layer facade for project-scoped repository CRUD.
 
-API and CLI adapters call this service rather than reaching across into
-``ProjectManager`` / ``ConfigManager`` / ``RepositoryRepository`` directly.
-The service composes those collaborators internally so the adapter only
-depends on this single application boundary.
-
-The SQLite ``repositories`` table is the sole source of truth for per-repo
-config; this service is the single write surface for that table.
+Adapters call this instead of importing ProjectManager, ConfigManager, or
+RepositoryRepository directly. The SQLite repositories table is the sole
+source of truth; this service is the single write surface.
 """
 
 from __future__ import annotations
@@ -42,12 +38,7 @@ class DuplicateRepositoryName(ValueError):
 
 @dataclass(frozen=True)
 class RepoLookupResult:
-    """Outcome of resolving a list of caller-supplied repo ids.
-
-    ``found`` preserves caller order; ``missing`` lists ids in the order
-    they were supplied; ``available`` is a sorted snapshot of every active
-    repo id in the project.
-    """
+    """Outcome of resolving a list of caller-supplied repo ids."""
 
     found: dict[int, Repository] = field(default_factory=dict)
     missing: list[int] = field(default_factory=list)
@@ -72,9 +63,7 @@ class ProjectRepositoriesService:
         base_path: str = request.app.state.base_path
         return cls(registry, ConfigManager(base_path, registry=registry))
 
-    # ------------------------------------------------------------------
     # Reads
-    # ------------------------------------------------------------------
     def list_active(self, project_id: int) -> list[Repository]:
         """Return every active repository in the project."""
         repo_repo = self._repo_repo(project_id)
@@ -102,9 +91,7 @@ class ProjectRepositoriesService:
             available=sorted(by_id.keys()),
         )
 
-    # ------------------------------------------------------------------
     # Writes
-    # ------------------------------------------------------------------
     def create(self, project_id: int, repo: Repository) -> Repository:
         """Insert *repo*; return the persisted Repository with ``id`` set."""
         repo_repo = self._repo_repo(project_id)
@@ -183,9 +170,7 @@ class ProjectRepositoriesService:
             raise RepositoryNotFound(f"Repository {repo_id} not found")
         repo_repo.set_url_seed_file(repo_id, abs_path)
 
-    # ------------------------------------------------------------------
     # Internals
-    # ------------------------------------------------------------------
     def _project_name(self, project_id: int) -> str:
         row = self._registry.resolve_by_id(project_id)
         if row is None or row.archived_at:

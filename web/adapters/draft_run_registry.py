@@ -1,12 +1,8 @@
-"""DraftRunRegistry — process-singleton tracking active draft generation runs.
+"""Process-singleton tracking active draft generation runs.
 
-Mirrors :class:`web.adapters.report_run_registry.ReportRunRegistry`. The
-SSE cancel endpoint (if added later) looks up cancellation tokens by
-``section``. The draft worker thread unregisters itself in its ``finally``
-block.
-
-Draft generation is single-active process-wide via ``LockRegistry`` slot
-``"report"``, so this map will hold at most one entry at a time.
+The draft worker thread unregisters itself in its ``finally`` block.
+Draft generation is single-active process-wide via ``LockRegistry``, so
+this map holds at most one entry at a time.
 """
 
 from __future__ import annotations
@@ -64,7 +60,7 @@ class DraftRunRegistry:
             return list(self._handles.values())
 
     def reset(self) -> None:
-        """Test helper — drop all entries."""
+        """Test helper to drop all entries."""
         with self._lock:
             self._handles.clear()
 

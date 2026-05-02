@@ -1,1 +1,1 @@
-"""Application layer for the per-project URL inventory (Phase 9)."""
+"""Application layer for the per-project URL inventory."""

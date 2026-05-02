@@ -1,15 +1,11 @@
-"""UserFileProvider — convert a user-uploaded endpoint file to UrlFinding rows.
+"""Convert user-uploaded endpoint files to UrlFinding rows.
 
-Reuses the existing format-detection + per-format adapters in
-``infrastructure/endpoints/converters/`` (which already understand OAS3,
-Swagger 2, Postman, HAR, and Katana JSONL). The adapter produces a
-normalised OAS3 document; this provider iterates ``paths`` × ``methods``
-and yields one ``UrlFinding`` row per operation via the shared
-``_oas3_to_findings`` helper.
-
-Each row's ``meta['original_file']`` carries the OAS3 operation object
-so the artifact builder can rebuild a faithful merged_oas3.json from
-DB rows alone — no need to re-read the source file at scan time.
+Reuses format-detection and per-format adapters that understand OAS3,
+Swagger 2, Postman, HAR, and Katana JSONL. The adapter produces a
+normalised OAS3 document; this provider iterates paths and methods and
+yields one UrlFinding row per operation via the shared iter_oas3_rows
+helper. Each row's ``meta['original_file']`` preserves the OAS3 operation
+object so the artifact builder can rebuild merged_oas3.json from DB rows.
 """
 
 from __future__ import annotations

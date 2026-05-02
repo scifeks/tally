@@ -47,7 +47,7 @@ class TestChatEnabled:
         assert svc.compute().chat_enabled is False
 
     def test_false_when_config_missing(self, tmp_path: Path) -> None:
-        # No config/global.json — ConfigManager raises FileNotFoundError.
+        # No config/global.json; ConfigManager raises FileNotFoundError.
         svc = CapabilitiesService(str(tmp_path), _runtime_service(False))
         assert svc.compute().chat_enabled is False
 

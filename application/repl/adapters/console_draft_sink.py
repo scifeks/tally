@@ -1,4 +1,4 @@
-"""ConsoleDraftEventSink — REPL adapter for draft lifecycle events (Phase 7.5).
+"""REPL adapter for draft lifecycle events.
 
 Replaces the inline ``console.status`` / ``console.print`` calls that were
 previously scattered through the old ``draft_runner`` module.

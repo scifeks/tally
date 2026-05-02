@@ -1,4 +1,4 @@
-"""GET /api/v1/config/field-specs — field configuration for the SPA."""
+"""Field configuration for the SPA."""
 
 from __future__ import annotations
 
@@ -20,15 +20,10 @@ def get_config() -> dict:
     """Return editable field specifications for the findings SPA.
 
     The response drives AG Grid column editability and cell editor params.
-    The SPA must not hardcode allowed values for any field — it reads them
-    here at startup.
-
-    Each entry in ``editable_fields`` describes one patchable field:
-    - ``editor``: ``"select"`` | ``"text"`` | ``"boolean"`` | ``"tags"``
-    - ``options``: present only for ``"select"`` and ``"tags"`` editors;
-      lists the allowed values in display order.
-    ``enums`` contains the canonical allowed-value sets sourced from
-    ``domain.tools.constants`` and ``domain.findings.severity``.
+    The SPA reads allowed values from this endpoint at startup.
+    Each field entry contains an editor type (select, text, boolean, tags)
+    and optional allowed values. The enums section contains canonical
+    allowed-value sets from domain constants.
     """
     return {
         "editable_fields": {

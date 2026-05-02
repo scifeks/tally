@@ -1,4 +1,4 @@
-"""Integration tests for Phase 8.6 — DELETE chat session.
+"""Integration tests for DELETE chat session.
 
 Endpoint: ``DELETE /api/v1/projects/{project_id}/chat/sessions/{session_id}``
 """

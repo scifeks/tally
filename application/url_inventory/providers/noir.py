@@ -1,8 +1,7 @@
-"""NoirProvider — convert Noir scan output into ``UrlFinding`` rows.
+"""Convert Noir scan output into UrlFinding rows.
 
-Noir natively produces an OAS3 document under
-``projects/<p>/tool_outputs/noir/``. This provider reads that file
-via the shared ``iter_oas3_rows`` helper and yields scan-source rows.
+Noir natively produces an OAS3 document. This provider reads that file via
+the shared ``iter_oas3_rows`` helper and yields scan-source rows.
 """
 
 from __future__ import annotations

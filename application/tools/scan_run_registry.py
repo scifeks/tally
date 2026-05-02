@@ -1,7 +1,7 @@
-"""ScanRunRegistry — process-singleton tracking active scan runs.
+"""Track active scan runs via a process-singleton registry.
 
-Maps ``run_id`` -> ``ScanRunHandle`` while a scan is in flight so cancel
-endpoints can find the ``CancellationToken`` and signal a stop. The
+Maps ``run_id`` to ``ScanRunHandle`` while a scan is in flight, allowing
+cancel endpoints to find the ``CancellationToken`` and signal a stop. The
 service that started the scan unregisters in its ``finally`` block.
 
 Thread-safe via an internal mutex; reads and writes are O(1).
@@ -79,7 +79,7 @@ class ScanRunRegistry:
             return list(self._handles.values())
 
     def reset(self) -> None:
-        """Test helper — drop all entries."""
+        """Test helper to drop all entries."""
         with self._lock:
             self._handles.clear()
 

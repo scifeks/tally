@@ -1,7 +1,4 @@
-"""SCA shared helpers — used by the four dedicated SCA handler modules.
-
-Handles: osv-scanner, pip-audit, npm-audit, composer-audit.
-"""
+"""SCA shared helpers for osv-scanner, pip-audit, npm-audit, composer-audit."""
 
 import json
 from typing import Any
@@ -11,9 +8,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 from ._shared import _first_output_file, _shared_meta
 
-# ---------------------------------------------------------------------------
 # Per-field enrichment specs
-# ---------------------------------------------------------------------------
 
 # pip-audit, npm-audit, composer-audit: limited metadata available.
 _SCA_COMMON_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
+from application.reporting.assembler import TEMPLATES_DIR
 from application.reporting.orchestrator import (
     ReportCancelled,
     ReportOverwriteDenied,
@@ -23,6 +24,8 @@ from application.reporting.orchestrator import (
     run_report,
 )
 from infrastructure.events.bus import EventBus
+from infrastructure.reporting.jinja2_template_renderer import Jinja2TemplateRenderer
+from infrastructure.reporting.weasyprint_pdf_renderer import WeasyPrintPdfRenderer
 from web.adapters.event_bus_report_sink import EventBusReportSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.adapters.report_run_registry import ReportRunRegistry
@@ -134,6 +137,8 @@ def _run_report(
             output = run_report(
                 orchestrator_request,
                 prompt=NoApprovalPromptAdapter(),
+                template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
+                pdf_renderer=WeasyPrintPdfRenderer(),
                 event_sink=sink,
                 cancel_token=cancel_token,
             )

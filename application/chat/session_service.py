@@ -56,12 +56,10 @@ class ChatSessionService:
 
     @property
     def session_repo(self) -> ChatSessionRepositoryPort:
-        """Exposed for the streaming POST flow only."""
         return self._session_repo
 
     @property
     def message_repo(self) -> ChatMessageRepositoryPort:
-        """Exposed for the streaming POST flow only."""
         return self._message_repo
 
     def create_session(self, *, project_id: int, title: str) -> ChatSessionRow:

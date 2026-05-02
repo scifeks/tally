@@ -1,4 +1,4 @@
-"""SQLite connection factory — shared infrastructure for all repositories."""
+"""Create and manage SQLite connections for all repository classes."""
 
 from __future__ import annotations
 

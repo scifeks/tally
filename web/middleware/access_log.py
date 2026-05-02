@@ -7,9 +7,8 @@ Log fields: ``ts``, ``req_id``, ``method``, ``path`` (query with sensitive
 params redacted), ``status``, ``latency_ms``, and ``error_class`` when
 the inner app raised.
 
-Never logs: request/response bodies, cookies, ``Authorization`` header,
-or ``X-CSRF-Token`` header. See ``docs/roadmap/ui-planning/API/security.md``
-(Logging & telemetry) for the full constraint list.
+Never logs request/response bodies, cookies, Authorization header, or
+X-CSRF-Token header.
 """
 
 from __future__ import annotations

@@ -17,11 +17,11 @@ because the VULN-line patterns are identical after ANSI codes are stripped.
 
 Seeds
 -----
-Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds file
+Reads ``repo.merged_seeds_path``, the canonical deduplicated seeds file
 produced by the URL discovery pipeline after Katana, Noir, and/or a
-user-provided endpoint file run.  The seeds file must be accessible inside
+user-provided endpoint file run. The seeds file must be accessible inside
 the container; mount the tally project's ``tool_outputs`` directory as a
-volume (e.g. ``-v /path/to/tally_data:/tally_data``).  When no seeds file
+volume (e.g. ``-v /path/to/tally_data:/tally_data``). When no seeds file
 is available, XSStrike is skipped and a warning is logged.
 """
 
@@ -140,7 +140,7 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
         )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
-                "XSStrike: no URL inventory for %s — skipping. "
+                "XSStrike: no URL inventory for %s; skipping. "
                 "Run Katana, Noir, or configure an endpoint file to "
                 "generate URL discovery output.",
                 repo.name,

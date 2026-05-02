@@ -85,5 +85,4 @@ class BaseNpmAuditTool(ToolInterface):
         result = summary.get(
             "total_vulnerabilities", len(parsed_data.get("vulnerabilities", []))
         )
-        # TODO: revisit when normalized schema is introduced
         return result

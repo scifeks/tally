@@ -1,4 +1,4 @@
-"""FindingRepository — CRUD and search for the findings table."""
+"""Create, read, update, and search findings in SQLite."""
 
 from __future__ import annotations
 
@@ -33,10 +33,6 @@ _ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
     {"severity", "confidence", "description"}
 )
 
-# ---------------------------------------------------------------------------
-# FindingRepository
-# ---------------------------------------------------------------------------
-
 
 class FindingRepository(FindingRepositoryPort):
     """CRUD and search operations for the findings table."""
@@ -48,7 +44,7 @@ class FindingRepository(FindingRepositoryPort):
         """Insert new findings rows for a scan run.
 
         Every finding produced by a scan is a new row bound to its run_id.
-        This method never updates existing rows — scans are INSERT-only.
+        This method is insert-only; it never updates existing rows.
 
         For each finding:
 
@@ -62,7 +58,7 @@ class FindingRepository(FindingRepositoryPort):
         if not findings:
             return
 
-        # Keys handled before the generic loop — excluded from meta blob.
+        # Keys handled before the generic loop are excluded from meta blob.
         _PRE_EXTRACTED: frozenset[str] = frozenset(
             {"finding_type", "cwe", "cwe_id", "cwe_ids"}
         )
@@ -138,7 +134,7 @@ class FindingRepository(FindingRepositoryPort):
                     named.get("description"),
                     named.get("package_version"),
                     named.get("cwe"),
-                    0,  # enriched — set to 1 by EnrichmentPipeline after LLM processing
+                    0,  # enriched: set to 1 by EnrichmentPipeline after LLM processing
                     json.dumps(meta),
                 )
             )
@@ -165,10 +161,10 @@ class FindingRepository(FindingRepositoryPort):
     def delete_findings(self, tools: list[str] | None = None) -> None:
         """Delete findings from the store.
 
-        ``tools=None``   — DELETE all rows from all tables (findings, run_tools,
-                           scan_runs, triage_batches, tool_audit_log).
-        ``tools=[...]``  — DELETE findings, triage_batches, and tool_audit_log
-                           records for those tools only.
+        tools=None: DELETE all rows from all tables (findings, run_tools,
+                    scan_runs, triage_batches, tool_audit_log).
+        tools=[...]: DELETE findings, triage_batches, and tool_audit_log
+                     records for those tools only.
         """
         if tools is not None:
             return self.delete_findings_by_tool_name(tools)
@@ -566,8 +562,8 @@ class FindingRepository(FindingRepositoryPort):
     ) -> int:
         """Update analyst-writable named columns on multiple findings in one tx.
 
-        Sets ``triaged_by = 'analyst_web'`` and ``triaged_at`` on every row.
-        Does not touch the meta JSON blob — meta keys are not supported for batch.
+        Sets triaged_by = 'analyst_web' and triaged_at on every row.
+        Does not touch the meta JSON blob; meta keys are not supported for batch.
         Returns the count of rows actually updated.
         """
         from datetime import UTC, datetime
@@ -619,8 +615,8 @@ class FindingRepository(FindingRepositoryPort):
         """Return SQLite findings.id values for the given fingerprints.
 
         When ``run_id`` is provided, only rows from that run are considered.
-        This is required now that fingerprints are non-unique across runs —
-        multiple rows may share the same fingerprint value.
+        Fingerprints are non-unique across runs, so multiple rows may share
+        the same fingerprint value.
 
         All matching ids are returned (there may be more than one per
         fingerprint). Missing fingerprints are silently omitted.
@@ -748,8 +744,8 @@ class FindingRepository(FindingRepositoryPort):
     def search_raw(self, filters: dict) -> list[Finding]:
         """Execute a structured SQL search; return parsed Finding rows.
 
-        Unlike ``search()``, rows are not wrapped in ChromaDB-shaped
-        result envelopes — callers receive ``Finding`` instances.
+        Unlike search(), rows are not wrapped in ChromaDB-shaped result
+        envelopes; callers receive Finding instances.
         """
         sql, params = FindingQueryBuilder(filters).build()
         with self._factory.connect() as conn:

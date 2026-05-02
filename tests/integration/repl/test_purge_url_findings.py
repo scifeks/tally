@@ -1,4 +1,4 @@
-"""Verify REPL ``purge`` clears the ``url_findings`` table (Phase 9 Step 5).
+"""Verify REPL ``purge`` clears the ``url_findings`` table.
 
 Full-purge (no --tool) uses ``purge_non_preserved_tables``, which clears
 all tables except those in ``ConnectionFactory.PRESERVED_TABLES``.

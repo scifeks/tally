@@ -24,9 +24,7 @@ class ProjectManager:
         self.registry = registry
         self.config = ConfigManager(base_path, registry=registry)
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def list_projects(self) -> list[str]:
         """Return sorted list of active project names from the registry."""
@@ -76,9 +74,7 @@ class ProjectManager:
             raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
         service.delete(project_id, target.id)
 
-    # ------------------------------------------------------------------
     # Filesystem helpers
-    # ------------------------------------------------------------------
 
     def create_project_dirs(self, name: str) -> None:
         """Create the standard subdirectory tree for a new project."""

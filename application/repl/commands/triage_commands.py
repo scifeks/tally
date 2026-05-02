@@ -39,9 +39,7 @@ class TriageCommands:
             return
         elif "--dry-run" in args:
             count = run_triage_dry_run(self._repl.active_project)
-            self._repl.console.print(
-                f"Rendered {count} batch prompt(s) — see DEBUG log"
-            )
+            self._repl.console.print(f"Rendered {count} batch prompt(s); see DEBUG log")
             return
         self._repl.console.print(
             "\n[bold yellow]⚠ Prompt injection warning[/bold yellow]\n"

@@ -1,9 +1,8 @@
-"""Shared OAS3 → UrlFinding conversion helpers used by every provider.
+"""Convert OAS3 documents to UrlFinding rows for all providers.
 
-UserFileProvider, KatanaProvider, and NoirProvider all reduce their input
-to an OAS3 document and walk ``paths × methods``. The differences are
-in the row's ``source``, ``tool``, ``run_id``, and ``file_path`` — those
-are passed in by the caller; the iteration shape is shared.
+Each provider reduces its input to an OAS3 document and walks paths and
+methods. Differences in source, tool, run_id, and file_path are passed in
+by the caller; the iteration shape is shared.
 """
 
 from __future__ import annotations

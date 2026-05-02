@@ -16,9 +16,7 @@ from domain.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
 _DEFAULT_PAGE_SIZE = 200
 
 
-# ---------------------------------------------------------------------------
 # SQLite strategy helpers (verbatim from sqlite_store.py)
-# ---------------------------------------------------------------------------
 
 # Flag name → SQLite column name
 _FLAG_TO_COLUMN: dict[str, str] = {
@@ -93,9 +91,7 @@ def _validate_flag_values(
                 )
 
 
-# ---------------------------------------------------------------------------
 # Strategy Protocol
-# ---------------------------------------------------------------------------
 
 
 class _SearchStrategy(Protocol):
@@ -110,9 +106,7 @@ class _SearchStrategy(Protocol):
     def build_result(self, page: int, page_size: int) -> Any: ...
 
 
-# ---------------------------------------------------------------------------
 # SQLite strategy
-# ---------------------------------------------------------------------------
 
 
 class _SqliteStrategy:
@@ -155,9 +149,7 @@ class _SqliteStrategy:
         }
 
 
-# ---------------------------------------------------------------------------
 # Chroma strategy
-# ---------------------------------------------------------------------------
 
 
 class _ChromaDBStrategy:
@@ -190,9 +182,7 @@ class _ChromaDBStrategy:
         )
 
 
-# ---------------------------------------------------------------------------
 # Factory
-# ---------------------------------------------------------------------------
 
 
 class SearchParserFactory:
@@ -211,9 +201,7 @@ class SearchParserFactory:
 _factory = SearchParserFactory()
 
 
-# ---------------------------------------------------------------------------
 # Shared token-processing loop
-# ---------------------------------------------------------------------------
 
 
 def _parse_with_strategy(
@@ -279,9 +267,7 @@ def _parse_with_strategy(
     return strategy.build_result(page, page_size)
 
 
-# ---------------------------------------------------------------------------
 # Public facades
-# ---------------------------------------------------------------------------
 
 
 def parse_sqlite_search_command(

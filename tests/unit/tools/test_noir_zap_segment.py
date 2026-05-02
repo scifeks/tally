@@ -16,9 +16,7 @@ from domain.tools.scan_types.models import SEGMENT_ORDER
 from infrastructure.tools.wrappers.base.noir import BaseNoirTool
 from infrastructure.tools.wrappers.base.zap import BaseZapTool
 
-# ---------------------------------------------------------------------------
 # Segment properties
-# ---------------------------------------------------------------------------
 
 
 class TestNoirSegmentRegistration:
@@ -69,9 +67,7 @@ class TestNoirSegmentRegistration:
         assert "api" not in SEGMENT_ORDER
 
 
-# ---------------------------------------------------------------------------
 # Ordering: noir must appear before zap within 'web' segment
-# ---------------------------------------------------------------------------
 
 
 class TestNoirZapOrdering:
@@ -112,9 +108,7 @@ class TestNoirZapOrdering:
         assert ordered.index("semgrep") < ordered.index("zap")
 
 
-# ---------------------------------------------------------------------------
-# Enrichment skip — NoirHandler.should_enrich must be False
-# ---------------------------------------------------------------------------
+# Enrichment skip: NoirHandler.should_enrich must be False
 
 
 class TestNoirEnrichmentSkip:

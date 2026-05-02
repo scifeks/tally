@@ -1,15 +1,8 @@
-"""Domain entries for the findings surface.
+"""Domain value objects for findings.
 
-``HistoryRow`` is the row-shaped value object returned by
-``FindingHistoryRepositoryPort.list_for_finding``. ``Finding`` is the
-row-shaped value object returned by ``FindingRepositoryPort`` read
-methods. Both live in ``domain/`` so port signatures depend on a domain
-type rather than an infrastructure dataclass (Rule 7).
-
-``Finding`` mirrors the columns of the SQLite ``findings`` table with
-JSON columns parsed (``meta`` to ``dict``, ``finding_type`` and ``cwe``
-to ``list[str]``) and severity translated from integer rank to
-lowercase label via ``domain.findings.severity.Severity``.
+``HistoryRow`` represents a finding history entry from ``FindingHistoryRepositoryPort``.
+``Finding`` represents a findings table row with JSON fields parsed
+and severity translated from integer rank to lowercase label.
 """
 
 from __future__ import annotations
@@ -82,8 +75,7 @@ class Finding:
 
         Tolerates malformed JSON in ``meta``/``finding_type``/``cwe``
         and unknown severity ranks by falling back to empty/None values
-        rather than raising — matches the prior adapter-side parsing
-        tolerance.
+        rather than raising.
         """
         return cls(
             id=int(row["id"]),

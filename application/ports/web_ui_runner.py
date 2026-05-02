@@ -1,11 +1,7 @@
 """WebUiRunner port: launch the embedded web UI dev server.
 
-Adapters:
-  infrastructure/web_ui/runner.py::WebUiRunner
-
-Owns the FastAPI app construction, uvicorn lifecycle, Vite dev-server
-spawn, browser launch, and `.env.local` seed so the REPL no longer
-imports web/, fastapi, or uvicorn.
+Owns FastAPI app construction, uvicorn lifecycle, Vite dev-server spawn,
+browser launch, and .env.local seed.
 """
 
 from __future__ import annotations

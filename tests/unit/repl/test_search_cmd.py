@@ -48,9 +48,7 @@ def _make_results(n=3, tool="semgrep", distance=None):
     ]
 
 
-# ---------------------------------------------------------------------------
 # --help flag
-# ---------------------------------------------------------------------------
 
 
 def test_search_help_flag_prints_table():
@@ -72,9 +70,7 @@ def test_search_help_no_project_still_works():
     repl.console.print.assert_called()
 
 
-# ---------------------------------------------------------------------------
 # Basic runs
-# ---------------------------------------------------------------------------
 
 
 def test_search_no_args_runs_ok():
@@ -131,9 +127,7 @@ def test_search_multi_severity():
     mock_store.search.assert_called_once()
 
 
-# ---------------------------------------------------------------------------
 # --type filter
-# ---------------------------------------------------------------------------
 
 
 def test_search_type_filter_invalid():
@@ -148,9 +142,7 @@ def test_search_type_filter_invalid():
     mock_store.search.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # Validation errors printed to console
-# ---------------------------------------------------------------------------
 
 
 def test_search_invalid_tool_prints_error():
@@ -210,9 +202,7 @@ def test_search_old_key_equals_rejected():
     mock_store.search.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # Arbitrary flag pass-through
-# ---------------------------------------------------------------------------
 
 
 def test_search_file_partial_match():
@@ -250,9 +240,7 @@ def test_search_url_partial():
     mock_store.search.assert_called_once()
 
 
-# ---------------------------------------------------------------------------
 # Empty results
-# ---------------------------------------------------------------------------
 
 
 def test_search_no_results_prints_message():
@@ -266,9 +254,7 @@ def test_search_no_results_prints_message():
     assert any("No findings matched" in p for p in printed)
 
 
-# ---------------------------------------------------------------------------
 # Pagination hint
-# ---------------------------------------------------------------------------
 
 
 def test_search_page_hint_shown():
@@ -284,9 +270,7 @@ def test_search_page_hint_shown():
     assert any("--page=2" in p for p in printed)
 
 
-# ---------------------------------------------------------------------------
 # No active project
-# ---------------------------------------------------------------------------
 
 
 def test_search_no_active_project_prints_warning():
@@ -298,9 +282,7 @@ def test_search_no_active_project_prints_warning():
     assert any("No active project" in p for p in printed)
 
 
-# ---------------------------------------------------------------------------
 # --show-fields
-# ---------------------------------------------------------------------------
 
 
 def test_show_fields_without_tool_prints_error():
@@ -359,9 +341,7 @@ def test_show_fields_returns_sorted_fields():
     assert "risk_type" in output
 
 
-# ---------------------------------------------------------------------------
 # --fields
-# ---------------------------------------------------------------------------
 
 
 def test_fields_valid_calls_store():

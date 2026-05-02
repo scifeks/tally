@@ -1,7 +1,7 @@
-"""Persistence port for the ``url_findings`` table.
+"""Persistence port for the url_findings table.
 
-Read methods return ``domain.url_inventory.entry.UrlFinding`` so the
-port boundary stays free of infrastructure types.
+Read methods return UrlFinding. The port boundary stays free of
+infrastructure types.
 """
 
 from __future__ import annotations

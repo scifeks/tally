@@ -1,15 +1,11 @@
-"""UrlFindingRepository: CRUD for the ``url_findings`` table (Phase 9).
+"""CRUD for the url_findings table.
 
-Stores one row per discovered URL: SCAN-sourced rows from Katana/Noir
-(linked to a ``scan_runs`` row) and USER-sourced rows from user-uploaded
-endpoint files.
+Stores one row per discovered URL: SCAN-sourced from Katana/Noir
+(linked to scan_runs) and USER-sourced from user-uploaded endpoint files.
 
-Dedup is enforced by the ``uniq_url_findings`` UNIQUE expression index
-``(repo_id, source, COALESCE(tool, ''), COALESCE(file_path, ''),
-   method, protocol, host, port, path)``.
-``insert_many`` uses ``INSERT OR IGNORE`` so the unique index silently
-absorbs duplicates within a single insert batch (e.g. Katana finding the
-same URL twice in one run).
+A UNIQUE expression index enforces dedup across (repo_id, source, tool,
+file_path, method, protocol, host, port, path). insert_many uses
+INSERT OR IGNORE to silently absorb duplicates within a batch.
 """
 
 from __future__ import annotations
@@ -100,9 +96,7 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # ------------------------------------------------------------------
     # Writes
-    # ------------------------------------------------------------------
     def insert_many(self, findings: Iterable[UrlFinding]) -> int:
         """Insert all rows; the unique index dedupes silently. Returns count
         of rows actually inserted (excluding ignored duplicates).
@@ -167,9 +161,7 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             cur = conn.execute("DELETE FROM url_findings")
             return cur.rowcount
 
-    # ------------------------------------------------------------------
     # Reads
-    # ------------------------------------------------------------------
     def list_for_repo(
         self, repo_id: int, *, source: UrlSource | None = None
     ) -> list[UrlFinding]:
@@ -319,9 +311,7 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             ).fetchone()
         return int(row[0]) if row else 0
 
-    # ------------------------------------------------------------------
     # Helpers
-    # ------------------------------------------------------------------
     @staticmethod
     def _row_to_entity(row: sqlite3.Row) -> UrlFinding:
         try:

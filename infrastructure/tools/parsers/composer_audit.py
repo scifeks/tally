@@ -18,9 +18,7 @@ from ._sca_shared import (
 _DEFAULT_SEVERITY = "low"
 
 
-# ---------------------------------------------------------------------------
 # Parse functions (called by BaseComposerAuditTool.parse_output)
-# ---------------------------------------------------------------------------
 
 
 def parse_composer_audit_json(json_path: Path) -> dict[str, Any]:
@@ -42,9 +40,7 @@ def parse_composer_audit_json_string(json_string: str) -> dict[str, Any]:
     return _parse_composer_audit_data(data)
 
 
-# ---------------------------------------------------------------------------
 # Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -89,9 +85,7 @@ def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 class ComposerAuditHandler:

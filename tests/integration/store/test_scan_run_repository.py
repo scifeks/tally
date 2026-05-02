@@ -1,4 +1,4 @@
-"""Tests for the Phase 5.1 RunRepository surface (scan_runs + run_tools)."""
+"""Tests for RunRepository surface (scan_runs and run_tools)."""
 
 from __future__ import annotations
 
