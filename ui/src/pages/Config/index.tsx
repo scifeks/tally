@@ -98,6 +98,7 @@ export default function Config() {
           <ToolOverridesSection
             catalog={toolCatalog}
             overrides={toolOverrides}
+            projectId={projectId}
             onSave={(override, isNew) => saveToolOverride.mutate({ projectId, override, isNew })}
             onDelete={toolId => deleteToolOverride.mutate({ projectId, toolId })}
             isSaving={saveToolOverride.isPending}

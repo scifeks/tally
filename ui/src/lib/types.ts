@@ -779,3 +779,53 @@ export interface RepositoryAuthUpdate {
   username?: string
   password?: string
 }
+
+// ─── Saved Scans & Tool Argument Profiles (client-side mocks) ───────────────
+// These types back the v0-ported Saved Scans tab on Scans and the Argument
+// Templates surface on the tool override card. The data is stored in-memory
+// only; no backend persistence yet (see useSavedScans / useToolArgProfiles).
+
+/** Whether an argument carries no value, a string value, or a file path. */
+export type ArgValueType = 'none' | 'string' | 'file'
+
+/** One argument inside an ArgumentTemplate. */
+export interface ToolArgument {
+  id: string
+  /** e.g. "--wordlist", "-v" */
+  flag: string
+  valueType: ArgValueType
+  /** String value or, for file type, the resolved on-disk path. */
+  value?: string
+  /** Original filename for file type (display only). */
+  fileName?: string
+}
+
+/** A named, ordered list of arguments for one tool. */
+export interface ArgumentTemplate {
+  id: string
+  name: string
+  arguments: ToolArgument[]
+}
+
+/** Whether an override uses stock args or custom argument templates. */
+export type ArgsMode = 'stock' | 'custom'
+
+/**
+ * A saved scan configuration: a named bundle of repos, tools, skip-tools,
+ * segments, and skip-enrichment. v0 used `domains: Domain[]`; we use the
+ * project's existing `Segment` enum (UI label remains "Domains").
+ */
+export interface SavedScan {
+  id: string
+  projectId: number
+  name: string
+  /** Empty = all repos. */
+  repoIds: number[]
+  /** Tool ids; can include template refs like "semgrep:tmpl-1". */
+  toolIds: string[]
+  skipToolIds: string[]
+  segments: Segment[]
+  skipEnrichment: boolean
+  createdAt: string
+  updatedAt: string
+}
