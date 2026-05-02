@@ -18,6 +18,7 @@ from application.tools.scan_types import (
     ExecutionResources,
     FullScan,
     RepoScan,
+    ScanTypeConfig,
     SegmentScan,
     ToolOnAllReposScan,
     ToolOnRepoScan,
@@ -25,7 +26,7 @@ from application.tools.scan_types import (
 from application.tools.scan_types.execution import _build_tool_execution_config
 from domain.pipeline import scan_events as se
 from domain.pipeline.events import EventBus
-from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
+from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary
 
 if TYPE_CHECKING:
     from rich.console import Console

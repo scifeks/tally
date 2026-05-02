@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from application.tools.scan_types.models import ScanTypeConfig
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 
 def _make_prompt() -> MagicMock:

@@ -1,4 +1,4 @@
-"""RepoScan — runs all applicable tools for a single repo."""
+"""RepoScan: runs all applicable tools for a single repo."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, cast
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import (
     dispatch_and_count_ingested,
     execute_tool_passes,
@@ -18,13 +19,13 @@ from application.tools.scan_types.execution import (
     ordered_repo_tools,
     should_skip_sca_tool,
 )
+from application.tools.scan_types.models import ScanTypeConfig
 from core.detection.noir import noir_skip_reason
 from domain.pipeline import scan_events as se
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
-from domain.tools.scan_types.base import ScanType
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)

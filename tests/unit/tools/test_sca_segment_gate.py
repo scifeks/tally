@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
@@ -63,7 +63,7 @@ class TestScaSegmentGate:
     def test_skips_entire_repo_when_no_manifests_found(self, tmp_path) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
-        # empty dir — no dependency manifests
+        # empty dir, no dependency manifests
         repo = _make_repo(path=str(tmp_path), languages=["python"])
         config = _make_config()
         resources = _make_resources()
@@ -85,7 +85,7 @@ class TestScaSegmentGate:
         resources = _make_resources()
 
         # Tools won't actually run (no registry config), but we should NOT
-        # hit the SCA gate — skips come from tool not found, not from gate.
+        # hit the SCA gate; skips come from tool not found, not from gate.
         with patch(_LOAD_REPOS, return_value=[repo]):
             summary = RepoSegmentScan(["pip-audit"], segment_name="sca").execute(
                 config, resources
@@ -97,7 +97,7 @@ class TestScaSegmentGate:
     def test_gate_not_applied_for_non_sca_segment(self, tmp_path) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
-        # empty dir — no manifests, but segment is sast so gate must not fire
+        # empty dir, no manifests, but segment is sast so gate must not fire
         repo = _make_repo(path=str(tmp_path), languages=["python"])
         config = _make_config()
         resources = _make_resources()
@@ -204,6 +204,6 @@ class TestScaSegmentGate:
                 config, resources
             )
 
-        # repo_a: tool not registered (1 skip) — gate passed
+        # repo_a: tool not registered (1 skip), gate passed
         # repo_b: gate skip (1 skip)
         assert summary.total_tools_skipped == 2

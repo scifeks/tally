@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from application.tools.scan_types.execution import execute_tool_passes
+from application.tools.scan_types.models import ScanTypeConfig
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 
 def _make_prompt(confirm_return: bool = True) -> MagicMock:
@@ -108,7 +108,7 @@ class TestExecuteToolPassesApproval:
 
 class TestExecuteToolPassesSkip:
     def test_empty_pass_list_returns_none(self) -> None:
-        """Empty pass list signals skip — execute_tool_passes returns None."""
+        """Empty pass list signals skip; execute_tool_passes returns None."""
         config = _make_config()
         tool = _make_tool()
         tool.build_execution_passes.return_value = []

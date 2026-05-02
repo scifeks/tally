@@ -12,9 +12,9 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 
 def _make_noir_tool() -> MagicMock:
@@ -166,7 +166,7 @@ class TestNoirSkipIncompatTechs:
         assert row.skip_reason == "skipped (Node.js app)"
 
     def test_noir_not_skipped_when_neither_set(self) -> None:
-        """Neither check fires — execute_tool_passes is called."""
+        """Neither check fires; execute_tool_passes is called."""
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
         noir = _make_noir_tool()

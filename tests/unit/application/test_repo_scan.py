@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.execution_config import ToolExecutionConfig
-from domain.tools.scan_types.models import ScanTypeConfig
 
 _LOAD_REPOS = "application.tools.scan_types.repo.load_active_repos"
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
@@ -137,7 +137,7 @@ class TestRepoScan:
     def test_sca_tool_skipped_when_no_manifests(self, tmp_path: Any) -> None:
         from application.tools.scan_types.repo import RepoScan
 
-        # tmp_path is empty — no Python manifests present.
+        # tmp_path is empty; no Python manifests present.
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
         config = _make_config()
         pip_audit = MagicMock()
@@ -160,7 +160,7 @@ class TestRepoScan:
         with patch(_LOAD_REPOS, return_value=[repo]):
             summary = RepoScan("my-repo").execute(config, resources)
 
-        # pip-audit must not appear in the tool_set — manifest gate blocks it.
+        # pip-audit must not appear in the tool_set; manifest gate blocks it.
         assert summary.total_tools_run == 0
 
     def test_sca_tool_included_when_manifests_present(self, tmp_path: Any) -> None:
@@ -197,7 +197,7 @@ class TestRepoScan:
     def test_non_sca_tool_still_uses_language_gate(self, tmp_path: Any) -> None:
         from application.tools.scan_types.repo import RepoScan
 
-        # empty dir — no manifests — but semgrep is sast so manifest gate
+        # empty dir, no manifests, but semgrep is sast so manifest gate
         # must not apply.
         repo = _make_mock_repo(name="my-repo", languages=["python"], path=str(tmp_path))
         config = _make_config()
@@ -222,13 +222,13 @@ class TestRepoScan:
             summary = RepoScan("my-repo").execute(config, resources)
 
         # semgrep matched via language gate, skipped only because not
-        # registered — not because of a manifest check.
+        # registered, not because of a manifest check.
         assert summary.total_tools_skipped == 1
 
     def test_always_run_tool_ignores_manifest_gate(self, tmp_path: Any) -> None:
         from application.tools.scan_types.repo import RepoScan
 
-        # empty dir — no manifests.
+        # empty dir, no manifests.
         repo = _make_mock_repo(name="my-repo", languages=[], path=str(tmp_path))
         config = _make_config()
         osv = MagicMock()

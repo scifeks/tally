@@ -1,4 +1,4 @@
-"""FullScan — runs all segments across all repos in SEGMENT_ORDER."""
+"""FullScan: runs all segments across all repos in SEGMENT_ORDER."""
 
 from __future__ import annotations
 
@@ -6,13 +6,14 @@ from time import perf_counter
 from typing import cast
 
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import tools_for_segment
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.pipeline import scan_events as se
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
-from domain.tools.scan_types.base import ScanType
-from domain.tools.scan_types.models import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import SEGMENT_ORDER, ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
 
 

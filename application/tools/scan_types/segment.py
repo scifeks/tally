@@ -1,15 +1,16 @@
-"""SegmentScan — validates a segment name and delegates to the right scan type."""
+"""SegmentScan: validates a segment name and delegates to the right scan type."""
 
 from __future__ import annotations
 
 from typing import Any, cast
 
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import tools_for_segment
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.tools.exceptions import InvalidSegmentError
-from domain.tools.scan_types.base import ScanType
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
 
 
