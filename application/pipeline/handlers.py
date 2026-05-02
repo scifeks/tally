@@ -7,6 +7,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from application.pipeline.fingerprint import compute_fingerprint
 from application.rag.ingestor import (
     ToolHandlerFactory,
     filter_code_rows,
@@ -18,7 +19,6 @@ from domain.pipeline.events import (
     IngestCompleted,
     ToolCompleted,
 )
-from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.llm.factory import get_llm_provider
 from infrastructure.store import make_store

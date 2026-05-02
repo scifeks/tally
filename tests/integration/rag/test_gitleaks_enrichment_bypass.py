@@ -14,9 +14,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
-from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 
 pytestmark = pytest.mark.integration

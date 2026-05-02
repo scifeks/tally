@@ -6,10 +6,10 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from application.pipeline.fingerprint import compute_fingerprint
 from application.ports.finding_repository import FindingRepositoryPort
 from domain.findings.entry import Finding
 from domain.findings.severity import Severity
-from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
     _COMMA_LIST_FIELDS,
