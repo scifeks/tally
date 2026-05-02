@@ -14,6 +14,7 @@ from application.startup.checker import DependencyChecker
 from application.tools.registry import discover_tools
 from infrastructure.runtime import ClaudeCodeProbe
 from infrastructure.store.project_registry import ProjectRegistryRepository
+from infrastructure.web_ui.runner import WebUiRunner
 
 _BASE_PATH = "."
 
@@ -128,6 +129,7 @@ if __name__ == "__main__":
             base_path=_BASE_PATH,
             runtime_service=runtime_service,
             project_registry=project_registry,
+            web_ui_runner=WebUiRunner(),
         ).run()
     except KeyboardInterrupt:
         pass

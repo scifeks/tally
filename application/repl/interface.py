@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from application.ports.web_ui_runner import WebUiRunnerPort
 from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
 from application.project.registry_service import ProjectRegistryService
@@ -34,7 +35,6 @@ from application.startup.checker import print_installed_system_tools
 from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
 from infrastructure.runtime import ClaudeCodeProbe
-from web.server import create_web_app as _create_web_app
 
 _log = logging.getLogger(__name__)
 
@@ -219,6 +219,7 @@ class REPL:
         base_path: str = ".",
         runtime_service: RuntimeDependencyService | None = None,
         project_registry: ProjectRegistryService | None = None,
+        web_ui_runner: WebUiRunnerPort | None = None,
     ):
         self.base_path = base_path
         self.console = Console()
@@ -239,6 +240,10 @@ class REPL:
         if runtime_service is None:
             runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
         self._runtime_service = runtime_service
+        if web_ui_runner is None:
+            from infrastructure.web_ui.runner import WebUiRunner
+
+            web_ui_runner = WebUiRunner()
         self.help_renderer = HelpRenderer(self.console, runtime_service=runtime_service)
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
@@ -247,7 +252,7 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
-        self.ui_commands = UiCommands(self, app_factory=_create_web_app)
+        self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -277,10 +282,10 @@ class REPL:
             try:
                 raw = session.prompt(self._get_prompt())
             except KeyboardInterrupt:
-                # Ctrl+C — stay in loop
+                # Ctrl+C: stay in loop
                 continue
             except EOFError:
-                # Ctrl+D — exit
+                # Ctrl+D: exit
                 break
 
             raw = raw.strip()
@@ -307,7 +312,7 @@ class REPL:
         Prints _HARNESS_SENTINEL to stdout before waiting for each
         command so pexpect can reliably detect when the REPL is ready.
         Interactive wizard commands (which call input() directly) work
-        normally — the sentinel only appears at the top-level REPL
+        normally; the sentinel only appears at the top-level REPL
         prompt boundary.
         """
         self._print_banner()
