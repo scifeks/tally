@@ -1,20 +1,20 @@
 """Cross-process atomic config writes with sidecar fcntl locking.
 
-Phase 9.1: load/modify/save races between the REPL, the web API, and the
-scan event handlers are eliminated by:
+load/modify/save races between the REPL, the web API, and the scan event
+handlers are eliminated by:
 
-1. ``locked_config(path)`` — a context manager that takes an exclusive
+1. ``locked_config(path)`` - a context manager that takes an exclusive
    advisory lock on a sidecar ``<path>.lock`` file via ``fcntl.flock``. The
    lock is held by an open file descriptor, so the kernel releases it on
    process death (clean or otherwise). A per-canonical-path
    ``threading.Lock`` is layered on top so async tasks within the same
    process serialize before reaching fcntl.
 
-2. ``atomic_write_text(path, text)`` — writes to a randomly-named
+2. ``atomic_write_text(path, text)`` - writes to a randomly-named
    ``<path>.<rand>.tmp`` and ``os.replace``s into place. fsync before
    replace; the temp file is unlinked on failure.
 
-3. ``sweep_orphans(base_path)`` — clears stale ``*.tmp`` files left by
+3. ``sweep_orphans(base_path)`` - clears stale ``*.tmp`` files left by
    crashes mid-write. Idempotent; safe to call at startup.
 """
 

@@ -56,7 +56,7 @@ def alerts_parsed_data() -> dict:
 
 class TestZapIngestor:
     def test_chunk_count(self, alerts_parsed_data: dict) -> None:
-        """2 alerts in fixture → 2 rows."""
+        """Fixture alerts produce matching row count."""
         handler = ToolHandlerFactory.load("zap")
         assert handler is not None
         result = _make_zap_result(alerts_parsed_data)
@@ -64,7 +64,7 @@ class TestZapIngestor:
         assert len(rows) == 2
 
     def test_shared_metadata(self, alerts_parsed_data: dict) -> None:
-        """ZAP rows have domain='web', type_vulnerability=True."""
+        """Normalized rows have domain='web' and type_vulnerability=True."""
         handler = ToolHandlerFactory.load("zap")
         assert handler is not None
         result = _make_zap_result(alerts_parsed_data)
@@ -80,7 +80,7 @@ class TestZapIngestor:
             assert row["type_dependency"] is False
 
     def test_metadata_fidelity(self, alerts_parsed_data: dict) -> None:
-        """Row fields match the fixture alert data."""
+        """Rows preserve all fixture fields correctly."""
         handler = ToolHandlerFactory.load("zap")
         assert handler is not None
         result = _make_zap_result(alerts_parsed_data)
@@ -177,7 +177,7 @@ class TestZapIngestor:
         assert "cwe_id" not in header_rows[0]
 
     def test_no_none_or_empty_metadata_values(self, alerts_parsed_data: dict) -> None:
-        """No row value is None or empty string (except source_file)."""
+        """Row values are never None or empty (except source_file)."""
         handler = ToolHandlerFactory.load("zap")
         assert handler is not None
         result = _make_zap_result(alerts_parsed_data)
@@ -189,7 +189,7 @@ class TestZapIngestor:
                     assert val != "", f"Empty string for key {key!r}"
 
     def test_return_type_is_list(self, alerts_parsed_data: dict) -> None:
-        """normalize() returns list[dict] with correct length."""
+        """normalize() returns list of dicts with matching length."""
         handler = ToolHandlerFactory.load("zap")
         assert handler is not None
         result = _make_zap_result(alerts_parsed_data)

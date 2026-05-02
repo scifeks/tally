@@ -1,4 +1,4 @@
-"""Integration test for Phase 8.10: sealing fires on scan completion.
+"""Integration test: sealing fires on scan completion.
 
 Drives ``ScanOrchestrator._run()`` directly with a no-op body so the
 chat sealing call site is exercised end-to-end without spinning up a
@@ -197,9 +197,7 @@ def test_orchestrator_no_op_when_project_id_is_none(tmp_path: Path) -> None:
     assert row.expired_at is None
 
 
-# ---------------------------------------------------------------------------
 # End-to-end through the web API
-# ---------------------------------------------------------------------------
 
 
 HANDSHAKE = "test-handshake-abc123xyz"

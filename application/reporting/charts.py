@@ -1,4 +1,4 @@
-"""Chart renderer strategy — production backend produces pure HTML/CSS fragments."""
+"""Render charts as pure HTML/CSS fragments with no external dependencies."""
 
 from __future__ import annotations
 

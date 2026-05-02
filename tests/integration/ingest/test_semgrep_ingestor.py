@@ -57,7 +57,7 @@ def findings_parsed_data() -> dict:
 
 class TestSemgrepIngestor:
     def test_chunk_count(self, findings_parsed_data: dict) -> None:
-        """2 findings in fixture → 2 rows."""
+        """Fixture findings produce matching row count."""
         handler = ToolHandlerFactory.load("semgrep")
         assert handler is not None
         result = _make_semgrep_result(findings_parsed_data)
@@ -65,7 +65,7 @@ class TestSemgrepIngestor:
         assert len(rows) == 2
 
     def test_shared_metadata(self, findings_parsed_data: dict) -> None:
-        """Semgrep rows have correct domain/enriched/type_* fields."""
+        """Normalized rows have correct domain and type flags."""
         handler = ToolHandlerFactory.load("semgrep")
         assert handler is not None
         result = _make_semgrep_result(findings_parsed_data)
@@ -81,7 +81,7 @@ class TestSemgrepIngestor:
             assert row["type_dependency"] is False
 
     def test_metadata_fidelity(self, findings_parsed_data: dict) -> None:
-        """Row fields match the fixture data."""
+        """Rows preserve all fixture fields correctly."""
         handler = ToolHandlerFactory.load("semgrep")
         assert handler is not None
         result = _make_semgrep_result(findings_parsed_data)
@@ -136,7 +136,7 @@ class TestSemgrepIngestor:
         assert "owasp" not in row
 
     def test_no_none_or_empty_metadata_values(self, findings_parsed_data: dict) -> None:
-        """No row value is None or empty string (except source_file)."""
+        """Row values are never None or empty (except source_file)."""
         handler = ToolHandlerFactory.load("semgrep")
         assert handler is not None
         result = _make_semgrep_result(findings_parsed_data)
@@ -148,7 +148,7 @@ class TestSemgrepIngestor:
                     assert val != "", f"Empty string for key {key!r}"
 
     def test_return_type_is_list(self, findings_parsed_data: dict) -> None:
-        """normalize() returns list[dict] with correct length."""
+        """normalize() returns list of dicts with matching length."""
         handler = ToolHandlerFactory.load("semgrep")
         assert handler is not None
         result = _make_semgrep_result(findings_parsed_data)

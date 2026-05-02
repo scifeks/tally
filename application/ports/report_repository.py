@@ -1,15 +1,7 @@
-"""Persistence port for the ``reports`` table.
+"""Persistence port for the reports table.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.reports.ReportRepository``. Read
-methods return ``domain.reports.entry.ReportRow`` so the port boundary
-stays free of infrastructure dataclasses.
-
-No application-layer caller imports ``ReportRepository`` today: every
-consumer lives in ``web/``. The port is introduced here to satisfy the
-"one Protocol port per repository" plan and to position A7, where the
-report runner logic moves into an application service that will
-consume this port directly.
+Read methods return ReportRow. The port positions future application
+services that will consume this port directly.
 """
 
 from __future__ import annotations

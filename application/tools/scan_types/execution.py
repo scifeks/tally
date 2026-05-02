@@ -159,14 +159,11 @@ def dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
 
 
 def ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
-    """Order tool_set by SEGMENT_ORDER; within each segment, discovery tools
-    run before scanners, then alphabetically within each group.
+    """Order tool_set by SEGMENT_ORDER and discovery-first priority.
 
-    Discovery tools (``is_discovery_tool=True``, e.g. Katana, Noir) must
-    produce OAS3/JSONL output before scanners (DalFox, XSStrike, ZAP) can
-    consume it.  A plain alphabetical sort is insufficient because
-    ``dalfox < katana``, which would run DalFox before Katana on first scan.
-    See ADR-00014.
+    Discovery tools (Katana, Noir) must run before downstream scanners
+    (DalFox, XSStrike, ZAP) to produce output they can consume. Plain
+    alphabetical sorting is insufficient because ``dalfox < katana``.
     """
     result: list[str] = []
     for segment in SEGMENT_ORDER:

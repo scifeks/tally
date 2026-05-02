@@ -1,16 +1,14 @@
-"""Hexagonal report orchestrator (Phase 7.4).
+"""Wraps report generation behind a single entry point.
 
-Wraps ``ReportGenerator`` (markdown/html/json) and ``ReportAssembler``
-(pdf) behind a single entry point that:
+Coordinates ``ReportGenerator`` (markdown/html/json) and
+``ReportAssembler`` (pdf) with:
 
-- emits ``ReportEvent`` instances through a ``ReportEventSink`` port,
-- honors a ``CancellationToken`` between steps,
-- accepts a ``force_overwrite`` flag in lieu of the REPL's bare
-  ``input()`` prompt (the API can never block on stdin).
+- ``ReportEvent`` emission through a ``ReportEventSink`` port.
+- ``CancellationToken`` support between steps.
+- ``force_overwrite`` flag so the API can never block on stdin.
 
-The orchestrator does not touch the database or filesystem layout —
-the caller (REPL command or web runner) decides where to write the
-artifact and what row to update.
+Does not touch the database or filesystem layout; the caller (REPL command
+or web runner) decides where to write the artifact and what row to update.
 """
 
 from __future__ import annotations
@@ -21,13 +19,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from application.locking.cancellation import CancellationToken
+from application.ports.html_template_renderer import HtmlTemplateRenderer
+from application.ports.pdf_renderer import PdfRenderer, PdfRenderError
 from application.ports.report_event_sink import (
     NullReportEventSink,
     ReportEventSink,
 )
 from application.ports.user_prompt import UserPromptPort
 from application.reporting.generator import ReportGenerator
-from application.reporting.pdf import PDFRenderError
 from application.reporting.resolver import SectionMissingError
 from domain.pipeline.report_events import (
     GenerationCancelled,
@@ -72,6 +71,8 @@ def run_report(
     request: ReportRequest,
     *,
     prompt: UserPromptPort,
+    template_renderer: HtmlTemplateRenderer | None = None,
+    pdf_renderer: PdfRenderer | None = None,
     event_sink: ReportEventSink | None = None,
     cancel_token: CancellationToken | None = None,
 ) -> Path:
@@ -80,6 +81,9 @@ def run_report(
     Steps emit events via *event_sink*. ``ReportCancelled`` is raised on
     cooperative cancellation between steps; ``ReportOverwriteDenied`` is
     raised when the file exists and ``force_overwrite`` is False.
+
+    For ``format == "pdf"``, *template_renderer* and *pdf_renderer* are
+    required. They are unused for text formats; callers may omit them.
     """
     sink: ReportEventSink = event_sink or NullReportEventSink()
     token = cancel_token or CancellationToken()
@@ -102,7 +106,13 @@ def run_report(
 
     try:
         if fmt == "pdf":
-            output = _run_pdf(request, prompt, sink, token)
+            if template_renderer is None or pdf_renderer is None:
+                raise ValueError(
+                    "template_renderer and pdf_renderer are required for pdf format"
+                )
+            output = _run_pdf(
+                request, prompt, template_renderer, pdf_renderer, sink, token
+            )
         else:
             output = _run_text(request, sink, token)
     except ReportCancelled:
@@ -114,7 +124,7 @@ def run_report(
             )
         )
         raise
-    except (SectionMissingError, PDFRenderError, ReportOverwriteDenied) as exc:
+    except (SectionMissingError, PdfRenderError, ReportOverwriteDenied) as exc:
         sink.emit(
             GenerationFailed(
                 report_id=request.report_id,
@@ -124,7 +134,7 @@ def run_report(
             )
         )
         raise
-    except Exception as exc:  # noqa: BLE001 — convert to event then re-raise
+    except Exception as exc:  # noqa: BLE001
         sink.emit(
             GenerationFailed(
                 report_id=request.report_id,
@@ -148,9 +158,7 @@ def run_report(
     return output
 
 
-# ---------------------------------------------------------------------------
 # Per-format implementations
-# ---------------------------------------------------------------------------
 
 
 def _check_cancel(
@@ -224,10 +232,12 @@ def _run_text(
 def _run_pdf(
     request: ReportRequest,
     prompt: UserPromptPort,
+    template_renderer: HtmlTemplateRenderer,
+    pdf_renderer: PdfRenderer,
     sink: ReportEventSink,
     token: CancellationToken,
 ) -> Path:
-    # Lazy import — tests patch ``application.reporting.assembler.ReportAssembler``
+    # Lazy import; tests patch application.reporting.assembler.ReportAssembler
     # at the source module, so the orchestrator must resolve it at call time.
     from application.reporting import assembler as assembler_mod
 
@@ -236,6 +246,8 @@ def _run_pdf(
         project=request.project,
         base_path=request.base_path,
         prompt=prompt,
+        template_renderer=template_renderer,
+        pdf_renderer=pdf_renderer,
         testing_type=request.testing_type,
         engagement_date=request.engagement_date,
         company_name_override=request.company_name_override,

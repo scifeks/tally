@@ -48,9 +48,7 @@ def fixture_rows(fixture_parsed: dict) -> list[dict]:
     return handler.normalize(result, profile="test-repo")
 
 
-# ---------------------------------------------------------------------------
 # ToolHandlerFactory
-# ---------------------------------------------------------------------------
 
 
 class TestHandlerLoad:
@@ -62,11 +60,6 @@ class TestHandlerLoad:
         handler = ToolHandlerFactory.load("xsstrike")
         assert handler is not None
         assert handler.tool_name == "xsstrike"
-
-
-# ---------------------------------------------------------------------------
-# normalize() — row count and field values
-# ---------------------------------------------------------------------------
 
 
 class TestNormalizeRowCount:
@@ -90,11 +83,6 @@ class TestNormalizeRowCount:
     def test_return_type_is_list_of_dicts(self, fixture_rows: list[dict]) -> None:
         assert isinstance(fixture_rows, list)
         assert all(isinstance(r, dict) for r in fixture_rows)
-
-
-# ---------------------------------------------------------------------------
-# normalize() — per-row field correctness
-# ---------------------------------------------------------------------------
 
 
 class TestNormalizeFieldValues:
@@ -145,11 +133,6 @@ class TestNormalizeFieldValues:
             assert row["payload"], "payload must not be empty"
 
 
-# ---------------------------------------------------------------------------
-# normalize() — shared metadata flags
-# ---------------------------------------------------------------------------
-
-
 class TestNormalizeMetadataFlags:
     def test_domain_is_web(self, fixture_rows: list[dict]) -> None:
         for row in fixture_rows:
@@ -172,9 +155,7 @@ class TestNormalizeMetadataFlags:
             assert row["enriched"] is False
 
 
-# ---------------------------------------------------------------------------
 # render()
-# ---------------------------------------------------------------------------
 
 
 class TestRender:
@@ -212,9 +193,7 @@ class TestRender:
             assert "79" in handler.render(row)
 
 
-# ---------------------------------------------------------------------------
 # fingerprint_key()
-# ---------------------------------------------------------------------------
 
 
 class TestFingerprintKey:

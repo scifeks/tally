@@ -1,4 +1,4 @@
-"""Tests for the Phase 5.1 scan event types."""
+"""Tests for scan event types."""
 
 from __future__ import annotations
 

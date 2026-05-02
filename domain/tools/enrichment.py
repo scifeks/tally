@@ -32,7 +32,7 @@ class FieldEnrichmentSpec:
         field_name: The enrichment field key (must be in ENRICHMENT_FIELDS).
         source_fields: Ordered tuple of metadata keys to extract from the
             finding and send as context. Keys absent from the finding are
-            silently omitted. Listed in priority order — most diagnostic first.
+            silently omitted. Listed in priority order (most diagnostic first).
         strategy: Whether to use the shared generic template or a dedicated
             field-specific prompt module. Defaults to GENERIC.
     """

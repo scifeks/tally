@@ -1,4 +1,4 @@
-"""Phase 6 integration tests: run_draft() injects rag_context from ChromaDB."""
+"""Integration tests: run_draft() injects rag_context from ChromaDB."""
 
 from __future__ import annotations
 

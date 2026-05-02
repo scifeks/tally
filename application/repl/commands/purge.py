@@ -54,9 +54,7 @@ class PurgeCommand:
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
 
-    # ------------------------------------------------------------------
     # Command entry point
-    # ------------------------------------------------------------------
 
     def cmd_purge(self, _cmd: str, args: list[str]) -> None:
         """purge [--tool=<tool,...>] [--keep-reports]: delete findings."""
@@ -184,9 +182,7 @@ class PurgeCommand:
                 f"[green]Deleted {chat_deleted} chat session(s).[/green]"
             )
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _delete_tool_output_files(self, tools: list[str] | None) -> None:
         """Delete files from tool_outputs directories.

@@ -1,12 +1,7 @@
-"""REPL adapter: receives scan events but does not render them.
+"""REPL adapter: no-op scan event sink.
 
-The REPL has long-standing Rich console output driven by direct
-``OrchestratorDisplay`` calls inside the scan_types modules. Phase 5.2
-adds parallel event emission for the API surface; the REPL must remain
-byte-identical, so this sink simply discards events.
-
-If the REPL ever grows progress UI driven from semantic events
-(rather than display calls), this is where it would live.
+The REPL output is driven by direct OrchestratorDisplay calls. This sink
+discards events to keep the REPL output byte-identical.
 """
 
 from __future__ import annotations

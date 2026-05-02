@@ -1,8 +1,8 @@
 """Shared pytest configuration and skip markers for the tally test suite.
 
-Skip markers — defined once here, used throughout the suite:
-  requires_gitleaks  — skip when the gitleaks binary is not installed
-  requires_ollama    — skip when Ollama is not reachable or not configured
+Skip markers (defined once here, used throughout the suite):
+  requires_gitleaks: skip when the gitleaks binary is not installed
+  requires_ollama: skip when Ollama is not reachable or not configured
 
 These are module-level constants, not fixtures. Test files import them:
     from tests.conftest import requires_ollama

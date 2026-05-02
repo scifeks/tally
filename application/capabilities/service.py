@@ -10,7 +10,7 @@ class CapabilitiesService:
       - chat_enabled: GlobalConfig.chat_llm_provider == "ollama".
       - triage_enabled: ClaudeCodeProbe (via RuntimeDependencyService) is
         installed.
-      - report_retention_enabled: hardcoded False — no retention sweep
+      - report_retention_enabled: hardcoded False; no retention sweep
         mechanism exists yet.
       - max_report_history: GlobalConfig.report_retention_count.
     """

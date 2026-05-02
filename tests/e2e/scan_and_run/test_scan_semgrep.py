@@ -19,7 +19,7 @@ requires_semgrep = pytest.mark.skipif(
 @requires_semgrep
 @pytest.mark.slow
 @pytest.mark.skip(
-    reason="Runs semgrep across all DVPA repos — too slow until synthetic "
+    reason="Runs semgrep across all DVPA repos, too slow until synthetic "
     "test repos are in place"
 )
 def test_scan_semgrep_produces_findings(tally_harness_live: TallyHarness) -> None:

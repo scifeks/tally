@@ -19,16 +19,13 @@ class RunRepository(RunRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # ------------------------------------------------------------------
     # Legacy entry points (retained for REPL parity and existing tests)
-    # ------------------------------------------------------------------
     def create_run(self, args: dict) -> int:
-        """Insert a scan_run row with only the legacy fields populated.
+        """Insert a scan_run row with only legacy fields populated.
 
-        Used by the REPL `_create_sqlite_run` path before Phase 5.2
-        wires the full create() signature. New columns remain NULL so
-        the row is still queryable but does not yet participate in
-        status/event tracking.
+        New columns remain NULL; the row is queryable but does not
+        participate in status/event tracking. Retained for backward
+        compatibility with the REPL.
         """
         created_at = datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
@@ -49,9 +46,7 @@ class RunRepository(RunRepositoryPort):
                 ],
             )
 
-    # ------------------------------------------------------------------
-    # Phase 5.1 surface
-    # ------------------------------------------------------------------
+    # Full scan run creation
     def create(
         self,
         *,

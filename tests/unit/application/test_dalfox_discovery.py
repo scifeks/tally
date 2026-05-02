@@ -118,7 +118,7 @@ class TestDalFoxDiscoveryFromCommandsJson:
         assert "dalfox" in tool_registry.list_tool_names()
 
     def test_dalfox_scan_segment_is_web(self, tmp_path) -> None:
-        """Registered tool has scan_segment='web' — routes to web scan type."""
+        """Registered tool has scan_segment='web'; routes to web scan type."""
         cfg = tmp_path / "config"
         cfg.mkdir()
         (cfg / "commands.json").write_text(

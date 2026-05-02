@@ -21,9 +21,7 @@ from tally_mcp.tools import findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 _BASE_FINDING = {
     "tool": "semgrep",
@@ -66,9 +64,7 @@ def _first_id(factory: ConnectionFactory) -> int:
     return row["id"]
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()

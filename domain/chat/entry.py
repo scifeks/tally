@@ -1,10 +1,8 @@
 """Domain entries for the chat surface.
 
-``ChatSessionRow`` and ``ChatMessageRow`` are the row-shaped value objects
-returned by the chat repository ports. They live in ``domain/`` so that
-port signatures depend on domain types rather than infrastructure types
-(Rule 7). The dataclasses are frozen and field-equivalent to the rows
-persisted in ``chat_sessions`` and ``chat_messages``.
+``ChatSessionRow`` and ``ChatMessageRow`` are frozen row-shaped value
+objects returned by chat repository ports. Frozen dataclasses preserve
+immutability across adapter boundaries.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""DraftEventSink port — destination for draft lifecycle events (Phase 7.5).
+"""Destination for draft lifecycle events.
 
 The draft orchestrator calls ``sink.emit(event)`` on every state transition.
 Concrete adapters decide what to do with the event:

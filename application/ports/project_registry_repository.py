@@ -1,4 +1,4 @@
-"""Persistence port for the global ``projects`` registry table."""
+"""Persistence port for the global projects registry table."""
 
 from __future__ import annotations
 

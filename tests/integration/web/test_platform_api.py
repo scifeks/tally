@@ -37,7 +37,7 @@ async def platform_client(tmp_path: Path):
 class TestHealth:
     async def test_health_returns_ok_without_auth(self, platform_client) -> None:
         client, _ = platform_client
-        # No handshake exchange, no session cookie — endpoint must still respond.
+        # No handshake exchange, no session cookie; endpoint must still respond.
         resp = await client.get(
             "/api/v1/health",
             headers={"Origin": f"http://127.0.0.1:{_TEST_PORT}"},

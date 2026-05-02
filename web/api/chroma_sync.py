@@ -21,11 +21,9 @@ def sync_finding_to_chroma(
 ) -> None:
     """Best-effort ChromaDB upsert after a SQLite analyst PATCH.
 
-    Fetches the updated row by primary key, renders text via
-    ``ToolHandler.render()``, and upserts via the knowledge base using
-    ``str(findings.id)`` as the doc ID.  Never raises — all exceptions
-    are caught and logged as warnings.  The PATCH endpoint returns 200
-    regardless of this function's outcome.
+    Fetches the updated row, renders text via ``ToolHandler.render()``,
+    and upserts via the knowledge base. Never raises; all exceptions are
+    caught and logged as warnings.
     """
     try:
         if knowledge_base is None:
@@ -35,7 +33,7 @@ def sync_finding_to_chroma(
         rows = finding_repo.get_by_ids([finding_id])
         if not rows:
             logger.warning(
-                "Chroma sync: finding id=%s not found in SQLite — skipping",
+                "Chroma sync: finding id=%s not found in SQLite (skipping)",
                 finding_id,
             )
             return
@@ -44,7 +42,7 @@ def sync_finding_to_chroma(
         handler = ToolHandlerFactory.load(row["tool"])
         if handler is None:
             logger.warning(
-                "Chroma sync: no handler for tool=%s (finding id=%s) — skipping",
+                "Chroma sync: no handler for tool=%s (finding id=%s) (skipping)",
                 row["tool"],
                 finding_id,
             )

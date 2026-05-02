@@ -1,4 +1,4 @@
-"""Integration tests for the Phase 14.3 RepositoryRepository."""
+"""Integration tests for RepositoryRepository."""
 
 from __future__ import annotations
 

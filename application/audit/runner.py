@@ -1,4 +1,4 @@
-"""AuditRunner — wraps async tool calls with timing and audit-log persistence."""
+"""Invoke an async function and persist an audit record for the call."""
 
 from __future__ import annotations
 

@@ -1,9 +1,9 @@
 """DalFox local wrapper for XSS scanning of SPAs and JavaScript-heavy apps.
 
-DalFox has **no built-in crawler** — seeds must be provided externally.
-This wrapper reads ``repo.merged_seeds_path``, the canonical deduplicated
-seeds file produced by the URL discovery pipeline after Katana, Noir,
-and/or a user-provided endpoint file run.
+DalFox has no built-in crawler; seeds must be provided externally. This
+wrapper reads ``repo.merged_seeds_path``, the canonical deduplicated seeds
+file produced by the URL discovery pipeline after Katana, Noir, and/or a
+user-provided endpoint file run.
 
 When ``merged_seeds_path`` is empty or missing, DalFox is skipped and a
 warning is logged.
@@ -172,7 +172,7 @@ class DalFoxLocalTool(BaseDalFoxTool):
         )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
-                "DalFox: no URL inventory for %s — skipping. "
+                "DalFox: no URL inventory for %s; skipping. "
                 "Run Katana, Noir, or configure an endpoint file to "
                 "generate URL discovery output.",
                 repo.name,

@@ -1,13 +1,9 @@
-"""ReportRunRegistry — process-singleton tracking active report runs.
+"""Process-singleton tracking active report runs.
 
-Mirrors :class:`application.tools.scan_run_registry.ScanRunRegistry`. The
-cancel endpoint looks up cancellation tokens by ``report_id``. The
-report worker thread unregisters itself in its ``finally`` block.
-
-Report generation is single-active process-wide via ``LockRegistry``
-slot ``"report"``, so this map will hold at most one entry at a time.
-The registry still uses a dict keyed by ``report_id`` to mirror the
-scan/triage registries and to keep the cancel API uniform.
+The cancel endpoint looks up cancellation tokens by ``report_id``. The
+report worker thread unregisters itself in its ``finally`` block. Report
+generation is single-active process-wide via ``LockRegistry``, so this
+map holds at most one entry at a time.
 """
 
 from __future__ import annotations
@@ -65,7 +61,7 @@ class ReportRunRegistry:
             return list(self._handles.values())
 
     def reset(self) -> None:
-        """Test helper — drop all entries."""
+        """Test helper to drop all entries."""
         with self._lock:
             self._handles.clear()
 

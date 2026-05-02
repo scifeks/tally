@@ -1,4 +1,4 @@
-"""Integration tests for findings — audit log written on every call."""
+"""Integration tests for findings audit log written on every call."""
 
 from __future__ import annotations
 

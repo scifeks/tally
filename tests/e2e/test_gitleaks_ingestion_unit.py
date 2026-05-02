@@ -27,11 +27,6 @@ _TALLY_ROOT = Path(__file__).resolve().parents[2]
 _TIMESTAMP = "2024-01-01T00:00:00"
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _write_global_config(base_path: Path) -> None:
     real_config = _TALLY_ROOT / "config" / "global.json"
     if not real_config.exists():
@@ -135,9 +130,7 @@ def _ingest(
     return rows
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -152,9 +145,7 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-# ---------------------------------------------------------------------------
 # Scenario 4a – Ingestion unit tests  (@requires_ollama, no gitleaks, not slow)
-# ---------------------------------------------------------------------------
 
 
 @requires_ollama

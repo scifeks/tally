@@ -1,11 +1,11 @@
-"""TriageEventSink port — destination for triage lifecycle events (Phase 6.1).
+"""Destination for triage lifecycle events.
 
 The triage runner calls ``sink.emit(event)`` on every state transition.
 Concrete adapters decide what to do with the event:
 
 - REPL adapter (``ConsoleTriageEventSink``): no-op. The REPL's existing
-  ``print()`` / logging output remains in place to preserve byte-
-  identical REPL behavior.
+  ``print()`` / logging output remains in place to preserve byte-identical
+  REPL behavior.
 - API adapter (``EventBusTriageSink``): projects the event into a
   ``BusEvent(stream="triage", ...)`` and publishes it to the
   process-singleton ``EventBus`` for SSE fan-out.

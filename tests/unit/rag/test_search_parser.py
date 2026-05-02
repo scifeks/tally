@@ -35,9 +35,7 @@ def _parse(raw: str) -> SearchQuery:
     return parse_search_query(raw, _KNOWN_TOOLS)
 
 
-# ---------------------------------------------------------------------------
 # Semantic-vs-metadata classification
-# ---------------------------------------------------------------------------
 
 
 def test_semantic_is_true():
@@ -55,9 +53,7 @@ def test_bare_tool_plus_semantic_separates():
     assert sq.semantic_text == "aws access key"
 
 
-# ---------------------------------------------------------------------------
 # Pagination tests
-# ---------------------------------------------------------------------------
 
 
 def test_default_page():
@@ -113,9 +109,7 @@ def test_flag_without_value_raises():
         _parse("--page-size")
 
 
-# ---------------------------------------------------------------------------
 # Validation error tests
-# ---------------------------------------------------------------------------
 
 
 def test_unknown_key_raises():
@@ -158,9 +152,7 @@ def test_severity_confirmed_raises_with_new_schema():
         _parse("severity=confirmed")
 
 
-# ---------------------------------------------------------------------------
 # Contextual error message tests
-# ---------------------------------------------------------------------------
 
 
 def test_unknown_key_error_without_tool_suggests_help_search():
@@ -178,9 +170,7 @@ def test_unknown_key_error_with_tool_after_bad_key_uses_tool_context():
         _parse("finding=foo tool=gitleaks")
 
 
-# ---------------------------------------------------------------------------
-# Results display tests — pure unit, helpers only
-# ---------------------------------------------------------------------------
+# Results display tests: pure unit, helpers only
 
 
 def test_extract_types_single():
@@ -217,9 +207,7 @@ def testcolor_severity_empty():
     assert color_severity("") == ""
 
 
-# ---------------------------------------------------------------------------
 # No-results display test
-# ---------------------------------------------------------------------------
 
 
 def test_no_results_message():
@@ -242,9 +230,7 @@ def test_no_results_message():
     assert any("No findings matched" in a for a in printed_args)
 
 
-# ---------------------------------------------------------------------------
 # parse_chromadb_search_command: pagination and error tests
-# ---------------------------------------------------------------------------
 
 _CMD_KNOWN_TOOLS = frozenset({"semgrep", "gitleaks", "zap"})
 

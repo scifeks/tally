@@ -69,9 +69,7 @@ def _base_ctx() -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Registry
-# ---------------------------------------------------------------------------
 
 
 class TestSectionRegistry:
@@ -98,9 +96,7 @@ class TestSectionRegistry:
         )
 
 
-# ---------------------------------------------------------------------------
 # draft_path property (parametrized)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -125,9 +121,7 @@ class TestDraftPath:
         assert gen.draft_path == tmp_path / f"{expected_section}.md"
 
 
-# ---------------------------------------------------------------------------
 # ExecutiveSummaryGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestExecutiveSummaryGenerator:
@@ -186,9 +180,7 @@ class TestExecutiveSummaryGenerator:
             assert gen.generate(_base_ctx()) == "summary text"
 
 
-# ---------------------------------------------------------------------------
 # RiskLevelSectionGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestRiskLevelSectionGenerator:
@@ -219,9 +211,7 @@ class TestRiskLevelSectionGenerator:
             assert gen.generate(_base_ctx()) == "risk paragraph"
 
 
-# ---------------------------------------------------------------------------
 # CriticalIssuesGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestCriticalIssuesGenerator:
@@ -266,7 +256,7 @@ class TestCriticalIssuesGenerator:
         assert "semgrep" in self._gen(tmp_path)._build_prompt(self._ctx_with_findings())
 
     def test_prompt_tool_line_only_for_findings_with_tool(self, tmp_path: Path) -> None:
-        # ACM-001 has a tool, ACM-002 does not — "Tool:" appears exactly once
+        # ACM-001 has a tool, ACM-002 does not; "Tool:" appears exactly once
         prompt = self._gen(tmp_path)._build_prompt(self._ctx_with_findings())
         assert prompt.count("Tool:") == 1
 
@@ -308,9 +298,7 @@ class TestCriticalIssuesGenerator:
             assert gen.generate(self._ctx_with_findings()) == "critical issues text"
 
 
-# ---------------------------------------------------------------------------
 # ImprovementPointsGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestImprovementPointsGenerator:
@@ -367,9 +355,7 @@ class TestImprovementPointsGenerator:
             assert gen.generate(self._ctx_with_groups()) == "improvement themes"
 
 
-# ---------------------------------------------------------------------------
 # ScopeMethodologyGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestScopeMethodologyGenerator:
@@ -434,9 +420,7 @@ class TestScopeMethodologyGenerator:
             assert gen.generate(self._ctx_with_scope()) == "scope section"
 
 
-# ---------------------------------------------------------------------------
 # GeneralRecommendationsGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestGeneralRecommendationsGenerator:

@@ -17,9 +17,7 @@ from domain.projects.entry import ProjectRow  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_repl(tmp_path: Path, active_project: str = "testproj") -> MagicMock:
@@ -66,9 +64,7 @@ def _run_purge(
     return repl, engine, mock_input
 
 
-# ---------------------------------------------------------------------------
 # Positional-arg rejection
-# ---------------------------------------------------------------------------
 
 
 def test_bare_positional_arg_rejected(tmp_path: Path) -> None:
@@ -101,9 +97,7 @@ def test_positional_arg_does_not_delete_anything(tmp_path: Path) -> None:
     mock_engine.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # No active project
-# ---------------------------------------------------------------------------
 
 
 def test_no_active_project_prints_warning(tmp_path: Path) -> None:
@@ -115,9 +109,7 @@ def test_no_active_project_prints_warning(tmp_path: Path) -> None:
     assert "No active project" in printed
 
 
-# ---------------------------------------------------------------------------
 # Abort on non-'y' input
-# ---------------------------------------------------------------------------
 
 
 def test_abort_on_no_answer(tmp_path: Path) -> None:
@@ -136,9 +128,7 @@ def test_abort_on_no_answer(tmp_path: Path) -> None:
     assert "Aborted" in printed
 
 
-# ---------------------------------------------------------------------------
 # Confirmation prompt contains [y/N]
-# ---------------------------------------------------------------------------
 
 
 def test_prompt_contains_yn(tmp_path: Path) -> None:
@@ -157,9 +147,7 @@ def test_prompt_contains_yn(tmp_path: Path) -> None:
     assert any("[y/N]" in c for c in prompt_calls)
 
 
-# ---------------------------------------------------------------------------
 # Tool output file deletion
-# ---------------------------------------------------------------------------
 
 
 def test_purge_all_deletes_tool_output_files(tmp_path: Path) -> None:
@@ -233,9 +221,7 @@ def test_purge_tool_missing_dir_does_not_raise(tmp_path: Path) -> None:
     # No exception = pass
 
 
-# ---------------------------------------------------------------------------
 # ChromaDB delete_findings called correctly
-# ---------------------------------------------------------------------------
 
 
 def test_purge_all_calls_delete_findings_no_tool(tmp_path: Path) -> None:
@@ -266,9 +252,7 @@ def test_purge_tool_calls_delete_findings_with_tool(tmp_path: Path) -> None:
     engine.delete_findings.assert_called_once_with(tool="nmap")
 
 
-# ---------------------------------------------------------------------------
 # Zero documents: no prompt shown
-# ---------------------------------------------------------------------------
 
 
 def test_zero_docs_skips_prompt(tmp_path: Path) -> None:
@@ -287,9 +271,7 @@ def test_zero_docs_skips_prompt(tmp_path: Path) -> None:
     engine.delete_findings.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # New tests: equals-sign syntax, multi-tool, invalid tool, old syntax rejection
-# ---------------------------------------------------------------------------
 
 
 def test_purge_no_args_triggers_confirmation_once(tmp_path: Path) -> None:
@@ -337,9 +319,7 @@ def test_purge_old_syntax_rejected(tmp_path: Path) -> None:
     assert "--tool=" in printed or "equals sign" in printed
 
 
-# ---------------------------------------------------------------------------
 # Report deletion
-# ---------------------------------------------------------------------------
 
 
 def _make_reports_dir(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -431,9 +411,7 @@ def test_keep_reports_confirmation_omits_reports(tmp_path: Path) -> None:
     assert not any("reports" in c.lower() for c in prompt_calls)
 
 
-# ---------------------------------------------------------------------------
 # Multi-source empty check (bug: purge after --keep-reports was used)
-# ---------------------------------------------------------------------------
 
 
 def test_purge_proceeds_when_only_reports_exist(tmp_path: Path) -> None:
@@ -510,9 +488,7 @@ def test_purge_proceeds_when_only_tool_outputs_exist(tmp_path: Path) -> None:
     assert "Nothing to purge" not in printed
 
 
-# ---------------------------------------------------------------------------
 # Chat data is hard-deleted on full purge
-# ---------------------------------------------------------------------------
 
 
 def _seed_chat_data(

@@ -17,12 +17,12 @@ class SectionMissingError(Exception):
 
 
 class DraftResolver:
-    """Resolves each report section to HTML, preferring reviewed over draft.
+    """Resolve each report section to HTML, preferring reviewed over draft.
 
     Resolution order for each section:
-    1. ``projects/<project>/report/reviewed/<section>.md`` — used without prompting.
-    2. ``projects/<project>/report/draft/<section>.md`` — user is prompted ``[y/N]``.
-    3. Neither exists — :exc:`SectionMissingError` is raised immediately.
+    1. ``projects/<project>/report/reviewed/<section>.md`` (used without prompting)
+    2. ``projects/<project>/report/draft/<section>.md`` (user is prompted ``[y/N]``)
+    3. Neither exists (raises :exc:`SectionMissingError` immediately)
 
     All resolved text is converted from markdown to HTML via
     :meth:`_md_to_html` before being returned.
@@ -36,9 +36,7 @@ class DraftResolver:
         self._reviewed_dir = paths.reports_dir / "reviewed"
         self._prompt = prompt
 
-    # ------------------------------------------------------------------ #
     # Public API
-    # ------------------------------------------------------------------ #
 
     def resolve(self, section: str) -> str:
         """Return rendered HTML for *section*.
@@ -91,9 +89,7 @@ class DraftResolver:
         text = load_blurb(name, variables)
         return self._md_to_html(text)
 
-    # ------------------------------------------------------------------ #
     # Private helpers
-    # ------------------------------------------------------------------ #
 
     @staticmethod
     def _md_to_html(md_text: str) -> str:

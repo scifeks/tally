@@ -23,12 +23,10 @@ class KnowledgeCommands:
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
 
-    # ------------------------------------------------------------------
     # Commands
-    # ------------------------------------------------------------------
 
     def cmd_search(self, _cmd: str, args: list[str]) -> None:
-        """search [--flags...]  — search over ingested findings."""
+        """Search over ingested findings. Usage: search [--flags...]"""
         # --help is allowed without an active project
         if "--help" in args:
             from application.repl.interface import _build_search_help_table
@@ -99,7 +97,7 @@ class KnowledgeCommands:
             self.repl.console.print(f"[dim]{page_hint}[/dim]")
 
     def cmd_chat(self, _cmd: str, args: list[str]) -> None:
-        """chat <message>  — RAG-augmented chat with the LLM."""
+        """RAG-augmented chat with the LLM. Usage: chat <message>"""
         if not args:
             self.repl.console.print("[red]Usage:[/red] chat <message>")
             return
@@ -133,7 +131,7 @@ class KnowledgeCommands:
         )
 
     def cmd_stats(self, _cmd: str, _args: list[str]) -> None:
-        """stats  — show knowledge base statistics for the active project."""
+        """Show knowledge base statistics for the active project."""
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. "
@@ -172,9 +170,7 @@ class KnowledgeCommands:
 
         self.repl.console.print(table)
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
         """Build a FindingKnowledgeBase for the active project, or None on error."""

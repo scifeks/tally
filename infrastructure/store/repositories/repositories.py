@@ -1,14 +1,11 @@
-"""RepositoryRepository: manages the per-project ``repositories`` table.
+"""CRUD for the per-project repositories table.
 
-Phase 14.3: the SQLite ``repositories`` table is the sole source of truth
-for per-repo config. Each row carries every field of the
-``Repository`` pydantic model (scalars as typed columns; list/dict
-fields and the ``auth`` block as TEXT-as-JSON columns) plus a stable
-integer ``id``, a mutable ``name``, a ``url_seed_file`` path, and the
-``created_at`` / ``deleted_at`` lifecycle stamps.
+Each row carries all Repository pydantic fields (scalars as columns;
+list/dict fields and auth as TEXT-as-JSON), plus id, mutable name,
+url_seed_file path, and created_at/deleted_at lifecycle stamps.
 
-Repos are soft-deleted via ``deleted_at``; ``list_active`` and
-``get_by_name`` filter ``deleted_at IS NULL`` by default.
+Soft deletion via deleted_at; list_active and get_by_name filter
+deleted_at IS NULL by default.
 """
 
 from __future__ import annotations
@@ -109,9 +106,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # ------------------------------------------------------------------
     # Reads
-    # ------------------------------------------------------------------
     def list_active(self) -> list[Repository]:
         """Return active rows ordered by name (case-insensitive)."""
         with self._factory.connect() as conn:
@@ -179,9 +174,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
             ).fetchone()
         return row is not None and row["deleted_at"] is not None
 
-    # ------------------------------------------------------------------
     # Writes
-    # ------------------------------------------------------------------
     def insert(self, repo: Repository) -> int:
         """Insert *repo* and return the new integer id."""
         cols = _repository_to_row(repo)

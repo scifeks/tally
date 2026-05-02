@@ -1,4 +1,4 @@
-"""Unit tests for GlobalConfig schema — web UI fields and validators."""
+"""Unit tests for GlobalConfig schema. Web UI fields and validators."""
 
 from __future__ import annotations
 

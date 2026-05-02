@@ -1,8 +1,4 @@
-"""Unit tests for QueryEngine.chat() context label building.
-
-Verifies that profile is included in the LLM prompt context labels
-when metadata contains a profile value.
-"""
+"""Unit tests for QueryEngine.chat() context label building."""
 
 from __future__ import annotations
 

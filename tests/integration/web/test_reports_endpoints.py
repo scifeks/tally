@@ -58,11 +58,6 @@ def _seed_report(
     return rid
 
 
-# ---------------------------------------------------------------------------
-# GET /reports — history
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_history_empty_returns_200(app_client) -> None:
     client, *_, project_id = app_client
@@ -122,9 +117,7 @@ async def test_history_unknown_project_returns_404(app_client) -> None:
     assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
 # GET /reports/latest
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -154,9 +147,7 @@ async def test_latest_returns_most_recent_done_report(app_client, tmp_path) -> N
     assert body["status"] == "done"
 
 
-# ---------------------------------------------------------------------------
 # GET /reports/{id}/download
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -224,9 +215,7 @@ async def test_download_409_when_status_not_done(app_client, tmp_path) -> None:
     assert resp.json()["error"]["code"] == "REPORT_NOT_READY"
 
 
-# ---------------------------------------------------------------------------
 # Pin / delete
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -288,9 +277,7 @@ async def test_delete_unlinks_file_and_row(app_client, tmp_path) -> None:
     assert repo.get(rid) is None
 
 
-# ---------------------------------------------------------------------------
 # Cancel
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -320,11 +307,6 @@ async def test_cancel_404_when_report_missing(app_client) -> None:
     assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# POST /reports/generate — JOB_BUSY collision
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_generate_returns_409_when_job_held(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
@@ -351,11 +333,6 @@ async def test_generate_validates_format(app_client) -> None:
         headers=mut_headers,
     )
     assert resp.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# POST /reports/generate — body propagation into the assembler
-# ---------------------------------------------------------------------------
 
 
 async def _wait_for_assembler_call(mock_class: MagicMock, timeout: float = 5.0) -> None:
@@ -464,9 +441,7 @@ async def test_generate_defaults_when_neither_field_sent(
     assert kwargs["skip_triage"] is False
 
 
-# ---------------------------------------------------------------------------
 # Repository unit tests for retention
-# ---------------------------------------------------------------------------
 
 
 def test_retention_keeps_pinned_and_drops_oldest(tmp_path: Path) -> None:

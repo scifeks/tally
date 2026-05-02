@@ -16,13 +16,9 @@ from domain.tools.constants import FINDING_TYPES
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Column mappings
-# ---------------------------------------------------------------------------
-
 # Named column names that map directly (field name == SQLite column name).
-# "severity" is intentionally excluded — it is stored as INTEGER and requires
-# int→label translation via Severity.from_rank() before exposure.
+# "severity" is excluded because it is stored as INTEGER and requires
+# int-to-label translation via Severity.from_rank() before exposure.
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
@@ -47,10 +43,6 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
         "tags",
     }
 )
-
-# ---------------------------------------------------------------------------
-# Normalisation helpers
-# ---------------------------------------------------------------------------
 
 
 def normalise_finding_type(val: Any) -> str | None:
@@ -86,11 +78,6 @@ def normalise_cwe(val: Any) -> str | None:
         return val  # already JSON array
     parts = [v.strip() for v in val.split(",") if v.strip()]
     return json.dumps(parts) if parts else None
-
-
-# ---------------------------------------------------------------------------
-# Row deserialisation
-# ---------------------------------------------------------------------------
 
 
 def deserialise_row(row: Any) -> dict[str, Any]:

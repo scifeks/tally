@@ -18,9 +18,7 @@ from tally_mcp.hooks.pre_tool_use import main  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS tool_audit_log (
@@ -59,9 +57,7 @@ def _row_count(db_path: Path) -> int:
     return count
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -73,9 +69,7 @@ def hook_env(tmp_path: Path) -> tuple[Path, Path]:
     return tmp_path, db_path
 
 
-# ---------------------------------------------------------------------------
 # Tests
-# ---------------------------------------------------------------------------
 
 
 def test_normal_operation_writes_audit_row(

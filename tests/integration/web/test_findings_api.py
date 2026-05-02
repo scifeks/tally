@@ -12,7 +12,7 @@ class TestAuthMiddlewareScope:
         """Browser must load the SPA without session cookies.
 
         Middleware must only enforce session auth on /api/* routes. A GET
-        to the SPA root must not return 401 — the browser needs index.html
+        to the SPA root must not return 401; the browser needs index.html
         to load before it can complete the handshake exchange.
         """
         client, _, _, _, _, _ = app_client
@@ -162,13 +162,7 @@ class TestGetFindings:
     async def test_legacy_repo_string_param_is_silently_ignored(
         self, app_client
     ) -> None:
-        """The dropped ?repo= param is a no-op — FastAPI ignores unknown params.
-
-        C1: the legacy ``repo: list[str]`` query param was removed from
-        list_findings. FastAPI silently ignores unrecognised query params,
-        so callers sending ?repo=anything get the full unfiltered result
-        set (200) rather than a 422.
-        """
+        """The dropped ?repo= param is a no-op; FastAPI ignores unknown params."""
         client, _, _, _, _, project_id = app_client
         baseline = await client.get(f"/api/v1/projects/{project_id}/findings")
         assert baseline.status_code == 200
@@ -267,7 +261,7 @@ class TestFindingsCounts:
         # (only true when every finding has both fields populated, which
         # is the case for the fixture).
         assert data["total"] == sum(data["by_severity"].values())
-        # by_status sum may be lower if any rows lack status — only assert
+        # by_status sum may be lower if any rows lack status; only assert
         # the sum is consistent with what is bucketed.
         assert sum(data["by_status"].values()) <= data["total"]
 

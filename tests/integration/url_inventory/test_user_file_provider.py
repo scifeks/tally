@@ -1,4 +1,4 @@
-"""Integration tests for UserFileProvider (Phase 9 Step 4 — tactical scope)."""
+"""Integration tests for UserFileProvider."""
 
 from __future__ import annotations
 

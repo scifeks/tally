@@ -1,4 +1,4 @@
-"""Integration tests for findings.update_finding() — persistence."""
+"""Integration tests for findings.update_finding() persistence."""
 
 from __future__ import annotations
 

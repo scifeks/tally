@@ -10,12 +10,12 @@ import yaml
 from .base import ConverterError
 
 _SUPPORTED_FORMATS = (
-    "oas3  — OpenAPI 3.x JSON/YAML (contains 'openapi' key starting with '3.')\n"
-    "oas2  — Swagger 2.0 JSON/YAML (contains 'swagger: 2.0' key)\n"
-    "postman — Postman collection JSON "
+    "oas3: OpenAPI 3.x JSON/YAML (contains 'openapi' key starting with '3.')\n"
+    "oas2: Swagger 2.0 JSON/YAML (contains 'swagger: 2.0' key)\n"
+    "postman: Postman collection JSON "
     "(contains 'info.schema' with 'getpostman.com')\n"
-    "har   — HTTP Archive JSON (file extension .har)\n"
-    "katana — Katana crawler JSONL output (file extension .jsonl)"
+    "har: HTTP Archive JSON (file extension .har)\n"
+    "katana: Katana crawler JSONL output (file extension .jsonl)"
 )
 
 

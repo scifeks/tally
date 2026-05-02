@@ -53,9 +53,7 @@ logger = logging.getLogger("tally.web.reports")
 v1_router = APIRouter()
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _service(request: Request, project_id: int) -> ReportsService:
@@ -136,9 +134,7 @@ def _ensure_within(base: Path, candidate: Path) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
 # Literal-segment routes first
-# ---------------------------------------------------------------------------
 
 
 @v1_router.get(
@@ -335,9 +331,7 @@ async def list_reports(
     )
 
 
-# ---------------------------------------------------------------------------
 # Draft routes (literal-segment, registered before /{report_id})
-# ---------------------------------------------------------------------------
 
 _DRAFT_MIME_ALLOWLIST = frozenset(
     {
@@ -612,9 +606,7 @@ async def delete_draft(
     await asyncio.to_thread(service.draft_repo.delete, section)
 
 
-# ---------------------------------------------------------------------------
 # Parameterized routes
-# ---------------------------------------------------------------------------
 
 
 @v1_router.post(
@@ -753,9 +745,7 @@ def _media_type_for(fmt: str) -> str:
     }.get(fmt, "application/octet-stream")
 
 
-# ---------------------------------------------------------------------------
 # Snapshot helper
-# ---------------------------------------------------------------------------
 
 
 async def _build_snapshot(

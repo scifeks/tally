@@ -16,9 +16,7 @@ from infrastructure.tools.parsers.xsstrike import (
     parse_xsstrike_log_string,
 )
 
-# ---------------------------------------------------------------------------
 # _strip_ansi
-# ---------------------------------------------------------------------------
 
 
 class TestStripAnsi:
@@ -37,9 +35,7 @@ class TestStripAnsi:
         assert _strip_ansi("\x1b[32m\x1b[0m") == ""
 
 
-# ---------------------------------------------------------------------------
-# parse_xsstrike_log_string — empty / malformed inputs
-# ---------------------------------------------------------------------------
+# parse_xsstrike_log_string: empty / malformed inputs
 
 
 class TestParseXSSTrikeLogStringEdgeCases:
@@ -68,19 +64,17 @@ class TestParseXSSTrikeLogStringEdgeCases:
             "2024-01-01 12:00:02 xsstrike - VULN - "
             "Vector for q: <script>alert(1)</script>\n"
         )
-        # DEBUG line between URL and vector — the pair is NOT consecutive;
-        # the URL becomes pending and is replaced.  Vector then has no URL → skipped.
+        # DEBUG line between URL and vector; the pair is NOT consecutive;
+        # the URL becomes pending and is replaced. Vector then has no URL; skipped.
         result = parse_xsstrike_log_string(log)
         # The pending_url is set to the VULN URL line.
-        # The DEBUG line is neither URL nor vector — pending_url stays.
+        # The DEBUG line is neither URL nor vector; pending_url stays.
         # The vector line matches and closes the pair.
         assert len(result["findings"]) == 1
         assert result["findings"][0]["url"] == "http://x.com/s"
 
 
-# ---------------------------------------------------------------------------
-# parse_xsstrike_log_string — valid VULN pairs
-# ---------------------------------------------------------------------------
+# parse_xsstrike_log_string: valid VULN pairs
 
 
 class TestParseXSSTrikeLogStringValidPairs:
@@ -157,9 +151,7 @@ class TestParseXSSTrikeLogStringValidPairs:
         assert "payload" in finding
 
 
-# ---------------------------------------------------------------------------
 # Unpaired lines
-# ---------------------------------------------------------------------------
 
 
 class TestUnpairedLines:
@@ -186,14 +178,12 @@ class TestUnpairedLines:
             "2024-01-01 12:00:02 xsstrike - VULN - Vector for q: payload\n"
         )
         result = parse_xsstrike_log_string(log)
-        # Only one finding — the second URL pairs with the vector.
+        # Only one finding; the second URL pairs with the vector.
         assert len(result["findings"]) == 1
         assert result["findings"][0]["url"] == "https://app.example.com/b"
 
 
-# ---------------------------------------------------------------------------
 # _parse_xsstrike_lines (internal)
-# ---------------------------------------------------------------------------
 
 
 class TestParseXSSTrikeLines:
@@ -207,9 +197,7 @@ class TestParseXSSTrikeLines:
         assert result["findings"] == []
 
 
-# ---------------------------------------------------------------------------
 # parse_xsstrike_log (file path)
-# ---------------------------------------------------------------------------
 
 
 class TestParseXSSTrikeLog:
@@ -257,9 +245,7 @@ class TestParseXSSTrikeLog:
         assert result["findings"] == []
 
 
-# ---------------------------------------------------------------------------
-# parse_xsstrike_log_string — return structure
-# ---------------------------------------------------------------------------
+# parse_xsstrike_log_string: return structure
 
 
 class TestReturnStructure:
@@ -282,9 +268,7 @@ class TestReturnStructure:
         assert result["summary"]["total_findings"] == 0
 
 
-# ---------------------------------------------------------------------------
 # RetireJs component findings
-# ---------------------------------------------------------------------------
 
 _RETIREJS_BLOCK = (
     "2026-04-12 19:30:11,523 plugins.retireJs - GOOD - "
@@ -387,9 +371,7 @@ class TestParseRetireJsFindings:
         assert result["component_findings"][0]["cve"] == "CVE-2019-11358"
 
 
-# ---------------------------------------------------------------------------
-# XSSTrikeHandler.normalize — retireJs component findings
-# ---------------------------------------------------------------------------
+# XSSTrikeHandler.normalize: retireJs component findings
 
 
 def _make_result(parsed_data: dict) -> ToolResult:

@@ -90,7 +90,7 @@ def create_app(
     Args:
         base_path: Tally base directory (same as ``ConfigManager.base_path``).
         handshake_token: One-time token; SPA exchanges it for session cookies.
-        port: Bound port — used by Host/Origin middleware allowlists.
+        port: Bound port used by Host/Origin middleware allowlists.
         allowed_origins: CORS allow-list. Empty or None disables CORS entirely.
 
     Returns:
@@ -141,10 +141,10 @@ def create_app(
     app.include_router(url_list_v1_router, prefix="/api/v1/projects")
 
     # Middleware added in reverse execution order (Starlette LIFO).
-    # Execution: SecurityHeaders → AccessLog → CORS → Host → Origin →
-    #            SessionAuth → CSRF → Redaction → handler.
+    # Execution: SecurityHeaders -> AccessLog -> CORS -> Host -> Origin ->
+    #            SessionAuth -> CSRF -> Redaction -> handler.
     # SecurityHeaders is the outermost wrapper so its headers attach to
-    # every response — including 400/401/403 short-circuits from inner
+    # every response, including 400/401/403 short-circuits from inner
     # middlewares.
     install_redaction_middleware(app)
     app.add_middleware(CSRFMiddleware)
@@ -182,7 +182,7 @@ def create_app(
         )
     else:
         logger.warning(
-            "web/static/ not found — static file mount skipped. "
+            "web/static/ not found (static file mount skipped). "
             "Run the frontend build step to enable the Vue SPA."
         )
 
@@ -207,7 +207,7 @@ def _attach_file_logging(base_path: str) -> None:
 
     file_handler = logging.FileHandler(log_path)
     file_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s — %(message)s")
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s - %(message)s")
     )
     for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         log_instance = logging.getLogger(logger_name)

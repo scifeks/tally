@@ -12,9 +12,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.reporting.findings_builder import FindingsBuilder  # noqa: E402
 
-# ---------------------------------------------------------------------------
 # Test fixture helpers
-# ---------------------------------------------------------------------------
 
 
 def _finding(**kwargs: Any) -> dict[str, Any]:
@@ -49,9 +47,7 @@ def _finding(**kwargs: Any) -> dict[str, Any]:
     return base
 
 
-# ---------------------------------------------------------------------------
 # TestBuildMasterTable
-# ---------------------------------------------------------------------------
 
 
 class TestBuildMasterTable:
@@ -66,7 +62,7 @@ class TestBuildMasterTable:
 
     def test_missing_tal_id_renders_dash(self) -> None:
         html = FindingsBuilder().build_master_table([_finding(tal_id=None)])
-        assert "—" in html
+        assert "-" in html
 
     def test_recurring_row_gets_css_class(self) -> None:
         html = FindingsBuilder().build_master_table([_finding(seen_count=3)])
@@ -86,9 +82,7 @@ class TestBuildMasterTable:
         assert "Code Findings" in html
 
 
-# ---------------------------------------------------------------------------
 # TestBuildCodeCards
-# ---------------------------------------------------------------------------
 
 
 class TestBuildCodeCards:
@@ -173,9 +167,7 @@ class TestBuildCodeCards:
         assert "&lt;script&gt;" in html
 
 
-# ---------------------------------------------------------------------------
 # TestBuildSecretsCards
-# ---------------------------------------------------------------------------
 
 
 class TestBuildSecretsCards:
@@ -233,9 +225,7 @@ class TestBuildSecretsCards:
         assert html.index("alpha") < html.index("zebra")
 
 
-# ---------------------------------------------------------------------------
 # TestBuildComprehensiveCodeTable
-# ---------------------------------------------------------------------------
 
 
 class TestBuildComprehensiveCodeTable:

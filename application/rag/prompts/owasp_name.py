@@ -12,7 +12,7 @@ _OWASP_FIELD_DEFINITION = (
     "Field to populate: owasp_name\n"
     "  The OWASP Top 10 category Name that best describes this finding.\n"
     '  Return ONLY a value from the "Name" column of the tables below'
-    " — copied exactly.\n"
+    " (copied exactly).\n"
     "  Return null if you cannot confidently map this finding to any category.\n"
     "  Do not guess. Do not invent values.\n"
     "\n"

@@ -374,7 +374,7 @@ class TestPurge:
         store.delete_findings(tools=["semgrep"])
 
         conn = store._connect()
-        # Batch has a gitleaks finding still present — must not be deleted
+        # Batch has a gitleaks finding still present; must not be deleted
         assert conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[0] == 1
         conn.close()
 

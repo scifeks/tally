@@ -57,7 +57,7 @@ class NpmAuditLocalTool(BaseNpmAuditTool):
 
         if not (Path(repo_path) / "package.json").exists():
             logger.info(
-                "npm-audit: package.json not found in %r — skipping",
+                "npm-audit: package.json not found in %r; skipping",
                 repo_path,
             )
             return []

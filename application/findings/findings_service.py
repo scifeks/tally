@@ -1,9 +1,8 @@
 """Application service for findings persistence + analyst access.
 
-Owns per-request construction of the finding, history, and project-repo
-repos so route modules do not import infrastructure persistence directly.
-Composes a `FindingAnalystService` and exposes the history repo + a
-`repo_name_lookup()` helper that the routes need.
+Owns per-request construction of repos so routes avoid direct imports of
+infrastructure persistence. Composes FindingAnalystService and exposes
+history repo + repo_name_lookup helper.
 """
 
 from __future__ import annotations
@@ -96,12 +95,10 @@ class FindingsService:
         return self._history_repo
 
     def repo_name_lookup(self) -> dict[int, str]:
-        """Build ``{repo_id: repo_name}`` for the project's active repos.
+        """Return {repo_id: repo_name} for active repos.
 
-        Returns ``{}`` when the findings DB has not been created yet
-        (a brand-new project hits the list route before any scan) or
-        when the underlying read raises. The defensive shape is
-        load-bearing for the list route.
+        Returns empty dict when the findings DB has not been created yet
+        or when the underlying read raises.
         """
         if not self._findings_db_exists:
             return {}
@@ -115,7 +112,7 @@ class FindingsService:
             return {}
 
     def lock_state_for(self, finding_id: int) -> tuple[bool, str | None]:
-        """Return ``(is_locked, lock_holder)`` for a single finding."""
+        """Return (is_locked, lock_holder) for a single finding."""
         return (
             self._lock_query.is_finding_locked(finding_id),
             self._lock_query.finding_lock_holder(finding_id),

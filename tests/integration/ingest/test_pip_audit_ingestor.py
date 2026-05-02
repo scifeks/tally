@@ -192,7 +192,7 @@ class TestPipAuditIngestor:
             assert row["tool"] == "pip-audit"
 
     def test_no_duplicates(self, vulns_parsed_data: dict) -> None:
-        """normalize() is deterministic — same input produces same count."""
+        """normalize() is deterministic; same input produces same count."""
         handler = ToolHandlerFactory.load("pip-audit")
         assert handler is not None
         result = _make_pip_audit_result(vulns_parsed_data)

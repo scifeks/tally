@@ -347,7 +347,7 @@ class TestFilterOptions:
             [_scan(repo_id, method="GET", host="api.acme.io", path="/x")]
         )
         out = url_repo.filter_options({"host": ["nowhere.invalid"]})
-        # Filter matches nothing — every dim is [].
+        # Filter matches nothing; every dim is [].
         assert out == {
             "method": [],
             "protocol": [],

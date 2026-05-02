@@ -61,7 +61,7 @@ async def test_event_bus_sink_publishes_to_subscriber() -> None:
 
 @pytest.mark.asyncio
 async def test_event_bus_sink_swallows_publish_failures() -> None:
-    """The sink must never raise — bus publish errors are suppressed."""
+    """The sink must never raise; bus publish errors are suppressed."""
     bus = EventBus()  # no job registered → publish_threadsafe will UnknownJob
     sink = EventBusScanSink(bus)
     # No exception escapes, even with no registered job.

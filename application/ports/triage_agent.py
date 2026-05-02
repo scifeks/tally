@@ -1,8 +1,4 @@
-"""TriageAgent port: runs one triage-agent session per call.
-
-Adapters:
-  infrastructure/agents/claude_triage_agent.py::ClaudeTriageAgent
-"""
+"""TriageAgent port: runs one triage-agent session per call."""
 
 from __future__ import annotations
 
@@ -15,11 +11,8 @@ from typing import Protocol, runtime_checkable
 class TriageSessionResult:
     """Outcome of one triage-agent session.
 
-    ``success`` is True when the agent completed normally with a zero exit
-    code. Timeouts and unexpected errors set ``success=False`` and populate
-    ``error`` with a short reason; ``returncode`` is -1 in those cases. No
-    exceptions cross the port boundary; the application reads
-    ``result.success`` and the optional diagnostics.
+    success=True when the agent completed normally with zero exit code.
+    Timeouts and errors set success=False with error details.
     """
 
     success: bool

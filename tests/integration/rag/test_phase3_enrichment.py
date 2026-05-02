@@ -1,4 +1,4 @@
-"""Phase 3 integration tests: EnrichmentPipeline reads/writes SQLite only."""
+"""Integration tests: EnrichmentPipeline reads and writes SQLite only."""
 
 from __future__ import annotations
 

@@ -47,11 +47,6 @@ def _draft_dir(tmp_path: Path) -> Path:
     return tmp_path / "projects" / "testproject" / "reports" / "draft"
 
 
-# ---------------------------------------------------------------------------
-# GET /reports/drafts — list
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_list_drafts_returns_all_sections_not_generated(
     app_client,
@@ -97,11 +92,6 @@ async def test_list_drafts_word_count_from_file(app_client, tmp_path) -> None:
     assert by_section["risk-level"]["preview"] == content
 
 
-# ---------------------------------------------------------------------------
-# POST /reports/drafts — start generation
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_start_draft_returns_202(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
@@ -145,16 +135,10 @@ async def test_start_draft_unknown_section_returns_422(app_client) -> None:
     assert resp.status_code == 422
 
 
-# ---------------------------------------------------------------------------
-# GET /reports/drafts/events — SSE stream
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_draft_events_bus_filters_by_project_id(app_client) -> None:
     """Tail-mode behavior: subscribe to the report_draft stream and verify
-    the filter the endpoint applies (skips httpx streaming — httpx ASGI does
-    not keep an SSE response open the way curl does)."""
+    the filter the endpoint applies."""
     import asyncio
     from datetime import UTC, datetime
 
@@ -209,9 +193,7 @@ async def test_event_bus_has_report_draft_job_registered(app_client) -> None:
     await bus.unsubscribe("report_draft", sub_id)
 
 
-# ---------------------------------------------------------------------------
 # POST /reports/drafts/upload
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -302,9 +284,7 @@ async def test_upload_draft_unknown_section_returns_422(app_client) -> None:
     assert resp.status_code == 422
 
 
-# ---------------------------------------------------------------------------
 # GET /reports/drafts/{section}/download
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -342,9 +322,7 @@ async def test_download_draft_unknown_section_returns_422(app_client) -> None:
     assert resp.status_code == 422
 
 
-# ---------------------------------------------------------------------------
 # DELETE /reports/drafts/{section}
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

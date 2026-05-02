@@ -20,9 +20,7 @@ _INVALID_TOOL = "nonexistent-tool"
 _VALID_TOOL = "semgrep"
 
 
-# ---------------------------------------------------------------------------
 # Invalid tool: all three commands reject it
-# ---------------------------------------------------------------------------
 
 
 @patch("application.repl.commands.scan_commands.tool_registry")
@@ -57,9 +55,7 @@ def test_invalid_tool_rejected_by_search():
     assert any("Search error" in p for p in printed)
 
 
-# ---------------------------------------------------------------------------
 # Valid tool: none print "Unknown tool" / "Search error"
-# ---------------------------------------------------------------------------
 
 
 @patch("application.repl.commands.scan_commands.tool_registry")

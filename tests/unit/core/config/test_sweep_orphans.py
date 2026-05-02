@@ -1,8 +1,4 @@
-"""Tests for ``core.config._atomic.sweep_orphans``.
-
-Split from ``test_atomic.py`` per the Phase 9 plan layout: each tests
-module mirrors a single concern of the ``_atomic`` module.
-"""
+"""Tests for ``core.config._atomic.sweep_orphans``."""
 
 from __future__ import annotations
 

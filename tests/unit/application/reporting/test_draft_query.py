@@ -34,9 +34,7 @@ class TestDraftQueryService(unittest.TestCase):
         self.repo = MagicMock()
         self.svc = DraftQueryService(self.repo)
 
-    # ------------------------------------------------------------------ #
     # get_filtered_findings
-    # ------------------------------------------------------------------ #
 
     def test_get_filtered_findings_default(self) -> None:
         sentinel = [_make_finding(id=1)]
@@ -54,9 +52,7 @@ class TestDraftQueryService(unittest.TestCase):
         self.repo.get_reportable_findings.assert_not_called()
         self.assertEqual(result, sentinel)
 
-    # ------------------------------------------------------------------ #
     # get_findings_for_report
-    # ------------------------------------------------------------------ #
 
     def test_get_findings_for_report_default_uses_reportable_query(self) -> None:
         sentinel = [_make_finding(id=1)]
@@ -74,9 +70,7 @@ class TestDraftQueryService(unittest.TestCase):
         self.repo.get_reportable_findings.assert_not_called()
         self.assertEqual(result, sentinel)
 
-    # ------------------------------------------------------------------ #
     # severity_distribution
-    # ------------------------------------------------------------------ #
 
     def test_severity_distribution_mixed(self) -> None:
         findings = [
@@ -109,9 +103,7 @@ class TestDraftQueryService(unittest.TestCase):
             },
         )
 
-    # ------------------------------------------------------------------ #
     # confidence_distribution
-    # ------------------------------------------------------------------ #
 
     def test_confidence_distribution_mixed(self) -> None:
         findings = [
@@ -130,9 +122,7 @@ class TestDraftQueryService(unittest.TestCase):
         dist = self.svc.confidence_distribution([])
         self.assertEqual(dist, {"confirmed": 0, "probable": 0, "potential": 0})
 
-    # ------------------------------------------------------------------ #
     # build_risk_counts
-    # ------------------------------------------------------------------ #
 
     def test_build_risk_counts_populated(self) -> None:
         findings = [
@@ -161,9 +151,7 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(rc.low_total, 0)
         self.assertEqual(rc.recurring, 0)
 
-    # ------------------------------------------------------------------ #
     # top_findings
-    # ------------------------------------------------------------------ #
 
     def test_top_findings_sorted(self) -> None:
         findings = [
@@ -197,9 +185,7 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(top[0].id, 2)
         self.assertEqual(top[1].id, 1)
 
-    # ------------------------------------------------------------------ #
     # risk_type_groups
-    # ------------------------------------------------------------------ #
 
     def test_risk_type_groups_normal(self) -> None:
         findings = [
@@ -221,9 +207,7 @@ class TestDraftQueryService(unittest.TestCase):
         groups = self.svc.risk_type_groups(findings)
         self.assertEqual(groups, [])
 
-    # ------------------------------------------------------------------ #
     # distinct_tools
-    # ------------------------------------------------------------------ #
 
     def test_distinct_tools_deduped_sorted(self) -> None:
         findings = [
@@ -237,9 +221,7 @@ class TestDraftQueryService(unittest.TestCase):
     def test_distinct_tools_empty(self) -> None:
         self.assertEqual(self.svc.distinct_tools([]), [])
 
-    # ------------------------------------------------------------------ #
     # distinct_repos
-    # ------------------------------------------------------------------ #
 
     def test_distinct_repos_deduped_sorted(self) -> None:
         findings = [
@@ -250,9 +232,7 @@ class TestDraftQueryService(unittest.TestCase):
         result = self.svc.distinct_repos(findings)
         self.assertEqual(result, ["repo-a", "repo-b"])
 
-    # ------------------------------------------------------------------ #
     # distinct_url_hosts
-    # ------------------------------------------------------------------ #
 
     def test_distinct_url_hosts_zap(self) -> None:
         findings = [
@@ -276,9 +256,7 @@ class TestDraftQueryService(unittest.TestCase):
         result = self.svc.distinct_url_hosts(findings)
         self.assertEqual(result, [])
 
-    # ------------------------------------------------------------------ #
     # distinct_ecosystems
-    # ------------------------------------------------------------------ #
 
     def test_distinct_ecosystems_sca(self) -> None:
         findings = [
@@ -295,9 +273,7 @@ class TestDraftQueryService(unittest.TestCase):
         result = self.svc.distinct_ecosystems(findings)
         self.assertEqual(result, [])
 
-    # ------------------------------------------------------------------ #
     # recurring_findings
-    # ------------------------------------------------------------------ #
 
     def test_recurring_findings_filters(self) -> None:
         findings = [
@@ -318,9 +294,7 @@ class TestDraftQueryService(unittest.TestCase):
         result = self.svc.recurring_findings(findings)
         self.assertEqual(result, [])
 
-    # ------------------------------------------------------------------ #
     # recurring_by_risk_type
-    # ------------------------------------------------------------------ #
 
     def test_recurring_by_risk_type_groups(self) -> None:
         findings = [

@@ -1,4 +1,4 @@
-"""Integration tests for the Phase 8.1 ChatSessionRepository."""
+"""Integration tests for ChatSessionRepository."""
 
 from __future__ import annotations
 

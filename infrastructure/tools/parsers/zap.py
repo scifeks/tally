@@ -35,9 +35,7 @@ _ZAP_VERSION_ALERT_PREFIX = (
 )
 
 
-# ---------------------------------------------------------------------------
 # Parse functions (called by BaseZapTool.parse_output)
-# ---------------------------------------------------------------------------
 
 
 def parse_zap_json(json_path: Path) -> dict[str, Any]:
@@ -72,9 +70,7 @@ def parse_zap_xml(xml_path: Path) -> dict[str, Any]:
     return _parse_zap_xml_root(root)
 
 
-# ---------------------------------------------------------------------------
-# Internal parse helpers — JSON
-# ---------------------------------------------------------------------------
+# Internal parse helpers (JSON)
 
 
 def _parse_zap_data(data: Any) -> dict[str, Any]:
@@ -202,9 +198,7 @@ def _build_alert_record(
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal parse helpers — XML
-# ---------------------------------------------------------------------------
+# Internal parse helpers (XML)
 
 
 def _parse_zap_xml_root(root: ET.Element) -> dict[str, Any]:
@@ -294,9 +288,7 @@ def _xml_text(element: ET.Element, tag: str) -> str:
     return (child.text or "").strip() if child is not None else ""
 
 
-# ---------------------------------------------------------------------------
 # Shared parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _normalize_risk(risk: str) -> str:
@@ -327,9 +319,7 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
-# ---------------------------------------------------------------------------
 # Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 class ZapHandler:

@@ -1,11 +1,8 @@
 """Domain entries for the triage surface.
 
-``TriageBatchRow`` and ``TriageRunSummary`` are the row-shaped value
-objects returned by ``TriageBatchRepositoryPort`` read methods. They
-live in ``domain/`` so port signatures depend on domain types rather
-than infrastructure dataclasses (Rule 7). Both are frozen and
-field-equivalent to the rows persisted in ``triage_batches`` (with
-``TriageRunSummary`` derived from those rows by aggregation).
+``TriageBatchRow`` and ``TriageRunSummary`` are frozen row-shaped value
+objects returned by triage repository ports. ``TriageRunSummary`` is
+derived from aggregated triage_batches rows.
 """
 
 from __future__ import annotations

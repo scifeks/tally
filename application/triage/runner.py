@@ -19,8 +19,6 @@ from application.ports.triage_event_sink import (
 )
 from application.tools.registry import tool_registry
 from application.triage.batching import compute_batches
-from core.config.manager import ConfigManager as _ConfigManager
-from core.config.schemas.global_config import MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 from core.project_paths import ProjectPaths
 from domain.pipeline.triage_events import (
     BatchCompleted,
@@ -32,12 +30,6 @@ from domain.pipeline.triage_events import (
     RunFailed,
     RunStarted,
 )
-
-try:
-    _cfg = _ConfigManager(str(Path(__file__).parent.parent.parent)).global_config
-    SESSION_TIMEOUT_SECONDS: int = _cfg.mcp_session_timeout_seconds
-except FileNotFoundError:
-    SESSION_TIMEOUT_SECONDS = MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
@@ -92,6 +84,7 @@ class TriageRunner:
         project_id: int | None = None,
         scan_run_id: int | None = None,
         triage_agent: TriageAgentPort,
+        session_timeout_seconds: int,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -104,9 +97,12 @@ class TriageRunner:
         self._project_id = project_id
         self._scan_run_id = scan_run_id
         self._triage_agent = triage_agent
+        self._session_timeout_seconds = session_timeout_seconds
 
     @classmethod
     def for_project(cls, project: str, app_root: Path | None = None) -> TriageRunner:
+        from application.config.mcp_defaults import load_mcp_defaults
+
         root = app_root or _APP_ROOT
         paths = ProjectPaths.from_canonical(root, project)
         if not paths.findings_db.exists():
@@ -115,6 +111,7 @@ class TriageRunner:
         from infrastructure.store import make_store
 
         run_repo, _, triage_repo, audit_repo = make_store(root, project)
+        _, _, session_timeout_seconds = load_mcp_defaults(str(root))
         return cls(
             project,
             run_repo,
@@ -122,11 +119,10 @@ class TriageRunner:
             audit_repo,
             root,
             triage_agent=ClaudeTriageAgent(),
+            session_timeout_seconds=session_timeout_seconds,
         )
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def batch(self) -> tuple[int, int]:
         """Run batching phase only.
@@ -260,9 +256,7 @@ class TriageRunner:
         result = self._run_batch_loop(run_id, _handler)
         return result.sessions_run
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _resolve_scan_run_id(self) -> int:
         """Return the scan_run_id triage will operate on.
@@ -450,7 +444,7 @@ class TriageRunner:
 
         result = self._triage_agent.run_session(
             prompt_text,
-            timeout_seconds=SESSION_TIMEOUT_SECONDS,
+            timeout_seconds=self._session_timeout_seconds,
             cwd=self._app_root,
         )
         if not result.success:

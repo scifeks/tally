@@ -1,15 +1,12 @@
-"""Hexagonal draft orchestrator (Phase 7.5).
+"""Orchestrates per-section LLM draft generation behind a single entry point.
 
-Wraps the per-section LLM draft generation behind a single entry point
-that:
+- Emits ``DraftEvent`` instances through a ``DraftEventSink`` port.
+- Honors a ``CancellationToken`` between steps.
+- Accepts a ``force_overwrite`` flag so the API can never block on stdin.
 
-- emits ``DraftEvent`` instances through a ``DraftEventSink`` port,
-- honors a ``CancellationToken`` between steps,
-- accepts a ``force_overwrite`` flag so the API can never block on stdin.
-
-The orchestrator owns filesystem writes and DB lifecycle updates; the
-caller (REPL loop or web runner) acquires the job lock and passes in
-both the sink and the repository.
+Owns filesystem writes and DB lifecycle updates; the caller (REPL loop or
+web runner) acquires the job lock and passes in both the sink and the
+repository.
 """
 
 from __future__ import annotations
@@ -172,9 +169,7 @@ def run_draft(
     return output
 
 
-# ---------------------------------------------------------------------------
 # Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _check_cancel(token: CancellationToken, section: str) -> None:

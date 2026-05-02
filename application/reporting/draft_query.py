@@ -37,7 +37,7 @@ class DraftQueryService:
         (``should_report = 1``) are returned.
 
         When *skip_triage* is True, all findings are returned regardless of
-        triage status — useful for generating drafts before triage is run.
+        triage status; useful for generating drafts before triage is run.
 
         FALSE POSITIVE FILTER WIRING POINT:
         When a mechanism for flagging false positives is defined, apply the
@@ -54,8 +54,8 @@ class DraftQueryService:
         ``should_report = 1`` is always required. ``skip_triage`` only
         relaxes the requirement for non-null triage columns:
 
-        * ``skip_triage=False`` — triaged_by IS NOT NULL AND should_report = 1
-        * ``skip_triage=True``  — should_report = 1 (triage columns ignored)
+        * ``skip_triage=False``: triaged_by IS NOT NULL AND should_report = 1
+        * ``skip_triage=True``: should_report = 1 (triage columns ignored)
 
         Distinct from :meth:`get_filtered_findings`, which is used by the
         LLM draft path and intentionally returns all findings when

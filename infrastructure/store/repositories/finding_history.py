@@ -1,4 +1,4 @@
-"""FindingHistoryRepository — read access for finding mutation history."""
+"""Query finding history entries for a given finding ID."""
 
 from __future__ import annotations
 

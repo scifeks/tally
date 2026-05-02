@@ -32,9 +32,7 @@ def _make_auth(
     return auth
 
 
-# ---------------------------------------------------------------------------
 # _HiddenInputParser
-# ---------------------------------------------------------------------------
 
 
 class TestHiddenInputParser:
@@ -90,9 +88,7 @@ class TestHiddenInputParser:
         assert parser.hidden == {}
 
 
-# ---------------------------------------------------------------------------
 # _resolve_credentials
-# ---------------------------------------------------------------------------
 
 
 class TestResolveCredentials:
@@ -149,9 +145,7 @@ class TestResolveCredentials:
         assert result == ("inline_u", "inline_p")
 
 
-# ---------------------------------------------------------------------------
 # perform_login
-# ---------------------------------------------------------------------------
 
 
 class TestPerformLogin:

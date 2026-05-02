@@ -17,24 +17,12 @@ from infrastructure.store import make_store
 from .context import FindingsContext
 from .tools import findings
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# FastMCP instance (safe at module level — no runtime config needed)
-# ---------------------------------------------------------------------------
 mcp = FastMCP("tally")
 
-# Set by main() before mcp.run(); None until then.
 _audit_runner: AuditRunner | None = None
-
-
-# ---------------------------------------------------------------------------
-# Tool registrations
-# ---------------------------------------------------------------------------
 
 
 @mcp.tool()
@@ -61,11 +49,6 @@ async def update_findings_batch(updates: list[dict]) -> dict:
     )
 
 
-# ---------------------------------------------------------------------------
-# Bootstrap
-# ---------------------------------------------------------------------------
-
-
 def main() -> None:
     """Parse arguments and initialise all application infrastructure."""
     global _audit_runner
@@ -90,12 +73,8 @@ def main() -> None:
     )
     _audit_runner = AuditRunner(_audit_repo)
 
-    logger.info("Tally MCP server starting — project=%s", _project_name)
+    logger.info("Tally MCP server starting (project=%s)", _project_name)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     main()

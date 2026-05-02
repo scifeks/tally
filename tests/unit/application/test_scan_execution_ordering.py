@@ -1,4 +1,4 @@
-"""Unit tests for ordered_repo_tools — discovery-first ordering (ADR-00014)."""
+"""Unit tests for ordered_repo_tools. Discovery-first ordering (ADR-00014)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,7 @@ from unittest.mock import MagicMock
 
 from application.tools.scan_types.execution import ordered_repo_tools
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_tool(name: str, segment: str, is_discovery: bool = False) -> MagicMock:
@@ -26,9 +24,7 @@ def _make_registry(tools: list[MagicMock]) -> MagicMock:
     return registry
 
 
-# ---------------------------------------------------------------------------
 # Ordering tests
-# ---------------------------------------------------------------------------
 
 
 class TestOrderedRepoTools:

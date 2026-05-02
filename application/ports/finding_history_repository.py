@@ -1,10 +1,7 @@
-"""Persistence port for the ``finding_history`` table (read-side).
+"""Persistence port for the finding_history table (read-side).
 
-Concrete implementation lives at
-``infrastructure.store.repositories.finding_history.FindingHistoryRepository``.
-The write path is handled inside ``FindingRepository`` so each history
-row is written in the same transaction as the finding mutation.
-Returned rows are domain types (``domain.findings.entry.HistoryRow``).
+The write path is handled inside FindingRepository so each history row
+is written in the same transaction as the finding mutation.
 """
 
 from __future__ import annotations

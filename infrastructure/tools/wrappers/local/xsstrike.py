@@ -1,7 +1,7 @@
 """XSStrike local wrapper for XSS-focused dynamic web application scanning.
 
-XSStrike has no built-in URL crawler — all URLs must be supplied via a seeds
-file.  This wrapper reads ``repo.merged_seeds_path``, the canonical
+XSStrike has no built-in URL crawler; all URLs must be supplied via a seeds
+file. This wrapper reads ``repo.merged_seeds_path``, the canonical
 deduplicated seeds file produced by the URL discovery pipeline after Katana,
 Noir, and/or a user-provided endpoint file run.
 
@@ -184,7 +184,7 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
-                "XSStrike: no URL inventory for %s — skipping. "
+                "XSStrike: no URL inventory for %s; skipping. "
                 "Run Katana, Noir, or configure an endpoint file to "
                 "generate URL discovery output.",
                 repo.name,

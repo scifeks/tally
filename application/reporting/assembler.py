@@ -8,13 +8,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import jinja2
-
 from application.reporting.attack_surface import AttackSurfaceBuilder
 from application.reporting.charts import get_chart_renderer
 from application.reporting.draft_query import DraftQueryService
 from application.reporting.findings_builder import FindingsBuilder
-from application.reporting.pdf import get_pdf_renderer
 from application.reporting.resolver import DraftResolver
 from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
@@ -23,12 +20,14 @@ from domain.reporting.context import ReportContext
 from infrastructure.store import make_store
 
 if TYPE_CHECKING:
+    from application.ports.html_template_renderer import HtmlTemplateRenderer
+    from application.ports.pdf_renderer import PdfRenderer
     from application.ports.user_prompt import UserPromptPort
 
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 _SEVERITY_RANKS = {s.label: s.rank for s in Severity.all_ordered()}
 
 # Human-readable labels for the confidentiality blurb's {{engagement_type}}.
@@ -94,6 +93,8 @@ class ReportAssembler:
         project: str,
         base_path: str | Path,
         prompt: UserPromptPort,
+        template_renderer: HtmlTemplateRenderer,
+        pdf_renderer: PdfRenderer,
         testing_type: str = "white_box",
         engagement_date: str | None = None,
         company_name_override: str | None = None,
@@ -102,14 +103,14 @@ class ReportAssembler:
         self._project = project
         self._base_path = Path(base_path)
         self._prompt = prompt
+        self._template_renderer = template_renderer
+        self._pdf_renderer = pdf_renderer
         self._testing_type = testing_type
         self._engagement_date = engagement_date
         self._company_name_override = company_name_override
         self._skip_triage = skip_triage
 
-    # ------------------------------------------------------------------ #
     # Public API
-    # ------------------------------------------------------------------ #
 
     def build_context(self) -> ReportContext:
         """Resolve all sections, render blurbs, generate TOC.
@@ -220,12 +221,12 @@ class ReportAssembler:
         )
 
     def render_pdf(self, context: ReportContext) -> bytes:
-        """Render *context* to PDF bytes via :class:`WeasyPrintRenderer`.
+        """Render *context* to PDF bytes via the injected renderers.
 
         Steps:
         1. Load ``static/report.css`` from disk.
-        2. Render the Jinja2 master template with *context*.
-        3. Pass the resulting HTML and CSS string to ``WeasyPrintRenderer``.
+        2. Render the master template with *context*.
+        3. Pass the HTML and CSS to the PdfRenderer.
 
         Args:
             context: Fully (or partially) populated :class:`ReportContext`.
@@ -234,13 +235,12 @@ class ReportAssembler:
             Raw PDF bytes.
 
         Raises:
-            PDFRenderError: WeasyPrint failed to produce a PDF.
+            PdfRenderError: The PDF backend failed to produce a PDF.
             FileNotFoundError: The CSS stylesheet is missing.
         """
         css = (_STATIC_DIR / "report.css").read_text(encoding="utf-8")
-        html = self._render_template(context)
-        renderer = get_pdf_renderer("weasyprint")
-        return renderer.render(html, css)
+        html = self._template_renderer.render("report.html.j2", {"ctx": context})
+        return self._pdf_renderer.render(html, css)
 
     def build_and_render(self) -> bytes:
         """Convenience: :meth:`build_context` then :meth:`render_pdf`.
@@ -250,27 +250,6 @@ class ReportAssembler:
         """
         context = self.build_context()
         return self.render_pdf(context)
-
-    # ------------------------------------------------------------------ #
-    # Private helpers
-    # ------------------------------------------------------------------ #
-
-    def _render_template(self, context: ReportContext) -> str:
-        """Render the Jinja2 master template with *context*.
-
-        Args:
-            context: The report context to render.
-
-        Returns:
-            Complete HTML document string.
-        """
-        env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
-            autoescape=True,
-            keep_trailing_newline=True,
-        )
-        template = env.get_template("report.html.j2")
-        return template.render(ctx=context)
 
 
 __all__ = ["ReportAssembler"]

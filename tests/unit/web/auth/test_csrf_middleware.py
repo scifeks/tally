@@ -16,7 +16,7 @@ def _app() -> tuple[FastAPI, SessionStore]:
     store = SessionStore()
     app = FastAPI()
     app.state.session_store = store
-    # CSRF innermost, SessionAuth outermost — mirrors production stack ordering.
+    # CSRF innermost, SessionAuth outermost; mirrors production stack ordering.
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(SessionAuthMiddleware)
 

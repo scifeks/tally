@@ -1,9 +1,9 @@
-"""Cancellation token for cooperative scan abort (Phase 5.2).
+"""Cancellation token for cooperative scan abort.
 
 A scan thread checks ``token.is_set()`` between segments, between tool
 launches, and inside ``ToolExecutor`` while waiting on a subprocess. The
 HTTP cancel endpoint sets the token; the scan thread observes it and
-unwinds gracefully — emitting ``run_cancelled`` and persisting
+unwinds gracefully, emitting ``run_cancelled`` and persisting
 ``status='cancelled'`` before exiting.
 
 The REPL passes a ``no_op_token()`` since the REPL has no UX to cancel

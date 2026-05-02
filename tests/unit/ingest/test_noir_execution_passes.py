@@ -45,9 +45,7 @@ def _make_context(
     )
 
 
-# ---------------------------------------------------------------------------
 # build_command
-# ---------------------------------------------------------------------------
 
 
 class TestNoirBuildCommand:
@@ -104,9 +102,7 @@ class TestNoirBuildCommand:
         assert Path(cmd[out_idx]).is_absolute()
 
 
-# ---------------------------------------------------------------------------
 # build_execution_passes
-# ---------------------------------------------------------------------------
 
 
 class TestNoirBuildExecutionPasses:
@@ -179,9 +175,7 @@ class TestNoirBuildExecutionPasses:
         assert "js_express" in techs
 
 
-# ---------------------------------------------------------------------------
 # _compute_noir_techs
-# ---------------------------------------------------------------------------
 
 
 class TestComputeNoirTechs:
@@ -209,9 +203,7 @@ class TestComputeNoirTechs:
         assert lower == upper
 
 
-# ---------------------------------------------------------------------------
 # build_command with techs
-# ---------------------------------------------------------------------------
 
 
 class TestNoirBuildCommandTechs:
@@ -261,9 +253,7 @@ class TestNoirBuildCommandTechs:
         assert "-t" not in cmd
 
 
-# ---------------------------------------------------------------------------
 # AI flags in build_command
-# ---------------------------------------------------------------------------
 
 
 class TestNoirAiFlags:
@@ -346,9 +336,7 @@ class TestNoirAiFlags:
         assert "--ai-max-token" not in cmd
 
 
-# ---------------------------------------------------------------------------
 # AI config resolution in build_execution_passes
-# ---------------------------------------------------------------------------
 
 
 class TestNoirExecutionPassesAiConfig:

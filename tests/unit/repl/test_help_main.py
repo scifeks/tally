@@ -34,9 +34,7 @@ def _build_help_table(group: str | None = None) -> Table:
     return renderer._build_table(group=group)
 
 
-# ---------------------------------------------------------------------------
 # test_help_table_has_three_columns
-# ---------------------------------------------------------------------------
 
 
 def test_help_table_has_three_columns():
@@ -44,9 +42,7 @@ def test_help_table_has_three_columns():
     assert len(table.columns) == 3
 
 
-# ---------------------------------------------------------------------------
 # test_each_command_appears_once_in_command_column
-# ---------------------------------------------------------------------------
 
 
 def test_each_command_appears_once_in_command_column():
@@ -66,9 +62,7 @@ def test_each_command_appears_once_in_command_column():
         seen.add(c)
 
 
-# ---------------------------------------------------------------------------
 # test_separators_only_for_multi_row_commands
-# ---------------------------------------------------------------------------
 
 
 def test_separators_at_section_boundaries():
@@ -105,9 +99,7 @@ def test_separators_at_section_boundaries():
         row_idx += 1
 
 
-# ---------------------------------------------------------------------------
 # test_no_filter_keys_text
-# ---------------------------------------------------------------------------
 
 
 def test_no_filter_keys_text():
@@ -116,9 +108,7 @@ def test_no_filter_keys_text():
     assert "Filter Keys" not in rendered
 
 
-# ---------------------------------------------------------------------------
 # test_no_arg_syntax_in_command_column
-# ---------------------------------------------------------------------------
 
 
 def test_no_arg_syntax_in_command_column():
@@ -133,9 +123,7 @@ def test_no_arg_syntax_in_command_column():
         )
 
 
-# ---------------------------------------------------------------------------
 # test_scan_command_rows_exact
-# ---------------------------------------------------------------------------
 
 
 def test_scan_command_rows_exact():
@@ -151,9 +139,7 @@ def test_scan_command_rows_exact():
     ]
 
 
-# ---------------------------------------------------------------------------
 # test_purge_command_rows_exact
-# ---------------------------------------------------------------------------
 
 
 def test_purge_command_rows_exact():
@@ -162,9 +148,7 @@ def test_purge_command_rows_exact():
     assert purge_args == [None, "--tool=<tool,...>", "--keep-reports"]
 
 
-# ---------------------------------------------------------------------------
 # test_search_command_rows_exact
-# ---------------------------------------------------------------------------
 
 
 def test_search_command_rows_exact():

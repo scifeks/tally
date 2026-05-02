@@ -18,9 +18,7 @@ from application.triage.prompts import (  # noqa: E402
 _IDS = [1, 2, 3]
 _PROJECT = "my-project"
 
-# ---------------------------------------------------------------------------
 # sast_trace
-# ---------------------------------------------------------------------------
 
 
 def test_sast_trace_returns_string() -> None:
@@ -61,9 +59,7 @@ def test_api_trace_no_grouping_instructions() -> None:
     assert "group" not in result.lower()
 
 
-# ---------------------------------------------------------------------------
 # api_trace
-# ---------------------------------------------------------------------------
 
 
 def test_api_trace_returns_string() -> None:
@@ -93,9 +89,7 @@ def test_api_trace_key_instructions() -> None:
     assert "remediation" in result
 
 
-# ---------------------------------------------------------------------------
 # sca_trace
-# ---------------------------------------------------------------------------
 
 
 def test_sca_trace_returns_string() -> None:

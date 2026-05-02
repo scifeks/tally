@@ -1,8 +1,8 @@
 """Static SPA (Single Page Application) detection for wizard-time use.
 
 Two-layer detection:
-1. Manifest sniff — parse package.json and look for known SPA framework deps.
-2. Source-pattern grep — search JS/TS/HTML source files for SPA routing wiring.
+1. Manifest sniff - parse package.json and look for known SPA framework deps.
+2. Source-pattern grep - search JS/TS/HTML source files for SPA routing wiring.
 
 Both layers short-circuit on the first positive match to keep startup fast.
 Source grep is skipped entirely when the repo has no JS/TS files (e.g. pure
@@ -15,7 +15,7 @@ import json
 import re
 from pathlib import Path
 
-# Deps that reliably indicate a SPA — both npm names and scoped variants.
+# Deps that reliably indicate a SPA, including scoped npm variants.
 _SPA_DEPS: frozenset[str] = frozenset(
     {
         "react",
@@ -111,7 +111,7 @@ def detect_spa(repo_path: str | Path) -> tuple[bool, str]:
     if not path.is_dir():
         return False, ""
 
-    # Layer 1: manifest sniff (cheapest — single file read).
+    # Layer 1: manifest sniff (cheapest - single file read).
     found, reason = _sniff_manifest(path)
     if found:
         return True, reason

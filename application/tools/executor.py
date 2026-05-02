@@ -94,9 +94,7 @@ class ToolExecutor:
         """
         self._cancel_token = token
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def execute(
         self,
@@ -112,14 +110,11 @@ class ToolExecutor:
 
         Args:
             tool:         The ToolWrapper to run.
-            auto_approve: Pass True to bypass the approval prompt (used by
-                          run() after execute_tool_passes has already obtained
-                          per-tool consent).
-            timeout:      Seconds before the subprocess is killed (default 300).
+            auto_approve: Pass True to skip the approval prompt (when already
+                          obtained by a parent context).
+            timeout:      Seconds before the subprocess is killed.
             label:        Prefix for saved output filenames (e.g. "webservers").
-            cwd:          Working directory for the subprocess. Required for
-                          tools like npm-audit and composer-audit that must run
-                          inside the project directory.
+            cwd:          Working directory for the subprocess.
             **kwargs:     Passed verbatim to tool.build_command().
         """
         timestamp = ToolResult.now_iso()
@@ -229,9 +224,7 @@ class ToolExecutor:
             **pass_.kwargs,
         )
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _ensure_output_dir(self, tool_name: str) -> Path:
         paths = ProjectPaths.from_canonical(self.base_path, self.project_name)

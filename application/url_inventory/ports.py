@@ -1,9 +1,4 @@
-"""Provider seam types for the URL inventory layer (Phase 9).
-
-The ``UrlFindingRepositoryPort`` persistence port lived here originally
-and was relocated to ``application/ports/url_finding_repository.py`` in
-Slice 9 (A5e) so every persistence port shares one folder.
-"""
+"""Provider seam types for the URL inventory layer."""
 
 from __future__ import annotations
 
@@ -33,11 +28,7 @@ class UrlProviderContext:
 
 @runtime_checkable
 class UrlListProvider(Protocol):
-    """A producer of ``UrlFinding`` rows for a given (repo, tool) pair.
-
-    Concrete implementations: KatanaProvider, NoirProvider, UserFileProvider
-    (Step 4 of the Phase 9 plan).
-    """
+    """A producer of ``UrlFinding`` rows for a given (repo, tool) pair."""
 
     source: UrlSource
     tool: UrlTool | None

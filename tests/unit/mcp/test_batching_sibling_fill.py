@@ -1,4 +1,4 @@
-"""Unit tests for compute_batches() — sibling fill rules."""
+"""Unit tests for compute_batches(). Sibling fill rules."""
 
 from __future__ import annotations
 
@@ -135,8 +135,8 @@ class TestSiblingFill:
 
     def test_sibling_with_multi_finding_file_does_not_fill(self) -> None:
         # src/a.py: 1 medium finding; src/b.py: 2 medium findings (same dir)
-        # src/b.py has 2 queue entries → not eligible for sibling fill
-        # Expected: 2 batches — src/a.py alone, src/b.py with both its findings
+        # src/b.py has 2 queue entries; not eligible for sibling fill
+        # Expected: 2 batches; src/a.py alone, src/b.py with both its findings
         findings = [
             _f(file="src/a.py", severity="medium", risk_type="sqli", line_start=1),
             _f(file="src/b.py", severity="medium", risk_type="sqli", line_start=1),

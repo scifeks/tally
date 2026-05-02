@@ -1,8 +1,4 @@
-"""Persistence port for the ``tool_audit_log`` table.
-
-Concrete implementation lives at
-``infrastructure.store.repositories.audit.AuditRepository``.
-"""
+"""Persistence port for the tool_audit_log table."""
 
 from __future__ import annotations
 

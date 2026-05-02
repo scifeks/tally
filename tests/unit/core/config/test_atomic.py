@@ -1,4 +1,4 @@
-"""Tests for core.config._atomic — locking and atomic write.
+"""Tests for core.config._atomic. Locking and atomic write.
 
 ``sweep_orphans`` lives in ``test_sweep_orphans.py``.
 """
@@ -102,7 +102,7 @@ def test_locked_config_serializes_across_processes(tmp_path: Path) -> None:
     target.write_text("0", encoding="utf-8")
     iterations = 20
 
-    # Use "spawn" — pytest pulls in pytest-asyncio etc., and Python 3.14
+    # Use "spawn"; pytest pulls in pytest-asyncio etc., and Python 3.14
     # warns on fork() from multi-threaded processes.
     ctx = multiprocessing.get_context("spawn")
     procs = [

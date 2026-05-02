@@ -12,12 +12,10 @@ field is the canonical classification.
 ``should_enrich = False`` because LLM enrichment adds no value to raw endpoint
 metadata.
 
-NOTE: The ``file`` field (source file path) cannot be populated from Noir's
-OAS3 output (v0.25.1) because the OAS3 format does not include source file
-metadata. The ``file`` column in findings rows is left as NULL.
-
-The ``source_file`` field captures the OAS3 report file path itself, not the
-source file where each endpoint was discovered.
+The ``file`` field (source file path) is left as NULL because the OAS3 format
+does not include source file metadata. The ``source_file`` field captures the
+OAS3 report file path itself, not the source file where each endpoint was
+discovered.
 """
 
 from __future__ import annotations
@@ -31,8 +29,7 @@ from domain.tools.base import ToolResult
 
 # Re-exported from the domain so legacy callers (tests, ``count_findings``)
 # can keep importing from here. The canonical rule and its application
-# both live in the application/domain layers — this module is just a
-# stable import surface.
+# live in the application/domain layers; this module is a stable import surface.
 from domain.url_inventory.vendor_filter import VENDOR_INDICATORS
 from domain.url_inventory.vendor_filter import (
     is_vendor_path as is_vendor_or_dependency_path,
@@ -52,9 +49,7 @@ __all__ = [
 ]
 
 
-# ---------------------------------------------------------------------------
 # Parse functions (called by BaseNoirTool.parse_output)
-# ---------------------------------------------------------------------------
 
 
 def parse_noir_json(json_path: Path) -> dict[str, Any]:
@@ -88,9 +83,7 @@ def parse_noir_json_string(json_string: str) -> dict[str, Any]:
     return _parse_oas3_data(data)
 
 
-# ---------------------------------------------------------------------------
 # Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_oas3_data(data: Any) -> dict[str, Any]:
@@ -102,7 +95,7 @@ def _parse_oas3_data(data: Any) -> dict[str, Any]:
             "summary": {"total_endpoints": 0, "total_paths": 0},
         }
 
-    # Soft version check — Noir always emits "3.0.x".
+    # Noir always emits "3.0.x".
     openapi_version: str = data.get("openapi") or ""
     if openapi_version and not openapi_version.startswith("3."):
         return {
@@ -204,7 +197,7 @@ def _parse_request_body(request_body: dict[str, Any]) -> list[dict[str, Any]]:
                     }
                 )
         else:
-            # Schema has no named properties — emit a single body placeholder.
+            # Schema has no named properties, so emit a single body placeholder.
             params.append(
                 {
                     "name": "_body",
@@ -218,9 +211,7 @@ def _parse_request_body(request_body: dict[str, Any]) -> list[dict[str, Any]]:
     return params
 
 
-# ---------------------------------------------------------------------------
 # Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 def _uri_only(raw: str) -> str:
@@ -272,12 +263,11 @@ class NoirHandler:
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        """Noir is URL-discovery only post-Phase-9: emits no findings rows.
+        """Noir emits no findings rows; endpoints land in url_findings instead.
 
-        Discovered endpoints land in the ``url_findings`` table via the
-        ``UrlInventoryIngestHandler``. The parser still produces
-        ``parsed_data`` and the OAS3 file (consumed by ZAP/XSStrike/DalFox
-        through the URL inventory artifact rebuild).
+        Discovered endpoints are ingested via ``UrlInventoryIngestHandler``.
+        The parser still produces ``parsed_data`` and the OAS3 file for
+        downstream tools (ZAP, XSStrike, DalFox) via URL inventory artifacts.
         """
         del result, profile
         return []

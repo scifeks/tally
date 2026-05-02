@@ -1,9 +1,8 @@
-"""Integration tests for ``NoirHandler`` post-Phase-9.
+"""Integration tests for ``NoirHandler``.
 
-Phase 9 routes Noir output into ``url_findings`` via
-``UrlInventoryIngestHandler`` instead of emitting rows into ``findings``.
-The handler's ``normalize`` is therefore expected to be a no-op, and the
-remaining contract is ``render`` continuing to render arbitrary URL
+Noir routes output into ``url_findings`` via ``UrlInventoryIngestHandler``
+instead of emitting rows into ``findings``. The handler's ``normalize`` is
+therefore a no-op, and ``render`` continues to render arbitrary URL
 metadata for any caller that pre-builds rows itself.
 """
 
@@ -56,7 +55,7 @@ class TestNoirIngestor:
     def test_normalize_returns_empty_post_phase_9(
         self, fixture_parsed_data: dict
     ) -> None:
-        """Phase 9: Noir is URL-discovery only; ``normalize`` emits no findings."""
+        """Noir is URL-discovery only; ``normalize`` emits no findings."""
         handler = ToolHandlerFactory.load("noir")
         assert handler is not None
         result = _make_noir_result(fixture_parsed_data)
@@ -83,7 +82,7 @@ class TestNoirIngestor:
         assert handler.normalize(result, profile="dvna") == []
 
     def test_render_includes_method_and_url(self) -> None:
-        """``render`` still works on hand-built rows for any caller."""
+        """``render`` works on hand-built rows for any caller."""
         handler = ToolHandlerFactory.load("noir")
         assert handler is not None
         text = handler.render(

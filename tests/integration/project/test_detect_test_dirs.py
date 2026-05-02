@@ -31,7 +31,7 @@ class TestDetectTestDirs:
         assert result == []
 
     def test_ignores_files(self, tmp_path: Path) -> None:
-        # "tests" is a file, not a directory — should not be detected
+        # "tests" is a file, not a directory; should not be detected
         (tmp_path / "tests").write_text("")
         result = _detect_test_dirs(tmp_path)
         assert result == []

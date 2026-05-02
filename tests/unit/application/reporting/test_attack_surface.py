@@ -36,9 +36,7 @@ class TestAttackSurfaceBuilder(unittest.TestCase):
         self.repo = MagicMock()
         self.builder = AttackSurfaceBuilder(self.repo)
 
-    # ------------------------------------------------------------------ #
     # Repository surface
-    # ------------------------------------------------------------------ #
 
     def test_repo_empty_findings(self) -> None:
         result = self.builder.build([])
@@ -74,9 +72,7 @@ class TestAttackSurfaceBuilder(unittest.TestCase):
         result = self.builder.build(findings)
         self.assertIn("No repository surface data available", result)
 
-    # ------------------------------------------------------------------ #
     # Dependency surface
-    # ------------------------------------------------------------------ #
 
     def test_dep_no_sca_findings(self) -> None:
         findings = [

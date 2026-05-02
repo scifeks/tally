@@ -1,4 +1,4 @@
-"""Phase 4 integration tests: ChromaDBHandler writes enriched rows to ChromaDB."""
+"""Integration tests: ChromaDBHandler writes enriched rows to ChromaDB."""
 
 from __future__ import annotations
 

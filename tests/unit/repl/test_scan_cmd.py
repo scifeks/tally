@@ -171,9 +171,7 @@ def test_scan_old_positional_syntax_rejected() -> None:
     assert not orchestrator.start_scan.called
 
 
-# ------------------------------------------------------------------
 # --skip-tools tests
-# ------------------------------------------------------------------
 
 
 def test_skip_tools_passes_skip_tools_set() -> None:
@@ -211,9 +209,7 @@ def test_skip_tools_with_repo_passes_both() -> None:
     assert set(kwargs["skip_tool_ids"]) == {"zap", "nmap"}
 
 
-# ------------------------------------------------------------------
 # --skip-enrichment tests
-# ------------------------------------------------------------------
 
 
 def test_skip_enrichment_flag_passes_true_to_start_scan() -> None:

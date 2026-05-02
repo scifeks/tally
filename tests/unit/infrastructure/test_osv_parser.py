@@ -1,5 +1,4 @@
-"""Unit tests for the OSV-Scanner JSON parser
-(infrastructure.tools.parsers.osv_scanner)."""
+"""Unit tests for the OSV-Scanner JSON parser."""
 
 from __future__ import annotations
 

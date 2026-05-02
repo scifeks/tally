@@ -1,4 +1,4 @@
-"""LockQueryService — read-only facade over LockRegistry for ports."""
+"""Read-only facade over LockRegistry for ports."""
 
 from __future__ import annotations
 

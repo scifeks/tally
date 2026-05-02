@@ -29,19 +29,12 @@ def convert_endpoint_file(
 ) -> Path:
     """Convert an endpoint definition file to OAS3.
 
-    Steps:
-    1. Confirm source_path exists and is readable; raise ConverterError
-       if not
-    2. Copy source_path to originals_dir / source_path.name (create
-       originals_dir if needed)
-    3. Use FormatDetector to detect the format
-    4. Select the correct adapter
-    5. Call adapter.validate(source_path)
-    6. Create output_dir if it does not exist
-    7. Call adapter.convert(source_path, output_dir)
-    8. Return the path returned by convert()
+    Validates source_path, backs it up to originals_dir, detects the format,
+    validates the content, and delegates to the appropriate adapter for
+    conversion. Returns the path to the output file.
 
-    Raises ConverterError for all failure cases.
+    Raises ConverterError if the source is missing, unreadable, invalid,
+    or conversion fails.
     """
     if not source_path.exists():
         raise ConverterError(f"Source file does not exist: {source_path}")

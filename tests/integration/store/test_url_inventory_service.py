@@ -102,7 +102,7 @@ class TestIngestScanSource:
             tool=UrlTool.KATANA,
             entries=[_scan(repo_id, path="/old1"), _scan(repo_id, path="/old2")],
         )
-        # Re-ingest with new entries — old katana rows must be wiped.
+        # Re-ingest with new entries; old katana rows must be wiped.
         service.ingest_scan_source(
             repo_id=repo_id,
             run_id=None,
@@ -131,7 +131,7 @@ class TestIngestScanSource:
             tool=UrlTool.NOIR,
             entries=[_scan(repo_id, path="/n", tool=UrlTool.NOIR)],
         )
-        # Re-ingest katana — noir rows must stay.
+        # Re-ingest katana; noir rows must stay.
         service.ingest_scan_source(
             repo_id=repo_id,
             run_id=None,
@@ -157,7 +157,7 @@ class TestIngestUserFile:
                 _user(repo_id, file_path="/uploads/v1.json", path="/old"),
             ],
         )
-        # Re-upload same file path — old rows wiped.
+        # Re-upload same file path; old rows wiped.
         service.ingest_user_file(
             repo_id=repo_id,
             file_path="/uploads/v1.json",

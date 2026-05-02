@@ -1,18 +1,7 @@
 """Dedicated per-field LLM prompt modules.
 
-Each module in this package handles one constrained enrichment field that
-requires a field-specific prompt (e.g. an enum table rather than free-form
-reasoning). All modules must expose a single function:
-
-    def render_prompt(source_values: dict[str, Any]) -> str: ...
-
-``source_values`` is a dict of pre-extracted metadata key/value pairs for
-the finding. The function returns the complete user-turn prompt string; the
-system prompt is owned by ``EnrichmentPipeline``.
-
-Adding a new dedicated field:
-1. Create ``application/rag/prompts/<field_name>.py`` with ``render_prompt``.
-2. Add one entry to ``_DEDICATED_MODULES`` below.
+Each module handles one constrained enrichment field and must expose
+render_prompt(source_values: dict[str, Any]) -> str.
 """
 
 from __future__ import annotations

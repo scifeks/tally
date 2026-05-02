@@ -1,10 +1,8 @@
-"""Integration tests for the Phase 8.2 application-layer chat service.
+"""Integration tests for the application-layer chat service.
 
-Uses a real SQLite-backed ``ChatSessionRepository`` /
-``ChatMessageRepository`` plus a fake ``LLMProvider`` that yields a
-scripted token stream. Retrieval is exercised through a fake
-``QueryEngine`` so we don't need a real ChromaDB instance — the test
-focus is the service's orchestration, not the RAG pipeline.
+Uses a real SQLite-backed ``ChatSessionRepository`` and ``ChatMessageRepository``
+plus a fake ``LLMProvider`` that yields a scripted token stream. Retrieval
+uses a fake ``QueryEngine``, so no real ChromaDB instance is needed.
 """
 
 from __future__ import annotations
@@ -47,11 +45,6 @@ from infrastructure.store.repositories.chat_sessions import (  # noqa: E402
 )
 
 pytestmark = pytest.mark.integration
-
-
-# ---------------------------------------------------------------------------
-# Fakes
-# ---------------------------------------------------------------------------
 
 
 class FakeProvider(LLMProvider):
@@ -124,11 +117,6 @@ class CapturingSink(ChatStreamSink):
         self.events.append(event)
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture()
 def factory(tmp_path: Path) -> ConnectionFactory:
     f = ConnectionFactory(tmp_path / "tally.db")
@@ -149,11 +137,6 @@ def message_repo(factory: ConnectionFactory) -> ChatMessageRepository:
 @pytest.fixture()
 def seed_session(session_repo: ChatSessionRepository) -> int:
     return session_repo.create(project_id=42, title="2026-04-25 14:30")
-
-
-# ---------------------------------------------------------------------------
-# Happy path
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -205,11 +188,6 @@ async def test_happy_path_streams_tokens_and_persists_assistant_turn(
     assert len(types) == 5  # start + 3 tokens + completed
     assert isinstance(sink.events[-1], ChatStreamCompleted)
     assert sink.events[-1].assistant_message_id == rows[1].id
-
-
-# ---------------------------------------------------------------------------
-# Retrieval
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -276,11 +254,6 @@ async def test_retrieval_failure_falls_back_to_no_context(
 
     assert provider.received_messages is not None
     assert "(no findings retrieved)" in provider.received_messages[0]["content"]
-
-
-# ---------------------------------------------------------------------------
-# Prompt assembly + 500k ceiling
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -367,9 +340,7 @@ async def test_prior_turns_passed_to_provider_in_order(
     assert roles_and_content[3] == ("user", "follow up")
 
 
-# ---------------------------------------------------------------------------
 # Cancellation: aclose() does not persist assistant row
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -403,11 +374,6 @@ async def test_aclose_after_partial_stream_does_not_persist_assistant(
     assert not any(isinstance(e, ChatStreamCompleted) for e in sink.events)
 
 
-# ---------------------------------------------------------------------------
-# Provider error: assistant turn not persisted
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_provider_error_does_not_persist_assistant(
     session_repo: ChatSessionRepository,
@@ -435,11 +401,6 @@ async def test_provider_error_does_not_persist_assistant(
     failures = [e for e in sink.events if isinstance(e, ChatStreamFailed)]
     assert len(failures) == 1
     assert failures[0].error == "LLMAdapterError"
-
-
-# ---------------------------------------------------------------------------
-# Validation: expired & wrong project
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -505,11 +466,6 @@ async def test_unknown_session_raises_not_found(
         )
 
     assert provider.call_count == 0
-
-
-# ---------------------------------------------------------------------------
-# Bookkeeping: session.touch fires on success only
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,9 @@
-"""ChatMessageRepository — manages the ``chat_messages`` table (Phase 8.1).
+"""Persist and retrieve chat messages within a session.
 
-Each row is one turn within a chat session. ``role`` is ``user`` or
-``assistant``; ``model`` is the LLM model identifier on assistant turns
-and NULL on user turns. Messages are append-only in v1 — there is no
-update or per-row delete API; deletion happens via cascade when the
-parent session is deleted.
+Each row is one turn within a chat session. Role is either user or
+assistant; model is the LLM model identifier on assistant turns and NULL
+on user turns. Messages are append-only; deletion cascades from session
+deletion.
 """
 
 from __future__ import annotations
@@ -28,9 +27,6 @@ class ChatMessageRepository(ChatMessageRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # ------------------------------------------------------------------
-    # Mutations
-    # ------------------------------------------------------------------
     def append(
         self,
         *,
@@ -53,9 +49,6 @@ class ChatMessageRepository(ChatMessageRepositoryPort):
             )
             return cur.lastrowid  # type: ignore[return-value]
 
-    # ------------------------------------------------------------------
-    # Queries
-    # ------------------------------------------------------------------
     def list_for_session(self, session_id: int) -> list[ChatMessageRow]:
         """Return every message for *session_id* in insertion order."""
         with self._factory.connect() as conn:

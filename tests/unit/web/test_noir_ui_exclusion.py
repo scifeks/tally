@@ -20,7 +20,7 @@ class TestNoirHandlerDomainAttributes:
     """NoirHandler must expose domain='code' and segment='web'."""
 
     def test_domain_is_code(self) -> None:
-        """Noir findings go into the 'code' domain bucket — not 'web'."""
+        """Noir findings go into the 'code' domain bucket; not 'web'."""
         assert NoirHandler().domain == "code"
 
     def test_segment_is_web(self) -> None:

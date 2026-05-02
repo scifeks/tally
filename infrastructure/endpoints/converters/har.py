@@ -1,4 +1,4 @@
-"""HAR adapter — converts HTTP Archive files to OAS3 in pure Python."""
+"""Convert HTTP Archive (HAR) files to OpenAPI 3.x without external tools."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .base import ConverterAdapter, ConverterError
 
 
 class HARAdapter(ConverterAdapter):
-    """Adapter for HAR files — converts to OAS3 without external tools."""
+    """Convert HAR files to OAS3 without external tools."""
 
     @property
     def supported_extensions(self) -> frozenset[str]:

@@ -1,13 +1,10 @@
-"""Domain rule: which URL paths are vendor / dependency directories.
+"""Domain rule: which URL paths are vendor or dependency directories.
 
-Pure rule with no I/O. Used at every URL-inventory ingest boundary
-(``iter_oas3_rows``) so vendor paths never enter ``url_findings`` —
-keeping the merged OAS3 artifact (which downstream DAST tools consume)
-free of unreachable dependency URLs.
-
-Path matching is segment-anchored: each indicator is wrapped with
-leading and trailing slashes so ``/vendor/`` matches
-``/api/vendor/foo`` but not ``/vendor-api/foo`` or ``/api/vendoring``.
+Pure rule with no I/O. Prevents vendor paths from entering the URL
+inventory so the merged OAS3 artifact is free of unreachable
+dependency URLs. Path matching is segment-anchored: ``/vendor/``
+matches ``/api/vendor/foo`` but not ``/vendor-api/foo`` or
+``/api/vendoring``.
 """
 
 from __future__ import annotations
@@ -34,15 +31,14 @@ def _normalize_indicator(name: str) -> str:
 
 
 def is_vendor_path(path: str, *, extra_indicators: Iterable[str] = ()) -> bool:
-    """Return True if *path* sits under a vendor / dependency directory.
+    """Return True if *path* sits under a vendor or dependency directory.
 
     Args:
-        path: A URL path (``/foo/bar``) or full URL — only the path
+        path: A URL path (``/foo/bar``) or full URL; only the path
             portion is examined.
         extra_indicators: Additional directory names (with or without
-            slashes) to treat as vendor dirs. Typically populated from
-            ``Repository.ignore_dirs`` so user-configured exclusions
-            apply to URL discovery.
+            slashes) to treat as vendor dirs, typically from
+            ``Repository.ignore_dirs``.
 
     Matching is case-insensitive and segment-anchored.
     """

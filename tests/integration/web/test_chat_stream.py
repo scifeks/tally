@@ -1,16 +1,9 @@
-"""Integration tests for Phase 8.8 — chat SSE event publish contract.
+"""Integration tests for chat SSE event publish contract.
 
 This file covers the chat SSE pipeline by subscribing to the underlying
 ``EventBus`` directly rather than driving the long-lived SSE endpoint
-over HTTP. As the existing ``test_finding_events_sse.py`` documents,
-``httpx.AsyncClient`` with ``ASGITransport`` runs the ASGI app inline
-on the test event loop, so a long-lived stream blocks any concurrent
-POST on the same client. Subscribing to the bus tests the same
-publish contract — the ``EventBusChatSink`` field projection and event
-ordering — without that constraint. The HTTP wrapper itself is a thin
-``StreamingResponse`` that forwards queue items via
-``format_sse_frame``; its routing/auth/422 surface is covered by
-plain GETs that don't open a long-lived stream.
+over HTTP. The HTTP wrapper itself is a thin ``StreamingResponse`` that
+forwards queue items via ``format_sse_frame``.
 """
 
 from __future__ import annotations
@@ -32,9 +25,7 @@ from web.adapters.chat_run_registry import get_chat_run_registry
 pytestmark = pytest.mark.integration
 
 
-# ---------------------------------------------------------------------------
 # Fakes
-# ---------------------------------------------------------------------------
 
 
 class _FakeProvider:
@@ -84,9 +75,7 @@ class _StubQueryEngine:
         return []
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _seed_session(factory, *, project_id: int, title: str = "seed") -> int:
@@ -143,11 +132,6 @@ async def _wait_for_no_active_stream(session_id: int, *, timeout: float = 2.0) -
         if get_chat_run_registry().get(session_id) is None:
             return
         await asyncio.sleep(0.01)
-
-
-# ---------------------------------------------------------------------------
-# Tests — bus publish contract via POST → EventBusChatSink
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -296,11 +280,6 @@ async def test_event_bus_payload_carries_filter_fields(app_client, monkeypatch) 
         assert e.payload["project_id"] == project_id
 
     await _wait_for_no_active_stream(sid)
-
-
-# ---------------------------------------------------------------------------
-# Tests — HTTP-only paths (no streaming open) — safe with ASGITransport
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

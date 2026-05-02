@@ -1,21 +1,9 @@
-"""Background triage runner — spawns the worker thread that owns a triage.
+"""Background triage runner that spawns the worker thread.
 
-Mirrors :mod:`web.scans.runner`. The HTTP start endpoint validates
-inputs, acquires the ``LockRegistry`` job slot synchronously (so 409
-returns immediately), resolves the latest scan_run_id for the project,
-then hands control to :func:`start_triage_thread` which:
-
-1. Wires the EventBus-backed event sink and the cancellation token.
-2. Registers the run in :class:`TriageRunRegistry` so cancel endpoints
-   can find the token.
-3. Calls :func:`application.triage.orchestrator.run_triage_for_project`.
-4. Releases the lock and unregisters the run in ``finally``.
-
-If :class:`application.triage.runner.TriageCancelled` is raised, the
-runner has already marked remaining batches cancelled and emitted
-``run_cancelled``; the worker only swallows the exception so the
-thread exits cleanly. Other exceptions are logged and swallowed for
-the same reason.
+Mirrors web.scans.runner. The HTTP start endpoint validates inputs,
+acquires the LockRegistry job slot, resolves the latest scan_run_id,
+then spawns a worker thread that wires the event sink, registers the run,
+calls the triage orchestrator, and releases the lock in its finally block.
 """
 
 from __future__ import annotations

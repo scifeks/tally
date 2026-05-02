@@ -1,13 +1,8 @@
-"""Scan lifecycle events emitted by the orchestrator (Phase 5.1).
+"""Scan lifecycle events emitted by the orchestrator.
 
-These events are domain-pure: they carry no transport concerns. The
-``ScanEventSink`` port (see ``application/ports/scan_event_sink.py``)
-turns them into either Rich console output (REPL adapter) or async
-``BusEvent`` publishes for SSE fan-out (web adapter).
-
-Field names match the SSE event payload catalogue in
-``docs/roadmap/ui-planning/API/endpoints.md §15.1`` so adapters can do a
-straight projection.
+Events are domain-pure and carry no transport concerns. The
+``ScanEventSink`` port converts them to Rich console output (REPL) or
+async SSE publishes (web).
 """
 
 from __future__ import annotations

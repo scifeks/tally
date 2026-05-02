@@ -28,9 +28,7 @@ class TestProjectCommands(unittest.TestCase):
         self._active_repos_mock = self._active_repos_patcher.start()
         self.addCleanup(self._active_repos_patcher.stop)
 
-    # ------------------------------------------------------------------
     # cmd_project dispatch
-    # ------------------------------------------------------------------
 
     def test_cmd_project_no_args_renders_help(self) -> None:
         self.cmds.cmd_project("project", [])
@@ -67,9 +65,7 @@ class TestProjectCommands(unittest.TestCase):
         args, _ = self.repl.console.print.call_args
         self.assertIn("Unknown subcommand", args[0])
 
-    # ------------------------------------------------------------------
     # cmd_repo dispatch
-    # ------------------------------------------------------------------
 
     def test_cmd_repo_no_args_renders_help(self) -> None:
         self.cmds.cmd_repo("repo", [])
@@ -95,9 +91,7 @@ class TestProjectCommands(unittest.TestCase):
         args, _ = self.repl.console.print.call_args
         self.assertIn("Unknown subcommand", args[0])
 
-    # ------------------------------------------------------------------
     # cmd_projects
-    # ------------------------------------------------------------------
 
     def test_cmd_projects_no_projects_prints_warning(self) -> None:
         self.repl.project_registry.list_active.return_value = []
@@ -127,9 +121,7 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_projects("projects", [])
         self.repl.console.print.assert_called_once()
 
-    # ------------------------------------------------------------------
     # cmd_switch
-    # ------------------------------------------------------------------
 
     def test_cmd_switch_no_args_prints_usage(self) -> None:
         self.cmds.cmd_switch("project", [])
@@ -147,9 +139,7 @@ class TestProjectCommands(unittest.TestCase):
         args, _ = self.repl.console.print.call_args
         self.assertIn("Project not found", args[0])
 
-    # ------------------------------------------------------------------
     # cmd_new_project
-    # ------------------------------------------------------------------
 
     def test_cmd_new_project_wizard_returns_name_sets_active(self) -> None:
         self.repl.wizard.create_project.return_value = "new-proj"
@@ -161,9 +151,7 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_new_project("project", [])
         self.assertEqual(self.repl.active_project, "test-project")
 
-    # ------------------------------------------------------------------
     # cmd_delete_project
-    # ------------------------------------------------------------------
 
     def test_cmd_delete_project_no_args_prints_usage(self) -> None:
         self.cmds.cmd_delete_project("project", [])
@@ -196,9 +184,7 @@ class TestProjectCommands(unittest.TestCase):
             self.cmds.cmd_delete_project("project", ["old-proj"])
         self.assertIsNone(self.repl.active_project)
 
-    # ------------------------------------------------------------------
     # cmd_edit_project
-    # ------------------------------------------------------------------
 
     def test_cmd_edit_project_explicit_name_calls_wizard(self) -> None:
         self.cmds.cmd_edit_project("project", ["some-proj"])
@@ -221,9 +207,7 @@ class TestProjectCommands(unittest.TestCase):
         args, _ = self.repl.console.print.call_args
         self.assertIn("bad", args[0])
 
-    # ------------------------------------------------------------------
     # cmd_add_repo
-    # ------------------------------------------------------------------
 
     def test_cmd_add_repo_no_active_project_prints_warning(self) -> None:
         self.repl.active_project = None
@@ -235,9 +219,7 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_add_repo("repo", [])
         self.repl.wizard.add_repository.assert_called_once_with("test-project")
 
-    # ------------------------------------------------------------------
     # cmd_repos
-    # ------------------------------------------------------------------
 
     def test_cmd_repos_no_active_project_prints_warning(self) -> None:
         self.repl.active_project = None
@@ -261,9 +243,7 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_repos("repo", [])
         self.repl.console.print.assert_called_once()
 
-    # ------------------------------------------------------------------
     # cmd_edit_repo
-    # ------------------------------------------------------------------
 
     def test_cmd_edit_repo_no_active_project_prints_warning(self) -> None:
         self.repl.active_project = None
@@ -288,9 +268,7 @@ class TestProjectCommands(unittest.TestCase):
         args, _ = self.repl.console.print.call_args
         self.assertIn("oops", args[0])
 
-    # ------------------------------------------------------------------
     # cmd_delete_repo
-    # ------------------------------------------------------------------
 
     def test_cmd_delete_repo_no_active_project_prints_warning(self) -> None:
         self.repl.active_project = None
@@ -324,9 +302,7 @@ class TestProjectCommands(unittest.TestCase):
         args, _ = self.repl.console.print.call_args
         self.assertIn("gone", args[0])
 
-    # ------------------------------------------------------------------
     # cmd_project_info
-    # ------------------------------------------------------------------
 
     def test_cmd_project_info_no_active_project_prints_warning(self) -> None:
         self.repl.active_project = None

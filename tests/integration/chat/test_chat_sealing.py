@@ -1,9 +1,7 @@
-"""Integration tests for Phase 8.10 — chat session sealing + retention sweep.
+"""Integration tests for chat session sealing and retention sweep.
 
-Exercises ``application/chat/sealing.py`` directly against real SQLite-
-backed repositories. Decoupled from the scan orchestrator so the helper
-semantics (Decisions 5, 6, Q15) can be validated without driving a real
-scan run.
+Exercises ``application/chat/sealing.py`` directly against real SQLite
+repositories, decoupled from the scan orchestrator.
 """
 
 from __future__ import annotations
@@ -32,11 +30,6 @@ from infrastructure.store.repositories.chat_sessions import (  # noqa: E402
 )
 
 pytestmark = pytest.mark.integration
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _setup(tmp_path: Path) -> tuple[ProjectPaths, ConnectionFactory]:
@@ -69,11 +62,6 @@ def _seed_expired(
         repo.mark_expired([sid], when=when)
         ids.append(sid)
     return ids
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
 
 
 def test_seal_marks_all_active_sessions_expired(tmp_path: Path) -> None:
@@ -141,7 +129,7 @@ def test_seal_with_retention_sweep_drops_oldest_expired(tmp_path: Path) -> None:
 
 
 def test_seal_retention_zero_keeps_every_expired_session(tmp_path: Path) -> None:
-    """retention_count=0 disables the sweep — every expired session survives."""
+    """retention_count=0 disables the sweep; every expired session survives."""
     _, factory = _setup(tmp_path)
     repo = ChatSessionRepository(factory)
     project_id = 1

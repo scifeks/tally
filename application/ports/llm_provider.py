@@ -1,4 +1,4 @@
-"""LLMProvider port — language-model adapter contract.
+"""Language-model adapter contract.
 
 Adapters:
   infrastructure/llm/claude_adapter.py  (Anthropic Messages API)

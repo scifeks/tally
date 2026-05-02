@@ -38,14 +38,7 @@ class RepoAuth(BaseModel):
 
 
 class Repository(BaseModel):
-    """Repository configuration.
-
-    Phase 14.3: the per-project SQLite ``repositories`` table is the sole
-    source of truth for per-repo config. ``id`` is the stable identifier
-    (assigned by SQLite on first insert); ``url_seed_file`` carries the
-    most-recent user-uploaded endpoint file path. Both are populated by
-    the DB row builder and excluded from any JSON serialisation.
-    """
+    """Repository configuration."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -92,7 +85,7 @@ class Repository(BaseModel):
             "in the tree (e.g. 'vendor' excludes app/vendor/). "
             "Case-insensitive. Applies to SAST and secrets tool segments, "
             "and to URL discovery (Noir, Katana) at the inventory ingest "
-            "boundary — vendor-style names listed here are excluded from "
+            "boundary. Vendor-style names listed here are excluded from "
             "url_findings on top of the built-in indicators."
         ),
     )
@@ -149,7 +142,7 @@ class Repository(BaseModel):
         default=5,
         description=(
             "Katana crawl depth (-d flag). Default 5. Headless mode caps this "
-            "at 5 automatically — deeper headless crawls stall on cyclic or "
+            "at 5 automatically; deeper headless crawls stall on cyclic or "
             "parameterised apps and offer diminishing returns."
         ),
     )
@@ -207,8 +200,8 @@ class Repository(BaseModel):
         """Cap katana_depth at 5 when headless mode is enabled.
 
         Headless Chrome at high depth stalls indefinitely on cyclic or
-        parameterised apps (e.g. DVWA ``?id=...``).  Silently truncating
-        rather than raising lets existing project configs load without error.
+        parameterised apps (e.g. DVWA ``?id=...``). Silently truncating
+        rather than raising allows existing project configs to load.
         """
         _HEADLESS_DEPTH_CAP = 5
         if self.katana_headless and self.katana_depth > _HEADLESS_DEPTH_CAP:
@@ -225,8 +218,7 @@ class Repository(BaseModel):
 def build_excluded_dirs(repo: Repository) -> list[str]:
     """Return deduplicated list of dir names to exclude from scans.
 
-    Combines repo.test_dirs and repo.ignore_dirs, preserving insertion order.
-    Callers (tool wrappers, ingestor) should treat entries as bare dir names
-    matched case-insensitively at any depth in the file tree.
+    Combines repo.test_dirs and repo.ignore_dirs in insertion order. Entries
+    are bare dir names matched case-insensitively at any depth in the tree.
     """
     return list(dict.fromkeys(repo.test_dirs + repo.ignore_dirs))

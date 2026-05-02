@@ -1,4 +1,4 @@
-"""ScanEventSink port — destination for scan lifecycle events (Phase 5.2).
+"""Destination for scan lifecycle events.
 
 The orchestrator and scan-types layer call ``sink.emit(event)`` on every
 state transition. Concrete adapters decide what to do with the event:

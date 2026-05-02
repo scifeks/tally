@@ -15,12 +15,10 @@ if TYPE_CHECKING:
 # Each line = 4 chars: left-edge, fill, column-divider, right-edge.
 HELP_BOX = box.Box("┌─┬┐\n│ ││\n├─┼┤\n│ ││\n├─┼┤\n├─┼┤\n│ ││\n└─┴┘\n")
 
-# ---------------------------------------------------------------------------
 # Help registry: (group, command, argument, description)
 # command=None  → section header row; description holds the section title.
 # command=_NOTE → dim informational row (no Command/Arguments cells).
 # group is used by HelpRenderer.render() to render filtered tables.
-# ---------------------------------------------------------------------------
 _NOTE = "_NOTE_"
 
 _HELP_REGISTRY = [
@@ -270,13 +268,13 @@ _HELP_REGISTRY = [
         "triage",
         "triage",
         "--batch",
-        "Run batching phase only — no Claude sessions",
+        "Run batching phase only; no Claude sessions",
     ),
     (
         "triage",
         "triage",
         "--dry-run",
-        "Batch + render prompts to DEBUG log — no MCP server, no Claude",
+        "Batch + render prompts to DEBUG log; no MCP server, no Claude",
     ),
     # Web UI
     ("ui", None, None, "Web UI"),
@@ -331,7 +329,7 @@ class HelpRenderer:
             and not self._runtime_service.is_installed("claude")
         )
 
-        # Collect titles of section headers that need a divider above them —
+        # Collect titles of section headers that need a divider above them;
         # every header except the first one in the (filtered) list.
         divider_sections: set[str] = set()
         first_header_seen = False

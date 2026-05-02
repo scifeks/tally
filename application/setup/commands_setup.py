@@ -47,8 +47,7 @@ def _has_metachar(s: str) -> bool:
 def _warn_metachar(label: str, value: str) -> None:
     if _has_metachar(value):
         print(
-            f"  Warning: {label} contains shell metacharacters "
-            "— verify this is correct."
+            f"  Warning: {label} contains shell metacharacters; verify this is correct."
         )
 
 
@@ -316,7 +315,7 @@ def run_commands_setup(base_path: str) -> None:
 
     all_tools = sorted(local_tools | docker_tools)
 
-    print("\nTally — First-Run Tool Setup")
+    print("\nTally - First-Run Tool Setup")
     print("=" * 40)
     print("Configure which security tools to use and how to run them.")
     print("(Delete config/commands.json to re-run this setup at any time.)\n")
@@ -332,7 +331,7 @@ def run_commands_setup(base_path: str) -> None:
         if entry is not None:
             commands[tool_name] = entry
 
-    # Write directly — ConfigManager requires global.json which may not exist yet
+    # Write directly; ConfigManager requires global.json which may not exist yet
     config_dir = Path(base_path) / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_dir / "commands.json", "w") as f:
@@ -345,7 +344,7 @@ def run_commands_setup(base_path: str) -> None:
         detail = entry.get("path", "") or entry.get("container", {}).get("name", "")
         print(f"  + {name:<18} ({loc}) {detail}")
     if not commands:
-        print("  (none — all tools skipped)")
+        print("  (none: all tools skipped)")
     print("\nconfig/commands.json written.")
     print(
         "If anything was misconfigured, delete config/commands.json and re-run tally.\n"

@@ -1,14 +1,9 @@
-"""Chat lifecycle events emitted by the chat application service (Phase 8.2).
+"""Chat lifecycle events.
 
 Domain-pure events (no transport concerns). The ``ChatStreamSink`` port
-(see ``application/ports/chat_event_sink.py``) projects them into either
-a no-op REPL discard or — once Phase 8.8 lands — an async ``BusEvent``
-publish for SSE fan-out.
-
-A "chat stream" is identified by ``session_id`` (the integer primary key
-of the ``chat_sessions`` row). Field names match the SSE event payload
-catalogue in ``docs/roadmap/ui-planning/API/endpoints.md §15`` so
-adapters can do a straight projection.
+projects them into either a REPL discard or an async ``BusEvent`` for
+SSE fan-out. A chat stream is identified by ``session_id`` (the primary
+key of the ``chat_sessions`` row).
 """
 
 from __future__ import annotations

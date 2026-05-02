@@ -82,7 +82,7 @@ class ToolOnRepoScan(ScanType):
         if skip_sca:
             logger.warning(
                 "SCA tool %r has no matching manifests for repo %r"
-                " (%s) — running anyway (explicitly requested).",
+                " (%s); running anyway (explicitly requested).",
                 self.tool_name,
                 repo.name,
                 skip_reason,
@@ -91,7 +91,7 @@ class ToolOnRepoScan(ScanType):
         seg = getattr(tool, "scan_segment", "") or ""
 
         resources.display.print_scan_header(
-            f"Repo Tool Scan: {repo.name} — {self.tool_name}"
+            f"Repo Tool Scan: {repo.name} | {self.tool_name}"
         )
         resources.event_sink.emit(
             se.ToolStarted(

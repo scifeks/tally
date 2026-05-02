@@ -3,8 +3,7 @@
 The vendor / dependency rule used to live in the Noir parser. Phase
 post-9.x moved it into the domain layer so the same rule serves every
 URL provider (Noir, Katana, user-uploaded OAS3) at one ingest gate.
-These tests pin the rule's contract directly — independent of any
-adapter.
+These tests pin the rule's contract independently of any adapter.
 """
 
 from __future__ import annotations

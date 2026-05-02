@@ -208,7 +208,7 @@ class ReportGenerator:
                     f"| {source} | {params} |"
                 )
             lines.append(
-                "_Note: Discovered Attack Surface entries are informational — "
+                "_Note: Discovered Attack Surface entries are informational, "
                 "not vulnerability findings._"
             )
 
@@ -377,7 +377,7 @@ class ReportGenerator:
                 f"<table>{th('Method', 'URI', 'Source File', 'Parameters')}"
                 f"<tbody>{rows}</tbody></table>"
                 '<p class="note">Note: Discovered Attack Surface entries are'
-                " informational — not vulnerability findings.</p></div>"
+                " informational, not vulnerability findings.</p></div>"
             )
 
         if not sections:

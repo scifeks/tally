@@ -65,9 +65,7 @@ logger = logging.getLogger("tally.web.scans")
 v1_router = APIRouter()
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _service(request: Request, project_id: int) -> ScansService:
@@ -158,9 +156,7 @@ def _build_progress(
     )
 
 
-# ---------------------------------------------------------------------------
 # Project-scoped routes: literal segments first, then parameterized
-# ---------------------------------------------------------------------------
 
 
 @v1_router.get(
@@ -473,9 +469,7 @@ async def get_scan(
     )
 
 
-# ---------------------------------------------------------------------------
 # More helpers (after route declarations to keep the public surface visible)
-# ---------------------------------------------------------------------------
 
 
 def _validate_tool_ids(tool_ids: list[str]) -> None:

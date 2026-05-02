@@ -1,20 +1,15 @@
 """Triage endpoints (history, detail, dispatch, cancel, SSE).
 
-Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §6``:
+Endpoints:
+- GET  /api/v1/projects/{project_id}/triage (history)
+- GET  /api/v1/projects/{project_id}/triage/events (SSE)
+- POST /api/v1/projects/{project_id}/triage (start)
+- POST /api/v1/projects/{project_id}/triage/{scan_run_id}/cancel
+- GET  /api/v1/projects/{project_id}/triage/{scan_run_id} (detail)
 
-- ``GET    /api/v1/projects/{project_id}/triage``                     (history)
-- ``GET    /api/v1/projects/{project_id}/triage/events``              (SSE)
-- ``POST   /api/v1/projects/{project_id}/triage``                     (start)
-- ``POST   /api/v1/projects/{project_id}/triage/{scan_run_id}/cancel``
-- ``GET    /api/v1/projects/{project_id}/triage/{scan_run_id}``       (detail)
-
-A "triage run" is identified by ``scan_run_id``; there is no separate
-triage_id. The runner picks the latest ``scan_runs`` row for the
-project and writes ``triage_batches`` keyed by that id. The SPA never
-chooses the scan_run; the application core does.
-
-Route ordering: literal-segment routes (``.../events``) registered
-before parameterized routes (``.../{scan_run_id}``).
+A triage run is identified by scan_run_id. The runner picks the latest
+scan_runs row for the project and writes triage_batches keyed by that id.
+Route ordering: literal-segment routes registered before parameterized.
 """
 
 from __future__ import annotations
@@ -55,9 +50,7 @@ logger = logging.getLogger("tally.web.triage")
 v1_router = APIRouter()
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _service(request: Request, project_id: int) -> TriageService:
@@ -108,9 +101,7 @@ def _batch_to_item(batch: TriageBatchRow) -> TriageBatchItem:
     )
 
 
-# ---------------------------------------------------------------------------
 # /api/v1/projects/{project_id}/triage: history (literal-segment first)
-# ---------------------------------------------------------------------------
 
 
 @v1_router.get(
@@ -349,9 +340,7 @@ async def start_triage(
     return _summary_to_response(summary, project_id)
 
 
-# ---------------------------------------------------------------------------
 # Parameterized: /{project_id}/triage/{scan_run_id}/...
-# ---------------------------------------------------------------------------
 
 
 @v1_router.post(
@@ -515,9 +504,7 @@ async def get_triage(
     )
 
 
-# ---------------------------------------------------------------------------
 # Snapshot helper
-# ---------------------------------------------------------------------------
 
 
 async def _build_snapshot(

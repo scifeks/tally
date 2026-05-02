@@ -1,5 +1,4 @@
-"""Unit tests for the npm audit JSON parser
-(infrastructure.tools.parsers.npm_audit)."""
+"""Unit tests for the npm audit JSON parser."""
 
 from __future__ import annotations
 

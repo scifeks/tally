@@ -1,17 +1,10 @@
-"""TriageRunRegistry — process-singleton tracking the active triage run.
+"""Process-singleton tracking the active triage run.
 
-Phase 6.6 needs a way for the cancel endpoint to find the
-``CancellationToken`` for an in-flight triage. The registry maps
-``scan_run_id`` -> live entry while the background triage thread holds
-the ``LockRegistry`` slot. The cancel endpoint looks up tokens here.
-The triage thread unregisters itself in its ``finally`` block.
-
-Triage is single-active process-wide via ``LockRegistry`` slot
-``"triage"``, so this map will hold at most one entry at a time. The
-registry still uses a dict keyed by ``scan_run_id`` to mirror
-``ScanRunRegistry`` and to keep the cancel API uniform.
-
-Thread-safe via an internal mutex; reads and writes are O(1).
+Maps ``scan_run_id`` to live entries while the background triage thread
+holds the ``LockRegistry`` slot. The cancel endpoint looks up tokens here.
+The triage thread unregisters itself in its ``finally`` block. Triage is
+single-active process-wide via ``LockRegistry``, so this map holds at most
+one entry. Thread-safe via an internal mutex.
 """
 
 from __future__ import annotations
@@ -69,7 +62,7 @@ class TriageRunRegistry:
             return list(self._handles.values())
 
     def reset(self) -> None:
-        """Test helper — drop all entries."""
+        """Test helper to drop all entries."""
         with self._lock:
             self._handles.clear()
 

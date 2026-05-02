@@ -1,12 +1,9 @@
-"""Integration tests for Phase 8.9 — POST chat session cancel.
+"""Integration tests for POST chat session cancel.
 
 Endpoint: ``POST /api/v1/projects/{project_id}/chat/sessions/{session_id}/cancel``
 
 The cancel endpoint looks up the in-flight asyncio task in the chat run
-registry and calls ``task.cancel()``. The chat-service generator's
-``GeneratorExit`` path then emits ``ChatStreamCancelled`` (projected to
-SSE as ``stream_cancelled``) and does NOT persist the assistant turn
-(decisions.md B7.7).
+registry and calls ``task.cancel()``.
 """
 
 from __future__ import annotations
@@ -27,9 +24,7 @@ from web.adapters.chat_run_registry import get_chat_run_registry
 pytestmark = pytest.mark.integration
 
 
-# ---------------------------------------------------------------------------
 # Fakes (mirror tests/integration/web/test_chat_message_send.py)
-# ---------------------------------------------------------------------------
 
 
 class _FakeProvider:
@@ -110,9 +105,7 @@ def _reset_registry():
     get_chat_run_registry().reset()
 
 
-# ---------------------------------------------------------------------------
 # Tests
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -172,7 +165,7 @@ async def test_cancel_emits_stream_cancelled_and_skips_persist(
     class _BlockingProvider(_FakeProvider):
         async def _iter(self) -> AsyncIterator[str]:
             started.set()
-            # Yield nothing and block forever — until cancelled.
+            # Yield nothing and block forever until cancelled.
             await asyncio.Event().wait()
             yield "never"  # pragma: no cover
 
@@ -232,7 +225,7 @@ async def test_cancel_409_when_no_active_stream(app_client, monkeypatch) -> None
     """A session with no in-flight task returns 409 CHAT_NO_ACTIVE_STREAM."""
     client, _fid, _rag, factory, mut_headers, project_id = app_client
     sid = _seed_session(factory, project_id=project_id)
-    del monkeypatch  # no provider patching needed — we never POST a message
+    del monkeypatch  # no provider patching needed; we never POST a message
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/chat/sessions/{sid}/cancel",

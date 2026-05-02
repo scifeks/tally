@@ -42,7 +42,7 @@ class FindingPatchRequest(BaseModel):
     tal_id: str | None = None
     cwe: list[str] | None = None
 
-    # Editable meta keys — meta_ prefix maps to the meta blob key
+    # Editable meta keys: meta_ prefix maps to the meta blob key
     meta_remediation: str | None = None
     meta_risk_type: str | None = None
     meta_owasp_name: str | None = None
@@ -217,7 +217,7 @@ class ProjectInfoResponse(BaseModel):
 
 
 class ProjectInfoPatchRequest(BaseModel):
-    """Mutable subset of project info — name and created remain immutable."""
+    """Mutable subset of project info; name and created are immutable."""
 
     company_name: str | None = None
     department_name: str | None = None
@@ -295,7 +295,7 @@ class DockerContainerRequest(BaseModel):
 
 
 class ToolOverrideCreateRequest(BaseModel):
-    """Body for POST /tools/overrides — tool_id + CommandEntry fields."""
+    """Body for POST /tools/overrides (tool_id + CommandEntry fields)."""
 
     tool_id: str = Field(..., min_length=1)
     type: str
@@ -305,7 +305,7 @@ class ToolOverrideCreateRequest(BaseModel):
 
 
 class ToolOverrideUpdateRequest(BaseModel):
-    """Body for PUT /tools/overrides/{tool_id} — full replacement."""
+    """Body for PUT /tools/overrides/{tool_id} (full replacement)."""
 
     type: str
     location: str
@@ -453,11 +453,6 @@ class UrlListFilterOptionsResponse(BaseModel):
     repo: list[RepoFilterOption]
 
 
-# ---------------------------------------------------------------------------
-# Phase 5 — Scans
-# ---------------------------------------------------------------------------
-
-
 class ScanConfigRepo(BaseModel):
     id: int
     name: str
@@ -584,20 +579,13 @@ class ScanProgressResponse(BaseModel):
     tool_runs_summary: ToolRunsSummary
 
 
-# ---------------------------------------------------------------------------
-# Triage (Phase 6) — endpoints.md §6
-# ---------------------------------------------------------------------------
-
-
 class TriageStartRequest(BaseModel):
     """POST body for /api/v1/projects/{id}/triage.
 
-    ``acknowledge_injection_risk`` MUST be ``true`` — the API replaces
-    the REPL's interactive prompt-injection confirmation
-    (``application/repl/commands/triage_commands.py``) with this
-    explicit field. ``finding_ids`` is reserved for future
-    finding-scoped triage; if omitted or null, the runner queues every
-    untriaged active finding for the latest scan_run.
+    ``acknowledge_injection_risk`` must be ``true`` to confirm the risk.
+    ``finding_ids`` is reserved for future finding-scoped triage; if
+    omitted or null, the runner queues every untriaged active finding
+    for the latest scan_run.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -658,11 +646,6 @@ class TriageDetailResponse(BaseModel):
 class TriageCancelResponse(BaseModel):
     scan_run_id: int
     status: str
-
-
-# ---------------------------------------------------------------------------
-# Reports (Phase 7) — endpoints.md §11
-# ---------------------------------------------------------------------------
 
 
 class ReportGenerateRequest(BaseModel):
@@ -741,17 +724,12 @@ class ReportCancelResponse(BaseModel):
     status: str
 
 
-# ---------------------------------------------------------------------------
-# Phase 8 — Chat
-# ---------------------------------------------------------------------------
-
-
 class ChatSessionSummary(BaseModel):
-    """Per-session response payload for ``GET/POST /chat/sessions``.
+    """Per-session response payload for GET/POST /chat/sessions.
 
-    Shape per ``endpoints.md §12``. ``last_message_at`` and
-    ``message_count`` are derived from ``chat_messages`` at read time;
-    they are 0/null on a freshly-created session.
+    ``last_message_at`` and ``message_count`` are derived from
+    ``chat_messages`` at read time; they are 0/null on a freshly-created
+    session.
     """
 
     id: int
@@ -777,13 +755,10 @@ class ChatSessionCreateRequest(BaseModel):
 
 
 class ChatMessageResponse(BaseModel):
-    """Per-message response payload for ``GET .../messages``.
+    """Per-message response payload for GET .../messages.
 
-    Shape per ``endpoints.md §12``. The row column ``created_at`` is
-    surfaced as ``timestamp`` because the SPA contract
-    (``ui/src/lib/types.ts::ChatMessage``) names that field
-    ``timestamp``. ``citations`` is always ``None`` in v1
-    (chat-history.md decision 10 — citation UI deferred).
+    The row column ``created_at`` is surfaced as ``timestamp`` to match
+    the SPA contract. ``citations`` is always ``None`` in v1.
     """
 
     id: int

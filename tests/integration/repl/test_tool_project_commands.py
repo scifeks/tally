@@ -23,9 +23,7 @@ def _make_tc(
     return ToolCommands(repl, MagicMock()), repl
 
 
-# ---------------------------------------------------------------------------
 # _parse_project_flag
-# ---------------------------------------------------------------------------
 
 
 def test_parse_project_flag_extracts_name() -> None:
@@ -77,7 +75,7 @@ def test_tool_add_bare_project_flag_routes_to_project_add(
     project_dir = tmp_path / "projects" / "DVPA" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    # No project-level commands.json — zero project overrides
+    # No project-level commands.json; zero project overrides
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "commands.json").write_text("{}")
@@ -111,9 +109,7 @@ def test_tool_add_bare_project_flag_no_active_project(tmp_path: Path) -> None:
     assert any("No active project" in c for c in printed_calls)
 
 
-# ---------------------------------------------------------------------------
 # _validate_project_arg
-# ---------------------------------------------------------------------------
 
 
 def test_validate_project_no_active_project() -> None:
@@ -141,9 +137,7 @@ def test_validate_project_found(tmp_path: Path) -> None:
     assert result is True
 
 
-# ---------------------------------------------------------------------------
 # tool list --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_list_project_no_config(tmp_path: Path) -> None:
@@ -173,13 +167,11 @@ def test_tool_list_project_with_config(tmp_path: Path) -> None:
     )
     tc, repl = _make_tc(base_path=str(tmp_path))
     tc._cmd_tool_list_project("myproject")
-    # Table object is passed to print — just verify print was called
+    # Table object is passed to print; just verify print was called
     assert repl.console.print.called
 
 
-# ---------------------------------------------------------------------------
 # tool add --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_add_project_duplicate_in_project(tmp_path: Path) -> None:
@@ -257,9 +249,7 @@ def test_tool_add_project_saves_entry(tmp_path: Path) -> None:
     assert saved["nmap"]["path"] == "/usr/bin/nmap"
 
 
-# ---------------------------------------------------------------------------
 # tool edit --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_edit_project_not_found(tmp_path: Path) -> None:
@@ -295,9 +285,7 @@ def test_tool_edit_project_saves_entry(tmp_path: Path) -> None:
     assert saved["nmap"]["path"] == "/new/nmap"
 
 
-# ---------------------------------------------------------------------------
 # tool remove --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_remove_project_not_found(tmp_path: Path) -> None:
@@ -345,9 +333,7 @@ def test_tool_remove_project_confirmed(tmp_path: Path) -> None:
     assert "nmap" not in saved
 
 
-# ---------------------------------------------------------------------------
-# discover_tools — project override
-# ---------------------------------------------------------------------------
+# discover_tools project override
 
 
 def test_discover_tools_project_override(tmp_path: Path) -> None:
@@ -390,9 +376,7 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
         discover_tools()
 
 
-# ---------------------------------------------------------------------------
 # _get_wrapper_availability path fix
-# ---------------------------------------------------------------------------
 
 
 def test_tool_add_global_shows_unconfigured_wrapper(tmp_path: Path) -> None:

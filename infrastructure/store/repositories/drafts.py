@@ -1,10 +1,10 @@
-"""DraftRepository: manages the ``drafts`` table (Phase 7.5).
+"""DraftRepository: manages the drafts table.
 
-Each row tracks one draft section: generating → draft (LLM-written) or
-reviewed (user-uploaded). The table lives in the per-project ``findings.db``
-alongside the ``reports`` table; no ``project_id`` column is needed.
+Each row tracks one draft section: generating, draft (LLM-written), or
+reviewed (user-uploaded). The table lives in the per-project findings.db
+alongside the reports table; no project_id column is needed.
 
-``not_generated`` is represented by the *absence* of a row.
+Absence of a row represents not_generated.
 """
 
 from __future__ import annotations
@@ -28,9 +28,7 @@ class DraftRepository(DraftRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # ------------------------------------------------------------------
     # Queries
-    # ------------------------------------------------------------------
 
     def get(self, section: str) -> DraftRow | None:
         with self._factory.connect() as conn:
@@ -44,9 +42,7 @@ class DraftRepository(DraftRepositoryPort):
             rows = conn.execute("SELECT * FROM drafts ORDER BY section").fetchall()
         return [_row_to_draft(r) for r in rows]
 
-    # ------------------------------------------------------------------
     # Lifecycle mutations
-    # ------------------------------------------------------------------
 
     def upsert_generating(self, section: str) -> None:
         """Insert or update *section* to ``generating``, clearing timestamps."""

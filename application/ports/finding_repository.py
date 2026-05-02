@@ -1,13 +1,7 @@
-"""Persistence port for the ``findings`` table.
+"""Persistence port for the findings table.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.findings.FindingRepository``.
-
-Read methods return parsed ``domain.findings.entry.Finding`` instances
-(JSON columns deserialised, severity translated from integer rank to
-lowercase label). The Chroma-compatible methods ``search``,
-``get_by_ids``, and ``get_all_findings_deserialized`` continue to
-return dicts shaped for the vector store.
+Read methods return Finding instances (JSON deserialized, severity as
+lowercase label). Vector-store methods return dicts.
 """
 
 from __future__ import annotations

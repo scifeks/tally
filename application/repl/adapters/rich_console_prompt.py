@@ -4,11 +4,7 @@ from __future__ import annotations
 
 
 class RichConsolePromptAdapter:
-    """Satisfies UserPromptPort; carries auto-approve state for scan sessions.
-
-    Lifetime: one per scan invocation.  Auto-approve state does not leak
-    across scans because a fresh instance is constructed for each command.
-    """
+    """Satisfies UserPromptPort; carries auto-approve state for scan sessions."""
 
     def __init__(self, auto_approve: bool = False) -> None:
         self._auto_approve = auto_approve

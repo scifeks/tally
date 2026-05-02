@@ -1,4 +1,4 @@
-"""Unit tests for compute_batches() — file clustering and ceiling rules."""
+"""Unit tests for compute_batches(). File clustering and ceiling rules."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Integration tests for Phase 8.7 — GET chat messages.
+"""Integration tests for GET chat messages.
 
 Endpoint: ``GET /api/v1/projects/{project_id}/chat/sessions/{session_id}/messages``
 """

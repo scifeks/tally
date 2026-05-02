@@ -15,14 +15,11 @@ logger = logging.getLogger(__name__)
 class ClaudeAdapter(LLMProvider):
     """LLMProvider backed by the Anthropic Messages API.
 
-    API key resolution order:
-      1. ANTHROPIC_API_KEY environment variable (takes precedence).
-      2. api_key from config (global.json claude.api_key).
-
-    The synchronous SDK client is instantiated once in __init__ and reused
-    for all chat()/complete() calls. The async client used by stream_chat()
-    is created per call; streaming sessions are short-lived and the
-    connection-pool overhead of constructing an AsyncAnthropic is small.
+    API key is resolved first from ANTHROPIC_API_KEY environment variable,
+    then from config (global.json claude.api_key). The synchronous SDK client
+    is instantiated once in __init__ and reused for chat()/complete() calls.
+    The async client used by stream_chat() is created per call; streaming
+    sessions are short-lived and the connection-pool overhead is small.
     """
 
     def __init__(
@@ -54,9 +51,7 @@ class ClaudeAdapter(LLMProvider):
         """
         return bool(self._resolved_key)
 
-    # ------------------------------------------------------------------
     # Shared request shaping
-    # ------------------------------------------------------------------
 
     def _normalise_kwargs(self, kwargs: dict[str, Any]) -> tuple[int, str]:
         """Pop and resolve max_tokens and model from kwargs.
@@ -106,9 +101,7 @@ class ClaudeAdapter(LLMProvider):
         system = "\n\n".join(system_parts) if system_parts else None
         return api_messages, system
 
-    # ------------------------------------------------------------------
     # LLMProvider interface
-    # ------------------------------------------------------------------
 
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         """Call the Anthropic Messages API and return the text response.

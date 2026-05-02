@@ -1,4 +1,4 @@
-"""Severity value object — single source of truth for label↔rank mapping."""
+"""Severity value object with label to rank mapping."""
 
 from __future__ import annotations
 

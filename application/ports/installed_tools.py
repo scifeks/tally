@@ -4,7 +4,7 @@ The installed-tools snapshot is captured once per process lifetime (typically
 at REPL boot or web-server startup) and never re-probed. The data is
 accurate at the moment the process starts; if the user installs or removes
 a tool while the REPL is running, the port will not see it until the
-process restarts. This is intentional — re-probing on every API request
+process restarts. This is intentional; re-probing on every API request
 would be slow, and re-probing on a schedule would create cache-coherence
 problems with downstream UI gating.
 """

@@ -1,4 +1,4 @@
-"""ReportEventSink port — destination for report lifecycle events (Phase 7.4).
+"""Destination for report lifecycle events.
 
 The report runner calls ``sink.emit(event)`` on every state transition.
 Concrete adapters decide what to do with the event:

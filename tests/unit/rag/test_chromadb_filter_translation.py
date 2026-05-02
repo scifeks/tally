@@ -1,8 +1,4 @@
-"""Pin the Filter AST -> ChromaDB DSL translation.
-
-Exercises ChromaDBVectorIndex._translate_clause directly so a typo in any
-operator string is caught without spinning up a real collection.
-"""
+"""Pin the Filter AST -> ChromaDB DSL translation."""
 
 from __future__ import annotations
 

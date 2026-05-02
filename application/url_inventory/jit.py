@@ -1,12 +1,8 @@
-"""JIT-rebuild URL artifacts for scan-tool launchers.
+"""Rebuild URL artifacts just-in-time for scan-tool launchers.
 
-ZAP / XSStrike / DalFox each need a freshly-rebuilt seeds file or merged
-OAS3 document just before they run. The persisted ``merged_seeds_path``
-/ ``merged_oas3_path`` fields were dropped in favour of rebuilding the
-artifacts on demand from ``url_findings`` rows.
-
-This helper is the single entry point for that rebuild — keeps the
-SQLite plumbing out of the tool wrappers.
+ZAP, XSStrike, and DalFox each need freshly-rebuilt seeds files or merged
+OAS3 documents just before they run. The on-disk artifacts are rebuilt
+on demand from ``url_findings`` rows.
 """
 
 from __future__ import annotations
@@ -27,12 +23,11 @@ def jit_rebuild_artifacts(
     project_name: str,
     repo: Repository,
 ) -> tuple[str | None, str | None]:
-    """Rebuild ``merged_urls.txt`` + ``merged_oas3.json`` for *repo*.
+    """Rebuild merged_urls.txt and merged_oas3.json for the repo.
 
-    Returns ``(seeds_path, oas3_path)`` — both absolute paths — when
-    ``url_findings`` has at least one row for the repo. When the repo
-    has no rows (or no DB id yet), returns ``(None, None)`` so the
-    caller can fall back to its quickscan path.
+    Returns (seeds_path, oas3_path) as absolute paths when the repo has
+    url_findings rows. Returns (None, None) if the repo has no rows or
+    no DB id yet, so the caller can fall back to its quickscan path.
     """
     if repo.id is None:
         return None, None

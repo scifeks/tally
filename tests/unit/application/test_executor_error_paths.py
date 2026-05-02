@@ -63,9 +63,7 @@ def executor(tmp_path: Path, runner: _StubRunner) -> ToolExecutor:
 
 
 class TestExecutorErrorPaths:
-    # ------------------------------------------------------------------
     # _needs_root
-    # ------------------------------------------------------------------
 
     def test_needs_root_true_for_requires_root_privileges(self) -> None:
         assert _needs_root("Error: requires root privileges to proceed") is True
@@ -79,9 +77,7 @@ class TestExecutorErrorPaths:
     def test_needs_root_false_for_clean_stderr(self) -> None:
         assert _needs_root("exit status 1: no such file") is False
 
-    # ------------------------------------------------------------------
     # _timeout_result
-    # ------------------------------------------------------------------
 
     def test_timeout_result_returns_failed_tool_result(
         self, executor: ToolExecutor
@@ -102,9 +98,7 @@ class TestExecutorErrorPaths:
         )
         assert result.duration_seconds >= 0.0
 
-    # ------------------------------------------------------------------
     # _run_with_escalation
-    # ------------------------------------------------------------------
 
     def test_run_with_escalation_timeout_returns_tool_result(
         self, tmp_path: Path

@@ -1,7 +1,7 @@
 """SQL query builder for findings searches.
 
-``FindingQueryBuilder`` constructs the SELECT + WHERE + ORDER BY + LIMIT/OFFSET
-SQL from a structured ``filters`` dict.  No DB connection is used here.
+FindingQueryBuilder constructs SQL (SELECT, WHERE, ORDER BY, LIMIT/OFFSET)
+from a structured filters dict without touching the database.
 """
 
 from __future__ import annotations

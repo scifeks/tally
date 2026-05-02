@@ -1,10 +1,8 @@
-"""Web adapter: project ReportEvents onto the async EventBus (Phase 7.4).
+"""Web adapter: project ReportEvents onto the async EventBus.
 
-Report runs on a worker ``threading.Thread`` separate from the FastAPI
-asyncio loop, so we use ``publish_threadsafe`` to hop back into the
-bus's loop. Adapters never raise — bus publish failures (closed job,
-disconnected loop) are swallowed so report generation never fails
-because nothing is listening.
+Report runs on a worker thread separate from the FastAPI asyncio loop,
+so ``publish_threadsafe`` hops back into the bus's loop. Bus publish
+failures are swallowed so report generation never fails when nothing listens.
 """
 
 from __future__ import annotations

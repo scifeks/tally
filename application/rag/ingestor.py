@@ -1,4 +1,4 @@
-"""Finding ingestion pipeline — ToolHandler protocol and path-normalisation helpers."""
+"""ToolHandler protocol and path normalization helpers."""
 
 import importlib
 import inspect
@@ -12,9 +12,7 @@ from domain.tools.enrichment import FieldEnrichmentSpec
 logger = logging.getLogger(__name__)
 
 
-# ------------------------------------------------------------------
 # ToolHandler Protocol
-# ------------------------------------------------------------------
 
 
 class ToolHandler(Protocol):
@@ -35,9 +33,7 @@ class ToolHandler(Protocol):
     def fingerprint_key(self, finding: dict) -> str: ...
 
 
-# ------------------------------------------------------------------
 # ToolHandlerFactory
-# ------------------------------------------------------------------
 
 
 class ToolHandlerFactory:
@@ -60,9 +56,7 @@ class ToolHandlerFactory:
         return None
 
 
-# ------------------------------------------------------------------
 # Handler registry helpers
-# ------------------------------------------------------------------
 
 
 def get_tool_domain(tool_name: str) -> str | None:
@@ -86,15 +80,14 @@ def is_excluded_path(rel_path: str, excluded_dirs: list[str]) -> bool:
 def _normalize_path(file_path: str, repos: list[Repository]) -> tuple[str, int | None]:
     """Return ``(relative_path, repo_id)`` for ``file_path``.
 
-    Phase 9: identifies repos by integer ``id`` (FK to the
-    ``repositories`` table) instead of mutable string name. Display
-    sites JOIN to ``repositories`` via ``_repo_label.label_for`` at
-    render time.
+    Identifies repos by integer ``id`` (FK to the ``repositories`` table)
+    instead of mutable string name. Display sites JOIN to ``repositories``
+    via ``_repo_label.label_for`` at render time.
 
     If ``file_path`` starts with ``repo.path``, strip that prefix.
     If no repo matches, return ``(file_path, None)`` unchanged.
     ``repo_id`` is ``None`` when no match is found, when the matched
-    repo has no DB id (legacy / unsynced), or when ``file_path`` is
+    repo has no DB id (legacy/unsynced), or when ``file_path`` is
     empty.
     """
     if not file_path:

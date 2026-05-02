@@ -1,9 +1,7 @@
 """Application service for finding-document storage and retrieval.
 
-Owns the compositions previously embedded in RAGEngine: bulk delete by
-tool/profile, statistics aggregation across the project, single-record
-fetch. Storage is delegated to a VectorIndex port; this class never imports
-its underlying engine.
+Delegates storage to a VectorIndex port; this class never imports the
+underlying engine directly.
 """
 
 from __future__ import annotations

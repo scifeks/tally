@@ -1,11 +1,7 @@
-"""Persistence port for the per-project ``repositories`` table.
+"""Persistence port for the per-project repositories table.
 
-Concrete implementation lives at
-``infrastructure.store.repositories.repositories.RepositoryRepository``.
-Read methods return ``core.config.schemas.repository.Repository``
-(a Pydantic model accepted as a domain-shaped value per pragmatic
-decision D2). The port boundary stays free of infrastructure
-dataclasses.
+Read methods return Repository (a Pydantic model accepted as a domain-shaped
+value). The port boundary stays free of infrastructure dataclasses.
 """
 
 from __future__ import annotations

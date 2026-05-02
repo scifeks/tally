@@ -1,16 +1,10 @@
 """Web adapter: project TriageEvents onto the async EventBus.
 
-Phase 6.2: triage runs on a worker ``threading.Thread`` separate from
-the FastAPI asyncio loop, so we use ``publish_threadsafe`` to hop back
-into the bus's loop. Adapters never raise — bus publish failures
-(closed job, disconnected loop) are swallowed so triage never fails
-because nothing is listening.
-
-The ``stream`` field on ``BusEvent`` already includes ``"triage"`` (see
-``infrastructure/events/types.py``). All triage events publish under
-``job_id="triage"`` so a single SSE subscriber on that job receives the
-full lifecycle stream and filters by ``payload['project_id']`` /
-``payload['scan_run_id']``.
+Triage runs on a worker thread separate from the FastAPI asyncio loop, so
+``publish_threadsafe`` hops back into the bus's loop. Bus publish failures
+are swallowed so triage never fails when nothing listens. All triage events
+publish under ``job_id="triage"`` so a single SSE subscriber receives the
+full lifecycle stream.
 """
 
 from __future__ import annotations

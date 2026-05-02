@@ -1,7 +1,7 @@
 """Helpers for translating ``repo_id`` integers into displayable repo names.
 
-Phase 9 moved ``findings.repo`` (TEXT name) to ``findings.repo_id`` (INT
-FK to ``repositories``). Renderers that show a repo column still want
+The ``findings.repo`` (TEXT name) column was replaced with ``findings.repo_id``
+(INT FK to ``repositories``). Renderers that show a repo column still want
 the human-readable name, so they JOIN at render time via this module.
 
 Usage::
@@ -35,7 +35,7 @@ def build_repos_by_id(repos: Iterable[Any]) -> dict[int, str]:
 def label_for(repo_id: Any, repos_by_id: dict[int, str]) -> str:
     """Map ``repo_id`` to its repo name.
 
-    Returns ``""`` when ``repo_id`` is None or missing from the lookup —
+    Returns ``""`` when ``repo_id`` is None or missing from the lookup;
     matches the legacy renderer behavior when ``findings.repo`` was NULL.
     Soft-deleted repos may still appear in ``repos_by_id`` if the caller
     chose not to filter; this module does not enforce a policy.

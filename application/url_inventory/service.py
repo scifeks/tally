@@ -1,22 +1,9 @@
-"""UrlInventoryService: application-layer orchestrator for url_findings.
+"""Application-layer orchestrator for url_findings operations.
 
-Wraps a ``UrlFindingRepositoryPort`` with the project-aware operations
-the rest of the codebase needs:
-
-- ``ingest_scan_source(repo_id, run_id, tool, entries)``: wipe-and-replace
-  for a single ``(repo_id, tool)`` pair. Used by the Katana / Noir
-  post-completion handler.
-- ``ingest_user_file(repo_id, file_path, entries)``: wipe-and-replace
-  for a single user-uploaded source file. Used by the wizard's endpoint
-  ingest path and by the Phase 9.3 multipart repo POST/PATCH endpoint.
-- ``regenerate_artifacts(repo_id, repo_dir_key, base_url)``: rebuild
-  ``merged_urls.txt`` + ``merged_oas3.json`` from the current DB rows for
-  one repo. Called JIT by ZAP/XSStrike/DalFox launchers and by the
-  Phase 9.5 ``POST /url-list/regenerate`` endpoint.
-- ``regenerate_artifacts_for_project(project_paths, active_repos)``:
-  iterate all active repos for a project; convenience for purge / batch
-  regeneration.
-- ``delete_for_project(project_id)``: used by REPL ``purge``.
+Provides:
+- Ingest of scan-source (Katana/Noir) and user-file data.
+- Artifact regeneration (merged_urls.txt and merged_oas3.json) from DB rows.
+- Project-scoped cleanup (used by REPL purge).
 """
 
 from __future__ import annotations
@@ -38,9 +25,7 @@ class UrlInventoryService:
     def __init__(self, repo: UrlFindingRepositoryPort) -> None:
         self._repo = repo
 
-    # ------------------------------------------------------------------
     # Ingest
-    # ------------------------------------------------------------------
     def ingest_scan_source(
         self,
         *,
@@ -70,9 +55,7 @@ class UrlInventoryService:
         self._repo.delete_for_user_file(repo_id, file_path)
         return self._repo.insert_many(entries)
 
-    # ------------------------------------------------------------------
     # Artifact regeneration
-    # ------------------------------------------------------------------
     def regenerate_artifacts(
         self,
         *,
@@ -81,11 +64,9 @@ class UrlInventoryService:
         repo_dir_key: str,
         base_url: str | None = None,
     ) -> tuple[str, str]:
-        """Rebuild seeds.txt + merged_oas3.json for one repo from DB rows.
+        """Rebuild merged_urls.txt and merged_oas3.json from DB rows.
 
         ``repo_dir_key`` is the on-disk directory name under ``endpoints/``.
-        Phase 9 callers should pass the repo's ``uuid`` (stable across
-        renames); legacy callers may still pass the repo name.
         """
         rows = self._repo.list_for_repo(repo_id)
         return write_artifacts(
@@ -105,11 +86,8 @@ class UrlInventoryService:
         """Rebuild artifacts for every active repo in a project.
 
         ``active_repos`` is an iterable of ``(repo_id, repo_dir_key)``
-        tuples (typically the caller maps active ``Repository`` entries
-        to their DB id + uuid pair). Returns a list of
-        ``(repo_id, seeds_path, oas3_path)`` tuples for the regenerated
-        repos. Used by the Phase 9.5 ``POST /url-list/regenerate``
-        endpoint and any batch-regeneration site.
+        tuples. Returns a list of ``(repo_id, seeds_path, oas3_path)``
+        tuples for the regenerated repos.
         """
         out: list[tuple[int, str, str]] = []
         for repo_id, repo_dir_key in active_repos:
@@ -122,19 +100,12 @@ class UrlInventoryService:
             out.append((repo_id, seeds_path, oas3_path))
         return out
 
-    # ------------------------------------------------------------------
     # Cleanup
-    # ------------------------------------------------------------------
     def delete_for_repo(self, repo_id: int) -> int:
         return self._repo.delete_for_repo(repo_id)
 
     def delete_for_project(self) -> int:
-        """Wipe every ``url_findings`` row in the project-scoped DB.
-
-        The repository handle is bound to a single project's
-        ``findings.db``, so this is effectively a per-project nuke. Used
-        by the REPL ``purge`` command's URL inventory cascade.
-        """
+        """Wipe every ``url_findings`` row in the project-scoped DB."""
         return self._repo.delete_all()
 
     def delete_all(self) -> int:
