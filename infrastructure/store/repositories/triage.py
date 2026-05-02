@@ -1,10 +1,12 @@
-"""TriageBatchRepository — triage batch lifecycle management."""
+"""TriageBatchRepository: triage batch lifecycle management."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from application.ports.triage_batch_repository import TriageBatchRepositoryPort
+from domain.triage.entry import TriageBatchRow, TriageRunSummary
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
@@ -19,34 +21,7 @@ TRIAGE_BATCH_STATUSES = (
 )
 
 
-@dataclass(frozen=True)
-class TriageBatchRow:
-    id: int
-    run_id: int
-    finding_ids: list[int]
-    batch_data: list[dict]
-    status: str
-    run_attempts: int
-    created_at: str | None
-    started_at: str | None
-    completed_at: str | None
-
-
-@dataclass(frozen=True)
-class TriageRunSummary:
-    """Aggregate view of a triage run derived from triage_batches rows."""
-
-    scan_run_id: int
-    status: str
-    started_at: str | None
-    finished_at: str | None
-    total_findings: int
-    processed_findings: int
-    total_batches: int
-    counts_by_status: dict[str, int]
-
-
-class TriageBatchRepository:
+class TriageBatchRepository(TriageBatchRepositoryPort):
     """Manages the triage_batches table lifecycle."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
@@ -191,7 +166,7 @@ class TriageBatchRepository:
         """Flip stranded ``in_progress`` and retryable ``failed`` rows back
         to ``pending`` so an explicit resume can pick them up.
 
-        ``run_attempts`` is preserved — the existing 3-attempt cap in
+        ``run_attempts`` is preserved; the existing 3-attempt cap in
         ``claim_batch`` still applies. Returns the number of rows flipped.
         """
         with self._factory.connect() as conn:
@@ -229,7 +204,7 @@ class TriageBatchRepository:
         ]
 
     # ------------------------------------------------------------------
-    # Phase 6 — query/aggregation helpers for the API surface
+    # Phase 6: query/aggregation helpers for the API surface
     # ------------------------------------------------------------------
 
     def cancel_remaining(self, run_id: int) -> int:
@@ -254,7 +229,7 @@ class TriageBatchRepository:
         """Distinct run_ids that have triage_batches rows, newest-first.
 
         ``triage_batches`` lives in the project's findings.db, so the
-        repository instance is already project-scoped — there is no
+        repository instance is already project-scoped; there is no
         project_id column to filter on. Returns (rows, total_count).
         """
         with self._factory.connect() as conn:

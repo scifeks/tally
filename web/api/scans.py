@@ -1,4 +1,4 @@
-"""Phase 5 — Scan endpoints (config, start, history, detail, cancel, SSE,
+"""Scan endpoints (config, start, history, detail, cancel, SSE,
 progress).
 
 Endpoint surface (all project-scoped after Phase 6.8):
@@ -13,7 +13,7 @@ Endpoint surface (all project-scoped after Phase 6.8):
 - ``POST   /api/v1/projects/{project_id}/scans/{run_id}/cancel``
 
 Route ordering (Phase 4 lesson): literal-segment routes are decorated
-**before** parameterised routes so Starlette doesn't shadow them.
+**before** parameterized routes so Starlette doesn't shadow them.
 """
 
 from __future__ import annotations
@@ -33,17 +33,13 @@ from application.tools.registry import discover_tools, tool_registry
 from application.tools.scan_run_registry import get_scan_run_registry
 from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
+from domain.scans.entry import ScanRunRow, ToolRunRow
 from domain.tools.scan_types import SEGMENT_ORDER
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
 from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.runs import (
-    SCAN_RUN_STATUSES,
-    RunRepository,
-    ScanRunRow,
-    ToolRunRow,
-)
+from infrastructure.store.repositories.runs import SCAN_RUN_STATUSES, RunRepository
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
@@ -161,7 +157,7 @@ def _build_progress(
 
 
 # ---------------------------------------------------------------------------
-# Project-scoped routes — literal segments first, then parameterised
+# Project-scoped routes: literal segments first, then parameterized
 # ---------------------------------------------------------------------------
 
 

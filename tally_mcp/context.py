@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
     from application.ports.finding_repository import FindingRepositoryPort
-    from infrastructure.store.repositories.triage import TriageBatchRepository
+    from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
 
 @dataclass(frozen=True)
 class FindingsContext:
     finding_repo: FindingRepositoryPort
     audit_repo: AuditRepositoryPort
-    triage_repo: TriageBatchRepository
+    triage_repo: TriageBatchRepositoryPort
     project_name: str

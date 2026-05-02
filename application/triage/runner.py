@@ -40,9 +40,9 @@ except FileNotFoundError:
 
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.run_repository import RunRepositoryPort
     from application.ports.triage_agent import TriageAgentPort
-    from infrastructure.store.repositories.runs import RunRepository
-    from infrastructure.store.repositories.triage import TriageBatchRepository
+    from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
 _log = logging.getLogger(__name__)
 
@@ -80,8 +80,8 @@ class TriageRunner:
     def __init__(
         self,
         project: str,
-        run_repo: RunRepository,
-        triage_repo: TriageBatchRepository,
+        run_repo: RunRepositoryPort,
+        triage_repo: TriageBatchRepositoryPort,
         audit_repo: AuditRepositoryPort,
         app_root: Path,
         registry: LockRegistry | None = None,

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
     )
-    from infrastructure.store.repositories.runs import RunRepository
+    from application.ports.run_repository import RunRepositoryPort
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class ScanOrchestrator:
                         Defaults to a no-op sink (REPL behavior unchanged).
         cancel_token:   Optional cooperative cancellation flag.
                         Defaults to a process-shared token that is never set.
-        run_repository: Optional ``RunRepository`` for persisting status,
+        run_repository: Optional ``RunRepositoryPort`` for persisting status,
                         timestamps, and findings_count. None disables
                         persistence (REPL legacy path).
         project_id:     Optional ``scan_runs.project_id`` carried into event
@@ -91,7 +91,7 @@ class ScanOrchestrator:
         console: Console | None = None,
         event_sink: ScanEventSink | None = None,
         cancel_token: CancellationToken | None = None,
-        run_repository: RunRepository | None = None,
+        run_repository: RunRepositoryPort | None = None,
         project_id: int | None = None,
         chat_session_repo: ChatSessionRepositoryPort | None = None,
     ) -> None:
@@ -152,7 +152,7 @@ class ScanOrchestrator:
         if self._cancel_token.is_set():
             raise ScanCancelled
 
-    def _persist(self, fn: Callable[[RunRepository, int], None]) -> None:
+    def _persist(self, fn: Callable[[RunRepositoryPort, int], None]) -> None:
         if self._run_repository is None or self._run_id is None:
             return
         try:
@@ -249,7 +249,7 @@ class ScanOrchestrator:
             logger.exception("chat session sealing failed; suppressing")
 
     # ------------------------------------------------------------------
-    # Public API — adapter shims
+    # Public API: adapter shims
     # ------------------------------------------------------------------
 
     def run_full_scan(

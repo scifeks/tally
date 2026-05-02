@@ -11,12 +11,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from domain.scans.entry import ScanRunRow, ToolRunRow  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
-from infrastructure.store.repositories.runs import (  # noqa: E402
-    RunRepository,
-    ScanRunRow,
-    ToolRunRow,
-)
+from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 
 pytestmark = pytest.mark.integration
 

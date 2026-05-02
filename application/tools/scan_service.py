@@ -51,6 +51,8 @@ from infrastructure.tools.runner import SubprocessRunner
 if TYPE_CHECKING:
     from rich.console import Console
 
+    from application.ports.run_repository import RunRepositoryPort
+
 
 logger = logging.getLogger("application.scan_service")
 
@@ -189,7 +191,7 @@ class ScanService:
         event_sink: ScanEventSink | None,
         console: Console | None,
         cancel_token: CancellationToken,
-        run_repo: RunRepository,
+        run_repo: RunRepositoryPort,
         chat_session_repo: ChatSessionRepository,
     ) -> None:
         # Imports deferred to thread entry to avoid circular-import risk
@@ -267,7 +269,7 @@ class ScanService:
                 logger.warning("scan lock already released for run %d", run_id)
 
 
-def _safe_persist_failed(run_repo: RunRepository, run_id: int) -> None:
+def _safe_persist_failed(run_repo: RunRepositoryPort, run_id: int) -> None:
     try:
         run_repo.set_status(run_id, "failed")
         run_repo.set_finished_at(run_id, _utc_now_iso())
