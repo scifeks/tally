@@ -9,6 +9,7 @@ from application.tools.registry import ToolRegistry
 from core.project_paths import ProjectPaths
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
+from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
 from infrastructure.store.connection import ConnectionFactory
@@ -20,6 +21,24 @@ from infrastructure.tools.wrappers.utils.manifest_check import (
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
     from core.config.schemas import Repository
+
+
+def _build_tool_execution_config(
+    config_manager: ConfigManager,
+) -> ToolExecutionConfig:
+    """Snapshot the slice of ConfigManager state that wrappers need."""
+    gc = config_manager.global_config
+    noir_snapshot: NoirProviderSnapshot | None = None
+    provider_name = gc.noir_provider
+    if provider_name:
+        provider_config = getattr(gc, provider_name, None)
+        if provider_config is not None and hasattr(provider_config, "base_url"):
+            noir_snapshot = NoirProviderSnapshot(
+                base_url=provider_config.base_url,
+                model=provider_config.model,
+                num_ctx=getattr(provider_config, "num_ctx", None),
+            )
+    return ToolExecutionConfig(noir_provider=noir_snapshot)
 
 
 def load_active_repos(base_path: str, project_name: str) -> list[Repository]:
@@ -63,15 +82,15 @@ def make_context(
     base_path: str,
     registry: ToolRegistry,
     repo: Any,
-    tool_config: Any,
+    command_config: Any,
 ) -> ExecutionContext:
     return ExecutionContext(
         project_name=project_name,
         base_path=base_path,
         repo=repo,
-        config_manager=config_manager,
+        tool_config=_build_tool_execution_config(config_manager),
         registry=registry,
-        is_docker=(tool_config.location == "docker" if tool_config else False),
+        is_docker=(command_config.location == "docker" if command_config else False),
         execution_mode="scan",
     )
 

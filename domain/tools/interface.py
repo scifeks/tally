@@ -1,8 +1,4 @@
-"""ToolInterface ABC and supporting dataclasses for Phase 1 refactor.
-
-These types are dormant in Phase 1 — wrappers implement them but the
-orchestrator does not call them yet.  Phase 6 will cut the orchestrator over.
-"""
+"""ToolInterface ABC and supporting dataclasses for tool wrappers."""
 
 from __future__ import annotations
 
@@ -11,8 +7,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
-    from core.config.manager import ConfigManager
     from core.config.schemas import Repository
+    from domain.tools.execution_config import ToolExecutionConfig
 
 from domain.tools.base import ToolResult
 
@@ -46,7 +42,7 @@ class ExecutionContext:
     project_name: str
     base_path: str
     repo: Repository | None  # None when not repo-scoped
-    config_manager: ConfigManager
+    tool_config: ToolExecutionConfig
     registry: RegistryLike
     is_docker: bool
     execution_mode: Literal["scan", "manual"] = "scan"

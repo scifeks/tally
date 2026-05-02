@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.config.schemas import Repository
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.docker.pip_audit import PipAuditDockerTool
 
@@ -48,12 +49,11 @@ def _make_repo(
 def _make_context(repo: Repository, docker_path: str) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = docker_path
-    config_manager = MagicMock()
     return ExecutionContext(
         project_name="DVPA",
         base_path="/tmp",
         repo=repo,
-        config_manager=config_manager,
+        tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=True,
     )

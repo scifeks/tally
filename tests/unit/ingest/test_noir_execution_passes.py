@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.config.schemas import OllamaConfig, Repository
-from core.config.schemas.global_config import GlobalConfig
+from core.config.schemas import Repository
+from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.base.noir import _compute_noir_techs
 from infrastructure.tools.wrappers.local.noir import NoirLocalTool
@@ -28,18 +28,18 @@ def _make_repo(path: str) -> Repository:
     )
 
 
-def _make_context(repo: Repository, base_path: str) -> ExecutionContext:
+def _make_context(
+    repo: Repository,
+    base_path: str,
+    tool_config: ToolExecutionConfig | None = None,
+) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = repo.path or "/repo"
-    config_manager = MagicMock()
-    config_manager.global_config = GlobalConfig.model_construct(
-        noir_provider="",
-    )
     return ExecutionContext(
         project_name="DVPA",
         base_path=base_path,
         repo=repo,
-        config_manager=config_manager,
+        tool_config=tool_config or ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,
     )
@@ -351,30 +351,20 @@ class TestNoirAiFlags:
 # ---------------------------------------------------------------------------
 
 
-def _make_global_config(
-    noir_provider: str = "",
-    ollama_noir: OllamaConfig | None = None,
-) -> GlobalConfig:
-    return GlobalConfig.model_construct(
-        noir_provider=noir_provider,
-        ollama_noir=ollama_noir,
-    )
-
-
 class TestNoirExecutionPassesAiConfig:
     def test_ai_kwargs_present_when_noir_provider_set(self, tmp_path: Path) -> None:
         src = tmp_path / "repo"
         src.mkdir()
         repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ollama_noir = OllamaConfig(
+        snapshot = NoirProviderSnapshot(
             base_url="http://10.0.0.1:11434",
             model="gemma3:27b",
             num_ctx=8192,
         )
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="ollama_noir",
-            ollama_noir=ollama_noir,
+        ctx = _make_context(
+            repo,
+            str(tmp_path),
+            tool_config=ToolExecutionConfig(noir_provider=snapshot),
         )
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
@@ -388,44 +378,32 @@ class TestNoirExecutionPassesAiConfig:
         src = tmp_path / "repo"
         src.mkdir()
         repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ollama_noir = OllamaConfig(
+        snapshot = NoirProviderSnapshot(
             base_url="http://10.0.0.1:11434",
             model="gemma3:27b",
             num_ctx=None,
         )
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="ollama_noir",
-            ollama_noir=ollama_noir,
+        ctx = _make_context(
+            repo,
+            str(tmp_path),
+            tool_config=ToolExecutionConfig(noir_provider=snapshot),
         )
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
         assert "ai_max_token" not in passes[0].kwargs
         assert passes[0].env == {"OLLAMA_HOST": "http://10.0.0.1:11434"}
 
-    def test_ai_kwargs_absent_when_noir_provider_empty(self, tmp_path: Path) -> None:
+    def test_ai_kwargs_absent_when_noir_provider_none(self, tmp_path: Path) -> None:
         src = tmp_path / "repo"
         src.mkdir()
         repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="",
+        ctx = _make_context(
+            repo,
+            str(tmp_path),
+            tool_config=ToolExecutionConfig(noir_provider=None),
         )
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
         assert "ai_provider_url" not in passes[0].kwargs
         assert "ai_model" not in passes[0].kwargs
         assert passes[0].env is None
-
-    def test_ai_kwargs_absent_when_provider_name_invalid(self, tmp_path: Path) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="nonexistent_provider",
-        )
-        tool = NoirLocalTool()
-        passes = tool.build_execution_passes(ctx)
-        assert "ai_provider_url" not in passes[0].kwargs
-        assert "ai_model" not in passes[0].kwargs

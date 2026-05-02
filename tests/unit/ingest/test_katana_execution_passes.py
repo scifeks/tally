@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from core.config.schemas import Repository
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.local.katana import KatanaLocalTool
 
@@ -39,12 +40,11 @@ def _make_repo(
 
 def _make_context(repo: Repository, base_path: str) -> ExecutionContext:
     registry = MagicMock()
-    config_manager = MagicMock()
     return ExecutionContext(
         project_name="testproject",
         base_path=base_path,
         repo=repo,
-        config_manager=config_manager,
+        tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,
     )

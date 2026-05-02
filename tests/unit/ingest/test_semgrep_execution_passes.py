@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from core.config.schemas import Repository
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.local.semgrep import SemgrepLocalTool
 
@@ -27,12 +28,11 @@ def _make_repo(path: str, test_dirs: list[str]) -> Repository:
 def _make_context(repo: Repository) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = repo.path or "/repo"
-    config_manager = MagicMock()
     return ExecutionContext(
         project_name="test",
         base_path="/tmp",
         repo=repo,
-        config_manager=config_manager,
+        tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,
     )
