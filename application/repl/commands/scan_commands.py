@@ -19,6 +19,7 @@ from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
+from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -63,7 +64,7 @@ class ScanCommands:
             discover_tools(self.repl.base_path)
 
     def _cmd_scan_inner(self, args: list[str]) -> None:
-        """Inner scan logic — runs after registry is refreshed."""
+        """Inner scan logic. Runs after registry is refreshed."""
         from application.rag.ingestor import get_tool_domain
         from domain.tools.constants import DOMAINS
 
@@ -245,8 +246,9 @@ class ScanCommands:
         return int(row["id"])
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
-        """run <tool> [--timeout <seconds>] [args...]  — execute a tool with raw
-        arguments.
+        """``run <tool> [--timeout <seconds>] [args...]``.
+
+        Execute a tool with raw arguments.
         """
         if not args:
             self.repl.console.print(
@@ -278,7 +280,7 @@ class ScanCommands:
         remaining: list[str],
         timeout: int,
     ) -> None:
-        """Inner run logic — runs after registry is refreshed with project overrides."""
+        """Inner run logic. Runs after registry is refreshed with project overrides."""
         assert self.repl.active_project is not None
         tool = tool_registry.get_tool(tool_name)
         if tool is None:
@@ -296,6 +298,7 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
             prompt=RichConsolePromptAdapter(),
+            subprocess_runner=SubprocessRunner(),
             reporter=StdoutProgressReporter(),
         )
         result = executor.execute(
@@ -313,7 +316,7 @@ class ScanCommands:
                 self.repl.console.print(f"Output saved to: {path}")
 
     # ------------------------------------------------------------------
-    # Private — shared SCA result helpers
+    # Private: shared SCA result helpers
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -342,7 +345,7 @@ class ScanCommands:
         return tools
 
     # ------------------------------------------------------------------
-    # Private — UI helpers
+    # Private: UI helpers
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -388,7 +391,7 @@ class ScanCommands:
         return None, args
 
     # ------------------------------------------------------------------
-    # Private — DAST-without-discovery warning
+    # Private: DAST-without-discovery warning
     # ------------------------------------------------------------------
 
     def _maybe_warn_dast_without_discovery(
@@ -496,7 +499,7 @@ class ScanCommands:
             return False
 
     # ------------------------------------------------------------------
-    # Private — export
+    # Private: export
     # ------------------------------------------------------------------
 
     def _export_summary(self, summary, export_path: str) -> None:

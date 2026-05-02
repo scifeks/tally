@@ -1,4 +1,4 @@
-"""Triage application service — entry points delegating to TriageRunner."""
+"""Triage application service: entry points delegating to TriageRunner."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def run_triage(project: str) -> dict[str, int]:
 
 
 def run_triage_batch_only(project: str) -> int:
-    """Run only the batching phase — no MCP server, no Claude sessions."""
+    """Run only the batching phase. No MCP server, no Claude sessions."""
     runner = TriageRunner.for_project(project)
     _run_id, total = runner.batch()
     return total
@@ -71,6 +71,7 @@ def run_triage_for_project(
     paths = ProjectPaths.from_canonical(root, project)
     if not paths.findings_db.exists():
         raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
+    from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
     from infrastructure.store import make_store
 
     run_repo, _, triage_repo, audit_repo = make_store(root, project)
@@ -84,6 +85,7 @@ def run_triage_for_project(
         cancel_token=cancel_token,
         project_id=project_id,
         scan_run_id=scan_run_id,
+        triage_agent=ClaudeTriageAgent(),
     )
     return dataclasses.asdict(_retry_once(runner.run))
 
@@ -102,7 +104,7 @@ def resume_triage_for_project(
     Flips stranded ``in_progress`` and retryable ``failed`` batches
     back to ``pending`` (via ``TriageBatchRepository.reset_for_resume``)
     before running, so ``claim_batch`` can pick them up. ``scan_run_id``
-    is mandatory — there is no "resume the latest run" semantic.
+    is mandatory; there is no "resume the latest run" semantic.
     """
     from .runner import _APP_ROOT
 
@@ -112,6 +114,7 @@ def resume_triage_for_project(
     paths = ProjectPaths.from_canonical(root, project)
     if not paths.findings_db.exists():
         raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
+    from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
     from infrastructure.store import make_store
 
     run_repo, _, triage_repo, audit_repo = make_store(root, project)
@@ -126,6 +129,7 @@ def resume_triage_for_project(
         cancel_token=cancel_token,
         project_id=project_id,
         scan_run_id=scan_run_id,
+        triage_agent=ClaudeTriageAgent(),
     )
     return dataclasses.asdict(_retry_once(runner.run))
 

@@ -21,6 +21,7 @@ from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
 from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.llm.factory import get_llm_provider
+from infrastructure.tools.runner import SubprocessRunner
 from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_gitleaks, requires_ollama
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
@@ -102,6 +103,7 @@ def _run_scan(
         project_name=project_name,
         base_path=base_path,
         prompt=NoApprovalPromptAdapter(),
+        subprocess_runner=SubprocessRunner(),
     )
     return executor.execute(
         tool,

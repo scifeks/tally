@@ -1,11 +1,10 @@
-"""Triage orchestration — TriageResult and TriageRunner."""
+"""Triage orchestration: TriageResult and TriageRunner."""
 
 from __future__ import annotations
 
 import importlib
 import json
 import logging
-import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -41,6 +40,7 @@ except FileNotFoundError:
 
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.triage_agent import TriageAgentPort
     from infrastructure.store.repositories.runs import RunRepository
     from infrastructure.store.repositories.triage import TriageBatchRepository
 
@@ -90,6 +90,7 @@ class TriageRunner:
         cancel_token: CancellationToken | None = None,
         project_id: int | None = None,
         scan_run_id: int | None = None,
+        triage_agent: TriageAgentPort,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -101,6 +102,7 @@ class TriageRunner:
         self._cancel_token: CancellationToken = cancel_token or no_op_token()
         self._project_id = project_id
         self._scan_run_id = scan_run_id
+        self._triage_agent = triage_agent
 
     @classmethod
     def for_project(cls, project: str, app_root: Path | None = None) -> TriageRunner:
@@ -108,10 +110,18 @@ class TriageRunner:
         paths = ProjectPaths.from_canonical(root, project)
         if not paths.findings_db.exists():
             raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
+        from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
         from infrastructure.store import make_store
 
         run_repo, _, triage_repo, audit_repo = make_store(root, project)
-        return cls(project, run_repo, triage_repo, audit_repo, root)
+        return cls(
+            project,
+            run_repo,
+            triage_repo,
+            audit_repo,
+            root,
+            triage_agent=ClaudeTriageAgent(),
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -426,66 +436,23 @@ class TriageRunner:
     def _run_session(
         self, render_fn: Callable[..., str], finding_ids: list[int]
     ) -> str:
-        """Run one Claude session. Returns 'success', 'failed', or 'incomplete'."""
+        """Run one triage-agent session.
+
+        Returns 'success', 'failed', or 'incomplete'.
+        """
         prompt_text = render_fn(finding_ids, self._project)
         session_start = datetime.now(UTC).isoformat()
 
-        # SECURITY: --dangerously-skip-permissions and --disallowedTools must
-        # ALWAYS be present together. Removing or weakening either flag creates
-        # a privilege-escalation path. Rationale:
-        #
-        # 1. --dangerously-skip-permissions is required because the MCP server
-        #    startup otherwise triggers interactive permission prompts that
-        #    cannot be answered in a non-interactive subprocess.
-        #
-        # 2. --disallowedTools is the compensating control that prevents Claude
-        #    from using any tool that directly modifies the filesystem or makes
-        #    network requests (Bash, Write, Edit, MultiEdit, WebFetch,
-        #    WebSearch). Without this list, --dangerously-skip-permissions
-        #    would grant the Claude subprocess full filesystem and network
-        #    access under the operator's user identity.
-        #
-        # 3. The MCP permission manifest in .mcp.json
-        #    (allow: [get_findings_batch, update_findings_batch], deny: [*])
-        #    is a third layer of defense: the MCP server itself refuses calls
-        #    to any tool not explicitly allow-listed.
-        #
-        # 4. If --disallowedTools is removed or its tool list is shortened,
-        #    the Claude subprocess gains unrestricted filesystem write and
-        #    network access as the current user — a critical security
-        #    regression.
-        #
-        # NEVER remove --dangerously-skip-permissions or --disallowedTools,
-        # and NEVER reduce the set of tools listed in --disallowedTools.
-        try:
-            result = subprocess.run(
-                [
-                    "claude",
-                    "--print",
-                    "--dangerously-skip-permissions",
-                    "--disallowedTools",
-                    "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch",
-                ],
-                input=prompt_text,
-                capture_output=True,
-                text=True,
-                timeout=SESSION_TIMEOUT_SECONDS,
-                cwd=str(self._app_root),
-            )
-        except subprocess.TimeoutExpired:
+        result = self._triage_agent.run_session(
+            prompt_text,
+            timeout_seconds=SESSION_TIMEOUT_SECONDS,
+            cwd=self._app_root,
+        )
+        if not result.success:
             _log.error(
-                "Triage session timed out after %ds",
-                SESSION_TIMEOUT_SECONDS,
-            )
-            return "failed"
-        except Exception as exc:
-            _log.error("Subprocess error during triage: %s", exc)
-            return "failed"
-
-        if result.returncode != 0:
-            _log.error(
-                "Triage session failed (rc=%d): %s",
+                "Triage session failed (rc=%d, error=%s): %s",
                 result.returncode,
+                result.error or "-",
                 result.stderr,
             )
             return "failed"
@@ -501,7 +468,7 @@ class TriageRunner:
             return "success"
 
         _log.warning(
-            "Session completed but no findings updated — "
+            "Session completed but no findings updated; "
             "possible prompt failure or empty batch"
         )
         return "incomplete"

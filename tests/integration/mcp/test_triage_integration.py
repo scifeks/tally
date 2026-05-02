@@ -1,8 +1,10 @@
 """Integration tests for the triage pipeline (no Claude invocation).
 
-These tests exercise the full pipeline end-to-end — real repositories, real
-batch creation, real claiming, real finding updates — with only Claude's
-subprocess call replaced by a synthetic handler.
+These tests exercise the full pipeline end-to-end against real
+repositories, real batch creation, real claiming, and real finding
+updates, with the triage agent port replaced by a stub. The argv
+contract for the real Claude adapter is covered separately under
+``tests/integration/agents/``.
 """
 
 from __future__ import annotations
@@ -19,6 +21,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.ports.triage_agent import (  # noqa: E402
+    TriageAgentPort,
+    TriageSessionResult,
+)
 from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
@@ -52,6 +58,19 @@ _VALID_UPDATE = {
     "reasoning": "test",
     "remediation": "fix it",
 }
+
+
+class _StubTriageAgent(TriageAgentPort):
+    """Returns a successful TriageSessionResult on every call."""
+
+    def run_session(
+        self,
+        prompt: str,
+        *,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> TriageSessionResult:
+        return TriageSessionResult(success=True, returncode=0, stderr="")
 
 
 def _seed_repo(factory: ConnectionFactory, name: str = "testrepo") -> int:
@@ -141,12 +160,19 @@ def _make_runner_real(
         )
     )
 
-    runner = TriageRunner(project, run_repo, triage_repo, audit_repo, tmp_path)
+    runner = TriageRunner(
+        project,
+        run_repo,
+        triage_repo,
+        audit_repo,
+        tmp_path,
+        triage_agent=_StubTriageAgent(),
+    )
     return runner, factory, run_repo, finding_repo
 
 
 # ---------------------------------------------------------------------------
-# Group 1 — .mcp.json structure
+# Group 1: .mcp.json structure
 # ---------------------------------------------------------------------------
 
 
@@ -202,125 +228,7 @@ def test_mcp_json_deny_star(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Group 2 — _run_session() subprocess contract
-# ---------------------------------------------------------------------------
-
-
-def _make_runner_mock(
-    tmp_path: Path, project: str = "proj"
-) -> tuple[TriageRunner, MagicMock]:
-    """Return a TriageRunner with a mock store (all 3 repos unified)."""
-    venv_python = tmp_path / ".venv" / "bin" / "python"
-    venv_python.parent.mkdir(parents=True, exist_ok=True)
-    venv_python.touch()
-
-    store = MagicMock()
-    store.create_run.return_value = 1
-    store.reset_stale_batches.return_value = 0
-    store.get_active_finding_combos.return_value = []
-    store.count_events_since.return_value = 0
-    runner = TriageRunner(project, store, store, store, tmp_path)
-    return runner, store
-
-
-def _render_stub(finding_ids: list[int], project: str) -> str:
-    return f"stub prompt for finding {finding_ids[0] if finding_ids else 'none'}"
-
-
-def test_run_session_invokes_claude_binary(tmp_path: Path) -> None:
-    runner, store = _make_runner_mock(tmp_path)
-    store.count_events_since.return_value = 1
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stderr = ""
-
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        runner._run_session(_render_stub, [1])
-
-    assert mock_run.called
-    cmd = mock_run.call_args[0][0]
-    assert cmd[0] == "claude"
-
-
-def test_run_session_print_flag_present(tmp_path: Path) -> None:
-    runner, store = _make_runner_mock(tmp_path)
-    store.count_events_since.return_value = 1
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stderr = ""
-
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        runner._run_session(_render_stub, [1])
-
-    cmd = mock_run.call_args[0][0]
-    assert "--print" in cmd
-
-
-def test_run_session_skip_permissions_flag(tmp_path: Path) -> None:
-    runner, store = _make_runner_mock(tmp_path)
-    store.count_events_since.return_value = 1
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stderr = ""
-
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        runner._run_session(_render_stub, [1])
-
-    cmd = mock_run.call_args[0][0]
-    assert "--dangerously-skip-permissions" in cmd
-
-
-def test_run_session_disallowed_tools_value(tmp_path: Path) -> None:
-    runner, store = _make_runner_mock(tmp_path)
-    store.count_events_since.return_value = 1
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stderr = ""
-
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        runner._run_session(_render_stub, [1])
-
-    cmd = mock_run.call_args[0][0]
-    idx = cmd.index("--disallowedTools")
-    assert cmd[idx + 1] == "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch"
-
-
-def test_run_session_cwd_is_app_root(tmp_path: Path) -> None:
-    runner, store = _make_runner_mock(tmp_path)
-    store.count_events_since.return_value = 1
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stderr = ""
-
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        runner._run_session(_render_stub, [1])
-
-    call_kwargs = mock_run.call_args[1]
-    assert call_kwargs["cwd"] == str(tmp_path)
-
-
-def test_run_session_stdin_contains_finding_id(tmp_path: Path) -> None:
-    runner, store = _make_runner_mock(tmp_path)
-    store.count_events_since.return_value = 1
-
-    mock_result = MagicMock()
-    mock_result.returncode = 0
-    mock_result.stderr = ""
-
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        runner._run_session(_render_stub, [42])
-
-    call_kwargs = mock_run.call_args[1]
-    assert "42" in call_kwargs["input"]
-
-
-# ---------------------------------------------------------------------------
-# Group 3 — End-to-end pipeline with real store + synthetic handler
+# Group 2: End-to-end pipeline with real store + synthetic handler
 # ---------------------------------------------------------------------------
 
 
@@ -424,7 +332,7 @@ def test_pipeline_result_counts_match(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Group 4 — Multi-batch regression (double-claiming fix)
+# Group 3: Multi-batch regression (double-claiming fix)
 # ---------------------------------------------------------------------------
 
 

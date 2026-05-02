@@ -81,6 +81,7 @@ def _make_runner(tmp_path: Path) -> tuple[TriageRunner, _RecordingSink, MagicMoc
         app_root=tmp_path,
         event_sink=sink,
         project_id=42,
+        triage_agent=MagicMock(),
     )
     return runner, sink, triage_repo
 

@@ -1,4 +1,4 @@
-"""Integration test for Phase 8.10 — sealing fires on scan completion.
+"""Integration test for Phase 8.10: sealing fires on scan completion.
 
 Drives ``ScanOrchestrator._run()`` directly with a no-op body so the
 chat sealing call site is exercised end-to-end without spinning up a
@@ -18,7 +18,7 @@ import pytest
 
 
 def _seed_global_config(base_path: Path) -> None:
-    """Write a minimal <base>/config/global.json — required by ConfigManager."""
+    """Write a minimal <base>/config/global.json. Required by ConfigManager."""
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "global.json").write_text(
@@ -81,6 +81,7 @@ def _build_orchestrator(
         project_name=project_name,
         base_path=tmp_path,
         prompt=prompt,
+        subprocess_runner=MagicMock(),
     )
     bus = EventBus()
     return ScanOrchestrator(
@@ -146,7 +147,7 @@ def test_orchestrator_does_not_seal_other_projects(tmp_path: Path) -> None:
 
 
 def test_orchestrator_does_not_seal_when_scan_fails(tmp_path: Path) -> None:
-    """A failing scan body MUST NOT seal — sealing is success-branch only."""
+    """A failing scan body MUST NOT seal; sealing is success-branch only."""
     project_id = 17
     _, factory = _setup_db(tmp_path)
     repo = ChatSessionRepository(factory)
@@ -178,6 +179,7 @@ def test_orchestrator_no_op_when_project_id_is_none(tmp_path: Path) -> None:
         project_name="testproject",
         base_path=tmp_path,
         prompt=prompt,
+        subprocess_runner=MagicMock(),
     )
     bus = EventBus()
     orch = ScanOrchestrator(
