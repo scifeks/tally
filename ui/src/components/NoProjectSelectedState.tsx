@@ -57,7 +57,7 @@ export function NoProjectSelectedState({
             <p className="text-sm text-muted-foreground">
               No projects found. Create a project using the CLI to get started.
             </p>
-            <code className="block mt-3 text-xs text-accent font-mono">$ tally project add</code>
+            <code className="block mt-3 text-xs text-accent font-mono">$ project add</code>
           </div>
         )}
 

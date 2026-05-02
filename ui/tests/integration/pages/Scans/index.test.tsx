@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -102,9 +102,7 @@ describe('Scans page — domain ↔ tool compatibility (12.5)', () => {
     expect(screen.getByText(/run only these tools \(1 selected\)/i)).toBeInTheDocument()
 
     // Selecting SECRETS should drop semgrep from the selection.
-    await act(async () => {
-      await user.click(screen.getByRole('button', { name: /^secrets$/i }))
-    })
+    await user.click(screen.getByRole('button', { name: /^secrets$/i }))
     await waitFor(() => {
       expect(screen.queryByText(/run only these tools \(1 selected\)/i)).not.toBeInTheDocument()
     })

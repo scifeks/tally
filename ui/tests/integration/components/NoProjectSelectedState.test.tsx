@@ -48,6 +48,6 @@ describe('NoProjectSelectedState', () => {
   it('shows the CLI hint when the project list is empty', () => {
     render(<NoProjectSelectedState projects={[]} />)
     expect(screen.getByText(/No projects found/i)).toBeInTheDocument()
-    expect(screen.getByText('$ tally project add')).toBeInTheDocument()
+    expect(screen.getByText('$ project add')).toBeInTheDocument()
   })
 })

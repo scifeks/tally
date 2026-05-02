@@ -8,6 +8,7 @@ import Triage from './pages/Triage'
 import Reports from './pages/Reports'
 import Chat from './pages/Chat'
 import Config from './pages/Config'
+import NotFound from './pages/NotFound'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="chat" element={<Chat />} />
         <Route path="config" element={<Config />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   )
