@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from core.config.schemas import Repository
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.docker.composer_audit import (
     ComposerAuditDockerTool,
@@ -41,7 +42,7 @@ def _make_context(repo: Repository, repo_path: str) -> ExecutionContext:
         project_name="test",
         base_path="/tmp",
         repo=repo,
-        config_manager=MagicMock(),
+        tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=True,
     )

@@ -61,6 +61,7 @@ def _make_repo(
 
 def _make_config() -> ScanTypeConfig:
     cm = MagicMock()
+    cm.global_config.noir_provider = ""
     prompt = MagicMock()
     prompt.confirm.return_value = True
     prompt.approve_all_remaining.return_value = None

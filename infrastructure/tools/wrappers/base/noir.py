@@ -236,19 +236,16 @@ class BaseNoirTool(ToolInterface):
         }
 
         pass_env: dict[str, str] | None = None
-        global_config = context.config_manager.global_config
-        noir_provider = global_config.noir_provider
-        if noir_provider:
-            provider_config = getattr(global_config, noir_provider, None)
-            if provider_config is not None:
-                # Noir's Ollama adapter is only activated by the "ollama"
-                # keyword, not a raw URL. Pass the actual host via OLLAMA_HOST
-                # so the adapter can reach a non-localhost server.
-                kwargs["ai_provider_url"] = "ollama"
-                kwargs["ai_model"] = provider_config.model
-                if provider_config.num_ctx is not None:
-                    kwargs["ai_max_token"] = provider_config.num_ctx
-                pass_env = {"OLLAMA_HOST": provider_config.base_url}
+        noir_provider = context.tool_config.noir_provider
+        if noir_provider is not None:
+            # Noir's Ollama adapter is only activated by the "ollama" keyword,
+            # not a raw URL. Pass the actual host via OLLAMA_HOST so the
+            # adapter can reach a non-localhost server.
+            kwargs["ai_provider_url"] = "ollama"
+            kwargs["ai_model"] = noir_provider.model
+            if noir_provider.num_ctx is not None:
+                kwargs["ai_max_token"] = noir_provider.num_ctx
+            pass_env = {"OLLAMA_HOST": noir_provider.base_url}
 
         return [
             ExecutionPass(
