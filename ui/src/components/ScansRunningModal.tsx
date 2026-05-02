@@ -178,10 +178,13 @@ function ProgressBar({ value }: { value: number }) {
   return (
     <div className="relative h-2 w-full border border-border bg-muted overflow-hidden">
       <div
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
         className={cn('h-full bg-accent transition-[width] duration-[2000ms] ease-out')}
         style={{ width: `${pct}%` }}
       />
-      {/* Scanline sweep to reinforce the live feel */}
       <div
         className="absolute inset-y-0 w-6 bg-gradient-to-r from-transparent via-[rgba(57,255,20,0.35)] to-transparent animate-[scan-sweep_1.4s_linear_infinite]"
         style={{ left: `${pct}%`, transform: 'translateX(-100%)' }}
