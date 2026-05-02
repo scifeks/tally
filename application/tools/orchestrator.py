@@ -29,8 +29,6 @@ from domain.pipeline.events import EventBus
 from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary
 
 if TYPE_CHECKING:
-    from rich.console import Console
-
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
     )
@@ -65,7 +63,6 @@ class ScanOrchestrator:
         prompt:         UserPromptPort adapter (REPL or API).
         run_id:         Optional scan_runs.id; required for persistence + lock.
         factory:        Optional ToolWrapperFactory; defaults to a fresh one.
-        console:        Optional Rich console for REPL display output.
         event_sink:     Optional ScanEventSink for SSE event emission.
                         Defaults to a no-op sink (REPL behavior unchanged).
         cancel_token:   Optional cooperative cancellation flag.
@@ -90,7 +87,6 @@ class ScanOrchestrator:
         prompt: UserPromptPort,
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
-        console: Console | None = None,
         event_sink: ScanEventSink | None = None,
         cancel_token: CancellationToken | None = None,
         run_repository: RunRepositoryPort | None = None,
@@ -103,7 +99,7 @@ class ScanOrchestrator:
         self._event_bus = event_bus
         self._prompt = prompt
         self._run_id = run_id
-        self.display = OrchestratorDisplay(console=console)
+        self.display = OrchestratorDisplay()
         self._factory = factory or ToolWrapperFactory()
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
         self._cancel_token: CancellationToken = cancel_token or no_op_token()

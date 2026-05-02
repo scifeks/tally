@@ -49,8 +49,6 @@ from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
-    from rich.console import Console
-
     from application.ports.run_repository import RunRepositoryPort
 
 
@@ -101,7 +99,6 @@ class ScanService:
         prompt: UserPromptPort,
         reporter: ProgressReporter | None = None,
         event_sink: ScanEventSink | None = None,
-        console: Console | None = None,
         run_args: dict[str, Any] | None = None,
     ) -> ScanHandle:
         """Start a scan. Synchronous portion runs entirely in this thread.
@@ -161,7 +158,6 @@ class ScanService:
                 "prompt": prompt,
                 "reporter": reporter,
                 "event_sink": event_sink,
-                "console": console,
                 "cancel_token": cancel_token,
                 "run_repo": run_repo,
                 "chat_session_repo": chat_session_repo,
@@ -189,7 +185,6 @@ class ScanService:
         prompt: UserPromptPort,
         reporter: ProgressReporter | None,
         event_sink: ScanEventSink | None,
-        console: Console | None,
         cancel_token: CancellationToken,
         run_repo: RunRepositoryPort,
         chat_session_repo: ChatSessionRepository,
@@ -213,7 +208,7 @@ class ScanService:
                 reporter=reporter,
             )
             pipeline_bus = PipelineFactory.create(
-                console=console,
+                reporter=reporter,
                 skip_enrichment=skip_enrichment,
                 project_id=project_id,
                 event_sink=event_sink,
@@ -227,7 +222,6 @@ class ScanService:
                 prompt=prompt,
                 run_id=run_id,
                 factory=ToolWrapperFactory(),
-                console=console,
                 event_sink=event_sink,
                 cancel_token=cancel_token,
                 run_repository=run_repo,
@@ -256,7 +250,7 @@ class ScanService:
             else:
                 # Body-stage failure: ScanOrchestrator._run already
                 # persisted 'cancelled' / 'failed' and emitted the
-                # matching SSE event. Just propagate via the future.
+                # matching SSE event. Propagate via the future.
                 logger.exception("scan run %d failed", run_id)
             future.set_exception(exc)
         finally:

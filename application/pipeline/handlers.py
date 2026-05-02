@@ -29,8 +29,6 @@ from infrastructure.vector.factory import make_chromadb_vector_index
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from rich.console import Console
-
     from core.config.schemas import Repository
 
 logger = logging.getLogger(__name__)
@@ -119,10 +117,9 @@ class BaseHandler:
 class IngestHandler(BaseHandler):
     """Handles ToolCompleted: normalizes findings to SQLite, emits IngestCompleted."""
 
-    def __init__(self, bus: EventBus, console: Console | None = None) -> None:
+    def __init__(self, bus: EventBus) -> None:
         super().__init__()
         self._bus = bus
-        self._console = console
 
     def handle(self, event: ToolCompleted) -> None:
         result = event.result
