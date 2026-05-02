@@ -1,4 +1,4 @@
-"""Rich display layer for scan orchestration output."""
+"""Rich display adapter for scan orchestration output."""
 
 from __future__ import annotations
 
@@ -13,35 +13,29 @@ class OrchestratorDisplay:
         self.console = console or Console()
 
     def print_scan_header(self, label: str) -> None:
-        """Print bold-cyan label followed by a divider line."""
         self.console.print(f"\n[bold cyan]{label}[/bold cyan]")
         self.console.print("─" * 50)
 
     def print_segment_header(self, segment: str) -> None:
-        """Print bold-yellow segment name."""
         self.console.print(f"\n[bold yellow]{segment.upper()}[/bold yellow]")
 
     def print_repo_scan_header(
         self, repo_name: str, lang_str: str, tools: list[str]
     ) -> None:
-        """Print 3-line repo scan preamble."""
         self.console.print(f"\n[bold cyan]Repo Scan:[/bold cyan] {repo_name}")
         self.console.print(f"Languages: {lang_str}")
         self.console.print(f"Tools: {', '.join(tools)}\n")
 
     def print_status(self, message: str) -> None:
-        """Print an arbitrary pre-formatted Rich status line."""
         self.console.print(message)
 
     def print_running(self, tool_name: str, repo_name: str = "") -> None:
-        """Print 'Running tool...' dim status line."""
         if repo_name:
             self.console.print(f"  [dim][*] Running {tool_name} ({repo_name})...[/dim]")
         else:
             self.console.print(f"  [dim][*] Running {tool_name}...[/dim]")
 
     def print_tool_line(self, row: ToolDisplayRow) -> None:
-        """Print a single result row: pass / fail / skipped."""
         if row.skipped:
             if row.skip_reason:
                 self.console.print(
@@ -65,7 +59,6 @@ class OrchestratorDisplay:
             )
 
     def print_summary_table(self, rows: list[ToolDisplayRow]) -> None:
-        """Print a Rich Table of non-skipped results."""
         rows = [r for r in rows if not r.skipped]
         if not rows:
             return
@@ -96,7 +89,6 @@ class OrchestratorDisplay:
         ingested: int,
         duration: float,
     ) -> None:
-        """Print scan-complete summary line."""
         self.console.print(
             f"\n[bold]Scan complete:[/bold] "
             f"[green]{run} passed[/green], "

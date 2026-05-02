@@ -1,24 +1,4 @@
-"""ScanService: single core port for starting a scan.
-
-Both adapters (REPL and Web) call ``ScanService.start_scan`` and nothing
-else from the locking surface. The service owns the entire start-scan
-lifecycle:
-
-  * Tier-1 ``scan`` job-slot acquisition (raises :exc:`JobBusy`
-    synchronously if another scan is already in flight).
-  * ``scan_runs`` row creation.
-  * Cancel-token registration in :class:`ScanRunRegistry`.
-  * Daemon worker thread spawning the actual orchestrator run.
-  * Normalized error egress: synchronous failures raise out of
-    ``start_scan``; asynchronous failures appear in three places in
-    lockstep, namely :meth:`Future.set_exception`, a ``RunFailed`` event
-    on the supplied event sink, and a persisted
-    ``scan_runs.status='failed'`` row.
-
-Adapters never touch :class:`LockRegistry` directly. The REPL blocks on
-``handle.result.result()`` to retrieve the :class:`ScanSummary`; the Web
-adapter ignores the future and relies on the SSE event stream.
-"""
+"""Single core port for starting a scan."""
 
 from __future__ import annotations
 
@@ -50,6 +30,7 @@ from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
     from application.ports.run_repository import RunRepositoryPort
+    from domain.tools.display import DisplayProtocol
 
 
 logger = logging.getLogger("application.scan_service")
@@ -62,10 +43,7 @@ class ScanHandle:
     """Returned from :meth:`ScanService.start_scan`.
 
     ``run_id`` is available immediately. ``result`` resolves when the
-    background scan completes: ``set_result(summary)`` on success or
-    ``set_exception(exc)`` on cancel/failure. Synchronous callers (REPL)
-    call ``result.result()`` to block; async-style callers (Web) ignore
-    the future and observe SSE events instead.
+    background scan completes.
     """
 
     run_id: int
@@ -99,20 +77,15 @@ class ScanService:
         prompt: UserPromptPort,
         reporter: ProgressReporter | None = None,
         event_sink: ScanEventSink | None = None,
+        display: DisplayProtocol | None = None,
         run_args: dict[str, Any] | None = None,
     ) -> ScanHandle:
-        """Start a scan. Synchronous portion runs entirely in this thread.
+        """Start a scan and return a :class:`ScanHandle`.
 
         Raises:
-            JobBusy: another scan is already holding the Tier-1 slot.
-                The web adapter maps this to HTTP 409; the REPL prints
-                a message.
+            JobBusy: another scan is already holding the scan slot.
             Anything raised by ``RunRepository.create``: the lock is
                 released before the exception propagates.
-
-        On success returns immediately with a :class:`ScanHandle`. The
-        actual scan body runs on a daemon worker thread; see
-        :meth:`_run_worker` for outcome handling.
         """
         holder_token = f"scan-run:{uuid.uuid4().hex[:8]}"
         self._lock_registry.acquire_job(SCAN_LOCK_KIND, holder_token)
@@ -158,6 +131,7 @@ class ScanService:
                 "prompt": prompt,
                 "reporter": reporter,
                 "event_sink": event_sink,
+                "display": display,
                 "cancel_token": cancel_token,
                 "run_repo": run_repo,
                 "chat_session_repo": chat_session_repo,
@@ -185,6 +159,7 @@ class ScanService:
         prompt: UserPromptPort,
         reporter: ProgressReporter | None,
         event_sink: ScanEventSink | None,
+        display: DisplayProtocol | None,
         cancel_token: CancellationToken,
         run_repo: RunRepositoryPort,
         chat_session_repo: ChatSessionRepository,
@@ -227,6 +202,7 @@ class ScanService:
                 run_repository=run_repo,
                 project_id=project_id,
                 chat_session_repo=chat_session_repo,
+                display=display,
             )
             setup_ok = True
 

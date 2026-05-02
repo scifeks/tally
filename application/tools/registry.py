@@ -1,13 +1,8 @@
 import importlib
 import inspect
 import logging
-import re
 from pathlib import Path
 from typing import Any
-
-from rich.console import Console
-from rich.markup import escape as markup_escape
-from rich.table import Table
 
 from application.tools.factory import ToolWrapperFactory
 from core.project_paths import ProjectPaths
@@ -47,15 +42,9 @@ class ToolRegistry:
         return self._tools.get(name)
 
     def get_tool_config(self, name: str):
-        """Return the CommandEntry for a registered tool, or None."""
         return self._configs.get(name)
 
     def get_repo_path(self, tool_name: str, repo) -> str:
-        """Return the correct filesystem path for tool execution.
-
-        Uses repo.docker_path when the tool is configured for docker;
-        falls back to repo.path for local tools or when no config exists.
-        """
         config = self.get_tool_config(tool_name)
         if config is not None and config.location == "docker":
             return repo.docker_path
@@ -84,18 +73,11 @@ tool_registry = ToolRegistry()
 
 
 def discover_tools(base_path: str = ".", project_name: str | None = None) -> None:
-    """Register tool wrappers, driven by commands.json when present.
+    """Register tool wrappers driven by commands.json.
 
-    When commands.json exists at <base_path>/config/commands.json, only tools
-    listed there are registered, using the wrapper from the configured location
-    subdirectory (local/ or docker/).
-
-    When commands.json is absent (pre-setup / development), all wrappers in
-    wrappers/local/ are registered as a backward-compatible fallback.
-
-    If project_name is provided and
-    projects/<project_name>/config/commands.json exists, its entries overlay the
-    global config (project entries fully replace global entries of the same name).
+    When commands.json is missing, falls back to registering every
+    wrapper in wrappers/local/. A project-level commands.json overlays
+    the global one entry for entry.
     """
     import json as _json
 
@@ -116,7 +98,7 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
             }
         except Exception as exc:
             logger.warning(
-                "Failed to load commands.json (%s) — falling back to local discovery",
+                "Failed to load commands.json (%s); falling back to local discovery",
                 exc,
             )
 
@@ -139,28 +121,25 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
         _discover_from_config(commands_config, wrappers_dir)
     else:
         logger.warning(
-            "commands.json not found at %s — "
-            "running in fallback mode (all local tools)",
+            "commands.json not found at %s; running in fallback mode (all local tools)",
             commands_path,
         )
         _discover_fallback(wrappers_dir)
 
 
 def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
-    """Register only tools listed in commands.json with their configured location."""
     factory = ToolWrapperFactory()
     for tool_name, entry in commands_config.items():
         try:
             tool = factory.create(tool_name, entry)
             tool_registry.register(tool, config=entry)
         except ImportError as exc:
-            logger.warning("Skipping %r: import failed — %s", tool_name, exc)
+            logger.warning("Skipping %r: import failed: %s", tool_name, exc)
         except Exception as exc:
-            logger.warning("Skipping %r: instantiation failed — %s", tool_name, exc)
+            logger.warning("Skipping %r: instantiation failed: %s", tool_name, exc)
 
 
 def _discover_fallback(wrappers_dir: Path) -> None:
-    """Fallback: register all wrappers found in wrappers/local/."""
     local_dir = wrappers_dir / "local"
     for py_file in sorted(local_dir.glob("*.py")):
         if py_file.name.startswith("_"):
@@ -179,58 +158,6 @@ def _discover_fallback(wrappers_dir: Path) -> None:
                 and obj.__module__ == module_name
             ):
                 tool_registry.register(obj())
-
-
-def build_tool_table(tools, registry) -> Table:
-    """Return a Rich Table of tool status rows (Tool/Category/Location/Status/Hint)."""
-    table = Table(show_header=True, header_style="bold", padding=(0, 1))
-    table.add_column("Tool", style="cyan", min_width=18)
-    table.add_column("Category", min_width=10)
-    table.add_column("Location", min_width=8)
-    table.add_column("Status", min_width=14)
-    table.add_column("Hint")
-
-    for tool in tools:
-        config = registry.get_tool_config(tool.name)
-        location = config.location if config else "local"
-
-        if location == "docker":
-            container = config.container.name if config else ""
-            status = "[green]v configured[/green]"
-            hint = f"Container: {container}"
-        else:
-            avail = tool.check_available()
-            version = tool.get_version() if avail else None
-            # Extract bare version number from verbose strings like "semgrep 1.2.3"
-            if version:
-                match = re.search(r"\d+\.\d+[\d.]*", version)
-                version = match.group(0) if match else version.split("(")[0].strip()
-            if avail:
-                safe = markup_escape(version) if version else "installed"
-                status = f"[green]v {safe}[/green]"
-            else:
-                status = "[yellow]! NOT FOUND[/yellow]"
-            hint = ""
-
-        table.add_row(tool.name, tool.category, location, status, hint)
-
-    return table
-
-
-def print_discovery_summary(console: Console) -> None:
-    """Print a Rich table summarising discovered tools."""
-    tools = tool_registry.get_all_tools()
-    available_count = sum(1 for t in tools if t.check_available())
-    unavailable_count = len(tools) - available_count
-
-    console.print("\n[bold]Configured Tools[/bold]")
-    console.print(build_tool_table(tools, tool_registry))
-
-    summary = f"Loaded {len(tools)} tools ({available_count} available"
-    if unavailable_count:
-        summary += f", {unavailable_count} not installed"
-    summary += ")"
-    console.print(f"[bold]{summary}[/bold]")
 
 
 # Auto-discover on import

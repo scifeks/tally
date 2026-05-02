@@ -1,4 +1,4 @@
-"""Unit tests for build_tool_table (application.tools.registry)."""
+"""Unit tests for build_tool_table (REPL adapter)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from unittest.mock import MagicMock
 from rich.console import Console
 from rich.table import Table
 
-from application.tools.registry import ToolRegistry, build_tool_table
+from application.repl.adapters.tool_registry_display import build_tool_table
+from application.tools.registry import ToolRegistry
 
 
 def _local_tool(name: str, category: str, *, available: bool = True) -> MagicMock:

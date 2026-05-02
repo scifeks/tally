@@ -19,6 +19,10 @@ from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
 from application.project.registry_service import ProjectRegistryService
 from application.rag.ingestor import get_tool_domain
+from application.repl.adapters.dependency_summary_display import (
+    print_installed_system_tools,
+)
+from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
     KnowledgeCommands,
     ProjectCommands,
@@ -31,8 +35,6 @@ from application.repl.commands import (
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
 from application.runtime import RuntimeDependencyService
-from application.startup.checker import print_installed_system_tools
-from application.tools.registry import print_discovery_summary
 from core.config import ConfigManager
 from infrastructure.runtime import ClaudeCodeProbe
 
@@ -254,10 +256,6 @@ class REPL:
         self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
-    # ------------------------------------------------------------------
-    # Public entry point
-    # ------------------------------------------------------------------
-
     def run(self) -> None:
         """Start the REPL loop."""
         if os.getenv("TALLY_HARNESS"):
@@ -349,10 +347,6 @@ class REPL:
 
         self.console.print("Goodbye!")
 
-    # ------------------------------------------------------------------
-    # Command dispatch
-    # ------------------------------------------------------------------
-
     def _dispatch(self, cmd: str, args: list) -> None:
         pc = self.project_commands
         sc = self.scan_commands
@@ -391,10 +385,6 @@ class REPL:
             _log.exception("Command %r raised an unhandled exception", cmd)
             self.console.print(f"[red]Error:[/red] {exc}")
 
-    # ------------------------------------------------------------------
-    # Implemented commands
-    # ------------------------------------------------------------------
-
     def _cmd_help(self, _cmd: str, args: list) -> None:
         if args and args[0] == "search":
             self._cmd_help_search(args[1:])
@@ -418,10 +408,6 @@ class REPL:
 
     def _cmd_exit(self, _cmd: str, _args: list) -> None:
         raise EOFError  # re-use EOF path to trigger "Goodbye!"
-
-    # ------------------------------------------------------------------
-    # UI helpers
-    # ------------------------------------------------------------------
 
     def _print_banner(self) -> None:
         if self.active_project:

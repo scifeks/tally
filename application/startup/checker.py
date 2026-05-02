@@ -10,14 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from rich.console import Console
-from rich.table import Table
-
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from application.runtime import RuntimeDependencyService
-    from domain.runtime.models import RuntimeDependencyStatus
 
 _INSTALL_HINTS = {
     "semgrep": "pip install semgrep",
@@ -69,10 +63,9 @@ class CheckResult:
 
 class DependencyChecker:
     def __init__(self, runtime_service: RuntimeDependencyService | None = None) -> None:
-        self._console = Console()
         self._runtime_service = runtime_service
 
-    def run(self, auto_fix: bool = False, silent: bool = False) -> CheckResult:
+    def run(self, auto_fix: bool = False) -> CheckResult:
         checks: list[DepCheck] = []
 
         checks.append(self.check_python_version())
@@ -95,16 +88,12 @@ class DependencyChecker:
         missing_optional = [c for c in checks if not c.required and not c.installed]
         all_required_present = len(missing_required) == 0
 
-        result = CheckResult(
+        return CheckResult(
             checks=checks,
             all_required_present=all_required_present,
             missing_required=missing_required,
             missing_optional=missing_optional,
         )
-
-        if not silent:
-            self.print_summary(result)
-        return result
 
     def check_python_version(self) -> DepCheck:
         major = sys.version_info.major
@@ -214,95 +203,3 @@ class DependencyChecker:
                     break
 
         return results
-
-    def print_summary(self, result: CheckResult) -> None:
-        self._console.print("\n[bold]Installed System Tools[/bold]")
-        self._console.print("=" * 22)
-
-        table = Table(
-            show_header=True, header_style="bold", padding=(0, 1), show_lines=True
-        )
-        table.add_column("Dependency", style="cyan", min_width=18)
-        table.add_column("Type", min_width=12)
-        table.add_column("Status", min_width=14)
-        table.add_column("Install Hint")
-
-        from rich.markup import escape as _esc
-
-        for check in result.checks:
-            if check.installed:
-                if check.warning:
-                    safe = _esc(check.version or "")
-                    status = f"[yellow]v {safe} (incompatible)[/yellow]"
-                else:
-                    safe = _esc(check.version) if check.version else "installed"
-                    status = f"[green]v {safe}[/green]"
-            else:
-                status = "[yellow]! NOT FOUND[/yellow]"
-
-            hint = check.install_hint or ""
-            table.add_row(check.name, check.type, status, hint)
-
-        self._console.print(table)
-
-        if result.missing_optional:
-            count = len(result.missing_optional)
-            self._console.print(
-                f"[yellow]Warning: {count} optional "
-                f"tool{'s' if count != 1 else ''} not found. "
-                f"Some scan features will be unavailable.[/yellow]"
-            )
-
-        if result.missing_required:
-            count = len(result.missing_required)
-            names = ", ".join(c.name for c in result.missing_required)
-            self._console.print(
-                f"[red]Error: {count} required dependency missing: {names}[/red]"
-            )
-
-
-def print_installed_system_tools(
-    console: Console,
-    runtime_deps: Sequence[RuntimeDependencyStatus] | None = None,
-) -> None:
-    """Print just the system tools table with 'Installed System Tools' header."""
-    checker = DependencyChecker()
-    tool_checks = checker.check_system_tools()
-
-    console.print("\n[bold]Installed System Tools[/bold]")
-    console.print("=" * 22)
-
-    table = Table(
-        show_header=True, header_style="bold", padding=(0, 1), show_lines=True
-    )
-    table.add_column("Dependency", style="cyan", min_width=18)
-    table.add_column("Type", min_width=12)
-    table.add_column("Status", min_width=14)
-    table.add_column("Install Hint")
-
-    from rich.markup import escape as _esc
-
-    for check in tool_checks:
-        if check.installed:
-            if check.warning:
-                safe = _esc(check.version or "")
-                status = f"[yellow]v {safe} (incompatible)[/yellow]"
-            else:
-                safe = _esc(check.version) if check.version else "installed"
-                status = f"[green]v {safe}[/green]"
-        else:
-            status = "[yellow]! NOT FOUND[/yellow]"
-        hint = check.install_hint or ""
-        table.add_row(check.name, check.type, status, hint)
-
-    if runtime_deps is not None:
-        for dep in runtime_deps:
-            if dep.installed:
-                safe = _esc(dep.version) if dep.version else "installed"
-                status = f"[green]v {safe}[/green]"
-            else:
-                status = "[yellow]! NOT FOUND[/yellow]"
-            hint = dep.install_hint or ""
-            table.add_row(dep.name, "runtime_dep", status, hint)
-
-    console.print(table)

@@ -1,4 +1,4 @@
-"""Unit tests for OrchestratorDisplay (application.tools.display)."""
+"""Unit tests for OrchestratorDisplay (REPL adapter)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from application.tools.display import OrchestratorDisplay
+from application.repl.adapters.orchestrator_display import OrchestratorDisplay
 from domain.tools.display import ToolDisplayRow
 
 
