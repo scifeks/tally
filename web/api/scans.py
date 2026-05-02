@@ -29,17 +29,16 @@ from fastapi.responses import StreamingResponse
 
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
+from application.scans.scans_service import ProjectNotFound, ScansService
 from application.tools.registry import discover_tools, tool_registry
 from application.tools.scan_run_registry import get_scan_run_registry
 from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
-from domain.scans.entry import ScanRunRow, ToolRunRow
+from domain.scans.entry import SCAN_RUN_STATUSES, ScanRunRow, ToolRunRow
 from domain.tools.scan_types import SEGMENT_ORDER
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.runs import SCAN_RUN_STATUSES, RunRepository
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
@@ -71,9 +70,12 @@ v1_router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-def _make_run_repo(row: dict) -> RunRepository:
-    paths = ProjectPaths.from_registry_row(row)
-    return RunRepository(ConnectionFactory(paths.findings_db))
+def _service(request: Request, project_id: int) -> ScansService:
+    """Build a ScansService for *project_id* or raise 404."""
+    try:
+        return ScansService.from_request(request, project_id)
+    except ProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
 
 def _scan_run_to_summary(row: ScanRunRow) -> ScanRunSummary:
@@ -225,11 +227,11 @@ async def scans_events(
     from the current ``scan_runs`` row(s) so the SPA can sync without
     waiting for the next live tick.
     """
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("scan")
 
-    snapshot_event = await _build_snapshot(row, project_id, run_id)
+    snapshot_event = await _build_snapshot(service, project_id, run_id)
 
     async def stream() -> AsyncIterator[str]:
         try:
@@ -269,7 +271,7 @@ async def cancel_all_scans(
     request: Request,
 ) -> ScanCancelAllResponse:
     """Cancel every active scan for this project."""
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
     registry = get_scan_run_registry()
     cancelled: list[int] = []
     for handle in registry.list_for_project(project_id):
@@ -277,7 +279,7 @@ async def cancel_all_scans(
         cancelled.append(handle.run_id)
 
     if cancelled:
-        repo = _make_run_repo(row)
+        repo = service.run_repo
         for run_id in cancelled:
             try:
                 await asyncio.to_thread(repo.set_status, run_id, "cancelling")
@@ -299,9 +301,9 @@ async def list_scans(
     limit: int = Query(default=20, ge=1, le=100),
 ) -> ScansListResponse:
     """Paginated scan history for a project, newest-first."""
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
     _validate_status(status)
-    repo = _make_run_repo(row)
+    repo = service.run_repo
     rows, total = await asyncio.to_thread(
         repo.list_for_project,
         project_id,
@@ -373,8 +375,8 @@ async def start_scan(
     except JobBusy as exc:
         raise JobBusyError("scan", exc.current_holder) from exc
 
-    repo = _make_run_repo(row)
-    fresh = await asyncio.to_thread(repo.get, handle.run_id)
+    service = _service(request, project_id)
+    fresh = await asyncio.to_thread(service.run_repo.get, handle.run_id)
     if fresh is None:
         raise NotFound(f"scan run {handle.run_id} not found after creation")
     return _scan_run_to_summary(fresh)
@@ -391,8 +393,8 @@ async def cancel_scan(
     request: Request,
 ) -> ScanCancelResponse:
     """Request cancellation of a specific scan run."""
-    row = _resolve_project(request, project_id)
-    repo = _make_run_repo(row)
+    service = _service(request, project_id)
+    repo = service.run_repo
 
     handle = get_scan_run_registry().get(run_id)
     if handle is None:
@@ -427,8 +429,8 @@ async def scan_progress(
     request: Request,
 ) -> ScanProgressResponse:
     """Point-in-time progress snapshot for a single scan run."""
-    row = _resolve_project(request, project_id)
-    repo = _make_run_repo(row)
+    service = _service(request, project_id)
+    repo = service.run_repo
     bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
     if bundle is None:
         raise NotFound(f"scan run {run_id} not found")
@@ -448,8 +450,8 @@ async def get_scan(
     request: Request,
 ) -> ScanDetailResponse:
     """Full scan run with the per-tool execution records."""
-    row = _resolve_project(request, project_id)
-    repo = _make_run_repo(row)
+    service = _service(request, project_id)
+    repo = service.run_repo
     bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
     if bundle is None:
         raise NotFound(f"scan run {run_id} not found")
@@ -501,7 +503,7 @@ def _validate_domains(domains: list[str]) -> None:
 
 
 async def _build_snapshot(
-    row: dict,
+    service: ScansService,
     project_id: int,
     run_id: int | None,
 ) -> BusEvent:
@@ -512,8 +514,7 @@ async def _build_snapshot(
     }
     registry = get_scan_run_registry()
     if run_id is not None:
-        repo = _make_run_repo(row)
-        bundle = await asyncio.to_thread(repo.get_with_tool_runs, run_id)
+        bundle = await asyncio.to_thread(service.run_repo.get_with_tool_runs, run_id)
         if bundle is not None:
             scan_row, tool_rows = bundle
             if scan_row.project_id == project_id:
