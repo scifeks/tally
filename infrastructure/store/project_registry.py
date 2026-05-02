@@ -1,4 +1,4 @@
-"""Project registry — single source of truth for project existence and paths."""
+"""Project registry: single source of truth for project existence and paths."""
 
 from __future__ import annotations
 
@@ -8,8 +8,12 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
+from application.ports.project_registry_repository import (
+    ProjectRegistryRepositoryPort,
+)
 
-class ProjectRegistryRepository:
+
+class ProjectRegistryRepository(ProjectRegistryRepositoryPort):
     """Repository over the `projects` table in tally.db."""
 
     def __init__(self, db_path: Path) -> None:

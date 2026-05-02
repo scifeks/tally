@@ -1,15 +1,21 @@
-"""Project registry service — application-layer facade over the registry repo."""
+"""Project registry service: application-layer facade over the registry repo."""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from core.project_paths import ProjectPaths
-from infrastructure.store.project_registry import ProjectRegistryRepository
+
+if TYPE_CHECKING:
+    from application.ports.project_registry_repository import (
+        ProjectRegistryRepositoryPort,
+    )
 
 
 class ProjectRegistryService:
-    """Application-layer facade over ProjectRegistryRepository."""
+    """Application-layer facade over a ``ProjectRegistryRepositoryPort``."""
 
-    def __init__(self, repository: ProjectRegistryRepository) -> None:
+    def __init__(self, repository: ProjectRegistryRepositoryPort) -> None:
         self._repo = repository
 
     def sync(self, base_path: str) -> None:

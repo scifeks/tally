@@ -1,22 +1,22 @@
-"""UrlInventoryService — application-layer orchestrator for url_findings.
+"""UrlInventoryService: application-layer orchestrator for url_findings.
 
-Wraps the ``UrlFindingRepository`` port with the project-aware operations
+Wraps a ``UrlFindingRepositoryPort`` with the project-aware operations
 the rest of the codebase needs:
 
-- ``ingest_scan_source(repo_id, run_id, tool, entries)`` — wipe-and-replace
+- ``ingest_scan_source(repo_id, run_id, tool, entries)``: wipe-and-replace
   for a single ``(repo_id, tool)`` pair. Used by the Katana / Noir
   post-completion handler.
-- ``ingest_user_file(repo_id, file_path, entries)`` — wipe-and-replace
+- ``ingest_user_file(repo_id, file_path, entries)``: wipe-and-replace
   for a single user-uploaded source file. Used by the wizard's endpoint
   ingest path and by the Phase 9.3 multipart repo POST/PATCH endpoint.
-- ``regenerate_artifacts(repo_id, repo_dir_key, base_url)`` — rebuild
+- ``regenerate_artifacts(repo_id, repo_dir_key, base_url)``: rebuild
   ``merged_urls.txt`` + ``merged_oas3.json`` from the current DB rows for
   one repo. Called JIT by ZAP/XSStrike/DalFox launchers and by the
   Phase 9.5 ``POST /url-list/regenerate`` endpoint.
-- ``regenerate_artifacts_for_project(project_paths, active_repos)`` —
+- ``regenerate_artifacts_for_project(project_paths, active_repos)``:
   iterate all active repos for a project; convenience for purge / batch
   regeneration.
-- ``delete_for_project(project_id)`` — used by REPL ``purge``.
+- ``delete_for_project(project_id)``: used by REPL ``purge``.
 """
 
 from __future__ import annotations
@@ -27,17 +27,15 @@ from typing import TYPE_CHECKING
 from application.url_inventory.artifact_builder import write_artifacts
 
 if TYPE_CHECKING:
+    from application.ports.url_finding_repository import UrlFindingRepositoryPort
     from core.project_paths import ProjectPaths
     from domain.url_inventory.entry import UrlFinding, UrlTool
-    from infrastructure.store.repositories.url_findings import (
-        UrlFindingRepository,
-    )
 
 
 class UrlInventoryService:
     """Application-layer URL inventory orchestrator."""
 
-    def __init__(self, repo: UrlFindingRepository) -> None:
+    def __init__(self, repo: UrlFindingRepositoryPort) -> None:
         self._repo = repo
 
     # ------------------------------------------------------------------
@@ -107,8 +105,8 @@ class UrlInventoryService:
         """Rebuild artifacts for every active repo in a project.
 
         ``active_repos`` is an iterable of ``(repo_id, repo_dir_key)``
-        tuples — typically the caller maps active ``Repository`` entries
-        to their DB id + uuid pair. Returns a list of
+        tuples (typically the caller maps active ``Repository`` entries
+        to their DB id + uuid pair). Returns a list of
         ``(repo_id, seeds_path, oas3_path)`` tuples for the regenerated
         repos. Used by the Phase 9.5 ``POST /url-list/regenerate``
         endpoint and any batch-regeneration site.

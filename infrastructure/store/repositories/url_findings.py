@@ -1,4 +1,4 @@
-"""UrlFindingRepository — CRUD for the ``url_findings`` table (Phase 9).
+"""UrlFindingRepository: CRUD for the ``url_findings`` table (Phase 9).
 
 Stores one row per discovered URL: SCAN-sourced rows from Katana/Noir
 (linked to a ``scan_runs`` row) and USER-sourced rows from user-uploaded
@@ -18,6 +18,7 @@ import json
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
+from application.ports.url_finding_repository import UrlFindingRepositoryPort
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
 
 if TYPE_CHECKING:
@@ -93,7 +94,7 @@ def _build_where(
     return parts, params
 
 
-class UrlFindingRepository:
+class UrlFindingRepository(UrlFindingRepositoryPort):
     """SQLite-backed implementation of ``UrlFindingRepositoryPort``."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
