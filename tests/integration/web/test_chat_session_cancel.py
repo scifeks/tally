@@ -84,8 +84,8 @@ def _patch_chat_deps(monkeypatch, *, provider: _FakeProvider) -> None:
         model_name=provider.model,
     )
     monkeypatch.setattr(
-        "web.api.chat.ChatStreamComposer.from_request",
-        lambda request, project_id: fake_composer,
+        "web.api.chat.ChatStreamComposer.for_project",
+        lambda registry, cache, base_path, project_id: fake_composer,
     )
 
 

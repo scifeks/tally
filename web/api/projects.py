@@ -60,7 +60,9 @@ v1_router = APIRouter()
 def _findings_service(request: Request, project_id: int) -> FindingsService:
     """Build a FindingsService for *project_id* or raise 404."""
     try:
-        return FindingsService.from_request(request, project_id)
+        return FindingsService.for_project(
+            request.app.state.project_registry, project_id
+        )
     except FindingsProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
@@ -68,7 +70,9 @@ def _findings_service(request: Request, project_id: int) -> FindingsService:
 def _url_list_service(request: Request, project_id: int) -> UrlListService:
     """Build a UrlListService for *project_id* or raise 404."""
     try:
-        return UrlListService.from_request(request, project_id)
+        return UrlListService.for_project(
+            request.app.state.project_registry, project_id
+        )
     except UrlListProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
@@ -86,7 +90,10 @@ def _load_project_tool_ids(commands_path: Path) -> list[str]:
 
 
 def _service_from_request(request: Request) -> ProjectRepositoriesService:
-    return ProjectRepositoriesService.from_request(request)
+    return ProjectRepositoriesService.build(
+        request.app.state.project_registry,
+        request.app.state.base_path,
+    )
 
 
 def _count_active_repos(service: ProjectRepositoriesService, project_id: int) -> int:

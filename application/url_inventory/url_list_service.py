@@ -16,14 +16,13 @@ from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
     from application.ports.url_finding_repository import (
         UrlFindingRepositoryPort,
     )
+    from application.project.registry_service import ProjectRegistryService
 
 
 class ProjectNotFound(LookupError):
@@ -47,8 +46,11 @@ class UrlListService:
         self._findings_db_exists = findings_db_exists
 
     @classmethod
-    def from_request(cls, request: Request, project_id: int) -> Self:
-        registry = request.app.state.project_registry
+    def for_project(
+        cls,
+        registry: ProjectRegistryService,
+        project_id: int,
+    ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")

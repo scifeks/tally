@@ -18,8 +18,6 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.project_repo_repository import ProjectRepoRepositoryPort
     from application.project.registry_service import ProjectRegistryService
 
@@ -57,10 +55,12 @@ class ProjectRepositoriesService:
         self._config_manager = config_manager
 
     @classmethod
-    def from_request(cls, request: Request) -> ProjectRepositoriesService:
-        """Build a service from the request-level app state."""
-        registry: ProjectRegistryService = request.app.state.project_registry
-        base_path: str = request.app.state.base_path
+    def build(
+        cls,
+        registry: ProjectRegistryService,
+        base_path: str,
+    ) -> ProjectRepositoriesService:
+        """Build a service from the registry and the Tally base path."""
         return cls(registry, ConfigManager(base_path, registry=registry))
 
     # Reads

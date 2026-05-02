@@ -56,7 +56,7 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> TriageService:
     """Build a TriageService for *project_id* or raise 404."""
     try:
-        return TriageService.from_request(request, project_id)
+        return TriageService.for_project(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 

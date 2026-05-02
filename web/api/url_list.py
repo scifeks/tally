@@ -37,7 +37,9 @@ url_list_v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> UrlListService:
     """Build a UrlListService for *project_id* or raise 404."""
     try:
-        return UrlListService.from_request(request, project_id)
+        return UrlListService.for_project(
+            request.app.state.project_registry, project_id
+        )
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
@@ -253,7 +255,10 @@ async def regenerate_url_list(
     service = _service(request, project_id)
     paths = ProjectPaths.from_registry_row(row)
 
-    repo_service = ProjectRepositoriesService.from_request(request)
+    repo_service = ProjectRepositoriesService.build(
+        request.app.state.project_registry,
+        request.app.state.base_path,
+    )
     active_repos: list[tuple[int, str]] = [
         (r.id, str(r.id))
         for r in repo_service.list_active(project_id)

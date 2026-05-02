@@ -44,15 +44,12 @@ class TestTriageService:
         )
         assert service.triage_repo is triage_repo
 
-    def test_from_request_raises_when_project_missing(self) -> None:
+    def test_for_project_raises_when_project_missing(self) -> None:
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
-        )
         with pytest.raises(ProjectNotFound):
-            TriageService.from_request(request, 7)  # type: ignore[arg-type]
+            TriageService.for_project(registry, 7)  # type: ignore[arg-type]
 
-    def test_from_request_raises_when_project_archived(self) -> None:
+    def test_for_project_raises_when_project_archived(self) -> None:
         archived = ProjectRow(
             id=7,
             name="p",
@@ -61,8 +58,5 @@ class TestTriageService:
             archived_at="2026-05-01T00:00:00Z",
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
-        request = SimpleNamespace(
-            app=SimpleNamespace(state=SimpleNamespace(project_registry=registry))
-        )
         with pytest.raises(ProjectNotFound):
-            TriageService.from_request(request, 7)  # type: ignore[arg-type]
+            TriageService.for_project(registry, 7)  # type: ignore[arg-type]

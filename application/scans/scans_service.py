@@ -16,8 +16,6 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
 
 if TYPE_CHECKING:
-    from fastapi import Request
-
     from application.ports.run_repository import RunRepositoryPort
     from application.project.registry_service import ProjectRegistryService
 
@@ -36,8 +34,11 @@ class ScansService:
         self._run_repo = run_repo
 
     @classmethod
-    def from_request(cls, request: Request, project_id: int) -> Self:
-        registry = request.app.state.project_registry
+    def for_project(
+        cls,
+        registry: ProjectRegistryService,
+        project_id: int,
+    ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")

@@ -71,7 +71,7 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> ScansService:
     """Build a ScansService for *project_id* or raise 404."""
     try:
-        return ScansService.from_request(request, project_id)
+        return ScansService.for_project(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
@@ -177,7 +177,10 @@ async def get_scans_config(
     # before reading so domain mappings reflect the project's commands.json.
     discover_tools(base_path, project_name=project_name)
 
-    repo_service = ProjectRepositoriesService.from_request(request)
+    repo_service = ProjectRepositoriesService.build(
+        request.app.state.project_registry,
+        request.app.state.base_path,
+    )
     repos: list[ScanConfigRepo] = []
     for r in repo_service.list_active(project_id):
         assert isinstance(r.id, int)  # list_active filters to DB-resident repos
@@ -334,9 +337,10 @@ async def start_scan(
     base_path: str = request.app.state.base_path
 
     discover_tools(base_path, project_name=project_name)
-    repo_lookup = ProjectRepositoriesService.from_request(request).find_by_ids(
-        project_id, body.repoIds
-    )
+    repo_lookup = ProjectRepositoriesService.build(
+        request.app.state.project_registry,
+        request.app.state.base_path,
+    ).find_by_ids(project_id, body.repoIds)
     if repo_lookup.missing:
         raise ValidationError(
             f"unknown repo ids: {repo_lookup.missing}",
