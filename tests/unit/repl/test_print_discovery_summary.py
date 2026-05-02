@@ -1,4 +1,4 @@
-"""Unit tests for print_discovery_summary (application.tools.registry)."""
+"""Unit tests for print_discovery_summary (REPL adapter)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from unittest.mock import MagicMock, patch
 
 from rich.console import Console
 
-from application.tools.registry import ToolRegistry, print_discovery_summary
+from application.repl.adapters.tool_registry_display import print_discovery_summary
+from application.tools.registry import ToolRegistry
 
 
 def _local_tool(name: str, category: str, *, available: bool = True) -> MagicMock:
@@ -32,7 +33,9 @@ class TestPrintDiscoverySummary:
         reg = self._patched_registry([t1, t2])
         buf = StringIO()
         console = Console(file=buf, highlight=False, no_color=True)
-        with patch("application.tools.registry.tool_registry", reg):
+        with patch(
+            "application.repl.adapters.tool_registry_display.tool_registry", reg
+        ):
             print_discovery_summary(console)
         assert "Configured Tools" in buf.getvalue()
 
@@ -42,6 +45,8 @@ class TestPrintDiscoverySummary:
         reg = self._patched_registry([t1, t2])
         buf = StringIO()
         console = Console(file=buf, highlight=False, no_color=True)
-        with patch("application.tools.registry.tool_registry", reg):
+        with patch(
+            "application.repl.adapters.tool_registry_display.tool_registry", reg
+        ):
             print_discovery_summary(console)
         assert "Loaded 2 tools" in buf.getvalue()

@@ -38,7 +38,7 @@ class TestDependencyCheckerRuntimeDep:
             mock_py.return_value = MagicMock(
                 required=True, installed=True, warning=None
             )
-            return checker.run(silent=True)
+            return checker.run()
 
     def test_all_required_present_when_installed(self) -> None:
         result = self._run(installed=True)
@@ -63,6 +63,6 @@ class TestDependencyCheckerRuntimeDep:
             mock_py.return_value = MagicMock(
                 required=True, installed=True, warning=None
             )
-            result = checker.run(silent=True)
+            result = checker.run()
         names = [c.name for c in result.checks]
         assert "claude" not in names

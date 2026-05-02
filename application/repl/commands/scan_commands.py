@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
+from application.repl.adapters.orchestrator_display import OrchestratorDisplay
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
@@ -42,10 +43,6 @@ class ScanCommands:
             self.repl.project_registry, self.repl.config
         )
         return service.list_active(row.id)
-
-    # ------------------------------------------------------------------
-    # Commands
-    # ------------------------------------------------------------------
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
         """scan [--repo=<repo,...>] [--tool=<tool,...>] [--domain=<domain,...>]"""
@@ -177,9 +174,8 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        # DAST-without-discovery prompt remains an adapter-level concern:
-        # it asks the user a question and may rewrite effective_tools
-        # before dispatch.
+        # The DAST-without-discovery prompt asks the user a question
+        # and may rewrite effective_tools before dispatch.
         if effective_tools is not None:
             effective_tools = self._maybe_warn_dast_without_discovery(
                 effective_tools,
@@ -206,6 +202,7 @@ class ScanCommands:
                 skip_enrichment=skip_enrichment,
                 prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
                 reporter=StdoutProgressReporter(),
+                display=OrchestratorDisplay(self.repl.console),
                 run_args={"args": args},
             )
         except JobBusy as exc:
@@ -314,10 +311,6 @@ class ScanCommands:
             for path in result.output_files.values():
                 self.repl.console.print(f"Output saved to: {path}")
 
-    # ------------------------------------------------------------------
-    # Private: shared SCA result helpers
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _select_repo_tools(
         languages: list[str],
@@ -342,10 +335,6 @@ class ScanCommands:
         if base_urls:
             tools.append("zap")
         return tools
-
-    # ------------------------------------------------------------------
-    # Private: UI helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _parse_timeout_arg(
@@ -389,10 +378,6 @@ class ScanCommands:
                 return value, remaining
         return None, args
 
-    # ------------------------------------------------------------------
-    # Private: DAST-without-discovery warning
-    # ------------------------------------------------------------------
-
     def _maybe_warn_dast_without_discovery(
         self,
         tools: list[str],
@@ -407,7 +392,7 @@ class ScanCommands:
         and, when it doesn't, prompts the user to prepend discovery tools.
 
         Returns the (possibly expanded) effective tool list to execute, or
-        ``None`` to indicate that the scan was cancelled by the user.
+        ``None`` to indicate that the scan was canceled by the user.
 
         When ``auto_approve`` is True the warning is suppressed.
         """
@@ -497,12 +482,7 @@ class ScanCommands:
         except Exception:
             return False
 
-    # ------------------------------------------------------------------
-    # Private: export
-    # ------------------------------------------------------------------
-
     def _export_summary(self, summary, export_path: str) -> None:
-        """Export ScanSummary results to a JSON file."""
         try:
             data = {
                 "total_tools_run": summary.total_tools_run,

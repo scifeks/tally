@@ -1,4 +1,4 @@
-"""Scan orchestration: coordinate multi-tool scans across segments and repos."""
+"""Scan orchestration."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from application.locking.cancellation import CancellationToken, no_op_token
 from application.ports.scan_event_sink import NullScanEventSink, ScanEventSink
 from application.ports.user_prompt import UserPromptPort
-from application.tools.display import OrchestratorDisplay
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
@@ -26,6 +25,7 @@ from application.tools.scan_types import (
 from application.tools.scan_types.execution import _build_tool_execution_config
 from domain.pipeline import scan_events as se
 from domain.pipeline.events import EventBus
+from domain.tools.display import DisplayProtocol, NullDisplay
 from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary
 
 if TYPE_CHECKING:
@@ -53,30 +53,7 @@ def _utc_now_iso() -> str:
 
 
 class ScanOrchestrator:
-    """Coordinate multi-tool scans across segments and repositories.
-
-    Args:
-        project:        Active project name.
-        tool_registry:  Registry of available tool wrappers.
-        tool_executor:  Configured executor (carries base_path and project_name).
-        event_bus:      Internal pipeline EventBus for ToolCompleted dispatch.
-        prompt:         UserPromptPort adapter (REPL or API).
-        run_id:         Optional scan_runs.id; required for persistence + lock.
-        factory:        Optional ToolWrapperFactory; defaults to a fresh one.
-        event_sink:     Optional ScanEventSink for SSE event emission.
-                        Defaults to a no-op sink (REPL behavior unchanged).
-        cancel_token:   Optional cooperative cancellation flag.
-                        Defaults to a process-shared token that is never set.
-        run_repository: Optional ``RunRepositoryPort`` for persisting status,
-                        timestamps, and findings_count. None disables
-                        persistence (REPL legacy path).
-        project_id:     Optional ``scan_runs.project_id`` carried into event
-                        payloads and into the Phase 8.10 chat-session
-                        sealing call after a successful run. Both REPL
-                        and web entry points pass it when the project
-                        registry resolves the active project; only legacy
-                        callers that bypass the registry leave it ``None``.
-    """
+    """Coordinate multi-tool scans across segments and repositories."""
 
     def __init__(
         self,
@@ -92,6 +69,7 @@ class ScanOrchestrator:
         run_repository: RunRepositoryPort | None = None,
         project_id: int | None = None,
         chat_session_repo: ChatSessionRepositoryPort | None = None,
+        display: DisplayProtocol | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -99,7 +77,7 @@ class ScanOrchestrator:
         self._event_bus = event_bus
         self._prompt = prompt
         self._run_id = run_id
-        self.display = OrchestratorDisplay()
+        self.display: DisplayProtocol = display or NullDisplay()
         self._factory = factory or ToolWrapperFactory()
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
         self._cancel_token: CancellationToken = cancel_token or no_op_token()
@@ -115,10 +93,6 @@ class ScanOrchestrator:
 
         self._config = ConfigManager(str(tool_executor.base_path))
         self._tool_config = _build_tool_execution_config(self._config)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _make_config(self, remaining_peers: int = 0) -> ScanTypeConfig:
         return ScanTypeConfig(
@@ -159,19 +133,11 @@ class ScanOrchestrator:
         except Exception:
             logger.exception("failed to persist scan_runs update; suppressing")
 
-    # ------------------------------------------------------------------
-    # Run orchestration shell
-    # ------------------------------------------------------------------
-
     def _run(self, body: Callable[[], ScanSummary]) -> ScanSummary:
-        """Wrap a scan invocation with persistence + event emission.
+        """Wrap a scan invocation with persistence and event emission.
 
-        Persistence + events are best-effort and never mask the underlying
-        scan result. Cancellation surfaces a ``ScanCancelled`` exception.
-
-        The Tier-1 ``scan`` job-slot lock is held by the caller
-        (:class:`application.tools.scan_service.ScanService`) for the
-        duration of this call; the orchestrator does not acquire it.
+        Persistence and events are best-effort and never mask the
+        underlying scan result. Cancellation surfaces a ``ScanCancelled``.
         """
         run_id = self._run_id or 0
         project_id = self._project_id
@@ -226,12 +192,11 @@ class ScanOrchestrator:
         return summary
 
     def _seal_chat_sessions(self) -> None:
-        """Run Phase 8.10 chat-session sealing + retention sweep.
+        """Seal chat sessions and run the retention sweep.
 
         Best-effort: a chat-DB hiccup must never mask a successful scan
-        result. Skipped when the caller did not supply a chat session
-        repo (legacy entry points that predate the project registry
-        wiring) or when no project_id was provided.
+        result. Skipped when no chat session repo or project_id was
+        supplied.
         """
         if self._project_id is None or self._chat_session_repo is None:
             return
@@ -246,10 +211,6 @@ class ScanOrchestrator:
             )
         except Exception:
             logger.exception("chat session sealing failed; suppressing")
-
-    # ------------------------------------------------------------------
-    # Public API: adapter shims
-    # ------------------------------------------------------------------
 
     def run_full_scan(
         self,
@@ -320,23 +281,12 @@ class ScanOrchestrator:
         domains: list[str] | None = None,
         skip_tools: set[str] | None = None,
     ) -> ScanSummary:
-        """Unified scoped-scan dispatch shared by REPL and HTTP API.
+        """Run a scoped scan, dispatching to the matching scan-type.
 
-        Mirrors the REPL's adapter-level loop semantics inside the core so
-        both adapters share one use case. Resolves ``effective_tools`` by
-        intersecting ``tool_names`` (default: all configured) with tools
-        whose domain is in ``domains`` (when given), then routes to the
-        existing scan-type strategies:
-
-        - repos given AND effective_tools given → nested loop of
-          ``ToolOnRepoScan`` over each (repo, tool) pair.
-        - repos given alone → loop of ``RepoScan`` per repo.
-        - effective_tools given alone → loop of ``ToolOnAllReposScan``
-          per tool.
-        - neither given → ``FullScan`` with ``skip_tools`` exclusion.
-
-        Emits a single ``RunStarted``/``RunCompleted`` pair around the
-        whole scoped scan via the wrapping ``_run()`` shell.
+        Resolves the effective tool list by intersecting ``tool_names``
+        (default: all configured) with tools whose domain is in
+        ``domains`` when given. Routes to nested ToolOnRepoScan, RepoScan,
+        ToolOnAllReposScan, or FullScan based on which scopes are set.
         """
         from application.rag.ingestor import get_tool_domain
 
@@ -359,7 +309,6 @@ class ScanOrchestrator:
         effective_tools: list[str] | None,
         skip_tools: set[str] | None,
     ) -> ScanSummary:
-        """Run the scoped-scan matrix and aggregate per-pair summaries."""
         if repo_names is not None and effective_tools is not None:
             summary = _empty_summary()
             total_pairs = len(repo_names) * len(effective_tools)
@@ -400,7 +349,6 @@ class ScanOrchestrator:
 
 
 def _summary_findings_count(summary: ScanSummary) -> int:
-    """Best-effort total findings extracted from a ScanSummary."""
     for attr in (
         "findings_ingested",
         "ingested_total",
@@ -420,7 +368,6 @@ def _summary_findings_count(summary: ScanSummary) -> int:
 
 
 def _empty_summary() -> ScanSummary:
-    """Zero-valued ScanSummary used as the fold seed in scoped scans."""
     return ScanSummary(
         total_tools_run=0,
         total_tools_skipped=0,
@@ -433,7 +380,6 @@ def _empty_summary() -> ScanSummary:
 
 
 def _merge_summary(running: ScanSummary, addition: ScanSummary) -> ScanSummary:
-    """Combine two ScanSummary instances; merges findings_by_tool counts."""
     merged_fbt = dict(running.findings_by_tool)
     for tool, count in addition.findings_by_tool.items():
         merged_fbt[tool] = merged_fbt.get(tool, 0) + count

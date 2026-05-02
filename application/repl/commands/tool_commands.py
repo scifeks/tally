@@ -24,12 +24,8 @@ class ToolCommands:
         self.repl = repl
         self.help_renderer = help_renderer
 
-    # ------------------------------------------------------------------
-    # Top-level dispatcher
-    # ------------------------------------------------------------------
-
     def cmd_tool(self, _cmd: str, args: list) -> None:
-        """tool [add|edit <name>|remove <name>|list] — manage tool configuration."""
+        """tool [add|edit <name>|remove <name>|list]: manage tool configuration."""
         if not args:
             self.help_renderer.render("tool")
             return
@@ -82,12 +78,9 @@ class ToolCommands:
             self.repl.console.print(f"[red]Unknown subcommand:[/red] {sub}")
             self.help_renderer.render("tool")
 
-    # ------------------------------------------------------------------
-    # Subcommands
-    # ------------------------------------------------------------------
-
     def _cmd_tool_list(self) -> None:
-        from application.tools.registry import build_tool_table, tool_registry
+        from application.repl.adapters.tool_registry_display import build_tool_table
+        from application.tools.registry import tool_registry
 
         tools = tool_registry.get_all_tools()
         if not tools:
@@ -204,10 +197,6 @@ class ToolCommands:
         self._reload_registry()
         self.repl.console.print(f"[green]Tool removed:[/green] {tool_name}")
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
     def _commands_json_path(self) -> Path:
         return Path(self.repl.base_path) / "config" / "commands.json"
 
@@ -250,10 +239,6 @@ class ToolCommands:
         }
         return local_tools, docker_tools
 
-    # ------------------------------------------------------------------
-    # Project flag helpers
-    # ------------------------------------------------------------------
-
     def _parse_project_flag(self, args: list) -> tuple[str | None, list]:
         """Extract --project[=<name>] from args. Returns (project_name, remaining).
 
@@ -282,10 +267,6 @@ class ToolCommands:
             return False
         return True
 
-    # ------------------------------------------------------------------
-    # Project-level file helpers
-    # ------------------------------------------------------------------
-
     def _project_commands_json_path(self, project_name: str) -> Path:
         return _project_paths(self.repl, project_name).commands_json
 
@@ -301,10 +282,6 @@ class ToolCommands:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
             json.dump(commands, f, indent=2)
-
-    # ------------------------------------------------------------------
-    # Project-scoped subcommands
-    # ------------------------------------------------------------------
 
     def _cmd_tool_list_project(self, project_name: str) -> None:
         from rich.table import Table
