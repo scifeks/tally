@@ -1,15 +1,17 @@
-"""Domain entries for the reports surface.
-
-``ReportRow`` and ``DraftRow`` are the row-shaped value objects returned
-by ``ReportRepositoryPort`` and ``DraftRepositoryPort``. They live in
-``domain/`` so port signatures depend on domain types rather than
-infrastructure dataclasses (Rule 7). Both are frozen and field-equivalent
-to the rows persisted in ``reports`` and ``drafts``.
-"""
+"""Row dataclasses for the reports and drafts tables."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+REPORT_STATUSES = (
+    "queued",
+    "running",
+    "done",
+    "failed",
+    "cancelling",
+    "cancelled",
+)
 
 
 @dataclass(frozen=True)
