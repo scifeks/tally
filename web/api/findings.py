@@ -18,7 +18,8 @@ from application.findings.findings_service import (
     FindingsService,
     ProjectNotFound,
 )
-from application.locking import FindingsBusy, LockQueryService
+from application.locking import FindingsBusy
+from application.rag.knowledge_base_cache import get_or_build_knowledge_base
 from domain.findings.entry import Finding
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
@@ -58,15 +59,17 @@ def _service(request: Request, project_id: int) -> FindingsService:
         raise NotFound(f"project {project_id} not found") from exc
 
 
-def _serialise_finding(finding: Finding) -> dict[str, Any]:
+def _serialise_finding(
+    finding: Finding, lock_state: tuple[bool, str | None]
+) -> dict[str, Any]:
     """Serialize a Finding for the API response.
 
     The named ``fingerprint`` column is exposed as ``id_fingerprint`` so
     it cannot collide with semgrep's scanner fingerprint stored in
     ``meta``. ``type_*`` flags written by the ChromaDB ingestor are
     stripped from ``meta`` before the response leaves the adapter.
-    ``is_locked`` and ``lock_holder`` reflect live state from the lock
-    registry.
+    Lock state is resolved by the caller via ``FindingsService`` so the
+    route does not construct ``LockQueryService`` per row.
     """
     result: dict[str, Any] = asdict(finding)
     result["meta"] = {
@@ -76,9 +79,9 @@ def _serialise_finding(finding: Finding) -> dict[str, Any]:
     result["enriched"] = 1 if result["enriched"] else 0
     result["should_report"] = 1 if result["should_report"] else 0
 
-    svc = LockQueryService()
-    result["is_locked"] = svc.is_finding_locked(finding.id)
-    result["lock_holder"] = svc.finding_lock_holder(finding.id)
+    is_locked, lock_holder = lock_state
+    result["is_locked"] = is_locked
+    result["lock_holder"] = lock_holder
     return result
 
 
@@ -239,7 +242,7 @@ async def list_findings(
     repo_name_by_id = service.repo_name_lookup()
     items: list[FindingResponse] = []
     for r in rows:
-        serial = _serialise_finding(r)
+        serial = _serialise_finding(r, service.lock_state_for(r.id))
         rid = serial.get("repo_id")
         if isinstance(rid, int):
             serial["repo_name"] = repo_name_by_id.get(rid, "")
@@ -310,7 +313,7 @@ async def get_finding(
     finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
     if finding is None:
         raise NotFound("Finding not found")
-    return _serialise_finding(finding)
+    return _serialise_finding(finding, service.lock_state_for(finding.id))
 
 
 @v1_router.get(
@@ -388,7 +391,9 @@ async def batch_patch_findings(
     for fid in result.updated:
         updated_row = await asyncio.to_thread(service.analyst.get_finding, fid)
         if updated_row is not None:
-            serialised = _serialise_finding(updated_row)
+            serialised = _serialise_finding(
+                updated_row, service.lock_state_for(updated_row.id)
+            )
             await bus.publish(
                 BusEvent(
                     event_id=new_event_id(),
@@ -459,11 +464,11 @@ async def patch_finding(
     if finding is None:
         raise NotFound("Finding not found")
 
-    serialised = _serialise_finding(finding)
-    from web.server import get_knowledge_base
-
-    knowledge_base = get_knowledge_base(
-        request.app, row.name, request.app.state.base_path
+    serialised = _serialise_finding(finding, service.lock_state_for(finding.id))
+    knowledge_base = get_or_build_knowledge_base(
+        request.app.state.knowledge_base_cache,
+        row.name,
+        request.app.state.base_path,
     )
     sync_finding_to_chroma(
         finding_id=finding_id,

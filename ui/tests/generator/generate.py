@@ -293,7 +293,7 @@ def _serialise_findings(rows: list[dict], project_id: int) -> list[dict]:
     """Run the production serializer over rows and inject project_id."""
     out: list[dict] = []
     for row in rows:
-        serial = _serialise_finding(Finding.from_row(row))
+        serial = _serialise_finding(Finding.from_row(row), (False, None))
         serial["project_id"] = project_id
         out.append(serial)
     return out

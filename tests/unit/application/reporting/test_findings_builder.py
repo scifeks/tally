@@ -18,7 +18,12 @@ from application.reporting.findings_builder import FindingsBuilder  # noqa: E402
 
 
 def _finding(**kwargs: Any) -> dict[str, Any]:
-    """Return a minimal code finding dict with optional overrides."""
+    """Return a minimal code finding dict with optional overrides.
+
+    Field shapes match ``asdict(domain.findings.entry.Finding)``: ``meta``
+    is a ``dict``, ``cwe`` is a ``list``. The reporting builder consumes
+    the assembler's output, which is always asdict-shaped.
+    """
     base: dict[str, Any] = {
         "id": 1,
         "tal_id": "TAL-001",
@@ -31,14 +36,14 @@ def _finding(**kwargs: Any) -> dict[str, Any]:
         "file": "app/auth.py",
         "rule_id": "sqli",
         "description": "SQL injection",
-        "meta": "{}",
+        "meta": {},
         "package_name": None,
         "package_version": None,
         "ecosystem": None,
         "domain": "code",
         "segment": "sast",
         "url": None,
-        "cwe": None,
+        "cwe": [],
     }
     base.update(kwargs)
     return base
@@ -114,11 +119,8 @@ class TestBuildCodeCards:
         assert "Unattributed" in html
 
     def test_sast_location_shows_file_and_line(self) -> None:
-        import json
-
-        meta = json.dumps({"line_start": 42})
         html = FindingsBuilder.build_code_cards(
-            [_finding(segment="sast", file="src/foo.py", meta=meta)]
+            [_finding(segment="sast", file="src/foo.py", meta={"line_start": 42})]
         )
         assert "src/foo.py" in html
         assert "42" in html
@@ -130,11 +132,14 @@ class TestBuildCodeCards:
         assert "config/secrets.env" in html
 
     def test_api_location_shows_method_and_url(self) -> None:
-        import json
-
-        meta = json.dumps({"method": "POST"})
         html = FindingsBuilder.build_code_cards(
-            [_finding(segment="api", url="https://example.com/login", meta=meta)]
+            [
+                _finding(
+                    segment="api",
+                    url="https://example.com/login",
+                    meta={"method": "POST"},
+                )
+            ]
         )
         assert "POST" in html
         assert "https://example.com/login" in html
@@ -161,10 +166,9 @@ class TestBuildCodeCards:
         assert "Unsafe deserialization" in html
 
     def test_html_escaping_in_title(self) -> None:
-        import json
-
-        meta = json.dumps({"title": "<script>xss</script>"})
-        html = FindingsBuilder.build_code_cards([_finding(meta=meta)])
+        html = FindingsBuilder.build_code_cards(
+            [_finding(meta={"title": "<script>xss</script>"})]
+        )
         assert "<script>" not in html
         assert "&lt;script&gt;" in html
 
@@ -213,11 +217,8 @@ class TestBuildSecretsCards:
         assert ".env" in html
 
     def test_no_line_numbers_in_output(self) -> None:
-        import json
-
-        meta = json.dumps({"line_number": 99})
         html = FindingsBuilder.build_secrets_cards(
-            [_finding(segment="secrets", file=".env", meta=meta)]
+            [_finding(segment="secrets", file=".env", meta={"line_number": 99})]
         )
         # File path present, but the line number should not appear.
         assert ".env" in html
@@ -247,27 +248,26 @@ class TestBuildComprehensiveCodeTable:
         assert "TAL-001" in html
 
     def test_owasp_name_from_meta(self) -> None:
-        import json
-
-        meta = json.dumps({"owasp_name": "Injection"})
-        html = FindingsBuilder().build_comprehensive_code_table([_finding(meta=meta)])
+        html = FindingsBuilder().build_comprehensive_code_table(
+            [_finding(meta={"owasp_name": "Injection"})]
+        )
         assert "Injection" in html
 
     def test_owasp_falls_back_to_cwe(self) -> None:
         html = FindingsBuilder().build_comprehensive_code_table(
-            [_finding(cwe='["CWE-89"]')]
+            [_finding(cwe=["CWE-89"])]
         )
         assert "CWE-89" in html
 
     def test_owasp_falls_back_to_rule_id(self) -> None:
         html = FindingsBuilder().build_comprehensive_code_table(
-            [_finding(cwe=None, rule_id="custom-rule")]
+            [_finding(cwe=[], rule_id="custom-rule")]
         )
         assert "custom-rule" in html
 
     def test_owasp_falls_back_to_unclassified(self) -> None:
         html = FindingsBuilder().build_comprehensive_code_table(
-            [_finding(cwe=None, rule_id=None, meta="{}")]
+            [_finding(cwe=[], rule_id=None, meta={})]
         )
         assert "Unclassified" in html
 

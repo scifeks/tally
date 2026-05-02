@@ -1,27 +1,28 @@
-"""Hexagonal chat application service (Phase 8.2).
+"""Chat application service.
 
-Streams an LLM response for one user turn, persisting both turns to the
-``chat_sessions`` / ``chat_messages`` tables. The service is HTTP/SSE-
-agnostic: it returns an ``AsyncIterator[str]`` of token text and emits
-domain events through a ``ChatStreamSink`` port. Phase 8.8 wires the
-output to FastAPI; this slice is responsible only for the core flow.
+Streams an LLM response for one user turn and persists both turns to
+``chat_sessions`` / ``chat_messages``. HTTP/SSE-agnostic: returns an
+``AsyncIterator[str]`` of token text and emits domain events through
+the ``ChatStreamSink`` port.
 
-Responsibilities, per the session prompt and ``decisions.md`` B7:
+Behavior:
 
-- Validate the session (404 unknown, 409 expired) before any side effect.
-- Run a fresh ``QueryEngine.search`` for retrieval on every turn (B7.3).
+- Validate the session (404 unknown, 409 expired) before any side
+  effect.
+- Run a fresh ``QueryEngine.search`` for retrieval on every turn.
 - Build ``[system + retrieval ctx] + [prior turns] + [new user]`` and
   apply the 500k-character ceiling at prompt-assembly time only;
-  stored rows are untouched (B7.2).
-- Persist the user turn before streaming begins, so a server crash mid-
-  stream leaves an orphaned user row rather than nothing (B7.7).
+  stored rows are untouched.
+- Persist the user turn before streaming begins, so a server crash
+  mid-stream leaves an orphaned user row rather than nothing.
 - Buffer the assistant response in memory and persist it on clean
   stream end via ``ChatMessageRepository.append`` (write-once).
-- On cancellation (``aclose()`` from FastAPI client disconnect or an
-  explicit cancel — Phase 8.9) the assistant row is **not** persisted;
-  ``ChatStreamCancelled`` is emitted and ``GeneratorExit`` re-raised.
-- On provider error, the assistant row is **not** persisted;
-  ``ChatStreamFailed`` is emitted and the original exception propagates.
+- On cancellation (``aclose()`` from client disconnect or an explicit
+  cancel) the assistant row is not persisted; ``ChatStreamCancelled``
+  is emitted and ``GeneratorExit`` re-raised.
+- On provider error, the assistant row is not persisted;
+  ``ChatStreamFailed`` is emitted and the original exception
+  propagates.
 """
 
 from __future__ import annotations
@@ -30,14 +31,13 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING
 
 from application.ports.chat_event_sink import (
     ChatStreamSink,
     NullChatStreamSink,
 )
 from application.ports.llm_provider import LLMProvider
-from application.ports.vector_index import VectorMatch
 from domain.pipeline.chat_events import (
     ChatStreamCancelled,
     ChatStreamCompleted,
@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from application.ports.chat_message_repository import (
         ChatMessageRepositoryPort,
     )
+    from application.ports.chat_retriever import ChatRetriever
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
     )
@@ -60,12 +61,12 @@ logger = logging.getLogger(__name__)
 
 PROMPT_CHAR_CEILING = 500_000
 """Maximum total ``content`` characters across the assembled message
-list (decisions.md B7.2). Stored rows are not pruned — only the
-prompt sent to the provider is trimmed."""
+list. Stored rows are not pruned; only the prompt sent to the provider
+is trimmed."""
 
 RETRIEVAL_N_RESULTS = 20
-"""Per-turn ChromaDB top-N for chat retrieval. Matches the existing
-REPL ``QueryEngine.chat`` default (``_DEFAULT_N_RESULTS``)."""
+"""Per-turn ChromaDB top-N for chat retrieval. Matches the REPL
+``QueryEngine.chat`` default."""
 
 
 _SYSTEM_PROMPT_TEMPLATE = (
@@ -96,23 +97,6 @@ class ChatSessionExpired(Exception):
     """The session has been sealed (expired_at is set) and is read-only."""
 
 
-class ChatRetriever(Protocol):
-    """Subset of ``QueryEngine`` used by the chat service.
-
-    Lets tests inject a fake retriever without standing up a real
-    ChromaDB or knowledge base. Production callers pass a regular
-    ``application.rag.query.QueryEngine`` — its real ``search`` is
-    structurally compatible with this Protocol.
-    """
-
-    def search(
-        self,
-        raw_input: str = "",
-        n_results: int = 20,
-        query: Any = None,
-    ) -> list[VectorMatch]: ...
-
-
 @dataclass(frozen=True)
 class ChatRequest:
     session_id: int
@@ -139,7 +123,7 @@ async def stream_chat(
     standard ``asyncio`` task cancellation: when the consumer's task is
     cancelled, Python invokes ``aclose()`` on this generator and the
     ``finally`` path emits ``ChatStreamCancelled`` without persisting
-    the assistant turn (decisions.md B7.7).
+    the assistant turn.
     """
     sink: ChatStreamSink = event_sink or NullChatStreamSink()
 
@@ -229,8 +213,8 @@ async def _stream_tokens(
     except (GeneratorExit, asyncio.CancelledError):
         # Both consumer-driven aclose() (GeneratorExit) and task-level
         # cancel() (CancelledError) end the stream without persisting
-        # the assistant turn (decisions.md B7.7). Phase 8.9's cancel
-        # endpoint relies on the CancelledError branch.
+        # the assistant turn. The cancel endpoint relies on the
+        # CancelledError branch.
         sink.emit(
             ChatStreamCancelled(
                 session_id=request.session_id,
@@ -283,7 +267,7 @@ def _retrieve_context(retriever: ChatRetriever, user_message: str) -> str:
     """Run per-turn retrieval; return formatted context lines or ''.
 
     Retrieval errors are logged and treated as "no context" rather than
-    failing the chat — the model can still answer from the conversation
+    failing the chat: the model can still answer from the conversation
     state. Mirrors the defensive try/except in ``draft_orchestrator``.
     """
     try:
@@ -336,8 +320,9 @@ def _apply_char_ceiling(
     """Drop oldest prior turns until total content length is <= *ceiling*.
 
     The system message (index 0) and the final user message (last
-    index) are preserved unconditionally. Stored DB rows are untouched —
-    only the in-memory list passed to the provider is trimmed.
+    index) are preserved unconditionally. Stored DB rows are
+    untouched; only the in-memory list passed to the provider is
+    trimmed.
     """
     if len(messages) <= 2:
         return messages

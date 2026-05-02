@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Self
 
 from application.findings.analyst_service import FindingAnalystService
+from application.locking import LockQueryService
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.finding_history import (
@@ -44,6 +45,7 @@ class FindingsService:
         history_repo: FindingHistoryRepositoryPort,
         project_repo: ProjectRepoRepositoryPort,
         analyst: FindingAnalystService,
+        lock_query: LockQueryService,
         *,
         findings_db_exists: bool,
     ) -> None:
@@ -51,6 +53,7 @@ class FindingsService:
         self._history_repo = history_repo
         self._project_repo = project_repo
         self._analyst = analyst
+        self._lock_query = lock_query
         self._findings_db_exists = findings_db_exists
 
     @classmethod
@@ -76,6 +79,7 @@ class FindingsService:
             history_repo=history_repo,
             project_repo=project_repo,
             analyst=analyst,
+            lock_query=LockQueryService(),
             findings_db_exists=findings_db_exists,
         )
 
@@ -109,6 +113,13 @@ class FindingsService:
             }
         except Exception:
             return {}
+
+    def lock_state_for(self, finding_id: int) -> tuple[bool, str | None]:
+        """Return ``(is_locked, lock_holder)`` for a single finding."""
+        return (
+            self._lock_query.is_finding_locked(finding_id),
+            self._lock_query.finding_lock_holder(finding_id),
+        )
 
     def count_findings(self) -> int:
         """Total count of rows in the findings table.

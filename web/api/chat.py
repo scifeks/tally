@@ -34,12 +34,11 @@ from application.chat.service import (
     stream_chat,
 )
 from application.chat.session_service import ChatSessionService, ProjectNotFound
-from application.rag.query import QueryEngine
+from application.chat.stream_composer import ChatStreamComposer, RagUnavailable
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from infrastructure.llm.factory import get_llm_provider
 from web.adapters.chat_run_registry import get_chat_run_registry
 from web.adapters.event_bus_chat_sink import EventBusChatSink
 from web.api._errors import Conflict, NotFound, ValidationError
@@ -245,7 +244,7 @@ async def _drive_chat_stream(
     chat_request: ChatRequest,
     session_repo: Any,
     message_repo: Any,
-    query_engine: QueryEngine,
+    query_engine: Any,
     provider: Any,
     model_name: str,
     sink: EventBusChatSink,
@@ -303,9 +302,7 @@ async def send_chat_message(
     - 409 ``CHAT_STREAM_ALREADY_RUNNING``: another stream for this
       session is in flight.
     """
-    row = _resolve_project(request, project_id)
-    project_name: str = row.name
-    base_path: str = request.app.state.base_path
+    _resolve_project(request, project_id)
 
     service = _service(request, project_id)
     try:
@@ -329,23 +326,15 @@ async def send_chat_message(
             details={"session_id": session_id},
         )
 
-    # Local import: web.server imports this module's v1_router during
-    # app construction, so a top-level import would be circular.
-    from web.server import get_knowledge_base
-
-    knowledge_base = await asyncio.to_thread(
-        get_knowledge_base, request.app, project_name, base_path
-    )
-    if knowledge_base is None:
-        raise ValidationError(
-            "RAG engine unavailable for this project; "
-            "ChromaDB or embedding provider is not reachable",
-            details={"project_id": project_id, "code": "RAG_UNAVAILABLE"},
+    try:
+        composer = await asyncio.to_thread(
+            ChatStreamComposer.from_request, request, project_id
         )
-    query_engine = QueryEngine(knowledge_base)
-
-    provider = await asyncio.to_thread(get_llm_provider, "chat", base_path)
-    model_name = provider.model
+    except RagUnavailable as exc:
+        raise ValidationError(
+            str(exc),
+            details={"project_id": project_id, "code": "RAG_UNAVAILABLE"},
+        ) from exc
 
     user_message_id = await asyncio.to_thread(
         service.append_user_message, session_id, body.content
@@ -374,9 +363,9 @@ async def send_chat_message(
             chat_request=chat_request,
             session_repo=service.session_repo,
             message_repo=service.message_repo,
-            query_engine=query_engine,
-            provider=provider,
-            model_name=model_name,
+            query_engine=composer.query_engine,
+            provider=composer.provider,
+            model_name=composer.model_name,
             sink=sink,
         ),
         name=f"chat-{session_id}",

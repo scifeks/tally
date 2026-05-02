@@ -27,13 +27,15 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    def create_batches(self, run_id: int, tool: str, repo: str, segment: str) -> int:
-        """Fetch active findings, compute batches, and persist to triage_batches.
+    def fetch_active_findings_for_batching(
+        self, tool: str, repo: str, segment: str
+    ) -> list[dict[str, Any]]:
+        """Return the active findings for *tool*/*repo*/*segment* in batching order.
 
-        Returns the number of batches written.
+        Only ``api`` and ``sast`` segments produce rows; other segments
+        return an empty list. Row shape varies by segment to surface the
+        fields the batching algorithm uses.
         """
-        from application.triage.batching import compute_batches
-
         params = (segment, tool, repo)
         if segment == "api":
             sql = """
@@ -74,13 +76,19 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                     CAST(json_extract(f.meta, '$.line_start') AS INTEGER)
             """
         else:
-            return 0
+            return []
 
         with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
-        findings = [dict(row) for row in rows]
+        return [dict(row) for row in rows]
 
-        batches = compute_batches(findings)
+    def create_batches(self, run_id: int, batches: list[list[dict[str, Any]]]) -> int:
+        """Persist pre-built triage *batches* for *run_id*.
+
+        Each batch is a list of finding dicts (as produced by
+        ``application.triage.batching.compute_batches``). Returns the
+        number of rows inserted.
+        """
         if not batches:
             return 0
 

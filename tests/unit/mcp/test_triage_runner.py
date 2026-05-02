@@ -135,14 +135,18 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
         ("semgrep", "repo1", "sast"),
         ("zap", "repo1", "api"),
     ]
+    store.fetch_active_findings_for_batching.return_value = []
     store.create_batches.return_value = 2
 
     run_id, total = runner.batch()
 
+    assert store.fetch_active_findings_for_batching.call_count == 2
+    store.fetch_active_findings_for_batching.assert_any_call("semgrep", "repo1", "sast")
+    store.fetch_active_findings_for_batching.assert_any_call("zap", "repo1", "api")
     assert store.create_batches.call_count == 2
+    for call in store.create_batches.call_args_list:
+        assert call.args[0] == run_id
     assert total == 4  # 2 + 2
-    store.create_batches.assert_any_call(run_id, "semgrep", "repo1", "sast")
-    store.create_batches.assert_any_call(run_id, "zap", "repo1", "api")
 
 
 def test_batch_passes_skip_tools_to_store(tmp_path: Path) -> None:
