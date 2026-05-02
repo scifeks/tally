@@ -1,16 +1,18 @@
-"""Domain entries for the scans surface.
-
-``ScanRunRow`` and ``ToolRunRow`` are the row-shaped value objects
-returned by ``RunRepositoryPort``. They live in ``domain/`` so port
-signatures depend on domain types rather than infrastructure dataclasses
-(Rule 7). The dataclasses are frozen and field-equivalent to the rows
-persisted in ``scan_runs`` and ``run_tools``.
-"""
+"""Domain entries for the scans surface."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
+SCAN_RUN_STATUSES = (
+    "queued",
+    "running",
+    "done",
+    "failed",
+    "cancelling",
+    "cancelled",
+)
 
 
 @dataclass(frozen=True)

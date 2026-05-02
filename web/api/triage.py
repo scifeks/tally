@@ -29,15 +29,12 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from application.locking import JobBusy, get_registry
-from core.project_paths import ProjectPaths
+from application.triage.triage_service import ProjectNotFound, TriageService
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.triage import TriageBatchRepository
 from web.adapters.triage_run_registry import get_triage_run_registry
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
@@ -63,10 +60,12 @@ v1_router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-def _make_repos(row: dict) -> tuple[RunRepository, TriageBatchRepository]:
-    paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    return RunRepository(factory), TriageBatchRepository(factory)
+def _service(request: Request, project_id: int) -> TriageService:
+    """Build a TriageService for *project_id* or raise 404."""
+    try:
+        return TriageService.from_request(request, project_id)
+    except ProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
 
 def _segment_for(batch: TriageBatchRow) -> str | None:
@@ -125,8 +124,8 @@ async def list_triage_runs(
     limit: int = Query(default=20, ge=1, le=100),
 ) -> TriagesListResponse:
     """Paginated triage history: scan_run_ids that have triage_batches."""
-    row = _resolve_project(request, project_id)
-    _, triage_repo = _make_repos(row)
+    service = _service(request, project_id)
+    triage_repo = service.triage_repo
     run_ids, total = await asyncio.to_thread(
         triage_repo.list_run_ids_for_project,
         offset=offset,
@@ -161,7 +160,7 @@ async def get_active_triage(
     ``summarize_for_run``; when the worker has registered but no batches
     have been written yet, a synthetic ``queued`` placeholder is returned.
     """
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
     handles = get_triage_run_registry().list_for_project(project_id)
     if not handles:
         return None
@@ -171,7 +170,7 @@ async def get_active_triage(
             project_id,
         )
     handle = handles[-1]
-    _, triage_repo = _make_repos(row)
+    triage_repo = service.triage_repo
     summary = await asyncio.to_thread(triage_repo.summarize_for_run, handle.scan_run_id)
     if summary is None:
         return TriageRunSummary(
@@ -198,8 +197,8 @@ async def get_latest_triage(
 
     404 when the project has zero triage history.
     """
-    row = _resolve_project(request, project_id)
-    _, triage_repo = _make_repos(row)
+    service = _service(request, project_id)
+    triage_repo = service.triage_repo
     run_ids, _total = await asyncio.to_thread(
         triage_repo.list_run_ids_for_project,
         offset=0,
@@ -230,11 +229,11 @@ async def triage_events(
     triage state so the SPA can sync without waiting for the next live
     tick.
     """
-    _resolve_project(request, project_id)
+    service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("triage")
 
-    snapshot_event = await _build_snapshot(request, project_id, scan_run_id)
+    snapshot_event = await _build_snapshot(service, project_id, scan_run_id)
 
     async def stream() -> AsyncIterator[str]:
         try:
@@ -295,8 +294,8 @@ async def start_triage(
     project_name: str = row["name"]
     base_path: str = request.app.state.base_path
 
-    run_repo, triage_repo = _make_repos(row)
-    scan_run_id = await asyncio.to_thread(run_repo.latest_run_id)
+    service = _service(request, project_id)
+    scan_run_id = await asyncio.to_thread(service.run_repo.latest_run_id)
     if scan_run_id is None:
         raise NotFound(
             f"project {project_name!r} has no scan runs; run a scan before triage",
@@ -333,7 +332,9 @@ async def start_triage(
             pass
         raise
 
-    summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+    summary = await asyncio.to_thread(
+        service.triage_repo.summarize_for_run, scan_run_id
+    )
     if summary is None:
         # No batches yet; return a queued placeholder.
         return TriageRunSummary(
@@ -364,14 +365,14 @@ async def cancel_triage(
     request: Request,
 ) -> TriageCancelResponse:
     """Request cancellation of an in-progress triage."""
-    _resolve_project(request, project_id)
+    service = _service(request, project_id)
     handle = get_triage_run_registry().get(scan_run_id)
     if handle is None:
         # Distinguish "never existed" from "already finished" by
         # checking persisted state.
-        row = _resolve_project(request, project_id)
-        _, triage_repo = _make_repos(row)
-        summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+        summary = await asyncio.to_thread(
+            service.triage_repo.summarize_for_run, scan_run_id
+        )
         if summary is None:
             raise NotFound(
                 f"no triage runs found for scan_run_id {scan_run_id}",
@@ -422,8 +423,10 @@ async def resume_triage(
     project_name: str = row["name"]
     base_path: str = request.app.state.base_path
 
-    _, triage_repo = _make_repos(row)
-    summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+    service = _service(request, project_id)
+    summary = await asyncio.to_thread(
+        service.triage_repo.summarize_for_run, scan_run_id
+    )
     if summary is None:
         raise NotFound(
             f"no triage runs found for scan_run_id {scan_run_id}",
@@ -466,7 +469,9 @@ async def resume_triage(
             pass
         raise
 
-    refreshed = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+    refreshed = await asyncio.to_thread(
+        service.triage_repo.summarize_for_run, scan_run_id
+    )
     if refreshed is None:  # pragma: no cover - defensive (we already checked)
         return TriageRunSummary(
             scan_run_id=scan_run_id,
@@ -490,8 +495,8 @@ async def get_triage(
     request: Request,
 ) -> TriageDetailResponse:
     """Full triage detail with batches."""
-    row = _resolve_project(request, project_id)
-    _, triage_repo = _make_repos(row)
+    service = _service(request, project_id)
+    triage_repo = service.triage_repo
     summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
     if summary is None:
         raise NotFound(
@@ -516,7 +521,7 @@ async def get_triage(
 
 
 async def _build_snapshot(
-    request: Request,
+    service: TriageService,
     project_id: int,
     scan_run_id: int | None,
 ) -> BusEvent:
@@ -526,8 +531,7 @@ async def _build_snapshot(
         "scan_run_id": scan_run_id,
     }
     if scan_run_id is not None:
-        row = _resolve_project(request, project_id)
-        _, triage_repo = _make_repos(row)
+        triage_repo = service.triage_repo
         summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
         if summary is not None:
             batches = await asyncio.to_thread(triage_repo.list_for_run, scan_run_id)

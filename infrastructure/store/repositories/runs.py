@@ -7,20 +7,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.ports.run_repository import RunRepositoryPort
-from domain.scans.entry import ScanRunRow, ToolRunRow
+from domain.scans.entry import SCAN_RUN_STATUSES, ScanRunRow, ToolRunRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
-
-
-SCAN_RUN_STATUSES = (
-    "queued",
-    "running",
-    "done",
-    "failed",
-    "cancelling",
-    "cancelled",
-)
 
 
 class RunRepository(RunRepositoryPort):
