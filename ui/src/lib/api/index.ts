@@ -147,3 +147,15 @@ export {
   useSaveToolOverride,
   useDeleteToolOverride,
 } from './useConfig'
+
+// Saved scans (CLIENT-SIDE MOCK — no backend yet)
+export { useSavedScans, useSaveScan, useDeleteSavedScan } from './useSavedScans'
+
+// Tool argument profiles (CLIENT-SIDE MOCK — no backend yet)
+export {
+  useToolArgProfile,
+  useToolArgProfileList,
+  useSaveToolArgProfile,
+  useDeleteToolArgProfile,
+} from './useToolArgProfiles'
+export type { ToolArgProfile } from './useToolArgProfiles'

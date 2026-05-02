@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ToolOverridesSection } from '@/pages/Config/ToolOverridesSection'
 import type { ToolCatalogEntry, ToolOverrideConfig } from '@/lib/types'
 
@@ -22,15 +23,19 @@ const overrides: ToolOverrideConfig[] = [
 function renderSection(
   props: Partial<React.ComponentProps<typeof ToolOverridesSection>> = {}
 ) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <ToolOverridesSection
-      catalog={catalog}
-      overrides={overrides}
-      onSave={vi.fn()}
-      onDelete={vi.fn()}
-      isSaving={false}
-      {...props}
-    />
+    <QueryClientProvider client={qc}>
+      <ToolOverridesSection
+        catalog={catalog}
+        overrides={overrides}
+        projectId={1}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        isSaving={false}
+        {...props}
+      />
+    </QueryClientProvider>
   )
 }
 

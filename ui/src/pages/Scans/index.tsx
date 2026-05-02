@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { Play, Square, RotateCcw, Settings2, Terminal, Check } from 'lucide-react'
+import { Play, Square, RotateCcw, Settings2, Terminal, Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import { useUI } from '@/lib/store'
@@ -9,12 +9,17 @@ import {
   useProjectScanConfig,
   useStartScan,
   useCancelScan,
+  useSavedScans,
+  useSaveScan,
+  useDeleteSavedScan,
+  useToolArgProfileList,
 } from '@/lib/api'
 import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
 import type { Segment, ScanLogEvent, ScanRunStatus, ScanOptions } from '@/lib/types'
 import { RadarSweep } from './RadarSweep'
 import { LogRow } from './LogRow'
 import { HistoryTable } from './HistoryTable'
+import { SavedScansTab } from './SavedScansTab'
 import { ScanMutationErrorModal } from '@/components/ScanMutationErrorModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
@@ -72,7 +77,36 @@ export default function Scans() {
     setSelectedTools(new Set())
     setSkipTools(new Set())
     setSkipEnrichment(false)
+    setSelectedSavedScanId(null)
   }, [activeProjectId])
+
+  // Saved scans (CLIENT-SIDE MOCK — see useSavedScans).
+  const { data: savedScans = [] } = useSavedScans(projectIdNum)
+  const { data: toolArgProfiles = [] } = useToolArgProfileList(projectIdNum)
+  const saveScan = useSaveScan()
+  const deleteSavedScan = useDeleteSavedScan()
+
+  // Currently-staged saved scan (UI surface only — does not influence the
+  // real Start Scan flow, which still posts ad-hoc scan options).
+  const [selectedSavedScanId, setSelectedSavedScanId] = useState<string | null>(null)
+  const selectedSavedScan = useMemo(
+    () => savedScans.find(s => s.id === selectedSavedScanId) ?? null,
+    [savedScans, selectedSavedScanId]
+  )
+
+  // Split-button dropdown state for picking a saved scan.
+  const [showScanDropdown, setShowScanDropdown] = useState(false)
+  const scanDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (scanDropdownRef.current && !scanDropdownRef.current.contains(e.target as Node)) {
+        setShowScanDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   // Tool ↔ domain compatibility. Selecting domains restricts the tools list
   // to those whose `segment` is in the selected set; with no domains chosen,
@@ -124,7 +158,7 @@ export default function Scans() {
   const runIdRef = useRef<number | null>(null)
   runIdRef.current = runId
 
-  const [activeTab, setActiveTab] = useState<'live' | 'history'>('live')
+  const [activeTab, setActiveTab] = useState<'live' | 'history' | 'saved'>('live')
 
   const stopElapsedTimer = useCallback(() => {
     if (timerRef.current) {
@@ -238,6 +272,7 @@ export default function Scans() {
     setLogs([])
     setEnrichmentProgress(null)
     setElapsedSec(0)
+    setSelectedSavedScanId(null)
   }, [])
 
   // Auto-scroll log
@@ -303,6 +338,9 @@ export default function Scans() {
             <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
               <span className="text-accent">[</span> STATUS <span className="text-accent">]</span>
             </span>
+            {selectedSavedScan && runStatus === 'idle' && (
+              <span className="text-xs text-high font-bold">{selectedSavedScan.name}</span>
+            )}
             <span
               className={cn(
                 'text-sm font-bold uppercase tracking-wider',
@@ -321,18 +359,65 @@ export default function Scans() {
                 elapsed: {formatElapsed(elapsedSec)}
               </span>
             )}
+            {selectedSavedScan && runStatus === 'idle' && (
+              <button
+                onClick={() => setSelectedSavedScanId(null)}
+                className="text-[10px] text-dim hover:text-muted-foreground"
+              >
+                (clear)
+              </button>
+            )}
           </div>
 
           {/* Buttons */}
           <div className="flex items-center gap-3">
             {canStart && (
-              <button
-                onClick={startScan}
-                className="flex items-center gap-2 px-4 h-9 bg-accent text-background font-bold text-xs uppercase tracking-wider hover:bg-accent/80 transition-colors"
-              >
-                <Play className="h-4 w-4" />
-                Start Scan
-              </button>
+              <div ref={scanDropdownRef} className="relative flex">
+                <button
+                  onClick={startScan}
+                  className="flex items-center gap-2 px-4 h-9 bg-accent text-background font-bold text-xs uppercase tracking-wider hover:bg-accent/80 transition-colors"
+                >
+                  <Play className="h-4 w-4" />
+                  Start Scan
+                </button>
+                {savedScans.length > 0 && (
+                  <button
+                    onClick={() => setShowScanDropdown(s => !s)}
+                    aria-label="pick a saved scan"
+                    className="flex items-center px-2 h-9 bg-accent text-background border-l border-background/30 hover:bg-accent/80 transition-colors"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                )}
+                {showScanDropdown && savedScans.length > 0 && (
+                  <div className="absolute top-full left-0 mt-1 w-64 border border-border bg-background z-50 shadow-lg">
+                    <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-dim border-b border-border">
+                      [ saved scans ]
+                    </div>
+                    {savedScans.map(scan => (
+                      <button
+                        key={scan.id}
+                        onClick={() => {
+                          setSelectedSavedScanId(scan.id)
+                          setShowScanDropdown(false)
+                        }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0',
+                          selectedSavedScanId === scan.id && 'bg-accent/20 text-accent'
+                        )}
+                      >
+                        <div className="font-bold">{scan.name}</div>
+                        <div className="text-[10px] text-dim">
+                          {scan.toolIds.length} tools &middot;{' '}
+                          {scan.segments.length > 0
+                            ? scan.segments.map(s => SEGMENT_LABEL[s]).join(', ')
+                            : 'all domains'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {canStart && (
               <button
@@ -648,9 +733,9 @@ export default function Scans() {
         </div>
       )}
 
-      {/* Tabs: Live / History */}
+      {/* Tabs: Live / History / Saved Scans */}
       <div className="flex items-stretch border-b border-border shrink-0">
-        {(['live', 'history'] as const).map(tab => (
+        {(['live', 'history', 'saved'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -661,13 +746,13 @@ export default function Scans() {
                 : 'text-muted-foreground border-transparent hover:text-foreground'
             )}
           >
-            {tab === 'live' ? 'Live Log' : 'History'}
+            {tab === 'live' ? 'Live Log' : tab === 'history' ? 'History' : 'Saved Scans'}
           </button>
         ))}
       </div>
 
       {/* Content area */}
-      {activeTab === 'live' ? (
+      {activeTab === 'live' && (
         <Panel
           title="scan log"
           className="flex-1 min-h-[400px]"
@@ -706,10 +791,34 @@ export default function Scans() {
             </div>
           )}
         </Panel>
-      ) : (
+      )}
+
+      {activeTab === 'history' && (
         <Panel title="scan history" className="flex-1 min-h-[400px]" bodyClassName="flex flex-col">
           <HistoryTable projectId={projectIdNum} />
         </Panel>
+      )}
+
+      {activeTab === 'saved' && (
+        <SavedScansTab
+          projectId={projectIdNum}
+          savedScans={savedScans}
+          configuredRepos={configuredRepos}
+          configuredTools={configuredTools}
+          toolArgProfiles={toolArgProfiles}
+          configuredSegments={configuredDomains}
+          onSave={(scan, isNew) => saveScan.mutate({ scan, isNew })}
+          onDelete={scanId => deleteSavedScan.mutate({ projectId: projectIdNum, scanId })}
+          onSelect={scanId => {
+            // CLIENT-SIDE MOCK: "Run This" stages the saved scan in the
+            // status bar; it does NOT trigger a real scan run. The plain
+            // Start Scan button continues to use ad-hoc options against
+            // the real backend.
+            setSelectedSavedScanId(scanId)
+            setActiveTab('live')
+          }}
+          isSaving={saveScan.isPending}
+        />
       )}
     </div>
   )

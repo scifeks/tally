@@ -1,21 +1,32 @@
-import { useState, useEffect } from 'react'
-import { Wrench, ChevronDown, Trash2, Save } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Wrench, ChevronDown, ChevronRight, FileText, Plus, Trash2, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
-import type { ToolOverrideConfig, ToolCatalogEntry, ToolType, ToolLocationMode } from '@/lib/types'
+import { useToolArgProfile, useSaveToolArgProfile } from '@/lib/api'
+import type {
+  ArgsMode,
+  ArgumentTemplate,
+  ToolOverrideConfig,
+  ToolCatalogEntry,
+  ToolType,
+  ToolLocationMode,
+} from '@/lib/types'
 import { SectionHeader } from './shared'
+import { ArgumentTemplateEditor } from './ArgumentTemplateEditor'
 
 // ─── Tool Overrides Section ───────────────────────────────────────────────────
 
 export function ToolOverridesSection({
   catalog,
   overrides,
+  projectId,
   onSave,
   onDelete,
   isSaving,
 }: {
   catalog: ToolCatalogEntry[]
   overrides: ToolOverrideConfig[]
+  projectId: number
   onSave: (override: ToolOverrideConfig, isNew: boolean) => void
   onDelete: (toolId: string) => void
   isSaving: boolean
@@ -23,6 +34,17 @@ export function ToolOverridesSection({
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<ToolOverrideConfig>>({})
   const [_isDirty, setIsDirty] = useState(false)
+
+  // Argument profile state (CLIENT-SIDE MOCK — see useToolArgProfiles).
+  // Stored separately from `form` so the real ToolOverrideConfig save flow
+  // is unaffected.
+  const [argsMode, setArgsMode] = useState<ArgsMode>('stock')
+  const [templates, setTemplates] = useState<ArgumentTemplate[]>([])
+  const [templatesExpanded, setTemplatesExpanded] = useState(false)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
+
+  const argProfileQuery = useToolArgProfile(projectId, selectedToolId)
+  const saveArgProfile = useSaveToolArgProfile()
 
   const selectedTool = catalog.find(t => t.id === selectedToolId)
   const existingOverride = overrides.find(o => o.toolId === selectedToolId)
@@ -44,8 +66,21 @@ export function ToolOverridesSection({
         })
       }
       setIsDirty(false)
+      setTemplatesExpanded(false)
+      setEditingTemplateId(null)
     }
   }, [selectedToolId, overrides, catalog])
+
+  // Sync arg-profile state from the mock store whenever the query resolves.
+  useEffect(() => {
+    if (selectedToolId && argProfileQuery.data) {
+      setArgsMode(argProfileQuery.data.argsMode)
+      setTemplates(argProfileQuery.data.argumentTemplates)
+    } else if (selectedToolId) {
+      setArgsMode('stock')
+      setTemplates([])
+    }
+  }, [selectedToolId, argProfileQuery.data])
 
   const updateField = <K extends keyof ToolOverrideConfig>(
     field: K,
@@ -58,6 +93,11 @@ export function ToolOverridesSection({
   const handleSave = () => {
     if (!selectedToolId) return
     onSave(form as ToolOverrideConfig, !!isNew)
+    saveArgProfile.mutate({
+      projectId,
+      toolId: selectedToolId,
+      profile: { argsMode, argumentTemplates: templates },
+    })
     setIsDirty(false)
   }
 
@@ -69,6 +109,29 @@ export function ToolOverridesSection({
       }
     }
   }
+
+  const addTemplate = useCallback(() => {
+    const newTemplate: ArgumentTemplate = {
+      id: `tmpl-${Date.now()}`,
+      name: '',
+      arguments: [{ id: `arg-${Date.now()}`, flag: '', valueType: 'none' }],
+    }
+    setTemplates(prev => [...prev, newTemplate])
+    setEditingTemplateId(newTemplate.id)
+    setTemplatesExpanded(true)
+    setIsDirty(true)
+  }, [])
+
+  const updateTemplate = useCallback((templateId: string, updates: Partial<ArgumentTemplate>) => {
+    setTemplates(prev => prev.map(t => (t.id === templateId ? { ...t, ...updates } : t)))
+    setIsDirty(true)
+  }, [])
+
+  const deleteTemplate = useCallback((templateId: string) => {
+    setTemplates(prev => prev.filter(t => t.id !== templateId))
+    setEditingTemplateId(prev => (prev === templateId ? null : prev))
+    setIsDirty(true)
+  }, [])
 
   const canSelectDocker = selectedTool?.supportsDocker ?? true
 
@@ -144,62 +207,95 @@ export function ToolOverridesSection({
             )}
           </div>
 
-          {/* Type */}
-          <div>
-            <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-              Type
+          {/* Type / Location / Args - all on one row */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Type */}
+            <div>
+              <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                Type
+              </div>
+              <div className="flex gap-1">
+                {(['repo', 'api'] as ToolType[]).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => updateField('type', type)}
+                    className={cn(
+                      'flex-1 h-8 text-[10px] uppercase tracking-wider border transition-colors',
+                      form.type === type
+                        ? 'border-accent bg-accent/20 text-accent'
+                        : 'border-border text-muted-foreground hover:border-muted-foreground'
+                    )}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2">
-              {(['repo', 'api'] as ToolType[]).map(type => (
-                <button
-                  key={type}
-                  onClick={() => updateField('type', type)}
-                  className={cn(
-                    'px-4 h-8 text-[10px] uppercase tracking-wider border transition-colors',
-                    form.type === type
-                      ? 'border-accent bg-accent/20 text-accent'
-                      : 'border-border text-muted-foreground hover:border-muted-foreground'
-                  )}
-                >
-                  {type}
-                </button>
-              ))}
+
+            {/* Location */}
+            <div>
+              <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                Location
+              </div>
+              <div className="flex gap-1">
+                {(['local', 'docker'] as ToolLocationMode[]).map(loc => {
+                  const disabled = loc === 'docker' && !canSelectDocker
+                  return (
+                    <button
+                      key={loc}
+                      onClick={() => updateField('location', loc)}
+                      disabled={disabled}
+                      className={cn(
+                        'flex-1 h-8 text-[10px] uppercase tracking-wider border transition-colors',
+                        form.location === loc
+                          ? 'border-accent bg-accent/20 text-accent'
+                          : disabled
+                            ? 'border-border/50 text-dim cursor-not-allowed'
+                            : 'border-border text-muted-foreground hover:border-muted-foreground'
+                      )}
+                    >
+                      {loc}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Args */}
+            <div>
+              <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                Args
+              </div>
+              <div className="flex gap-1">
+                {(['stock', 'custom'] as ArgsMode[]).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      setArgsMode(mode)
+                      setIsDirty(true)
+                      if (mode === 'custom' && templates.length === 0) {
+                        setTemplatesExpanded(true)
+                      }
+                    }}
+                    className={cn(
+                      'flex-1 h-8 text-[10px] uppercase tracking-wider border transition-colors',
+                      argsMode === mode
+                        ? 'border-accent bg-accent/20 text-accent'
+                        : 'border-border text-muted-foreground hover:border-muted-foreground'
+                    )}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Location */}
-          <div>
-            <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-              Location
+          {!canSelectDocker && (
+            <div className="text-[9px] text-dim">
+              {selectedTool.name} does not support Docker mode
             </div>
-            <div className="flex gap-2">
-              {(['local', 'docker'] as ToolLocationMode[]).map(loc => {
-                const disabled = loc === 'docker' && !canSelectDocker
-                return (
-                  <button
-                    key={loc}
-                    onClick={() => updateField('location', loc)}
-                    disabled={disabled}
-                    className={cn(
-                      'px-4 h-8 text-[10px] uppercase tracking-wider border transition-colors',
-                      form.location === loc
-                        ? 'border-accent bg-accent/20 text-accent'
-                        : disabled
-                          ? 'border-border/50 text-dim cursor-not-allowed'
-                          : 'border-border text-muted-foreground hover:border-muted-foreground'
-                    )}
-                  >
-                    {loc}
-                  </button>
-                )
-              })}
-            </div>
-            {!canSelectDocker && (
-              <div className="text-[9px] text-dim mt-1">
-                {selectedTool.name} does not support Docker mode
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Path fields */}
           {form.location === 'local' ? (
@@ -262,6 +358,87 @@ export function ToolOverridesSection({
                   className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Argument Templates (only when argsMode = custom) */}
+          {argsMode === 'custom' && (
+            <div className="border border-border">
+              <button
+                onClick={() => setTemplatesExpanded(!templatesExpanded)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {templatesExpanded ? (
+                    <ChevronDown className="h-3 w-3 text-dim" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-dim" />
+                  )}
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Argument Templates
+                  </span>
+                </div>
+                <span className="text-[10px] text-dim">
+                  {templates.length === 0
+                    ? 'No templates yet'
+                    : `${templates.length} template${templates.length > 1 ? 's' : ''}`}
+                </span>
+              </button>
+
+              {templatesExpanded && (
+                <div className="border-t border-border p-3 space-y-3">
+                  {templates.map(template => (
+                    <div key={template.id} className="border border-border bg-muted/20">
+                      {editingTemplateId === template.id ? (
+                        <ArgumentTemplateEditor
+                          template={template}
+                          onUpdate={updates => updateTemplate(template.id, updates)}
+                          onDelete={() => deleteTemplate(template.id)}
+                          onClose={() => setEditingTemplateId(null)}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-4 w-4 text-dim" />
+                            <div>
+                              <div className="text-xs font-bold text-foreground">
+                                {template.name || '(unnamed)'}
+                              </div>
+                              <div className="text-[10px] text-dim">
+                                {template.arguments.length} argument
+                                {template.arguments.length !== 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setEditingTemplateId(template.id)}
+                              className="px-2 h-6 text-[9px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteTemplate(template.id)}
+                              aria-label="delete template"
+                              className="px-2 h-6 text-[9px] uppercase tracking-wider border border-crit/50 text-crit hover:bg-crit/10"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={addTemplate}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-border text-muted-foreground hover:border-accent hover:text-accent transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span className="text-[10px] uppercase tracking-wider">Add Template</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
