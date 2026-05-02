@@ -14,18 +14,17 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.findings.analyst_service import FindingAnalystService
+from application.findings.findings_service import (
+    FindingsService,
+    ProjectNotFound,
+)
 from application.locking import FindingsBusy, LockQueryService
-from core.project_paths import ProjectPaths
 from domain.findings.entry import Finding
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import BusEvent
-from infrastructure.store import FindingRepository
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.finding_history import FindingHistoryRepository
 from web.api._errors import FindingsLocked, NotFound
 from web.api._project_resolver import _resolve_project
 from web.api.chroma_sync import sync_finding_to_chroma
@@ -44,21 +43,30 @@ from web.api.schemas import (
 
 logger = logging.getLogger("tally.web.findings")
 
-# Kept empty for backward-compat imports — routes are on v1_router.
+# Kept empty for backward-compat imports; routes are on v1_router.
 router = APIRouter()
 
 # Matches type_secret, type_vulnerability, type_weakness, etc.
 _TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
 
 
-def _serialise_finding(finding: Finding) -> dict[str, Any]:
-    """Serialise a Finding for the API response.
+def _service(request: Request, project_id: int) -> FindingsService:
+    """Build a FindingsService for *project_id* or raise 404."""
+    try:
+        return FindingsService.from_request(request, project_id)
+    except ProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
-    The named ``fingerprint`` column is exposed as ``id_fingerprint`` so it
-    cannot collide with semgrep's scanner fingerprint stored in ``meta``.
-    ``type_*`` flags written by the ChromaDB ingestor are stripped from
-    ``meta`` before the response leaves the adapter. ``is_locked`` and
-    ``lock_holder`` reflect live state from the lock registry.
+
+def _serialise_finding(finding: Finding) -> dict[str, Any]:
+    """Serialize a Finding for the API response.
+
+    The named ``fingerprint`` column is exposed as ``id_fingerprint`` so
+    it cannot collide with semgrep's scanner fingerprint stored in
+    ``meta``. ``type_*`` flags written by the ChromaDB ingestor are
+    stripped from ``meta`` before the response leaves the adapter.
+    ``is_locked`` and ``lock_holder`` reflect live state from the lock
+    registry.
     """
     result: dict[str, Any] = asdict(finding)
     result["meta"] = {
@@ -74,20 +82,6 @@ def _serialise_finding(finding: Finding) -> dict[str, Any]:
     return result
 
 
-def _make_repo(row: dict) -> FindingRepository:
-    """Build a FindingRepository for the project described by *row*."""
-    paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    return FindingRepository(factory)
-
-
-def _make_history_repo(row: dict) -> FindingHistoryRepository:
-    """Build a FindingHistoryRepository for the project described by *row*."""
-    paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    return FindingHistoryRepository(factory)
-
-
 v1_router = APIRouter()
 
 
@@ -100,10 +94,8 @@ async def get_findings_counts(
     request: Request,
 ) -> FindingsCountsResponse:
     """Return aggregate finding counts bucketed by five dimensions."""
-    row = _resolve_project(request, project_id)
-    repo = _make_repo(row)
-    service = FindingAnalystService(repo)
-    data = await asyncio.to_thread(service.count_aggregates)
+    service = _service(request, project_id)
+    data = await asyncio.to_thread(service.analyst.count_aggregates)
     return FindingsCountsResponse(**data)
 
 
@@ -116,10 +108,8 @@ async def get_findings_facets(
     request: Request,
 ) -> FindingsFacetsResponse:
     """Return distinct filter values present in this project's findings."""
-    row = _resolve_project(request, project_id)
-    repo = _make_repo(row)
-    service = FindingAnalystService(repo)
-    data = await asyncio.to_thread(service.distinct_facet_values)
+    service = _service(request, project_id)
+    data = await asyncio.to_thread(service.analyst.distinct_facet_values)
     return FindingsFacetsResponse(**data)
 
 
@@ -142,12 +132,12 @@ async def get_findings_filter_options(
 ) -> FindingsFilterOptionsResponse:
     """Return per-dimension filter options under the active filter set.
 
-    Mirrors the filter query params of ``GET /findings``. Each dimension's
-    counts apply every active filter (strict semantics) and zero-count
-    options are omitted. Powers the Findings page filter dropdowns
-    (Phase 12.1).
+    Mirrors the filter query params of ``GET /findings``. Each
+    dimension's counts apply every active filter (strict semantics) and
+    zero-count options are omitted. Powers the Findings page filter
+    dropdowns.
     """
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
 
     if severity:
         for s in severity:
@@ -173,9 +163,7 @@ async def get_findings_filter_options(
         "search": search,
     }
 
-    repo_obj = _make_repo(row)
-    service = FindingAnalystService(repo_obj)
-    data = await asyncio.to_thread(service.filter_options, filters)
+    data = await asyncio.to_thread(service.analyst.filter_options, filters)
     return FindingsFilterOptionsResponse(**data)
 
 
@@ -202,13 +190,14 @@ async def list_findings(
 ) -> FindingsListResponse:
     """Return a paginated, filtered, sorted list of findings.
 
-    ``repo_id`` (integer DB id) is the canonical repo filter.
-    Each response item carries both ``repo_id`` and ``repo_name`` so
-    callers don't have to JOIN client-side.
+    ``repo_id`` (integer DB id) is the canonical repo filter. Each
+    response item carries both ``repo_id`` and ``repo_name`` so callers
+    do not have to JOIN client-side.
     """
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
 
-    # Validate severity labels — ValueError → 422 via global handler.
+    # Validate severity labels: ValueError surfaces as 422 via the
+    # global handler.
     if severity:
         for s in severity:
             Severity.from_label(s)
@@ -244,12 +233,10 @@ async def list_findings(
         "search": search,
     }
 
-    repo_obj = _make_repo(row)
-    service = FindingAnalystService(repo_obj)
-    total = await asyncio.to_thread(service.search_count, filters)
-    rows = await asyncio.to_thread(service.search_raw, filters)
+    total = await asyncio.to_thread(service.analyst.search_count, filters)
+    rows = await asyncio.to_thread(service.analyst.search_raw, filters)
 
-    repo_name_by_id = _repo_name_lookup(row)
+    repo_name_by_id = service.repo_name_lookup()
     items: list[FindingResponse] = []
     for r in rows:
         serial = _serialise_finding(r)
@@ -267,27 +254,6 @@ async def list_findings(
     )
 
 
-def _repo_name_lookup(project_row: dict) -> dict[int, str]:
-    """Build a ``{repo_id: repo_name}`` map for a project's active repos."""
-    try:
-        from infrastructure.store.repositories.repositories import (
-            RepositoryRepository,
-        )
-
-        paths = ProjectPaths.from_registry_row(project_row)
-        if not paths.findings_db.exists():
-            return {}
-        factory = ConnectionFactory(paths.findings_db)
-        repo_repo = RepositoryRepository(factory)
-        return {
-            r.id: r.name
-            for r in repo_repo.list_active()
-            if r.name and isinstance(r.id, int)
-        }
-    except Exception:
-        return {}
-
-
 @v1_router.get("/{project_id}/findings/events")
 async def findings_events(
     project_id: int,
@@ -295,8 +261,9 @@ async def findings_events(
 ) -> StreamingResponse:
     """SSE stream emitting finding_updated events for this project.
 
-    Tail-only — no snapshot on connect. Clients filter by event_type.
-    Each event carries the full serialised finding record plus project_id.
+    Tail-only; no snapshot on connect. Clients filter by event_type.
+    Each event carries the full serialized finding record plus
+    project_id.
     """
     _resolve_project(request, project_id)
     bus = request.app.state.event_bus
@@ -339,10 +306,8 @@ async def get_finding(
     request: Request,
 ) -> dict:
     """Return a single finding by integer primary key."""
-    row = _resolve_project(request, project_id)
-    repo = _make_repo(row)
-    service = FindingAnalystService(repo)
-    finding = await asyncio.to_thread(service.get_finding, finding_id)
+    service = _service(request, project_id)
+    finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
     if finding is None:
         raise NotFound("Finding not found")
     return _serialise_finding(finding)
@@ -360,13 +325,11 @@ async def get_finding_history(
     limit: int = Query(default=50, ge=1, le=500),
 ) -> FindingHistoryResponse:
     """Return paginated mutation history for a single finding."""
-    row = _resolve_project(request, project_id)
-    repo = _make_repo(row)
-    service = FindingAnalystService(repo)
-    finding = await asyncio.to_thread(service.get_finding, finding_id)
+    service = _service(request, project_id)
+    finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
     if finding is None:
         raise NotFound("Finding not found")
-    history_repo = _make_history_repo(row)
+    history_repo = service.history_repo
     total = await asyncio.to_thread(history_repo.count_for_finding, finding_id)
     items = await asyncio.to_thread(
         history_repo.list_for_finding, finding_id, offset=offset, limit=limit
@@ -401,12 +364,10 @@ async def batch_patch_findings(
 ) -> BatchPatchResponse:
     """Apply analyst field updates to multiple findings in one request.
 
-    Locked findings are skipped (not errored). Returns three disjoint id
-    buckets: updated, skipped_locked, not_found.
+    Locked findings are skipped (not errored). Returns three disjoint
+    id buckets: updated, skipped_locked, not_found.
     """
-    row = _resolve_project(request, project_id)
-    repo = _make_repo(row)
-    service = FindingAnalystService(repo)
+    service = _service(request, project_id)
 
     session_id: str = request.state.session_id
     holder = f"analyst-patch:web:{session_id[:8]}"
@@ -420,13 +381,12 @@ async def batch_patch_findings(
             fields[k] = v
 
     result = await asyncio.to_thread(
-        service.bulk_update_fields, body.ids, fields, holder_token=holder
+        service.analyst.bulk_update_fields, body.ids, fields, holder_token=holder
     )
 
-    # Emit finding_updated for each successfully updated finding.
     bus = request.app.state.event_bus
     for fid in result.updated:
-        updated_row = await asyncio.to_thread(service.get_finding, fid)
+        updated_row = await asyncio.to_thread(service.analyst.get_finding, fid)
         if updated_row is not None:
             serialised = _serialise_finding(updated_row)
             await bus.publish(
@@ -462,12 +422,11 @@ async def patch_finding(
 
     Only fields explicitly included in the request body are written.
     Returns 409 FINDING_LOCKED if the finding is held by another job.
-    Returns 404 if the finding does not exist.
-    After the SQLite write, performs a best-effort ChromaDB metadata sync.
+    Returns 404 if the finding does not exist. After the SQLite write,
+    performs a best-effort ChromaDB metadata sync.
     """
     row = _resolve_project(request, project_id)
-    repo = _make_repo(row)
-    service = FindingAnalystService(repo)
+    service = _service(request, project_id)
 
     session_id: str = request.state.session_id
     holder = f"analyst-patch:web:{session_id[:8]}"
@@ -488,7 +447,7 @@ async def patch_finding(
 
     try:
         updated = await asyncio.to_thread(
-            service.update_fields, finding_id, fields, holder_token=holder
+            service.analyst.update_fields, finding_id, fields, holder_token=holder
         )
     except FindingsBusy as exc:
         raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
@@ -496,7 +455,7 @@ async def patch_finding(
     if not updated:
         raise NotFound("Finding not found")
 
-    finding = await asyncio.to_thread(service.get_finding, finding_id)
+    finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
     if finding is None:
         raise NotFound("Finding not found")
 
@@ -509,7 +468,7 @@ async def patch_finding(
     sync_finding_to_chroma(
         finding_id=finding_id,
         knowledge_base=knowledge_base,
-        finding_repo=repo,
+        finding_repo=service.finding_repo,
     )
 
     bus = request.app.state.event_bus
