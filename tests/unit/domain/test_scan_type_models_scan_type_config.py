@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.scan_types.models import ScanTypeConfig
 
 
@@ -19,7 +20,7 @@ class TestScanTypeConfig:
         defaults: dict = dict(
             project_name="proj",
             base_path="/tmp/proj",
-            config_manager=MagicMock(),
+            tool_config=ToolExecutionConfig(noir_provider=None),
             run_id=42,
             prompt=_make_prompt(),
         )

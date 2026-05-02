@@ -9,7 +9,7 @@ from domain.tools.base import ToolResult
 
 if TYPE_CHECKING:
     from application.ports.user_prompt import UserPromptPort
-    from core.config.manager import ConfigManager
+    from domain.tools.execution_config import ToolExecutionConfig
 
 SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web"]
 
@@ -29,7 +29,7 @@ class ScanSummary:
 class ScanTypeConfig:
     project_name: str
     base_path: str
-    config_manager: ConfigManager
+    tool_config: ToolExecutionConfig
     run_id: int | None
     prompt: UserPromptPort
     remaining_peers: int = 0

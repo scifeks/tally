@@ -283,7 +283,7 @@ class RepoSegmentScan(ScanType):
                     )
                 )
                 context = make_context(
-                    config.config_manager,
+                    config.tool_config,
                     config.project_name,
                     config.base_path,
                     registry,

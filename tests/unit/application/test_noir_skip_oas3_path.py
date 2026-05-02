@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from application.tools.scan_types.resources import ExecutionResources
+from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.scan_types.models import ScanTypeConfig
 
 
@@ -60,15 +61,13 @@ def _make_repo(
 
 
 def _make_config() -> ScanTypeConfig:
-    cm = MagicMock()
-    cm.global_config.noir_provider = ""
     prompt = MagicMock()
     prompt.confirm.return_value = True
     prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test",
         base_path="/tmp/test",
-        config_manager=cm,
+        tool_config=ToolExecutionConfig(noir_provider=None),
         run_id=1,
         prompt=prompt,
     )

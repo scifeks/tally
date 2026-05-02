@@ -28,7 +28,10 @@ def _make_orchestrator(
     cancel: CancellationToken | None = None,
     repo: MagicMock | None = None,
 ) -> ScanOrchestrator:
-    with patch("core.config.manager.ConfigManager"):
+    with (
+        patch("core.config.manager.ConfigManager"),
+        patch("application.tools.orchestrator._build_tool_execution_config"),
+    ):
         return ScanOrchestrator(
             project="test-project",
             tool_registry=MagicMock(),
@@ -136,7 +139,10 @@ def test_orchestrator_installs_cancel_token_on_executor() -> None:
     token = CancellationToken()
     executor = MagicMock(base_path="/tmp")
 
-    with patch("core.config.manager.ConfigManager"):
+    with (
+        patch("core.config.manager.ConfigManager"),
+        patch("application.tools.orchestrator._build_tool_execution_config"),
+    ):
         ScanOrchestrator(
             project="p",
             tool_registry=MagicMock(),

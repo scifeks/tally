@@ -22,6 +22,7 @@ from application.tools.scan_types import (
     ToolOnAllReposScan,
     ToolOnRepoScan,
 )
+from application.tools.scan_types.execution import _build_tool_execution_config
 from domain.pipeline import scan_events as se
 from domain.pipeline.events import EventBus
 from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
@@ -116,6 +117,7 @@ class ScanOrchestrator:
         from core.config.manager import ConfigManager
 
         self._config = ConfigManager(str(tool_executor.base_path))
+        self._tool_config = _build_tool_execution_config(self._config)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -125,7 +127,7 @@ class ScanOrchestrator:
         return ScanTypeConfig(
             project_name=self.project_name,
             base_path=str(self.executor.base_path),
-            config_manager=self._config,
+            tool_config=self._tool_config,
             run_id=self._run_id,
             prompt=self._prompt,
             remaining_peers=remaining_peers,
