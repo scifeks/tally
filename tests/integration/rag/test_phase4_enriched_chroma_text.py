@@ -17,12 +17,12 @@ from unittest.mock import patch
 
 import pytest
 
+from application.pipeline.fingerprint import compute_fingerprint
 from application.pipeline.strategies import PersistOnlyStrategy
 from application.ports.embedding_provider import EmbeddingProvider
 from application.rag.knowledge_base import FindingKnowledgeBase
 from core.project_paths import ProjectPaths
 from domain.pipeline.events import IngestCompleted
-from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
 

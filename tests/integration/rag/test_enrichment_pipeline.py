@@ -17,6 +17,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
 from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
@@ -24,7 +25,6 @@ from application.rag import EnrichmentPipeline  # noqa: E402
 from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import IngestCompleted  # noqa: E402
-from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
 
