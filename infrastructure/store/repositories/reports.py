@@ -1,13 +1,12 @@
-"""ReportRepository: manages the ``reports`` table (Phase 7.1).
+"""SQLite-backed CRUD and retention helpers for the ``reports`` table.
 
-Reports are file-based artifacts produced by the report orchestrator.
-Each row tracks one generation run: queued → running → done/failed/
-cancelled. The filesystem path is recorded so downloads can stream the
-file (with server-side path-traversal validation).
+Each row tracks one report-generation run: queued, running, done,
+failed, cancelling, or cancelled. The filesystem path is recorded so
+downloads can stream the file (with server-side path-traversal
+validation).
 
-A row's ``retention_tier`` flips between ``'auto'`` (counted by the
-retention sweeper) and ``'pinned'`` (exempt). The repository is
-project-scoped via its ``ConnectionFactory``.
+``retention_tier`` flips between ``'auto'`` (counted by the retention
+sweeper) and ``'pinned'`` (exempt).
 """
 
 from __future__ import annotations
@@ -16,20 +15,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.ports.report_repository import ReportRepositoryPort
-from domain.reports.entry import ReportRow
+from domain.reports.entry import REPORT_STATUSES, ReportRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
-
-REPORT_STATUSES = (
-    "queued",
-    "running",
-    "done",
-    "failed",
-    "cancelling",
-    "cancelled",
-)
 
 RETENTION_TIERS = ("auto", "pinned")
 
@@ -176,7 +166,7 @@ class ReportRepository(ReportRepositoryPort):
         return _row_to_report(row) if row else None
 
     # ------------------------------------------------------------------
-    # Phase 7.2: retention sweep
+    # Retention sweep
     # ------------------------------------------------------------------
     def select_for_retention(
         self,

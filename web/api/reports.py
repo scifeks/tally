@@ -1,20 +1,8 @@
-"""Phase 7 report endpoints (history, latest, generate, cancel,
-pin/delete, download, SSE).
-
-Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §11``:
-
-- ``GET    /api/v1/projects/{project_id}/reports``                  (history)
-- ``GET    /api/v1/projects/{project_id}/reports/latest``           (latest)
-- ``GET    /api/v1/projects/{project_id}/reports/events``           (SSE)
-- ``POST   /api/v1/projects/{project_id}/reports/generate``         (start)
-- ``GET    /api/v1/projects/{project_id}/reports/{report_id}/download``
-- ``POST   /api/v1/projects/{project_id}/reports/{report_id}/pin``
-- ``POST   /api/v1/projects/{project_id}/reports/{report_id}/cancel``
-- ``DELETE /api/v1/projects/{project_id}/reports/{report_id}``
+"""Report and draft HTTP endpoints.
 
 Route ordering: literal-segment routes (``.../latest``, ``.../events``,
-``.../generate``) registered before parameterized routes
-(``.../{report_id}``).
+``.../generate``) are registered before parameterized routes
+(``.../{report_id}``) so Starlette does not shadow them.
 """
 
 from __future__ import annotations
@@ -32,18 +20,13 @@ from pydantic import BaseModel
 
 from application.locking import JobBusy, get_registry
 from application.reporting.drafts import SECTION_REGISTRY
+from application.reporting.reports_service import ProjectNotFound, ReportsService
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
-from domain.reports.entry import DraftRow, ReportRow
+from domain.reports.entry import REPORT_STATUSES, DraftRow, ReportRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.drafts import DraftRepository
-from infrastructure.store.repositories.reports import (
-    REPORT_STATUSES,
-    ReportRepository,
-)
 from web.adapters.draft_run_registry import get_draft_run_registry
 from web.adapters.report_run_registry import get_report_run_registry
 from web.api._errors import (
@@ -74,10 +57,12 @@ v1_router = APIRouter()
 # ---------------------------------------------------------------------------
 
 
-def _make_repo(row: dict) -> tuple[ReportRepository, ConnectionFactory]:
-    paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    return ReportRepository(factory), factory
+def _service(request: Request, project_id: int) -> ReportsService:
+    """Build a ReportsService for *project_id* or raise 404."""
+    try:
+        return ReportsService.from_request(request, project_id)
+    except ProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
 
 def _row_to_summary(report: ReportRow, project_id: int) -> ReportSummary:
@@ -114,13 +99,6 @@ def _validate_status(status: str | None) -> None:
 def _resolve_reports_dir(row: dict) -> Path:
     paths = ProjectPaths.from_registry_row(row)
     return paths.reports_dir.resolve()
-
-
-def _make_draft_repo(row: dict) -> DraftRepository:
-    paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    return DraftRepository(factory)
 
 
 def _build_draft_snapshot(project_id: int, section: str | None) -> BusEvent:
@@ -171,9 +149,8 @@ async def get_latest_report(
     request: Request,
 ) -> ReportSummary | None:
     """Return the most recent ``done`` report for *project_id*, or ``null``."""
-    row = _resolve_project(request, project_id)
-    repo, _ = _make_repo(row)
-    report = await asyncio.to_thread(repo.latest_for_project, project_id)
+    service = _service(request, project_id)
+    report = await asyncio.to_thread(service.report_repo.latest_for_project, project_id)
     if report is None:
         return None
     return _row_to_summary(report, project_id)
@@ -186,11 +163,11 @@ async def reports_events(
     report_id: int | None = Query(default=None),
 ) -> StreamingResponse:
     """SSE stream emitting report lifecycle events for *project_id*."""
-    row = _resolve_project(request, project_id)
+    service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("report")
 
-    snapshot_event = await _build_snapshot(row, project_id, report_id)
+    snapshot_event = await _build_snapshot(service, project_id, report_id)
 
     async def stream() -> AsyncIterator[str]:
         try:
@@ -240,7 +217,8 @@ async def generate_report(
     project_name: str = row["name"]
     base_path: str = request.app.state.base_path
 
-    repo, factory = _make_repo(row)
+    service = _service(request, project_id)
+    repo = service.report_repo
 
     paths = ProjectPaths.from_registry_row(row)
     reports_dir = paths.reports_dir
@@ -308,7 +286,7 @@ async def generate_report(
             report_id=report_id,
             request=web_request,
             holder_token=holder,
-            factory=factory,
+            report_repo=repo,
             bus=bus,
             report_run_registry=get_report_run_registry(),
             retention_count=retention_count,
@@ -339,11 +317,10 @@ async def list_reports(
     limit: int = Query(default=20, ge=1, le=100),
 ) -> ReportsListResponse:
     """Paginated report history for a project, newest-first."""
-    row = _resolve_project(request, project_id)
     _validate_status(status)
-    repo, _ = _make_repo(row)
+    service = _service(request, project_id)
     rows, total = await asyncio.to_thread(
-        repo.list_for_project,
+        service.report_repo.list_for_project,
         project_id,
         status=status,
         offset=offset,
@@ -415,8 +392,8 @@ async def list_drafts(
 ) -> list[dict[str, Any]]:
     """Return one entry per section; absent rows report as ``not_generated``."""
     row = _resolve_project(request, project_id)
-    repo = _make_draft_repo(row)
-    records = await asyncio.to_thread(repo.list_all)
+    service = _service(request, project_id)
+    records = await asyncio.to_thread(service.draft_repo.list_all)
     draft_dir = _resolve_drafts_dir(row)
     by_section = {r.section: r for r in records}
     return [
@@ -454,9 +431,7 @@ async def start_draft(
     except JobBusy as exc:
         raise JobBusyError("report", exc.current_holder) from exc
 
-    paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
+    service = _service(request, project_id)
     web_req = WebDraftRequest(section=body.section, force_overwrite=body.force)
     try:
         start_draft_thread(
@@ -465,7 +440,7 @@ async def start_draft(
             project_id=project_id,
             request=web_req,
             holder_token=holder,
-            factory=factory,
+            draft_repo=service.draft_repo,
             bus=request.app.state.event_bus,
             draft_run_registry=get_draft_run_registry(),
             lock_registry=lock_registry,
@@ -554,7 +529,7 @@ async def upload_draft(
         raise ValidationError("draft file contains null bytes", details={})
 
     row = _resolve_project(request, project_id)
-    repo = _make_draft_repo(row)
+    service = _service(request, project_id)
     draft_dir = _resolve_drafts_dir(row)
     draft_dir.mkdir(parents=True, exist_ok=True)
     out = draft_dir / f"{section}.md"
@@ -562,7 +537,9 @@ async def upload_draft(
 
     original_filename = file.filename or f"{section}.md"
     now = datetime.now(UTC).isoformat()
-    await asyncio.to_thread(repo.mark_reviewed, section, original_filename, now)
+    await asyncio.to_thread(
+        service.draft_repo.mark_reviewed, section, original_filename, now
+    )
 
     return {
         "section": section,
@@ -585,8 +562,8 @@ async def download_draft(
             details={"allowed": list(SECTION_REGISTRY)},
         )
     row = _resolve_project(request, project_id)
-    repo = _make_draft_repo(row)
-    record = await asyncio.to_thread(repo.get, section)
+    service = _service(request, project_id)
+    record = await asyncio.to_thread(service.draft_repo.get, section)
     if record is None:
         raise NotFound(f"draft {section!r} not found")
 
@@ -621,7 +598,7 @@ async def delete_draft(
             details={"allowed": list(SECTION_REGISTRY)},
         )
     row = _resolve_project(request, project_id)
-    repo = _make_draft_repo(row)
+    service = _service(request, project_id)
     draft_dir = _resolve_drafts_dir(row)
     candidate = draft_dir / f"{section}.md"
     try:
@@ -631,7 +608,7 @@ async def delete_draft(
         logger.warning("skipping unlink for draft %r: path outside draft dir", section)
     except OSError:
         logger.exception("could not unlink draft %s", candidate)
-    await asyncio.to_thread(repo.delete, section)
+    await asyncio.to_thread(service.draft_repo.delete, section)
 
 
 # ---------------------------------------------------------------------------
@@ -650,8 +627,8 @@ async def cancel_report(
     request: Request,
 ) -> ReportCancelResponse:
     """Request cancellation of an in-progress report run."""
-    row = _resolve_project(request, project_id)
-    repo, _ = _make_repo(row)
+    service = _service(request, project_id)
+    repo = service.report_repo
 
     handle = get_report_run_registry().get(report_id)
     if handle is None:
@@ -684,8 +661,8 @@ async def pin_report(
     report_id: int,
     request: Request,
 ) -> None:
-    row = _resolve_project(request, project_id)
-    repo, _ = _make_repo(row)
+    service = _service(request, project_id)
+    repo = service.report_repo
     report = await asyncio.to_thread(repo.get, report_id)
     if report is None or report.project_id != project_id:
         raise NotFound(f"report {report_id} not found")
@@ -702,7 +679,8 @@ async def delete_report(
     request: Request,
 ) -> None:
     row = _resolve_project(request, project_id)
-    repo, _ = _make_repo(row)
+    service = _service(request, project_id)
+    repo = service.report_repo
     report = await asyncio.to_thread(repo.get, report_id)
     if report is None or report.project_id != project_id:
         raise NotFound(f"report {report_id} not found")
@@ -738,8 +716,8 @@ async def download_report(
 ) -> FileResponse:
     """Stream the report file with server-side path-traversal validation."""
     row = _resolve_project(request, project_id)
-    repo, _ = _make_repo(row)
-    report = await asyncio.to_thread(repo.get, report_id)
+    service = _service(request, project_id)
+    report = await asyncio.to_thread(service.report_repo.get, report_id)
     if report is None or report.project_id != project_id:
         raise NotFound(f"report {report_id} not found")
     if report.status != "done":
@@ -780,7 +758,7 @@ def _media_type_for(fmt: str) -> str:
 
 
 async def _build_snapshot(
-    row: dict,
+    service: ReportsService,
     project_id: int,
     report_id: int | None,
 ) -> BusEvent:
@@ -790,8 +768,7 @@ async def _build_snapshot(
         "report_id": report_id,
     }
     if report_id is not None:
-        repo, _ = _make_repo(row)
-        report = await asyncio.to_thread(repo.get, report_id)
+        report = await asyncio.to_thread(service.report_repo.get, report_id)
         if report is not None and report.project_id == project_id:
             payload.update(
                 status=report.status,

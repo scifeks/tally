@@ -1,17 +1,10 @@
-"""Background draft runner — spawns the worker thread for draft generation.
+"""Background draft runner.
 
-Mirrors :mod:`web.reports.runner`. The HTTP POST /reports/drafts endpoint
-acquires the ``report`` LockRegistry slot synchronously, then hands
-control to :func:`start_draft_thread` which:
-
-1. Wires the EventBus-backed draft event sink and cancellation token.
-2. Registers the run in :class:`DraftRunRegistry` so cancel endpoints
-   can find the token.
-3. Calls :func:`application.reporting.draft_orchestrator.run_draft`.
-4. Releases the lock and unregisters the run in ``finally``.
-
-The orchestrator owns all repo state transitions; the runner only
-acquires and releases the process-wide lock.
+The HTTP draft route acquires the ``report`` LockRegistry slot
+synchronously, then hands the lock off to a daemon worker spawned
+here. The worker takes ownership of the slot and releases it in its
+``finally`` block. The orchestrator owns all repo state transitions;
+the runner only manages the process-wide lock.
 """
 
 from __future__ import annotations
@@ -20,6 +13,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
@@ -30,11 +24,12 @@ from application.reporting.draft_orchestrator import (
     run_draft,
 )
 from infrastructure.events.bus import EventBus
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.drafts import DraftRepository
 from web.adapters.draft_run_registry import DraftRunRegistry
 from web.adapters.event_bus_draft_sink import EventBusDraftSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
+
+if TYPE_CHECKING:
+    from application.ports.draft_repository import DraftRepositoryPort
 
 logger = logging.getLogger("tally.web.reports")
 
@@ -54,7 +49,7 @@ def start_draft_thread(
     project_id: int,
     request: WebDraftRequest,
     holder_token: str,
-    factory: ConnectionFactory,
+    draft_repo: DraftRepositoryPort,
     bus: EventBus,
     draft_run_registry: DraftRunRegistry,
     lock_registry: LockRegistry | None = None,
@@ -80,7 +75,7 @@ def start_draft_thread(
             "project_id": project_id,
             "request": request,
             "holder_token": holder_token,
-            "factory": factory,
+            "draft_repo": draft_repo,
             "bus": bus,
             "cancel_token": cancel_token,
             "lock_registry": lock_registry or get_registry(),
@@ -100,14 +95,13 @@ def _run_draft(
     project_id: int,
     request: WebDraftRequest,
     holder_token: str,
-    factory: ConnectionFactory,
+    draft_repo: DraftRepositoryPort,
     bus: EventBus,
     cancel_token: CancellationToken,
     lock_registry: LockRegistry,
     draft_run_registry: DraftRunRegistry,
 ) -> None:
     sink = EventBusDraftSink(bus)
-    repo = DraftRepository(factory)
 
     orchestrator_request = DraftRequest(
         project=project_name,
@@ -122,7 +116,7 @@ def _run_draft(
             run_draft(
                 orchestrator_request,
                 prompt=NoApprovalPromptAdapter(),
-                repo=repo,
+                repo=draft_repo,
                 event_sink=sink,
                 cancel_token=cancel_token,
             )

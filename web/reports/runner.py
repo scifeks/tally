@@ -1,18 +1,9 @@
-"""Background report runner — spawns the worker thread that owns a report.
+"""Background report runner.
 
-Mirrors :mod:`web.scans.runner` and :mod:`web.triage.runner`. The HTTP
-generate endpoint validates inputs, acquires the ``LockRegistry`` job
-slot synchronously (so 409 returns immediately), creates the
-``reports`` row, then hands control to :func:`start_report_thread`
-which:
-
-1. Wires the EventBus-backed event sink and the cancellation token.
-2. Registers the run in :class:`ReportRunRegistry` so cancel endpoints
-   can find the token.
-3. Calls :func:`application.reporting.orchestrator.run_report`.
-4. Updates the ``reports`` row with status / size / error and runs the
-   retention sweep on success.
-5. Releases the lock and unregisters the run in ``finally``.
+The HTTP generate route acquires the ``LockRegistry`` job slot
+synchronously so a 409 returns immediately, then hands the lock off
+to a daemon worker spawned here. The worker takes ownership of the
+slot and releases it in its ``finally`` block.
 """
 
 from __future__ import annotations
@@ -21,6 +12,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
@@ -31,11 +23,12 @@ from application.reporting.orchestrator import (
     run_report,
 )
 from infrastructure.events.bus import EventBus
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.reports import ReportRepository
 from web.adapters.event_bus_report_sink import EventBusReportSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.adapters.report_run_registry import ReportRunRegistry
+
+if TYPE_CHECKING:
+    from application.ports.report_repository import ReportRepositoryPort
 
 logger = logging.getLogger("tally.web.reports")
 
@@ -61,7 +54,7 @@ def start_report_thread(
     report_id: int,
     request: WebReportRequest,
     holder_token: str,
-    factory: ConnectionFactory,
+    report_repo: ReportRepositoryPort,
     bus: EventBus,
     report_run_registry: ReportRunRegistry,
     retention_count: int,
@@ -89,7 +82,7 @@ def start_report_thread(
             "report_id": report_id,
             "request": request,
             "holder_token": holder_token,
-            "factory": factory,
+            "report_repo": report_repo,
             "bus": bus,
             "cancel_token": cancel_token,
             "lock_registry": lock_registry or get_registry(),
@@ -111,7 +104,7 @@ def _run_report(
     report_id: int,
     request: WebReportRequest,
     holder_token: str,
-    factory: ConnectionFactory,
+    report_repo: ReportRepositoryPort,
     bus: EventBus,
     cancel_token: CancellationToken,
     lock_registry: LockRegistry,
@@ -119,9 +112,8 @@ def _run_report(
     retention_count: int,
 ) -> None:
     sink = EventBusReportSink(bus)
-    repo = ReportRepository(factory)
-    repo.set_status(report_id, "running")
-    repo.set_started_at(report_id)
+    report_repo.set_status(report_id, "running")
+    report_repo.set_started_at(report_id)
 
     orchestrator_request = ReportRequest(
         project=project_name,
@@ -146,29 +138,29 @@ def _run_report(
                 cancel_token=cancel_token,
             )
         except ReportCancelled:
-            repo.set_status(report_id, "cancelled")
-            repo.set_finished_at(report_id)
+            report_repo.set_status(report_id, "cancelled")
+            report_repo.set_finished_at(report_id)
             logger.info("report run %d cancelled", report_id)
             return
         except ReportOverwriteDenied as exc:
-            repo.set_status(report_id, "failed")
-            repo.set_error(report_id, str(exc))
-            repo.set_finished_at(report_id)
+            report_repo.set_status(report_id, "failed")
+            report_repo.set_error(report_id, str(exc))
+            report_repo.set_finished_at(report_id)
             logger.info("report run %d overwrite denied", report_id)
             return
         except Exception as exc:  # noqa: BLE001
-            repo.set_status(report_id, "failed")
-            repo.set_error(report_id, f"{type(exc).__name__}: {exc}")
-            repo.set_finished_at(report_id)
+            report_repo.set_status(report_id, "failed")
+            report_repo.set_error(report_id, f"{type(exc).__name__}: {exc}")
+            report_repo.set_finished_at(report_id)
             logger.exception("report run %d failed", report_id)
             return
 
         size = output.stat().st_size if output.exists() else 0
-        repo.set_file_size(report_id, size)
-        repo.set_status(report_id, "done")
-        repo.set_finished_at(report_id)
+        report_repo.set_file_size(report_id, size)
+        report_repo.set_status(report_id, "done")
+        report_repo.set_finished_at(report_id)
 
-        _enforce_retention(repo, project_id, retention_count)
+        _enforce_retention(report_repo, project_id, retention_count)
     finally:
         report_run_registry.unregister(report_id)
         try:
@@ -180,7 +172,7 @@ def _run_report(
 
 
 def _enforce_retention(
-    repo: ReportRepository,
+    repo: ReportRepositoryPort,
     project_id: int,
     keep: int,
 ) -> None:
