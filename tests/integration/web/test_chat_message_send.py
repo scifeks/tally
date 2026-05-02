@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -93,15 +94,20 @@ def _seed_session(
 
 
 def _patch_chat_deps(monkeypatch, *, chunks: list[str]) -> _FakeProvider:
-    """Patch the chat handler's QueryEngine + provider factory.
+    """Patch the chat handler's stream composer.
 
     Returns the FakeProvider so tests can inspect what messages it
     received from the chat-service prompt assembly.
     """
     provider = _FakeProvider(chunks)
-    monkeypatch.setattr("web.api.chat.QueryEngine", _StubQueryEngine)
+    fake_composer = SimpleNamespace(
+        query_engine=_StubQueryEngine(),
+        provider=provider,
+        model_name=provider.model,
+    )
     monkeypatch.setattr(
-        "web.api.chat.get_llm_provider", lambda role, base_path: provider
+        "web.api.chat.ChatStreamComposer.from_request",
+        lambda request, project_id: fake_composer,
     )
     return provider
 
@@ -215,9 +221,14 @@ async def test_post_409_when_stream_already_running(app_client, monkeypatch) -> 
             yield "done"
 
     provider = _SlowProvider(["done"])
-    monkeypatch.setattr("web.api.chat.QueryEngine", _StubQueryEngine)
+    fake_composer = SimpleNamespace(
+        query_engine=_StubQueryEngine(),
+        provider=provider,
+        model_name=provider.model,
+    )
     monkeypatch.setattr(
-        "web.api.chat.get_llm_provider", lambda role, base_path: provider
+        "web.api.chat.ChatStreamComposer.from_request",
+        lambda request, project_id: fake_composer,
     )
 
     first = await client.post(

@@ -18,6 +18,7 @@ from application.ports.triage_event_sink import (
     TriageEventSink,
 )
 from application.tools.registry import tool_registry
+from application.triage.batching import compute_batches
 from core.config.manager import ConfigManager as _ConfigManager
 from core.config.schemas.global_config import MCP_SESSION_TIMEOUT_SECONDS_DEFAULT
 from core.project_paths import ProjectPaths
@@ -154,7 +155,11 @@ class TriageRunner:
         total = 0
         for tool, repo, segment in combos:
             try:
-                count = self._triage_repo.create_batches(run_id, tool, repo, segment)
+                findings = self._triage_repo.fetch_active_findings_for_batching(
+                    tool, repo, segment
+                )
+                batches = compute_batches(findings)
+                count = self._triage_repo.create_batches(run_id, batches)
                 _log.info(
                     "Created %d batches: tool=%s repo=%s segment=%s",
                     count,

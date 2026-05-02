@@ -13,6 +13,7 @@ from application.findings.findings_service import (
     FindingsService,
     ProjectNotFound,
 )
+from application.locking import LockQueryService
 from domain.projects.entry import ProjectRow
 
 
@@ -92,6 +93,7 @@ def _build(
         history_repo=history_repo,  # type: ignore[arg-type]
         project_repo=project_repo,  # type: ignore[arg-type]
         analyst=analyst,
+        lock_query=LockQueryService(),
         findings_db_exists=findings_db_exists,
     )
     return service, project_repo
@@ -168,6 +170,7 @@ class TestFindingsService:
             history_repo=history_repo,  # type: ignore[arg-type]
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
+            lock_query=LockQueryService(),
             findings_db_exists=False,
         )
         assert service.count_findings() == 0
@@ -183,6 +186,7 @@ class TestFindingsService:
             history_repo=history_repo,  # type: ignore[arg-type]
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
+            lock_query=LockQueryService(),
             findings_db_exists=True,
         )
         assert service.count_findings() == 0
@@ -197,6 +201,7 @@ class TestFindingsService:
             history_repo=history_repo,  # type: ignore[arg-type]
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
+            lock_query=LockQueryService(),
             findings_db_exists=True,
         )
         assert service.count_findings() == 17

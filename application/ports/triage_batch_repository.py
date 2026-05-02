@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from domain.triage.entry import TriageBatchRow, TriageRunSummary
 
 
 class TriageBatchRepositoryPort(Protocol):
+    def fetch_active_findings_for_batching(
+        self, tool: str, repo: str, segment: str
+    ) -> list[dict[str, Any]]: ...
     def create_batches(
-        self, run_id: int, tool: str, repo: str, segment: str
+        self, run_id: int, batches: list[list[dict[str, Any]]]
     ) -> int: ...
     def claim_batch(self, run_id: int) -> TriageBatchRow | None: ...
     def complete_batch(self, batch_id: int, status: str) -> None: ...

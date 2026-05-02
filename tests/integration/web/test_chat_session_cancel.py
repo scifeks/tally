@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -82,9 +83,14 @@ def _seed_session(factory, *, project_id: int, title: str = "seed") -> int:
 
 
 def _patch_chat_deps(monkeypatch, *, provider: _FakeProvider) -> None:
-    monkeypatch.setattr("web.api.chat.QueryEngine", _StubQueryEngine)
+    fake_composer = SimpleNamespace(
+        query_engine=_StubQueryEngine(),
+        provider=provider,
+        model_name=provider.model,
+    )
     monkeypatch.setattr(
-        "web.api.chat.get_llm_provider", lambda role, base_path: provider
+        "web.api.chat.ChatStreamComposer.from_request",
+        lambda request, project_id: fake_composer,
     )
 
 

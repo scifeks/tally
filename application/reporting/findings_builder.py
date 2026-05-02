@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import json
 import logging
 from collections import defaultdict
 from typing import Any
@@ -19,16 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_meta(finding: dict[str, Any]) -> dict[str, Any]:
-    """Parse the meta JSON blob; return empty dict on failure."""
+    """Return the meta dict; defaults to empty when missing or malformed."""
     meta = finding.get("meta")
-    if isinstance(meta, dict):
-        return meta
-    if isinstance(meta, str):
-        try:
-            return json.loads(meta)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {}
+    return meta if isinstance(meta, dict) else {}
 
 
 def _get_title(finding: dict[str, Any]) -> str:
@@ -63,7 +55,7 @@ def _get_owasp_name(finding: dict[str, Any]) -> str:
 
     Resolution order:
       1. meta.owasp_name
-      2. First CWE from the cwe column (JSON array string)
+      2. First CWE from the cwe list
       3. rule_id column
       4. "Unclassified" (logs a warning)
     """
@@ -72,14 +64,9 @@ def _get_owasp_name(finding: dict[str, Any]) -> str:
     if owasp:
         return html.escape(str(owasp))
 
-    cwe_raw = finding.get("cwe")
-    if cwe_raw:
-        try:
-            cwe_list = json.loads(cwe_raw) if isinstance(cwe_raw, str) else cwe_raw
-            if cwe_list:
-                return html.escape(str(cwe_list[0]))
-        except (json.JSONDecodeError, TypeError, IndexError):
-            pass
+    cwe_list = finding.get("cwe")
+    if isinstance(cwe_list, list) and cwe_list:
+        return html.escape(str(cwe_list[0]))
 
     rule_id = finding.get("rule_id")
     if rule_id:

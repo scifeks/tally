@@ -378,9 +378,13 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
+            "infrastructure.store.repositories.triage.TriageBatchRepository.fetch_active_findings_for_batching",
+            return_value=[],
+        ) as mock_fetch,
+        patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=1,
-        ) as mock_create,
+        ),
         patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
@@ -389,8 +393,8 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
     ):
         run_triage(project)
 
-    assert mock_create.call_count == 2
-    calls = {(c.args[1], c.args[2], c.args[3]) for c in mock_create.call_args_list}
+    assert mock_fetch.call_count == 2
+    calls = {(c.args[0], c.args[1], c.args[2]) for c in mock_fetch.call_args_list}
     assert ("semgrep", "repo1", "sast") in calls
     assert ("zap", "repo1", "api") in calls
 
@@ -403,7 +407,7 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
+            "infrastructure.store.repositories.triage.TriageBatchRepository.fetch_active_findings_for_batching",
             side_effect=RuntimeError("db locked"),
         ),
         patch(
@@ -429,6 +433,10 @@ def test_batch_count_reported(project_db, capsys) -> None:
 
     with (
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
+        patch(
+            "infrastructure.store.repositories.triage.TriageBatchRepository.fetch_active_findings_for_batching",
+            return_value=[],
+        ),
         patch(
             "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
             return_value=3,
