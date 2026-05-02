@@ -1,11 +1,13 @@
-"""RunRepository — manages scan_runs and run_tools tables."""
+"""RunRepository: manages scan_runs and run_tools tables."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+
+from application.ports.run_repository import RunRepositoryPort
+from domain.scans.entry import ScanRunRow, ToolRunRow
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
@@ -21,40 +23,7 @@ SCAN_RUN_STATUSES = (
 )
 
 
-@dataclass(frozen=True)
-class ScanRunRow:
-    id: int
-    project_id: int | None
-    args: dict[str, Any]
-    created_at: str | None
-    status: str | None
-    started_at: str | None
-    finished_at: str | None
-    repo_ids: list[str]
-    tool_ids: list[str]
-    domains: list[str]
-    skip_enrichment: bool
-    findings_count: int | None
-
-
-@dataclass(frozen=True)
-class ToolRunRow:
-    id: int
-    run_id: int
-    tool: str | None
-    findings_count: int
-    repo: str | None
-    domain: str | None
-    status: str | None
-    started_at: str | None
-    finished_at: str | None
-    exit_code: int | None
-    skip_reason: str | None
-    enriched_count: int | None
-    total_to_enrich: int | None
-
-
-class RunRepository:
+class RunRepository(RunRepositoryPort):
     """Manages scan run lifecycle records (`scan_runs` + `run_tools`)."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
@@ -161,7 +130,7 @@ class RunRepository:
         """Mark every ``running``/``cancelling`` row as ``failed``.
 
         Used at server start to clean up rows whose owning process is
-        gone — Tier-1 lock guarantees only one scan is live at a time,
+        gone. Tier-1 lock guarantees only one scan is live at a time,
         so any persisted-as-running row from a prior process is stale.
         Returns the row count updated.
         """

@@ -1,4 +1,4 @@
-"""Phase 6 — Triage endpoints (history, detail, dispatch, cancel, SSE).
+"""Triage endpoints (history, detail, dispatch, cancel, SSE).
 
 Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §6``:
 
@@ -8,13 +8,13 @@ Endpoint surface per ``docs/roadmap/ui-planning/API/endpoints.md §6``:
 - ``POST   /api/v1/projects/{project_id}/triage/{scan_run_id}/cancel``
 - ``GET    /api/v1/projects/{project_id}/triage/{scan_run_id}``       (detail)
 
-A "triage run" is identified by ``scan_run_id`` — there is no separate
+A "triage run" is identified by ``scan_run_id``; there is no separate
 triage_id. The runner picks the latest ``scan_runs`` row for the
 project and writes ``triage_batches`` keyed by that id. The SPA never
 chooses the scan_run; the application core does.
 
 Route ordering: literal-segment routes (``.../events``) registered
-before parameterised routes (``.../{scan_run_id}``).
+before parameterized routes (``.../{scan_run_id}``).
 """
 
 from __future__ import annotations
@@ -30,18 +30,14 @@ from fastapi.responses import StreamingResponse
 
 from application.locking import JobBusy, get_registry
 from core.project_paths import ProjectPaths
+from domain.triage.entry import TriageBatchRow
+from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.triage import (
-    TriageBatchRepository,
-    TriageBatchRow,
-)
-from infrastructure.store.repositories.triage import (
-    TriageRunSummary as TriageRunSummaryRow,
-)
+from infrastructure.store.repositories.triage import TriageBatchRepository
 from web.adapters.triage_run_registry import get_triage_run_registry
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
@@ -114,7 +110,7 @@ def _batch_to_item(batch: TriageBatchRow) -> TriageBatchItem:
 
 
 # ---------------------------------------------------------------------------
-# /api/v1/projects/{project_id}/triage — history (literal-segment first)
+# /api/v1/projects/{project_id}/triage: history (literal-segment first)
 # ---------------------------------------------------------------------------
 
 
@@ -339,7 +335,7 @@ async def start_triage(
 
     summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
     if summary is None:
-        # No batches yet — return a queued placeholder.
+        # No batches yet; return a queued placeholder.
         return TriageRunSummary(
             scan_run_id=scan_run_id,
             project_id=project_id,
@@ -353,7 +349,7 @@ async def start_triage(
 
 
 # ---------------------------------------------------------------------------
-# Parameterised: /{project_id}/triage/{scan_run_id}/...
+# Parameterized: /{project_id}/triage/{scan_run_id}/...
 # ---------------------------------------------------------------------------
 
 

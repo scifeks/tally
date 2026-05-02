@@ -9,12 +9,8 @@ import pytest
 
 from application.triage.runner import TriageRunner
 from domain.pipeline.triage_events import RunFailed
-from infrastructure.store.repositories.triage import (
-    TriageBatchRow,
-)
-from infrastructure.store.repositories.triage import (
-    TriageRunSummary as TriageRunSummaryRow,
-)
+from domain.triage.entry import TriageBatchRow
+from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 
 
 class _RecordingSink:
