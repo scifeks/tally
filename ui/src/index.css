@@ -172,6 +172,28 @@
     transform-origin: center center;
   }
 
+  /* Horizontal scan line for the 404 page */
+  @keyframes scan {
+    0%,
+    100% {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(calc(100vw + 100%));
+      opacity: 0;
+    }
+  }
+  .animate-scan {
+    animation: scan 2s ease-in-out infinite;
+  }
+
   /* Inline variant: blinks the current glyph (use on a prompt caret). */
   .tty-cursor-inline {
     animation: tty-blink 1s steps(1) infinite;
