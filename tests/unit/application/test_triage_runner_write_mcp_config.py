@@ -18,6 +18,7 @@ def _make_runner(tmp_path: Path) -> TriageRunner:
         triage_repo=MagicMock(),
         audit_repo=MagicMock(),
         app_root=tmp_path,
+        triage_agent=MagicMock(),
     )
 
 

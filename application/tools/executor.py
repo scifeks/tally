@@ -1,8 +1,5 @@
 import logging
-import os
 import shlex
-import subprocess
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -13,6 +10,14 @@ from application.ports.progress_reporter import (
     NullProgressReporter,
     ProgressReporter,
 )
+from application.ports.subprocess_runner import (
+    SubprocessCancelled,
+    SubprocessNotFound,
+    SubprocessPermissionDenied,
+    SubprocessResult,
+    SubprocessRunnerPort,
+    SubprocessTimeout,
+)
 from application.ports.user_prompt import UserPromptPort
 from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
@@ -20,14 +25,10 @@ from domain.tools.interface import ExecutionPass
 
 
 class ToolCancelled(Exception):
-    """Raised when a subprocess is aborted via the cancellation token."""
+    """Raised when a tool execution is interrupted via the cancellation token."""
 
 
 _log = logging.getLogger(__name__)
-# Seconds between cancel-token checks while a subprocess is running.
-_CANCEL_POLL_INTERVAL = 0.5
-# Grace period after SIGTERM before SIGKILL when cancelling a subprocess.
-_CANCEL_GRACE_SECONDS = 3.0
 
 # Tokens that are unambiguously shell operators
 _METACHAR_TOKENS = {"&&", "||", ";", ">", ">>", "<", "<<", "|"}
@@ -62,7 +63,7 @@ def sanitize_command(cmd: list[str]) -> list[str]:
 
 
 class _RunResult(NamedTuple):
-    proc: subprocess.CompletedProcess[str]
+    proc: SubprocessResult
     start: float
     success: bool
 
@@ -73,11 +74,13 @@ class ToolExecutor:
         project_name: str,
         base_path: Path,
         prompt: UserPromptPort,
+        subprocess_runner: SubprocessRunnerPort,
         reporter: ProgressReporter | None = None,
     ) -> None:
         self.project_name = project_name
         self.base_path = Path(base_path)
         self._prompt = prompt
+        self._subprocess_runner = subprocess_runner
         self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._sudo_approved = False
         self._cancel_token: CancellationToken = no_op_token()
@@ -173,7 +176,7 @@ class ToolExecutor:
         if not success and proc.stderr:
             combined = (combined + "\n" + proc.stderr).strip()
 
-        # 6. Parse output (failures are silently swallowed — parsed_data stays None)
+        # 6. Parse output (failures are silently swallowed; parsed_data stays None)
         parsed: dict[str, Any] | None = None
         try:
             parsed = tool.parse_output(combined, output_files)
@@ -277,86 +280,24 @@ class ToolExecutor:
             duration_seconds=duration,
         )
 
-    def _run_subprocess(
+    def _spawn(
         self,
         cmd: list[str],
         timeout: int,
         cwd: str | None,
-        env: dict[str, str] | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        """Run *cmd* and return its CompletedProcess.
-
-        While the subprocess is running, ``self._cancel_token`` is polled
-        every ``_CANCEL_POLL_INTERVAL`` seconds. If it becomes set, the
-        process group receives SIGTERM, then SIGKILL after a short grace
-        period, and ``ToolCancelled`` is raised so the caller can unwind.
-        """
-        import signal as _signal
-
-        effective_env = {**os.environ, **env} if env else None
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=cwd,
-            env=effective_env,
-            start_new_session=True,
-        )
-
-        deadline = perf_counter() + timeout
-        while True:
-            if self._cancel_token.is_set():
-                self._abort_proc_group(proc, _signal)
-                raise ToolCancelled
-            remaining = deadline - perf_counter()
-            if remaining <= 0:
-                try:
-                    os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                try:
-                    proc.communicate()
-                except Exception:
-                    pass
-                raise subprocess.TimeoutExpired(cmd, timeout)
-            try:
-                stdout, stderr = proc.communicate(
-                    timeout=min(_CANCEL_POLL_INTERVAL, remaining)
-                )
-                break
-            except subprocess.TimeoutExpired:
-                # poll cancel token, then continue waiting
-                continue
-
-        return subprocess.CompletedProcess(
-            args=proc.args,
-            returncode=proc.returncode,
-            stdout=stdout,
-            stderr=stderr,
-        )
-
-    @staticmethod
-    def _abort_proc_group(proc: subprocess.Popen, sig_module: Any) -> None:
-        """Send SIGTERM to *proc*'s group, escalate to SIGKILL after grace."""
+        env: dict[str, str] | None,
+    ) -> SubprocessResult:
+        """Delegate to the SubprocessRunner port; translate cancellation."""
         try:
-            os.killpg(os.getpgid(proc.pid), sig_module.SIGTERM)
-        except ProcessLookupError:
-            return
-        deadline = time.monotonic() + _CANCEL_GRACE_SECONDS
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                break
-            time.sleep(0.1)
-        if proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(proc.pid), sig_module.SIGKILL)
-            except ProcessLookupError:
-                pass
-        try:
-            proc.communicate()
-        except Exception:
-            pass
+            return self._subprocess_runner.run(
+                cmd,
+                timeout=timeout,
+                cwd=cwd,
+                env=env,
+                cancel_token=self._cancel_token,
+            )
+        except SubprocessCancelled as exc:
+            raise ToolCancelled from exc
 
     def _run_with_escalation(
         self,
@@ -370,14 +311,14 @@ class ToolExecutor:
         env: dict[str, str] | None = None,
     ) -> _RunResult | ToolResult:
         try:
-            proc = self._run_subprocess(cmd, timeout, cwd, env)
-        except subprocess.TimeoutExpired:
+            proc = self._spawn(cmd, timeout, cwd, env)
+        except SubprocessTimeout:
             return self._timeout_result(tool_name, timestamp, start, timeout)
-        except FileNotFoundError:
+        except SubprocessNotFound:
             self._reporter.report("    ✗ Failed  (command not found)")
             _log.error("Tool %s: command not found: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Command not found: {cmd[0]!r}")
-        except PermissionError:
+        except SubprocessPermissionDenied:
             self._reporter.report("    ✗ Failed  (permission denied)")
             _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
@@ -390,22 +331,22 @@ class ToolExecutor:
                 self._sudo_approved = True
                 start = perf_counter()
                 try:
-                    proc = self._run_subprocess(sudo_cmd, timeout, cwd, env)
-                except subprocess.TimeoutExpired:
+                    proc = self._spawn(sudo_cmd, timeout, cwd, env)
+                except SubprocessTimeout:
                     return self._timeout_result(tool_name, timestamp, start, timeout)
-                except FileNotFoundError:
+                except SubprocessNotFound:
                     su_cmd = ["su", "-c", shlex.join(cmd)]
                     self._reporter.report(
                         "    (sudo not found, retrying with su -c...)"
                     )
                     start = perf_counter()
                     try:
-                        proc = self._run_subprocess(su_cmd, timeout, cwd, env)
-                    except subprocess.TimeoutExpired:
+                        proc = self._spawn(su_cmd, timeout, cwd, env)
+                    except SubprocessTimeout:
                         return self._timeout_result(
                             tool_name, timestamp, start, timeout
                         )
-                    except (FileNotFoundError, PermissionError):
+                    except (SubprocessNotFound, SubprocessPermissionDenied):
                         self._reporter.report(
                             "    ✗ Failed  (elevated privileges not available)"
                         )
@@ -418,7 +359,7 @@ class ToolExecutor:
                             "Elevated privileges not available"
                             " (sudo and su both failed)",
                         )
-                except PermissionError:
+                except SubprocessPermissionDenied:
                     self._reporter.report("    ✗ Failed  (permission denied)")
                     _log.error("Tool %s: permission denied running sudo", tool_name)
                     return self._failure(

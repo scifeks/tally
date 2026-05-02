@@ -13,6 +13,7 @@ from application.tools.registry import discover_tools, tool_registry
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.tools.runner import SubprocessRunner
 from tests.conftest import requires_gitleaks
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 
@@ -98,6 +99,7 @@ def _run_scan(
         project_name=project_name,
         base_path=base_path,
         prompt=NoApprovalPromptAdapter(),
+        subprocess_runner=SubprocessRunner(),
     )
     return executor.execute(
         tool,

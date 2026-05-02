@@ -1,4 +1,4 @@
-"""ScanService — single core port for starting a scan.
+"""ScanService: single core port for starting a scan.
 
 Both adapters (REPL and Web) call ``ScanService.start_scan`` and nothing
 else from the locking surface. The service owns the entire start-scan
@@ -11,9 +11,9 @@ lifecycle:
   * Daemon worker thread spawning the actual orchestrator run.
   * Normalized error egress: synchronous failures raise out of
     ``start_scan``; asynchronous failures appear in three places in
-    lockstep — :meth:`Future.set_exception`, a ``RunFailed`` event on
-    the supplied event sink, and a persisted ``scan_runs.status='failed'``
-    row.
+    lockstep, namely :meth:`Future.set_exception`, a ``RunFailed`` event
+    on the supplied event sink, and a persisted
+    ``scan_runs.status='failed'`` row.
 
 Adapters never touch :class:`LockRegistry` directly. The REPL blocks on
 ``handle.result.result()`` to retrieve the :class:`ScanSummary`; the Web
@@ -46,6 +46,7 @@ from domain.tools.scan_types import ScanSummary
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 from infrastructure.store.repositories.runs import RunRepository
+from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -61,7 +62,7 @@ class ScanHandle:
     """Returned from :meth:`ScanService.start_scan`.
 
     ``run_id`` is available immediately. ``result`` resolves when the
-    background scan completes — ``set_result(summary)`` on success or
+    background scan completes: ``set_result(summary)`` on success or
     ``set_exception(exc)`` on cancel/failure. Synchronous callers (REPL)
     call ``result.result()`` to block; async-style callers (Web) ignore
     the future and observe SSE events instead.
@@ -111,7 +112,7 @@ class ScanService:
                 released before the exception propagates.
 
         On success returns immediately with a :class:`ScanHandle`. The
-        actual scan body runs on a daemon worker thread — see
+        actual scan body runs on a daemon worker thread; see
         :meth:`_run_worker` for outcome handling.
         """
         holder_token = f"scan-run:{uuid.uuid4().hex[:8]}"
@@ -206,6 +207,7 @@ class ScanService:
                 project_name=project_name,
                 base_path=Path(base_path),
                 prompt=prompt,
+                subprocess_runner=SubprocessRunner(),
                 reporter=reporter,
             )
             pipeline_bus = PipelineFactory.create(
