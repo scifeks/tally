@@ -119,6 +119,7 @@ interface ReportEventPayloadApi {
   progress?: number
   output_path?: string
   word_count?: number
+  preview?: string | null
   error?: string
 }
 
@@ -197,6 +198,8 @@ function mapReportEvent(type: ReportLogEventType, data: ReportEventPayloadApi): 
     section: data.section,
     message: data.message ?? '',
     progress: data.progress,
+    wordCount: data.word_count,
+    preview: data.preview ?? undefined,
   }
 }
 
@@ -355,8 +358,26 @@ export function useGenerateDrafts() {
       return data.drafts.map(mapReportDraft)
     },
     onError: err => setError(toErrorPayload(err)),
-    onSuccess: (_, { projectId }) => {
-      queryClient.invalidateQueries({ queryKey: ['reports', projectId, 'drafts'] })
+    onSuccess: (incoming, { projectId }) => {
+      // Apply the POST response to the cache so any stale `failed` state
+      // from prior runs clears immediately. SSE drives transitions from
+      // here on; no GET refetch needed.
+      queryClient.setQueryData<ReportDraft[]>(['reports', projectId, 'drafts'], prev => {
+        if (!prev) return prev
+        const bySection = new Map(incoming.map(d => [d.section, d]))
+        return prev.map(existing => {
+          const next = bySection.get(existing.section)
+          if (!next) return existing
+          return {
+            ...existing,
+            status: next.status,
+            error: undefined,
+            preview: undefined,
+            wordCount: undefined,
+            generatedAt: undefined,
+          }
+        })
+      })
     },
   })
 }

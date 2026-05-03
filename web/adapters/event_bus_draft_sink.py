@@ -21,11 +21,12 @@ DRAFT_STREAM = "report_draft"
 
 
 def _payload_for(event: DraftEvent) -> dict:
-    """Flatten a draft event dataclass into the BusEvent payload mapping."""
-    payload = dataclasses.asdict(event)
-    payload.pop("id", None)
-    payload.pop("timestamp", None)
-    return payload
+    """Flatten a draft event dataclass into the BusEvent payload mapping.
+
+    ``id`` and ``timestamp`` stay on the wire so SSE consumers have a
+    stable per-event identifier for React keys and audit logging.
+    """
+    return dataclasses.asdict(event)
 
 
 class EventBusDraftSink:

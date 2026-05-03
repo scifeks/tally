@@ -505,6 +505,10 @@ export interface ReportLogEvent {
   section?: ReportDraftSection
   message: string
   progress?: number
+  /** Carried by draft_completed events */
+  wordCount?: number
+  /** Carried by draft_completed events */
+  preview?: string
 }
 
 export interface ReportSnapshotPayload {

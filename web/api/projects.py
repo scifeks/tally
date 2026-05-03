@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from pathlib import Path
 from typing import Any
 
@@ -426,41 +425,16 @@ async def _ingest_endpoint_file(
     repo: Repository,
     endpoint_file: UploadFile,
 ) -> None:
-    """Persist the upload to ``endpoints/<repo-name>-<epoch>/`` and ingest it.
-
-    Each upload lands in a fresh sibling directory keyed on epoch
-    seconds; prior uploads accumulate as history. The most-recent path
-    is recorded on ``repositories.url_seed_file``.
-    """
-    from application.url_inventory.ports import UrlProviderContext
-    from application.url_inventory.providers.user_file import UserFileProvider
-
+    """Read the upload off the request and hand it to the URL list service."""
     if repo.id is None:
         raise ApiValidationError("Repository must be persisted before upload")
-    repo_id = repo.id
-
-    row = _resolve_project(request, project_id)
-    paths = ProjectPaths.from_registry_row(row)
-    epoch = time.time_ns()
-    upload_dir = paths.seed_upload_dir(repo.name, epoch)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    dest = upload_dir / (endpoint_file.filename or "upload.json")
-    dest.write_bytes(await endpoint_file.read())
-
-    repo_service = _service_from_request(request)
-    repo_service.record_seed_file(project_id, repo_id, str(dest))
-
-    url_list_service = _url_list_service(request, project_id)
-    ctx = UrlProviderContext(
+    contents = await endpoint_file.read()
+    filename = endpoint_file.filename or "upload.json"
+    service = _url_list_service(request, project_id)
+    await asyncio.to_thread(
+        service.ingest_uploaded_endpoint_file,
         repo=repo,
-        repo_id=repo_id,
-        base_path=str(paths.root.parent.parent),
-        project_name=row.name,
-        run_id=None,
-    )
-    entries = list(UserFileProvider().provide(ctx, file_path=str(dest)))
-    url_list_service.inventory.ingest_user_file(
-        repo_id=repo_id,
-        file_path=str(dest),
-        entries=entries,
+        repo_id=repo.id,
+        filename=filename,
+        contents=contents,
     )

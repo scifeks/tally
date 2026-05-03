@@ -166,6 +166,7 @@ def run_draft(
     content = output.read_text(encoding="utf-8")
     word_count = len(content.split())
     file_size = output.stat().st_size
+    preview = content[:200]
 
     sink.emit(
         DraftCompleted(
@@ -175,6 +176,7 @@ def run_draft(
             output_path=str(output),
             file_size_bytes=file_size,
             word_count=word_count,
+            preview=preview,
             message=f"Draft saved to {output}",
         )
     )
@@ -314,17 +316,27 @@ def _build_rag_query(section: str, context: dict[str, Any]) -> str | None:
         return "all security findings by severity and tool"
 
     if section == "critical-issues":
-        findings: list[dict[str, Any]] = context.get("top_findings", [])
+        findings: list[Finding] = context.get("top_findings", [])
         terms: list[str] = []
-        for field in ("vulnerability_id", "cwe", "risk_type"):
-            seen: set[str] = set()
-            for f in findings:
-                val = f.get(field)
-                if val and isinstance(val, str) and val not in seen:
+        seen: set[str] = set()
+        cap = 15
+
+        for f in findings:
+            if len(seen) >= cap:
+                break
+            candidates: list[str | None] = [f.vulnerability_id]
+            candidates.extend(f.cwe)
+            if isinstance(f.meta, dict):
+                risk_type = f.meta.get("risk_type")
+                if isinstance(risk_type, str):
+                    candidates.append(risk_type)
+            for val in candidates:
+                if val and val not in seen:
                     seen.add(val)
                     terms.append(val)
-                if len(seen) >= 5:
-                    break
+                    if len(seen) >= cap:
+                        break
+
         base = "critical high severity vulnerabilities exploitable"
         return f"{base} {' '.join(terms)}" if terms else base
 

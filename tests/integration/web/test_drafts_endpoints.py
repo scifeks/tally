@@ -57,7 +57,8 @@ async def test_list_drafts_returns_all_sections_not_generated(
     client, *_, project_id = app_client
     resp = await client.get(f"/api/v1/projects/{project_id}/reports/drafts")
     assert resp.status_code == 200, resp.text
-    items = resp.json()
+    body = resp.json()
+    items = body["drafts"]
     assert isinstance(items, list)
     assert len(items) == len(SECTION_REGISTRY)
     for item in items:
@@ -72,7 +73,7 @@ async def test_list_drafts_reflects_db_row(app_client) -> None:
     _seed_draft(factory, section="executive-summary", status="draft")
     resp = await client.get(f"/api/v1/projects/{project_id}/reports/drafts")
     assert resp.status_code == 200
-    by_section = {i["section"]: i for i in resp.json()}
+    by_section = {i["section"]: i for i in resp.json()["drafts"]}
     assert by_section["executive-summary"]["status"] == "draft"
     for s, item in by_section.items():
         if s != "executive-summary":
@@ -91,7 +92,7 @@ async def test_list_drafts_surfaces_failed_error_string(app_client) -> None:
     _seed_draft(factory, section="executive-summary", status="failed", error=msg)
     resp = await client.get(f"/api/v1/projects/{project_id}/reports/drafts")
     assert resp.status_code == 200
-    by_section = {i["section"]: i for i in resp.json()}
+    by_section = {i["section"]: i for i in resp.json()["drafts"]}
     assert by_section["executive-summary"]["status"] == "failed"
     assert by_section["executive-summary"]["error"] == msg
 
@@ -107,7 +108,7 @@ async def test_list_drafts_word_count_from_file(app_client, tmp_path) -> None:
 
     resp = await client.get(f"/api/v1/projects/{project_id}/reports/drafts")
     assert resp.status_code == 200
-    by_section = {i["section"]: i for i in resp.json()}
+    by_section = {i["section"]: i for i in resp.json()["drafts"]}
     assert by_section["risk-level"]["word_count"] == 5
     assert by_section["risk-level"]["preview"] == content
 
@@ -337,7 +338,7 @@ async def test_upload_draft_happy_path(app_client, tmp_path) -> None:
     body = resp.json()
     assert body["section"] == "executive-summary"
     assert body["status"] == "reviewed"
-    assert body["original_filename"] == "exec.md"
+    assert body["uploaded_filename"] == "exec.md"
     assert body["word_count"] > 0
 
     record = DraftRepository(factory).get("executive-summary")
