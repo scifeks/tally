@@ -19,8 +19,13 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from application.locking import JobBusy, get_registry
+from application.reporting.draft_run_registry import get_draft_run_registry
 from application.reporting.drafts import SECTION_REGISTRY
-from application.reporting.reports_service import ProjectNotFound, ReportsService
+from application.reporting.reports_service import (
+    ProjectNotFound,
+    ReportsService,
+    UnknownSectionError,
+)
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
@@ -28,7 +33,8 @@ from domain.reports.entry import REPORT_STATUSES, DraftRow, ReportRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from web.adapters.draft_run_registry import get_draft_run_registry
+from web.adapters.event_bus_draft_sink import EventBusDraftSink
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.adapters.report_run_registry import get_report_run_registry
 from web.api._errors import (
     Conflict,
@@ -44,7 +50,6 @@ from web.api.schemas import (
     ReportsListResponse,
     ReportSummary,
 )
-from web.reports.draft_runner import WebDraftRequest, start_draft_thread
 from web.reports.runner import WebReportRequest, start_report_thread
 
 logger = logging.getLogger("tally.web.reports")
@@ -346,7 +351,7 @@ _DRAFT_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
 
 
 class _DraftStartRequest(BaseModel):
-    section: str
+    sections: list[str]
     force: bool = False
 
 
@@ -403,53 +408,47 @@ async def list_drafts(
     "/{project_id}/reports/drafts",
     status_code=202,
 )
-async def start_draft(
+async def start_drafts(
     project_id: int,
     request: Request,
     body: _DraftStartRequest,
 ) -> dict[str, Any]:
-    """Queue draft generation for *section*.
+    """Queue sequential draft generation for one or more sections.
 
-    Returns 409 if any report or draft is already in progress,
-    or 422 if *section* is not in the registry.
+    Returns 409 if a report or draft batch is already in progress,
+    or 422 if ``sections`` is empty, contains duplicates, or names a
+    section not in the registry.
     """
-    if body.section not in SECTION_REGISTRY:
-        raise ValidationError(
-            f"unknown section {body.section!r}",
-            details={"allowed": list(SECTION_REGISTRY)},
-        )
     row = _resolve_project(request, project_id)
-    base_path: str = request.app.state.base_path
-
-    lock_registry = get_registry()
-    holder = f"draft-web:{new_event_id()[:8]}"
+    service = _service(request, project_id)
+    sink = EventBusDraftSink(request.app.state.event_bus)
     try:
-        lock_registry.acquire_job("report", holder)
+        handle = await asyncio.to_thread(
+            service.start_drafts,
+            sections=body.sections,
+            force=body.force,
+            base_path=request.app.state.base_path,
+            project_id=project_id,
+            project_name=row.name,
+            prompt=NoApprovalPromptAdapter(),
+            event_sink=sink,
+        )
+    except UnknownSectionError as exc:
+        raise ValidationError(
+            str(exc), details={"allowed": list(SECTION_REGISTRY)}
+        ) from exc
     except JobBusy as exc:
         raise JobBusyError("report", exc.current_holder) from exc
 
-    service = _service(request, project_id)
-    web_req = WebDraftRequest(section=body.section, force_overwrite=body.force)
-    try:
-        start_draft_thread(
-            base_path=base_path,
-            project_name=row.name,
-            project_id=project_id,
-            request=web_req,
-            holder_token=holder,
-            draft_repo=service.draft_repo,
-            bus=request.app.state.event_bus,
-            draft_run_registry=get_draft_run_registry(),
-            lock_registry=lock_registry,
-        )
-    except Exception:
-        try:
-            lock_registry.release_job("report", holder)
-        except Exception:  # noqa: BLE001
-            pass
-        raise
-
-    return {"section": body.section, "status": "generating"}
+    return {
+        "drafts": [
+            {
+                "section": section,
+                "status": "generating" if i == 0 else "queued",
+            }
+            for i, section in enumerate(handle.sections)
+        ]
+    }
 
 
 @v1_router.get("/{project_id}/reports/drafts/events")

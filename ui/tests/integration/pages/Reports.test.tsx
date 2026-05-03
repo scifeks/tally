@@ -183,16 +183,19 @@ describe('Reports page - draft generation', () => {
     server.use(
       http.post('/api/v1/projects/1/reports/drafts', async ({ request }) => {
         body = (await request.json()) as Record<string, unknown>
+        const sections = (body.sections as string[]) ?? []
         return HttpResponse.json(
           {
-            section: body.section,
-            status: 'generating',
-            generated_at: null,
-            reviewed_at: null,
-            preview: null,
-            word_count: null,
-            uploaded_filename: null,
-            error: null,
+            drafts: sections.map((section, i) => ({
+              section,
+              status: i === 0 ? 'generating' : 'queued',
+              generated_at: null,
+              reviewed_at: null,
+              preview: null,
+              word_count: null,
+              uploaded_filename: null,
+              error: null,
+            })),
           },
           { status: 202 }
         )
@@ -208,7 +211,7 @@ describe('Reports page - draft generation', () => {
     await user.click(generateBtn)
 
     await waitFor(() => expect(body).not.toBeNull())
-    expect(body).toMatchObject({ section: 'improvement-points', force: false })
+    expect(body).toMatchObject({ sections: ['improvement-points'], force: false })
   })
 
   it('surfaces 409 JOB_ALREADY_RUNNING through the report-mutation-error modal', async () => {

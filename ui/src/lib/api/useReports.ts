@@ -9,7 +9,7 @@
  *
  * Endpoint contract:
  *   GET    /api/v1/projects/:id/reports/drafts
- *   POST   /api/v1/projects/:id/reports/drafts             - body { section, force? }
+ *   POST   /api/v1/projects/:id/reports/drafts             - body { sections, force? }
  *   GET    /api/v1/projects/:id/reports/drafts/:section/download  - text/markdown
  *   POST   /api/v1/projects/:id/reports/drafts/upload      - multipart { section, file }
  *   DELETE /api/v1/projects/:id/reports/drafts/:section
@@ -328,23 +328,26 @@ export function useLatestReport(projectId: number | null) {
 
 // ─── Mutations ──────────────────────────────────────────────────────────────
 
-export interface GenerateDraftVariables {
+export interface GenerateDraftsVariables {
   projectId: number
-  section: ReportDraftSection
+  sections: ReportDraftSection[]
   force?: boolean
 }
 
-export function useGenerateDraft() {
+export function useGenerateDrafts() {
   const queryClient = useQueryClient()
   const setError = useUI(s => s.setReportMutationError)
 
-  return useMutation<ReportDraft, ApiError, GenerateDraftVariables>({
-    mutationFn: async ({ projectId, section, force }) => {
-      const data = await apiFetch<ReportDraftApi>(REST_ENDPOINTS.generateDraft(projectId), {
-        method: 'POST',
-        body: { section, force: force ?? false },
-      })
-      return mapReportDraft(data)
+  return useMutation<ReportDraft[], ApiError, GenerateDraftsVariables>({
+    mutationFn: async ({ projectId, sections, force }) => {
+      const data = await apiFetch<ReportDraftsResponseApi>(
+        REST_ENDPOINTS.generateDraft(projectId),
+        {
+          method: 'POST',
+          body: { sections, force: force ?? false },
+        }
+      )
+      return data.drafts.map(mapReportDraft)
     },
     onError: err => setError(toErrorPayload(err)),
     onSuccess: (_, { projectId }) => {

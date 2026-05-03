@@ -88,7 +88,7 @@ export {
   useReportDrafts,
   useReportHistory,
   useLatestReport,
-  useGenerateDraft,
+  useGenerateDrafts,
   useUploadDraft,
   useDeleteDraft,
   useGenerateReport,
@@ -102,7 +102,7 @@ export {
   mapReportRun,
 } from './useReports'
 export type {
-  GenerateDraftVariables,
+  GenerateDraftsVariables,
   UploadDraftVariables,
   DeleteDraftVariables,
   GenerateReportVariables,

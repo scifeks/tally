@@ -7,7 +7,7 @@ import {
   useProjects,
   useReportDrafts,
   useReportHistory,
-  useGenerateDraft,
+  useGenerateDrafts,
   useUploadDraft,
   useDeleteDraft,
   useGenerateReport,
@@ -39,7 +39,7 @@ export default function Reports() {
   const { data: projects = [] } = useProjects()
   const { data: draftData = [] } = useReportDrafts(activeProjectId)
   const { data: historyData = [] } = useReportHistory(activeProjectId)
-  const generateDraft = useGenerateDraft()
+  const generateDrafts = useGenerateDrafts()
   const uploadDraft = useUploadDraft()
   const deleteDraft = useDeleteDraft()
   const generateReport = useGenerateReport()
@@ -79,10 +79,13 @@ export default function Reports() {
   const selectedFormat = FORMAT_OPTIONS.find(f => f.value === format) ?? FORMAT_OPTIONS[0]
   const canGenerate = selectedFormat.requiresDrafts ? allDraftsReady : true
 
-  // Track which single section is being generated for the per-card spinner.
-  const generatingSection: ReportDraftSection | null =
-    generateDraft.isPending && generateDraft.variables ? generateDraft.variables.section : null
-  const [generatingAll, setGeneratingAll] = useState(false)
+  // Sections currently included in an in-flight POST. The first one is
+  // generating; the rest are queued. The SSE stream flips per-section state
+  // once each finishes, so we use this only to drive the per-card spinner.
+  const generatingSections: ReadonlySet<ReportDraftSection> = useMemo(() => {
+    if (!generateDrafts.isPending || !generateDrafts.variables) return new Set()
+    return new Set(generateDrafts.variables.sections)
+  }, [generateDrafts.isPending, generateDrafts.variables])
 
   // Auto-scroll logs
   useEffect(() => {
@@ -121,36 +124,24 @@ export default function Reports() {
   const handleGenerateDraft = useCallback(
     (section: ReportDraftSection, force: boolean) => {
       if (activeProjectId === null) return
-      generateDraft.mutate({ projectId: activeProjectId, section, force })
+      generateDrafts.mutate({ projectId: activeProjectId, sections: [section], force })
     },
-    [activeProjectId, generateDraft]
+    [activeProjectId, generateDrafts]
   )
 
   const handleGenerateAll = useCallback(
-    async (force: boolean) => {
+    (force: boolean) => {
       if (activeProjectId === null) return
-      setGeneratingAll(true)
-      try {
-        const toGenerate = force
-          ? SECTION_ORDER
-          : SECTION_ORDER.filter(s => {
-              const d = drafts.find(dr => dr.section === s)
-              return !d || d.status === 'not_generated' || d.status === 'failed'
-            })
-        for (const section of toGenerate) {
-          try {
-            await generateDraft.mutateAsync({ projectId: activeProjectId, section, force })
-          } catch {
-            // Mutation error is surfaced via the modal slice; abort the loop
-            // so the user can resolve before continuing.
-            break
-          }
-        }
-      } finally {
-        setGeneratingAll(false)
-      }
+      const sections = force
+        ? [...SECTION_ORDER]
+        : SECTION_ORDER.filter(s => {
+            const d = drafts.find(dr => dr.section === s)
+            return !d || d.status === 'not_generated' || d.status === 'failed'
+          })
+      if (sections.length === 0) return
+      generateDrafts.mutate({ projectId: activeProjectId, sections, force })
     },
-    [activeProjectId, drafts, generateDraft]
+    [activeProjectId, drafts, generateDrafts]
   )
 
   const handleUpload = useCallback(
@@ -463,11 +454,13 @@ export default function Reports() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleGenerateAll(false)}
-                    disabled={generatingAll || allDraftsReady || activeProjectId === null}
+                    disabled={
+                      generateDrafts.isPending || allDraftsReady || activeProjectId === null
+                    }
                     data-testid="report-generate-missing-button"
                     className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {generatingAll ? (
+                    {generateDrafts.isPending ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       'Generate Missing'
@@ -475,7 +468,7 @@ export default function Reports() {
                   </button>
                   <button
                     onClick={() => handleGenerateAll(true)}
-                    disabled={generatingAll || activeProjectId === null}
+                    disabled={generateDrafts.isPending || activeProjectId === null}
                     data-testid="report-regenerate-all-button"
                     className="px-2 py-1 text-[10px] uppercase tracking-wider border border-warn text-warn hover:bg-warn hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Regenerate all (overwrites existing)"
@@ -494,7 +487,7 @@ export default function Reports() {
                     onGenerate={force => handleGenerateDraft(draft.section, force)}
                     onUpload={file => handleUpload(draft.section, file)}
                     onDelete={() => handleDelete(draft.section)}
-                    isGenerating={generatingSection === draft.section || generatingAll}
+                    isGenerating={generatingSections.has(draft.section)}
                     skipTriage={skipTriage}
                   />
                 ))}
