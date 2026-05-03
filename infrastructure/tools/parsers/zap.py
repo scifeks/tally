@@ -416,6 +416,8 @@ class ZapHandler:
                 row["evidence"] = evidence
             if cwe_id is not None and cwe_id > 0:
                 row["cwe_id"] = cwe_id
+            if alert_name:
+                row["title"] = alert_name
             row.update(_shared_meta(self, "vulnerability"))
 
             rows.append(row)

@@ -124,6 +124,51 @@ class UrlListService:
         except Exception:
             return 0
 
+    def count_all_url_findings(self) -> int:
+        """Count every url_findings row, regardless of repo state.
+
+        Returns 0 when the findings DB has not been created yet or
+        when the underlying read raises. Used by the REPL ``purge``
+        command to decide whether the full-wipe path has any
+        url_findings work to do.
+        """
+        if not self._findings_db_exists:
+            return 0
+        try:
+            return self._url_repo.count_all()
+        except Exception:
+            return 0
+
+    def delete_url_findings_for_tools(self, tools: list[str]) -> int:
+        """Delete url_findings rows whose ``tool`` is in *tools*.
+
+        Returns 0 when the findings DB does not yet exist, when
+        *tools* is empty, or on any underlying error. Used by the
+        per-tool branch of the REPL ``purge`` command for Katana /
+        Noir cleanup.
+        """
+        if not self._findings_db_exists or not tools:
+            return 0
+        try:
+            return self._url_repo.delete_for_tools(tools)
+        except Exception:
+            return 0
+
+    def purge_all_url_findings(self) -> int:
+        """Wipe every url_findings row for the project.
+
+        Returns 0 when the findings DB does not yet exist or on
+        any underlying error. Delegates to the wrapped
+        ``UrlInventoryService`` so the REPL ``purge`` command does
+        not need to import the inventory service directly.
+        """
+        if not self._findings_db_exists:
+            return 0
+        try:
+            return self._inventory.delete_for_project()
+        except Exception:
+            return 0
+
     def repo_has_url_findings(self, repo_id: int) -> bool:
         """Return True when *repo_id* has any persisted url_findings rows.
 

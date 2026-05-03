@@ -21,6 +21,7 @@ from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from application.url_inventory.service import UrlInventoryService  # noqa: E402
 from core.config.schemas.repository import Repository  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
+from domain.projects.entry import ProjectRow  # noqa: E402
 from domain.url_inventory.entry import UrlFinding, UrlSource  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.repositories import (  # noqa: E402
@@ -36,12 +37,20 @@ pytestmark = pytest.mark.integration
 MOCK_TOOLS = ["nmap", "semgrep"]
 
 
-def _make_repl(tmp_path: Path) -> MagicMock:
+def _make_repl(tmp_path: Path, project_id: int = 7) -> MagicMock:
     repl = MagicMock()
     repl.active_project = "testproj"
     repl.base_path = str(tmp_path)
     repl.console = MagicMock()
     repl.tool_registry.list_tool_names.return_value = MOCK_TOOLS
+    project_row = ProjectRow(
+        id=project_id,
+        name="testproj",
+        path=str(tmp_path / "projects" / "testproj"),
+        created_at="2026-01-01T00:00:00Z",
+    )
+    repl.project_registry.resolve_by_name = MagicMock(return_value=project_row)
+    repl.project_registry.resolve_by_id = MagicMock(return_value=project_row)
     return repl
 
 

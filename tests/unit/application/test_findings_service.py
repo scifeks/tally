@@ -50,15 +50,25 @@ class _CountingFindingRepo:
         self._total = total
         self._raises = raises
         self.count_findings_calls = 0
+        self.last_count_tools: list[str] | None = None
+        self.delete_findings_calls: list[list[str] | None] = []
 
-    def count_findings(self) -> int:
+    def count_findings(self, *, tools: list[str] | None = None, **_kwargs: Any) -> int:
         self.count_findings_calls += 1
+        self.last_count_tools = tools
         if self._raises is not None:
             raise self._raises
         return self._total
 
+    def delete_findings(self, tools: list[str] | None = None) -> None:
+        self.delete_findings_calls.append(tools)
+        if self._raises is not None:
+            raise self._raises
+
     def __getattr__(self, _name: str) -> Any:
-        raise AssertionError("Only count_findings is exercised by these tests")
+        raise AssertionError(
+            "Only count_findings / delete_findings exercised by these tests"
+        )
 
 
 class _StubHistoryRepo:
@@ -258,6 +268,122 @@ class TestFindingsService:
         )
         assert service.count_findings() == 17
         assert finding_repo.count_findings_calls == 1
+
+
+class TestFindingsServiceCountFindingsTools:
+    def test_forwards_tools_filter_to_repo(self) -> None:
+        finding_repo = _CountingFindingRepo(total=8)
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
+            findings_db_exists=True,
+        )
+        assert service.count_findings(tools=["semgrep", "gitleaks"]) == 8
+        assert finding_repo.last_count_tools == ["semgrep", "gitleaks"]
+
+    def test_returns_zero_when_findings_db_missing_with_tools(self) -> None:
+        finding_repo = _CountingFindingRepo(total=8)
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
+            findings_db_exists=False,
+        )
+        assert service.count_findings(tools=["semgrep"]) == 0
+        assert finding_repo.count_findings_calls == 0
+
+
+class TestFindingsServiceDeleteFindingsForTools:
+    def test_forwards_tools_to_repo(self) -> None:
+        finding_repo = _CountingFindingRepo()
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
+            findings_db_exists=True,
+        )
+        service.delete_findings_for_tools(["katana", "noir"])
+        assert finding_repo.delete_findings_calls == [["katana", "noir"]]
+
+    def test_empty_tools_is_no_op(self) -> None:
+        finding_repo = _CountingFindingRepo()
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
+            findings_db_exists=True,
+        )
+        service.delete_findings_for_tools([])
+        assert finding_repo.delete_findings_calls == []
+
+
+class TestFindingsServicePurgeAllFindingsData:
+    def test_forwards_to_factory_purge(self) -> None:
+        finding_repo = _StubFindingRepo()
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        factory = MagicMock()
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
+            findings_db_exists=True,
+            factory=factory,
+        )
+        service.purge_all_findings_data()
+        factory.purge_non_preserved_tables.assert_called_once_with()
+
+    def test_no_op_when_factory_not_stored(self) -> None:
+        finding_repo = _StubFindingRepo()
+        history_repo = _StubHistoryRepo()
+        project_repo = _StubProjectRepo()
+        analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
+        service = FindingsService(
+            finding_repo=finding_repo,  # type: ignore[arg-type]
+            history_repo=history_repo,  # type: ignore[arg-type]
+            project_repo=project_repo,  # type: ignore[arg-type]
+            analyst=analyst,
+            lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
+            findings_db_exists=True,
+        )
+        # Does not raise.
+        service.purge_all_findings_data()
 
 
 class TestFindingsServicePatch:

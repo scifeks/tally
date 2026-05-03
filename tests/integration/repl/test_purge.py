@@ -541,14 +541,14 @@ def test_full_purge_hard_deletes_chat_sessions_and_messages(
     sids, _ = _seed_chat_data(tmp_path, "testproj", project_id=project_id, n_sessions=2)
 
     repl = _make_repl(tmp_path)
-    repl.project_registry.resolve_by_name = MagicMock(
-        return_value=ProjectRow(
-            id=project_id,
-            name="testproj",
-            path=str(tmp_path / "projects" / "testproj"),
-            created_at="2026-01-01T00:00:00Z",
-        )
+    project_row = ProjectRow(
+        id=project_id,
+        name="testproj",
+        path=str(tmp_path / "projects" / "testproj"),
+        created_at="2026-01-01T00:00:00Z",
     )
+    repl.project_registry.resolve_by_name = MagicMock(return_value=project_row)
+    repl.project_registry.resolve_by_id = MagicMock(return_value=project_row)
     cmd = PurgeCommand(repl)
     engine = _make_rag_engine(0)
     engine.count_documents.return_value = 0
@@ -587,14 +587,14 @@ def test_tool_filtered_purge_does_not_touch_chat(tmp_path: Path) -> None:
     sids, _ = _seed_chat_data(tmp_path, "testproj", project_id=project_id, n_sessions=2)
 
     repl = _make_repl(tmp_path)
-    repl.project_registry.resolve_by_name = MagicMock(
-        return_value=ProjectRow(
-            id=project_id,
-            name="testproj",
-            path=str(tmp_path / "projects" / "testproj"),
-            created_at="2026-01-01T00:00:00Z",
-        )
+    project_row = ProjectRow(
+        id=project_id,
+        name="testproj",
+        path=str(tmp_path / "projects" / "testproj"),
+        created_at="2026-01-01T00:00:00Z",
     )
+    repl.project_registry.resolve_by_name = MagicMock(return_value=project_row)
+    repl.project_registry.resolve_by_id = MagicMock(return_value=project_row)
     cmd = PurgeCommand(repl)
     engine = _make_rag_engine(2)
     with (

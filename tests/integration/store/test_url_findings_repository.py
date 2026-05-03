@@ -214,6 +214,66 @@ class TestDelete:
         assert url_repo.list_for_repo(repo_id) == []
 
 
+class TestCountAll:
+    def test_returns_zero_on_empty_table(self, url_repo: UrlFindingRepository) -> None:
+        assert url_repo.count_all() == 0
+
+    def test_counts_every_row_regardless_of_repo_state(
+        self, factory: ConnectionFactory, url_repo: UrlFindingRepository
+    ) -> None:
+        rr = RepositoryRepository(factory)
+        active_id = rr.insert(_repo("active"))
+        deleted_id = rr.insert(_repo("deleted"))
+        url_repo.insert_many(
+            [
+                _scan(active_id, path="/a"),
+                _scan(active_id, path="/b"),
+                _scan(deleted_id, path="/c"),
+            ]
+        )
+        rr.soft_delete(deleted_id)
+        # count_all ignores soft-delete state — all three rows count.
+        assert url_repo.count_all() == 3
+
+
+class TestDeleteForTools:
+    def test_empty_tools_returns_zero(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many([_scan(repo_id, path="/a", tool=UrlTool.KATANA)])
+        assert url_repo.delete_for_tools([]) == 0
+        assert len(url_repo.list_for_repo(repo_id)) == 1
+
+    def test_deletes_rows_matching_tool_list(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [
+                _scan(repo_id, path="/k1", tool=UrlTool.KATANA),
+                _scan(repo_id, path="/k2", tool=UrlTool.KATANA),
+                _scan(repo_id, path="/n1", tool=UrlTool.NOIR),
+                _user(repo_id, file_path="/uploads/a.json", path="/u1"),
+            ]
+        )
+        n = url_repo.delete_for_tools(["katana", "noir"])
+        assert n == 3
+        rows = url_repo.list_for_repo(repo_id)
+        assert {r.path for r in rows} == {"/u1"}
+
+    def test_unmatched_tools_delete_nothing(
+        self, url_repo: UrlFindingRepository, repo_id: int
+    ) -> None:
+        url_repo.insert_many(
+            [
+                _scan(repo_id, path="/k1", tool=UrlTool.KATANA),
+                _scan(repo_id, path="/n1", tool=UrlTool.NOIR),
+            ]
+        )
+        n = url_repo.delete_for_tools(["semgrep"])
+        assert n == 0
+        assert len(url_repo.list_for_repo(repo_id)) == 2
+
+
 class TestPagination:
     def test_pagination_filters_and_total(
         self, url_repo: UrlFindingRepository, repo_id: int

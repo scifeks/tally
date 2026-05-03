@@ -267,11 +267,18 @@ class XSSTrikeHandler:
                 "payload": payload,
                 "timestamp": timestamp,
                 "source_file": source_file,
+                "title": (
+                    f"Cross-Site Scripting (XSS) in '{param}'"
+                    if param
+                    else "Cross-Site Scripting (XSS)"
+                ),
             }
             row.update(_shared_meta(self, "vulnerability"))
             rows.append(row)
 
         for cf in component_findings:
+            component_name = cf.get("component_name", "")
+            component_version = cf.get("component_version", "")
             row = {
                 "tool": "xsstrike",
                 "profile": profile,
@@ -279,8 +286,8 @@ class XSSTrikeHandler:
                 "severity": cf.get("severity", "low"),
                 "confidence": "confirmed",
                 "risk_type": "Vulnerable Component",
-                "package_name": cf.get("component_name", ""),
-                "package_version": cf.get("component_version", ""),
+                "package_name": component_name,
+                "package_version": component_version,
                 "vulnerability_id": cf.get("cve", ""),
                 "url": cf.get("component_location", ""),
                 "timestamp": timestamp,
@@ -288,6 +295,12 @@ class XSSTrikeHandler:
             }
             if cf.get("summary"):
                 row["description"] = cf["summary"]
+            if component_name:
+                row["title"] = (
+                    f"Vulnerable component: {component_name}@{component_version}"
+                    if component_version
+                    else f"Vulnerable component: {component_name}"
+                )
             row.update(_shared_meta(self, "dependency"))
             rows.append(row)
 

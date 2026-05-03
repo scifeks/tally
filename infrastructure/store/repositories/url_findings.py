@@ -311,6 +311,33 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             ).fetchone()
         return int(row[0]) if row else 0
 
+    def count_all(self) -> int:
+        """Count every row, regardless of repo soft-delete state.
+
+        Used by the project-wide ``purge`` REPL command to decide
+        whether the full-wipe path has any url_findings work to do.
+        """
+        with self._factory.connect() as conn:
+            row = conn.execute("SELECT COUNT(*) FROM url_findings").fetchone()
+        return int(row[0]) if row else 0
+
+    def delete_for_tools(self, tools: list[str]) -> int:
+        """Delete rows whose ``tool`` value is in *tools*.
+
+        The per-tool ``purge`` path uses this to clear Katana / Noir
+        rows alongside the matching `findings` rows. An empty list is
+        a no-op (returns 0) so callers do not need to guard.
+        """
+        if not tools:
+            return 0
+        placeholders = ",".join("?" * len(tools))
+        with self._factory.connect() as conn:
+            cur = conn.execute(
+                f"DELETE FROM url_findings WHERE tool IN ({placeholders})",
+                tools,
+            )
+            return cur.rowcount
+
     # Helpers
     @staticmethod
     def _row_to_entity(row: sqlite3.Row) -> UrlFinding:
