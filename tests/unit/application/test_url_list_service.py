@@ -19,6 +19,13 @@ from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
 
 
+class _StubConverter:
+    """No-op stand-in for UrlSourceConverterPort."""
+
+    def to_oas3(self, source_path: Path) -> dict[str, Any]:
+        return {}
+
+
 @dataclass
 class _Repo:
     id: int | None
@@ -127,6 +134,7 @@ def _build(
     paths: ProjectPaths | None = None,
     project_name: str = "test-project",
     inventory: Any = None,
+    converter: Any = None,
 ) -> UrlListService:
     if url_repo is None:
         url_repo = _StubUrlRepo()
@@ -136,10 +144,13 @@ def _build(
         inventory = UrlInventoryService(url_repo)  # type: ignore[arg-type]
     if paths is None:
         paths = ProjectPaths(Path("/tmp/url-list-svc-test"))
+    if converter is None:
+        converter = _StubConverter()
     return UrlListService(
         url_repo=url_repo,  # type: ignore[arg-type]
         project_repo=project_repo,  # type: ignore[arg-type]
         inventory=inventory,
+        converter=converter,
         findings_db_exists=findings_db_exists,
         paths=paths,
         project_name=project_name,
@@ -322,7 +333,7 @@ class _FakeUserFileProvider:
     instances: list[_FakeUserFileProvider] = []
     _next_entries: list[Any] = []
 
-    def __init__(self) -> None:
+    def __init__(self, _converter: Any = None) -> None:
         self.calls: list[dict[str, Any]] = []
         type(self).instances.append(self)
 

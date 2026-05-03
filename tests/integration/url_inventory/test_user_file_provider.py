@@ -18,6 +18,9 @@ from application.url_inventory.providers.user_file import (  # noqa: E402
 )
 from core.config.schemas import Repository  # noqa: E402
 from domain.url_inventory.entry import UrlSource  # noqa: E402
+from infrastructure.endpoints.converters.endpoint_file_converter import (  # noqa: E402
+    EndpointFileConverter,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -79,7 +82,11 @@ _MIN_OAS3: dict = {
 class TestProvideOAS3:
     def test_yields_one_row_per_method(self, tmp_path: Path) -> None:
         spec = _write_oas3(tmp_path, _MIN_OAS3)
-        rows = list(UserFileProvider().provide(_ctx(tmp_path), file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(
+                _ctx(tmp_path), file_path=str(spec)
+            )
+        )
         # 2 methods on /api/users + 1 on /api/orders = 3.
         assert len(rows) == 3
         triples = sorted((r.method, r.path) for r in rows)
@@ -91,7 +98,11 @@ class TestProvideOAS3:
 
     def test_all_rows_are_user_source(self, tmp_path: Path) -> None:
         spec = _write_oas3(tmp_path, _MIN_OAS3)
-        rows = list(UserFileProvider().provide(_ctx(tmp_path), file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(
+                _ctx(tmp_path), file_path=str(spec)
+            )
+        )
         assert all(r.source is UrlSource.USER for r in rows)
         assert all(r.tool is None for r in rows)
         assert all(r.run_id is None for r in rows)
@@ -99,7 +110,11 @@ class TestProvideOAS3:
 
     def test_meta_carries_original_operation(self, tmp_path: Path) -> None:
         spec = _write_oas3(tmp_path, _MIN_OAS3)
-        rows = list(UserFileProvider().provide(_ctx(tmp_path), file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(
+                _ctx(tmp_path), file_path=str(spec)
+            )
+        )
         orders = next(r for r in rows if r.path == "/api/orders")
         assert "original_file" in orders.meta
         assert orders.meta["original_file"]["parameters"][0]["name"] == "id"
@@ -112,7 +127,9 @@ class TestProvideOAS3:
             base_path=str(tmp_path),
             project_name="alpha",
         )
-        rows = list(UserFileProvider().provide(ctx, file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(ctx, file_path=str(spec))
+        )
         assert all(r.repo_id == 42 for r in rows)
 
 
@@ -121,7 +138,7 @@ class TestBaseResolution:
         doc = {**_MIN_OAS3, "servers": [{"url": "https://api.example.com:8443"}]}
         spec = _write_oas3(tmp_path, doc)
         rows = list(
-            UserFileProvider().provide(
+            UserFileProvider(EndpointFileConverter()).provide(
                 _ctx(tmp_path, base_urls=["https://override.test"]),
                 file_path=str(spec),
             )
@@ -135,7 +152,7 @@ class TestBaseResolution:
         doc.pop("servers", None)
         spec = _write_oas3(tmp_path, doc)
         rows = list(
-            UserFileProvider().provide(
+            UserFileProvider(EndpointFileConverter()).provide(
                 _ctx(tmp_path, base_urls=["http://internal.test:8080"]),
                 file_path=str(spec),
             )
@@ -147,13 +164,21 @@ class TestBaseResolution:
     def test_default_port_https(self, tmp_path: Path) -> None:
         doc = {**_MIN_OAS3, "servers": [{"url": "https://www.example.com"}]}
         spec = _write_oas3(tmp_path, doc)
-        rows = list(UserFileProvider().provide(_ctx(tmp_path), file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(
+                _ctx(tmp_path), file_path=str(spec)
+            )
+        )
         assert rows[0].port == 443
 
     def test_default_port_http(self, tmp_path: Path) -> None:
         doc = {**_MIN_OAS3, "servers": [{"url": "http://www.example.com"}]}
         spec = _write_oas3(tmp_path, doc)
-        rows = list(UserFileProvider().provide(_ctx(tmp_path), file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(
+                _ctx(tmp_path), file_path=str(spec)
+            )
+        )
         assert rows[0].port == 80
 
 
@@ -172,7 +197,11 @@ class TestSkipsUnsupportedMethods:
             },
         }
         spec = _write_oas3(tmp_path, doc)
-        rows = list(UserFileProvider().provide(_ctx(tmp_path), file_path=str(spec)))
+        rows = list(
+            UserFileProvider(EndpointFileConverter()).provide(
+                _ctx(tmp_path), file_path=str(spec)
+            )
+        )
         # Only GET should produce a row; "summary" and "parameters" are
         # path-level OAS3 keys, not HTTP methods.
         assert {(r.method, r.path) for r in rows} == {("GET", "/x")}

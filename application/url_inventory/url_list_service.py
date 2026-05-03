@@ -17,6 +17,9 @@ from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers.user_file import UserFileProvider
 from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
+from infrastructure.endpoints.converters.endpoint_file_converter import (
+    EndpointFileConverter,
+)
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.url_findings import UrlFindingRepository
@@ -28,6 +31,7 @@ if TYPE_CHECKING:
     from application.ports.url_finding_repository import (
         UrlFindingRepositoryPort,
     )
+    from application.ports.url_source_converter import UrlSourceConverterPort
     from application.project.registry_service import ProjectRegistryService
     from core.config.schemas import Repository
 
@@ -45,6 +49,7 @@ class UrlListService:
         project_repo: ProjectRepoRepositoryPort,
         inventory: UrlInventoryService,
         *,
+        converter: UrlSourceConverterPort,
         findings_db_exists: bool,
         paths: ProjectPaths,
         project_name: str,
@@ -52,6 +57,7 @@ class UrlListService:
         self._url_repo = url_repo
         self._project_repo = project_repo
         self._inventory = inventory
+        self._converter = converter
         self._findings_db_exists = findings_db_exists
         self._paths = paths
         self._project_name = project_name
@@ -76,10 +82,12 @@ class UrlListService:
         url_repo = UrlFindingRepository(factory)
         project_repo = RepositoryRepository(factory)
         inventory = UrlInventoryService(url_repo)
+        converter = EndpointFileConverter()
         return cls(
             url_repo=url_repo,
             project_repo=project_repo,
             inventory=inventory,
+            converter=converter,
             findings_db_exists=findings_db_exists,
             paths=paths,
             project_name=row.name,
@@ -213,7 +221,9 @@ class UrlListService:
             project_name=self._project_name,
             run_id=None,
         )
-        entries = list(UserFileProvider().provide(ctx, file_path=str(dest)))
+        entries = list(
+            UserFileProvider(self._converter).provide(ctx, file_path=str(dest))
+        )
         self._inventory.ingest_user_file(
             repo_id=repo_id,
             file_path=str(dest),
