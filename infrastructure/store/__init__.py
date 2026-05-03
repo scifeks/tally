@@ -32,6 +32,17 @@ def make_store(
     )
 
 
+def make_audit_repo(db_path: Path) -> AuditRepository:
+    """Create an AuditRepository bound to an existing findings.db.
+
+    For callers that already hold the on-disk path and only need audit-write
+    access. Does not initialise the schema; the caller must guarantee the
+    database already exists (the pre-tool-use hook fires after the project's
+    findings.db has been created by the regular MCP server startup).
+    """
+    return AuditRepository(ConnectionFactory(db_path))
+
+
 __all__ = [
     "ConnectionFactory",
     "RunRepository",
@@ -39,4 +50,5 @@ __all__ = [
     "TriageBatchRepository",
     "AuditRepository",
     "make_store",
+    "make_audit_repo",
 ]
