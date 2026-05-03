@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request, Response
 
 from application.runtime.dependency_service import RuntimeDependencyService
-from application.tools.registry import discover_tools, tool_registry
+from application.tools.registry import discover_tools
 from core.config._atomic import atomic_write_text, locked_config
 from core.config.schemas import CommandEntry
 from core.project_paths import ProjectPaths
@@ -70,9 +70,9 @@ def _supports_docker(tool_name: str) -> bool:
 
 
 @tools_v1_router.get("/catalog", response_model=ToolCatalogResponse)
-def get_tools_catalog() -> ToolCatalogResponse:
+def get_tools_catalog(request: Request) -> ToolCatalogResponse:
     """Return metadata for all registered tool wrappers."""
-    tools = tool_registry.get_all_tools()
+    tools = request.app.state.tool_registry.get_all_tools()
     items = [
         ToolCatalogItem(
             id=tool.name,
@@ -197,7 +197,9 @@ def _load_overrides(path: Path) -> dict:
 def _refresh_registry(request: Request, project_name: str) -> None:
     """Refresh the in-memory tool registry after a write."""
     base_path: str = request.app.state.base_path
-    discover_tools(base_path, project_name=project_name)
+    discover_tools(
+        request.app.state.tool_registry, base_path, project_name=project_name
+    )
 
 
 @projects_tools_v1_router.post(

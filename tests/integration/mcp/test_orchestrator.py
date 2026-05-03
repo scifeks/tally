@@ -113,10 +113,23 @@ def project_db(tmp_path: Path):
 # Helpers
 
 
+def _make_tool_registry_mock(
+    skip: bool = False, scan_segment: str = "sast"
+) -> MagicMock:
+    """Return a tool_registry MagicMock whose get_tool() returns a runnable tool."""
+    tool = MagicMock()
+    tool.skip = skip
+    tool.scan_segment = scan_segment
+    reg = MagicMock()
+    reg.get_tool.return_value = tool
+    reg.get_all_tools.return_value = [tool]
+    return reg
+
+
 def _run_with_root(project: str, tmp_root: Path) -> dict:
     """Invoke run_triage with _APP_ROOT patched."""
     with patch.object(triage_mod, "_APP_ROOT", tmp_root):
-        return run_triage(project)
+        return run_triage(project, _make_tool_registry_mock())
 
 
 # Tests
@@ -156,7 +169,7 @@ def test_mcp_json_written(project_db) -> None:
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", side_effect=fake_run),
     ):
-        run_triage(project)
+        run_triage(project, _make_tool_registry_mock())
 
     assert captured.get("exists") is True
     assert project in str(captured.get("data", {}))
@@ -183,7 +196,7 @@ def test_success_outcome(project_db) -> None:
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", side_effect=fake_run),
     ):
-        result = run_triage(project)
+        result = run_triage(project, _make_tool_registry_mock())
 
     assert result["sessions_run"] == 1
     assert result["success"] == 1
@@ -203,7 +216,7 @@ def test_incomplete_outcome(project_db) -> None:
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", return_value=mock_result),
     ):
-        result = run_triage(project)
+        result = run_triage(project, _make_tool_registry_mock())
 
     assert result["sessions_run"] == 1
     assert result["incomplete"] == 1
@@ -219,7 +232,7 @@ def test_timeout_outcome(project_db) -> None:
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", side_effect=TimeoutExpired(cmd="claude", timeout=300)),
     ):
-        result = run_triage(project)
+        result = run_triage(project, _make_tool_registry_mock())
 
     assert result["sessions_run"] == 1
     assert result["failed"] == 1
@@ -239,7 +252,7 @@ def test_nonzero_exit_outcome(project_db) -> None:
         patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch("subprocess.run", return_value=mock_result),
     ):
-        result = run_triage(project)
+        result = run_triage(project, _make_tool_registry_mock())
 
     assert result["sessions_run"] == 1
     assert result["failed"] == 1
@@ -250,7 +263,7 @@ def test_nonzero_exit_outcome(project_db) -> None:
 def test_missing_db_raises(tmp_path: Path) -> None:
     with patch.object(triage_mod, "_APP_ROOT", tmp_path):
         with pytest.raises(FileNotFoundError):
-            run_triage("nonexistent-project")
+            run_triage("nonexistent-project", _make_tool_registry_mock())
 
 
 def test_standalone_import() -> None:
@@ -294,7 +307,7 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
         ),
         patch("subprocess.run", return_value=mock_result),
     ):
-        run_triage(project)
+        run_triage(project, _make_tool_registry_mock())
 
     with factory.connect() as conn:
         row = conn.execute(
@@ -337,7 +350,7 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
         ),
         patch("subprocess.run", return_value=mock_result),
     ):
-        run_triage(project)
+        run_triage(project, _make_tool_registry_mock())
 
     with factory.connect() as conn:
         rows = conn.execute(
@@ -381,7 +394,7 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
         ),
         patch("subprocess.run", return_value=mock_run),
     ):
-        run_triage(project)
+        run_triage(project, _make_tool_registry_mock())
 
     assert mock_fetch.call_count == 2
     calls = {(c.args[0], c.args[1], c.args[2]) for c in mock_fetch.call_args_list}
@@ -407,7 +420,7 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
         patch.object(TriageRunner, "_write_mcp_config") as mock_write,
     ):
         with pytest.raises(RuntimeError, match="Batching failed"):
-            run_triage(project)
+            run_triage(project, _make_tool_registry_mock())
 
     mock_write.assert_not_called()
 
@@ -437,7 +450,7 @@ def test_batch_count_reported(project_db, capsys) -> None:
         ),
         patch("subprocess.run", return_value=mock_run),
     ):
-        run_triage(project)
+        run_triage(project, _make_tool_registry_mock())
 
     out = capsys.readouterr().out
     assert "3" in out

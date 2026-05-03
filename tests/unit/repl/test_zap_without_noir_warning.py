@@ -29,6 +29,12 @@ def _make_repl(
     repl = MagicMock()
     repl.active_project = "DVPA"
     repl.base_path = "/tmp/tally"
+    repl.tool_registry.list_tool_names.return_value = [
+        "katana",
+        "noir",
+        "zap",
+        "semgrep",
+    ]
     names = repo_names if repo_names is not None else ["dvna"]
     repos = []
     for name in names:
@@ -198,7 +204,6 @@ class TestCmdScanInnerWarning:
         mock_service.start_scan.return_value = mock_handle
 
         with (
-            patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
             patch(
                 "application.repl.commands.scan_commands.get_scan_service",
                 return_value=mock_service,
@@ -206,12 +211,6 @@ class TestCmdScanInnerWarning:
             patch.object(sc, "_repo_has_url_findings", return_value=url_findings_exist),
             patch("builtins.input", return_value=user_input),
         ):
-            mock_reg.list_tool_names.return_value = [
-                "katana",
-                "noir",
-                "zap",
-                "semgrep",
-            ]
             sc.cmd_scan("scan", args)
 
         return mock_service

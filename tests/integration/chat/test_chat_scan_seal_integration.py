@@ -43,7 +43,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.tools.executor import ToolExecutor  # noqa: E402
 from application.tools.orchestrator import ScanOrchestrator  # noqa: E402
-from application.tools.registry import tool_registry  # noqa: E402
+from application.tools.registry import ToolRegistry  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import EventBus  # noqa: E402
 from domain.tools.scan_types import ScanSummary  # noqa: E402
@@ -86,7 +86,7 @@ def _build_orchestrator(
     bus = EventBus()
     return ScanOrchestrator(
         project=project_name,
-        tool_registry=tool_registry,
+        tool_registry=ToolRegistry(),
         tool_executor=executor,
         event_bus=bus,
         prompt=prompt,
@@ -184,7 +184,7 @@ def test_orchestrator_no_op_when_project_id_is_none(tmp_path: Path) -> None:
     bus = EventBus()
     orch = ScanOrchestrator(
         project="testproject",
-        tool_registry=tool_registry,
+        tool_registry=ToolRegistry(),
         tool_executor=executor,
         event_bus=bus,
         prompt=prompt,

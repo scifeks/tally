@@ -19,6 +19,7 @@ def _make_repl_and_kc(active_project: str | None = "testproj"):
     repl = MagicMock()
     repl.active_project = active_project
     repl.console = MagicMock()
+    repl.tool_registry.list_tool_names.return_value = list(_KNOWN_TOOLS)
     kc = KnowledgeCommands(repl)
     return repl, kc
 

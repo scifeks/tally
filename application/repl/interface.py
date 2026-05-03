@@ -35,6 +35,7 @@ from application.repl.commands import (
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
 from application.runtime import RuntimeDependencyService
+from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
 from infrastructure.runtime import ClaudeCodeProbe
 
@@ -222,6 +223,7 @@ class REPL:
         runtime_service: RuntimeDependencyService | None = None,
         project_registry: ProjectRegistryService | None = None,
         web_ui_runner: WebUiRunnerPort | None = None,
+        tool_registry: ToolRegistry | None = None,
     ):
         self.base_path = base_path
         self.console = Console()
@@ -246,6 +248,10 @@ class REPL:
             from infrastructure.web_ui.runner import WebUiRunner
 
             web_ui_runner = WebUiRunner()
+        if tool_registry is None:
+            tool_registry = ToolRegistry()
+            discover_tools(tool_registry, base_path)
+        self.tool_registry = tool_registry
         self.help_renderer = HelpRenderer(self.console, runtime_service=runtime_service)
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
@@ -268,7 +274,7 @@ class REPL:
         print_installed_system_tools(
             self.console, runtime_deps=self._runtime_service.statuses()
         )
-        print_discovery_summary(self.console)
+        print_discovery_summary(self.console, self.tool_registry)
 
         history_path = Path.home() / ".tally-repl-history"
         session: PromptSession = PromptSession(
@@ -317,7 +323,7 @@ class REPL:
         print_installed_system_tools(
             self.console, runtime_deps=self._runtime_service.statuses()
         )
-        print_discovery_summary(self.console)
+        print_discovery_summary(self.console, self.tool_registry)
 
         while True:
             sys.stdout.write(_HARNESS_SENTINEL + "\n")

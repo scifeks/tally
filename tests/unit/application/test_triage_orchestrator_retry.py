@@ -24,7 +24,7 @@ class TestRetryOnce:
         runner.run.side_effect = [_BUSY, _SUCCESS]
         mock_for_project.return_value = runner
 
-        result = run_triage("test-project")
+        result = run_triage("test-project", MagicMock())
 
         assert result == {"sessions_run": 1, "success": 1, "failed": 0, "incomplete": 0}
         mock_sleep.assert_called_once_with(5)
@@ -40,7 +40,7 @@ class TestRetryOnce:
         mock_for_project.return_value = runner
 
         with pytest.raises(FindingsBusy):
-            run_triage("test-project")
+            run_triage("test-project", MagicMock())
 
         mock_sleep.assert_called_once_with(5)
         assert runner.run.call_count == 2
@@ -54,7 +54,7 @@ class TestRetryOnce:
         mock_for_project.return_value = runner
 
         with patch("application.triage.orchestrator.time.sleep") as mock_sleep:
-            run_triage("test-project")
+            run_triage("test-project", MagicMock())
 
         mock_sleep.assert_not_called()
         assert runner.run.call_count == 1

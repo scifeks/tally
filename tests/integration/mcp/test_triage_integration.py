@@ -13,7 +13,7 @@ import asyncio
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -165,10 +165,15 @@ def _make_runner_real(
         triage_repo,
         audit_repo,
         tmp_path,
+        tool_registry=MagicMock(),
         triage_agent=_StubTriageAgent(),
         session_timeout_seconds=300,
     )
     return runner, factory, run_repo, finding_repo
+
+
+def _mock_reg(runner: TriageRunner) -> MagicMock:
+    return runner._tool_registry  # type: ignore[return-value]
 
 
 # Group 1: .mcp.json structure
@@ -233,7 +238,8 @@ def test_pipeline_batch_creates_pending_batches(tmp_path: Path) -> None:
     _seed(run_repo, finding_repo, factory=factory)
 
     mock_semgrep = _make_mock_semgrep()
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         runner.batch()
@@ -252,7 +258,8 @@ def test_pipeline_all_batches_completed_after_loop(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -272,7 +279,8 @@ def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -296,7 +304,8 @@ def test_pipeline_audit_log_written(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -316,7 +325,8 @@ def test_pipeline_result_counts_match(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id, _ = runner.batch()
@@ -351,7 +361,8 @@ def test_all_batches_processed_no_stuck_in_progress(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id2, _ = runner.batch()
@@ -396,7 +407,8 @@ def test_claim_count_equals_batch_count_plus_one(tmp_path: Path) -> None:
 
     runner._triage_repo.claim_batch = spy_claim  # type: ignore[method-assign]
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id2, total_batches = runner.batch()
@@ -427,7 +439,8 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
     mock_semgrep = _make_mock_semgrep()
     handler = _make_synthetic_handler()
 
-    with patch("application.triage.runner.tool_registry") as mock_reg:
+    mock_reg = _mock_reg(runner)
+    if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
         run_id2, _ = runner.batch()

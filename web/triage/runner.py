@@ -12,6 +12,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
@@ -23,6 +24,9 @@ from application.triage.runner import NoScanRunError, TriageCancelled
 from infrastructure.events.bus import EventBus
 from web.adapters.event_bus_triage_sink import EventBusTriageSink
 from web.adapters.triage_run_registry import TriageRunRegistry
+
+if TYPE_CHECKING:
+    from application.tools.registry import ToolRegistry
 
 logger = logging.getLogger("tally.web.triage")
 
@@ -47,6 +51,7 @@ def start_triage_thread(
     request: TriageRequest,
     holder_token: str,
     bus: EventBus,
+    tool_registry: ToolRegistry,
     triage_run_registry: TriageRunRegistry,
     lock_registry: LockRegistry | None = None,
     is_resume: bool = False,
@@ -79,6 +84,7 @@ def start_triage_thread(
             "bus": bus,
             "cancel_token": cancel_token,
             "lock_registry": lock_registry or get_registry(),
+            "tool_registry": tool_registry,
             "triage_run_registry": triage_run_registry,
             "is_resume": is_resume,
         },
@@ -100,6 +106,7 @@ def _run_triage(
     bus: EventBus,
     cancel_token: CancellationToken,
     lock_registry: LockRegistry,
+    tool_registry: ToolRegistry,
     triage_run_registry: TriageRunRegistry,
     is_resume: bool = False,
 ) -> None:
@@ -112,6 +119,7 @@ def _run_triage(
                     project_name,
                     project_id=project_id,
                     scan_run_id=scan_run_id,
+                    tool_registry=tool_registry,
                     event_sink=sink,
                     cancel_token=cancel_token,
                     app_root=Path(base_path),
@@ -120,6 +128,7 @@ def _run_triage(
                 run_triage_for_project(
                     project_name,
                     project_id=project_id,
+                    tool_registry=tool_registry,
                     event_sink=sink,
                     cancel_token=cancel_token,
                     app_root=Path(base_path),

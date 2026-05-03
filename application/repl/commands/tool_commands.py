@@ -80,16 +80,16 @@ class ToolCommands:
 
     def _cmd_tool_list(self) -> None:
         from application.repl.adapters.tool_registry_display import build_tool_table
-        from application.tools.registry import tool_registry
 
-        tools = tool_registry.get_all_tools()
+        registry = self.repl.tool_registry
+        tools = registry.get_all_tools()
         if not tools:
             self.repl.console.print(
                 "[dim]No tools configured. "
                 "Use [bold]tool add[/bold] to add a tool.[/dim]"
             )
             return
-        self.repl.console.print(build_tool_table(tools, tool_registry))
+        self.repl.console.print(build_tool_table(tools, registry))
 
     def _cmd_tool_add(self) -> None:
         from application.setup.commands_setup import interview_tool
@@ -216,7 +216,7 @@ class ToolCommands:
     def _reload_registry(self) -> None:
         from application.tools.registry import discover_tools
 
-        discover_tools(self.repl.base_path)
+        discover_tools(self.repl.tool_registry, self.repl.base_path)
 
     def _get_wrapper_availability(self) -> tuple:
         wrappers_dir = (

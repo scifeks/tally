@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from rich.console import Console
 
@@ -21,7 +21,7 @@ def _local_tool(name: str, category: str, *, available: bool = True) -> MagicMoc
 
 
 class TestPrintDiscoverySummary:
-    def _patched_registry(self, tools: list) -> ToolRegistry:
+    def _registry(self, tools: list) -> ToolRegistry:
         reg = ToolRegistry()
         for tool in tools:
             reg.register(tool)
@@ -30,23 +30,17 @@ class TestPrintDiscoverySummary:
     def test_output_contains_configured_tools_header(self) -> None:
         t1 = _local_tool("semgrep", "sast")
         t2 = _local_tool("gitleaks", "secrets")
-        reg = self._patched_registry([t1, t2])
+        reg = self._registry([t1, t2])
         buf = StringIO()
         console = Console(file=buf, highlight=False, no_color=True)
-        with patch(
-            "application.repl.adapters.tool_registry_display.tool_registry", reg
-        ):
-            print_discovery_summary(console)
+        print_discovery_summary(console, reg)
         assert "Configured Tools" in buf.getvalue()
 
     def test_output_contains_loaded_count(self) -> None:
         t1 = _local_tool("semgrep", "sast")
         t2 = _local_tool("gitleaks", "secrets")
-        reg = self._patched_registry([t1, t2])
+        reg = self._registry([t1, t2])
         buf = StringIO()
         console = Console(file=buf, highlight=False, no_color=True)
-        with patch(
-            "application.repl.adapters.tool_registry_display.tool_registry", reg
-        ):
-            print_discovery_summary(console)
+        print_discovery_summary(console, reg)
         assert "Loaded 2 tools" in buf.getvalue()

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import threading
 
-from application.tools.registry import tool_registry
+from application.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 class InstalledToolsProbe:
     """Probe ``tool.check_available()`` once and cache the result."""
 
-    def __init__(self) -> None:
+    def __init__(self, tool_registry: ToolRegistry) -> None:
+        self._tool_registry = tool_registry
         self._snapshot: frozenset[str] | None = None
         self._lock = threading.Lock()
 
@@ -30,10 +31,9 @@ class InstalledToolsProbe:
                     self._snapshot = self._probe()
         return self._snapshot
 
-    @staticmethod
-    def _probe() -> frozenset[str]:
+    def _probe(self) -> frozenset[str]:
         installed: set[str] = set()
-        for tool in tool_registry.get_all_tools():
+        for tool in self._tool_registry.get_all_tools():
             try:
                 if tool.check_available():
                     installed.add(tool.name)

@@ -49,19 +49,6 @@ requires_ollama = pytest.mark.skipif(
 
 
 @pytest.fixture(autouse=True)
-def _restore_tool_registry():
-    """Isolate tool_registry singleton state across all test scopes."""
-    try:
-        from application.tools.registry import tool_registry
-
-        saved = tool_registry.snapshot()
-        yield
-        tool_registry.restore(saved)
-    except ImportError:
-        yield
-
-
-@pytest.fixture(autouse=True)
 def _restore_lock_registry():
     """Isolate lock_registry singleton state across all test scopes."""
     try:

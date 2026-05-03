@@ -34,11 +34,15 @@ class TriageCommands:
             self._repl.console.print("[red]Error:[/red] No active project set.")
             return
         if "--batch" in args:
-            count = run_triage_batch_only(self._repl.active_project)
+            count = run_triage_batch_only(
+                self._repl.active_project, self._repl.tool_registry
+            )
             self._repl.console.print(f"Created {count} batches")
             return
         elif "--dry-run" in args:
-            count = run_triage_dry_run(self._repl.active_project)
+            count = run_triage_dry_run(
+                self._repl.active_project, self._repl.tool_registry
+            )
             self._repl.console.print(f"Rendered {count} batch prompt(s); see DEBUG log")
             return
         self._repl.console.print(
@@ -54,7 +58,7 @@ class TriageCommands:
             self._repl.console.print("[yellow]Triage cancelled.[/yellow]")
             return
 
-        result = run_triage(self._repl.active_project)
+        result = run_triage(self._repl.active_project, self._repl.tool_registry)
         self._repl.console.print(
             f"Triage: {result['sessions_run']} sessions run, "
             f"{result['success']} success, "
