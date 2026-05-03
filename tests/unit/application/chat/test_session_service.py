@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import asyncio
+from collections.abc import AsyncIterator, Iterable
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
-from application.chat.service import ChatSessionNotFound
+from application.chat.run_registry import get_chat_run_registry
+from application.chat.service import (
+    ChatSessionExpired,
+    ChatSessionNotFound,
+    ChatStreamAlreadyRunning,
+    ChatStreamNotRunning,
+)
 from application.chat.session_service import (
     ChatSessionService,
     ProjectNotFound,
+    SendMessageHandle,
 )
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
 from domain.projects.entry import ProjectRow
@@ -275,3 +284,226 @@ class TestChatSessionService:
         service = ChatSessionService(session_repo, message_repo)
         assert service.session_repo is session_repo
         assert service.message_repo is message_repo
+
+
+# Streaming orchestration
+
+
+class _StubChatSink:
+    def __init__(self) -> None:
+        self.events: list[Any] = []
+
+    def emit(self, event: Any) -> None:
+        self.events.append(event)
+
+
+class _FakeProvider:
+    def __init__(self, chunks: list[str]) -> None:
+        self._chunks = chunks
+        self.model = "fake-chat-model"
+
+    def is_available(self) -> bool:
+        return True
+
+    def complete(self, prompt: str, **kwargs: Any) -> str:  # noqa: ARG002
+        return ""
+
+    def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:  # noqa: ARG002
+        return ""
+
+    def stream_chat(
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        del messages, kwargs
+        return self._iter()
+
+    async def _iter(self) -> AsyncIterator[str]:
+        for c in self._chunks:
+            yield c
+
+
+class _StubQueryEngine:
+    def search(
+        self,
+        raw_input: str = "",
+        n_results: int = 20,
+        query: Any = None,
+    ) -> list[dict[str, Any]]:
+        del raw_input, n_results, query
+        return []
+
+
+def _composer_for(provider: _FakeProvider) -> SimpleNamespace:
+    return SimpleNamespace(
+        query_engine=_StubQueryEngine(),
+        provider=provider,
+        model_name=provider.model,
+    )
+
+
+def _make_session_service_with_session(
+    session_id: int = 1,
+    project_id: int = 5,
+    *,
+    expired: str | None = None,
+) -> tuple[ChatSessionService, _StubSessionRepo, _StubMessageRepo]:
+    session_repo = _StubSessionRepo(
+        {session_id: _row(session_id, project_id, expired=expired)}
+    )
+    message_repo = _StubMessageRepo()
+    return ChatSessionService(session_repo, message_repo), session_repo, message_repo
+
+
+@pytest.fixture(autouse=True)
+def _reset_chat_run_registry():
+    get_chat_run_registry().reset()
+    yield
+    get_chat_run_registry().reset()
+
+
+class TestChatSessionServiceSendMessage:
+    @pytest.mark.asyncio
+    async def test_returns_handle_and_persists_user_message(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service, _session_repo, message_repo = _make_session_service_with_session(
+            session_id=1, project_id=5
+        )
+        provider = _FakeProvider(["a"])
+        monkeypatch.setattr(
+            "application.chat.session_service.ChatStreamComposer.for_project",
+            lambda *_args, **_kwargs: _composer_for(provider),
+        )
+        result = await service.send_message(
+            project_id=5,
+            session_id=1,
+            content="hi",
+            chat_sink=_StubChatSink(),
+            project_registry=SimpleNamespace(),  # type: ignore[arg-type]
+            knowledge_base_cache={},
+            base_path="/tmp",
+        )
+        await asyncio.sleep(0)  # let driver start
+        assert isinstance(result, SendMessageHandle)
+        assert result.user_message_id == 99
+        assert result.session_id == 1
+        assert result.project_id == 5
+        assert {c["role"] for c in message_repo.append_calls} >= {"user"}
+        # Allow the driver task to finish.
+        for _ in range(50):
+            if get_chat_run_registry().get(1) is None:
+                break
+            await asyncio.sleep(0.01)
+
+    @pytest.mark.asyncio
+    async def test_raises_session_not_found_for_unknown_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        monkeypatch.setattr(
+            "application.chat.session_service.ChatStreamComposer.for_project",
+            lambda *_args, **_kwargs: _composer_for(_FakeProvider([])),
+        )
+        with pytest.raises(ChatSessionNotFound):
+            await service.send_message(
+                project_id=5,
+                session_id=99,
+                content="hi",
+                chat_sink=_StubChatSink(),
+                project_registry=SimpleNamespace(),  # type: ignore[arg-type]
+                knowledge_base_cache={},
+                base_path="/tmp",
+            )
+
+    @pytest.mark.asyncio
+    async def test_raises_session_expired_for_sealed_session(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service, *_ = _make_session_service_with_session(
+            session_id=1, project_id=5, expired="2026-05-02T01:00:00Z"
+        )
+        monkeypatch.setattr(
+            "application.chat.session_service.ChatStreamComposer.for_project",
+            lambda *_args, **_kwargs: _composer_for(_FakeProvider([])),
+        )
+        with pytest.raises(ChatSessionExpired):
+            await service.send_message(
+                project_id=5,
+                session_id=1,
+                content="hi",
+                chat_sink=_StubChatSink(),
+                project_registry=SimpleNamespace(),  # type: ignore[arg-type]
+                knowledge_base_cache={},
+                base_path="/tmp",
+            )
+
+    @pytest.mark.asyncio
+    async def test_raises_already_running_when_registry_has_handle(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        get_chat_run_registry().register(
+            session_id=1,
+            project_id=5,
+            user_message_id=42,
+            task=MagicMock(spec=asyncio.Task),
+        )
+        monkeypatch.setattr(
+            "application.chat.session_service.ChatStreamComposer.for_project",
+            lambda *_args, **_kwargs: _composer_for(_FakeProvider([])),
+        )
+        with pytest.raises(ChatStreamAlreadyRunning):
+            await service.send_message(
+                project_id=5,
+                session_id=1,
+                content="hi",
+                chat_sink=_StubChatSink(),
+                project_registry=SimpleNamespace(),  # type: ignore[arg-type]
+                knowledge_base_cache={},
+                base_path="/tmp",
+            )
+
+
+class TestChatSessionServiceCancelStream:
+    def test_cancels_in_flight_task(self) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        task = MagicMock(spec=asyncio.Task)
+        get_chat_run_registry().register(
+            session_id=1,
+            project_id=5,
+            user_message_id=42,
+            task=task,
+        )
+        service.cancel_stream(1, 5)
+        task.cancel.assert_called_once_with()
+
+    def test_raises_session_not_found_for_unknown(self) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        with pytest.raises(ChatSessionNotFound):
+            service.cancel_stream(99, 5)
+
+    def test_raises_stream_not_running_when_registry_empty(self) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        with pytest.raises(ChatStreamNotRunning):
+            service.cancel_stream(1, 5)
+
+
+class TestChatSessionServicePeekActiveStream:
+    def test_returns_handle_when_registered(self) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        task = MagicMock(spec=asyncio.Task)
+        get_chat_run_registry().register(
+            session_id=1,
+            project_id=5,
+            user_message_id=42,
+            task=task,
+        )
+        handle = service.peek_active_stream(1)
+        assert handle is not None
+        assert handle.user_message_id == 42
+
+    def test_returns_none_when_not_registered(self) -> None:
+        service, *_ = _make_session_service_with_session(session_id=1, project_id=5)
+        assert service.peek_active_stream(1) is None

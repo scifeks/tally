@@ -7,6 +7,7 @@ from pathlib import Path
 from application.project.registry_service import ProjectRegistryService
 from core.config import ConfigManager, ProjectConfig
 from core.project_paths import ProjectPaths
+from infrastructure.store.connection import ConnectionFactory
 
 
 class ProjectManager:
@@ -34,12 +35,17 @@ class ProjectManager:
         """Validate that project_name exists in the registry and is not archived.
 
         Raises ValueError if the project is unknown. Callers update their own
-        in-memory active-project state after this returns successfully.
+        in-memory active-project state after this returns successfully. The
+        project's findings.db schema is (re)initialized so a dropped or
+        partial database comes back with every table present.
         """
         row = self.registry.resolve_by_name(project_name)
         if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' does not exist.")
         self.projects_dir.mkdir(parents=True, exist_ok=True)
+        paths = ProjectPaths.from_registry_row(row)
+        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+        ConnectionFactory(paths.findings_db).init_schema()
 
     def get_project_info(self, project_name: str) -> ProjectConfig | None:
         """Load and return ProjectConfig for project_name."""

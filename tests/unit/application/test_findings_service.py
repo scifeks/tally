@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
-from application.findings.analyst_service import FindingAnalystService
+from application.findings.analyst_service import (
+    BulkUpdateResult,
+    FindingAnalystService,
+)
 from application.findings.findings_service import (
     FindingsService,
     ProjectNotFound,
 )
-from application.locking import LockQueryService
+from application.locking import FindingsBusy, LockQueryService
+from application.ports.finding_event_sink import NullFindingEventSink
+from domain.findings.entry import Finding
+from domain.findings.events import FindingUpdated
 from domain.projects.entry import ProjectRow
 
 
@@ -78,6 +86,14 @@ class _StubProjectRepo:
         return self._rows
 
 
+class _RecordingSink:
+    def __init__(self) -> None:
+        self.events: list[FindingUpdated] = []
+
+    def emit(self, event: FindingUpdated) -> None:
+        self.events.append(event)
+
+
 def _build(
     *,
     project_repo: _StubProjectRepo | None = None,
@@ -94,9 +110,45 @@ def _build(
         project_repo=project_repo,  # type: ignore[arg-type]
         analyst=analyst,
         lock_query=LockQueryService(),
+        project_id=1,
+        project_name="p",
         findings_db_exists=findings_db_exists,
+        event_sink=NullFindingEventSink(),
     )
     return service, project_repo
+
+
+def _build_with_analyst(
+    analyst: Any,
+    *,
+    sink: _RecordingSink | None = None,
+    project_id: int = 7,
+) -> FindingsService:
+    finding_repo = _StubFindingRepo()
+    history_repo = _StubHistoryRepo()
+    project_repo = _StubProjectRepo()
+    return FindingsService(
+        finding_repo=finding_repo,  # type: ignore[arg-type]
+        history_repo=history_repo,  # type: ignore[arg-type]
+        project_repo=project_repo,  # type: ignore[arg-type]
+        analyst=analyst,
+        lock_query=LockQueryService(),
+        project_id=project_id,
+        project_name="p",
+        findings_db_exists=True,
+        event_sink=sink or NullFindingEventSink(),
+    )
+
+
+def _make_finding(finding_id: int = 42) -> Finding:
+    return Finding(
+        id=finding_id,
+        fingerprint="fp",
+        run_id=1,
+        tool="semgrep",
+        domain="sast",
+        segment="sast",
+    )
 
 
 class TestFindingsService:
@@ -165,6 +217,8 @@ class TestFindingsService:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
             findings_db_exists=False,
         )
         assert service.count_findings() == 0
@@ -181,6 +235,8 @@ class TestFindingsService:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
             findings_db_exists=True,
         )
         assert service.count_findings() == 0
@@ -196,7 +252,88 @@ class TestFindingsService:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            project_id=1,
+            project_name="p",
             findings_db_exists=True,
         )
         assert service.count_findings() == 17
         assert finding_repo.count_findings_calls == 1
+
+
+class TestFindingsServicePatch:
+    def test_patch_finding_emits_event_and_returns_finding(self) -> None:
+        finding = _make_finding()
+        analyst = MagicMock(spec=FindingAnalystService)
+        analyst.update_fields.return_value = True
+        analyst.get_finding.return_value = finding
+        sink = _RecordingSink()
+        service = _build_with_analyst(analyst, sink=sink, project_id=7)
+
+        result = service.patch_finding(42, {"severity": "critical"})
+
+        assert result is finding
+        analyst.update_fields.assert_called_once()
+        assert len(sink.events) == 1
+        event = sink.events[0]
+        assert event.project_id == 7
+        assert event.finding is finding
+
+    def test_patch_finding_returns_none_when_not_found(self) -> None:
+        analyst = MagicMock(spec=FindingAnalystService)
+        analyst.update_fields.return_value = False
+        sink = _RecordingSink()
+        service = _build_with_analyst(analyst, sink=sink)
+
+        assert service.patch_finding(42, {"severity": "critical"}) is None
+
+        analyst.get_finding.assert_not_called()
+        assert sink.events == []
+
+    def test_patch_finding_propagates_findings_busy(self) -> None:
+        analyst = MagicMock(spec=FindingAnalystService)
+        analyst.update_fields.side_effect = FindingsBusy([42], {42: "x"})
+        sink = _RecordingSink()
+        service = _build_with_analyst(analyst, sink=sink)
+
+        with pytest.raises(FindingsBusy):
+            service.patch_finding(42, {})
+
+        assert sink.events == []
+
+    def test_patch_finding_holder_token_format(self) -> None:
+        finding = _make_finding()
+        analyst = MagicMock(spec=FindingAnalystService)
+        analyst.update_fields.return_value = True
+        analyst.get_finding.return_value = finding
+        service = _build_with_analyst(analyst)
+
+        service.patch_finding(42, {})
+
+        kwargs = analyst.update_fields.call_args.kwargs
+        assert re.fullmatch(r"analyst-patch:[0-9a-f]{8}", kwargs["holder_token"])
+
+    def test_batch_patch_emits_event_per_updated_id(self) -> None:
+        finding_a = _make_finding(1)
+        finding_b = _make_finding(2)
+        analyst = MagicMock(spec=FindingAnalystService)
+        bulk = BulkUpdateResult(updated=[1, 2], skipped_locked=[3], not_found=[])
+        analyst.bulk_update_fields.return_value = bulk
+        analyst.get_finding.side_effect = lambda fid: {1: finding_a, 2: finding_b}[fid]
+        sink = _RecordingSink()
+        service = _build_with_analyst(analyst, sink=sink, project_id=11)
+
+        result = service.batch_patch_findings([1, 2, 3], {"should_report": 1})
+
+        assert result is bulk
+        assert [e.finding.id for e in sink.events] == [1, 2]
+        assert all(e.project_id == 11 for e in sink.events)
+
+    def test_batch_patch_holder_token_format(self) -> None:
+        analyst = MagicMock(spec=FindingAnalystService)
+        analyst.bulk_update_fields.return_value = BulkUpdateResult()
+        service = _build_with_analyst(analyst)
+
+        service.batch_patch_findings([], {})
+
+        kwargs = analyst.bulk_update_fields.call_args.kwargs
+        assert re.fullmatch(r"analyst-batch:[0-9a-f]{8}", kwargs["holder_token"])

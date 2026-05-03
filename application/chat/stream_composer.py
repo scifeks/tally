@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Self
 
-from application.chat.session_service import ProjectNotFound
+from application.chat.service import ProjectNotFound
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
 from application.rag.query import QueryEngine
 from infrastructure.llm.factory import get_llm_provider

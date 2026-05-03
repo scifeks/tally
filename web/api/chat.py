@@ -10,10 +10,10 @@ Endpoint surface:
 - ``GET    /api/v1/projects/{project_id}/chat/stream`` (SSE)
 - ``POST   /api/v1/projects/{project_id}/chat/sessions/{session_id}/cancel``
 
-Routes resolve a ``ChatSessionService`` per request and call the service for
-all persistence work; infrastructure repositories are not imported here.
-The streaming POST passes the service's repo handles into ``stream_chat``
-so the in-flight assistant turn shares the per-request connection factory.
+Routes resolve a ``ChatSessionService`` per request and call the service
+for all persistence and orchestration work. The send route hands the
+service the inputs it needs to build the per-turn composer and spawn the
+streaming task; the cancel route asks the service to cancel.
 """
 
 from __future__ import annotations
@@ -28,21 +28,19 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from application.chat.service import (
-    ChatRequest,
     ChatSessionExpired,
     ChatSessionNotFound,
-    stream_chat,
+    ChatStreamAlreadyRunning,
+    ChatStreamNotRunning,
 )
 from application.chat.session_service import ChatSessionService, ProjectNotFound
-from application.chat.stream_composer import ChatStreamComposer, RagUnavailable
+from application.chat.stream_composer import RagUnavailable
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from web.adapters.chat_run_registry import get_chat_run_registry
 from web.adapters.event_bus_chat_sink import EventBusChatSink
 from web.api._errors import Conflict, NotFound, ValidationError
-from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
     ChatMessageCancelResponse,
     ChatMessageResponse,
@@ -102,13 +100,17 @@ def _row_to_message_response(row: ChatMessageRow) -> ChatMessageResponse:
     )
 
 
-def _build_chat_snapshot(project_id: int, session_id: int) -> BusEvent:
+def _build_chat_snapshot(
+    service: ChatSessionService,
+    project_id: int,
+    session_id: int,
+) -> BusEvent:
     """On-connect SSE snapshot exposing in-flight stream identifiers.
 
     Includes ``active`` so the SPA can decide whether to wait for tokens
     or render the empty state.
     """
-    handle = get_chat_run_registry().get(session_id)
+    handle = service.peek_active_stream(session_id)
     payload: dict[str, Any] = {
         "project_id": project_id,
         "session_id": session_id,
@@ -241,46 +243,6 @@ async def delete_chat_session(
         raise NotFound(str(exc)) from exc
 
 
-async def _drive_chat_stream(
-    *,
-    chat_request: ChatRequest,
-    session_repo: Any,
-    message_repo: Any,
-    query_engine: Any,
-    provider: Any,
-    model_name: str,
-    sink: EventBusChatSink,
-) -> None:
-    """Background task body: drive the chat-service generator to completion.
-
-    Tokens reach the SSE client via the sink; yielded chunks are
-    discarded here. The task always unregisters itself from the
-    chat run registry in its ``finally`` block, even on cancel or
-    error, so a follow-up POST for the same session is not blocked.
-    """
-    try:
-        gen = await stream_chat(
-            chat_request,
-            session_repo=session_repo,
-            message_repo=message_repo,
-            query_engine=query_engine,
-            provider=provider,
-            model_name=model_name,
-            event_sink=sink,
-        )
-        try:
-            async for _chunk in gen:
-                pass
-        finally:
-            await gen.aclose()  # type: ignore[union-attr]
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.exception("chat stream failed for session %d", chat_request.session_id)
-    finally:
-        get_chat_run_registry().unregister(chat_request.session_id)
-
-
 @v1_router.post(
     "/{project_id}/chat/sessions/{session_id}/messages",
     response_model=ChatMessageSendResponse,
@@ -303,89 +265,44 @@ async def send_chat_message(
     - 409 ``CHAT_SESSION_EXPIRED``: session has been sealed.
     - 409 ``CHAT_STREAM_ALREADY_RUNNING``: another stream for this
       session is in flight.
+    - 422 ``RAG_UNAVAILABLE``: per-project knowledge base cannot be
+      built (ChromaDB or embedding provider unreachable).
     """
-    _resolve_project(request, project_id)
-
     service = _service(request, project_id)
+    sink = EventBusChatSink(request.app.state.event_bus)
     try:
-        session_row = await asyncio.to_thread(
-            service.get_session_or_raise, session_id, project_id
+        result = await service.send_message(
+            project_id=project_id,
+            session_id=session_id,
+            content=body.content,
+            chat_sink=sink,
+            project_registry=request.app.state.project_registry,
+            knowledge_base_cache=request.app.state.knowledge_base_cache,
+            base_path=request.app.state.base_path,
         )
     except ChatSessionNotFound as exc:
         raise NotFound(str(exc)) from exc
-    if session_row.expired_at is not None:
+    except ChatSessionExpired as exc:
         raise Conflict(
-            f"chat session {session_id} is sealed",
+            str(exc),
             code="CHAT_SESSION_EXPIRED",
-            details={"expired_at": session_row.expired_at},
-        )
-
-    registry = get_chat_run_registry()
-    if registry.get(session_id) is not None:
+            details={"session_id": session_id},
+        ) from exc
+    except ChatStreamAlreadyRunning as exc:
         raise Conflict(
-            f"chat stream for session {session_id} is already running",
+            str(exc),
             code="CHAT_STREAM_ALREADY_RUNNING",
             details={"session_id": session_id},
-        )
-
-    try:
-        composer = await asyncio.to_thread(
-            ChatStreamComposer.for_project,
-            request.app.state.project_registry,
-            request.app.state.knowledge_base_cache,
-            request.app.state.base_path,
-            project_id,
-        )
+        ) from exc
     except RagUnavailable as exc:
         raise ValidationError(
             str(exc),
             details={"project_id": project_id, "code": "RAG_UNAVAILABLE"},
         ) from exc
 
-    user_message_id = await asyncio.to_thread(
-        service.append_user_message, session_id, body.content
-    )
-
-    bus = request.app.state.event_bus
-    sink = EventBusChatSink(bus)
-
-    chat_request = ChatRequest(
-        session_id=session_id,
-        project_id=project_id,
-        user_message=body.content,
-    )
-
-    # Re-validate: stream_chat() will re-fetch and could still raise if
-    # the session was deleted between our check and the task start. The
-    # background driver swallows + logs; the POST returns 202 because
-    # the user row is already persisted.
-    try:
-        del session_row  # used only for the expired check above
-    except (ChatSessionNotFound, ChatSessionExpired):
-        raise
-
-    task: asyncio.Task[None] = asyncio.create_task(
-        _drive_chat_stream(
-            chat_request=chat_request,
-            session_repo=service.session_repo,
-            message_repo=service.message_repo,
-            query_engine=composer.query_engine,
-            provider=composer.provider,
-            model_name=composer.model_name,
-            sink=sink,
-        ),
-        name=f"chat-{session_id}",
-    )
-    registry.register(
-        session_id=session_id,
-        project_id=project_id,
-        user_message_id=user_message_id,
-        task=task,
-    )
-
     stream_url = f"/api/v1/projects/{project_id}/chat/stream?session_id={session_id}"
     return ChatMessageSendResponse(
-        user_message_id=user_message_id,
+        user_message_id=result.user_message_id,
         assistant_message_id=None,
         session_id=session_id,
         stream_url=stream_url,
@@ -404,12 +321,10 @@ async def cancel_chat_stream(
 ) -> ChatMessageCancelResponse:
     """Cancel the in-flight assistant stream for *session_id*.
 
-    Looks up the asyncio task in the chat run registry and calls
-    ``task.cancel()``. The chat-service generator's ``GeneratorExit``
-    path emits ``ChatStreamCancelled`` (projected to SSE as
-    ``stream_cancelled``) and does not persist the assistant turn. The
-    driver's ``finally`` unregisters the handle so a follow-up POST is
-    not blocked. Errors:
+    The chat-service generator's cancellation path emits
+    ``ChatStreamCancelled`` (projected to SSE as ``stream_cancelled``)
+    and does not persist the assistant turn. The driver's ``finally``
+    unregisters the handle so a follow-up POST is not blocked. Errors:
 
     - 404: session not found or wrong project.
     - 409 ``CHAT_NO_ACTIVE_STREAM``: no stream is currently in flight
@@ -421,18 +336,15 @@ async def cancel_chat_stream(
     """
     service = _service(request, project_id)
     try:
-        await asyncio.to_thread(service.get_session_or_raise, session_id, project_id)
+        service.cancel_stream(session_id, project_id)
     except ChatSessionNotFound as exc:
         raise NotFound(str(exc)) from exc
-
-    handle = get_chat_run_registry().get(session_id)
-    if handle is None:
+    except ChatStreamNotRunning as exc:
         raise Conflict(
-            f"no chat stream is running for session {session_id}",
+            str(exc),
             code="CHAT_NO_ACTIVE_STREAM",
             details={"session_id": session_id},
-        )
-    handle.task.cancel()
+        ) from exc
     return ChatMessageCancelResponse(
         session_id=session_id,
         cancelled_message_id=None,
@@ -453,11 +365,11 @@ async def chat_stream(
     thinking. Client disconnect closes the SSE; it does not cancel the
     underlying asyncio task. Explicit cancellation is the cancel route.
     """
-    _resolve_project(request, project_id)
+    service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("chat")
 
-    snapshot = _build_chat_snapshot(project_id, session_id)
+    snapshot = _build_chat_snapshot(service, project_id, session_id)
 
     async def stream() -> AsyncIterator[str]:
         try:

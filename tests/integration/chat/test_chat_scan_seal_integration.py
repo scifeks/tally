@@ -41,17 +41,18 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.chat.run_registry import get_chat_run_registry  # noqa: E402
 from application.tools.executor import ToolExecutor  # noqa: E402
 from application.tools.orchestrator import ScanOrchestrator  # noqa: E402
 from application.tools.registry import ToolRegistry  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import EventBus  # noqa: E402
 from domain.tools.scan_types import ScanSummary  # noqa: E402
+from infrastructure.events.bus import EventBus as InfraEventBus  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.chat_sessions import (  # noqa: E402
     ChatSessionRepository,
 )
-from web.adapters.chat_run_registry import get_chat_run_registry  # noqa: E402
 from web.server import create_app  # noqa: E402
 
 pytestmark = pytest.mark.integration
@@ -227,6 +228,9 @@ async def test_post_message_after_seal_returns_409(tmp_path: Path) -> None:
     _, factory = _setup_db(tmp_path)
 
     app = create_app(str(tmp_path), HANDSHAKE, port=12345)
+    bus = InfraEventBus()
+    await bus.register_job("chat", "chat")
+    app.state.event_bus = bus
     project_id = app.state.project_registry.register("testproject", str(tmp_path))
 
     repo = ChatSessionRepository(factory)

@@ -1,17 +1,32 @@
 """Application service for findings persistence + analyst access.
 
-Owns per-request construction of repos so routes avoid direct imports of
-infrastructure persistence. Composes FindingAnalystService and exposes
-history repo + repo_name_lookup helper.
+Owns per-request construction of repos so routes avoid direct imports
+of infrastructure persistence. Composes ``FindingAnalystService`` and
+exposes history repo + ``repo_name_lookup`` helper. Owns the
+``patch_finding`` / ``batch_patch_findings`` orchestration: lock holder
+construction, ChromaDB best-effort sync, and ``FindingUpdated`` event
+emission via the injected sink.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self
+import logging
+import uuid
+from typing import TYPE_CHECKING, Any, Self
 
-from application.findings.analyst_service import FindingAnalystService
+from application.findings.analyst_service import (
+    BulkUpdateResult,
+    FindingAnalystService,
+)
 from application.locking import LockQueryService
+from application.ports.finding_event_sink import (
+    FindingEventSink,
+    NullFindingEventSink,
+)
+from application.rag.ingestor import ToolHandlerFactory
+from application.rag.knowledge_base_cache import get_or_build_knowledge_base
 from core.project_paths import ProjectPaths
+from domain.findings.events import FindingUpdated
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.finding_history import (
     FindingHistoryRepository,
@@ -28,6 +43,11 @@ if TYPE_CHECKING:
         ProjectRepoRepositoryPort,
     )
     from application.project.registry_service import ProjectRegistryService
+    from application.rag.knowledge_base import FindingKnowledgeBase
+    from domain.findings.entry import Finding
+
+
+logger = logging.getLogger("application.findings_service")
 
 
 class ProjectNotFound(LookupError):
@@ -45,20 +65,36 @@ class FindingsService:
         analyst: FindingAnalystService,
         lock_query: LockQueryService,
         *,
+        project_id: int,
+        project_name: str,
         findings_db_exists: bool,
+        knowledge_base_cache: dict[str, FindingKnowledgeBase | None] | None = None,
+        base_path: str = "",
+        event_sink: FindingEventSink | None = None,
     ) -> None:
         self._finding_repo = finding_repo
         self._history_repo = history_repo
         self._project_repo = project_repo
         self._analyst = analyst
         self._lock_query = lock_query
+        self._project_id = project_id
+        self._project_name = project_name
         self._findings_db_exists = findings_db_exists
+        self._kb_cache: dict[str, FindingKnowledgeBase | None] = (
+            knowledge_base_cache if knowledge_base_cache is not None else {}
+        )
+        self._base_path = base_path
+        self._event_sink: FindingEventSink = event_sink or NullFindingEventSink()
 
     @classmethod
     def for_project(
         cls,
         registry: ProjectRegistryService,
         project_id: int,
+        *,
+        knowledge_base_cache: dict[str, FindingKnowledgeBase | None] | None = None,
+        base_path: str | None = None,
+        event_sink: FindingEventSink | None = None,
     ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
@@ -81,7 +117,12 @@ class FindingsService:
             project_repo=project_repo,
             analyst=analyst,
             lock_query=LockQueryService(),
+            project_id=project_id,
+            project_name=row.name,
             findings_db_exists=findings_db_exists,
+            knowledge_base_cache=knowledge_base_cache,
+            base_path=base_path or "",
+            event_sink=event_sink,
         )
 
     @property
@@ -95,6 +136,14 @@ class FindingsService:
     @property
     def history_repo(self) -> FindingHistoryRepositoryPort:
         return self._history_repo
+
+    @property
+    def project_id(self) -> int:
+        return self._project_id
+
+    @property
+    def project_name(self) -> str:
+        return self._project_name
 
     def repo_name_lookup(self) -> dict[int, str]:
         """Return {repo_id: repo_name} for active repos.
@@ -132,3 +181,101 @@ class FindingsService:
             return self._finding_repo.count_findings()
         except Exception:
             return 0
+
+    def patch_finding(self, finding_id: int, fields: dict[str, Any]) -> Finding | None:
+        """Apply analyst-writable updates to a single finding.
+
+        Acquires the per-finding lock under a service-built holder, writes
+        the fields, syncs to ChromaDB best-effort, and emits a
+        ``FindingUpdated`` event. Returns the refreshed ``Finding`` on
+        success or ``None`` if the finding does not exist. Raises
+        ``FindingsBusy`` if the finding is held by another holder.
+        """
+        holder = f"analyst-patch:{uuid.uuid4().hex[:8]}"
+        updated = self._analyst.update_fields(finding_id, fields, holder_token=holder)
+        if not updated:
+            return None
+        finding = self._analyst.get_finding(finding_id)
+        if finding is None:
+            return None
+        self._sync_to_chroma(finding_id)
+        self._emit_updated(finding)
+        return finding
+
+    def batch_patch_findings(
+        self, ids: list[int], fields: dict[str, Any]
+    ) -> BulkUpdateResult:
+        """Apply analyst-writable updates to multiple findings.
+
+        Per-id lock acquire / write / release; locked rows skipped, not
+        errored. After the bulk write, each successfully updated row is
+        synced to ChromaDB and an event is emitted. Returns the
+        ``BulkUpdateResult`` from the analyst service unchanged.
+        """
+        holder = f"analyst-batch:{uuid.uuid4().hex[:8]}"
+        result = self._analyst.bulk_update_fields(ids, fields, holder_token=holder)
+        for fid in result.updated:
+            finding = self._analyst.get_finding(fid)
+            if finding is None:
+                continue
+            self._sync_to_chroma(fid)
+            self._emit_updated(finding)
+        return result
+
+    def _emit_updated(self, finding: Finding) -> None:
+        is_locked, lock_holder = self.lock_state_for(finding.id)
+        self._event_sink.emit(
+            FindingUpdated(
+                project_id=self._project_id,
+                finding=finding,
+                is_locked=is_locked,
+                lock_holder=lock_holder,
+            )
+        )
+
+    def _sync_to_chroma(self, finding_id: int) -> None:
+        """Best-effort ChromaDB upsert after a SQLite analyst PATCH.
+
+        Fetches the row, renders text via ``ToolHandler.render()``, and
+        upserts via the per-project knowledge base. Never raises; all
+        exceptions are caught and logged as warnings.
+        """
+        try:
+            knowledge_base = get_or_build_knowledge_base(
+                self._kb_cache, self._project_name, self._base_path
+            )
+            if knowledge_base is None:
+                logger.warning("Chroma sync: knowledge base not available; skipping")
+                return
+
+            rows = self._finding_repo.get_by_ids([finding_id])
+            if not rows:
+                logger.warning(
+                    "Chroma sync: finding id=%s not found in SQLite (skipping)",
+                    finding_id,
+                )
+                return
+
+            row = rows[0]
+            handler = ToolHandlerFactory.load(row["tool"])
+            if handler is None:
+                logger.warning(
+                    "Chroma sync: no handler for tool=%s (finding id=%s) (skipping)",
+                    row["tool"],
+                    finding_id,
+                )
+                return
+
+            text = handler.render(row)
+            metadata = {"tool": row["tool"], "profile": row["profile"]}
+            knowledge_base.add_findings(
+                documents=[text],
+                metadatas=[metadata],
+                ids=[str(row["id"])],
+            )
+        except Exception as exc:
+            logger.warning(
+                "Chroma sync: unexpected error for finding id=%s: %s",
+                finding_id,
+                exc,
+            )

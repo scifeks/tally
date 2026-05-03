@@ -5,10 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 from collections.abc import AsyncIterator
-from dataclasses import asdict
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
@@ -19,16 +16,13 @@ from application.findings.findings_service import (
     ProjectNotFound,
 )
 from application.locking import FindingsBusy
-from application.rag.knowledge_base_cache import get_or_build_knowledge_base
-from domain.findings.entry import Finding
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
-from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
-from infrastructure.events.types import BusEvent
+from web.adapters.event_bus_finding_sink import EventBusFindingSink
 from web.api._errors import FindingsLocked, NotFound
+from web.api._finding_serialiser import serialise_finding as _serialise_finding
 from web.api._project_resolver import _resolve_project
-from web.api.chroma_sync import sync_finding_to_chroma
 from web.api.schemas import (
     BatchFindingPatchRequest,
     BatchPatchResponse,
@@ -42,49 +36,47 @@ from web.api.schemas import (
     FindingsListResponse,
 )
 
+__all__ = ["router", "v1_router", "_serialise_finding"]
+
 logger = logging.getLogger("tally.web.findings")
 
 # Kept empty for backward-compat imports; routes are on v1_router.
 router = APIRouter()
-
-# Matches type_secret, type_vulnerability, type_weakness, etc.
-_TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
 
 
 def _service(request: Request, project_id: int) -> FindingsService:
     """Build a FindingsService for *project_id* or raise 404."""
     try:
         return FindingsService.for_project(
-            request.app.state.project_registry, project_id
+            request.app.state.project_registry,
+            project_id,
+            knowledge_base_cache=request.app.state.knowledge_base_cache,
+            base_path=request.app.state.base_path,
+            event_sink=EventBusFindingSink(request.app.state.event_bus),
         )
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
 
-def _serialise_finding(
-    finding: Finding, lock_state: tuple[bool, str | None]
-) -> dict[str, Any]:
-    """Serialize a Finding for the API response.
+def _translate_patch_fields(raw: dict[str, Any]) -> dict[str, Any]:
+    """Reshape a Pydantic patch body into the repo field schema.
 
-    The named ``fingerprint`` column is exposed as ``id_fingerprint`` so
-    it cannot collide with semgrep's scanner fingerprint stored in
-    ``meta``. ``type_*`` flags written by the ChromaDB ingestor are
-    stripped from ``meta`` before the response leaves the adapter.
-    Lock state is resolved by the caller via ``FindingsService`` so the
-    route does not construct ``LockQueryService`` per row.
+    ``meta_*`` keys flatten into the named meta keys recognised by
+    ``FindingRepository.update_analyst_fields``. List columns
+    (``finding_type``, ``cwe``) serialise to JSON. ``should_report``
+    coerces to 0/1 to match the column's stored representation.
     """
-    result: dict[str, Any] = asdict(finding)
-    result["meta"] = {
-        k: v for k, v in result["meta"].items() if not _TYPE_FLAG_RE.match(k)
-    }
-    result["id_fingerprint"] = result.pop("fingerprint")
-    result["enriched"] = 1 if result["enriched"] else 0
-    result["should_report"] = 1 if result["should_report"] else 0
-
-    is_locked, lock_holder = lock_state
-    result["is_locked"] = is_locked
-    result["lock_holder"] = lock_holder
-    return result
+    fields: dict[str, Any] = {}
+    for k, v in raw.items():
+        if k.startswith("meta_"):
+            fields[k.removeprefix("meta_")] = v
+        elif k in ("finding_type", "cwe"):
+            fields[k] = json.dumps(v)
+        elif k == "should_report":
+            fields["should_report"] = 1 if v else 0
+        else:
+            fields[k] = v
+    return fields
 
 
 v1_router = APIRouter()
@@ -267,7 +259,7 @@ async def findings_events(
     """SSE stream emitting finding_updated events for this project.
 
     Tail-only; no snapshot on connect. Clients filter by event_type.
-    Each event carries the full serialized finding record plus
+    Each event carries the full serialised finding record plus
     project_id.
     """
     _resolve_project(request, project_id)
@@ -373,40 +365,10 @@ async def batch_patch_findings(
     id buckets: updated, skipped_locked, not_found.
     """
     service = _service(request, project_id)
-
-    session_id: str = request.state.session_id
-    holder = f"analyst-patch:web:{session_id[:8]}"
-
     raw = body.model_dump(exclude={"ids"}, exclude_none=True)
-    fields: dict[str, Any] = {}
-    for k, v in raw.items():
-        if k == "should_report":
-            fields["should_report"] = 1 if v else 0
-        else:
-            fields[k] = v
+    fields = _translate_patch_fields(raw)
 
-    result = await asyncio.to_thread(
-        service.analyst.bulk_update_fields, body.ids, fields, holder_token=holder
-    )
-
-    bus = request.app.state.event_bus
-    for fid in result.updated:
-        updated_row = await asyncio.to_thread(service.analyst.get_finding, fid)
-        if updated_row is not None:
-            serialised = _serialise_finding(
-                updated_row, service.lock_state_for(updated_row.id)
-            )
-            await bus.publish(
-                BusEvent(
-                    event_id=new_event_id(),
-                    job_id="finding",
-                    stream="finding",
-                    event_type="finding_updated",
-                    payload={**serialised, "project_id": project_id},
-                    ts=datetime.now(UTC),
-                )
-            )
-
+    result = await asyncio.to_thread(service.batch_patch_findings, body.ids, fields)
     return BatchPatchResponse(
         updated=result.updated,
         skipped_locked=result.skipped_locked,
@@ -432,62 +394,16 @@ async def patch_finding(
     Returns 404 if the finding does not exist. After the SQLite write,
     performs a best-effort ChromaDB metadata sync.
     """
-    row = _resolve_project(request, project_id)
     service = _service(request, project_id)
-
-    session_id: str = request.state.session_id
-    holder = f"analyst-patch:web:{session_id[:8]}"
-
     raw = body.model_dump(exclude_none=True)
-    fields: dict[str, Any] = {}
-    for k, v in raw.items():
-        if k.startswith("meta_"):
-            fields[k.removeprefix("meta_")] = v
-        elif k == "finding_type":
-            fields["finding_type"] = json.dumps(v)
-        elif k == "cwe":
-            fields["cwe"] = json.dumps(v)
-        elif k == "should_report":
-            fields["should_report"] = 1 if v else 0
-        else:
-            fields[k] = v
+    fields = _translate_patch_fields(raw)
 
     try:
-        updated = await asyncio.to_thread(
-            service.analyst.update_fields, finding_id, fields, holder_token=holder
-        )
+        finding = await asyncio.to_thread(service.patch_finding, finding_id, fields)
     except FindingsBusy as exc:
         raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
 
-    if not updated:
-        raise NotFound("Finding not found")
-
-    finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
     if finding is None:
         raise NotFound("Finding not found")
 
-    serialised = _serialise_finding(finding, service.lock_state_for(finding.id))
-    knowledge_base = get_or_build_knowledge_base(
-        request.app.state.knowledge_base_cache,
-        row.name,
-        request.app.state.base_path,
-    )
-    sync_finding_to_chroma(
-        finding_id=finding_id,
-        knowledge_base=knowledge_base,
-        finding_repo=service.finding_repo,
-    )
-
-    bus = request.app.state.event_bus
-    await bus.publish(
-        BusEvent(
-            event_id=new_event_id(),
-            job_id="finding",
-            stream="finding",
-            event_type="finding_updated",
-            payload={**serialised, "project_id": project_id},
-            ts=datetime.now(UTC),
-        )
-    )
-
-    return serialised
+    return _serialise_finding(finding, service.lock_state_for(finding.id))
