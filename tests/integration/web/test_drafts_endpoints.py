@@ -33,6 +33,7 @@ def _seed_draft(
     *,
     section: str,
     status: str = "draft",
+    error: str | None = None,
 ) -> None:
     """Insert a draft row directly via DraftRepository."""
     repo = DraftRepository(factory)
@@ -41,6 +42,8 @@ def _seed_draft(
         repo.mark_drafted(section)
     elif status == "reviewed":
         repo.mark_reviewed(section, "upload.md")
+    elif status == "failed":
+        repo.mark_failed(section, error or "boom")
 
 
 def _draft_dir(tmp_path: Path) -> Path:
@@ -74,6 +77,23 @@ async def test_list_drafts_reflects_db_row(app_client) -> None:
     for s, item in by_section.items():
         if s != "executive-summary":
             assert item["status"] == "not_generated"
+
+
+@pytest.mark.asyncio
+async def test_list_drafts_surfaces_failed_error_string(app_client) -> None:
+    """A failed draft row's user-facing error must reach the GET response."""
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    msg = (
+        "No findings are marked for inclusion in the report. "
+        "Triage your findings and mark which ones to include "
+        "before generating drafts."
+    )
+    _seed_draft(factory, section="executive-summary", status="failed", error=msg)
+    resp = await client.get(f"/api/v1/projects/{project_id}/reports/drafts")
+    assert resp.status_code == 200
+    by_section = {i["section"]: i for i in resp.json()}
+    assert by_section["executive-summary"]["status"] == "failed"
+    assert by_section["executive-summary"]["error"] == msg
 
 
 @pytest.mark.asyncio
@@ -196,6 +216,50 @@ async def test_start_drafts_does_not_hold_lock_after_validation_failure(
     )
     assert resp.status_code == 422
     assert get_registry().current_job_holder("report") is None
+
+
+@pytest.mark.asyncio
+async def test_start_drafts_forwards_skip_triage_to_worker(app_client) -> None:
+    """body.skip_triage must reach _run_worker via start_drafts kwargs."""
+    client, _fid, _rag, _factory, mut_headers, project_id = app_client
+    captured: dict = {}
+
+    def capture(self, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+
+    with patch(
+        "application.reporting.reports_service.ReportsService._run_worker",
+        new=capture,
+    ):
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/reports/drafts",
+            json={"sections": ["executive-summary"], "skip_triage": True},
+            headers=mut_headers,
+        )
+    assert resp.status_code == 202, resp.text
+    assert captured.get("skip_triage") is True
+
+
+@pytest.mark.asyncio
+async def test_start_drafts_skip_triage_defaults_to_false(app_client) -> None:
+    """Omitting skip_triage in the body must result in skip_triage=False."""
+    client, _fid, _rag, _factory, mut_headers, project_id = app_client
+    captured: dict = {}
+
+    def capture(self, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+
+    with patch(
+        "application.reporting.reports_service.ReportsService._run_worker",
+        new=capture,
+    ):
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/reports/drafts",
+            json={"sections": ["executive-summary"]},
+            headers=mut_headers,
+        )
+    assert resp.status_code == 202, resp.text
+    assert captured.get("skip_triage") is False
 
 
 @pytest.mark.asyncio

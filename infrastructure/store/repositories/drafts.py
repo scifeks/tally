@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
 
-DRAFT_STATUSES = ("generating", "draft", "reviewed")
+DRAFT_STATUSES = ("generating", "draft", "reviewed", "failed")
 
 
 class DraftRepository(DraftRepositoryPort):
@@ -54,7 +54,8 @@ class DraftRepository(DraftRepositoryPort):
                 "   status = 'generating',"
                 "   original_filename = NULL,"
                 "   generated_at = NULL,"
-                "   reviewed_at = NULL",
+                "   reviewed_at = NULL,"
+                "   error = NULL",
                 (section,),
             )
 
@@ -65,7 +66,8 @@ class DraftRepository(DraftRepositoryPort):
             conn.execute(
                 "UPDATE drafts"
                 " SET status = 'draft', generated_at = ?,"
-                "     original_filename = NULL, reviewed_at = NULL"
+                "     original_filename = NULL, reviewed_at = NULL,"
+                "     error = NULL"
                 " WHERE section = ?",
                 (ts, section),
             )
@@ -86,36 +88,25 @@ class DraftRepository(DraftRepositoryPort):
                 " ON CONFLICT(section) DO UPDATE SET"
                 "   status = 'reviewed',"
                 "   original_filename = excluded.original_filename,"
-                "   reviewed_at = excluded.reviewed_at",
+                "   reviewed_at = excluded.reviewed_at,"
+                "   error = NULL",
                 (section, original_filename, ts),
             )
 
-    def restore(self, section: str, prior: DraftRow | None) -> None:
-        """Revert *section* to *prior* after a failed generation.
-
-        If *prior* is ``None`` the row is deleted (section returns to
-        ``not_generated``). Otherwise the row is reset to the prior fields.
-        """
-        if prior is None:
-            with self._factory.connect() as conn:
-                conn.execute("DELETE FROM drafts WHERE section = ?", (section,))
-        else:
-            with self._factory.connect() as conn:
-                conn.execute(
-                    "UPDATE drafts"
-                    " SET status = ?,"
-                    "     original_filename = ?,"
-                    "     generated_at = ?,"
-                    "     reviewed_at = ?"
-                    " WHERE section = ?",
-                    (
-                        prior.status,
-                        prior.original_filename,
-                        prior.generated_at,
-                        prior.reviewed_at,
-                        section,
-                    ),
-                )
+    def mark_failed(self, section: str, error: str) -> None:
+        """Persist failure for *section* with a user-facing *error* string."""
+        with self._factory.connect() as conn:
+            conn.execute(
+                "INSERT INTO drafts (section, status, error)"
+                " VALUES (?, 'failed', ?)"
+                " ON CONFLICT(section) DO UPDATE SET"
+                "   status = 'failed',"
+                "   error = excluded.error,"
+                "   original_filename = NULL,"
+                "   generated_at = NULL,"
+                "   reviewed_at = NULL",
+                (section, error),
+            )
 
     def delete(self, section: str) -> None:
         with self._factory.connect() as conn:
@@ -129,4 +120,5 @@ def _row_to_draft(row: Any) -> DraftRow:
         original_filename=row["original_filename"],
         generated_at=row["generated_at"],
         reviewed_at=row["reviewed_at"],
+        error=row["error"],
     )

@@ -138,7 +138,7 @@ describe('useLatestReport', () => {
 // ─── useGenerateDrafts ──────────────────────────────────────────────────────
 
 describe('useGenerateDrafts', () => {
-  it('posts { sections, force } and returns mapped drafts', async () => {
+  it('posts { sections, force, skip_triage } and returns mapped drafts', async () => {
     let body: Record<string, unknown> | null = null
     server.use(
       http.post('/api/v1/projects/:projectId/reports/drafts', async ({ request }) => {
@@ -180,13 +180,34 @@ describe('useGenerateDrafts', () => {
         projectId: 1,
         sections: ['executive-summary', 'risk-level'],
         force: true,
+        skipTriage: true,
       })
     })
-    expect(body).toEqual({ sections: ['executive-summary', 'risk-level'], force: true })
+    expect(body).toEqual({
+      sections: ['executive-summary', 'risk-level'],
+      force: true,
+      skip_triage: true,
+    })
     expect(resolved).toEqual([
       expect.objectContaining({ section: 'executive-summary', status: 'generating' }),
       expect.objectContaining({ section: 'risk-level', status: 'queued' }),
     ])
+  })
+
+  it('defaults skip_triage to false when omitted', async () => {
+    let body: Record<string, unknown> | null = null
+    server.use(
+      http.post('/api/v1/projects/:projectId/reports/drafts', async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ drafts: [] }, { status: 202 })
+      })
+    )
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useGenerateDrafts(), { wrapper })
+    await act(async () => {
+      await result.current.mutateAsync({ projectId: 1, sections: ['risk-level'] })
+    })
+    expect(body).toMatchObject({ skip_triage: false, force: false })
   })
 
   it('routes a 409 JOB_ALREADY_RUNNING through setReportMutationError', async () => {

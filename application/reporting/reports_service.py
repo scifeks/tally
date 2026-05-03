@@ -122,6 +122,7 @@ class ReportsService:
         project_name: str,
         prompt: UserPromptPort,
         event_sink: DraftEventSink,
+        skip_triage: bool = False,
     ) -> DraftBatchHandle:
         """Start a sequential draft batch on a daemon worker thread.
 
@@ -140,6 +141,7 @@ class ReportsService:
             kwargs={
                 "sections": validated,
                 "force": force,
+                "skip_triage": skip_triage,
                 "base_path": base_path,
                 "project_id": project_id,
                 "project_name": project_name,
@@ -158,6 +160,7 @@ class ReportsService:
         *,
         sections: tuple[str, ...],
         force: bool,
+        skip_triage: bool,
         base_path: str,
         project_id: int,
         project_name: str,
@@ -178,6 +181,7 @@ class ReportsService:
                     base_path=Path(base_path),
                     section=section,
                     force_overwrite=force,
+                    skip_triage=skip_triage,
                     project_id=project_id,
                 )
                 try:
