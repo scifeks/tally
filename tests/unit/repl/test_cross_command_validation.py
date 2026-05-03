@@ -47,9 +47,7 @@ def test_invalid_tool_rejected_by_purge():
 def test_invalid_tool_rejected_by_search():
     repl = _mock_repl()
     kc = KnowledgeCommands(repl)
-    mock_qe = MagicMock()
-    mock_qe._known_tools = frozenset(_VALID_TOOLS)
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    kc._get_finding_repo = MagicMock(return_value=MagicMock())
     kc.cmd_search("search", [f"--tool={_INVALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Search error" in p for p in printed)
@@ -89,10 +87,9 @@ def test_valid_tool_accepted_by_purge():
 def test_valid_tool_accepted_by_search():
     repl = _mock_repl()
     kc = KnowledgeCommands(repl)
-    mock_qe = MagicMock()
-    mock_qe._known_tools = frozenset(_VALID_TOOLS)
-    mock_qe.search.return_value = []
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = MagicMock()
+    mock_store.search.return_value = []
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", [f"--tool={_VALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Search error" in p for p in printed)

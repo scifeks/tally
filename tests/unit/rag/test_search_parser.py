@@ -216,13 +216,13 @@ def test_no_results_message():
 
     repl = MagicMock()
     repl.active_project = "test_project"
+    repl.tool_registry.list_tool_names.return_value = ["semgrep", "gitleaks"]
 
     kc = KnowledgeCommands(repl)
 
-    mock_qe = MagicMock()
-    mock_qe.search.return_value = []
-    mock_qe._known_tools = frozenset({"semgrep", "gitleaks"})
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_repo = MagicMock()
+    mock_repo.search.return_value = []
+    kc._get_finding_repo = MagicMock(return_value=mock_repo)
 
     kc.cmd_search("search", ["--type=secret"])
 
