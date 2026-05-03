@@ -1,10 +1,12 @@
-"""Process-singleton tracking the active triage run.
+"""Track active triage runs via a process-singleton registry.
 
-Maps ``scan_run_id`` to live entries while the background triage thread
-holds the ``LockRegistry`` slot. The cancel endpoint looks up tokens here.
-The triage thread unregisters itself in its ``finally`` block. Triage is
-single-active process-wide via ``LockRegistry``, so this map holds at most
-one entry. Thread-safe via an internal mutex.
+Maps ``scan_run_id`` to ``TriageRunHandle`` while a triage worker is in
+flight, allowing cancel endpoints to find the ``CancellationToken`` and
+signal a stop. The service that started the triage unregisters in its
+``finally`` block. Triage is single-active process-wide via
+``LockRegistry``, so this map holds at most one entry.
+
+Thread-safe via an internal mutex.
 """
 
 from __future__ import annotations

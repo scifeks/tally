@@ -56,15 +56,16 @@ def run_triage_for_project(
     cancel_token: CancellationToken | None = None,
     app_root: Path | None = None,
     scan_run_id: int | None = None,
+    holder_token: str | None = None,
 ) -> dict[str, int]:
-    """Web-path entry: full triage with sink + cancel token wired in.
+    """Service-path entry: full triage with sink + cancel token wired in.
 
     Resolves the latest scan_run for the project's findings.db and
-    triages it. Caller passes the project's integer id (used to stamp
-    events with ``project_id``) and the dependencies that turn the
-    runner into an SSE-emitting, cancellable worker. ``scan_run_id``
-    pins the run to a specific id (e.g. for resume); when ``None``
-    the runner picks the latest scan_run.
+    triages it. The caller (``TriageService.start_triage``) owns the
+    Tier-1 ``triage`` job lock. ``holder_token`` is forwarded to
+    ``TriageRunner.run`` so per-batch finding-id locks acquire under
+    the same identity, blocking analyst PATCHes for the duration of
+    each batch.
     """
     from .runner import _APP_ROOT
 
@@ -94,7 +95,9 @@ def run_triage_for_project(
         session_timeout_seconds=session_timeout_seconds,
         tool_registry=tool_registry,
     )
-    return dataclasses.asdict(_retry_once(runner.run))
+    return dataclasses.asdict(
+        _retry_once(lambda: runner.run(holder_token=holder_token))
+    )
 
 
 def resume_triage_for_project(
@@ -106,8 +109,9 @@ def resume_triage_for_project(
     event_sink: TriageEventSink | None = None,
     cancel_token: CancellationToken | None = None,
     app_root: Path | None = None,
+    holder_token: str | None = None,
 ) -> dict[str, int]:
-    """Web-path entry: explicit resume of an existing triage run.
+    """Service-path entry: explicit resume of an existing triage run.
 
     Flips stranded ``in_progress`` and retryable ``failed`` batches
     back to ``pending`` (via ``TriageBatchRepository.reset_for_resume``)
@@ -143,7 +147,9 @@ def resume_triage_for_project(
         session_timeout_seconds=session_timeout_seconds,
         tool_registry=tool_registry,
     )
-    return dataclasses.asdict(_retry_once(runner.run))
+    return dataclasses.asdict(
+        _retry_once(lambda: runner.run(holder_token=holder_token))
+    )
 
 
 if __name__ == "__main__":

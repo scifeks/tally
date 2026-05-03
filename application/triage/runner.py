@@ -194,8 +194,15 @@ class TriageRunner:
                 ) from exc
         return run_id, total
 
-    def run(self) -> TriageResult:
-        """Run full triage pipeline (batch → MCP setup → Claude sessions)."""
+    def run(self, *, holder_token: str | None = None) -> TriageResult:
+        """Run full triage pipeline (batch → MCP setup → Claude sessions).
+
+        The "triage" job lock is owned by the caller (the application
+        service that started this run, or the REPL helper). When
+        ``holder_token`` is provided, per-batch finding-id locks are
+        acquired against that token so concurrent analyst PATCHes are
+        blocked while a batch is being written.
+        """
         run_id, _total = self.batch()
         self._emit(
             RunStarted(
@@ -204,32 +211,30 @@ class TriageRunner:
                 message=f"Triage starting for scan_run_id={run_id}",
             )
         )
-        holder = f"triage-run:{run_id}"
-        with self._registry.job("triage", holder):
-            mcp_json_path = self._write_mcp_config(run_id)
-            try:
-                result = self._run_batch_loop(
-                    run_id,
-                    lambda batch_id, render_fn, finding_ids: self._run_session(
-                        render_fn, finding_ids
-                    ),
-                    holder_token=holder,
+        mcp_json_path = self._write_mcp_config(run_id)
+        try:
+            result = self._run_batch_loop(
+                run_id,
+                lambda batch_id, render_fn, finding_ids: self._run_session(
+                    render_fn, finding_ids
+                ),
+                holder_token=holder_token,
+            )
+        except TriageCancelled:
+            self._triage_repo.cancel_remaining(run_id)
+            self._emit(
+                RunCancelled(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    message="Triage cancelled",
                 )
-            except TriageCancelled:
-                self._triage_repo.cancel_remaining(run_id)
-                self._emit(
-                    RunCancelled(
-                        scan_run_id=run_id,
-                        project_id=self._project_id,
-                        message="Triage cancelled",
-                    )
-                )
-                raise
-            except Exception as exc:
-                self._emit_run_failed(run_id, exc)
-                raise
-            finally:
-                mcp_json_path.unlink(missing_ok=True)
+            )
+            raise
+        except Exception as exc:
+            self._emit_run_failed(run_id, exc)
+            raise
+        finally:
+            mcp_json_path.unlink(missing_ok=True)
         self._emit(
             RunCompleted(
                 scan_run_id=run_id,

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from application.locking import JobBusy
+from application.repl.adapters.console_triage_event_sink import ConsoleTriageEventSink
 from application.triage.orchestrator import (
-    run_triage,
     run_triage_batch_only,
     run_triage_dry_run,
 )
+from application.triage.runner import NoScanRunError
+from application.triage.triage_service import ProjectNotFound, TriageService
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -58,7 +61,37 @@ class TriageCommands:
             self._repl.console.print("[yellow]Triage cancelled.[/yellow]")
             return
 
-        result = run_triage(self._repl.active_project, self._repl.tool_registry)
+        row = self._repl.project_registry.resolve_by_name(self._repl.active_project)
+        if row is None or row.archived_at:
+            self._repl.console.print(
+                f"[red]Error:[/red] project {self._repl.active_project!r} not found"
+            )
+            return
+        try:
+            service = TriageService.for_project(self._repl.project_registry, row.id)
+        except ProjectNotFound:
+            self._repl.console.print(
+                f"[red]Error:[/red] project {self._repl.active_project!r} not found"
+            )
+            return
+        try:
+            handle = service.start_triage(
+                base_path=self._repl.base_path,
+                project_id=row.id,
+                project_name=self._repl.active_project,
+                tool_registry=self._repl.tool_registry,
+                event_sink=ConsoleTriageEventSink(),
+            )
+        except NoScanRunError as exc:
+            self._repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+        except JobBusy as exc:
+            self._repl.console.print(
+                f"[yellow]Another triage is in progress (holder={exc.current_holder})."
+                f"[/yellow]"
+            )
+            return
+        result = handle.result.result()
         self._repl.console.print(
             f"Triage: {result['sessions_run']} sessions run, "
             f"{result['success']} success, "
