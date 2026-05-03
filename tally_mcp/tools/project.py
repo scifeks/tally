@@ -2,8 +2,9 @@
 
 import asyncio
 import json
-import sqlite3
 from pathlib import Path
+
+from infrastructure.store.project_registry import ProjectRegistryRepository
 
 _app_root: Path = Path(__file__).parent.parent.parent
 
@@ -13,15 +14,11 @@ def _project_root(project: str) -> Path:
     tally_db = _app_root / "tally.db"
     if tally_db.exists():
         try:
-            with sqlite3.connect(str(tally_db)) as conn:
-                row = conn.execute(
-                    "SELECT path FROM projects WHERE name = ? AND archived_at IS NULL",
-                    (project,),
-                ).fetchone()
-            if row:
-                return Path(row[0])
-        except sqlite3.Error:
-            pass
+            row = ProjectRegistryRepository(tally_db).get_by_name(project)
+        except Exception:
+            row = None
+        if row is not None and row.archived_at is None:
+            return Path(row.path)
     from core.project_paths import ProjectPaths
 
     return ProjectPaths.from_canonical(_app_root, project).root
