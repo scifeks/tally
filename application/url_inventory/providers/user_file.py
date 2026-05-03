@@ -10,17 +10,15 @@ object so the artifact builder can rebuild merged_oas3.json from DB rows.
 
 from __future__ import annotations
 
-import json
-import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.url_inventory.providers._oas3_to_findings import iter_oas3_rows
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
-from infrastructure.endpoints.converters.service import convert_endpoint_file
 
 if TYPE_CHECKING:
+    from application.ports.url_source_converter import UrlSourceConverterPort
     from application.url_inventory.ports import UrlProviderContext
 
 
@@ -30,6 +28,9 @@ class UserFileProvider:
     source: UrlSource = UrlSource.USER
     tool: UrlTool | None = None
 
+    def __init__(self, converter: UrlSourceConverterPort) -> None:
+        self._converter = converter
+
     def provide(
         self,
         ctx: UrlProviderContext,
@@ -37,8 +38,7 @@ class UserFileProvider:
         file_path: str,
     ) -> Iterable[UrlFinding]:
         """Parse *file_path* and yield ``UrlFinding`` rows."""
-        src = Path(file_path)
-        oas3_doc = _convert_to_oas3(src)
+        oas3_doc = self._converter.to_oas3(Path(file_path))
         return list(
             iter_oas3_rows(
                 oas3_doc,
@@ -49,13 +49,3 @@ class UserFileProvider:
                 file_path=file_path,
             )
         )
-
-
-def _convert_to_oas3(src: Path) -> dict:
-    """Normalise *src* (any supported format) to an OAS3 dict in memory."""
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        out_dir = tmp_path / "out"
-        originals_dir = tmp_path / "originals"
-        oas3_path = convert_endpoint_file(src, out_dir, originals_dir)
-        return json.loads(oas3_path.read_text(encoding="utf-8"))

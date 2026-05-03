@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 import logging
 from collections.abc import Callable
@@ -19,6 +18,7 @@ from application.ports.triage_event_sink import (
 )
 from application.tools.registry import ToolRegistry
 from application.triage.batching import compute_batches
+from application.triage.prompts import api_trace, sast_trace, sca_trace
 from core.project_paths import ProjectPaths
 from domain.pipeline.triage_events import (
     BatchCompleted,
@@ -37,6 +37,12 @@ if TYPE_CHECKING:
     from application.ports.triage_agent import TriageAgentPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
+_PROMPT_RENDERERS: dict[str, Callable[[list[int], str], str]] = {
+    "api": api_trace.render,
+    "sast": sast_trace.render,
+    "sca": sca_trace.render,
+}
+
 _log = logging.getLogger(__name__)
 
 _APP_ROOT = Path(__file__).parent.parent.parent
@@ -48,7 +54,7 @@ class TriageCancelled(Exception):
     """Raised when triage observes its CancellationToken set mid-run.
 
     The runner's batch loop catches this, marks remaining batches
-    cancelled, emits a ``run_cancelled`` event, and exits cleanly.
+    canceled, emits a ``run_cancelled`` event, and exits cleanly.
     """
 
 
@@ -226,7 +232,7 @@ class TriageRunner:
                 RunCancelled(
                     scan_run_id=run_id,
                     project_id=self._project_id,
-                    message="Triage cancelled",
+                    message="Triage canceled",
                 )
             )
             raise
@@ -297,7 +303,7 @@ class TriageRunner:
         except Exception as exc:  # pragma: no cover - defensive
             _log.debug("Triage event sink raised; swallowing: %s", exc)
 
-    def _check_cancelled(self) -> None:
+    def _check_canceled(self) -> None:
         if self._cancel_token.is_set():
             raise TriageCancelled
 
@@ -363,7 +369,7 @@ class TriageRunner:
         """
         sessions_run = success = failed = incomplete = 0
         while True:
-            self._check_cancelled()
+            self._check_canceled()
 
             batch = self._triage_repo.claim_batch(run_id)
             if batch is None:
@@ -383,10 +389,7 @@ class TriageRunner:
                 continue
 
             segment = tool_obj.scan_segment
-            module = importlib.import_module(
-                f"application.triage.prompts.{segment}_trace"
-            )
-            render_fn: Callable[..., str] = module.render
+            render_fn = _PROMPT_RENDERERS[segment]
 
             sessions_run += 1
             self._emit(

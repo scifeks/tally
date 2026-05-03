@@ -250,7 +250,7 @@ class InteractiveProjectWizard:
         """Run interactive interview to create a new project.
 
         Returns:
-            Created project name on success, None if user cancelled.
+            Created project name on success, None if user canceled.
         """
         print("\nCreating new project...\n")
         try:
@@ -293,14 +293,14 @@ class InteractiveProjectWizard:
             return name
 
         except KeyboardInterrupt:
-            print("\n\n[Cancelled]")
+            print("\n\n[Canceled]")
             return None
 
     def add_repository(self, project_name: str) -> Repository | None:
         """Interactively add a repository to an existing project.
 
         Returns:
-            Added Repository on success, None if cancelled.
+            Added Repository on success, None if canceled.
         """
         if project_name not in self._manager.list_projects():
             raise ValueError(f"Project '{project_name}' does not exist.")
@@ -331,14 +331,14 @@ class InteractiveProjectWizard:
             )
             return persisted
         except KeyboardInterrupt:
-            print("\n\n[Cancelled]")
+            print("\n\n[Canceled]")
             return None
 
     def edit_repository(self, project_name: str, repo_name: str) -> Repository | None:
         """Interactively edit an existing repository in project_name.
 
         Returns:
-            Updated Repository on success, None if cancelled.
+            Updated Repository on success, None if canceled.
 
         Raises:
             ValueError: if the project or repository does not exist.
@@ -605,7 +605,7 @@ class InteractiveProjectWizard:
             return updated
 
         except KeyboardInterrupt:
-            print("\n\n[Cancelled]")
+            print("\n\n[Canceled]")
             return None
 
     def _has_existing_endpoint_file(
@@ -676,6 +676,9 @@ class InteractiveProjectWizard:
         ``endpoints/<repo_id>/``.
         """
         from infrastructure.endpoints.converters import ConverterError
+        from infrastructure.endpoints.converters.endpoint_file_converter import (
+            EndpointFileConverter,
+        )
 
         epoch = time.time_ns()
         upload_dir = paths.seed_upload_dir(repo.name, epoch)
@@ -693,7 +696,11 @@ class InteractiveProjectWizard:
             run_id=None,
         )
         try:
-            entries = list(UserFileProvider().provide(ctx, file_path=str(target)))
+            entries = list(
+                UserFileProvider(EndpointFileConverter()).provide(
+                    ctx, file_path=str(target)
+                )
+            )
         except (ConverterError, ValueError, OSError) as exc:
             print(f"\n  Endpoint file conversion failed: {exc}")
             print(
@@ -770,7 +777,7 @@ class InteractiveProjectWizard:
         separately via ``repo add / edit / delete``.
 
         Returns:
-            True on success, False if the user cancelled.
+            True on success, False if the user canceled.
 
         Raises:
             ValueError: if the project does not exist.
@@ -835,7 +842,7 @@ class InteractiveProjectWizard:
             return True
 
         except KeyboardInterrupt:
-            print("\n\n[Cancelled]")
+            print("\n\n[Canceled]")
             return False
 
     def _interview_repositories(self) -> list[tuple[Repository, str | None]]:
