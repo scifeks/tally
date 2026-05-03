@@ -68,9 +68,12 @@ interface ReportSummaryApi {
   project_id: number | null
   filename: string
   format: ReportFormat
-  generated_at: string
-  size_bytes: number
-  download_url: string
+  status: string
+  file_size_bytes: number | null
+  created_at: string | null
+  started_at: string | null
+  finished_at: string | null
+  download_url: string | null
   pinned?: boolean
 }
 
@@ -154,9 +157,9 @@ export function mapReportHistoryEntry(api: ReportSummaryApi): ReportHistoryEntry
     projectId: api.project_id ?? 0,
     filename: api.filename,
     format: api.format,
-    generatedAt: api.generated_at,
-    sizeBytes: api.size_bytes,
-    downloadUrl: api.download_url,
+    generatedAt: api.finished_at ?? api.started_at ?? api.created_at ?? '',
+    sizeBytes: api.file_size_bytes ?? 0,
+    downloadUrl: api.download_url ?? '',
     pinned: api.pinned,
   }
 }
