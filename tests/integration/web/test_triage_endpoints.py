@@ -8,9 +8,9 @@ from typing import Any
 import pytest
 
 from application.locking import get_registry
+from application.triage.run_registry import get_triage_run_registry
 from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.triage import TriageBatchRepository
-from web.adapters.triage_run_registry import get_triage_run_registry
 
 pytestmark = pytest.mark.integration
 
@@ -213,17 +213,19 @@ async def test_start_triage_404_when_no_scan_runs(app_client, monkeypatch) -> No
 async def test_start_triage_returns_202_and_acquires_slot(
     app_client, monkeypatch
 ) -> None:
+    from application.triage.triage_service import TriageService
+
     client, _fid, _rag, factory, mut_headers, project_id = app_client
     _seed_scan_run(factory, project_id=project_id)
 
-    # Replace the worker so the request returns immediately.
+    # Stub the worker so the spawned thread is a no-op and the lock
+    # remains acquired (the route's response is what we are asserting).
     started: dict = {}
 
-    def fake_start_triage_thread(**kwargs):
+    def fake_run_worker(self, **kwargs):
         started.update(kwargs)
-        # don't release the lock; worker would normally hold then release
 
-    monkeypatch.setattr("web.api.triage.start_triage_thread", fake_start_triage_thread)
+    monkeypatch.setattr(TriageService, "_run_worker", fake_run_worker)
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage",
@@ -235,6 +237,65 @@ async def test_start_triage_returns_202_and_acquires_slot(
     assert body["scan_run_id"] == started["scan_run_id"]
     assert body["project_id"] == project_id
     assert body["status"] in {"queued", "running", "done", "failed", "cancelled"}
+
+
+@pytest.mark.asyncio
+async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> None:
+    """Run the real worker with the orchestrator stubbed.
+
+    Why: the previous architecture acquired the ``triage`` job lock in
+    the route AND again inside ``TriageRunner.run``. The second acquire
+    raised ``JobBusy`` against the slot the route already held, so any
+    real production triage failed. The earlier tests stubbed the worker
+    entirely, so the bug never surfaced. This test exercises the worker
+    end-to-end (orchestrator stubbed), verifying the lock is acquired
+    exactly once and released cleanly.
+    """
+    import threading
+
+    from application.triage import triage_service
+
+    client, _fid, _rag, factory, mut_headers, project_id = app_client
+    _seed_scan_run(factory, project_id=project_id)
+
+    captured: dict[str, Any] = {}
+    done = threading.Event()
+
+    def fake_run_triage(project, **kwargs):
+        captured["project"] = project
+        captured["holder_token"] = kwargs.get("holder_token")
+        captured["scan_run_id"] = kwargs.get("scan_run_id")
+        captured["lock_held_during_call"] = (
+            get_registry()._jobs.get("triage")  # type: ignore[attr-defined]
+            == kwargs.get("holder_token")
+        )
+        done.set()
+        return {"sessions_run": 0, "success": 0, "failed": 0, "incomplete": 0}
+
+    monkeypatch.setattr(triage_service, "run_triage_for_project", fake_run_triage)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/triage",
+        json={"acknowledge_injection_risk": True},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 202, resp.text
+
+    assert done.wait(timeout=5.0), "worker did not invoke the orchestrator"
+
+    # The orchestrator was called exactly once, while the lock was held
+    # under the holder_token the service minted. No JobBusy was raised.
+    assert captured["holder_token"] is not None
+    assert captured["lock_held_during_call"] is True
+
+    # Wait for the worker thread to release the lock.
+    for _ in range(50):
+        if get_registry()._jobs.get("triage") is None:  # type: ignore[attr-defined]
+            break
+        threading.Event().wait(0.05)
+    assert get_registry()._jobs.get("triage") is None, (  # type: ignore[attr-defined]
+        "lock not released by the worker"
+    )
 
 
 @pytest.mark.asyncio
@@ -569,12 +630,14 @@ async def test_resume_202_dispatches_with_explicit_scan_run_id(
     run_id = _seed_scan_run(factory, project_id=project_id)
     _seed_triage_batch(factory, run_id=run_id, finding_ids=[1], status="failed")
 
+    from application.triage.triage_service import TriageService
+
     started: dict = {}
 
-    def fake_start_triage_thread(**kwargs):
+    def fake_run_worker(self, **kwargs):
         started.update(kwargs)
 
-    monkeypatch.setattr("web.api.triage.start_triage_thread", fake_start_triage_thread)
+    monkeypatch.setattr(TriageService, "_run_worker", fake_run_worker)
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage/{run_id}/resume",

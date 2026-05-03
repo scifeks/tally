@@ -353,6 +353,7 @@ _DRAFT_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
 class _DraftStartRequest(BaseModel):
     sections: list[str]
     force: bool = False
+    skip_triage: bool = False
 
 
 def _resolve_drafts_dir(row: ProjectRow) -> Path:

@@ -23,14 +23,20 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.locking import JobBusy, get_registry
-from application.triage.triage_service import ProjectNotFound, TriageService
+from application.locking import JobBusy
+from application.triage.run_registry import get_triage_run_registry
+from application.triage.runner import NoScanRunError
+from application.triage.triage_service import (
+    ProjectNotFound,
+    TriageNotResumableError,
+    TriageService,
+)
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
-from web.adapters.triage_run_registry import get_triage_run_registry
+from web.adapters.event_bus_triage_sink import EventBusTriageSink
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
@@ -41,7 +47,6 @@ from web.api.schemas import (
     TriagesListResponse,
     TriageStartRequest,
 )
-from web.triage.runner import TriageRequest, start_triage_thread
 
 logger = logging.getLogger("tally.web.triage")
 
@@ -286,51 +291,32 @@ async def start_triage(
     base_path: str = request.app.state.base_path
 
     service = _service(request, project_id)
-    scan_run_id = await asyncio.to_thread(service.run_repo.latest_run_id)
-    if scan_run_id is None:
+    sink = EventBusTriageSink(request.app.state.event_bus)
+    finding_ids = tuple(body.finding_ids) if body.finding_ids else None
+    try:
+        handle = await asyncio.to_thread(
+            service.start_triage,
+            base_path=base_path,
+            project_id=project_id,
+            project_name=project_name,
+            tool_registry=request.app.state.tool_registry,
+            event_sink=sink,
+            finding_ids=finding_ids,
+        )
+    except NoScanRunError as exc:
         raise NotFound(
             f"project {project_name!r} has no scan runs; run a scan before triage",
-        )
-
-    lock_registry = get_registry()
-    holder = f"triage-web:{new_event_id()[:8]}"
-    try:
-        lock_registry.acquire_job("triage", holder)
+        ) from exc
     except JobBusy as exc:
         raise JobBusyError("triage", exc.current_holder) from exc
 
-    bus = request.app.state.event_bus
-    triage_request = TriageRequest(
-        finding_ids=tuple(body.finding_ids) if body.finding_ids else None,
-    )
-
-    try:
-        start_triage_thread(
-            base_path=base_path,
-            project_name=project_name,
-            project_id=project_id,
-            scan_run_id=scan_run_id,
-            request=triage_request,
-            holder_token=holder,
-            bus=bus,
-            tool_registry=request.app.state.tool_registry,
-            triage_run_registry=get_triage_run_registry(),
-            lock_registry=lock_registry,
-        )
-    except Exception:
-        try:
-            lock_registry.release_job("triage", holder)
-        except Exception:  # noqa: BLE001
-            pass
-        raise
-
     summary = await asyncio.to_thread(
-        service.triage_repo.summarize_for_run, scan_run_id
+        service.triage_repo.summarize_for_run, handle.scan_run_id
     )
     if summary is None:
         # No batches yet; return a queued placeholder.
         return TriageRunSummary(
-            scan_run_id=scan_run_id,
+            scan_run_id=handle.scan_run_id,
             project_id=project_id,
             status="queued",
             started_at=None,
@@ -414,51 +400,30 @@ async def resume_triage(
     base_path: str = request.app.state.base_path
 
     service = _service(request, project_id)
-    summary = await asyncio.to_thread(
-        service.triage_repo.summarize_for_run, scan_run_id
-    )
-    if summary is None:
-        raise NotFound(
-            f"no triage runs found for scan_run_id {scan_run_id}",
+    sink = EventBusTriageSink(request.app.state.event_bus)
+    try:
+        await asyncio.to_thread(
+            service.resume_triage,
+            base_path=base_path,
+            project_id=project_id,
+            project_name=project_name,
+            scan_run_id=scan_run_id,
+            tool_registry=request.app.state.tool_registry,
+            event_sink=sink,
         )
-    if summary.status not in ("failed", "running"):
+    except TriageNotResumableError as exc:
+        if exc.status is None:
+            raise NotFound(
+                f"no triage runs found for scan_run_id {scan_run_id}",
+            ) from exc
         raise Conflict(
             f"triage scan_run_id {scan_run_id} is not resumable "
-            f"(status={summary.status!r})",
+            f"(status={exc.status!r})",
             code="TRIAGE_NOT_RESUMABLE",
-            details={"status": summary.status},
-        )
-
-    lock_registry = get_registry()
-    holder = f"triage-resume:{new_event_id()[:8]}"
-    try:
-        lock_registry.acquire_job("triage", holder)
+            details={"status": exc.status},
+        ) from exc
     except JobBusy as exc:
         raise JobBusyError("triage", exc.current_holder) from exc
-
-    bus = request.app.state.event_bus
-    triage_request = TriageRequest(finding_ids=None)
-
-    try:
-        start_triage_thread(
-            base_path=base_path,
-            project_name=project_name,
-            project_id=project_id,
-            scan_run_id=scan_run_id,
-            request=triage_request,
-            holder_token=holder,
-            bus=bus,
-            tool_registry=request.app.state.tool_registry,
-            triage_run_registry=get_triage_run_registry(),
-            lock_registry=lock_registry,
-            is_resume=True,
-        )
-    except Exception:
-        try:
-            lock_registry.release_job("triage", holder)
-        except Exception:  # noqa: BLE001
-            pass
-        raise
 
     refreshed = await asyncio.to_thread(
         service.triage_repo.summarize_for_run, scan_run_id

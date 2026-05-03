@@ -24,14 +24,16 @@ class TestTriageCommandsClaudeGate:
         repl = _repl()
         cmds = TriageCommands(repl, runtime_service=_runtime(installed=False))
         with (
-            patch("application.repl.commands.triage_commands.run_triage") as r,
+            patch(
+                "application.repl.commands.triage_commands.TriageService"
+            ) as mock_service,
             patch(
                 "application.repl.commands.triage_commands.run_triage_batch_only"
             ) as rb,
             patch("application.repl.commands.triage_commands.run_triage_dry_run") as rd,
         ):
             cmds.cmd_triage("triage", args)
-        r.assert_not_called()
+        mock_service.for_project.assert_not_called()
         rb.assert_not_called()
         rd.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
@@ -49,17 +51,21 @@ class TestTriageCommandsClaudeGate:
     def test_claude_present_proceeds_to_project_check(self) -> None:
         repl = _repl(active_project=None)
         cmds = TriageCommands(repl, runtime_service=_runtime(installed=True))
-        with patch("application.repl.commands.triage_commands.run_triage") as r:
+        with patch(
+            "application.repl.commands.triage_commands.TriageService"
+        ) as mock_service:
             cmds.cmd_triage("triage", [])
-        r.assert_not_called()
+        mock_service.for_project.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
         assert "No active" in printed
 
     def test_no_runtime_service_skips_gate(self) -> None:
         repl = _repl(active_project=None)
         cmds = TriageCommands(repl, runtime_service=None)
-        with patch("application.repl.commands.triage_commands.run_triage") as r:
+        with patch(
+            "application.repl.commands.triage_commands.TriageService"
+        ) as mock_service:
             cmds.cmd_triage("triage", [])
-        r.assert_not_called()
+        mock_service.for_project.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
         assert "No active" in printed
