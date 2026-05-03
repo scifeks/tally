@@ -73,6 +73,13 @@ class ProjectPaths:
         """
         return self.endpoints_dir / repo
 
+    @property
+    def arg_files_dir(self) -> Path:
+        return self.root / "arg_files"
+
+    def arg_profile_dir(self, profile_id: int) -> Path:
+        return self.arg_files_dir / str(profile_id)
+
     def seed_upload_dir(self, repo_name: str, epoch: int) -> Path:
         """Return ``endpoints/<repo_name>-<epoch>/`` for a user upload.
 

@@ -109,7 +109,9 @@ class ConnectionFactory:
                     tool_ids        TEXT,
                     domains         TEXT,
                     skip_enrichment INTEGER,
-                    findings_count  INTEGER
+                    findings_count  INTEGER,
+                    saved_scan_id   INTEGER REFERENCES saved_scans(id)
+                                      ON DELETE SET NULL
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_scan_runs_project_id
@@ -118,19 +120,20 @@ class ConnectionFactory:
                     ON scan_runs (status);
 
                 CREATE TABLE IF NOT EXISTS run_tools (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id          INTEGER,
-                    tool            TEXT,
-                    findings_count  INTEGER DEFAULT 0,
-                    repo            TEXT,
-                    domain          TEXT,
-                    status          TEXT,
-                    started_at      TEXT,
-                    finished_at     TEXT,
-                    exit_code       INTEGER,
-                    skip_reason     TEXT,
-                    enriched_count  INTEGER,
-                    total_to_enrich INTEGER
+                    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id               INTEGER,
+                    tool                 TEXT,
+                    findings_count       INTEGER DEFAULT 0,
+                    repo                 TEXT,
+                    domain               TEXT,
+                    status               TEXT,
+                    started_at           TEXT,
+                    finished_at          TEXT,
+                    exit_code            INTEGER,
+                    skip_reason          TEXT,
+                    enriched_count       INTEGER,
+                    total_to_enrich      INTEGER,
+                    arg_profile_snapshot TEXT
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_run_tools_run_id
@@ -307,6 +310,74 @@ class ConnectionFactory:
                     ON url_findings (repo_id, source);
                 CREATE INDEX IF NOT EXISTS idx_url_findings_run
                     ON url_findings (run_id);
+
+                CREATE TABLE IF NOT EXISTS tool_arg_profiles (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_name  TEXT    NOT NULL,
+                    name       TEXT    NOT NULL,
+                    args       TEXT    NOT NULL DEFAULT '[]',
+                    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT    NOT NULL DEFAULT (datetime('now')),
+                    UNIQUE (tool_name, name)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_tool_arg_profiles_tool
+                    ON tool_arg_profiles (tool_name);
+
+                CREATE TABLE IF NOT EXISTS tool_overrides (
+                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tool_name           TEXT    NOT NULL UNIQUE,
+                    args_mode           TEXT    NOT NULL DEFAULT 'stock'
+                                          CHECK (args_mode IN ('stock', 'custom')),
+                    type                TEXT    NOT NULL
+                                          CHECK (type IN ('repo', 'api')),
+                    location            TEXT    NOT NULL
+                                          CHECK (location IN ('local', 'docker')),
+                    path                TEXT,
+                    container_name      TEXT,
+                    container_tool_path TEXT,
+                    created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+                    updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS saved_scans (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name            TEXT    NOT NULL UNIQUE,
+                    skip_enrichment INTEGER NOT NULL DEFAULT 0,
+                    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS saved_scan_repos (
+                    saved_scan_id INTEGER NOT NULL
+                                    REFERENCES saved_scans(id)  ON DELETE CASCADE,
+                    repo_id       INTEGER NOT NULL
+                                    REFERENCES repositories(id) ON DELETE CASCADE,
+                    PRIMARY KEY (saved_scan_id, repo_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_saved_scan_repos_repo
+                    ON saved_scan_repos (repo_id);
+
+                CREATE TABLE IF NOT EXISTS saved_scan_tools (
+                    saved_scan_id INTEGER NOT NULL
+                                    REFERENCES saved_scans(id) ON DELETE CASCADE,
+                    tool_name     TEXT    NOT NULL,
+                    PRIMARY KEY (saved_scan_id, tool_name)
+                );
+
+                CREATE TABLE IF NOT EXISTS saved_scan_arg_profiles (
+                    saved_scan_id  INTEGER NOT NULL
+                                     REFERENCES saved_scans(id)
+                                     ON DELETE CASCADE,
+                    arg_profile_id INTEGER NOT NULL
+                                     REFERENCES tool_arg_profiles(id)
+                                     ON DELETE RESTRICT,
+                    PRIMARY KEY (saved_scan_id, arg_profile_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_saved_scan_arg_profiles_profile
+                    ON saved_scan_arg_profiles (arg_profile_id);
             """)
 
     def purge_non_preserved_tables(self) -> None:
