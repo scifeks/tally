@@ -353,17 +353,15 @@ describe('Reports page - draft SSE → log surface', () => {
     ).toBeInTheDocument()
   })
 
-  it('refetches drafts and surfaces error on draft_failed', async () => {
+  it('mutates the drafts cache on draft_failed without a second GET', async () => {
     useUI.setState({ activeProjectId: 1 })
 
-    // Initial GET: executive-summary is "draft". After SSE draft_failed,
-    // the next GET swaps that section to "failed" with an error string.
     let getCount = 0
     server.use(
       http.get('/api/v1/projects/1/reports/drafts', () => {
         getCount += 1
-        if (getCount === 1) {
-          return HttpResponse.json([
+        return HttpResponse.json({
+          drafts: [
             {
               section: 'executive-summary',
               status: 'draft',
@@ -374,28 +372,14 @@ describe('Reports page - draft SSE → log surface', () => {
               uploaded_filename: null,
               error: null,
             },
-          ])
-        }
-        return HttpResponse.json([
-          {
-            section: 'executive-summary',
-            status: 'failed',
-            generated_at: null,
-            reviewed_at: null,
-            preview: null,
-            word_count: null,
-            uploaded_filename: null,
-            error:
-              'No findings are marked for inclusion in the report. ' +
-              'Triage your findings and mark which ones to include ' +
-              'before generating drafts.',
-          },
-        ])
+          ],
+        })
       })
     )
 
     renderReports()
-    await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(1))
+    await waitFor(() => expect(getCount).toBe(1))
+    expect(await screen.findByText(/draft ready/i)).toBeInTheDocument()
 
     await waitFor(() =>
       expect(
@@ -407,17 +391,26 @@ describe('Reports page - draft SSE → log surface', () => {
     )
     if (!draftSse) throw new Error('draft SSE never opened')
 
+    const errorMessage =
+      'No findings are marked for inclusion in the report. ' +
+      'Triage your findings and mark which ones to include ' +
+      'before generating drafts.'
+
     act(() => {
       draftSse.emitTyped('draft_failed', {
         id: 'df-1',
         run_id: 0,
         timestamp: '2026-04-28T12:01:00+00:00',
         section: 'executive-summary',
-        message: 'No findings are marked for inclusion in the report.',
+        message: errorMessage,
         error: 'DraftGenerationError',
       })
     })
 
-    await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(2))
+    await waitFor(() => {
+      expect(screen.queryByText(/draft ready/i)).not.toBeInTheDocument()
+    })
+    expect(screen.getByText(/^failed$/i)).toBeInTheDocument()
+    expect(getCount).toBe(1)
   })
 })

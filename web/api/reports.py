@@ -111,7 +111,7 @@ def _build_draft_snapshot(project_id: int, section: str | None) -> BusEvent:
     active = get_draft_run_registry().get_for_project(project_id)
     payload: dict[str, Any] = {
         "project_id": project_id,
-        "active_sections": [h.section for h in active],
+        "in_flight": [h.section for h in active],
     }
     if section is not None:
         payload["section"] = section
@@ -382,7 +382,7 @@ def _draft_section_summary(
         "status": status,
         "generated_at": record.generated_at if record else None,
         "reviewed_at": record.reviewed_at if record else None,
-        "original_filename": record.original_filename if record else None,
+        "uploaded_filename": record.original_filename if record else None,
         "word_count": word_count,
         "preview": preview,
         "error": record.error if record else None,
@@ -393,17 +393,19 @@ def _draft_section_summary(
 async def list_drafts(
     project_id: int,
     request: Request,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Return one entry per section; absent rows report as ``not_generated``."""
     row = _resolve_project(request, project_id)
     service = _service(request, project_id)
     records = await asyncio.to_thread(service.draft_repo.list_all)
     draft_dir = _resolve_drafts_dir(row)
     by_section = {r.section: r for r in records}
-    return [
-        _draft_section_summary(s, by_section.get(s), draft_dir)
-        for s in SECTION_REGISTRY
-    ]
+    return {
+        "drafts": [
+            _draft_section_summary(s, by_section.get(s), draft_dir)
+            for s in SECTION_REGISTRY
+        ]
+    }
 
 
 @v1_router.post(
@@ -543,7 +545,7 @@ async def upload_draft(
     return {
         "section": section,
         "status": "reviewed",
-        "original_filename": original_filename,
+        "uploaded_filename": original_filename,
         "word_count": len(text.split()),
     }
 

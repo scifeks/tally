@@ -29,12 +29,16 @@ from fastapi.responses import StreamingResponse
 
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
-from application.scans.scans_service import ProjectNotFound, ScansService
+from application.scans.scans_service import (
+    ProjectNotFound,
+    ScanNotCancellable,
+    ScanNotFound,
+    ScansService,
+)
 from application.tools.registry import discover_tools
 
 if TYPE_CHECKING:
     from application.tools.registry import ToolRegistry
-from application.tools.scan_run_registry import get_scan_run_registry
 from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
 from domain.scans.entry import SCAN_RUN_STATUSES, ScanRunRow, ToolRunRow
@@ -275,20 +279,7 @@ async def cancel_all_scans(
 ) -> ScanCancelAllResponse:
     """Cancel every active scan for this project."""
     service = _service(request, project_id)
-    registry = get_scan_run_registry()
-    cancelled: list[int] = []
-    for handle in registry.list_for_project(project_id):
-        handle.cancel_token.set()
-        cancelled.append(handle.run_id)
-
-    if cancelled:
-        repo = service.run_repo
-        for run_id in cancelled:
-            try:
-                await asyncio.to_thread(repo.set_status, run_id, "cancelling")
-            except Exception:  # noqa: BLE001
-                logger.exception("failed to mark scan %d cancelling", run_id)
-
+    cancelled = await asyncio.to_thread(service.cancel_all)
     return ScanCancelAllResponse(cancelled=cancelled)
 
 
@@ -400,28 +391,16 @@ async def cancel_scan(
 ) -> ScanCancelResponse:
     """Request cancellation of a specific scan run."""
     service = _service(request, project_id)
-    repo = service.run_repo
-
-    handle = get_scan_run_registry().get(run_id)
-    if handle is None:
-        scan_row = await asyncio.to_thread(repo.get, run_id)
-        if scan_row is None or scan_row.project_id != project_id:
-            raise NotFound(f"scan run {run_id} not found")
+    try:
+        await asyncio.to_thread(service.cancel_scan, run_id)
+    except ScanNotFound as exc:
+        raise NotFound(f"scan run {run_id} not found") from exc
+    except ScanNotCancellable as exc:
         raise Conflict(
             f"scan run {run_id} is not in a cancellable state",
             code="SCAN_NOT_CANCELLABLE",
-            details={"status": scan_row.status or "unknown"},
-        )
-
-    if handle.project_id != project_id:
-        raise NotFound(f"scan run {run_id} not found")
-
-    handle.cancel_token.set()
-    try:
-        await asyncio.to_thread(repo.set_status, run_id, "cancelling")
-    except Exception:  # noqa: BLE001
-        logger.exception("failed to mark scan %d cancelling", run_id)
-
+            details={"status": exc.status},
+        ) from exc
     return ScanCancelResponse(id=run_id, status="cancelling")
 
 
@@ -516,14 +495,13 @@ async def _build_snapshot(
         "run_id": run_id,
         "project_id": project_id,
     }
-    registry = get_scan_run_registry()
     if run_id is not None:
         bundle = await asyncio.to_thread(service.run_repo.get_with_tool_runs, run_id)
         if bundle is not None:
             scan_row, tool_rows = bundle
             if scan_row.project_id == project_id:
                 progress = _build_progress(scan_row, tool_rows)
-                handle = registry.get(run_id)
+                handle = service.peek_active_run(run_id)
                 payload.update(
                     status=scan_row.status,
                     progress=progress.progress,
@@ -535,7 +513,7 @@ async def _build_snapshot(
                     project_id=scan_row.project_id,
                 )
     else:
-        active_handles = registry.list_for_project(project_id)
+        active_handles = service.list_active_runs()
         payload["active_run_ids"] = [h.run_id for h in active_handles]
         # Sibling field carrying the most recent (repo, tool) per active
         # run so a mid-scan SSE subscriber can render the live label

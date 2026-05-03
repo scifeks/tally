@@ -19,6 +19,7 @@ import {
 import type {
   ReportFormat,
   TestingType,
+  ReportDraft,
   ReportDraftSection,
   ReportLogEvent,
   ReportGenerationStatus,
@@ -31,6 +32,33 @@ import { DraftCard } from './DraftCard'
 import { HistoryTable } from './HistoryTable'
 import { LogRow } from './LogRow'
 import { PreflightChecklist } from './PreflightChecklist'
+
+function mergeDraftFromEvent(prev: ReportDraft, event: ReportLogEvent): ReportDraft {
+  if (event.type === 'draft_started') {
+    return {
+      ...prev,
+      status: 'generating',
+      error: undefined,
+      preview: undefined,
+      wordCount: undefined,
+      generatedAt: undefined,
+    }
+  }
+  if (event.type === 'draft_completed') {
+    return {
+      ...prev,
+      status: 'draft',
+      generatedAt: event.timestamp,
+      wordCount: event.wordCount ?? prev.wordCount,
+      preview: event.preview ?? prev.preview,
+      error: undefined,
+    }
+  }
+  if (event.type === 'draft_failed') {
+    return { ...prev, status: 'failed', error: event.message }
+  }
+  return prev
+}
 
 // ─── Reports Page ─────────────────────────────────────────────────────────────
 
@@ -117,8 +145,15 @@ export default function Reports() {
         event.type === 'draft_completed' ||
         event.type === 'draft_failed'
       ) {
-        queryClient.invalidateQueries({
-          queryKey: ['reports', activeProjectId, 'drafts'],
+        const eventSection = event.section
+        if (!eventSection || activeProjectId === null) return
+        queryClient.setQueryData<ReportDraft[]>(['reports', activeProjectId, 'drafts'], prev => {
+          if (!prev) return prev
+          const idx = prev.findIndex(d => d.section === eventSection)
+          if (idx === -1) return prev
+          const next = [...prev]
+          next[idx] = mergeDraftFromEvent(next[idx], event)
+          return next
         })
       }
     },
@@ -482,7 +517,7 @@ export default function Reports() {
                       generateDrafts.isPending || allDraftsReady || activeProjectId === null
                     }
                     data-testid="report-generate-missing-button"
-                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent enabled:hover:bg-accent enabled:hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {generateDrafts.isPending ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -494,7 +529,7 @@ export default function Reports() {
                     onClick={() => handleGenerateAll(true)}
                     disabled={generateDrafts.isPending || activeProjectId === null}
                     data-testid="report-regenerate-all-button"
-                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-warn text-warn hover:bg-warn hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-warn text-warn enabled:hover:bg-warn/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Regenerate all (overwrites existing)"
                   >
                     <RefreshCw className="h-3 w-3" />

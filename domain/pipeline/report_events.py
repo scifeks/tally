@@ -85,6 +85,7 @@ class DraftCompleted(_ReportEventBase):
     output_path: str = ""
     file_size_bytes: int = 0
     word_count: int = 0
+    preview: str | None = None
     message: str = ""
 
 

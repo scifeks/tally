@@ -2,13 +2,19 @@
 
 Owns per-request construction of the URL finding repo, the project
 repo lookup, and the wrapping ``UrlInventoryService`` so route modules
-do not import infrastructure persistence directly.
+do not import infrastructure persistence directly. Owns the
+``ingest_uploaded_endpoint_file`` orchestration: disk persistence into
+``endpoints/<repo_name>-<epoch>/``, ``url_seed_file`` pointer update,
+``UserFileProvider`` invocation, and ``UrlInventoryService`` ingest.
 """
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Self
 
+from application.url_inventory.ports import UrlProviderContext
+from application.url_inventory.providers.user_file import UserFileProvider
 from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
@@ -23,6 +29,7 @@ if TYPE_CHECKING:
         UrlFindingRepositoryPort,
     )
     from application.project.registry_service import ProjectRegistryService
+    from core.config.schemas import Repository
 
 
 class ProjectNotFound(LookupError):
@@ -39,11 +46,15 @@ class UrlListService:
         inventory: UrlInventoryService,
         *,
         findings_db_exists: bool,
+        paths: ProjectPaths,
+        project_name: str,
     ) -> None:
         self._url_repo = url_repo
         self._project_repo = project_repo
         self._inventory = inventory
         self._findings_db_exists = findings_db_exists
+        self._paths = paths
+        self._project_name = project_name
 
     @classmethod
     def for_project(
@@ -70,6 +81,8 @@ class UrlListService:
             project_repo=project_repo,
             inventory=inventory,
             findings_db_exists=findings_db_exists,
+            paths=paths,
+            project_name=row.name,
         )
 
     @property
@@ -110,3 +123,40 @@ class UrlListService:
             return self._url_repo.count_active()
         except Exception:
             return 0
+
+    def ingest_uploaded_endpoint_file(
+        self,
+        *,
+        repo: Repository,
+        repo_id: int,
+        filename: str,
+        contents: bytes,
+    ) -> None:
+        """Persist *contents* under ``endpoints/<repo_name>-<epoch>/`` and ingest.
+
+        Each call creates a fresh sibling dir so prior uploads accumulate as
+        history. Records the most-recent path on
+        ``repositories.url_seed_file``, runs ``UserFileProvider`` against the
+        file, and ingests the rows via the wrapped ``UrlInventoryService``.
+        """
+        epoch = time.time_ns()
+        upload_dir = self._paths.seed_upload_dir(repo.name, epoch)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        dest = upload_dir / filename
+        dest.write_bytes(contents)
+
+        self._project_repo.set_url_seed_file(repo_id, str(dest))
+
+        ctx = UrlProviderContext(
+            repo=repo,
+            repo_id=repo_id,
+            base_path=str(self._paths.root.parent.parent),
+            project_name=self._project_name,
+            run_id=None,
+        )
+        entries = list(UserFileProvider().provide(ctx, file_path=str(dest)))
+        self._inventory.ingest_user_file(
+            repo_id=repo_id,
+            file_path=str(dest),
+            entries=entries,
+        )
