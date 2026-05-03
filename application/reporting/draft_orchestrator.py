@@ -116,6 +116,16 @@ def run_draft(
 
     draft_path = draft_dir / f"{section}.md"
     if draft_path.exists() and not request.force_overwrite:
+        user_msg = "Draft already exists. Use Regenerate to overwrite."
+        sink.emit(
+            DraftFailed(
+                report_id=0,
+                project_id=request.project_id,
+                section=section,
+                error="DraftOverwriteDenied",
+                message=user_msg,
+            )
+        )
         raise DraftOverwriteDenied(
             f"Draft already exists at {draft_path}. Use force=True to overwrite."
         )
