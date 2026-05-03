@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from web.adapters.chat_run_registry import (
+from application.chat.run_registry import (
     ChatRunRegistry,
     get_chat_run_registry,
 )

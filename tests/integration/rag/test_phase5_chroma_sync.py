@@ -1,4 +1,4 @@
-"""Integration tests: sync_finding_to_chroma does a direct id-based upsert."""
+"""Integration tests: FindingsService patch upserts into ChromaDB by sqlite id."""
 
 from __future__ import annotations
 
@@ -10,13 +10,16 @@ from typing import Any
 
 import pytest
 
+from application.findings.analyst_service import FindingAnalystService
+from application.findings.findings_service import FindingsService
+from application.locking import LockQueryService
 from application.pipeline.fingerprint import compute_fingerprint
 from application.ports.embedding_provider import EmbeddingProvider
+from application.ports.finding_event_sink import NullFindingEventSink
 from application.rag.knowledge_base import FindingKnowledgeBase
 from core.project_paths import ProjectPaths
 from infrastructure.store import make_store
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
-from web.api.chroma_sync import sync_finding_to_chroma
 
 pytestmark = pytest.mark.integration
 
@@ -57,6 +60,30 @@ def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
     )
 
 
+def _build_service(
+    *,
+    finding_repo: Any,
+    history_repo: Any,
+    project_repo: Any,
+    project_name: str,
+    base_path: Path,
+    kb: FindingKnowledgeBase | None,
+) -> FindingsService:
+    return FindingsService(
+        finding_repo=finding_repo,
+        history_repo=history_repo,
+        project_repo=project_repo,
+        analyst=FindingAnalystService(finding_repo),
+        lock_query=LockQueryService(),
+        project_id=1,
+        project_name=project_name,
+        findings_db_exists=True,
+        knowledge_base_cache={project_name: kb},
+        base_path=str(base_path),
+        event_sink=NullFindingEventSink(),
+    )
+
+
 @pytest.fixture()
 def phase5_env(tmp_path: Path) -> dict:
     base_path = tmp_path
@@ -65,7 +92,9 @@ def phase5_env(tmp_path: Path) -> dict:
     paths = ProjectPaths.from_canonical(base_path, project_name)
     paths.root.mkdir(parents=True, exist_ok=True)
 
-    run_repo, finding_repo, _, _ = make_store(str(base_path), project_name)
+    run_repo, finding_repo, history_repo, project_repo = make_store(
+        str(base_path), project_name
+    )
     run_id = run_repo.create_run({})
 
     semgrep_row = {
@@ -86,29 +115,39 @@ def phase5_env(tmp_path: Path) -> dict:
         "project_name": project_name,
         "finding_id": finding_id,
         "finding_repo": finding_repo,
+        "history_repo": history_repo,
+        "project_repo": project_repo,
         "kb": kb,
     }
 
 
-def _sync(env: dict, finding_id: int | None = None) -> None:
-    fid = finding_id if finding_id is not None else env["finding_id"]
-    sync_finding_to_chroma(
-        finding_id=fid,
-        knowledge_base=env["kb"],
+def _service_with_kb(env: dict, kb: FindingKnowledgeBase | None) -> FindingsService:
+    return _build_service(
         finding_repo=env["finding_repo"],
+        history_repo=env["history_repo"],
+        project_repo=env["project_repo"],
+        project_name=env["project_name"],
+        base_path=env["base_path"],
+        kb=kb,
     )
+
+
+def _patch(env: dict, finding_id: int | None = None) -> None:
+    fid = finding_id if finding_id is not None else env["finding_id"]
+    service = _service_with_kb(env, env["kb"])
+    service.patch_finding(fid, {"description": "updated by analyst"})
 
 
 class TestPhase5ChromaSync:
     def test_upsert_creates_doc_with_sqlite_id(self, phase5_env: dict) -> None:
         finding_id = phase5_env["finding_id"]
-        _sync(phase5_env)
+        _patch(phase5_env)
 
         doc = phase5_env["kb"].get_finding(str(finding_id))
         assert doc is not None
 
     def test_doc_has_tool_and_profile_only(self, phase5_env: dict) -> None:
-        _sync(phase5_env)
+        _patch(phase5_env)
 
         finding_id = phase5_env["finding_id"]
         doc = phase5_env["kb"].get_finding(str(finding_id))
@@ -118,19 +157,22 @@ class TestPhase5ChromaSync:
         assert doc["metadata"]["profile"] == "default"
 
     def test_sync_is_idempotent(self, phase5_env: dict) -> None:
-        _sync(phase5_env)
-        _sync(phase5_env)
+        _patch(phase5_env)
+        _patch(phase5_env)
 
         assert phase5_env["kb"].count() == 1
 
     def test_noop_when_kb_is_none(self, phase5_env: dict) -> None:
-        sync_finding_to_chroma(
-            finding_id=phase5_env["finding_id"],
-            knowledge_base=None,
-            finding_repo=phase5_env["finding_repo"],
+        service = _service_with_kb(phase5_env, kb=None)
+        service.patch_finding(
+            phase5_env["finding_id"], {"description": "no kb available"}
         )
         assert phase5_env["kb"].count() == 0
 
     def test_noop_when_finding_not_found(self, phase5_env: dict) -> None:
-        _sync(phase5_env, finding_id=99999)
+        # update_fields short-circuits to False for a non-existent id, so
+        # patch_finding returns None and never reaches _sync_to_chroma.
+        service = _service_with_kb(phase5_env, phase5_env["kb"])
+        result = service.patch_finding(99999, {"description": "ghost"})
+        assert result is None
         assert phase5_env["kb"].count() == 0

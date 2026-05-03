@@ -16,9 +16,9 @@ from typing import Any
 import httpx
 import pytest
 
+from application.chat.run_registry import get_chat_run_registry
 from infrastructure.store.repositories.chat_messages import ChatMessageRepository
 from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
-from web.adapters.chat_run_registry import get_chat_run_registry
 
 pytestmark = pytest.mark.integration
 
@@ -101,7 +101,7 @@ def _patch_chat_deps(monkeypatch, *, chunks: list[str]) -> _FakeProvider:
         model_name=provider.model,
     )
     monkeypatch.setattr(
-        "web.api.chat.ChatStreamComposer.for_project",
+        "application.chat.session_service.ChatStreamComposer.for_project",
         lambda registry, cache, base_path, project_id: fake_composer,
     )
     return provider
@@ -220,7 +220,7 @@ async def test_post_409_when_stream_already_running(app_client, monkeypatch) -> 
         model_name=provider.model,
     )
     monkeypatch.setattr(
-        "web.api.chat.ChatStreamComposer.for_project",
+        "application.chat.session_service.ChatStreamComposer.for_project",
         lambda registry, cache, base_path, project_id: fake_composer,
     )
 

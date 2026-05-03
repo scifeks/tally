@@ -89,12 +89,24 @@ _SYSTEM_PROMPT_TEMPLATE = (
 )
 
 
+class ProjectNotFound(LookupError):
+    """Raised when a project_id has no active row in the registry."""
+
+
 class ChatSessionNotFound(Exception):
     """The session_id does not exist or does not belong to project_id."""
 
 
 class ChatSessionExpired(Exception):
     """The session has been sealed (expired_at is set) and is read-only."""
+
+
+class ChatStreamAlreadyRunning(Exception):
+    """A chat stream is already in flight for this session_id."""
+
+
+class ChatStreamNotRunning(Exception):
+    """No chat stream is currently in flight for this session_id."""
 
 
 @dataclass(frozen=True)

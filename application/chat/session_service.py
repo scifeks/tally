@@ -1,34 +1,67 @@
-"""Application service for chat session and message CRUD.
+"""Application service for chat session and message CRUD plus stream
+orchestration.
 
 Owns per-request construction of the chat persistence repos so route
-modules do not import infrastructure persistence directly. Streaming
-turn execution still lives in ``application.chat.service.stream_chat``;
-the route hands it the repos exposed on this service.
+modules do not import infrastructure persistence directly. Stream
+orchestration (validate, compose, persist user, spawn driver task,
+register handle) and cancellation also live here so the web adapter is
+free of ``asyncio.create_task`` / ``task.cancel()`` plumbing.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
 
-from application.chat.service import ChatSessionNotFound
+from application.chat.run_registry import (
+    ChatRunHandle,
+    get_chat_run_registry,
+)
+from application.chat.service import (
+    ChatRequest,
+    ChatSessionExpired,
+    ChatSessionNotFound,
+    ChatStreamAlreadyRunning,
+    ChatStreamNotRunning,
+    ProjectNotFound,
+    stream_chat,
+)
+from application.chat.stream_composer import ChatStreamComposer
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.chat_messages import ChatMessageRepository
 from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 
 if TYPE_CHECKING:
+    from application.ports.chat_event_sink import ChatStreamSink
     from application.ports.chat_message_repository import ChatMessageRepositoryPort
     from application.ports.chat_session_repository import ChatSessionRepositoryPort
     from application.project.registry_service import ProjectRegistryService
+    from application.rag.knowledge_base import FindingKnowledgeBase
     from domain.chat.entry import ChatMessageRow, ChatSessionRow
 
 
-class ProjectNotFound(LookupError):
-    """Raised when a project_id has no active row in the registry."""
+logger = logging.getLogger("application.chat.session_service")
+
+
+@dataclass(frozen=True)
+class SendMessageHandle:
+    """Returned from :meth:`ChatSessionService.send_message`.
+
+    The user row is already persisted; the assistant row will be
+    written write-once on clean stream end and its id arrives on the
+    SSE ``stream_end`` event.
+    """
+
+    user_message_id: int
+    session_id: int
+    project_id: int
 
 
 class ChatSessionService:
-    """Chat session and message CRUD bound to a single project."""
+    """Chat session and message CRUD plus stream orchestration."""
 
     def __init__(
         self,
@@ -127,3 +160,137 @@ class ChatSessionService:
             self._message_repo.last_created_at(session_id),
             self._message_repo.count_for_session(session_id),
         )
+
+    async def send_message(
+        self,
+        *,
+        project_id: int,
+        session_id: int,
+        content: str,
+        chat_sink: ChatStreamSink,
+        project_registry: ProjectRegistryService,
+        knowledge_base_cache: dict[str, FindingKnowledgeBase | None],
+        base_path: str,
+    ) -> SendMessageHandle:
+        """Validate, compose, persist user, spawn driver, register handle.
+
+        Raises:
+            ChatSessionNotFound: session_id is unknown or wrong project.
+            ChatSessionExpired: session has been sealed.
+            ChatStreamAlreadyRunning: another stream is in flight for
+                this session.
+            RagUnavailable: per-project knowledge base cannot be built.
+        """
+        session = await asyncio.to_thread(
+            self.get_session_or_raise, session_id, project_id
+        )
+        if session.expired_at is not None:
+            raise ChatSessionExpired(
+                f"chat session {session_id} is sealed (expired_at="
+                f"{session.expired_at!r})"
+            )
+
+        registry = get_chat_run_registry()
+        if registry.get(session_id) is not None:
+            raise ChatStreamAlreadyRunning(
+                f"chat stream for session {session_id} is already running"
+            )
+
+        composer = await asyncio.to_thread(
+            ChatStreamComposer.for_project,
+            project_registry,
+            knowledge_base_cache,
+            base_path,
+            project_id,
+        )
+
+        user_message_id = await asyncio.to_thread(
+            self.append_user_message, session_id, content
+        )
+
+        chat_request = ChatRequest(
+            session_id=session_id,
+            project_id=project_id,
+            user_message=content,
+        )
+        task: asyncio.Task[None] = asyncio.create_task(
+            self._drive_stream(
+                chat_request=chat_request,
+                composer=composer,
+                chat_sink=chat_sink,
+            ),
+            name=f"chat-{session_id}",
+        )
+        registry.register(
+            session_id=session_id,
+            project_id=project_id,
+            user_message_id=user_message_id,
+            task=task,
+        )
+        return SendMessageHandle(
+            user_message_id=user_message_id,
+            session_id=session_id,
+            project_id=project_id,
+        )
+
+    def cancel_stream(self, session_id: int, project_id: int) -> None:
+        """Cancel the in-flight chat stream for *session_id*.
+
+        Raises:
+            ChatSessionNotFound: session_id is unknown or wrong project.
+            ChatStreamNotRunning: no stream is currently in flight.
+        """
+        self.get_session_or_raise(session_id, project_id)
+        handle = get_chat_run_registry().get(session_id)
+        if handle is None:
+            raise ChatStreamNotRunning(
+                f"no chat stream is running for session {session_id}"
+            )
+        handle.task.cancel()
+
+    def peek_active_stream(self, session_id: int) -> ChatRunHandle | None:
+        """Return the registry handle for *session_id*, or None.
+
+        Used by the SSE on-connect snapshot to expose the in-flight
+        ``user_message_id`` without forcing the route to know the
+        registry shape.
+        """
+        return get_chat_run_registry().get(session_id)
+
+    async def _drive_stream(
+        self,
+        *,
+        chat_request: ChatRequest,
+        composer: ChatStreamComposer,
+        chat_sink: ChatStreamSink,
+    ) -> None:
+        """Drive ``stream_chat`` to completion; unregister in finally.
+
+        Tokens reach the SSE client via the sink; yielded chunks are
+        discarded here. The finally always unregisters the handle, even
+        on cancel or error, so a follow-up POST for the same session is
+        not blocked.
+        """
+        try:
+            gen = await stream_chat(
+                chat_request,
+                session_repo=self._session_repo,
+                message_repo=self._message_repo,
+                query_engine=composer.query_engine,
+                provider=composer.provider,
+                model_name=composer.model_name,
+                event_sink=chat_sink,
+            )
+            try:
+                async for _chunk in gen:
+                    pass
+            finally:
+                await gen.aclose()  # type: ignore[union-attr]
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "chat stream failed for session %d", chat_request.session_id
+            )
+        finally:
+            get_chat_run_registry().unregister(chat_request.session_id)
