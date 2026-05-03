@@ -69,19 +69,20 @@ class ToolRegistry:
         return {name: tool.check_available() for name, tool in self._tools.items()}
 
 
-tool_registry = ToolRegistry()
+def discover_tools(
+    registry: ToolRegistry,
+    base_path: str = ".",
+    project_name: str | None = None,
+) -> None:
+    """Populate *registry* with tool wrappers driven by commands.json.
 
-
-def discover_tools(base_path: str = ".", project_name: str | None = None) -> None:
-    """Register tool wrappers driven by commands.json.
-
-    When commands.json is missing, falls back to registering every
-    wrapper in wrappers/local/. A project-level commands.json overlays
-    the global one entry for entry.
+    Clears the registry first. When commands.json is missing, falls
+    back to registering every wrapper in wrappers/local/. A project-
+    level commands.json overlays the global one entry for entry.
     """
     import json as _json
 
-    tool_registry.clear()
+    registry.clear()
 
     wrappers_dir = _PROJECT_ROOT / "infrastructure" / "tools" / "wrappers"
     commands_path = Path(base_path) / "config" / "commands.json"
@@ -118,28 +119,30 @@ def discover_tools(base_path: str = ".", project_name: str | None = None) -> Non
                 logger.warning("Failed to load project commands.json (%s)", exc)
 
     if commands_config is not None:
-        _discover_from_config(commands_config, wrappers_dir)
+        _discover_from_config(registry, commands_config, wrappers_dir)
     else:
         logger.warning(
             "commands.json not found at %s; running in fallback mode (all local tools)",
             commands_path,
         )
-        _discover_fallback(wrappers_dir)
+        _discover_fallback(registry, wrappers_dir)
 
 
-def _discover_from_config(commands_config, wrappers_dir: Path) -> None:
+def _discover_from_config(
+    registry: ToolRegistry, commands_config, wrappers_dir: Path
+) -> None:
     factory = ToolWrapperFactory()
     for tool_name, entry in commands_config.items():
         try:
             tool = factory.create(tool_name, entry)
-            tool_registry.register(tool, config=entry)
+            registry.register(tool, config=entry)
         except ImportError as exc:
             logger.warning("Skipping %r: import failed: %s", tool_name, exc)
         except Exception as exc:
             logger.warning("Skipping %r: instantiation failed: %s", tool_name, exc)
 
 
-def _discover_fallback(wrappers_dir: Path) -> None:
+def _discover_fallback(registry: ToolRegistry, wrappers_dir: Path) -> None:
     local_dir = wrappers_dir / "local"
     for py_file in sorted(local_dir.glob("*.py")):
         if py_file.name.startswith("_"):
@@ -157,8 +160,4 @@ def _discover_fallback(wrappers_dir: Path) -> None:
                 and not inspect.isabstract(obj)
                 and obj.__module__ == module_name
             ):
-                tool_registry.register(obj())
-
-
-# Auto-discover on import
-discover_tools()
+                registry.register(obj())

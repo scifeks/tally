@@ -52,7 +52,7 @@ class TestTriageCommands:
         ) as mock_batch:
             commands.cmd_triage("triage", ["--batch"])
 
-        mock_batch.assert_called_once_with("test-project")
+        mock_batch.assert_called_once_with("test-project", mock_repl.tool_registry)
         printed = " ".join(str(call) for call in mock_repl.console.print.call_args_list)
         assert "3" in printed
 
@@ -65,7 +65,7 @@ class TestTriageCommands:
         ) as mock_dry:
             commands.cmd_triage("triage", ["--dry-run"])
 
-        mock_dry.assert_called_once_with("test-project")
+        mock_dry.assert_called_once_with("test-project", mock_repl.tool_registry)
 
     def test_default_path_cancelled_when_user_enters_n(
         self, commands: TriageCommands, mock_repl: MagicMock
@@ -93,4 +93,4 @@ class TestTriageCommands:
         ):
             commands.cmd_triage("triage", [])
 
-        mock_run.assert_called_once_with("test-project")
+        mock_run.assert_called_once_with("test-project", mock_repl.tool_registry)

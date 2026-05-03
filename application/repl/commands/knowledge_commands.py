@@ -14,14 +14,15 @@ if TYPE_CHECKING:
 
 from application.repl.commands.findings_table import FindingsTableFactory
 
-_findings_table_factory = FindingsTableFactory()
-
 
 class KnowledgeCommands:
     """Handlers for knowledge base search, chat, and stats commands."""
 
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
+        self._findings_table_factory = FindingsTableFactory(
+            tool_registry=repl.tool_registry,
+        )
 
     # Commands
 
@@ -47,14 +48,15 @@ class KnowledgeCommands:
             return
 
         from application.repl.search_command_parser import parse_sqlite_search_command
-        from application.tools.registry import tool_registry
         from core.exceptions import SearchValidationError
 
         finding_repo = self._get_finding_repo()
         if finding_repo is None:
             return
 
-        known_tools: frozenset[str] = frozenset(tool_registry.list_tool_names())
+        known_tools: frozenset[str] = frozenset(
+            self.repl.tool_registry.list_tool_names()
+        )
 
         try:
             filters = parse_sqlite_search_command(args, known_tools)
@@ -78,9 +80,9 @@ class KnowledgeCommands:
         fields = filters.get("fields", [])
         tool_filter: str | None = filters.get("tool") if not fields else None
         if fields:
-            table = _findings_table_factory.build_fields(results, fields)
+            table = self._findings_table_factory.build_fields(results, fields)
         else:
-            table = _findings_table_factory.build(
+            table = self._findings_table_factory.build(
                 results, is_semantic, tool_filter=tool_filter
             )
 
@@ -254,7 +256,9 @@ class KnowledgeCommands:
         if finding_repo is None:
             return
 
-        result = _findings_table_factory.discover_tool_fields(finding_repo, tool_name)
+        result = self._findings_table_factory.discover_tool_fields(
+            finding_repo, tool_name
+        )
         if result is None:
             self.repl.console.print(
                 f"[yellow]No findings found for tool '{tool_name}'. "

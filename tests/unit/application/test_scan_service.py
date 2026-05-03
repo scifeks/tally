@@ -46,6 +46,7 @@ def _start_kwargs(paths: ProjectPaths) -> dict:
         project_name="proj",
         base_path="/tmp",
         paths=paths,
+        tool_registry=MagicMock(),
         prompt=MagicMock(),
     )
 

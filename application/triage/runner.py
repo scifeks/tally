@@ -17,7 +17,7 @@ from application.ports.triage_event_sink import (
     NullTriageEventSink,
     TriageEventSink,
 )
-from application.tools.registry import tool_registry
+from application.tools.registry import ToolRegistry
 from application.triage.batching import compute_batches
 from core.project_paths import ProjectPaths
 from domain.pipeline.triage_events import (
@@ -85,6 +85,7 @@ class TriageRunner:
         scan_run_id: int | None = None,
         triage_agent: TriageAgentPort,
         session_timeout_seconds: int,
+        tool_registry: ToolRegistry,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -98,9 +99,15 @@ class TriageRunner:
         self._scan_run_id = scan_run_id
         self._triage_agent = triage_agent
         self._session_timeout_seconds = session_timeout_seconds
+        self._tool_registry = tool_registry
 
     @classmethod
-    def for_project(cls, project: str, app_root: Path | None = None) -> TriageRunner:
+    def for_project(
+        cls,
+        project: str,
+        tool_registry: ToolRegistry,
+        app_root: Path | None = None,
+    ) -> TriageRunner:
         from application.config.mcp_defaults import load_mcp_defaults
 
         root = app_root or _APP_ROOT
@@ -120,6 +127,7 @@ class TriageRunner:
             root,
             triage_agent=ClaudeTriageAgent(),
             session_timeout_seconds=session_timeout_seconds,
+            tool_registry=tool_registry,
         )
 
     # Public API
@@ -144,7 +152,9 @@ class TriageRunner:
             )
 
         skip_tools = frozenset(
-            t.name for t in tool_registry.get_all_tools() if getattr(t, "skip", False)
+            t.name
+            for t in self._tool_registry.get_all_tools()
+            if getattr(t, "skip", False)
         )
         combos = self._triage_repo.get_active_finding_combos(skip_tools)
 
@@ -359,7 +369,9 @@ class TriageRunner:
             batch_data = batch.batch_data
 
             tool_name = batch_data[0]["tool"] if batch_data else None
-            tool_obj = tool_registry.get_tool(tool_name or "") if tool_name else None
+            tool_obj = (
+                self._tool_registry.get_tool(tool_name or "") if tool_name else None
+            )
 
             if tool_obj is None or tool_obj.skip:
                 self._triage_repo.complete_batch(batch_id, "success")

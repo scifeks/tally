@@ -313,6 +313,7 @@ async def start_triage(
             request=triage_request,
             holder_token=holder,
             bus=bus,
+            tool_registry=request.app.state.tool_registry,
             triage_run_registry=get_triage_run_registry(),
             lock_registry=lock_registry,
         )
@@ -447,6 +448,7 @@ async def resume_triage(
             request=triage_request,
             holder_token=holder,
             bus=bus,
+            tool_registry=request.app.state.tool_registry,
             triage_run_registry=get_triage_run_registry(),
             lock_registry=lock_registry,
             is_resume=True,

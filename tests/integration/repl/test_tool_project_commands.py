@@ -337,7 +337,7 @@ def test_tool_remove_project_confirmed(tmp_path: Path) -> None:
 
 
 def test_discover_tools_project_override(tmp_path: Path) -> None:
-    from application.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import ToolRegistry, discover_tools
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -367,13 +367,11 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
         )
     )
 
-    try:
-        discover_tools(str(tmp_path), project_name="proj")
-        config = tool_registry.get_tool_config("gitleaks")
-        assert config is not None
-        assert config.path == "/custom/gitleaks"
-    finally:
-        discover_tools()
+    registry = ToolRegistry()
+    discover_tools(registry, str(tmp_path), project_name="proj")
+    config = registry.get_tool_config("gitleaks")
+    assert config is not None
+    assert config.path == "/custom/gitleaks"
 
 
 # _get_wrapper_availability path fix
@@ -427,7 +425,7 @@ def test_tool_add_project_shows_unconfigured_wrapper(tmp_path: Path) -> None:
 
 
 def test_discover_tools_no_project(tmp_path: Path) -> None:
-    from application.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import ToolRegistry, discover_tools
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -443,10 +441,8 @@ def test_discover_tools_no_project(tmp_path: Path) -> None:
         )
     )
 
-    try:
-        discover_tools(str(tmp_path))
-        config = tool_registry.get_tool_config("gitleaks")
-        assert config is not None
-        assert config.path == "/usr/bin/gitleaks"
-    finally:
-        discover_tools()
+    registry = ToolRegistry()
+    discover_tools(registry, str(tmp_path))
+    config = registry.get_tool_config("gitleaks")
+    assert config is not None
+    assert config.path == "/usr/bin/gitleaks"

@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.markup import escape as markup_escape
 from rich.table import Table
 
-from application.tools.registry import tool_registry
+if TYPE_CHECKING:
+    from application.tools.registry import ToolRegistry
 
 
-def build_tool_table(tools, registry) -> Table:
+def build_tool_table(tools, registry: ToolRegistry) -> Table:
     table = Table(show_header=True, header_style="bold", padding=(0, 1))
     table.add_column("Tool", style="cyan", min_width=18)
     table.add_column("Category", min_width=10)
@@ -46,13 +48,13 @@ def build_tool_table(tools, registry) -> Table:
     return table
 
 
-def print_discovery_summary(console: Console) -> None:
-    tools = tool_registry.get_all_tools()
+def print_discovery_summary(console: Console, registry: ToolRegistry) -> None:
+    tools = registry.get_all_tools()
     available_count = sum(1 for t in tools if t.check_available())
     unavailable_count = len(tools) - available_count
 
     console.print("\n[bold]Configured Tools[/bold]")
-    console.print(build_tool_table(tools, tool_registry))
+    console.print(build_tool_table(tools, registry))
 
     summary = f"Loaded {len(tools)} tools ({available_count} available"
     if unavailable_count:

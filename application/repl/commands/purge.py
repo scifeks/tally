@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 from rich.markup import escape
 
 from application.ports.filters import Eq
-from application.tools.registry import tool_registry
 from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
@@ -95,7 +94,7 @@ class PurgeCommand:
         tools: list[str] | None = None
         if tool_val is not None:
             tools = [t.strip() for t in tool_val.split(",") if t.strip()]
-            known = set(tool_registry.list_tool_names())
+            known = set(self.repl.tool_registry.list_tool_names())
             invalid = [t for t in tools if t not in known]
             if invalid:
                 self.repl.console.print(

@@ -41,6 +41,7 @@ def _make_repl(tmp_path: Path) -> MagicMock:
     repl.active_project = "testproj"
     repl.base_path = str(tmp_path)
     repl.console = MagicMock()
+    repl.tool_registry.list_tool_names.return_value = MOCK_TOOLS
     return repl
 
 
@@ -97,10 +98,8 @@ def test_full_purge_clears_url_findings(tmp_path: Path) -> None:
     cmd = PurgeCommand(_make_repl(tmp_path))
     with (
         patch.object(cmd, "_get_knowledge_base", return_value=_make_kb(0)),
-        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
-        mock_reg.list_tool_names.return_value = MOCK_TOOLS
         cmd.cmd_purge("purge", [])
 
     # Post-purge: url_findings is empty; repositories row survives.
@@ -120,10 +119,8 @@ def test_tool_purge_does_not_touch_url_findings(tmp_path: Path) -> None:
     cmd = PurgeCommand(_make_repl(tmp_path))
     with (
         patch.object(cmd, "_get_knowledge_base", return_value=_make_kb(2)),
-        patch("application.repl.commands.purge.tool_registry") as mock_reg,
         patch("builtins.input", return_value="y"),
     ):
-        mock_reg.list_tool_names.return_value = MOCK_TOOLS
         cmd.cmd_purge("purge", ["--tool=semgrep"])
 
     rows = UrlFindingRepository(factory).list_for_repo(rid)

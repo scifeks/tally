@@ -14,7 +14,6 @@ from application.repl.adapters.stdout_progress_reporter import StdoutProgressRep
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
-from application.tools.registry import tool_registry
 from application.tools.scan_service import get_scan_service
 from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
@@ -54,11 +53,15 @@ class ScanCommands:
 
         from application.tools.registry import discover_tools
 
-        discover_tools(self.repl.base_path, project_name=self.repl.active_project)
+        discover_tools(
+            self.repl.tool_registry,
+            self.repl.base_path,
+            project_name=self.repl.active_project,
+        )
         try:
             self._cmd_scan_inner(args)
         finally:
-            discover_tools(self.repl.base_path)
+            discover_tools(self.repl.tool_registry, self.repl.base_path)
 
     def _cmd_scan_inner(self, args: list[str]) -> None:
         """Inner scan logic. Runs after registry is refreshed."""
@@ -126,7 +129,7 @@ class ScanCommands:
         requested_tools: list[str] | None = None
         if tool_val is not None:
             requested_tools = [t.strip() for t in tool_val.split(",") if t.strip()]
-            known = set(tool_registry.list_tool_names())
+            known = set(self.repl.tool_registry.list_tool_names())
             invalid = [t for t in requested_tools if t not in known]
             if invalid:
                 self.repl.console.print(
@@ -151,7 +154,7 @@ class ScanCommands:
         skip_tools: set[str] = set()
         if skip_tools_val is not None:
             parsed_skips = [t.strip() for t in skip_tools_val.split(",") if t.strip()]
-            known = set(tool_registry.list_tool_names())
+            known = set(self.repl.tool_registry.list_tool_names())
             invalid_skips = [t for t in parsed_skips if t not in known]
             if invalid_skips:
                 self.repl.console.print(
@@ -164,7 +167,7 @@ class ScanCommands:
         # Compute effective tool list (--tool and/or --domain only)
         effective_tools: list[str] | None = None
         if requested_tools is not None or requested_domains is not None:
-            all_configured = list(tool_registry.list_tool_names())
+            all_configured = list(self.repl.tool_registry.list_tool_names())
             candidates = (
                 list(requested_tools) if requested_tools is not None else all_configured
             )
@@ -196,6 +199,7 @@ class ScanCommands:
                 project_name=self.repl.active_project,
                 base_path=str(self.repl.base_path),
                 paths=paths,
+                tool_registry=self.repl.tool_registry,
                 repo_ids=tuple(repo_names or ()),
                 tool_ids=tuple(effective_tools or ()),
                 skip_tool_ids=tuple(skip_tools),
@@ -264,11 +268,15 @@ class ScanCommands:
 
         from application.tools.registry import discover_tools
 
-        discover_tools(self.repl.base_path, project_name=self.repl.active_project)
+        discover_tools(
+            self.repl.tool_registry,
+            self.repl.base_path,
+            project_name=self.repl.active_project,
+        )
         try:
             self._cmd_run_inner(tool_name, remaining, timeout)
         finally:
-            discover_tools(self.repl.base_path)
+            discover_tools(self.repl.tool_registry, self.repl.base_path)
 
     def _cmd_run_inner(
         self,
@@ -278,7 +286,7 @@ class ScanCommands:
     ) -> None:
         """Inner run logic. Runs after registry is refreshed with project overrides."""
         assert self.repl.active_project is not None
-        tool = tool_registry.get_tool(tool_name)
+        tool = self.repl.tool_registry.get_tool(tool_name)
         if tool is None:
             self.repl.console.print(f"[red]Tool not found:[/red] {tool_name}")
             return

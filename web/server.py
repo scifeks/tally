@@ -17,6 +17,7 @@ from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.scans.scans_service import ScansService
+from application.tools.registry import ToolRegistry, discover_tools
 from infrastructure.events.bus import EventBus
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
 from infrastructure.store.project_registry import ProjectRegistryRepository
@@ -116,7 +117,11 @@ def create_app(
 
     app.state.knowledge_base_cache = {}
 
-    app.state.installed_tools = InstalledToolsProbe()
+    tool_registry = ToolRegistry()
+    discover_tools(tool_registry, base_path)
+    app.state.tool_registry = tool_registry
+
+    app.state.installed_tools = InstalledToolsProbe(tool_registry)
 
     app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
 

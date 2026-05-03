@@ -15,7 +15,7 @@ from application.rag.ingestor import ToolHandlerFactory
 from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.query import QueryEngine
 from application.tools.executor import ToolExecutor
-from application.tools.registry import discover_tools, tool_registry
+from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
@@ -96,8 +96,9 @@ def _run_scan(
     repo_path: Path,
     scan_type: str = "dir",
 ) -> ToolResult:
-    discover_tools(str(base_path))
-    tool = tool_registry.get_tool("gitleaks")
+    registry = ToolRegistry()
+    discover_tools(registry, str(base_path))
+    tool = registry.get_tool("gitleaks")
     assert tool is not None, "gitleaks not registered after discover_tools"
     executor = ToolExecutor(
         project_name=project_name,

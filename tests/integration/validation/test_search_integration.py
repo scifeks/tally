@@ -38,6 +38,7 @@ def _make_kc(
     repl = MagicMock()
     repl.active_project = _PROJECT_NAME
     repl.console = MagicMock()
+    repl.tool_registry.list_tool_names.return_value = ["semgrep", "gitleaks", "zap"]
     kc = KnowledgeCommands(repl)
     kc._get_finding_repo = MagicMock(return_value=finding_repo)
     return repl, kc

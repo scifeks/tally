@@ -16,7 +16,7 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.runtime import RuntimeDependencyService
 from application.startup.checker import DependencyChecker
-from application.tools.registry import discover_tools
+from application.tools.registry import ToolRegistry, discover_tools
 from infrastructure.runtime import ClaudeCodeProbe
 from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.web_ui.runner import WebUiRunner
@@ -110,10 +110,10 @@ if __name__ == "__main__":
 
     sweep_orphans(Path(_BASE_PATH))
 
-    # Re-run discovery with the confirmed base_path so the registry reflects
-    # whatever commands.json now contains (the module-level auto-discovery in
-    # registry.py ran at import time before setup completed).
-    discover_tools(_BASE_PATH)
+    # Build the tool registry now that sync_commands_config has reconciled
+    # commands.json against installed wrappers.
+    tool_registry = ToolRegistry()
+    discover_tools(tool_registry, _BASE_PATH)
 
     runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
 
@@ -136,6 +136,7 @@ if __name__ == "__main__":
             runtime_service=runtime_service,
             project_registry=project_registry,
             web_ui_runner=WebUiRunner(),
+            tool_registry=tool_registry,
         ).run()
     except KeyboardInterrupt:
         pass

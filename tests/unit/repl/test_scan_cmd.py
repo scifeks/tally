@@ -33,6 +33,7 @@ def _run(
     repl = MagicMock()
     repl.active_project = active_project
     repl.base_path = "/tmp/test"
+    repl.tool_registry.list_tool_names.return_value = tools
     repl.project_registry.resolve_by_name.return_value = ProjectRow(
         id=1, name=active_project, path="/tmp/test", created_at="2026-05-02T00:00:00Z"
     )
@@ -47,14 +48,12 @@ def _run(
 
     sc = ScanCommands(repl)
     with (
-        patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
         patch(
             "application.repl.commands.scan_commands.get_scan_service",
             return_value=mock_service,
         ),
         patch.object(ScanCommands, "_active_repos", return_value=repos),
     ):
-        mock_reg.list_tool_names.return_value = tools
         sc.cmd_scan("scan", args)
 
     return repl, mock_service

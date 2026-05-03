@@ -22,7 +22,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
@@ -30,7 +30,10 @@ from fastapi.responses import StreamingResponse
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.scans.scans_service import ProjectNotFound, ScansService
-from application.tools.registry import discover_tools, tool_registry
+from application.tools.registry import discover_tools
+
+if TYPE_CHECKING:
+    from application.tools.registry import ToolRegistry
 from application.tools.scan_run_registry import get_scan_run_registry
 from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
@@ -172,10 +175,11 @@ async def get_scans_config(
 
     base_path: str = request.app.state.base_path
     project_name: str = row.name
+    tool_registry = request.app.state.tool_registry
 
-    # Tool registry is process-shared; rediscover with this project's overrides
-    # before reading so domain mappings reflect the project's commands.json.
-    discover_tools(base_path, project_name=project_name)
+    # Rediscover with this project's overrides before reading so domain
+    # mappings reflect the project's commands.json.
+    discover_tools(tool_registry, base_path, project_name=project_name)
 
     repo_service = ProjectRepositoriesService.build(
         request.app.state.project_registry,
@@ -335,8 +339,9 @@ async def start_scan(
     row = _resolve_project(request, project_id)
     project_name: str = row.name
     base_path: str = request.app.state.base_path
+    tool_registry = request.app.state.tool_registry
 
-    discover_tools(base_path, project_name=project_name)
+    discover_tools(tool_registry, base_path, project_name=project_name)
     repo_lookup = ProjectRepositoriesService.build(
         request.app.state.project_registry,
         request.app.state.base_path,
@@ -349,7 +354,7 @@ async def start_scan(
                 "available": repo_lookup.available,
             },
         )
-    _validate_tool_ids(body.toolIds + body.skipToolIds)
+    _validate_tool_ids(tool_registry, body.toolIds + body.skipToolIds)
     _validate_domains(body.domains)
 
     repo_names = [repo_lookup.found[rid].name for rid in body.repoIds]
@@ -364,6 +369,7 @@ async def start_scan(
             project_name=project_name,
             base_path=base_path,
             paths=paths,
+            tool_registry=tool_registry,
             repo_ids=tuple(repo_names),
             tool_ids=tuple(body.toolIds),
             domains=tuple(body.domains),
@@ -476,7 +482,7 @@ async def get_scan(
 # More helpers (after route declarations to keep the public surface visible)
 
 
-def _validate_tool_ids(tool_ids: list[str]) -> None:
+def _validate_tool_ids(tool_registry: ToolRegistry, tool_ids: list[str]) -> None:
     if not tool_ids:
         return
     valid = {tw.name for tw in tool_registry.get_all_tools()}

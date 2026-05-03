@@ -30,6 +30,7 @@ from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
     from application.ports.run_repository import RunRepositoryPort
+    from application.tools.registry import ToolRegistry
     from domain.tools.display import DisplayProtocol
 
 
@@ -69,6 +70,7 @@ class ScanService:
         project_name: str,
         base_path: str,
         paths: ProjectPaths,
+        tool_registry: ToolRegistry,
         repo_ids: tuple[str, ...] = (),
         tool_ids: tuple[str, ...] = (),
         domains: tuple[str, ...] = (),
@@ -123,6 +125,7 @@ class ScanService:
                 "project_id": project_id,
                 "project_name": project_name,
                 "base_path": base_path,
+                "tool_registry": tool_registry,
                 "repo_ids": repo_ids,
                 "tool_ids": tool_ids,
                 "domains": domains,
@@ -151,6 +154,7 @@ class ScanService:
         project_id: int,
         project_name: str,
         base_path: str,
+        tool_registry: ToolRegistry,
         repo_ids: tuple[str, ...],
         tool_ids: tuple[str, ...],
         domains: tuple[str, ...],
@@ -167,13 +171,13 @@ class ScanService:
         # Imports deferred to thread entry to avoid circular-import risk
         # and to keep module import side-effects minimal.
         from application.pipeline.factory import PipelineFactory
-        from application.tools.registry import discover_tools, tool_registry
+        from application.tools.registry import discover_tools
 
         setup_ok = False
         try:
             # Re-discover tools so the registry reflects this project's
-            # overrides; mutates the process-global tool_registry.
-            discover_tools(base_path, project_name=project_name)
+            # per-project overrides.
+            discover_tools(tool_registry, base_path, project_name=project_name)
 
             executor = ToolExecutor(
                 project_name=project_name,

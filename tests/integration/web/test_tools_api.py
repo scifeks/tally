@@ -11,7 +11,6 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from application.tools.registry import tool_registry
 from infrastructure.store.connection import ConnectionFactory
 from tests.integration.web.conftest import (
     HANDSHAKE,
@@ -115,9 +114,10 @@ def _make_unauthed_app(tmp_path: Path) -> Any:
 class TestToolsCatalog:
     async def test_catalog_returns_items(self, app_client) -> None:
         client, *_ = app_client
-        tool_registry.clear()
-        tool_registry.register(_FakeTool("bandit", "sast", "Python security linter"))
-        tool_registry.register(_FakeTool("gitleaks", "secrets", "Secret scanner"))
+        registry = client._transport.app.state.tool_registry
+        registry.clear()
+        registry.register(_FakeTool("bandit", "sast", "Python security linter"))
+        registry.register(_FakeTool("gitleaks", "secrets", "Secret scanner"))
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
@@ -126,8 +126,9 @@ class TestToolsCatalog:
 
     async def test_catalog_item_fields(self, app_client) -> None:
         client, *_ = app_client
-        tool_registry.clear()
-        tool_registry.register(_FakeTool("bandit", "sast", "Python security linter"))
+        registry = client._transport.app.state.tool_registry
+        registry.clear()
+        registry.register(_FakeTool("bandit", "sast", "Python security linter"))
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         item = resp.json()["items"][0]
@@ -140,7 +141,7 @@ class TestToolsCatalog:
 
     async def test_catalog_empty_when_no_tools(self, app_client) -> None:
         client, *_ = app_client
-        tool_registry.clear()
+        client._transport.app.state.tool_registry.clear()
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
@@ -165,19 +166,15 @@ class TestInstalledTools:
         from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 
         client, *_ = app_client
-        tool_registry.clear()
-        tool_registry.register(
-            _FakeTool("bandit", "sast", "Python linter", installed=True)
-        )
-        tool_registry.register(
-            _FakeTool("nuclei", "dast", "Web scanner", installed=False)
-        )
-        tool_registry.register(
+        registry = client._transport.app.state.tool_registry
+        registry.clear()
+        registry.register(_FakeTool("bandit", "sast", "Python linter", installed=True))
+        registry.register(_FakeTool("nuclei", "dast", "Web scanner", installed=False))
+        registry.register(
             _FakeTool("gitleaks", "secrets", "Secret scanner", installed=True)
         )
-        # Re-probe after the registry was rewritten by the fixture.
         client._transport.app.state.installed_tools = (  # type: ignore[attr-defined]
-            InstalledToolsProbe()
+            InstalledToolsProbe(registry)
         )
 
         resp = await client.get("/api/v1/tools/installed")
@@ -309,7 +306,7 @@ class TestToolOverridesWriteCRUD:
         client, headers, tmp_path, project_id = tools_v1_client
         called: list[tuple[str, str | None]] = []
 
-        def _spy(base_path: str, project_name: str | None = None) -> None:
+        def _spy(_registry, base_path: str, project_name: str | None = None) -> None:
             called.append((base_path, project_name))
 
         monkeypatch.setattr("web.api.tools.discover_tools", _spy)
@@ -401,7 +398,7 @@ class TestToolOverridesWriteCRUD:
         called: list[tuple[str, str | None]] = []
         monkeypatch.setattr(
             "web.api.tools.discover_tools",
-            lambda bp, project_name=None: called.append((bp, project_name)),
+            lambda _reg, bp, project_name=None: called.append((bp, project_name)),
         )
 
         resp = await client.put(
@@ -452,7 +449,7 @@ class TestToolOverridesWriteCRUD:
         called: list[tuple[str, str | None]] = []
         monkeypatch.setattr(
             "web.api.tools.discover_tools",
-            lambda bp, project_name=None: called.append((bp, project_name)),
+            lambda _reg, bp, project_name=None: called.append((bp, project_name)),
         )
 
         resp = await client.delete(

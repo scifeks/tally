@@ -16,6 +16,7 @@ from .runner import TriageRunner
 if TYPE_CHECKING:
     from application.locking.cancellation import CancellationToken
     from application.ports.triage_event_sink import TriageEventSink
+    from application.tools.registry import ToolRegistry
 
 
 def _retry_once[T](fn: Callable[[], T]) -> T:
@@ -27,22 +28,22 @@ def _retry_once[T](fn: Callable[[], T]) -> T:
         return fn()
 
 
-def run_triage(project: str) -> dict[str, int]:
+def run_triage(project: str, tool_registry: ToolRegistry) -> dict[str, int]:
     """Run AI triage sessions for untriaged findings."""
-    runner = TriageRunner.for_project(project)
+    runner = TriageRunner.for_project(project, tool_registry)
     return dataclasses.asdict(_retry_once(runner.run))
 
 
-def run_triage_batch_only(project: str) -> int:
+def run_triage_batch_only(project: str, tool_registry: ToolRegistry) -> int:
     """Run only the batching phase. No MCP server, no Claude sessions."""
-    runner = TriageRunner.for_project(project)
+    runner = TriageRunner.for_project(project, tool_registry)
     _run_id, total = runner.batch()
     return total
 
 
-def run_triage_dry_run(project: str) -> int:
+def run_triage_dry_run(project: str, tool_registry: ToolRegistry) -> int:
     """Batch phase + render prompts to DEBUG log. No MCP server, no Claude."""
-    runner = TriageRunner.for_project(project)
+    runner = TriageRunner.for_project(project, tool_registry)
     return _retry_once(runner.run_dry_run)
 
 
@@ -50,6 +51,7 @@ def run_triage_for_project(
     project: str,
     *,
     project_id: int,
+    tool_registry: ToolRegistry,
     event_sink: TriageEventSink | None = None,
     cancel_token: CancellationToken | None = None,
     app_root: Path | None = None,
@@ -90,6 +92,7 @@ def run_triage_for_project(
         scan_run_id=scan_run_id,
         triage_agent=ClaudeTriageAgent(),
         session_timeout_seconds=session_timeout_seconds,
+        tool_registry=tool_registry,
     )
     return dataclasses.asdict(_retry_once(runner.run))
 
@@ -99,6 +102,7 @@ def resume_triage_for_project(
     *,
     project_id: int,
     scan_run_id: int,
+    tool_registry: ToolRegistry,
     event_sink: TriageEventSink | None = None,
     cancel_token: CancellationToken | None = None,
     app_root: Path | None = None,
@@ -137,6 +141,7 @@ def resume_triage_for_project(
         scan_run_id=scan_run_id,
         triage_agent=ClaudeTriageAgent(),
         session_timeout_seconds=session_timeout_seconds,
+        tool_registry=tool_registry,
     )
     return dataclasses.asdict(_retry_once(runner.run))
 
@@ -144,7 +149,11 @@ def resume_triage_for_project(
 if __name__ == "__main__":
     import argparse
 
+    from application.tools.registry import ToolRegistry, discover_tools
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     args = parser.parse_args()
-    print(run_triage(args.project))
+    _registry = ToolRegistry()
+    discover_tools(_registry)
+    print(run_triage(args.project, _registry))
