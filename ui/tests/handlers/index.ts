@@ -502,11 +502,21 @@ export const handlers = [
       return errorEnvelope(404, 'NOT_FOUND', 'project not found')
     }
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-    if (typeof body.section !== 'string') {
-      return errorEnvelope(422, 'VALIDATION_ERROR', 'section is required', { field: 'section' })
+    const sections = body.sections
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'sections is required', {
+        field: 'sections',
+      })
     }
+    const template = reportDraftStart202Fixture.drafts[0]
     return HttpResponse.json(
-      { ...reportDraftStart202Fixture, section: body.section },
+      {
+        drafts: sections.map((section, i) => ({
+          ...template,
+          section: section as string,
+          status: i === 0 ? 'generating' : 'queued',
+        })),
+      },
       { status: 202 }
     )
   }),

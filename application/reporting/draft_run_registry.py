@@ -1,8 +1,8 @@
 """Process-singleton tracking active draft generation runs.
 
-The draft worker thread unregisters itself in its ``finally`` block.
-Draft generation is single-active process-wide via ``LockRegistry``, so
-this map holds at most one entry at a time.
+Mirrors :mod:`application.tools.scan_run_registry`. The DELETE-per-section
+cancel route reads handles by section so it can flip the per-section
+cancellation token while the batch worker is mid-loop.
 """
 
 from __future__ import annotations

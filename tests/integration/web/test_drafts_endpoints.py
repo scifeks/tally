@@ -8,9 +8,9 @@ from unittest.mock import patch
 import pytest
 
 from application.locking import get_registry
+from application.reporting.draft_run_registry import get_draft_run_registry
 from application.reporting.drafts import SECTION_REGISTRY
 from infrastructure.store.repositories.drafts import DraftRepository
-from web.adapters.draft_run_registry import get_draft_run_registry
 
 pytestmark = pytest.mark.integration
 
@@ -93,29 +93,55 @@ async def test_list_drafts_word_count_from_file(app_client, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_start_draft_returns_202(app_client) -> None:
+async def test_start_drafts_single_section_returns_202(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
-    with patch("web.api.reports.start_draft_thread"):
+    with patch(
+        "application.reporting.reports_service.ReportsService._run_worker",
+        return_value=None,
+    ):
         resp = await client.post(
             f"/api/v1/projects/{project_id}/reports/drafts",
-            json={"section": "executive-summary", "force": False},
+            json={"sections": ["executive-summary"], "force": False},
             headers=mut_headers,
         )
     assert resp.status_code == 202, resp.text
     body = resp.json()
-    assert body["section"] == "executive-summary"
-    assert body["status"] == "generating"
+    assert body["drafts"] == [{"section": "executive-summary", "status": "generating"}]
 
 
 @pytest.mark.asyncio
-async def test_start_draft_returns_409_when_job_held(app_client) -> None:
+async def test_start_drafts_multi_section_returns_202(app_client) -> None:
+    client, _fid, _rag, _factory, mut_headers, project_id = app_client
+    with patch(
+        "application.reporting.reports_service.ReportsService._run_worker",
+        return_value=None,
+    ):
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/reports/drafts",
+            json={
+                "sections": ["executive-summary", "risk-level", "critical-issues"],
+                "force": False,
+            },
+            headers=mut_headers,
+        )
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert body["drafts"] == [
+        {"section": "executive-summary", "status": "generating"},
+        {"section": "risk-level", "status": "queued"},
+        {"section": "critical-issues", "status": "queued"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_start_drafts_returns_409_when_job_held(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
     reg = get_registry()
     reg.acquire_job("report", "external-holder")
     try:
         resp = await client.post(
             f"/api/v1/projects/{project_id}/reports/drafts",
-            json={"section": "executive-summary"},
+            json={"sections": ["executive-summary"]},
             headers=mut_headers,
         )
     finally:
@@ -125,14 +151,51 @@ async def test_start_draft_returns_409_when_job_held(app_client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_start_draft_unknown_section_returns_422(app_client) -> None:
+async def test_start_drafts_unknown_section_returns_422(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
     resp = await client.post(
         f"/api/v1/projects/{project_id}/reports/drafts",
-        json={"section": "not-a-real-section"},
+        json={"sections": ["not-a-real-section"]},
         headers=mut_headers,
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_drafts_empty_list_returns_422(app_client) -> None:
+    client, _fid, _rag, _factory, mut_headers, project_id = app_client
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/drafts",
+        json={"sections": []},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_drafts_duplicate_section_returns_422(app_client) -> None:
+    client, _fid, _rag, _factory, mut_headers, project_id = app_client
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/drafts",
+        json={"sections": ["executive-summary", "executive-summary"]},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_start_drafts_does_not_hold_lock_after_validation_failure(
+    app_client,
+) -> None:
+    """A 422 (bad sections) must not leave the report slot held."""
+    client, _fid, _rag, _factory, mut_headers, project_id = app_client
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/reports/drafts",
+        json={"sections": []},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 422
+    assert get_registry().current_job_holder("report") is None
 
 
 @pytest.mark.asyncio

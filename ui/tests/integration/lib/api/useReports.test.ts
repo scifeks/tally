@@ -8,7 +8,7 @@ import {
   useReportDrafts,
   useReportHistory,
   useLatestReport,
-  useGenerateDraft,
+  useGenerateDrafts,
   useUploadDraft,
   useDeleteDraft,
   useGenerateReport,
@@ -135,49 +135,66 @@ describe('useLatestReport', () => {
   })
 })
 
-// ─── useGenerateDraft ───────────────────────────────────────────────────────
+// ─── useGenerateDrafts ──────────────────────────────────────────────────────
 
-describe('useGenerateDraft', () => {
-  it('posts { section, force } and returns the mapped draft', async () => {
+describe('useGenerateDrafts', () => {
+  it('posts { sections, force } and returns mapped drafts', async () => {
     let body: Record<string, unknown> | null = null
     server.use(
       http.post('/api/v1/projects/:projectId/reports/drafts', async ({ request }) => {
         body = (await request.json()) as Record<string, unknown>
         return HttpResponse.json(
           {
-            section: 'executive-summary',
-            status: 'generating',
-            generated_at: null,
-            reviewed_at: null,
-            preview: null,
-            word_count: null,
-            uploaded_filename: null,
-            error: null,
+            drafts: [
+              {
+                section: 'executive-summary',
+                status: 'generating',
+                generated_at: null,
+                reviewed_at: null,
+                preview: null,
+                word_count: null,
+                uploaded_filename: null,
+                error: null,
+              },
+              {
+                section: 'risk-level',
+                status: 'queued',
+                generated_at: null,
+                reviewed_at: null,
+                preview: null,
+                word_count: null,
+                uploaded_filename: null,
+                error: null,
+              },
+            ],
           },
           { status: 202 }
         )
       })
     )
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useGenerateDraft(), { wrapper })
+    const { result } = renderHook(() => useGenerateDrafts(), { wrapper })
     let resolved: unknown = null
     await act(async () => {
       resolved = await result.current.mutateAsync({
         projectId: 1,
-        section: 'executive-summary',
+        sections: ['executive-summary', 'risk-level'],
         force: true,
       })
     })
-    expect(body).toEqual({ section: 'executive-summary', force: true })
-    expect(resolved).toMatchObject({ section: 'executive-summary', status: 'generating' })
+    expect(body).toEqual({ sections: ['executive-summary', 'risk-level'], force: true })
+    expect(resolved).toEqual([
+      expect.objectContaining({ section: 'executive-summary', status: 'generating' }),
+      expect.objectContaining({ section: 'risk-level', status: 'queued' }),
+    ])
   })
 
   it('routes a 409 JOB_ALREADY_RUNNING through setReportMutationError', async () => {
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useGenerateDraft(), { wrapper })
+    const { result } = renderHook(() => useGenerateDrafts(), { wrapper })
     await act(async () => {
       await result.current
-        .mutateAsync({ projectId: 99, section: 'executive-summary' })
+        .mutateAsync({ projectId: 99, sections: ['executive-summary'] })
         .catch(() => undefined)
     })
     const err = useUI.getState().reportMutationError
@@ -199,10 +216,10 @@ describe('useGenerateDraft', () => {
       )
     )
     const { wrapper } = makeWrapper()
-    const { result } = renderHook(() => useGenerateDraft(), { wrapper })
+    const { result } = renderHook(() => useGenerateDrafts(), { wrapper })
     await act(async () => {
       await result.current
-        .mutateAsync({ projectId: 1, section: 'executive-summary' })
+        .mutateAsync({ projectId: 1, sections: ['executive-summary'] })
         .catch(() => undefined)
     })
     expect(useUI.getState().reportMutationError?.code).toBe('VALIDATION_ERROR')
