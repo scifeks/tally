@@ -7,7 +7,15 @@ from typing import TYPE_CHECKING
 from rich.panel import Panel
 from rich.table import Table
 
+from application.chat.stream_composer import RagUnavailable
+from application.findings.findings_service import (
+    FindingsService,
+    ProjectNotFound,
+)
+from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+
 if TYPE_CHECKING:
+    from application.ports.finding_repository import FindingRepositoryPort
     from application.rag.knowledge_base import FindingKnowledgeBase
     from application.rag.query import QueryEngine
     from application.repl.interface import REPL
@@ -112,8 +120,10 @@ class KnowledgeCommands:
             return
 
         message = " ".join(args)
-        query_engine = self._get_query_engine()
-        if query_engine is None:
+        try:
+            query_engine = self._get_query_engine()
+        except RagUnavailable as exc:
+            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
             return
 
         try:
@@ -141,8 +151,10 @@ class KnowledgeCommands:
             )
             return
 
-        kb = self._get_knowledge_base()
-        if kb is None:
+        try:
+            kb = self._get_knowledge_base()
+        except RagUnavailable as exc:
+            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
             return
 
         stats = kb.compute_stats()
@@ -174,46 +186,35 @@ class KnowledgeCommands:
 
     # Private helpers
 
-    def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
-        """Build a FindingKnowledgeBase for the active project, or None on error."""
-        from pathlib import Path
+    def _get_knowledge_base(self) -> FindingKnowledgeBase:
+        """Return the per-project FindingKnowledgeBase.
 
-        from application.rag.knowledge_base import FindingKnowledgeBase
-        from infrastructure.embedding.factory import get_embedding_provider
-        from infrastructure.llm.factory import get_llm_provider
-        from infrastructure.vector.factory import make_chromadb_vector_index
-
+        Raises RagUnavailable if ChromaDB or the embedding/LLM provider
+        cannot be reached. The shared cache stores both successful
+        builds and prior failures.
+        """
         assert self.repl.active_project is not None
-        base = Path(self.repl.base_path)
-        try:
-            embedding_provider = get_embedding_provider(base)
-            chat_provider = get_llm_provider("chat", base)
-            vector_index = make_chromadb_vector_index(
-                project_name=self.repl.active_project,
-                base_path=base,
-                embedding_provider=embedding_provider,
+        knowledge_base = get_or_build_knowledge_base(
+            self.repl.knowledge_base_cache,
+            self.repl.active_project,
+            self.repl.base_path,
+        )
+        if knowledge_base is None:
+            raise RagUnavailable(
+                "RAG engine unavailable for this project; "
+                "ChromaDB or embedding provider is not reachable"
             )
-            return FindingKnowledgeBase(
-                vector_index=vector_index,
-                chat_provider=chat_provider,
-                project_name=self.repl.active_project,
-                base_path=base,
-            )
-        except RuntimeError as exc:
-            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
-            return None
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Project error:[/red] {exc}")
-            return None
+        return knowledge_base
 
-    def _get_query_engine(self) -> QueryEngine | None:
-        """Create and return a QueryEngine for the active project, or None on error."""
+    def _get_query_engine(self) -> QueryEngine:
+        """Return a QueryEngine for the active project.
+
+        Raises RagUnavailable when the underlying knowledge base cannot
+        be built.
+        """
         from application.rag.query import QueryEngine
 
-        kb = self._get_knowledge_base()
-        if kb is None:
-            return None
-        return QueryEngine(kb)
+        return QueryEngine(self._get_knowledge_base())
 
     def _cmd_show_fields(self, args: list[str]) -> None:
         """Handle search --show-fields --tool=<name>."""
@@ -271,16 +272,20 @@ class KnowledgeCommands:
         if meta_fields:
             self.repl.console.print(f"Meta fields:   {', '.join(meta_fields)}")
 
-    def _get_finding_repo(self):  # type: ignore[return]
-        """Return a FindingRepository for the active project, or None on error."""
-        from infrastructure.store import make_store
-
+    def _get_finding_repo(self) -> FindingRepositoryPort | None:
+        """Return a FindingRepositoryPort for the active project, or None."""
         assert self.repl.active_project is not None
         try:
-            _, finding_repo, _, _ = make_store(
-                self.repl.base_path, self.repl.active_project
-            )
-            return finding_repo
-        except Exception as exc:
-            self.repl.console.print(f"[red]SQLite error:[/red] {exc}")
+            return FindingsService.for_project(
+                self.repl.project_registry, self._resolve_project_id()
+            ).finding_repo
+        except (ProjectNotFound, ValueError) as exc:
+            self.repl.console.print(f"[red]Project error:[/red] {exc}")
             return None
+
+    def _resolve_project_id(self) -> int:
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            raise ValueError(f"project not found: {self.repl.active_project}")
+        return row.id

@@ -5,6 +5,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
@@ -38,6 +39,9 @@ from application.runtime import RuntimeDependencyService
 from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
 from infrastructure.runtime import ClaudeCodeProbe
+
+if TYPE_CHECKING:
+    from application.rag.knowledge_base import FindingKnowledgeBase
 
 _log = logging.getLogger(__name__)
 
@@ -241,6 +245,7 @@ class REPL:
         self.projects = ProjectManager(base_path)
         self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
+        self.knowledge_base_cache: dict[str, FindingKnowledgeBase | None] = {}
         if runtime_service is None:
             runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
         self._runtime_service = runtime_service
