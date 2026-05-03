@@ -126,6 +126,7 @@ def _run_worker_kwargs(sections: tuple[str, ...]) -> dict:
     return dict(
         sections=sections,
         force=False,
+        skip_triage=False,
         base_path="/tmp",
         project_id=1,
         project_name="proj",
@@ -222,3 +223,28 @@ def test_worker_unregisters_each_section_after_run(
     registry.acquire_job("report", "draft-batch:test1234")
     svc._run_worker(**_run_worker_kwargs(("executive-summary", "risk-level")))
     assert draft_run_registry.list_all() == []
+
+
+def test_worker_threads_skip_triage_into_draft_request(
+    registry: LockRegistry, draft_run_registry: DraftRunRegistry, monkeypatch
+) -> None:
+    """skip_triage on the batch must propagate into every DraftRequest."""
+    svc = ReportsService(
+        report_repo=MagicMock(),
+        draft_repo=MagicMock(),
+        lock_registry=registry,
+        draft_run_registry=draft_run_registry,
+    )
+    seen: list[bool] = []
+
+    def fake_run_draft(req, **_kwargs):  # type: ignore[no-untyped-def]
+        seen.append(req.skip_triage)
+
+    monkeypatch.setattr(
+        "application.reporting.reports_service.run_draft", fake_run_draft
+    )
+    registry.acquire_job("report", "draft-batch:test1234")
+    kwargs = _run_worker_kwargs(("executive-summary", "risk-level"))
+    kwargs["skip_triage"] = True
+    svc._run_worker(**kwargs)
+    assert seen == [True, True]

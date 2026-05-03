@@ -352,4 +352,72 @@ describe('Reports page - draft SSE → log surface', () => {
       await screen.findByText(/compiled the executive summary content/i)
     ).toBeInTheDocument()
   })
+
+  it('refetches drafts and surfaces error on draft_failed', async () => {
+    useUI.setState({ activeProjectId: 1 })
+
+    // Initial GET: executive-summary is "draft". After SSE draft_failed,
+    // the next GET swaps that section to "failed" with an error string.
+    let getCount = 0
+    server.use(
+      http.get('/api/v1/projects/1/reports/drafts', () => {
+        getCount += 1
+        if (getCount === 1) {
+          return HttpResponse.json([
+            {
+              section: 'executive-summary',
+              status: 'draft',
+              generated_at: '2026-04-28T11:00:00+00:00',
+              reviewed_at: null,
+              preview: 'previously generated content',
+              word_count: 100,
+              uploaded_filename: null,
+              error: null,
+            },
+          ])
+        }
+        return HttpResponse.json([
+          {
+            section: 'executive-summary',
+            status: 'failed',
+            generated_at: null,
+            reviewed_at: null,
+            preview: null,
+            word_count: null,
+            uploaded_filename: null,
+            error:
+              'No findings are marked for inclusion in the report. ' +
+              'Triage your findings and mark which ones to include ' +
+              'before generating drafts.',
+          },
+        ])
+      })
+    )
+
+    renderReports()
+    await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(1))
+
+    await waitFor(() =>
+      expect(
+        MockEventSource.instances.some(es => es.url.includes('reports/drafts/events'))
+      ).toBe(true)
+    )
+    const draftSse = MockEventSource.instances.find(es =>
+      es.url.includes('reports/drafts/events')
+    )
+    if (!draftSse) throw new Error('draft SSE never opened')
+
+    act(() => {
+      draftSse.emitTyped('draft_failed', {
+        id: 'df-1',
+        run_id: 0,
+        timestamp: '2026-04-28T12:01:00+00:00',
+        section: 'executive-summary',
+        message: 'No findings are marked for inclusion in the report.',
+        error: 'DraftGenerationError',
+      })
+    })
+
+    await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(2))
+  })
 })

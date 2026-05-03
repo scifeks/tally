@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square, RotateCcw, AlertTriangle, Loader2, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel, Bar } from '@/components/tty'
@@ -35,6 +36,7 @@ import { PreflightChecklist } from './PreflightChecklist'
 
 export default function Reports() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const queryClient = useQueryClient()
 
   const { data: projects = [] } = useProjects()
   const { data: draftData = [] } = useReportDrafts(activeProjectId)
@@ -94,22 +96,34 @@ export default function Reports() {
     }
   }, [logs])
 
-  const appendEvent = useCallback((event: ReportLogEvent) => {
-    setLogs(prev => [...prev, event])
-    if (event.type === 'step_completed' && typeof event.progress === 'number') {
-      setProgress(event.progress)
-    }
-    if (event.type === 'generation_started') {
-      setGenerationStatus('generating')
-    }
-    if (event.type === 'generation_completed') {
-      setGenerationStatus('completed')
-      setProgress(100)
-    }
-    if (event.type === 'generation_failed') {
-      setGenerationStatus('failed')
-    }
-  }, [])
+  const appendEvent = useCallback(
+    (event: ReportLogEvent) => {
+      setLogs(prev => [...prev, event])
+      if (event.type === 'step_completed' && typeof event.progress === 'number') {
+        setProgress(event.progress)
+      }
+      if (event.type === 'generation_started') {
+        setGenerationStatus('generating')
+      }
+      if (event.type === 'generation_completed') {
+        setGenerationStatus('completed')
+        setProgress(100)
+      }
+      if (event.type === 'generation_failed') {
+        setGenerationStatus('failed')
+      }
+      if (
+        event.type === 'draft_started' ||
+        event.type === 'draft_completed' ||
+        event.type === 'draft_failed'
+      ) {
+        queryClient.invalidateQueries({
+          queryKey: ['reports', activeProjectId, 'drafts'],
+        })
+      }
+    },
+    [activeProjectId, queryClient]
+  )
 
   // Full-report SSE - only subscribe while we actually have a run in flight.
   useReportEvents(activeProjectId, appendEvent, {
@@ -124,9 +138,14 @@ export default function Reports() {
   const handleGenerateDraft = useCallback(
     (section: ReportDraftSection, force: boolean) => {
       if (activeProjectId === null) return
-      generateDrafts.mutate({ projectId: activeProjectId, sections: [section], force })
+      generateDrafts.mutate({
+        projectId: activeProjectId,
+        sections: [section],
+        force,
+        skipTriage,
+      })
     },
-    [activeProjectId, generateDrafts]
+    [activeProjectId, generateDrafts, skipTriage]
   )
 
   const handleGenerateAll = useCallback(
@@ -139,9 +158,14 @@ export default function Reports() {
             return !d || d.status === 'not_generated' || d.status === 'failed'
           })
       if (sections.length === 0) return
-      generateDrafts.mutate({ projectId: activeProjectId, sections, force })
+      generateDrafts.mutate({
+        projectId: activeProjectId,
+        sections,
+        force,
+        skipTriage,
+      })
     },
-    [activeProjectId, drafts, generateDrafts]
+    [activeProjectId, drafts, generateDrafts, skipTriage]
   )
 
   const handleUpload = useCallback(

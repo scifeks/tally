@@ -385,6 +385,7 @@ def _draft_section_summary(
         "original_filename": record.original_filename if record else None,
         "word_count": word_count,
         "preview": preview,
+        "error": record.error if record else None,
     }
 
 
@@ -428,6 +429,7 @@ async def start_drafts(
             service.start_drafts,
             sections=body.sections,
             force=body.force,
+            skip_triage=body.skip_triage,
             base_path=request.app.state.base_path,
             project_id=project_id,
             project_name=row.name,

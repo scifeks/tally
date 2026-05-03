@@ -209,7 +209,8 @@ class ConnectionFactory:
                     status            TEXT NOT NULL,
                     original_filename TEXT,
                     generated_at      TEXT,
-                    reviewed_at       TEXT
+                    reviewed_at       TEXT,
+                    error             TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS chat_sessions (

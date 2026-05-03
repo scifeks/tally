@@ -332,6 +332,7 @@ export interface GenerateDraftsVariables {
   projectId: number
   sections: ReportDraftSection[]
   force?: boolean
+  skipTriage?: boolean
 }
 
 export function useGenerateDrafts() {
@@ -339,12 +340,16 @@ export function useGenerateDrafts() {
   const setError = useUI(s => s.setReportMutationError)
 
   return useMutation<ReportDraft[], ApiError, GenerateDraftsVariables>({
-    mutationFn: async ({ projectId, sections, force }) => {
+    mutationFn: async ({ projectId, sections, force, skipTriage }) => {
       const data = await apiFetch<ReportDraftsResponseApi>(
         REST_ENDPOINTS.generateDraft(projectId),
         {
           method: 'POST',
-          body: { sections, force: force ?? false },
+          body: {
+            sections,
+            force: force ?? false,
+            skip_triage: skipTriage ?? false,
+          },
         }
       )
       return data.drafts.map(mapReportDraft)

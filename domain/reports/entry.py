@@ -38,3 +38,4 @@ class DraftRow:
     original_filename: str | None
     generated_at: str | None
     reviewed_at: str | None
+    error: str | None = None

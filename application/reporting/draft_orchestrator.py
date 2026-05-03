@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from application.ports.user_prompt import UserPromptPort
     from core.config.schemas import Repository
     from domain.findings.entry import Finding
-    from domain.reports.entry import DraftRow
 
 
 def _active_repos(base_path: str, project_name: str) -> list[Repository]:
@@ -121,7 +120,6 @@ def run_draft(
             f"Draft already exists at {draft_path}. Use force=True to overwrite."
         )
 
-    prior_row: DraftRow | None = repo.get(section)
     repo.upsert_generating(section)
 
     sink.emit(
@@ -135,15 +133,29 @@ def run_draft(
 
     try:
         output = _generate(request, section, draft_path, draft_dir, token, prompt)
-    except Exception as exc:
-        repo.restore(section, prior_row)
+    except DraftCancelled as exc:
+        user_msg = "Cancelled before generation completed."
+        repo.mark_failed(section, user_msg)
         sink.emit(
             DraftFailed(
                 report_id=0,
                 project_id=request.project_id,
                 section=section,
                 error=type(exc).__name__,
-                message=str(exc),
+                message=user_msg,
+            )
+        )
+        raise
+    except Exception as exc:
+        user_msg = _user_message(exc)
+        repo.mark_failed(section, user_msg)
+        sink.emit(
+            DraftFailed(
+                report_id=0,
+                project_id=request.project_id,
+                section=section,
+                error=type(exc).__name__,
+                message=user_msg,
             )
         )
         raise
@@ -172,6 +184,13 @@ def run_draft(
 # Internal helpers
 
 
+def _user_message(exc: BaseException) -> str:
+    """Translate *exc* into a user-facing message at the event boundary."""
+    if isinstance(exc, DraftGenerationError):
+        return str(exc)
+    return f"Draft generation failed: {exc}"
+
+
 def _check_cancel(token: CancellationToken, section: str) -> None:
     if token.is_set():
         raise DraftCancelled(f"Draft generation for {section!r} cancelled")
@@ -192,7 +211,8 @@ def _generate(
     llm = get_llm_provider("report", request.base_path)
     if not llm.is_available():
         raise DraftGenerationError(
-            "LLM provider unavailable. Check config/global.json."
+            "The configured LLM is not reachable. Check your global config "
+            "and try again."
         )
 
     generator_cls = SECTION_REGISTRY[section]
@@ -208,8 +228,9 @@ def _generate(
             "No findings in the database. Run a scan first."
             if request.skip_triage
             else (
-                "No triaged findings with should_report=1. "
-                "Run triage before generating drafts."
+                "No findings are marked for inclusion in the report. "
+                "Triage your findings and mark which ones to include "
+                "before generating drafts."
             )
         )
         raise DraftGenerationError(msg)
