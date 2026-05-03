@@ -66,8 +66,13 @@ class TestReportCommand:
         mock_kb = MagicMock()
         with (
             patch.object(ReportCommand, "_get_knowledge_base", return_value=mock_kb),
+            patch.object(ReportCommand, "_resolve_project_id", return_value=1),
+            patch(
+                "application.repl.commands.report.FindingsService.for_project"
+            ) as mock_for_project,
             patch("application.reporting.generator.ReportGenerator") as mock_gen_cls,
         ):
+            mock_for_project.return_value.finding_repo = MagicMock()
             cmd.execute("report", ["--format=markdown"])
 
         mock_gen_cls.return_value.generate.assert_called_once()
@@ -93,7 +98,7 @@ class TestReportCommand:
         mock_cls.assert_called_once()
         mock_cls.return_value.build_context.assert_called_once()
 
-    # _parse_value_flag: equals form (Bugs 5 & 6)
+    # _parse_value_flag: equals form
 
     def test_equals_form_extracts_value(self) -> None:
         result = ReportCommand._parse_value_flag(["--format=json"], "--format")
@@ -244,10 +249,13 @@ class TestReportCommand:
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
         with (
-            patch("infrastructure.store.connection.ConnectionFactory"),
-            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch.object(ReportCommand, "_resolve_project_id", return_value=1),
+            patch(
+                "application.repl.commands.report.ReportsService.for_project"
+            ) as mock_for_project,
             patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
         ):
+            mock_for_project.return_value.draft_repo = MagicMock()
             cmd.execute("report", ["draft"])
         assert mock_run.call_count == len(SECTION_REGISTRY)
         called_sections = [c.args[0].section for c in mock_run.call_args_list]
@@ -257,10 +265,13 @@ class TestReportCommand:
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
         with (
-            patch("infrastructure.store.connection.ConnectionFactory"),
-            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch.object(ReportCommand, "_resolve_project_id", return_value=1),
+            patch(
+                "application.repl.commands.report.ReportsService.for_project"
+            ) as mock_for_project,
             patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
         ):
+            mock_for_project.return_value.draft_repo = MagicMock()
             cmd.execute("report", ["draft", "risk-level"])
         assert mock_run.call_count == 1
         assert mock_run.call_args.args[0].section == "risk-level"
@@ -278,10 +289,13 @@ class TestReportCommand:
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
         with (
-            patch("infrastructure.store.connection.ConnectionFactory"),
-            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch.object(ReportCommand, "_resolve_project_id", return_value=1),
+            patch(
+                "application.repl.commands.report.ReportsService.for_project"
+            ) as mock_for_project,
             patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
         ):
+            mock_for_project.return_value.draft_repo = MagicMock()
             cmd.execute("report", ["draft", "--skip-triage"])
         assert mock_run.call_count == len(SECTION_REGISTRY)
         for call in mock_run.call_args_list:
@@ -291,10 +305,13 @@ class TestReportCommand:
         self, cmd: ReportCommand, mock_repl: MagicMock
     ) -> None:
         with (
-            patch("infrastructure.store.connection.ConnectionFactory"),
-            patch("infrastructure.store.repositories.drafts.DraftRepository"),
+            patch.object(ReportCommand, "_resolve_project_id", return_value=1),
+            patch(
+                "application.repl.commands.report.ReportsService.for_project"
+            ) as mock_for_project,
             patch("application.reporting.draft_orchestrator.run_draft") as mock_run,
         ):
+            mock_for_project.return_value.draft_repo = MagicMock()
             cmd.execute("report", ["draft", "risk-level", "--force", "--skip-triage"])
         assert mock_run.call_count == 1
         req = mock_run.call_args.args[0]

@@ -7,6 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.chat.stream_composer import RagUnavailable
+from application.findings.findings_service import FindingsService, ProjectNotFound
+from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+from application.reporting.reports_service import (
+    ProjectNotFound as ReportProjectNotFound,
+)
+from application.reporting.reports_service import ReportsService
 from core.project_paths import ProjectPaths
 
 logger = logging.getLogger(__name__)
@@ -177,8 +184,18 @@ class ReportCommand:
             )
             return
 
-        kb = self._get_knowledge_base()
-        if kb is None:
+        try:
+            kb = self._get_knowledge_base()
+        except RagUnavailable as exc:
+            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
+            return
+
+        try:
+            finding_repo = FindingsService.for_project(
+                self.repl.project_registry, self._resolve_project_id()
+            ).finding_repo
+        except (ProjectNotFound, ValueError) as exc:
+            self.repl.console.print(f"[red]Project error:[/red] {exc}")
             return
 
         if output_path is None:
@@ -189,11 +206,7 @@ class ReportCommand:
             output_path = str(reports_dir / f"report_{ts}.{ext}")
 
         from application.reporting.generator import ReportGenerator
-        from infrastructure.store import make_store
 
-        _, finding_repo, _, _ = make_store(
-            self.repl.base_path, self.repl.active_project
-        )
         generator = ReportGenerator(kb, self.repl.active_project, finding_repo)
 
         with self.repl.console.status(f"Generating {fmt} report..."):
@@ -230,8 +243,6 @@ class ReportCommand:
             run_draft,
         )
         from application.reporting.drafts import SECTION_REGISTRY
-        from infrastructure.store.connection import ConnectionFactory
-        from infrastructure.store.repositories.drafts import DraftRepository
 
         force = "--force" in args
         skip_triage = "--skip-triage" in args
@@ -246,12 +257,16 @@ class ReportCommand:
 
         sections = [args[0]] if args else list(SECTION_REGISTRY.keys())
 
+        try:
+            draft_repo = ReportsService.for_project(
+                self.repl.project_registry, self._resolve_project_id()
+            ).draft_repo
+        except (ReportProjectNotFound, ValueError) as exc:
+            self.repl.console.print(f"[red]Project error:[/red] {exc}")
+            return
+
         prompt = RichConsolePromptAdapter()
         sink = ConsoleDraftEventSink(self.repl.console)
-        paths = _project_paths(self.repl)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        draft_repo = DraftRepository(factory)
 
         for section in sections:
             request = DraftRequest(
@@ -379,35 +394,32 @@ class ReportCommand:
             return False
         return True
 
-    def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
-        """Build a FindingKnowledgeBase for the active project, or None on error."""
-        from application.rag.knowledge_base import FindingKnowledgeBase
-        from infrastructure.embedding.factory import get_embedding_provider
-        from infrastructure.llm.factory import get_llm_provider
-        from infrastructure.vector.factory import make_chromadb_vector_index
+    def _get_knowledge_base(self) -> FindingKnowledgeBase:
+        """Return the per-project FindingKnowledgeBase.
 
+        Raises RagUnavailable if ChromaDB or the embedding/LLM provider
+        cannot be reached. The shared cache stores both successful
+        builds and prior failures.
+        """
         assert self.repl.active_project is not None
-        base = Path(self.repl.base_path)
-        try:
-            embedding_provider = get_embedding_provider(base)
-            chat_provider = get_llm_provider("chat", base)
-            vector_index = make_chromadb_vector_index(
-                project_name=self.repl.active_project,
-                base_path=base,
-                embedding_provider=embedding_provider,
+        knowledge_base = get_or_build_knowledge_base(
+            self.repl.knowledge_base_cache,
+            self.repl.active_project,
+            self.repl.base_path,
+        )
+        if knowledge_base is None:
+            raise RagUnavailable(
+                "RAG engine unavailable for this project; "
+                "ChromaDB or embedding provider is not reachable"
             )
-            return FindingKnowledgeBase(
-                vector_index=vector_index,
-                chat_provider=chat_provider,
-                project_name=self.repl.active_project,
-                base_path=base,
-            )
-        except RuntimeError as exc:
-            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
-            return None
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Project error:[/red] {exc}")
-            return None
+        return knowledge_base
+
+    def _resolve_project_id(self) -> int:
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            raise ValueError(f"project not found: {self.repl.active_project}")
+        return row.id
 
     @staticmethod
     def _parse_value_flag(args: list[str], *flags: str) -> tuple[str | None, list[str]]:
