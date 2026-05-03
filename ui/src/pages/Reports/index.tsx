@@ -127,7 +127,10 @@ export default function Reports() {
   const appendEvent = useCallback(
     (event: ReportLogEvent) => {
       setLogs(prev => [...prev, event])
-      if (event.type === 'step_completed' && typeof event.progress === 'number') {
+      if (
+        (event.type === 'step_started' || event.type === 'step_completed') &&
+        typeof event.progress === 'number'
+      ) {
         setProgress(event.progress)
       }
       if (event.type === 'generation_started') {

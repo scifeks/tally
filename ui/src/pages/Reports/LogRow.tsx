@@ -23,9 +23,6 @@ export function LogRow({ event }: { event: ReportLogEvent }) {
         {event.type.replace(/_/g, ' ')}
       </span>
       <span className="text-foreground flex-1">{event.message}</span>
-      {event.progress !== undefined && (
-        <span className="text-accent tabular-nums">{event.progress}%</span>
-      )}
     </div>
   )
 }

@@ -182,6 +182,7 @@ def _emit_step(
                 report_id=request.report_id,
                 project_id=request.project_id,
                 step=step,
+                progress=progress,
                 message=f"{step} started",
             )
         )
@@ -205,13 +206,13 @@ def _run_text(
     _check_cancel(token, request)
     _, finding_repo, _, _ = make_store(str(request.base_path), request.project)
 
-    _emit_step(sink, request, "aggregate", 25, started=True)
+    _emit_step(sink, request, "aggregate", 0, started=True)
     generator = ReportGenerator(None, request.project, finding_repo)
     aggregated = generator._aggregate_findings()  # noqa: SLF001
     _emit_step(sink, request, "aggregate", 25, started=False)
 
     _check_cancel(token, request)
-    _emit_step(sink, request, "render", 75, started=True)
+    _emit_step(sink, request, "render", 25, started=True)
     fmt = request.format
     renderers: dict[str, Callable[[dict], str]] = {
         "markdown": generator._render_markdown,  # noqa: SLF001
@@ -222,7 +223,7 @@ def _run_text(
     _emit_step(sink, request, "render", 75, started=False)
 
     _check_cancel(token, request)
-    _emit_step(sink, request, "write", 100, started=True)
+    _emit_step(sink, request, "write", 75, started=True)
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     request.output_path.write_text(content, encoding="utf-8")
     _emit_step(sink, request, "write", 100, started=False)
@@ -254,17 +255,17 @@ def _run_pdf(
         skip_triage=request.skip_triage,
     )
 
-    _emit_step(sink, request, "build_context", 33, started=True)
+    _emit_step(sink, request, "build_context", 0, started=True)
     context = assembler.build_context()
     _emit_step(sink, request, "build_context", 33, started=False)
 
     _check_cancel(token, request)
-    _emit_step(sink, request, "render_pdf", 75, started=True)
+    _emit_step(sink, request, "render_pdf", 33, started=True)
     pdf_bytes = assembler.render_pdf(context)
     _emit_step(sink, request, "render_pdf", 75, started=False)
 
     _check_cancel(token, request)
-    _emit_step(sink, request, "write", 100, started=True)
+    _emit_step(sink, request, "write", 75, started=True)
     request.output_path.parent.mkdir(parents=True, exist_ok=True)
     request.output_path.write_bytes(pdf_bytes)
     _emit_step(sink, request, "write", 100, started=False)

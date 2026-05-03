@@ -38,6 +38,7 @@ class GenerationStarted(_ReportEventBase):
 @dataclass(frozen=True)
 class StepStarted(_ReportEventBase):
     step: str = ""
+    progress: int = 0
     message: str = ""
 
 
