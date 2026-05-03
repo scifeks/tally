@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING
 
 from rich.markup import escape
 
+from application.chat.sealing import purge_chat_for_project
+from application.chat.session_service import ChatSessionService
+from application.chat.stream_composer import RagUnavailable
+from application.findings.findings_service import FindingsService
 from application.ports.filters import Eq
+from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+from application.url_inventory.url_list_service import UrlListService
 from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
@@ -103,8 +109,10 @@ class PurgeCommand:
                 )
                 return
 
-        kb = self._get_knowledge_base()
-        if kb is None:
+        try:
+            kb = self._get_knowledge_base()
+        except RagUnavailable as exc:
+            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
             return
 
         count = self._count_matching(kb, tools=tools)
@@ -165,10 +173,10 @@ class PurgeCommand:
         else:
             total_deleted = kb.delete_findings(tool=None)
         self._delete_tool_output_files(tools=tools)
-        # Chat purge runs before _purge_sqlite. Full-wipe deletes the
-        # findings.db file outright, so going through the chat helper
-        # first keeps the explicit application-layer semantics regardless
-        # of how the SQLite wipe is done.
+        # Chat purge runs before _purge_sqlite. The full-wipe path
+        # clears chat tables too, so going through the chat helper
+        # first keeps the explicit application-layer semantics
+        # regardless of how the SQLite wipe is done.
         chat_deleted = self._purge_chat() if tools is None else 0
         self._purge_sqlite(tools=tools)
         if tools is None and not keep_reports:
@@ -259,44 +267,23 @@ class PurgeCommand:
 
     def _count_sqlite_findings(self, tools: list[str] | None) -> int:
         """Count SQLite findings matching the given tools, or total if None."""
+        project_id = self._resolve_project_id()
+        if project_id is None:
+            return 0
         try:
-            from infrastructure.store.connection import ConnectionFactory
-
-            db_path = _project_paths(self.repl).findings_db
-            if not db_path.exists():
-                return 0
-            factory = ConnectionFactory(db_path)
-            with factory.connect() as conn:
-                if tools is None:
-                    row = conn.execute("SELECT COUNT(*) FROM findings").fetchone()
-                else:
-                    placeholders = ",".join("?" * len(tools))
-                    row = conn.execute(
-                        f"SELECT COUNT(*) FROM findings WHERE tool IN ({placeholders})",
-                        tools,
-                    ).fetchone()
-                return int(row[0]) if row else 0
+            svc = FindingsService.for_project(self.repl.project_registry, project_id)
+            return svc.count_findings(tools=tools)
         except Exception:
             return 0
 
     def _count_url_findings(self) -> int:
         """Count url_findings rows for the active project (full-purge guard)."""
+        project_id = self._resolve_project_id()
+        if project_id is None:
+            return 0
         try:
-            from infrastructure.store.connection import ConnectionFactory
-
-            db_path = _project_paths(self.repl).findings_db
-            if not db_path.exists():
-                return 0
-            factory = ConnectionFactory(db_path)
-            with factory.connect() as conn:
-                cur = conn.execute(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type='table' AND name='url_findings'"
-                )
-                if cur.fetchone() is None:
-                    return 0
-                row = conn.execute("SELECT COUNT(*) FROM url_findings").fetchone()
-                return int(row[0]) if row else 0
+            svc = UrlListService.for_project(self.repl.project_registry, project_id)
+            return svc.count_all_url_findings()
         except Exception:
             return 0
 
@@ -334,18 +321,10 @@ class PurgeCommand:
         if project_id is None:
             return 0
         try:
-            from infrastructure.store.connection import ConnectionFactory
-            from infrastructure.store.repositories.chat_sessions import (
-                ChatSessionRepository,
+            svc = ChatSessionService.for_project(self.repl.project_registry, project_id)
+            return len(
+                svc.session_repo.list_for_project(project_id, include_expired=True)
             )
-
-            db_path = _project_paths(self.repl).findings_db
-            if not db_path.exists():
-                return 0
-            factory = ConnectionFactory(db_path)
-            factory.init_schema()
-            repo = ChatSessionRepository(factory)
-            return len(repo.list_for_project(project_id, include_expired=True))
         except Exception:
             return 0
 
@@ -359,93 +338,49 @@ class PurgeCommand:
         if project_id is None:
             return 0
         try:
-            from application.chat.sealing import purge_chat_for_project
-            from infrastructure.store.connection import ConnectionFactory
-            from infrastructure.store.repositories.chat_sessions import (
-                ChatSessionRepository,
-            )
-
-            paths = _project_paths(self.repl)
-            factory = ConnectionFactory(paths.findings_db)
-            factory.init_schema()
-            session_repo = ChatSessionRepository(factory)
-            return purge_chat_for_project(project_id, session_repo=session_repo)
+            svc = ChatSessionService.for_project(self.repl.project_registry, project_id)
+            return purge_chat_for_project(project_id, session_repo=svc.session_repo)
         except Exception as exc:
             self.repl.console.print(f"[yellow]Chat purge warning:[/yellow] {exc}")
             return 0
 
     def _purge_sqlite(self, tools: list[str] | None) -> None:
         """Delete SQLite findings for the given tools, or full wipe if None."""
+        project_id = self._resolve_project_id()
+        if project_id is None:
+            return
         try:
-            from infrastructure.store.connection import ConnectionFactory
-            from infrastructure.store.repositories.findings import FindingRepository
-
-            db_path = _project_paths(self.repl).findings_db
-            factory = ConnectionFactory(db_path)
+            findings = FindingsService.for_project(
+                self.repl.project_registry, project_id
+            )
+            urls = UrlListService.for_project(self.repl.project_registry, project_id)
             if tools is None:
-                if factory.db_path.exists():
-                    try:
-                        from application.url_inventory.service import (
-                            UrlInventoryService,
-                        )
-                        from infrastructure.store.repositories.url_findings import (
-                            UrlFindingRepository,
-                        )
-
-                        UrlInventoryService(
-                            UrlFindingRepository(factory)
-                        ).delete_for_project()
-                    except Exception:
-                        pass
-                    factory.purge_non_preserved_tables()
-                else:
-                    factory.init_schema()
+                urls.purge_all_url_findings()
+                findings.purge_all_findings_data()
             else:
-                _URL_TOOLS = {"katana", "noir"}
-                url_tools = [t for t in tools if t in _URL_TOOLS]
-                if url_tools and factory.db_path.exists():
-                    try:
-                        placeholders = ",".join("?" * len(url_tools))
-                        with factory.connect() as conn:
-                            conn.execute(
-                                f"DELETE FROM url_findings WHERE tool IN "
-                                f"({placeholders})",
-                                url_tools,
-                            )
-                    except Exception:
-                        pass
-                FindingRepository(factory).delete_findings(tools=tools)
+                findings.delete_findings_for_tools(tools)
+                url_tools = [t for t in tools if t in {"katana", "noir"}]
+                if url_tools:
+                    urls.delete_url_findings_for_tools(url_tools)
         except Exception as exc:
             self.repl.console.print(f"[yellow]SQLite purge warning:[/yellow] {exc}")
 
-    def _get_knowledge_base(self) -> FindingKnowledgeBase | None:
-        """Build a FindingKnowledgeBase for the active project, or None on error."""
-        from pathlib import Path
+    def _get_knowledge_base(self) -> FindingKnowledgeBase:
+        """Return the per-project knowledge base.
 
-        from application.rag.knowledge_base import FindingKnowledgeBase
-        from infrastructure.embedding.factory import get_embedding_provider
-        from infrastructure.llm.factory import get_llm_provider
-        from infrastructure.vector.factory import make_chromadb_vector_index
-
+        Raises ``RagUnavailable`` when the embedding provider, LLM
+        provider, or vector index cannot be constructed. The REPL
+        adapter (``cmd_purge``) catches and prints the colored error.
+        """
         assert self.repl.active_project is not None
-        base = Path(self.repl.base_path)
-        try:
-            embedding_provider = get_embedding_provider(base)
-            chat_provider = get_llm_provider("chat", base)
-            vector_index = make_chromadb_vector_index(
-                project_name=self.repl.active_project,
-                base_path=base,
-                embedding_provider=embedding_provider,
+        kb = get_or_build_knowledge_base(
+            self.repl.knowledge_base_cache,
+            self.repl.active_project,
+            self.repl.base_path,
+        )
+        if kb is None:
+            raise RagUnavailable(
+                "RAG engine unavailable for this project; "
+                "ChromaDB or embedding provider is not reachable"
             )
-            return FindingKnowledgeBase(
-                vector_index=vector_index,
-                chat_provider=chat_provider,
-                project_name=self.repl.active_project,
-                base_path=base,
-            )
-        except RuntimeError as exc:
-            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
-            return None
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Project error:[/red] {exc}")
-            return None
+        return kb

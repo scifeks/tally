@@ -255,6 +255,8 @@ class SemgrepHandler:
                 row["impact"] = impact
             if references:
                 row["references"] = ", ".join(references)
+            if rule_id:
+                row["title"] = rule_id.rsplit(".", 1)[-1] or rule_id
             row.update(_shared_meta(self, "vulnerability"))
 
             rows.append(row)

@@ -243,6 +243,8 @@ class GitleaksHandler:
                 row["fingerprint"] = fingerprint
             if source:
                 row["source"] = source
+            if rule_id:
+                row["title"] = rule_id
             row.update(_shared_meta(self, "secret"))
 
             rows.append(row)

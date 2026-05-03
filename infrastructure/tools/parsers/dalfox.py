@@ -178,6 +178,11 @@ class DalFoxHandler:
                 "method": finding.get("method", "GET"),
                 "timestamp": timestamp,
                 "source_file": source_file,
+                "title": (
+                    f"Cross-Site Scripting (XSS) in '{param}'"
+                    if param
+                    else "Cross-Site Scripting (XSS)"
+                ),
             }
             row.update(_shared_meta(self, "vulnerability"))
             rows.append(row)

@@ -30,15 +30,25 @@ class _StubUrlRepo:
         self,
         *,
         active_count: int = 0,
+        all_count: int = 0,
+        delete_for_tools_return: int = 0,
         raises: Exception | None = None,
+        count_all_raises: Exception | None = None,
+        delete_for_tools_raises: Exception | None = None,
         list_for_repo_rows: dict[int, list[Any]] | None = None,
         list_for_repo_raises: Exception | None = None,
     ) -> None:
         self._active_count = active_count
+        self._all_count = all_count
+        self._delete_for_tools_return = delete_for_tools_return
         self._raises = raises
+        self._count_all_raises = count_all_raises
+        self._delete_for_tools_raises = delete_for_tools_raises
         self._list_for_repo_rows = list_for_repo_rows or {}
         self._list_for_repo_raises = list_for_repo_raises
         self.count_active_calls = 0
+        self.count_all_calls = 0
+        self.delete_for_tools_calls: list[list[str]] = []
         self.list_for_repo_calls: list[int] = []
 
     def count_active(self) -> int:
@@ -46,6 +56,18 @@ class _StubUrlRepo:
         if self._raises is not None:
             raise self._raises
         return self._active_count
+
+    def count_all(self) -> int:
+        self.count_all_calls += 1
+        if self._count_all_raises is not None:
+            raise self._count_all_raises
+        return self._all_count
+
+    def delete_for_tools(self, tools: list[str]) -> int:
+        self.delete_for_tools_calls.append(list(tools))
+        if self._delete_for_tools_raises is not None:
+            raise self._delete_for_tools_raises
+        return self._delete_for_tools_return
 
     def list_for_repo(self, repo_id: int) -> list[Any]:
         self.list_for_repo_calls.append(repo_id)
@@ -214,6 +236,84 @@ class TestUrlListServiceRepoHasUrlFindings:
         service = _build(url_repo=url_repo)
         assert service.repo_has_url_findings(42) is False
         assert url_repo.list_for_repo_calls == [42]
+
+
+class TestUrlListServiceCountAllUrlFindings:
+    def test_forwards_to_repo_count_all(self) -> None:
+        url_repo = _StubUrlRepo(all_count=23)
+        service = _build(url_repo=url_repo)
+        assert service.count_all_url_findings() == 23
+        assert url_repo.count_all_calls == 1
+
+    def test_returns_zero_when_findings_db_missing(self) -> None:
+        url_repo = _StubUrlRepo(all_count=23)
+        service = _build(url_repo=url_repo, findings_db_exists=False)
+        assert service.count_all_url_findings() == 0
+        assert url_repo.count_all_calls == 0
+
+    def test_returns_zero_when_repo_raises(self) -> None:
+        url_repo = _StubUrlRepo(count_all_raises=RuntimeError("db gone"))
+        service = _build(url_repo=url_repo)
+        assert service.count_all_url_findings() == 0
+
+
+class TestUrlListServiceDeleteUrlFindingsForTools:
+    def test_forwards_tools_to_repo(self) -> None:
+        url_repo = _StubUrlRepo(delete_for_tools_return=4)
+        service = _build(url_repo=url_repo)
+        assert service.delete_url_findings_for_tools(["katana", "noir"]) == 4
+        assert url_repo.delete_for_tools_calls == [["katana", "noir"]]
+
+    def test_empty_tools_is_no_op(self) -> None:
+        url_repo = _StubUrlRepo(delete_for_tools_return=99)
+        service = _build(url_repo=url_repo)
+        assert service.delete_url_findings_for_tools([]) == 0
+        assert url_repo.delete_for_tools_calls == []
+
+    def test_returns_zero_when_findings_db_missing(self) -> None:
+        url_repo = _StubUrlRepo(delete_for_tools_return=99)
+        service = _build(url_repo=url_repo, findings_db_exists=False)
+        assert service.delete_url_findings_for_tools(["katana"]) == 0
+        assert url_repo.delete_for_tools_calls == []
+
+    def test_returns_zero_when_repo_raises(self) -> None:
+        url_repo = _StubUrlRepo(delete_for_tools_raises=RuntimeError("db gone"))
+        service = _build(url_repo=url_repo)
+        assert service.delete_url_findings_for_tools(["katana"]) == 0
+
+
+class _StubInventoryWithDelete:
+    """Records ``delete_for_project`` calls."""
+
+    def __init__(self, *, return_value: int = 0, raises: Exception | None = None):
+        self._return_value = return_value
+        self._raises = raises
+        self.delete_for_project_calls = 0
+
+    def delete_for_project(self) -> int:
+        self.delete_for_project_calls += 1
+        if self._raises is not None:
+            raise self._raises
+        return self._return_value
+
+
+class TestUrlListServicePurgeAllUrlFindings:
+    def test_forwards_to_inventory_delete_for_project(self) -> None:
+        inventory = _StubInventoryWithDelete(return_value=12)
+        service = _build(inventory=inventory)
+        assert service.purge_all_url_findings() == 12
+        assert inventory.delete_for_project_calls == 1
+
+    def test_returns_zero_when_findings_db_missing(self) -> None:
+        inventory = _StubInventoryWithDelete(return_value=12)
+        service = _build(inventory=inventory, findings_db_exists=False)
+        assert service.purge_all_url_findings() == 0
+        assert inventory.delete_for_project_calls == 0
+
+    def test_returns_zero_when_inventory_raises(self) -> None:
+        inventory = _StubInventoryWithDelete(raises=RuntimeError("db gone"))
+        service = _build(inventory=inventory)
+        assert service.purge_all_url_findings() == 0
 
 
 class _FakeUserFileProvider:

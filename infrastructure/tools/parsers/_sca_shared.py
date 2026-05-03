@@ -144,6 +144,11 @@ def _build_sca_normalize(builder: Any, result: ToolResult, profile: str) -> list
             row["references"] = ", ".join(references)
         if cwe_ids:
             row["cwe_ids"] = ", ".join(cwe_ids)
+        baseline_title = summary or (
+            f"{vuln_id} in {pkg_name}" if vuln_id and pkg_name else vuln_id or pkg_name
+        )
+        if baseline_title:
+            row["title"] = baseline_title
         row.update(_shared_meta(builder, "dependency"))
 
         rows.append(row)

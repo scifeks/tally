@@ -68,6 +68,7 @@ class FindingsService:
         project_id: int,
         project_name: str,
         findings_db_exists: bool,
+        factory: ConnectionFactory | None = None,
         knowledge_base_cache: dict[str, FindingKnowledgeBase | None] | None = None,
         base_path: str = "",
         event_sink: FindingEventSink | None = None,
@@ -80,6 +81,11 @@ class FindingsService:
         self._project_id = project_id
         self._project_name = project_name
         self._findings_db_exists = findings_db_exists
+        # Stored so :meth:`purge_all_findings_data` can call
+        # ``factory.purge_non_preserved_tables()`` without re-resolving
+        # the project. Optional in the constructor so existing test
+        # fixtures that build the service from stubs remain valid.
+        self._factory = factory
         self._kb_cache: dict[str, FindingKnowledgeBase | None] = (
             knowledge_base_cache if knowledge_base_cache is not None else {}
         )
@@ -120,6 +126,7 @@ class FindingsService:
             project_id=project_id,
             project_name=row.name,
             findings_db_exists=findings_db_exists,
+            factory=factory,
             knowledge_base_cache=knowledge_base_cache,
             base_path=base_path or "",
             event_sink=event_sink,
@@ -169,18 +176,50 @@ class FindingsService:
             self._lock_query.finding_lock_holder(finding_id),
         )
 
-    def count_findings(self) -> int:
+    def count_findings(self, *, tools: list[str] | None = None) -> int:
         """Total count of rows in the findings table.
 
         Returns 0 when the findings DB has not been created yet or
-        when the underlying read raises.
+        when the underlying read raises. When *tools* is provided,
+        the count is restricted to rows whose ``tool`` value is in
+        the list.
         """
         if not self._findings_db_exists:
             return 0
         try:
-            return self._finding_repo.count_findings()
+            return self._finding_repo.count_findings(tools=tools)
         except Exception:
             return 0
+
+    def delete_findings_for_tools(self, tools: list[str]) -> None:
+        """Delete findings for the given tools.
+
+        Empty list is a no-op. Failures swallowed so the REPL purge
+        flow can continue with the url_findings cleanup; the caller
+        prints a warning if it cares.
+        """
+        if not tools:
+            return
+        try:
+            self._finding_repo.delete_findings(tools=tools)
+        except Exception:
+            return
+
+    def purge_all_findings_data(self) -> None:
+        """Wipe every non-preserved table in the project's findings DB.
+
+        Used by the full ``purge`` REPL command. The ``repositories``
+        table is preserved by ``ConnectionFactory.purge_non_preserved_tables``;
+        every other findings-DB table is cleared. Failures are
+        swallowed so the REPL flow can proceed with the rest of the
+        purge cascade; the caller prints a warning if it cares.
+        """
+        if self._factory is None:
+            return
+        try:
+            self._factory.purge_non_preserved_tables()
+        except Exception:
+            return
 
     def patch_finding(self, finding_id: int, fields: dict[str, Any]) -> Finding | None:
         """Apply analyst-writable updates to a single finding.

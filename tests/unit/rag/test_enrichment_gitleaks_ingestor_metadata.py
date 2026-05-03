@@ -54,10 +54,10 @@ class TestGitleaksIngestorMetadata:
         rows = self._get_rows("jwt")
         assert rows[0]["risk_type"] == "jwt"
 
-    def test_no_title_field_produced(self) -> None:
+    def test_title_field_set_from_rule_id(self) -> None:
         rows = self._get_rows("aws-access-token")
         assert len(rows) == 1
-        assert "title" not in rows[0]
+        assert rows[0]["title"] == "aws-access-token"
 
     def test_no_title_when_no_rule_id(self) -> None:
         rows = self._get_rows("")
