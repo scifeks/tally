@@ -16,6 +16,7 @@ from application.reporting import draft_orchestrator
 from application.reporting.draft_orchestrator import (
     DraftCancelled,
     DraftGenerationError,
+    DraftOverwriteDenied,
     DraftRequest,
     _user_message,
     run_draft,
@@ -143,3 +144,33 @@ def test_user_message_passthrough_for_draft_generation_error():
 
 def test_user_message_wraps_other_exceptions():
     assert _user_message(RuntimeError("x")) == "Draft generation failed: x"
+
+
+def test_overwrite_denied_emits_failed_event(tmp_path, repo, sink, captured_events):
+    """Pre-existing draft + force=False emits DraftFailed before raising.
+
+    The web UI's SSE stream only learns about per-section state through
+    these events; without an emit on the denied path the cards stay
+    stuck in 'generating' forever.
+    """
+    section = "executive-summary"
+    draft_dir = tmp_path / "projects" / "proj" / "reports" / "draft"
+    draft_dir.mkdir(parents=True)
+    (draft_dir / f"{section}.md").write_text("stale", encoding="utf-8")
+
+    request_obj = DraftRequest(
+        project="proj",
+        base_path=tmp_path,
+        section=section,
+        force_overwrite=False,
+        project_id=1,
+    )
+
+    with pytest.raises(DraftOverwriteDenied):
+        run_draft(request_obj, prompt=MagicMock(), repo=repo, event_sink=sink)
+
+    failed = next(e for e in captured_events if isinstance(e, DraftFailed))
+    assert failed.error == "DraftOverwriteDenied"
+    assert "already exists" in failed.message.lower()
+    repo.upsert_generating.assert_not_called()
+    repo.mark_failed.assert_not_called()

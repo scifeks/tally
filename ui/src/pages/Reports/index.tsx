@@ -193,10 +193,14 @@ export default function Reports() {
             return !d || d.status === 'not_generated' || d.status === 'failed'
           })
       if (sections.length === 0) return
+      // A failed section's on-disk file is from before the failure and
+      // must be overwritten on retry; force=true is correct for the
+      // missing branch too since not_generated cards have no file to
+      // clobber.
       generateDrafts.mutate({
         projectId: activeProjectId,
         sections,
-        force,
+        force: true,
         skipTriage,
       })
     },
