@@ -12,15 +12,13 @@ import {
   useDeleteChatSession,
   useChatStream,
   useProjects,
+  useAppendChatMessageToCache,
 } from '@/lib/api'
 import type { ChatMessage, ChatSession, ChatStreamEvent } from '@/lib/types'
 import { ChatMutationErrorModal } from '@/components/ChatMutationErrorModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 interface StreamingOverlay {
-  userMessageId: number
-  userContent: string
-  userTimestamp: string
   assistantContent: string
   assistantTimestamp: string
   status: 'pending' | 'streaming' | 'complete' | 'cancelled' | 'error'
@@ -141,6 +139,7 @@ export default function Chat() {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [inputValue, setInputValue] = useState('')
   const [streamingOverlay, setStreamingOverlay] = useState<StreamingOverlay | null>(null)
+  const appendChatMessageToCache = useAppendChatMessageToCache()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -182,23 +181,20 @@ export default function Chat() {
           break
         case 'stream_end':
           if (activeProjectId !== null && activeSessionId !== null) {
+            appendChatMessageToCache(activeProjectId, activeSessionId, {
+              id: event.messageId,
+              sessionId: activeSessionId,
+              role: 'assistant',
+              content: event.content,
+              model: null,
+              timestamp: new Date().toISOString(),
+              citations: null,
+            })
             queryClient.invalidateQueries({
               queryKey: ['chat', activeProjectId, 'sessions'],
             })
-            // Wait for the messages refetch to resolve before clearing the
-            // overlay. If the overlay clears first the cached persisted
-            // messages still lag behind, leaving a render where the just-
-            // sent user prompt momentarily disappears or — when the
-            // persisted user-message id differs from the POST-returned one
-            // — duplicates beside the streamed copy.
-            void queryClient
-              .refetchQueries({
-                queryKey: ['chat', activeProjectId, 'messages', activeSessionId],
-              })
-              .finally(() => setStreamingOverlay(null))
-          } else {
-            setStreamingOverlay(null)
           }
+          setStreamingOverlay(null)
           break
         case 'stream_cancelled':
           setStreamingOverlay(null)
@@ -208,7 +204,7 @@ export default function Chat() {
           break
       }
     },
-    [activeProjectId, activeSessionId, queryClient]
+    [activeProjectId, activeSessionId, queryClient, appendChatMessageToCache]
   )
 
   useChatStream(activeProjectId, activeSessionId, onStreamEvent, {
@@ -217,26 +213,8 @@ export default function Chat() {
 
   const messages: ChatMessage[] = useMemo(() => {
     if (!streamingOverlay || activeSessionId === null) return persistedMessages
-    // Defensive dedup: drop any persisted user message that matches the
-    // overlay either by id (the happy path) or by role+content (fallback
-    // in case the persisted id and the POST-returned user_message_id ever
-    // drift). Without this fallback, a mismatched id would render the
-    // user's prompt twice once the persisted refetch arrives.
-    const filtered = persistedMessages.filter(
-      m =>
-        m.id !== streamingOverlay.userMessageId &&
-        !(m.role === 'user' && m.content === streamingOverlay.userContent)
-    )
-    const overlay: ChatMessage[] = [
-      {
-        id: streamingOverlay.userMessageId,
-        sessionId: activeSessionId,
-        role: 'user',
-        content: streamingOverlay.userContent,
-        model: null,
-        timestamp: streamingOverlay.userTimestamp,
-        citations: null,
-      },
+    return [
+      ...persistedMessages,
       {
         id: -1,
         sessionId: activeSessionId,
@@ -249,7 +227,6 @@ export default function Chat() {
           streamingOverlay.status === 'pending' || streamingOverlay.status === 'streaming',
       },
     ]
-    return [...filtered, ...overlay]
   }, [persistedMessages, streamingOverlay, activeSessionId])
 
   useEffect(() => {
@@ -296,15 +273,29 @@ export default function Chat() {
       return
     }
 
+    appendChatMessageToCache(activeProjectId, activeSessionId, {
+      id: result.userMessageId,
+      sessionId: activeSessionId,
+      role: 'user',
+      content,
+      model: null,
+      timestamp: now,
+      citations: null,
+    })
+
     setStreamingOverlay({
-      userMessageId: result.userMessageId,
-      userContent: content,
-      userTimestamp: now,
       assistantContent: '',
       assistantTimestamp: new Date().toISOString(),
       status: 'pending',
     })
-  }, [activeProjectId, activeSessionId, inputValue, isStreaming, sendMessage])
+  }, [
+    activeProjectId,
+    activeSessionId,
+    inputValue,
+    isStreaming,
+    sendMessage,
+    appendChatMessageToCache,
+  ])
 
   const handleCancel = useCallback(() => {
     if (activeProjectId === null || activeSessionId === null) return

@@ -122,6 +122,7 @@ export {
   useDeleteChatSession,
   useChatStream,
   useInvalidateChatMessages,
+  useAppendChatMessageToCache,
   mapChatSession,
   mapChatMessage,
 } from './useChat'

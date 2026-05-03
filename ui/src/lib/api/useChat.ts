@@ -482,3 +482,29 @@ export function useInvalidateChatMessages() {
       queryKey: ['chat', projectId, 'messages', sessionId],
     })
 }
+
+interface ChatMessagesInfiniteCache {
+  pages: ChatMessagesPage[]
+  pageParams: unknown[]
+}
+
+export function useAppendChatMessageToCache() {
+  const queryClient = useQueryClient()
+  return (projectId: number, sessionId: number, msg: ChatMessage) => {
+    queryClient.setQueriesData<ChatMessagesInfiniteCache>(
+      { queryKey: ['chat', projectId, 'messages', sessionId] },
+      old => {
+        if (!old || old.pages.length === 0) return old
+        const lastIdx = old.pages.length - 1
+        const last = old.pages[lastIdx]
+        const pages = [...old.pages]
+        pages[lastIdx] = {
+          ...last,
+          items: [...last.items, msg],
+          total: last.total + 1,
+        }
+        return { ...old, pages }
+      }
+    )
+  }
+}

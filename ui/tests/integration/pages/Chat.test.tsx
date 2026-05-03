@@ -286,148 +286,17 @@ describe('Chat page - sealed session UX (12.7)', () => {
   })
 })
 
-// ─── User-prompt dedup hardening (12.8) ────────────────────────────────────
+// ─── No duplication after stream_end ───────────────────────────────────────
 
-describe('Chat page - prompt dedup after stream end (12.8)', () => {
-  it('renders the user prompt exactly once even when persisted and overlay ids drift', async () => {
+describe('Chat page - no duplication after stream_end', () => {
+  it('renders exactly one user bubble and one assistant bubble per round', async () => {
     useUI.setState({ activeProjectId: 1 })
-
-    // The handler returns user_message_id 5001 from POST. We override the
-    // messages GET so that — as if the persisted user-message id and the
-    // POST-returned id had drifted — the persisted user message has a
-    // different id (id 6001) but the same content the user just typed.
-    server.use(
-      http.get('/api/v1/projects/1/chat/sessions/101/messages', ({ request }) => {
-        const url = new URL(request.url)
-        const offset = Number(url.searchParams.get('offset') ?? 0)
-        const limit = Number(url.searchParams.get('limit') ?? 50)
-        const baseFixture = {
-          items: [
-            {
-              id: 1001,
-              session_id: 101,
-              role: 'user',
-              content: 'What does finding 42 mean?',
-              model: null,
-              timestamp: '2026-04-28T10:00:00+00:00',
-              citations: null,
-            },
-            {
-              id: 6001,
-              session_id: 101,
-              role: 'user',
-              content: 'Drift case prompt',
-              model: null,
-              timestamp: '2026-04-28T10:10:00+00:00',
-              citations: null,
-            },
-          ],
-          total: 2,
-          offset: 0,
-          limit: 50,
-        }
-        const slice = baseFixture.items.slice(offset, offset + limit)
-        return HttpResponse.json({ items: slice, total: 2, offset, limit })
-      })
-    )
 
     const user = userEvent.setup()
     renderChat()
 
     await waitFor(() =>
-      expect(screen.getByText(/What does finding 42 mean\?/i)).toBeInTheDocument()
-    )
-
-    const textarea = screen.getByPlaceholderText(/Ask about your security findings/i)
-    await user.click(textarea)
-    await user.keyboard('Drift case prompt')
-    await user.click(screen.getByRole('button', { name: /send message/i }))
-
-    // The messages cache already holds 'Drift case prompt' under id 6001
-    // (different from POST's user_message_id 5001). With ID-only dedup
-    // there would be two copies; the role+content fallback guarantees one.
-    await waitFor(
-      () => expect(screen.getAllByText(/^Drift case prompt$/i)).toHaveLength(1),
-      { timeout: 2000 }
-    )
-  })
-
-  it('keeps the user prompt visible across stream_end while the messages refetch resolves', async () => {
-    useUI.setState({ activeProjectId: 1 })
-
-    // Block the messages refetch behind a manually-resolved promise so we
-    // can observe the page state after stream_end but before the cache
-    // updates. Without the deferred-clear fix, the user prompt would
-    // disappear here; with it, the overlay survives until the refetch
-    // resolves and the persisted user/assistant pair takes over.
-    let releaseRefetch: (() => void) | null = null
-    let refetchCount = 0
-    server.use(
-      http.get('/api/v1/projects/1/chat/sessions/101/messages', async () => {
-        refetchCount += 1
-        if (refetchCount > 1) {
-          await new Promise<void>(resolve => {
-            releaseRefetch = resolve
-          })
-          return HttpResponse.json({
-            items: [
-              {
-                id: 1001,
-                session_id: 101,
-                role: 'user',
-                content: 'What does finding 42 mean?',
-                model: null,
-                timestamp: '2026-04-28T10:00:00+00:00',
-                citations: null,
-              },
-              {
-                id: 5001,
-                session_id: 101,
-                role: 'user',
-                content: 'Defer test prompt',
-                model: null,
-                timestamp: '2026-04-28T10:30:00+00:00',
-                citations: null,
-              },
-              {
-                id: 7777,
-                session_id: 101,
-                role: 'assistant',
-                content: 'reply',
-                model: 'claude-sonnet-4-6',
-                timestamp: '2026-04-28T10:30:05+00:00',
-                citations: null,
-              },
-            ],
-            total: 3,
-            offset: 0,
-            limit: 50,
-          })
-        }
-        return HttpResponse.json({
-          items: [
-            {
-              id: 1001,
-              session_id: 101,
-              role: 'user',
-              content: 'What does finding 42 mean?',
-              model: null,
-              timestamp: '2026-04-28T10:00:00+00:00',
-              citations: null,
-            },
-          ],
-          total: 1,
-          offset: 0,
-          limit: 50,
-        })
-      })
-    )
-
-    const user = userEvent.setup()
-    renderChat()
-
-    await waitFor(() =>
-      expect(screen.getByText(/What does finding 42 mean\?/i)).toBeInTheDocument()
+      expect(screen.getByText(/most severe XSS finding/i)).toBeInTheDocument()
     )
 
     const textarea = screen.getByPlaceholderText(/Ask about your security findings/i)
@@ -453,7 +322,7 @@ describe('Chat page - prompt dedup after stream end (12.8)', () => {
         project_id: 1,
         session_id: 101,
         message_id: null,
-        chunk: 'reply ',
+        chunk: 'reply text',
       })
     })
     act(() => {
@@ -461,20 +330,13 @@ describe('Chat page - prompt dedup after stream end (12.8)', () => {
         project_id: 1,
         session_id: 101,
         message_id: 7777,
-        content: 'reply',
+        content: 'reply text',
       })
-    })
-
-    // Refetch is in flight (paused). The overlay must still render the
-    // user prompt — without the deferred clear it would already be gone.
-    await waitFor(() => expect(screen.getByText('Defer test prompt')).toBeInTheDocument())
-
-    act(() => {
-      releaseRefetch?.()
     })
 
     await waitFor(() => expect(screen.getByText(/CONNECTED/i)).toBeInTheDocument())
     expect(screen.getAllByText('Defer test prompt')).toHaveLength(1)
+    expect(screen.getAllByText('reply text')).toHaveLength(1)
   })
 })
 

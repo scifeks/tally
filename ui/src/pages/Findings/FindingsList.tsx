@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { SeverityChip } from '@/components/tty'
 import { FilterHeader } from '@/components/FilterHeader'
 import type { FilterHeaderOption } from '@/components/FilterHeader'
-import { cn, formatRelative } from '@/lib/utils'
+import { cn, findingTitle, formatRelative } from '@/lib/utils'
 import type { Finding, Severity, Status } from '@/lib/types'
 import {
   GRID_COLS,
@@ -133,6 +133,7 @@ export function FindingsList({
     getScrollElement: () => parentRef.current,
     estimateSize: () => 36,
     overscan: 12,
+    measureElement: el => el.getBoundingClientRect().height,
   })
 
   const allFilteredSelected = rows.length > 0 && rows.every(r => selectedIds.has(r.id))
@@ -237,10 +238,11 @@ export function FindingsList({
               const f = rows[v.index]
               const isSelected = selectedIds.has(f.id)
               const isFocused = selectedRowId === f.id
-              const cweLabel = f.cwe.length > 0 ? f.cwe.join(', ') : '-'
               return (
                 <div
                   key={f.id}
+                  ref={virtualizer.measureElement}
+                  data-index={v.index}
                   role="button"
                   tabIndex={0}
                   onClick={() => onSelect(f.id)}
@@ -252,11 +254,10 @@ export function FindingsList({
                     top: 0,
                     left: 0,
                     width: '100%',
-                    height: `${v.size}px`,
                     transform: `translateY(${v.start}px)`,
                   }}
                   className={cn(
-                    'grid items-center text-xs px-3 border-b border-border cursor-pointer',
+                    'grid items-center text-xs px-3 border-b border-border cursor-pointer min-h-9',
                     GRID_COLS,
                     isFocused ? 'bg-muted' : 'hover:bg-muted/60',
                     isSelected && 'bg-muted/80'
@@ -275,12 +276,16 @@ export function FindingsList({
                   <div>
                     <SeverityChip severity={f.severity} />
                   </div>
-                  <div className="text-foreground truncate pr-3">{f.title}</div>
+                  <div className="text-foreground truncate pr-3">{findingTitle(f)}</div>
                   <div className="text-muted-foreground truncate">{f.tool}</div>
                   <div className="text-muted-foreground truncate tabular-nums">{locationOf(f)}</div>
-                  <div className="tabular-nums truncate">
+                  <div className="flex flex-wrap gap-x-1 gap-y-0.5 py-1 tabular-nums">
                     {f.cwe.length > 0 ? (
-                      <span className="text-primary">{cweLabel}</span>
+                      f.cwe.map(c => (
+                        <span key={c} className="text-primary">
+                          {c}
+                        </span>
+                      ))
                     ) : (
                       <span className="text-dim">-</span>
                     )}
