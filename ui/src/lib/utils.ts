@@ -45,3 +45,15 @@ export function toEpoch(value: string | null | undefined): number {
   const d = parseIso(value)
   return d ? d.getTime() : 0
 }
+
+interface FindingTitleSource {
+  title?: string | null
+  findingType: string[]
+  tool: string
+}
+
+export function findingTitle(f: FindingTitleSource): string {
+  if (f.title && f.title.trim()) return f.title
+  if (f.findingType.length > 0) return f.findingType.join(' / ')
+  return `${f.tool} finding`
+}

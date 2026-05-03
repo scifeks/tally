@@ -10,7 +10,7 @@ import {
   useRunningScansCount,
 } from '@/lib/api'
 import { Panel, SeverityChip } from '@/components/tty'
-import { cn, formatRelative } from '@/lib/utils'
+import { cn, findingTitle, formatRelative } from '@/lib/utils'
 import { Play, GitBranch, Wrench, Link2, ScrollText, ArrowRight } from 'lucide-react'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 import type { ReactNode } from 'react'
@@ -241,7 +241,7 @@ export default function Dashboard() {
                       <div>
                         <SeverityChip severity={f.severity} />
                       </div>
-                      <div className="text-foreground truncate pr-3">{f.title}</div>
+                      <div className="text-foreground truncate pr-3">{findingTitle(f)}</div>
                       <div className="text-muted-foreground">{f.tool}</div>
                       <div className="text-right text-muted-foreground tabular-nums">
                         {formatRelative(f.discoveredAt)}

@@ -54,6 +54,6 @@ export const STATUS_COLOR: Record<Status, string> = {
   false_positive: '#4a7a4a',
 }
 
-// Column grid: checkbox | id | sev | title | tool | location | commit | status | found
+// Column grid: checkbox | id | sev | title | tool | location | cwe | status | found
 export const GRID_COLS =
-  'grid-cols-[32px_80px_76px_minmax(220px,1fr)_120px_minmax(140px,200px)_90px_110px_90px]'
+  'grid-cols-[32px_80px_76px_minmax(220px,1fr)_120px_minmax(140px,200px)_minmax(120px,1fr)_110px_90px]'
