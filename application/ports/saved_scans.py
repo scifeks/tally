@@ -1,0 +1,58 @@
+"""Persistence port for the saved_scans, saved_scan_repos,
+saved_scan_tools, and saved_scan_arg_profiles tables.
+
+Read methods return domain dataclasses. The hydrated read joins
+through repositories and tool_arg_profiles to surface names and the
+deleted_at marker; write methods rewrite all three join tables in one
+transaction. ``insert`` and ``replace`` raise ``SavedScanNameConflict``
+when the ``UNIQUE (name)`` constraint is violated.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from domain.saved_scans.entry import (
+        SavedScanHydrated,
+        SavedScanListItem,
+    )
+
+
+class SavedScanNameConflict(Exception):
+    """Raised when ``name`` collides with an existing row."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"saved scan {name!r} already exists")
+        self.name = name
+
+
+class SavedScansRepositoryPort(Protocol):
+    def list_for_project(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[SavedScanListItem], int]: ...
+    def get_hydrated(self, saved_scan_id: int) -> SavedScanHydrated | None: ...
+    def list_arg_profile_ids(self, saved_scan_id: int) -> list[int]: ...
+    def insert(
+        self,
+        *,
+        name: str,
+        skip_enrichment: bool,
+        repo_ids: list[int],
+        tool_names: list[str],
+        arg_profile_ids: list[int],
+    ) -> int: ...
+    def replace(
+        self,
+        saved_scan_id: int,
+        *,
+        name: str,
+        skip_enrichment: bool,
+        repo_ids: list[int],
+        tool_names: list[str],
+        arg_profile_ids: list[int],
+    ) -> None: ...
+    def delete(self, saved_scan_id: int) -> None: ...
