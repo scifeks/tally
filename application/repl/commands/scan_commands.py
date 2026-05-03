@@ -12,13 +12,16 @@ from application.repl.adapters.orchestrator_display import OrchestratorDisplay
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
+from application.scans.scans_service import ProjectNotFound, ScansService
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
 from application.tools.scan_service import get_scan_service
+from application.url_inventory.url_list_service import (
+    ProjectNotFound as UrlProjectNotFound,
+)
+from application.url_inventory.url_list_service import UrlListService
 from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
@@ -177,6 +180,11 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
+        project_id = self._resolve_project_id()
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
+        )
+
         # The DAST-without-discovery prompt asks the user a question
         # and may rewrite effective_tools before dispatch.
         if effective_tools is not None:
@@ -184,14 +192,10 @@ class ScanCommands:
                 effective_tools,
                 repo_names,
                 auto_approve,
+                project_id,
             )
             if effective_tools is None:
                 return
-
-        project_id = self._resolve_project_id()
-        paths = ProjectPaths.from_canonical(
-            self.repl.base_path, self.repl.active_project
-        )
 
         try:
             handle = get_scan_service().start_scan(
@@ -229,14 +233,12 @@ class ScanCommands:
             return
 
         if summary.findings_by_tool:
-            run_repo = RunRepository(ConnectionFactory(paths.findings_db))
-            run_repo.add_run_tools(
-                handle.run_id,
-                [
-                    {"tool": t, "findings_count": c}
-                    for t, c in summary.findings_by_tool.items()
-                ],
-            )
+            try:
+                ScansService.for_project(
+                    self.repl.project_registry, project_id
+                ).record_run_tool_counts(handle.run_id, summary.findings_by_tool)
+            except ProjectNotFound:
+                pass
 
     def _resolve_project_id(self) -> int:
         assert self.repl.active_project is not None
@@ -391,13 +393,14 @@ class ScanCommands:
         tools: list[str],
         repo_names: list[str] | None,
         auto_approve: bool,
+        project_id: int,
     ) -> list[str] | None:
         """Warn when DAST tools are requested but no discovery output exists.
 
         DAST tools (zap, xsstrike, dalfox) work best when an endpoint
         discovery tool (katana, noir) has already produced OAS3 output.
-        This method checks whether that output exists for the target repos
-        and, when it doesn't, prompts the user to prepend discovery tools.
+        Checks whether that output exists for the target repos and, when
+        it does not, prompts the user to prepend discovery tools.
 
         Returns the (possibly expanded) effective tool list to execute, or
         ``None`` to indicate that the scan was canceled by the user.
@@ -425,7 +428,7 @@ class ScanCommands:
         missing = [
             r
             for r in target_repos
-            if r.crawl_enabled and not self._repo_has_url_findings(r)
+            if r.crawl_enabled and not self._repo_has_url_findings(r, project_id)
         ]
         if not missing:
             return tools
@@ -462,33 +465,22 @@ class ScanCommands:
         # choice == "2": proceed without discovery
         return tools
 
-    def _repo_has_url_findings(self, repo: object) -> bool:
+    def _repo_has_url_findings(self, repo: object, project_id: int) -> bool:
         """Return True if *repo* already has any ``url_findings`` rows.
 
-        Used by the DAST-without-discovery warning: when a repo has
-        previously-ingested URL data (Katana/Noir scan, or a user-uploaded
-        endpoint file), the DAST tools have something to consume and the
-        warning is suppressed.
+        The DAST-without-discovery warning calls this per repo: when a
+        repo has previously-ingested URL data (Katana/Noir scan, or a
+        user-uploaded endpoint file), the DAST tools have something to
+        consume and the warning is suppressed.
         """
         repo_id = getattr(repo, "id", None)
         if not isinstance(repo_id, int):
             return False
         try:
-            from infrastructure.store.connection import ConnectionFactory
-            from infrastructure.store.repositories.url_findings import (
-                UrlFindingRepository,
-            )
-
-            assert self.repl.active_project is not None
-            paths = ProjectPaths.from_canonical(
-                self.repl.base_path, self.repl.active_project
-            )
-            if not paths.findings_db.exists():
-                return False
-            factory = ConnectionFactory(paths.findings_db)
-            return bool(UrlFindingRepository(factory).list_for_repo(repo_id))
-        except Exception:
+            service = UrlListService.for_project(self.repl.project_registry, project_id)
+        except UrlProjectNotFound:
             return False
+        return service.repo_has_url_findings(repo_id)
 
     def _export_summary(self, summary, export_path: str) -> None:
         try:

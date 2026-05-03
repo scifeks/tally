@@ -91,6 +91,23 @@ class ScansService:
     def project_id(self) -> int:
         return self._project_id
 
+    def record_run_tool_counts(
+        self, run_id: int, findings_by_tool: dict[str, int]
+    ) -> None:
+        """Persist aggregate per-tool finding counts for a completed run.
+
+        No-op when ``findings_by_tool`` is empty. Translates the
+        domain-shaped mapping into the row shape
+        ``RunRepositoryPort.add_run_tools`` accepts.
+        """
+        if not findings_by_tool:
+            return
+        rows = [
+            {"tool": tool, "findings_count": count}
+            for tool, count in findings_by_tool.items()
+        ]
+        self._run_repo.add_run_tools(run_id, rows)
+
     def cancel_scan(self, run_id: int) -> None:
         """Signal cancellation for a single scan run owned by this project.
 

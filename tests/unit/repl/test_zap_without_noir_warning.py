@@ -71,7 +71,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=url_findings_exist),
             patch("builtins.input", return_value=user_input),
         ):
-            return sc._maybe_warn_dast_without_discovery(tools, names, auto_approve)
+            return sc._maybe_warn_dast_without_discovery(tools, names, auto_approve, 1)
 
     def test_no_warning_when_no_dast_tools(self) -> None:
         result = self._call(["semgrep"])
@@ -104,7 +104,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         assert result == ["zap"]
         mock_input.assert_not_called()
 
@@ -156,7 +156,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", side_effect=EOFError),
         ):
-            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         assert result is None
 
     def test_warning_printed_to_console(self) -> None:
@@ -167,7 +167,7 @@ class TestMaybeWarnDastWithoutDiscovery:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", return_value="2"),
         ):
-            sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
 
         printed = " ".join(
             str(a) for call in repl.console.print.call_args_list for a in call[0]
