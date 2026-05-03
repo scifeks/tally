@@ -124,6 +124,20 @@ class UrlListService:
         except Exception:
             return 0
 
+    def repo_has_url_findings(self, repo_id: int) -> bool:
+        """Return True when *repo_id* has any persisted url_findings rows.
+
+        Returns False when the findings DB has not been created yet or
+        when the underlying read raises. Mirrors the defensive shape of
+        ``count_active_url_findings``.
+        """
+        if not self._findings_db_exists:
+            return False
+        try:
+            return bool(self._url_repo.list_for_repo(repo_id))
+        except Exception:
+            return False
+
     def ingest_uploaded_endpoint_file(
         self,
         *,

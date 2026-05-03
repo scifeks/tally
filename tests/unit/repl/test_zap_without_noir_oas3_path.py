@@ -40,7 +40,7 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", return_value=True),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         assert result == ["zap"]
         mock_input.assert_not_called()
 
@@ -52,7 +52,7 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", return_value="2"),
         ):
-            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         # Warning shown; option 2 chosen; ZAP-only, tools unchanged
         assert result == ["zap"]
 
@@ -62,14 +62,14 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
         repo_without = _make_repo("without-urls")
         sc = _make_sc([repo_with, repo_without])
 
-        def _has_findings(repo: object) -> bool:
+        def _has_findings(repo: object, _project_id: int) -> bool:
             return getattr(repo, "name", "") == "with-urls"
 
         with (
             patch.object(sc, "_repo_has_url_findings", side_effect=_has_findings),
             patch("builtins.input", return_value="1"),
         ):
-            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         # Option 1; katana prepended (and noir for non-node repos)
         assert result is not None
         assert "katana" in result
@@ -84,6 +84,6 @@ class TestMaybeWarnDastWithoutDiscoveryUrlFindings:
             patch.object(sc, "_repo_has_url_findings", return_value=False),
             patch("builtins.input", mock_input),
         ):
-            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False)
+            result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         assert result == ["zap"]
         mock_input.assert_not_called()

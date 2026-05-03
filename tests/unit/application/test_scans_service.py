@@ -205,3 +205,25 @@ class TestScansServiceListActiveRuns:
     def test_returns_empty_list_when_no_handles(self) -> None:
         service, _registry, _repo = _service(project_id=5)
         assert service.list_active_runs() == []
+
+
+class TestScansServiceRecordRunToolCounts:
+    def test_translates_mapping_to_row_list_and_persists(self) -> None:
+        service, _registry, repo = _service(project_id=5)
+
+        service.record_run_tool_counts(42, {"semgrep": 7, "gitleaks": 3})
+
+        repo.add_run_tools.assert_called_once()
+        run_id, rows = repo.add_run_tools.call_args.args
+        assert run_id == 42
+        assert sorted(rows, key=lambda r: r["tool"]) == [
+            {"tool": "gitleaks", "findings_count": 3},
+            {"tool": "semgrep", "findings_count": 7},
+        ]
+
+    def test_empty_mapping_short_circuits_without_touching_repo(self) -> None:
+        service, _registry, repo = _service(project_id=5)
+
+        service.record_run_tool_counts(42, {})
+
+        repo.add_run_tools.assert_not_called()

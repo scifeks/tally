@@ -31,16 +31,27 @@ class _StubUrlRepo:
         *,
         active_count: int = 0,
         raises: Exception | None = None,
+        list_for_repo_rows: dict[int, list[Any]] | None = None,
+        list_for_repo_raises: Exception | None = None,
     ) -> None:
         self._active_count = active_count
         self._raises = raises
+        self._list_for_repo_rows = list_for_repo_rows or {}
+        self._list_for_repo_raises = list_for_repo_raises
         self.count_active_calls = 0
+        self.list_for_repo_calls: list[int] = []
 
     def count_active(self) -> int:
         self.count_active_calls += 1
         if self._raises is not None:
             raise self._raises
         return self._active_count
+
+    def list_for_repo(self, repo_id: int) -> list[Any]:
+        self.list_for_repo_calls.append(repo_id)
+        if self._list_for_repo_raises is not None:
+            raise self._list_for_repo_raises
+        return list(self._list_for_repo_rows.get(repo_id, []))
 
     def __getattr__(self, _name: str) -> Any:
         raise AssertionError(
@@ -177,6 +188,32 @@ class TestUrlListService:
         service = _build(url_repo=url_repo)
         assert service.count_active_url_findings() == 17
         assert url_repo.count_active_calls == 1
+
+
+class TestUrlListServiceRepoHasUrlFindings:
+    def test_returns_true_when_repo_has_rows(self) -> None:
+        url_repo = _StubUrlRepo(list_for_repo_rows={42: [object(), object()]})
+        service = _build(url_repo=url_repo)
+        assert service.repo_has_url_findings(42) is True
+        assert url_repo.list_for_repo_calls == [42]
+
+    def test_returns_false_when_repo_has_no_rows(self) -> None:
+        url_repo = _StubUrlRepo(list_for_repo_rows={})
+        service = _build(url_repo=url_repo)
+        assert service.repo_has_url_findings(42) is False
+        assert url_repo.list_for_repo_calls == [42]
+
+    def test_returns_false_when_findings_db_missing(self) -> None:
+        url_repo = _StubUrlRepo(list_for_repo_rows={42: [object()]})
+        service = _build(url_repo=url_repo, findings_db_exists=False)
+        assert service.repo_has_url_findings(42) is False
+        assert url_repo.list_for_repo_calls == []
+
+    def test_returns_false_when_repo_raises(self) -> None:
+        url_repo = _StubUrlRepo(list_for_repo_raises=RuntimeError("db gone"))
+        service = _build(url_repo=url_repo)
+        assert service.repo_has_url_findings(42) is False
+        assert url_repo.list_for_repo_calls == [42]
 
 
 class _FakeUserFileProvider:
