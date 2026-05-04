@@ -17,11 +17,16 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import uvicorn
 
 from application.ports.web_ui_runner import WebUiRunnerPort
 from web.server import create_web_app
+
+if TYPE_CHECKING:
+    from application.project.registry_service import ProjectRegistryService
+    from application.tools.registry import ToolRegistry
 
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 
@@ -40,6 +45,8 @@ class WebUiRunner(WebUiRunnerPort):
         api_port: int,
         vite_port: int,
         allowed_origins: list[str],
+        project_registry: ProjectRegistryService,
+        tool_registry: ToolRegistry,
     ) -> None:
         if host in _BANNED_HOSTS:
             print(
@@ -56,7 +63,14 @@ class WebUiRunner(WebUiRunnerPort):
         self._write_env_local(ui_dir, host, api_port, vite_port)
 
         token = secrets.token_hex(16)
-        app = create_web_app(base_path, api_port, token, allowed_origins)
+        app = create_web_app(
+            base_path,
+            api_port,
+            token,
+            allowed_origins,
+            project_registry=project_registry,
+            tool_registry=tool_registry,
+        )
 
         self._start_vite(ui_dir)
 

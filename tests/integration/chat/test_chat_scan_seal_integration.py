@@ -53,7 +53,7 @@ from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.chat_sessions import (  # noqa: E402
     ChatSessionRepository,
 )
-from web.server import create_app  # noqa: E402
+from tests._app_factory import build_test_app  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -227,7 +227,7 @@ async def test_post_message_after_seal_returns_409(tmp_path: Path) -> None:
     get_chat_run_registry().reset()
     _, factory = _setup_db(tmp_path)
 
-    app = create_app(str(tmp_path), HANDSHAKE, port=12345)
+    app = build_test_app(tmp_path, HANDSHAKE, port=12345)
     bus = InfraEventBus()
     await bus.register_job("chat", "chat")
     app.state.event_bus = bus

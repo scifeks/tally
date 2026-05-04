@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
 
+from application.project.registry_service import ProjectRegistryService
+from application.tools.registry import ToolRegistry
 from web.server import create_app
 
 _PORT = 8765
@@ -14,9 +18,11 @@ _TOKEN = "testtoken"
 @pytest.fixture()
 def client() -> TestClient:
     app = create_app(
-        base_path="/tmp/tally_secheaders_test",
+        base_path="/nonexistent",
         handshake_token=_TOKEN,
         port=_PORT,
+        project_registry=MagicMock(spec=ProjectRegistryService),
+        tool_registry=ToolRegistry(),
         allowed_origins=None,
     )
     return TestClient(app, raise_server_exceptions=False)

@@ -14,7 +14,7 @@ from infrastructure.events.bus import EventBus
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
-from web.server import create_app
+from tests._app_factory import build_test_app
 
 
 def _seed_global_config(base_path: Path) -> None:
@@ -99,7 +99,7 @@ async def app_client(tmp_path: Path):
     kb_mock = MagicMock()
     kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]
 
-    app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
     # Seed the per-project knowledge base cache so chroma sync uses the mock.
     app.state.knowledge_base_cache = {"testproject": kb_mock}
 

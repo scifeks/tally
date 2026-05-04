@@ -108,9 +108,9 @@ async def test_create_session_without_csrf_is_forbidden(app_client) -> None:
 @pytest.mark.asyncio
 async def test_create_session_unauthenticated_is_unauthorized(tmp_path) -> None:
     """A fresh client with no session cookie must be rejected."""
-    from web.server import create_app
+    from tests._app_factory import build_test_app
 
-    app = create_app(str(tmp_path), "test-handshake-abc123xyz", port=12345)
+    app = build_test_app(tmp_path, "test-handshake-abc123xyz", port=12345)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
@@ -204,9 +204,9 @@ async def test_list_unknown_project_returns_404(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_list_unauthenticated_is_unauthorized(tmp_path) -> None:
-    from web.server import create_app
+    from tests._app_factory import build_test_app
 
-    app = create_app(str(tmp_path), "test-handshake-abc123xyz", port=12345)
+    app = build_test_app(tmp_path, "test-handshake-abc123xyz", port=12345)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,

@@ -46,4 +46,6 @@ class UiCommands:
             api_port=cfg.web_ui_port,
             vite_port=cfg.web_ui_vite_port,
             allowed_origins=cfg.effective_allowed_origins,
+            project_registry=self._repl.project_registry,
+            tool_registry=self._repl.tool_registry,
         )

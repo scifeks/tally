@@ -6,7 +6,11 @@ browser launch, and .env.local seed.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from application.project.registry_service import ProjectRegistryService
+    from application.tools.registry import ToolRegistry
 
 
 @runtime_checkable
@@ -21,4 +25,6 @@ class WebUiRunnerPort(Protocol):
         api_port: int,
         vite_port: int,
         allowed_origins: list[str],
+        project_registry: ProjectRegistryService,
+        tool_registry: ToolRegistry,
     ) -> None: ...

@@ -14,7 +14,7 @@ from infrastructure.events.bus import EventBus
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
-from web.server import create_app
+from tests._app_factory import build_test_app
 
 pytestmark = pytest.mark.integration
 
@@ -63,7 +63,7 @@ async def batch_client(tmp_path: Path):
         ]
 
     kb_mock = MagicMock()
-    app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
     app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     _bus = EventBus()

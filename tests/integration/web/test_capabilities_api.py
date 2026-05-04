@@ -7,15 +7,15 @@ from pathlib import Path
 import httpx
 
 from infrastructure.store.connection import ConnectionFactory
+from tests._app_factory import build_test_app
 from tests.integration.web.conftest import HANDSHAKE, TEST_PORT
-from web.server import create_app
 
 
 def _make_unauthed_app(tmp_path: Path):
     db_path = tmp_path / "sqlite" / "findings.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     ConnectionFactory(db_path).init_schema()
-    return create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    return build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
 
 
 class TestCapabilities:
@@ -61,7 +61,7 @@ class TestCapabilities:
         db_path = tmp_path / "projects" / "p1" / "sqlite" / "findings.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         ConnectionFactory(db_path).init_schema()
-        app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+        app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
@@ -90,7 +90,7 @@ class TestCapabilities:
         db_path = tmp_path / "projects" / "p1" / "sqlite" / "findings.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         ConnectionFactory(db_path).init_schema()
-        app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+        app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
@@ -119,7 +119,7 @@ class TestCapabilities:
         db_path = tmp_path / "projects" / "p1" / "sqlite" / "findings.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         ConnectionFactory(db_path).init_schema()
-        app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+        app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
