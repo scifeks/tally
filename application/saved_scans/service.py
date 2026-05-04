@@ -12,6 +12,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from application.saved_scans.errors import StaleSavedScanError
+from domain.saved_scans.entry import (
+    StaleSavedScanArgProfileItem,
+    StaleSavedScanItem,
+    StaleSavedScanRepoItem,
+    StaleSavedScanToolItem,
+)
+
 if TYPE_CHECKING:
     from application.ports.saved_scans import SavedScansRepositoryPort
     from application.ports.tool_arg_profiles import (
@@ -149,6 +157,44 @@ class SavedScansService:
         first.
         """
         self._repo.delete(saved_scan_id)
+
+    def run_saved_scan(self, saved_scan_id: int) -> SavedScanHydrated:
+        """Load a saved scan and validate all references still exist.
+
+        Raises SavedScanNotFound if the saved scan does not exist.
+        Raises StaleSavedScanError if any repo is soft-deleted, any
+        tool is unregistered, or any arg profile no longer exists.
+        Returns the hydrated saved scan if validation passes.
+        """
+        hydrated = self._repo.get_hydrated(saved_scan_id)
+        if hydrated is None:
+            raise SavedScanNotFound(saved_scan_id)
+
+        stale: list[StaleSavedScanItem] = []
+
+        # Check for soft-deleted repos.
+        for r in hydrated.repos:
+            if r.deleted_at is not None:
+                stale.append(StaleSavedScanRepoItem(id=r.id, name=r.name))
+
+        # Check for unregistered tools.
+        registered = set(self._tool_registry.list_tool_names())
+        for t in hydrated.tools:
+            if t.tool_name not in registered:
+                stale.append(StaleSavedScanToolItem(name=t.tool_name))
+
+        # Check for orphan arg profiles.
+        raw_profile_ids = self._repo.list_arg_profile_ids(saved_scan_id)
+        if raw_profile_ids:
+            present = set(self._profiles_repo.existing_ids(raw_profile_ids))
+            for pid in raw_profile_ids:
+                if pid not in present:
+                    stale.append(StaleSavedScanArgProfileItem(id=pid))
+
+        if stale:
+            raise StaleSavedScanError(stale)
+
+        return hydrated
 
     def _validate_input(
         self,
