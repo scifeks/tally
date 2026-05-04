@@ -1,4 +1,4 @@
-"""One-shot startup orchestration shared by every driving adapter."""
+"""Startup orchestration shared by every driving adapter."""
 
 from __future__ import annotations
 

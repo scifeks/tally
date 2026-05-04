@@ -1,9 +1,4 @@
-"""Shared helper for integration tests that need a fully-bootstrapped FastAPI app.
-
-Mirrors the production composition root in ``tally.py``: build the registry
-adapters, run ``BootstrapService``, then hand the bootstrapped state to
-``create_app``.
-"""
+"""Shared helper for integration tests that need a fully-bootstrapped FastAPI app."""
 
 from __future__ import annotations
 
