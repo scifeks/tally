@@ -1,4 +1,4 @@
-"""Project-scoped routes for tool argument profiles (read and delete)."""
+"""Project-scoped routes for tool argument profiles."""
 
 from __future__ import annotations
 
@@ -6,8 +6,19 @@ import asyncio
 from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Request, Response
+from starlette.datastructures import FormData, UploadFile
 
-from application.tool_arg_profiles.service import ToolArgProfilesService
+from application.ports.arg_files_storage import ArgFileNameError
+from application.ports.tool_arg_profiles import ToolArgProfileNameConflict
+from application.tool_arg_profiles.service import (
+    FileArgInput,
+    FlagArgInput,
+    ProfileArgInput,
+    StringArgInput,
+    ToolArgProfileNotFound,
+    ToolArgProfilesService,
+    ToolArgProfileValidationError,
+)
 from core.project_paths import ProjectPaths
 from domain.tool_arg_profiles.entry import (
     ToolArgProfile,
@@ -22,15 +33,21 @@ from infrastructure.store.repositories.saved_scans import SavedScansRepository
 from infrastructure.store.repositories.tool_arg_profiles import (
     ToolArgProfilesRepository,
 )
-from web.api._errors import Conflict, NotFound
+from web.api._errors import Conflict, NotFound, PathTraversal
+from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.arg_profiles_schemas import (
     ArgProfileArgResponse,
     ArgProfileFileArgResponse,
     ArgProfileFlagArgResponse,
     ArgProfileListResponse,
+    ArgProfilePayload,
+    ArgProfilePayloadFileArg,
+    ArgProfilePayloadFlagArg,
+    ArgProfilePayloadStringArg,
     ArgProfileResponse,
     ArgProfileStringArgResponse,
+    parse_arg_profile_payload,
 )
 
 arg_profiles_v1_router = APIRouter()
@@ -101,6 +118,50 @@ def _to_response(
     )
 
 
+async def _build_inputs(
+    payload: ArgProfilePayload,
+    form: FormData,
+    *,
+    allow_keep_existing: bool,
+) -> list[ProfileArgInput]:
+    """Pair payload file-args with multipart uploads to build service inputs.
+
+    PUT treats a missing upload as keep-existing; POST collects every
+    missing arg name into a single 422 envelope.
+    """
+    inputs: list[ProfileArgInput] = []
+    missing_files: list[dict[str, str]] = []
+    for arg in payload.args:
+        if isinstance(arg, ArgProfilePayloadFlagArg):
+            inputs.append(FlagArgInput(name=arg.name))
+            continue
+        if isinstance(arg, ArgProfilePayloadStringArg):
+            inputs.append(StringArgInput(name=arg.name, value=arg.value))
+            continue
+        assert isinstance(arg, ArgProfilePayloadFileArg)
+        upload = form.get(arg.name)
+        if isinstance(upload, UploadFile):
+            data = await upload.read()
+            inputs.append(FileArgInput(name=arg.name, data=data))
+        elif allow_keep_existing:
+            inputs.append(FileArgInput(name=arg.name, data=None))
+        else:
+            missing_files.append({"field": arg.name, "issue": "missing upload field"})
+    if missing_files:
+        raise ApiValidationError(
+            "Arg profile payload references files that were not uploaded",
+            details={"fields": missing_files},
+        )
+    return inputs
+
+
+def _validation_error_to_envelope(exc: ToolArgProfileValidationError) -> dict:
+    """Translate a service ToolArgProfileValidationError into envelope details."""
+    return {
+        "fields": [{"field": fe.field, "issue": fe.issue} for fe in exc.fields],
+    }
+
+
 @arg_profiles_v1_router.get(
     "/{project_id}/arg-profiles",
     response_model=ArgProfileListResponse,
@@ -143,6 +204,89 @@ async def get_arg_profile(
     profile = await asyncio.to_thread(service.get, profile_id)
     if profile is None:
         raise NotFound(f"Arg profile id={profile_id} not found")
+    return _to_response(profile, project_id, with_download_url=True)
+
+
+@arg_profiles_v1_router.post(
+    "/{project_id}/arg-profiles",
+    response_model=ArgProfileResponse,
+    status_code=201,
+)
+async def create_arg_profile(
+    project_id: int,
+    request: Request,
+) -> ArgProfileResponse:
+    """Create a new arg profile via multipart upload."""
+    form = await request.form()
+    payload_field = form.get("payload")
+    if not isinstance(payload_field, str):
+        raise ApiValidationError("payload form field is required")
+    parsed = parse_arg_profile_payload(payload_field)
+    inputs = await _build_inputs(parsed, form, allow_keep_existing=False)
+
+    service, _saved_scans_repo, _paths = await asyncio.to_thread(
+        _build_service, request, project_id
+    )
+    try:
+        profile = await asyncio.to_thread(
+            service.create,
+            tool_name=parsed.tool_name,
+            name=parsed.name,
+            args=inputs,
+        )
+    except ToolArgProfileValidationError as exc:
+        raise ApiValidationError(
+            "Arg profile validation failed",
+            details=_validation_error_to_envelope(exc),
+        ) from exc
+    except ToolArgProfileNameConflict as exc:
+        raise Conflict(str(exc)) from exc
+    except ArgFileNameError as exc:
+        raise PathTraversal(str(exc)) from exc
+
+    return _to_response(profile, project_id, with_download_url=True)
+
+
+@arg_profiles_v1_router.put(
+    "/{project_id}/arg-profiles/{profile_id}",
+    response_model=ArgProfileResponse,
+)
+async def replace_arg_profile(
+    project_id: int,
+    profile_id: int,
+    request: Request,
+) -> ArgProfileResponse:
+    """Replace an arg profile via multipart upload."""
+    form = await request.form()
+    payload_field = form.get("payload")
+    if not isinstance(payload_field, str):
+        raise ApiValidationError("payload form field is required")
+    parsed = parse_arg_profile_payload(payload_field)
+    inputs = await _build_inputs(parsed, form, allow_keep_existing=True)
+
+    service, _saved_scans_repo, _paths = await asyncio.to_thread(
+        _build_service, request, project_id
+    )
+    try:
+        profile = await asyncio.to_thread(
+            service.replace,
+            profile_id,
+            tool_name=parsed.tool_name,
+            name=parsed.name,
+            args=inputs,
+        )
+    except ToolArgProfileNotFound as exc:
+        raise NotFound(str(exc)) from exc
+    except ToolArgProfileValidationError as exc:
+        raise ApiValidationError(
+            "Arg profile validation failed",
+            details=_validation_error_to_envelope(exc),
+        ) from exc
+    except ToolArgProfileNameConflict as exc:
+        raise Conflict(str(exc)) from exc
+    except ArgFileNameError as exc:
+        raise PathTraversal(str(exc)) from exc
+
     return _to_response(profile, project_id, with_download_url=True)
 
 
