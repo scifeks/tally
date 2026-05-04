@@ -30,6 +30,9 @@ from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.tool_arg_profiles import (
     ToolArgProfilesRepository,
 )
+from infrastructure.store.repositories.tool_overrides import (
+    ToolOverridesRepository,
+)
 from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
@@ -64,10 +67,16 @@ class ScanCommands:
 
         from application.tools.registry import discover_tools
 
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
+        )
+        factory = ConnectionFactory(paths.findings_db)
+        overrides_repo = ToolOverridesRepository(factory)
         discover_tools(
             self.repl.tool_registry,
             self.repl.base_path,
             project_name=self.repl.active_project,
+            overrides_repo=overrides_repo,
         )
         try:
             self._cmd_scan_inner(args)
@@ -285,10 +294,16 @@ class ScanCommands:
 
         from application.tools.registry import discover_tools
 
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
+        )
+        factory = ConnectionFactory(paths.findings_db)
+        overrides_repo = ToolOverridesRepository(factory)
         discover_tools(
             self.repl.tool_registry,
             self.repl.base_path,
             project_name=self.repl.active_project,
+            overrides_repo=overrides_repo,
         )
         try:
             self._cmd_run_inner(tool_name, remaining, timeout)

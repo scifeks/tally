@@ -262,11 +262,6 @@ class RepositoryListResponse(BaseModel):
     limit: int
 
 
-class DockerContainerResponse(BaseModel):
-    name: str
-    tool_path: str
-
-
 class ToolCatalogItem(BaseModel):
     id: str
     name: str
@@ -285,45 +280,6 @@ class InstalledToolsResponse(BaseModel):
     """Names of tool wrappers whose binary was probed at process startup."""
 
     installed: list[str]
-
-
-class DockerContainerRequest(BaseModel):
-    """Container config block for tool override write requests."""
-
-    name: str
-    tool_path: str
-
-
-class ToolOverrideCreateRequest(BaseModel):
-    """Body for POST /tools/overrides (tool_id + CommandEntry fields)."""
-
-    tool_id: str = Field(..., min_length=1)
-    type: str
-    location: str
-    path: str = ""
-    container: DockerContainerRequest | None = None
-
-
-class ToolOverrideUpdateRequest(BaseModel):
-    """Body for PUT /tools/overrides/{tool_id} (full replacement)."""
-
-    type: str
-    location: str
-    path: str = ""
-    container: DockerContainerRequest | None = None
-
-
-class ToolOverrideItem(BaseModel):
-    tool_id: str
-    type: str
-    location: str
-    path: str | None = None
-    container: DockerContainerResponse | None = None
-
-
-class ToolOverrideResponse(BaseModel):
-    items: list[ToolOverrideItem]
-    total: int
 
 
 class RuntimeDependencyItem(BaseModel):

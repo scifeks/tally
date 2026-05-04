@@ -35,7 +35,7 @@ export function ToolOverridesSection({
   const [form, setForm] = useState<Partial<ToolOverrideConfig>>({})
   const [_isDirty, setIsDirty] = useState(false)
 
-  // Argument profile state (CLIENT-SIDE MOCK — see useToolArgProfiles).
+  // Argument profile state (CLIENT-SIDE MOCK, see useToolArgProfiles).
   // Stored separately from `form` so the real ToolOverrideConfig save flow
   // is unaffected.
   const [argsMode, setArgsMode] = useState<ArgsMode>('stock')
@@ -61,6 +61,7 @@ export function ToolOverridesSection({
         const tool = catalog.find(t => t.id === selectedToolId)
         setForm({
           toolId: selectedToolId,
+          argsMode: 'stock',
           type: 'repo',
           location: tool?.supportsLocal ? 'local' : 'docker',
         })
@@ -92,7 +93,7 @@ export function ToolOverridesSection({
 
   const handleSave = () => {
     if (!selectedToolId) return
-    onSave(form as ToolOverrideConfig, !!isNew)
+    onSave({ ...form, argsMode } as ToolOverrideConfig, !!isNew)
     saveArgProfile.mutate({
       projectId,
       toolId: selectedToolId,

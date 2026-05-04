@@ -227,8 +227,10 @@ const REPOSITORIES_FIXTURES: Record<string, RepositoriesPage> = {
 }
 
 interface ToolOverridesFixture {
-  items: Array<Record<string, unknown> & { tool_id: string }>
+  items: Array<Record<string, unknown> & { toolName: string }>
   total: number
+  offset: number
+  limit: number
 }
 
 const TOOL_OVERRIDES_FIXTURES: Record<string, ToolOverridesFixture> = {
@@ -830,20 +832,20 @@ export const handlers = [
   }),
   http.post('/api/v1/projects/:projectId/tools/overrides', async ({ request }) => {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-    return HttpResponse.json(body, { status: 201 })
+    return HttpResponse.json({ id: 1, ...body }, { status: 201 })
   }),
   http.put(
-    '/api/v1/projects/:projectId/tools/overrides/:toolId',
+    '/api/v1/projects/:projectId/tools/overrides/:toolName',
     async ({ params, request }) => {
-      if (params.toolId === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
+      if (params.toolName === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
         return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
       }
       const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-      return HttpResponse.json({ tool_id: params.toolId, ...body })
+      return HttpResponse.json({ id: 1, toolName: params.toolName, ...body })
     }
   ),
-  http.delete('/api/v1/projects/:projectId/tools/overrides/:toolId', ({ params }) => {
-    if (params.toolId === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
+  http.delete('/api/v1/projects/:projectId/tools/overrides/:toolName', ({ params }) => {
+    if (params.toolName === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
       return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
     }
     return new HttpResponse(null, { status: 204 })

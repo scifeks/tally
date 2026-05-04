@@ -10,6 +10,7 @@ import { REST_ENDPOINTS } from './config'
 import { useUI } from '../store'
 import type {
   ApiErrorPayload,
+  ArgsMode,
   ProjectInfo,
   ProjectInfoUpdate,
   RepoLocationMode,
@@ -81,16 +82,20 @@ interface ToolCatalogResponseApi {
 }
 
 interface ToolOverrideItemApi {
-  tool_id: string
+  id: number
+  toolName: string
+  argsMode: ArgsMode
   type: string
   location: string
   path: string | null
-  container: { name: string; tool_path: string } | null
+  container: { name: string; toolPath: string } | null
 }
 
 interface ToolOverrideResponseApi {
   items: ToolOverrideItemApi[]
   total: number
+  offset: number
+  limit: number
 }
 
 // ─── Mappers (wire <-> domain) ───────────────────────────────────────────────
@@ -172,23 +177,26 @@ function mapToolCatalog(api: ToolCatalogItemApi): ToolCatalogEntry {
 
 function mapToolOverride(api: ToolOverrideItemApi): ToolOverrideConfig {
   const out: ToolOverrideConfig = {
-    toolId: api.tool_id,
+    toolId: api.toolName,
+    argsMode: api.argsMode,
     type: api.type as ToolType,
     location: api.location as ToolLocationMode,
   }
   if (api.path) out.path = api.path
   if (api.container) {
-    out.container = { name: api.container.name, toolPath: api.container.tool_path }
+    out.container = { name: api.container.name, toolPath: api.container.toolPath }
   }
   return out
 }
 
 function toToolOverrideRequest(o: ToolOverrideConfig): Record<string, unknown> {
   return {
+    toolName: o.toolId,
+    argsMode: o.argsMode,
     type: o.type,
     location: o.location,
-    path: o.path ?? '',
-    container: o.container ? { name: o.container.name, tool_path: o.container.toolPath } : null,
+    path: o.path ?? null,
+    container: o.container ? { name: o.container.name, toolPath: o.container.toolPath } : null,
   }
 }
 
@@ -386,9 +394,7 @@ export function useSaveToolOverride() {
       const url = isNew
         ? REST_ENDPOINTS.createToolOverride(projectId)
         : REST_ENDPOINTS.updateToolOverride(projectId, override.toolId)
-      const body: Record<string, unknown> = isNew
-        ? { tool_id: override.toolId, ...toToolOverrideRequest(override) }
-        : toToolOverrideRequest(override)
+      const body = toToolOverrideRequest(override)
       const api = await apiFetch<ToolOverrideItemApi>(url, {
         method: isNew ? 'POST' : 'PUT',
         body,

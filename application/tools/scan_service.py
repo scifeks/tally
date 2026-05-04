@@ -180,14 +180,9 @@ class ScanService:
         # Imports deferred to thread entry to avoid circular-import risk
         # and to keep module import side-effects minimal.
         from application.pipeline.factory import PipelineFactory
-        from application.tools.registry import discover_tools
 
         setup_ok = False
         try:
-            # Re-discover tools so the registry reflects this project's
-            # per-project overrides.
-            discover_tools(tool_registry, base_path, project_name=project_name)
-
             executor = ToolExecutor(
                 project_name=project_name,
                 base_path=Path(base_path),
@@ -228,11 +223,11 @@ class ScanService:
             future.set_result(summary)
         except Exception as exc:
             if not setup_ok:
-                # Setup-stage failure (discover_tools, pipeline build,
-                # orchestrator construction): the orchestrator never ran
-                # so it never persisted or emitted anything. The service
-                # is the only path through which the API/REPL can learn,
-                # so write the row + emit RunFailed here.
+                # Setup-stage failure (pipeline build, orchestrator
+                # construction): the orchestrator never ran so it never
+                # persisted or emitted anything. The service is the only
+                # path through which the API/REPL can learn, so write the
+                # row + emit RunFailed here.
                 logger.exception("scan run %d setup failed", run_id)
                 _safe_persist_failed(run_repo, run_id)
                 _safe_emit_run_failed(event_sink, run_id, project_id, exc)
