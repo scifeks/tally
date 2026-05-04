@@ -55,7 +55,7 @@ docker/docker-compose.yaml
 MagicMock
 
 #Roadmap and arch decisions
-/docs/roadmap/
+/docs/roadmap
 /docs/superpowers/
 
 #Claude MCP stuff
