@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from domain.saved_scans.entry import (
         SavedScanHydrated,
         SavedScanListItem,
+        SavedScanReference,
     )
 
 
@@ -36,6 +37,9 @@ class SavedScansRepositoryPort(Protocol):
     ) -> tuple[list[SavedScanListItem], int]: ...
     def get_hydrated(self, saved_scan_id: int) -> SavedScanHydrated | None: ...
     def list_arg_profile_ids(self, saved_scan_id: int) -> list[int]: ...
+    def find_referencing_arg_profile(
+        self, arg_profile_id: int
+    ) -> list[SavedScanReference]: ...
     def insert(
         self,
         *,

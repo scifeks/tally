@@ -24,6 +24,7 @@ from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
+from web.api.arg_profiles import arg_profiles_v1_router
 from web.api.auth import router as auth_router
 from web.api.chat import v1_router as chat_projects_v1_router
 from web.api.config import router as config_router
@@ -137,6 +138,7 @@ def create_app(
     app.include_router(projects_v1_router, prefix="/api/v1/projects")
     app.include_router(tools_v1_router, prefix="/api/v1/tools")
     app.include_router(projects_tools_v1_router, prefix="/api/v1/projects")
+    app.include_router(arg_profiles_v1_router, prefix="/api/v1/projects")
     app.include_router(runtime_v1_router, prefix="/api/v1")
     app.include_router(platform_v1_router, prefix="/api/v1")
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
