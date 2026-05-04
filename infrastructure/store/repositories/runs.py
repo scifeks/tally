@@ -57,6 +57,7 @@ class RunRepository(RunRepositoryPort):
         skip_enrichment: bool,
         args: dict[str, Any] | None = None,
         status: str = "queued",
+        saved_scan_id: int | None = None,
     ) -> int:
         """Insert a fully-populated scan_runs row. Returns the new id."""
         created_at = datetime.now(UTC).isoformat()
@@ -64,8 +65,9 @@ class RunRepository(RunRepositoryPort):
             cur = conn.execute(
                 "INSERT INTO scan_runs ("
                 "project_id, args, created_at, status,"
-                " repo_ids, tool_ids, domains, skip_enrichment"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " repo_ids, tool_ids, domains, skip_enrichment,"
+                " saved_scan_id"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     project_id,
                     json.dumps(args or {}),
@@ -75,9 +77,38 @@ class RunRepository(RunRepositoryPort):
                     json.dumps(tool_ids),
                     json.dumps(domains),
                     1 if skip_enrichment else 0,
+                    saved_scan_id,
                 ),
             )
             return cur.lastrowid  # type: ignore[return-value]
+
+    def set_arg_profile_snapshot(
+        self, run_id: int, tool_name: str, snapshot_json: str
+    ) -> None:
+        """Freeze the arg-profile snapshot for one tool on one run.
+
+        Coexists with ``add_run_tools`` by reading first: if a row for
+        ``(run_id, tool)`` already exists it is updated in place, otherwise
+        a minimal row is inserted. Prevents duplicate ``run_tools`` rows
+        without depending on a UNIQUE constraint.
+        """
+        with self._factory.connect() as conn:
+            existing = conn.execute(
+                "SELECT id FROM run_tools WHERE run_id = ? AND tool = ?",
+                (run_id, tool_name),
+            ).fetchone()
+            if existing is not None:
+                conn.execute(
+                    "UPDATE run_tools SET arg_profile_snapshot = ? WHERE id = ?",
+                    (snapshot_json, existing["id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO run_tools"
+                    " (run_id, tool, arg_profile_snapshot)"
+                    " VALUES (?, ?, ?)",
+                    (run_id, tool_name, snapshot_json),
+                )
 
     def set_status(self, run_id: int, status: str) -> None:
         if status not in SCAN_RUN_STATUSES:

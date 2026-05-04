@@ -36,6 +36,12 @@ from application.scans.scans_service import (
     ScansService,
 )
 from application.tools.registry import discover_tools
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
+from infrastructure.store.repositories.runs import RunRepository
+from infrastructure.store.repositories.tool_arg_profiles import (
+    ToolArgProfilesRepository,
+)
 
 if TYPE_CHECKING:
     from application.tools.registry import ToolRegistry
@@ -353,14 +359,21 @@ async def start_scan(
     paths = ProjectPaths.from_registry_row(row)
     sink = EventBusScanSink(request.app.state.event_bus)
 
+    factory = ConnectionFactory(paths.findings_db)
+    run_repo = RunRepository(factory)
+    chat_session_repo = ChatSessionRepository(factory)
+    profiles_repo = ToolArgProfilesRepository(factory)
+
     try:
         handle = await asyncio.to_thread(
             get_scan_service().start_scan,
             project_id=project_id,
             project_name=project_name,
             base_path=base_path,
-            paths=paths,
             tool_registry=tool_registry,
+            run_repo=run_repo,
+            chat_session_repo=chat_session_repo,
+            profiles_repo=profiles_repo,
             repo_ids=tuple(repo_names),
             tool_ids=tuple(body.toolIds),
             domains=tuple(body.domains),

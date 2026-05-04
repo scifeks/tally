@@ -22,6 +22,14 @@ from application.url_inventory.url_list_service import (
 from application.url_inventory.url_list_service import UrlListService
 from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.chat_sessions import (
+    ChatSessionRepository,
+)
+from infrastructure.store.repositories.runs import RunRepository
+from infrastructure.store.repositories.tool_arg_profiles import (
+    ToolArgProfilesRepository,
+)
 from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
@@ -197,13 +205,20 @@ class ScanCommands:
             if effective_tools is None:
                 return
 
+        factory = ConnectionFactory(paths.findings_db)
+        run_repo = RunRepository(factory)
+        chat_session_repo = ChatSessionRepository(factory)
+        profiles_repo = ToolArgProfilesRepository(factory)
+
         try:
             handle = get_scan_service().start_scan(
                 project_id=project_id,
                 project_name=self.repl.active_project,
                 base_path=str(self.repl.base_path),
-                paths=paths,
                 tool_registry=self.repl.tool_registry,
+                run_repo=run_repo,
+                chat_session_repo=chat_session_repo,
+                profiles_repo=profiles_repo,
                 repo_ids=tuple(repo_names or ()),
                 tool_ids=tuple(effective_tools or ()),
                 skip_tool_ids=tuple(skip_tools),

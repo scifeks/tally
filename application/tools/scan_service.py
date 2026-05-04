@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import uuid
 from concurrent.futures import Future
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -20,16 +21,18 @@ from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.orchestrator import ScanOrchestrator
 from application.tools.scan_run_registry import ScanRunRegistry, get_scan_run_registry
-from core.project_paths import ProjectPaths
 from domain.pipeline import scan_events as se
 from domain.tools.scan_types import ScanSummary
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
-from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
+    from application.ports.chat_session_repository import (
+        ChatSessionRepositoryPort,
+    )
     from application.ports.run_repository import RunRepositoryPort
+    from application.ports.tool_arg_profiles import (
+        ToolArgProfilesRepositoryPort,
+    )
     from application.tools.registry import ToolRegistry
     from domain.tools.display import DisplayProtocol
 
@@ -69,8 +72,10 @@ class ScanService:
         project_id: int,
         project_name: str,
         base_path: str,
-        paths: ProjectPaths,
         tool_registry: ToolRegistry,
+        run_repo: RunRepositoryPort,
+        chat_session_repo: ChatSessionRepositoryPort,
+        profiles_repo: ToolArgProfilesRepositoryPort,
         repo_ids: tuple[str, ...] = (),
         tool_ids: tuple[str, ...] = (),
         domains: tuple[str, ...] = (),
@@ -81,21 +86,22 @@ class ScanService:
         event_sink: ScanEventSink | None = None,
         display: DisplayProtocol | None = None,
         run_args: dict[str, Any] | None = None,
+        arg_profile_ids: list[int] | None = None,
+        saved_scan_id: int | None = None,
     ) -> ScanHandle:
         """Start a scan and return a :class:`ScanHandle`.
 
         Raises:
             JobBusy: another scan is already holding the scan slot.
-            Anything raised by ``RunRepository.create``: the lock is
-                released before the exception propagates.
+            ValueError: ``arg_profile_ids`` references unknown profiles.
+            Anything raised by ``run_repo.create``: the lock is released
+                before the exception propagates.
         """
         holder_token = f"scan-run:{uuid.uuid4().hex[:8]}"
         self._lock_registry.acquire_job(SCAN_LOCK_KIND, holder_token)
 
         try:
-            factory = ConnectionFactory(paths.findings_db)
-            run_repo = RunRepository(factory)
-            chat_session_repo = ChatSessionRepository(factory)
+            snapshots = _resolve_arg_profile_snapshots(profiles_repo, arg_profile_ids)
             run_id = run_repo.create(
                 project_id=project_id,
                 repo_ids=list(repo_ids),
@@ -103,7 +109,10 @@ class ScanService:
                 domains=list(domains),
                 skip_enrichment=skip_enrichment,
                 args=run_args,
+                saved_scan_id=saved_scan_id,
             )
+            for tool_name, snapshot_json in snapshots.items():
+                run_repo.set_arg_profile_snapshot(run_id, tool_name, snapshot_json)
         except Exception:
             self._lock_registry.release_job(SCAN_LOCK_KIND, holder_token)
             raise
@@ -166,7 +175,7 @@ class ScanService:
         display: DisplayProtocol | None,
         cancel_token: CancellationToken,
         run_repo: RunRepositoryPort,
-        chat_session_repo: ChatSessionRepository,
+        chat_session_repo: ChatSessionRepositoryPort,
     ) -> None:
         # Imports deferred to thread entry to avoid circular-import risk
         # and to keep module import side-effects minimal.
@@ -241,6 +250,30 @@ class ScanService:
                 logger.warning("lock holder mismatch on scan run %d release", run_id)
             except KeyError:
                 logger.warning("scan lock already released for run %d", run_id)
+
+
+def _resolve_arg_profile_snapshots(
+    profiles_repo: ToolArgProfilesRepositoryPort,
+    arg_profile_ids: list[int] | None,
+) -> dict[str, str]:
+    """Validate ids and return ``{tool_name: snapshot_json}``.
+
+    Later ids win on duplicate ``tool_name`` per D-PLAN-2. Raises
+    :class:`ValueError` listing missing ids when validation fails.
+    """
+    if not arg_profile_ids:
+        return {}
+    existing = set(profiles_repo.existing_ids(arg_profile_ids))
+    missing = sorted(set(arg_profile_ids) - existing)
+    if missing:
+        raise ValueError(f"unknown arg profile ids: {missing}")
+    snapshots: dict[str, str] = {}
+    for profile_id in arg_profile_ids:
+        profile = profiles_repo.get(profile_id)
+        if profile is None:
+            raise ValueError(f"unknown arg profile ids: [{profile_id}]")
+        snapshots[profile.tool_name] = json.dumps([asdict(arg) for arg in profile.args])
+    return snapshots
 
 
 def _safe_persist_failed(run_repo: RunRepositoryPort, run_id: int) -> None:
