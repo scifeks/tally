@@ -490,3 +490,60 @@ class TestSavedScansRepository:
         )
         repo.delete(rid)
         assert profiles_repo.get(profile_a) is not None
+
+
+class TestFindReferencingArgProfile:
+    def test_returns_empty_when_no_saved_scan_references_profile(
+        self,
+        repo: SavedScansRepository,
+        profiles_repo: ToolArgProfilesRepository,
+    ) -> None:
+        profile_id = profiles_repo.insert(tool_name="gitleaks", name="verbose", args=[])
+        result = repo.find_referencing_arg_profile(profile_id)
+        assert result == []
+
+    def test_returns_single_reference_when_one_saved_scan_uses_profile(
+        self,
+        repo: SavedScansRepository,
+        profiles_repo: ToolArgProfilesRepository,
+    ) -> None:
+        profile_id = profiles_repo.insert(tool_name="gitleaks", name="verbose", args=[])
+        scan_id = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            arg_profile_ids=[profile_id],
+        )
+        result = repo.find_referencing_arg_profile(profile_id)
+        assert len(result) == 1
+        assert result[0].id == scan_id
+        assert result[0].name == "weekly"
+
+    def test_returns_multiple_references_ordered_by_saved_scan_id(
+        self,
+        repo: SavedScansRepository,
+        profiles_repo: ToolArgProfilesRepository,
+    ) -> None:
+        profile_id = profiles_repo.insert(tool_name="gitleaks", name="verbose", args=[])
+        scan_id_1 = repo.insert(
+            name="daily",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            arg_profile_ids=[profile_id],
+        )
+        scan_id_2 = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            arg_profile_ids=[profile_id],
+        )
+        result = repo.find_referencing_arg_profile(profile_id)
+        assert len(result) == 2
+        assert result[0].id == scan_id_1
+        assert result[0].name == "daily"
+        assert result[1].id == scan_id_2
+        assert result[1].name == "weekly"
+        assert [r.id for r in result] == sorted([scan_id_1, scan_id_2])

@@ -35,6 +35,14 @@ class SavedScanArgProfileRef:
 
 
 @dataclass(frozen=True)
+class SavedScanReference:
+    """Minimal saved-scan reference used in cross-aggregate IN_USE responses."""
+
+    id: int
+    name: str
+
+
+@dataclass(frozen=True)
 class SavedScanHydrated:
     saved_scan: SavedScan
     repos: list[SavedScanRepoRef]

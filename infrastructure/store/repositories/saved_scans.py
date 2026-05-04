@@ -16,6 +16,7 @@ from domain.saved_scans.entry import (
     SavedScanArgProfileRef,
     SavedScanHydrated,
     SavedScanListItem,
+    SavedScanReference,
     SavedScanRepoRef,
     SavedScanToolRef,
 )
@@ -151,6 +152,20 @@ class SavedScansRepository(SavedScansRepositoryPort):
                 (saved_scan_id,),
             ).fetchall()
         return [int(r["arg_profile_id"]) for r in rows]
+
+    def find_referencing_arg_profile(
+        self, arg_profile_id: int
+    ) -> list[SavedScanReference]:
+        with self._factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT s.id AS id, s.name AS name"
+                " FROM saved_scan_arg_profiles j"
+                " JOIN saved_scans s ON s.id = j.saved_scan_id"
+                " WHERE j.arg_profile_id = ?"
+                " ORDER BY s.id ASC",
+                (arg_profile_id,),
+            ).fetchall()
+        return [SavedScanReference(id=int(r["id"]), name=r["name"]) for r in rows]
 
     def insert(
         self,
