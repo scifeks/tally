@@ -9,6 +9,7 @@ from pathlib import Path
 
 from rich.console import Console
 
+from application.bootstrap import BootstrapService
 from application.project.registry_service import ProjectRegistryService
 from application.repl import REPL
 from application.repl.adapters.dependency_summary_display import (
@@ -16,7 +17,7 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.runtime import RuntimeDependencyService
 from application.startup.checker import DependencyChecker
-from application.tools.registry import ToolRegistry, discover_tools
+from application.tools.registry import ToolRegistry
 from infrastructure.runtime import ClaudeCodeProbe
 from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.web_ui.runner import WebUiRunner
@@ -45,16 +46,7 @@ def check_location_attestation(base_path: str) -> None:
     config_manager.save_global_config(config_manager.global_config)
 
 
-def _build_project_registry(base_path: str) -> ProjectRegistryService:
-    repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
-    repo.init_schema()
-    svc = ProjectRegistryService(repo)
-    svc.sync(base_path)
-    return svc
-
-
 if __name__ == "__main__":
-    # Parse args first so --base-path is available for attestation and setup.
     parser = argparse.ArgumentParser(description="Tally security auditing REPL")
     parser.add_argument(
         "--base-path",
@@ -77,7 +69,6 @@ if __name__ == "__main__":
 
     check_location_attestation(_BASE_PATH)
 
-    # Configure logging before any module starts emitting records.
     _logs_dir = Path("logs")
     _logs_dir.mkdir(exist_ok=True)
     _log_fmt = logging.Formatter(
@@ -100,21 +91,6 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.DEBUG, handlers=[_main_handler, _err_handler])
 
-    from application.setup.commands_setup import sync_commands_config
-
-    sync_commands_config(_BASE_PATH)
-
-    # Clear stale .tmp files left behind by interrupted atomic writes
-    # from a prior crash. Idempotent and bounded to config dirs.
-    from core.config._atomic import sweep_orphans
-
-    sweep_orphans(Path(_BASE_PATH))
-
-    # Build the tool registry now that sync_commands_config has reconciled
-    # commands.json against installed wrappers.
-    tool_registry = ToolRegistry()
-    discover_tools(tool_registry, _BASE_PATH)
-
     runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
 
     if args.check:
@@ -127,8 +103,16 @@ if __name__ == "__main__":
         if not result.all_required_present:
             sys.exit(1)
 
-    # Build the project registry (creates tally.db on first run, syncs from disk).
-    project_registry = _build_project_registry(_BASE_PATH)
+    registry_repo = ProjectRegistryRepository(Path(_BASE_PATH) / "tally.db")
+    project_registry = ProjectRegistryService(registry_repo)
+    tool_registry = ToolRegistry()
+
+    BootstrapService(
+        registry_repo=registry_repo,
+        project_registry=project_registry,
+        tool_registry=tool_registry,
+        base_path=_BASE_PATH,
+    ).run()
 
     try:
         REPL(

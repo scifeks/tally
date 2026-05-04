@@ -11,7 +11,7 @@ import pytest
 import pytest_asyncio
 
 from infrastructure.store.connection import ConnectionFactory
-from web.server import create_app
+from tests._app_factory import build_test_app
 
 pytestmark = pytest.mark.integration
 
@@ -63,7 +63,7 @@ async def repo_crud_client(tmp_path: Path):
     repo_path = tmp_path / "repo-src"
     repo_path.mkdir()
 
-    app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
+    app = build_test_app(tmp_path, _HANDSHAKE, port=_TEST_PORT)
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None
     project_id = row.id

@@ -15,7 +15,7 @@ from domain.url_inventory.entry import UrlFinding, UrlSource
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.url_findings import UrlFindingRepository
-from web.server import create_app
+from tests._app_factory import build_test_app
 
 pytestmark = pytest.mark.integration
 
@@ -124,7 +124,7 @@ async def url_list_client(tmp_path: Path):
         ]
     )
 
-    app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
+    app = build_test_app(tmp_path, _HANDSHAKE, port=_TEST_PORT)
     row = app.state.project_registry.resolve_by_name("testproject")
     assert row is not None
     project_id = row.id

@@ -16,11 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
 from application.runtime.dependency_service import RuntimeDependencyService
-from application.scans.scans_service import ScansService
-from application.tools.registry import ToolRegistry, discover_tools
+from application.tools.registry import ToolRegistry
 from infrastructure.events.bus import EventBus
 from infrastructure.runtime.claude_probe import ClaudeCodeProbe
-from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
@@ -80,19 +78,23 @@ def create_app(
     handshake_token: str,
     *,
     port: int,
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
     allowed_origins: list[str] | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application.
 
-    The server is project-agnostic: every domain endpoint takes
-    ``:project_id`` in the path and resolves it against the project
-    registry per request. FindingKnowledgeBase instances are lazily
-    built and cached per project.
+    Pure wiring: bootstrap (schema init, registry sync, stale-scan sweep,
+    tool discovery) is owned by ``BootstrapService`` and runs once in the
+    REPL composition root. ``project_registry`` and ``tool_registry`` are
+    injected already-bootstrapped.
 
     Args:
         base_path: Tally base directory (same as ``ConfigManager.base_path``).
         handshake_token: One-time token; SPA exchanges it for session cookies.
         port: Bound port used by Host/Origin middleware allowlists.
+        project_registry: Bootstrapped registry passed in from the REPL.
+        tool_registry: Populated tool registry passed in from the REPL.
         allowed_origins: CORS allow-list. Empty or None disables CORS entirely.
 
     Returns:
@@ -108,20 +110,9 @@ def create_app(
     app.state.handshake_registry = registry
     app.state.session_store = SessionStore()
 
-    registry_repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
-    registry_repo.init_schema()
-    project_registry = ProjectRegistryService(registry_repo)
-    project_registry.sync(base_path)
     app.state.project_registry = project_registry
-
-    ScansService.mark_stale_failed_for_all_projects(project_registry)
-
     app.state.knowledge_base_cache = {}
-
-    tool_registry = ToolRegistry()
-    discover_tools(tool_registry, base_path)
     app.state.tool_registry = tool_registry
-
     app.state.installed_tools = InstalledToolsProbe(tool_registry)
 
     app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
@@ -247,6 +238,9 @@ def create_server(
     base_path: str,
     port: int,
     handshake_token: str,
+    *,
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
     host: str = "127.0.0.1",
     allowed_origins: list[str] | None = None,
 ) -> uvicorn.Server:
@@ -261,6 +255,8 @@ def create_server(
         base_path,
         handshake_token,
         port=port,
+        project_registry=project_registry,
+        tool_registry=tool_registry,
         allowed_origins=allowed_origins,
     )
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
@@ -274,6 +270,9 @@ def create_web_app(
     port: int,
     handshake_token: str,
     allowed_origins: list[str] | None = None,
+    *,
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
 ) -> FastAPI:
     """Create the FastAPI application for direct ``uvicorn.run`` usage."""
     _attach_file_logging(base_path)
@@ -282,6 +281,8 @@ def create_web_app(
         base_path,
         handshake_token,
         port=port,
+        project_registry=project_registry,
+        tool_registry=tool_registry,
         allowed_origins=allowed_origins,
     )
 
@@ -290,11 +291,22 @@ def start(
     base_path: str,
     port: int,
     handshake_token: str,
+    *,
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
     host: str = "127.0.0.1",
     allowed_origins: list[str] | None = None,
 ) -> None:
     """Launch the web UI server (blocking)."""
     import asyncio
 
-    server = create_server(base_path, port, handshake_token, host, allowed_origins)
+    server = create_server(
+        base_path,
+        port,
+        handshake_token,
+        project_registry=project_registry,
+        tool_registry=tool_registry,
+        host=host,
+        allowed_origins=allowed_origins,
+    )
     asyncio.run(server.serve())

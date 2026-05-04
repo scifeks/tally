@@ -17,7 +17,7 @@ from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.tool_overrides import (
     ToolOverridesRepository,
 )
-from web.server import create_app
+from tests._app_factory import build_test_app
 
 pytestmark = pytest.mark.integration
 
@@ -111,7 +111,7 @@ async def projects_v1_client(tmp_path: Path):
     kb_mock = MagicMock()
     kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]
 
-    app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
+    app = build_test_app(tmp_path, _HANDSHAKE, port=_TEST_PORT)
     app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     row = app.state.project_registry.resolve_by_name("testproject")

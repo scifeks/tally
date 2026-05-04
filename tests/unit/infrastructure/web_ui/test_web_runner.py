@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.project.registry_service import ProjectRegistryService
+from application.tools.registry import ToolRegistry
 from infrastructure.web_ui.runner import WebUiRunner
 
 
@@ -16,6 +18,8 @@ class _ServeKwargs(TypedDict):
     api_port: int
     vite_port: int
     allowed_origins: list[str]
+    project_registry: ProjectRegistryService
+    tool_registry: ToolRegistry
 
 
 def _serve_kwargs(
@@ -35,6 +39,8 @@ def _serve_kwargs(
             if allowed_origins is not None
             else [f"http://{host}:{vite_port}"]
         ),
+        "project_registry": MagicMock(spec=ProjectRegistryService),
+        "tool_registry": ToolRegistry(),
     }
 
 

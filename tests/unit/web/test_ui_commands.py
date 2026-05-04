@@ -47,6 +47,8 @@ class TestServeCommand:
             api_port=8080,
             vite_port=3000,
             allowed_origins=["http://127.0.0.1:3000"],
+            project_registry=repl.project_registry,
+            tool_registry=repl.tool_registry,
         )
 
     def test_stop_flag_no_longer_recognized(self) -> None:

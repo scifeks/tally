@@ -12,12 +12,12 @@ import pytest
 import pytest_asyncio
 
 from infrastructure.store.connection import ConnectionFactory
+from tests._app_factory import build_test_app
 from tests.integration.web.conftest import (
     HANDSHAKE,
     TEST_PORT,
     _authenticate,
 )
-from web.server import create_app
 
 pytestmark = pytest.mark.integration
 
@@ -84,7 +84,7 @@ async def tools_v1_client(tmp_path: Path):
     kb_mock = MagicMock()
     kb_mock.get.return_value = []
 
-    app = create_app(str(tmp_path), HANDSHAKE, port=TEST_PORT)
+    app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
     app.state.knowledge_base_cache = {"testproject": kb_mock}
 
     row = app.state.project_registry.resolve_by_name("testproject")
@@ -107,7 +107,7 @@ def _make_unauthed_app(tmp_path: Path) -> Any:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     factory = ConnectionFactory(db_path)
     factory.init_schema()
-    app = create_app(str(tmp_path), "tok", port=TEST_PORT)
+    app = build_test_app(tmp_path, "tok", port=TEST_PORT)
     return app
 
 

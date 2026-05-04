@@ -10,7 +10,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from web.server import create_app
+from tests._app_factory import build_test_app
 
 pytestmark = pytest.mark.integration
 
@@ -24,7 +24,7 @@ async def platform_client(tmp_path: Path):
     (tmp_path / "config").mkdir(parents=True)
     (tmp_path / "config" / "global.json").write_text("{}")
 
-    app = create_app(str(tmp_path), _HANDSHAKE, port=_TEST_PORT)
+    app = build_test_app(tmp_path, _HANDSHAKE, port=_TEST_PORT)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
