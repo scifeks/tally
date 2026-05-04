@@ -42,6 +42,9 @@ from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.tool_arg_profiles import (
     ToolArgProfilesRepository,
 )
+from infrastructure.store.repositories.tool_overrides import (
+    ToolOverridesRepository,
+)
 
 if TYPE_CHECKING:
     from application.tools.registry import ToolRegistry
@@ -187,9 +190,15 @@ async def get_scans_config(
     project_name: str = row.name
     tool_registry = request.app.state.tool_registry
 
-    # Rediscover with this project's overrides before reading so domain
-    # mappings reflect the project's commands.json.
-    discover_tools(tool_registry, base_path, project_name=project_name)
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    overrides_repo = ToolOverridesRepository(factory)
+    discover_tools(
+        tool_registry,
+        base_path,
+        project_name=project_name,
+        overrides_repo=overrides_repo,
+    )
 
     repo_service = ProjectRepositoriesService.build(
         request.app.state.project_registry,
@@ -338,7 +347,15 @@ async def start_scan(
     base_path: str = request.app.state.base_path
     tool_registry = request.app.state.tool_registry
 
-    discover_tools(tool_registry, base_path, project_name=project_name)
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    overrides_repo = ToolOverridesRepository(factory)
+    discover_tools(
+        tool_registry,
+        base_path,
+        project_name=project_name,
+        overrides_repo=overrides_repo,
+    )
     repo_lookup = ProjectRepositoriesService.build(
         request.app.state.project_registry,
         request.app.state.base_path,
@@ -356,10 +373,8 @@ async def start_scan(
 
     repo_names = [repo_lookup.found[rid].name for rid in body.repoIds]
 
-    paths = ProjectPaths.from_registry_row(row)
     sink = EventBusScanSink(request.app.state.event_bus)
 
-    factory = ConnectionFactory(paths.findings_db)
     run_repo = RunRepository(factory)
     chat_session_repo = ChatSessionRepository(factory)
     profiles_repo = ToolArgProfilesRepository(factory)

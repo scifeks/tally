@@ -3,29 +3,38 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 
+from application.ports.tool_overrides import ToolOverrideNameConflict
 from application.runtime.dependency_service import RuntimeDependencyService
+from application.tool_overrides.service import (
+    ToolOverrideNotFound,
+    ToolOverridesService,
+    ToolOverrideValidationError,
+)
 from application.tools.registry import discover_tools
-from core.config._atomic import atomic_write_text, locked_config
-from core.config.schemas import CommandEntry
 from core.project_paths import ProjectPaths
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.tool_overrides import ToolOverridesRepository
 from web.api._errors import Conflict, NotFound
 from web.api._errors import ValidationError as ApiValidationError
+from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
-    DockerContainerResponse,
     InstalledToolsResponse,
     RuntimeDependenciesResponse,
     RuntimeDependencyItem,
     ToolCatalogItem,
     ToolCatalogResponse,
+)
+from web.api.tool_overrides_schemas import (
+    ToolOverrideContainerResponse,
     ToolOverrideCreateRequest,
-    ToolOverrideItem,
+    ToolOverrideListResponse,
+    ToolOverrideReplaceRequest,
     ToolOverrideResponse,
-    ToolOverrideUpdateRequest,
 )
 
 _WRAPPERS_ROOT = (
@@ -69,6 +78,48 @@ def _supports_docker(tool_name: str) -> bool:
     return (_WRAPPERS_ROOT / "docker" / f"{normalized}.py").exists()
 
 
+def _build_service(
+    request: Request, project_id: int
+) -> tuple[ToolOverridesService, ToolOverridesRepository, ProjectPaths, str]:
+    row = _resolve_project(request, project_id)
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+    repo = ToolOverridesRepository(factory)
+    return ToolOverridesService(repo), repo, paths, row.name
+
+
+def _refresh_registry_with_repo(
+    request: Request,
+    project_name: str,
+    overrides_repo: ToolOverridesRepository,
+) -> None:
+    base_path: str = request.app.state.base_path
+    discover_tools(
+        request.app.state.tool_registry,
+        base_path,
+        project_name=project_name,
+        overrides_repo=overrides_repo,
+    )
+
+
+def _to_response(override) -> ToolOverrideResponse:
+    container = None
+    if override.container_name and override.container_tool_path:
+        container = ToolOverrideContainerResponse(
+            name=override.container_name,
+            tool_path=override.container_tool_path,
+        )
+    return ToolOverrideResponse(
+        id=override.id,
+        tool_name=override.tool_name,
+        args_mode=override.args_mode,
+        type=override.type,
+        location=override.location,
+        path=override.path,
+        container=container,
+    )
+
+
 @tools_v1_router.get("/catalog", response_model=ToolCatalogResponse)
 def get_tools_catalog(request: Request) -> ToolCatalogResponse:
     """Return metadata for all registered tool wrappers."""
@@ -102,214 +153,133 @@ def get_installed_tools(request: Request) -> InstalledToolsResponse:
 
 @projects_tools_v1_router.get(
     "/{project_id}/tools/overrides",
-    response_model=ToolOverrideResponse,
+    response_model=ToolOverrideListResponse,
 )
 async def get_tool_overrides(
     project_id: int,
     request: Request,
-) -> ToolOverrideResponse:
-    """Return project-level tool config overrides from commands.json."""
-    registry = request.app.state.project_registry
-    row = registry.resolve_by_id(project_id)
-    if row is None or row.archived_at:
-        raise NotFound(f"Project {project_id} not found")
-
-    paths = ProjectPaths.from_registry_row(row)
-    override_path = paths.commands_json
-
-    if not override_path.exists():
-        return ToolOverrideResponse(items=[], total=0)
-
-    def _load() -> dict:
-        with open(override_path) as f:
-            return json.load(f)
-
-    data: dict = await asyncio.to_thread(_load)
-
-    items: list[ToolOverrideItem] = []
-    for tool_id, entry_data in data.items():
-        entry = CommandEntry(**entry_data)
-        container = None
-        if entry.container is not None:
-            container = DockerContainerResponse(
-                name=entry.container.name,
-                tool_path=entry.container.tool_path,
-            )
-        items.append(
-            ToolOverrideItem(
-                tool_id=tool_id,
-                type=entry.type,
-                location=entry.location,
-                path=entry.path or None,
-                container=container,
-            )
-        )
-
-    return ToolOverrideResponse(items=items, total=len(items))
-
-
-def _entry_dict(
-    *, type_: str, location: str, path: str, container: object | None
-) -> dict:
-    """Convert request fields into a JSON-serialisable commands.json entry."""
-    container_dict: dict | None = None
-    if container is not None:
-        container_dict = {
-            "name": container.name,  # type: ignore[attr-defined]
-            "tool_path": container.tool_path,  # type: ignore[attr-defined]
-        }
-    return {
-        "type": type_,
-        "location": location,
-        "path": path,
-        "container": container_dict,
-    }
-
-
-def _validate_entry(entry: dict) -> CommandEntry:
-    """Round-trip an entry dict through CommandEntry to validate constraints."""
-    return CommandEntry(**entry)
-
-
-def _to_response_item(tool_id: str, entry: CommandEntry) -> ToolOverrideItem:
-    container = None
-    if entry.container is not None:
-        container = DockerContainerResponse(
-            name=entry.container.name,
-            tool_path=entry.container.tool_path,
-        )
-    return ToolOverrideItem(
-        tool_id=tool_id,
-        type=entry.type,
-        location=entry.location,
-        path=entry.path or None,
-        container=container,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> ToolOverrideListResponse:
+    """Return project-level tool config overrides from the database."""
+    service, _repo, _paths, _name = await asyncio.to_thread(
+        _build_service, request, project_id
     )
-
-
-def _load_overrides(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    with open(path) as f:
-        return json.load(f)
-
-
-def _refresh_registry(request: Request, project_name: str) -> None:
-    """Refresh the in-memory tool registry after a write."""
-    base_path: str = request.app.state.base_path
-    discover_tools(
-        request.app.state.tool_registry, base_path, project_name=project_name
+    rows, total = await asyncio.to_thread(service.list, offset=offset, limit=limit)
+    return ToolOverrideListResponse(
+        items=[_to_response(r) for r in rows],
+        total=total,
+        offset=offset,
+        limit=limit,
     )
 
 
 @projects_tools_v1_router.post(
     "/{project_id}/tools/overrides",
     status_code=201,
-    response_model=ToolOverrideItem,
+    response_model=ToolOverrideResponse,
 )
 async def create_tool_override(
     project_id: int,
     request: Request,
     body: ToolOverrideCreateRequest,
-) -> ToolOverrideItem:
-    """Create a new project-scoped tool override in commands.json."""
-    registry = request.app.state.project_registry
-    row = registry.resolve_by_id(project_id)
-    if row is None or row.archived_at:
-        raise NotFound(f"Project {project_id} not found")
-
-    paths = ProjectPaths.from_registry_row(row)
-    override_path = paths.commands_json
-    paths.config_dir.mkdir(parents=True, exist_ok=True)
-
-    entry_dict = _entry_dict(
-        type_=body.type,
-        location=body.location,
-        path=body.path,
-        container=body.container,
+) -> ToolOverrideResponse:
+    """Create a new project-scoped tool override."""
+    service, repo, _paths, project_name = await asyncio.to_thread(
+        _build_service, request, project_id
     )
+    container_name = body.container.name if body.container else None
+    container_tool_path = body.container.tool_path if body.container else None
     try:
-        entry = _validate_entry(entry_dict)
-    except Exception as exc:
-        raise ApiValidationError(str(exc)) from exc
+        override = await asyncio.to_thread(
+            service.create,
+            tool_name=body.tool_name,
+            args_mode=body.args_mode,
+            type=body.type,
+            location=body.location,
+            path=body.path,
+            container_name=container_name,
+            container_tool_path=container_tool_path,
+        )
+    except ToolOverrideValidationError as exc:
+        raise ApiValidationError(
+            "request body failed validation",
+            details={"fields": [asdict(f) for f in exc.fields]},
+        ) from exc
+    except ToolOverrideNameConflict as exc:
+        raise Conflict(f"Tool override {body.tool_name!r} already exists") from exc
 
-    with locked_config(override_path):
-        data = _load_overrides(override_path)
-        if body.tool_id in data:
-            raise Conflict(f"Tool override '{body.tool_id}' already exists")
-        data[body.tool_id] = entry_dict
-        atomic_write_text(override_path, json.dumps(data, indent=2))
-
-    _refresh_registry(request, row.name)
-    return _to_response_item(body.tool_id, entry)
+    await asyncio.to_thread(_refresh_registry_with_repo, request, project_name, repo)
+    return _to_response(override)
 
 
 @projects_tools_v1_router.put(
-    "/{project_id}/tools/overrides/{tool_id}",
-    response_model=ToolOverrideItem,
+    "/{project_id}/tools/overrides/{tool_name}",
+    response_model=ToolOverrideResponse,
 )
 async def replace_tool_override(
     project_id: int,
-    tool_id: str,
+    tool_name: str,
     request: Request,
-    body: ToolOverrideUpdateRequest,
-) -> ToolOverrideItem:
+    body: ToolOverrideReplaceRequest,
+) -> ToolOverrideResponse:
     """Replace an existing project-scoped tool override."""
-    registry = request.app.state.project_registry
-    row = registry.resolve_by_id(project_id)
-    if row is None or row.archived_at:
-        raise NotFound(f"Project {project_id} not found")
-
-    paths = ProjectPaths.from_registry_row(row)
-    override_path = paths.commands_json
-    paths.config_dir.mkdir(parents=True, exist_ok=True)
-
-    entry_dict = _entry_dict(
-        type_=body.type,
-        location=body.location,
-        path=body.path,
-        container=body.container,
+    if body.tool_name is not None and body.tool_name != tool_name:
+        raise ApiValidationError(
+            "request body failed validation",
+            details={
+                "fields": [
+                    {
+                        "field": "toolName",
+                        "issue": "must match path parameter when present",
+                    }
+                ]
+            },
+        )
+    service, repo, _paths, project_name = await asyncio.to_thread(
+        _build_service, request, project_id
     )
+    container_name = body.container.name if body.container else None
+    container_tool_path = body.container.tool_path if body.container else None
     try:
-        entry = _validate_entry(entry_dict)
-    except Exception as exc:
-        raise ApiValidationError(str(exc)) from exc
+        override = await asyncio.to_thread(
+            service.replace,
+            tool_name,
+            args_mode=body.args_mode,
+            type=body.type,
+            location=body.location,
+            path=body.path,
+            container_name=container_name,
+            container_tool_path=container_tool_path,
+        )
+    except ToolOverrideValidationError as exc:
+        raise ApiValidationError(
+            "request body failed validation",
+            details={"fields": [asdict(f) for f in exc.fields]},
+        ) from exc
+    except ToolOverrideNotFound as exc:
+        raise NotFound(f"Tool override {tool_name!r} not found") from exc
 
-    with locked_config(override_path):
-        data = _load_overrides(override_path)
-        if tool_id not in data:
-            raise NotFound(f"Tool override '{tool_id}' not found")
-        data[tool_id] = entry_dict
-        atomic_write_text(override_path, json.dumps(data, indent=2))
-
-    _refresh_registry(request, row.name)
-    return _to_response_item(tool_id, entry)
+    await asyncio.to_thread(_refresh_registry_with_repo, request, project_name, repo)
+    return _to_response(override)
 
 
 @projects_tools_v1_router.delete(
-    "/{project_id}/tools/overrides/{tool_id}",
+    "/{project_id}/tools/overrides/{tool_name}",
     status_code=204,
 )
 async def delete_tool_override(
     project_id: int,
-    tool_id: str,
+    tool_name: str,
     request: Request,
 ) -> Response:
     """Delete a project-scoped tool override."""
-    registry = request.app.state.project_registry
-    row = registry.resolve_by_id(project_id)
-    if row is None or row.archived_at:
-        raise NotFound(f"Project {project_id} not found")
-
-    paths = ProjectPaths.from_registry_row(row)
-    override_path = paths.commands_json
-
-    with locked_config(override_path):
-        data = _load_overrides(override_path)
-        if tool_id not in data:
-            raise NotFound(f"Tool override '{tool_id}' not found")
-        del data[tool_id]
-        atomic_write_text(override_path, json.dumps(data, indent=2))
-
-    _refresh_registry(request, row.name)
+    service, repo, _paths, project_name = await asyncio.to_thread(
+        _build_service, request, project_id
+    )
+    existing = await asyncio.to_thread(service.get, tool_name)
+    if existing is None:
+        raise NotFound(f"Tool override {tool_name!r} not found")
+    await asyncio.to_thread(service.delete, tool_name)
+    await asyncio.to_thread(_refresh_registry_with_repo, request, project_name, repo)
     return Response(status_code=204)

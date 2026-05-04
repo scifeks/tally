@@ -730,6 +730,7 @@ export interface ToolCatalogEntry {
  */
 export interface ToolOverrideConfig {
   toolId: string
+  argsMode: ArgsMode
   type: ToolType
   location: ToolLocationMode
   /** Required when location = local */

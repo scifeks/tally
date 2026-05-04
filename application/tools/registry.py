@@ -2,16 +2,35 @@ import importlib
 import inspect
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from application.tools.factory import ToolWrapperFactory
-from core.project_paths import ProjectPaths
+from core.config.schemas import CommandEntry, DockerContainer
+from domain.tool_overrides.entry import ToolOverride
 from domain.tools.base import ToolWrapper
 from domain.tools.interface import ToolInterface
+
+if TYPE_CHECKING:
+    from application.ports.tool_overrides import ToolOverridesRepositoryPort
 
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+
+def _override_to_command_entry(override: ToolOverride) -> CommandEntry:
+    container: DockerContainer | None = None
+    if override.container_name and override.container_tool_path:
+        container = DockerContainer(
+            name=override.container_name,
+            tool_path=override.container_tool_path,
+        )
+    return CommandEntry(
+        type=override.type,
+        location=override.location,
+        path=override.path or "",
+        container=container,
+    )
 
 
 class ToolRegistry:
@@ -73,12 +92,14 @@ def discover_tools(
     registry: ToolRegistry,
     base_path: str = ".",
     project_name: str | None = None,
+    overrides_repo: "ToolOverridesRepositoryPort | None" = None,
 ) -> None:
     """Populate *registry* with tool wrappers driven by commands.json.
 
     Clears the registry first. When commands.json is missing, falls
-    back to registering every wrapper in wrappers/local/. A project-
-    level commands.json overlays the global one entry for entry.
+    back to registering every wrapper in wrappers/local/. When both
+    project_name and overrides_repo are provided, DB rows overlay
+    the global config entry for entry by tool_name.
     """
     import json as _json
 
@@ -104,19 +125,16 @@ def discover_tools(
             )
 
     if commands_config is not None and project_name is not None:
-        project_path = ProjectPaths.from_canonical(
-            base_path, project_name
-        ).commands_json
-        if project_path.exists():
-            try:
-                with open(project_path) as f:
-                    project_data = _json.load(f)
-                from core.config.schemas import CommandEntry
-
-                for name, entry in project_data.items():
-                    commands_config[name] = CommandEntry(**entry)
-            except Exception as exc:
-                logger.warning("Failed to load project commands.json (%s)", exc)
+        if overrides_repo is not None:
+            rows, total = overrides_repo.list_paginated(offset=0, limit=10_000)
+            if total > 10_000:
+                raise RuntimeError(
+                    f"tool_overrides has {total} rows; exceeds discover_tools ceiling"
+                )
+            for override in rows:
+                commands_config[override.tool_name] = _override_to_command_entry(
+                    override
+                )
 
     if commands_config is not None:
         _discover_from_config(registry, commands_config, wrappers_dir)

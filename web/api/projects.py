@@ -38,6 +38,10 @@ from core.config.manager import ConfigManager
 from core.config.schemas import Repository
 from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.tool_overrides import (
+    ToolOverridesRepository,
+)
 from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -76,16 +80,12 @@ def _url_list_service(request: Request, project_id: int) -> UrlListService:
         raise NotFound(f"project {project_id} not found") from exc
 
 
-def _load_project_tool_ids(commands_path: Path) -> list[str]:
-    """Return sorted tool IDs from a project's commands.json, or [] if absent."""
-    if not commands_path.exists():
-        return []
-    try:
-        with open(commands_path) as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return []
-    return sorted(data.keys())
+def _load_project_tool_ids(paths: ProjectPaths) -> list[str]:
+    """Return sorted tool names from tool_overrides table in DB."""
+    factory = ConnectionFactory(paths.findings_db)
+    repo = ToolOverridesRepository(factory)
+    rows, _total = repo.list_paginated(offset=0, limit=10_000)
+    return sorted(o.tool_name for o in rows)
 
 
 def _service_from_request(request: Request) -> ProjectRepositoriesService:
@@ -153,7 +153,7 @@ async def get_project_meta(
     url_list_service = _url_list_service(request, project_id)
     finding_count = await asyncio.to_thread(findings_service.count_findings)
     url_list_count = await asyncio.to_thread(url_list_service.count_active_url_findings)
-    enabled_tools = await asyncio.to_thread(_load_project_tool_ids, paths.commands_json)
+    enabled_tools = await asyncio.to_thread(_load_project_tool_ids, paths)
     repo_service = _service_from_request(request)
     repo_count = await asyncio.to_thread(_count_active_repos, repo_service, project_id)
     return ProjectMetaResponse(

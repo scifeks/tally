@@ -43,12 +43,14 @@ from web.api.schemas import (  # noqa: E402
     ScanRunSummary,
     ScansListResponse,
     ToolCatalogResponse,
-    ToolOverrideResponse,
     TriageCancelResponse,
     TriageDetailResponse,
     TriageRunSummary,
     TriagesListResponse,
     UrlListFilterOptionsResponse,
+)
+from web.api.tool_overrides_schemas import (  # noqa: E402
+    ToolOverrideListResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -99,7 +101,7 @@ def _write_fixture(rel_path: str, data: Any) -> None:
 
 
 def _validate(model: type, payload: Any) -> None:
-    """Pydantic model_validate — raises if the payload drifts from schema."""
+    """Pydantic model_validate. Raises if the payload drifts from schema."""
     model.model_validate(payload)
 
 
@@ -173,7 +175,7 @@ def build_context() -> dict[str, Any]:
     if len(projects) >= 2:
         project_2 = projects[1]
     else:
-        # Only one real project — synthesize a project-2 placeholder so the
+        # Only one real project, so synthesize a project-2 placeholder so the
         # second-tenant fixtures still render. Distinct id avoids cross-fixture
         # collisions; payload otherwise mirrors project-1.
         project_2 = {
@@ -273,7 +275,7 @@ def _build_findings_list(ctx: dict) -> list[dict]:
             row["id"] = next_id
             next_id += 1
             # finding_type and cwe must be JSON-string in DB-row shape; the
-            # seeds carry them as Python lists for readability — encode now.
+            # seeds carry them as Python lists for readability, so encode now.
             if isinstance(row.get("finding_type"), list):
                 row["finding_type"] = json.dumps(row["finding_type"])
             if isinstance(row.get("cwe"), list):
@@ -372,7 +374,7 @@ def produce_findings(ctx: dict) -> dict[str, Any]:
     serialised_p1 = _serialise_findings(rows, ctx["project_1_id"])
     serialised_p2 = _serialise_findings(rows, ctx["project_2_id"])
 
-    # findings/populated.json — first 50 of project-1
+    # findings/populated.json: first 50 of project-1
     populated = {
         "items": serialised_p1[:50],
         "total": len(serialised_p1),
@@ -382,7 +384,7 @@ def produce_findings(ctx: dict) -> dict[str, Any]:
     _validate(FindingsListResponse, populated)
     _write_fixture("findings/populated.json", populated)
 
-    # findings/page-2.json — next slice (offset=50)
+    # findings/page-2.json: next slice (offset=50)
     page2_items = serialised_p1[50:100]
     page2 = {
         "items": page2_items,
@@ -398,7 +400,7 @@ def produce_findings(ctx: dict) -> dict[str, Any]:
     _validate(FindingsListResponse, empty)
     _write_fixture("findings/empty.json", empty)
 
-    # findings/counts-populated.json — derived from patched in-memory data
+    # findings/counts-populated.json: derived from patched in-memory data
     counts_p1 = _compute_counts(serialised_p1)
     # urls_count + last_scan_at come from the scan_run timestamp
     counts_p1["urls_count"] = len(ctx["url_rows"])
@@ -411,14 +413,14 @@ def produce_findings(ctx: dict) -> dict[str, Any]:
     _validate(FindingsCountsResponse, counts_empty)
     _write_fixture("findings/counts-empty.json", counts_empty)
 
-    # findings/finding-updated.json — pick a real finding, flip status to fixed
+    # findings/finding-updated.json: pick a real finding, flip status to fixed
     sample = copy.deepcopy(serialised_p1[0])
     sample["status"] = "fixed"
     sample["triaged_at"] = "2026-04-30T16:00:00+00:00"
     sample["triaged_by"] = "analyst_web"
     _write_fixture("findings/finding-updated.json", sample)
 
-    # findings/finding-locked-error.json — small enough to inline.
+    # findings/finding-locked-error.json: small enough to inline.
     locked_id = int(serialised_p1[2]["id"])
     scan_id = int(ctx["scan_run"]["id"])
     locked = {
@@ -480,7 +482,7 @@ def produce_findings_filter_options(ctx: dict, findings_meta: dict) -> None:
         if isinstance(rid, int):
             repo_counts[rid] += 1
 
-    # finding_type is a list-typed column — flatten before counting.
+    # finding_type is a list-typed column, so flatten before counting.
     finding_types: list[str] = []
     for r in rows:
         for ft in r.get("finding_type") or []:
@@ -755,7 +757,7 @@ def produce_scans(ctx: dict) -> None:
 def _build_scan_config_repos(ctx: dict) -> list[dict]:
     """Construct ScanConfigRepo entries from the repositories table.
 
-    Mirrors ``web/api/scans.py:get_scans_config`` — ``source`` is the
+    Mirrors ``web/api/scans.py:get_scans_config``. ``source`` is the
     comma-joined repo type list (e.g. ``"ui,api"``) and ``location`` is
     ``"docker"`` when a container is configured else ``"local"``.
     """
@@ -814,7 +816,7 @@ def produce_repositories(ctx: dict) -> None:
         {"items": [], "total": 0, "offset": 0, "limit": 500},
     )
 
-    # Single repo detail (config/repository.json — used by /repositories/:id)
+    # Single repo detail (config/repository.json, used by /repositories/:id)
     if items:
         _write_fixture("config/repository.json", items[0])
 
@@ -874,7 +876,7 @@ def produce_tool_overrides() -> None:
         ("project-2", raw["project_2"]),
         ("empty", raw["empty"]),
     ):
-        _validate(ToolOverrideResponse, payload)
+        _validate(ToolOverrideListResponse, payload)
         _write_fixture(f"config/tool-overrides-{slug}.json", payload)
 
 
@@ -935,7 +937,7 @@ def produce_projects(ctx: dict, findings_meta: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Triage / Reports / Chat — wire-shape templates
+# Triage / Reports / Chat: wire-shape templates
 # ---------------------------------------------------------------------------
 
 
@@ -944,7 +946,7 @@ def _substitute(payload: Any, ctx: dict, extras: dict) -> Any:
     bag = {**ctx, **extras}
 
     def lookup(token: str):
-        # token format: type:key — type ∈ {int, str, ints}
+        # token format: type:key, where type is one of int, str, ints
         kind, _, key = token.partition(":")
         val = bag.get(key)
         if val is None:
@@ -970,7 +972,7 @@ def _substitute(payload: Any, ctx: dict, extras: dict) -> Any:
         ):
             return lookup(payload[2:-2])
         # Embedded token(s): replace each occurrence with str(value). Only
-        # match our typed tokens — kind ∈ {int, str, ints} — so GitHub's
+        # match our typed tokens (kind is one of int, str, ints) so GitHub's
         # ${{...}} in real finding descriptions is left untouched.
         import re as _re
 
@@ -1098,7 +1100,7 @@ def main() -> int:
 
     ctx = build_context()
 
-    # Silence unused-import warnings — these are loaded for side-effect of
+    # Silence unused-import warnings: these are loaded for side-effect of
     # being importable, not to invoke directly here.
     _ = (ScanCancelResponse,)
 
