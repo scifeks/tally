@@ -479,6 +479,8 @@ class ScanStartRequest(BaseModel):
     All fields optional; empty arrays mean "scan everything" per
     endpoints.md §9. Field names are camelCase to match the SSE/HTTP
     contract; aliases accept snake_case for REPL/tooling parity.
+    The argProfileIds field (D-1-4) is additive: existing callers that
+    omit it continue to work unchanged.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -499,6 +501,10 @@ class ScanStartRequest(BaseModel):
     skipEnrichment: bool = Field(
         default=False,
         validation_alias=AliasChoices("skipEnrichment", "skip_enrichment"),
+    )
+    argProfileIds: list[int] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("argProfileIds", "arg_profile_ids"),
     )
 
 
