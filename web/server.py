@@ -31,6 +31,7 @@ from web.api.locks import router as locks_router
 from web.api.platform import platform_v1_router
 from web.api.projects import v1_router as projects_v1_router
 from web.api.reports import v1_router as reports_projects_v1_router
+from web.api.saved_scans import saved_scans_v1_router
 from web.api.scans import v1_router as scans_projects_v1_router
 from web.api.tools import projects_tools_v1_router, runtime_v1_router, tools_v1_router
 from web.api.triage import v1_router as triage_projects_v1_router
@@ -130,6 +131,7 @@ def create_app(
     app.include_router(tools_v1_router, prefix="/api/v1/tools")
     app.include_router(projects_tools_v1_router, prefix="/api/v1/projects")
     app.include_router(arg_profiles_v1_router, prefix="/api/v1/projects")
+    app.include_router(saved_scans_v1_router, prefix="/api/v1/projects")
     app.include_router(runtime_v1_router, prefix="/api/v1")
     app.include_router(platform_v1_router, prefix="/api/v1")
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
