@@ -74,7 +74,7 @@ export const savedScansHandlers = [
   }),
   http.put('/api/v1/projects/:projectId/saved-scans/:savedScanId', async ({ params }) => {
     if (params.savedScanId === SAVED_SCAN_NOT_FOUND_ID) {
-      return errorEnvelope(404, 'NOT_FOUND', `saved_scan id ${params.savedScanId} not found`)
+      return errorEnvelope(404, 'NOT_FOUND', `Saved scan id=${params.savedScanId} not found`)
     }
     return HttpResponse.json(savedScanReplaced)
   }),
