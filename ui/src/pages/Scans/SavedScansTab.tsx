@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Bookmark, Check, Play, Save, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { ConfiguredRepo, ConfiguredTool, SavedScan, Segment } from '@/lib/types'
+import type { ConfiguredRepo, ConfiguredTool, SavedScanListItem, Segment } from '@/lib/types'
+import type { SavedScanWriteInput } from '@/lib/api/useSavedScans'
 import type { ToolArgProfile } from '@/lib/api/useToolArgProfiles'
 
 const SEGMENT_LABEL: Record<Segment, string> = {
@@ -11,16 +12,26 @@ const SEGMENT_LABEL: Record<Segment, string> = {
   secrets: 'SECRETS',
 }
 
+interface FormState {
+  id?: number
+  name: string
+  repoIds: number[]
+  toolIds: string[]
+  skipToolIds: string[]
+  segments: Segment[]
+  skipEnrichment: boolean
+}
+
 interface SavedScansTabProps {
   projectId: number
-  savedScans: SavedScan[]
+  savedScans: SavedScanListItem[]
   configuredRepos: ConfiguredRepo[]
   configuredTools: ConfiguredTool[]
   toolArgProfiles: ToolArgProfile[]
   configuredSegments: Segment[]
-  onSave: (scan: SavedScan, isNew: boolean) => void
-  onDelete: (scanId: string) => void
-  onSelect: (scanId: string) => void
+  onSave: (payload: SavedScanWriteInput, existingId?: number) => void
+  onDelete: (savedScanId: number) => void
+  onSelect: (savedScanId: number) => void
   isSaving: boolean
 }
 
@@ -36,9 +47,9 @@ export function SavedScansTab({
   onSelect,
   isSaving,
 }: SavedScansTabProps) {
-  const [selectedScanId, setSelectedScanId] = useState<string | null>(null)
+  const [selectedScanId, setSelectedScanId] = useState<number | null>(null)
   const [isCreatingNew, setIsCreatingNew] = useState(false)
-  const [form, setForm] = useState<Partial<SavedScan>>({})
+  const [form, setForm] = useState<Partial<FormState>>({})
 
   const selectedScan = savedScans.find(s => s.id === selectedScanId)
 
@@ -70,11 +81,28 @@ export function SavedScansTab({
 
   useEffect(() => {
     if (selectedScanId && selectedScan) {
-      setForm({ ...selectedScan })
+      // Build the synthetic toolIds from toolNames + argProfileIds.
+      const toolIds: string[] = [
+        ...selectedScan.toolNames,
+        ...selectedScan.argProfileIds.map(pid => {
+          const opt = allToolOptions.find(
+            o => o.id === `${toolArgProfiles.find(p => p.id === pid)?.toolName}:${pid}`
+          )
+          return opt?.id ?? String(pid)
+        }),
+      ]
+      setForm({
+        id: selectedScan.id,
+        name: selectedScan.name,
+        repoIds: selectedScan.repoIds,
+        toolIds,
+        skipToolIds: selectedScan.skipToolIds,
+        segments: selectedScan.segments,
+        skipEnrichment: selectedScan.skipEnrichment,
+      })
       setIsCreatingNew(false)
     } else if (isCreatingNew) {
       setForm({
-        projectId,
         name: '',
         repoIds: [],
         toolIds: [],
@@ -83,7 +111,7 @@ export function SavedScansTab({
         skipEnrichment: false,
       })
     }
-  }, [selectedScanId, selectedScan, isCreatingNew, projectId])
+  }, [selectedScanId, selectedScan, isCreatingNew, projectId, allToolOptions, toolArgProfiles])
 
   const handleCreateNew = () => {
     setSelectedScanId(null)
@@ -92,19 +120,29 @@ export function SavedScansTab({
 
   const handleSave = () => {
     if (!form.name?.trim()) return
-    const scanToSave: SavedScan = {
-      id: form.id ?? `temp-${Date.now()}`,
-      projectId,
-      name: form.name,
+    const toolNames: string[] = []
+    const argProfileIds: number[] = []
+    for (const id of form.toolIds ?? []) {
+      const colonIdx = id.lastIndexOf(':')
+      if (colonIdx !== -1) {
+        const profileId = Number(id.slice(colonIdx + 1))
+        if (!isNaN(profileId)) {
+          argProfileIds.push(profileId)
+          continue
+        }
+      }
+      toolNames.push(id)
+    }
+    const payload: SavedScanWriteInput = {
+      name: form.name.trim(),
+      skipEnrichment: form.skipEnrichment ?? false,
       repoIds: form.repoIds ?? [],
-      toolIds: form.toolIds ?? [],
+      toolNames,
       skipToolIds: form.skipToolIds ?? [],
       segments: form.segments ?? [],
-      skipEnrichment: form.skipEnrichment ?? false,
-      createdAt: form.createdAt ?? new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      argProfileIds,
     }
-    onSave(scanToSave, isCreatingNew)
+    onSave(payload, form.id)
     if (isCreatingNew) {
       setIsCreatingNew(false)
     }
@@ -117,7 +155,7 @@ export function SavedScansTab({
     }
   }
 
-  const updateForm = <K extends keyof SavedScan>(field: K, value: SavedScan[K]) => {
+  const updateForm = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm(f => ({ ...f, [field]: value }))
   }
 
@@ -161,7 +199,7 @@ export function SavedScansTab({
                 >
                   <div className="text-xs font-bold">{scan.name}</div>
                   <div className="text-[10px] text-dim">
-                    {scan.toolIds.length} tools &middot;{' '}
+                    {scan.toolNames.length + scan.argProfileIds.length} tools &middot;{' '}
                     {scan.repoIds.length === 0 ? 'all repos' : `${scan.repoIds.length} repos`}
                   </div>
                 </button>

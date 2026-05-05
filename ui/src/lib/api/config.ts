@@ -247,6 +247,24 @@ export const REST_ENDPOINTS = {
   deleteToolOverride: (projectId: number, toolId: string) =>
     `${API_BASE_URL}/projects/${projectId}/tools/overrides/${toolId}`,
 
+  // ─── Saved Scans ────────────────────────────────────────────────────────────
+  /** GET: list saved scans for a project. Query: offset?, limit?. */
+  listSavedScans: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/saved-scans`,
+  /** GET: hydrated saved scan by ID. */
+  getSavedScan: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}`,
+  /** POST: create a saved scan. */
+  createSavedScan: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/saved-scans`,
+  /** PUT: replace a saved scan. */
+  updateSavedScan: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}`,
+  /** DELETE: remove a saved scan. */
+  deleteSavedScan: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}`,
+  /** POST: trigger a run from a saved scan. */
+  runSavedScan: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}/run`,
+
   // ─── Argument Profiles ──────────────────────────────────────────────────────
   /** GET: list argument profiles for a project. Query: tool_name?, offset?, limit?. */
   listArgProfiles: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/arg-profiles`,

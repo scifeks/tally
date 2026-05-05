@@ -1,121 +1,102 @@
-/**
- * Saved Scans hooks (CLIENT-SIDE MOCK)
- * ====================================
- * Backs the v0-ported "Saved Scans" tab on the Scans page. The store is a
- * module-level Map keyed by projectId. State resets on full page reload —
- * intentional. No fetch, no MSW handler. Once the backend lands, swap the
- * three queryFn / mutationFn bodies for `apiFetch` calls and delete the
- * in-memory store.
- */
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { SavedScan } from '../types'
+import { apiFetch, type ApiError } from './client'
+import { REST_ENDPOINTS } from './config'
+import { useUI } from '../store'
+import type { ApiErrorPayload, SavedScanListItem, SavedScanDetail, Segment } from '../types'
 
-// ─── Seed data (mirrors v0's mockSavedScans) ─────────────────────────────────
-
-const SEED: Record<number, SavedScan[]> = {
-  1: [
-    {
-      id: 'scan-1',
-      projectId: 1,
-      name: 'Full SAST + SCA',
-      repoIds: [],
-      toolIds: ['semgrep', 'osv-scanner', 'gitleaks'],
-      skipToolIds: [],
-      segments: ['sast', 'sca', 'secrets'],
-      skipEnrichment: false,
-      createdAt: '2025-01-10T08:00:00Z',
-      updatedAt: '2025-01-10T08:00:00Z',
-    },
-    {
-      id: 'scan-2',
-      projectId: 1,
-      name: 'Quick Web Scan',
-      repoIds: [1],
-      toolIds: ['noir', 'katana'],
-      skipToolIds: ['xsstrike'],
-      segments: ['web'],
-      skipEnrichment: true,
-      createdAt: '2025-01-12T14:30:00Z',
-      updatedAt: '2025-01-15T09:00:00Z',
-    },
-  ],
+export interface SavedScanListResponse {
+  items: SavedScanListItem[]
+  total: number
+  offset: number
+  limit: number
 }
 
-// ─── In-memory store ─────────────────────────────────────────────────────────
-
-const store: Map<number, SavedScan[]> = new Map(
-  Object.entries(SEED).map(([k, v]) => [Number(k), v.map(s => ({ ...s }))])
-)
-
-function getList(projectId: number): SavedScan[] {
-  return store.get(projectId) ?? []
+export interface SavedScanWriteInput {
+  name: string
+  skipEnrichment: boolean
+  repoIds: number[]
+  toolNames: string[]
+  skipToolIds: string[]
+  segments: Segment[]
+  argProfileIds: number[]
 }
 
-function setList(projectId: number, list: SavedScan[]): void {
-  store.set(projectId, list)
+const LIST_KEY = (projectId: number, offset?: number, limit?: number) =>
+  ['savedScans', projectId, offset ?? null, limit ?? null] as const
+
+const DETAIL_KEY = (projectId: number, id: number) => ['savedScans', projectId, id] as const
+
+function toErrorPayload(err: ApiError): ApiErrorPayload {
+  return { code: err.code, message: err.message, details: err.details, status: err.status }
 }
 
-// ─── Hooks ───────────────────────────────────────────────────────────────────
+export function useSavedScans(projectId: number, opts?: { offset?: number; limit?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.offset !== undefined) params.set('offset', String(opts.offset))
+  if (opts?.limit !== undefined) params.set('limit', String(opts.limit))
+  const qs = params.toString()
 
-const QUERY_KEY = (projectId: number) => ['savedScans', projectId] as const
-
-export function useSavedScans(projectId: number) {
   return useQuery({
-    queryKey: QUERY_KEY(projectId),
-    queryFn: async (): Promise<SavedScan[]> => {
-      await new Promise(resolve => setTimeout(resolve, 100))
-      return getList(projectId).map(s => ({ ...s }))
+    queryKey: LIST_KEY(projectId, opts?.offset, opts?.limit),
+    queryFn: async (): Promise<SavedScanListResponse> => {
+      const url = `${REST_ENDPOINTS.listSavedScans(projectId)}${qs ? `?${qs}` : ''}`
+      return apiFetch<SavedScanListResponse>(url)
     },
-    enabled: Boolean(projectId),
     staleTime: 5 * 60 * 1000,
+    enabled: Boolean(projectId),
+  })
+}
+
+export function useSavedScan(projectId: number, id: number | null) {
+  return useQuery({
+    queryKey: DETAIL_KEY(projectId, id ?? 0),
+    queryFn: async (): Promise<SavedScanDetail> =>
+      apiFetch<SavedScanDetail>(REST_ENDPOINTS.getSavedScan(projectId, id as number)),
+    staleTime: 5 * 60 * 1000,
+    enabled: Boolean(projectId && id),
   })
 }
 
 export function useSaveScan() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation<SavedScan, Error, { scan: SavedScan; isNew: boolean }>({
-    mutationFn: async ({ scan, isNew }) => {
-      await new Promise(resolve => setTimeout(resolve, 100))
-      const now = new Date().toISOString()
-      const list = getList(scan.projectId)
-      if (isNew) {
-        const created: SavedScan = {
-          ...scan,
-          id: `scan-${Date.now()}`,
-          createdAt: now,
-          updatedAt: now,
-        }
-        setList(scan.projectId, [...list, created])
-        return created
-      }
-      const updated: SavedScan = { ...scan, updatedAt: now }
-      setList(
-        scan.projectId,
-        list.map(s => (s.id === scan.id ? updated : s))
-      )
-      return updated
+  return useMutation<
+    SavedScanDetail,
+    ApiError,
+    { projectId: number; payload: SavedScanWriteInput; existingId?: number }
+  >({
+    mutationFn: async ({ projectId, payload, existingId }) => {
+      const url = existingId
+        ? REST_ENDPOINTS.updateSavedScan(projectId, existingId)
+        : REST_ENDPOINTS.createSavedScan(projectId)
+      return apiFetch<SavedScanDetail>(url, {
+        method: existingId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
     },
-    onSuccess: (_, { scan }) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY(scan.projectId) })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (saved, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['savedScans', projectId] })
+      queryClient.invalidateQueries({ queryKey: DETAIL_KEY(projectId, saved.id) })
     },
   })
 }
 
 export function useDeleteSavedScan() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation<void, Error, { projectId: number; scanId: string }>({
-    mutationFn: async ({ projectId, scanId }) => {
-      await new Promise(resolve => setTimeout(resolve, 100))
-      setList(
-        projectId,
-        getList(projectId).filter(s => s.id !== scanId)
-      )
+  return useMutation<void, ApiError, { projectId: number; savedScanId: number }>({
+    mutationFn: async ({ projectId, savedScanId }) => {
+      await apiFetch<void>(REST_ENDPOINTS.deleteSavedScan(projectId, savedScanId), {
+        method: 'DELETE',
+      })
     },
+    onError: err => setError(toErrorPayload(err)),
     onSuccess: (_, { projectId }) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY(projectId) })
+      queryClient.invalidateQueries({ queryKey: ['savedScans', projectId] })
     },
   })
 }
