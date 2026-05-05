@@ -290,6 +290,34 @@ async def replace_arg_profile(
     return _to_response(profile, project_id, with_download_url=True)
 
 
+@arg_profiles_v1_router.get(
+    "/{project_id}/arg-profiles/{profile_id}/files/{arg_name}",
+)
+async def download_arg_file(
+    project_id: int,
+    profile_id: int,
+    arg_name: str,
+    request: Request,
+) -> Response:
+    """Stream the bytes of a file-type arg."""
+    service, _saved_scans_repo, _paths = await asyncio.to_thread(
+        _build_service, request, project_id
+    )
+    try:
+        data = await asyncio.to_thread(service.read_file_arg, profile_id, arg_name)
+    except ArgFileNameError as exc:
+        raise PathTraversal(str(exc)) from exc
+    if data is None:
+        raise NotFound(
+            f"No file persisted for arg {arg_name!r} on profile {profile_id}"
+        )
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{arg_name}"'},
+    )
+
+
 @arg_profiles_v1_router.delete(
     "/{project_id}/arg-profiles/{profile_id}",
     status_code=204,
