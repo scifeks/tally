@@ -1,0 +1,13 @@
+{
+  "id": 1,
+  "toolName": "gitleaks",
+  "name": "verbose-only",
+  "args": [
+    {
+      "name": "--verbose",
+      "type": "flag"
+    }
+  ],
+  "createdAt": "2026-05-05T01:41:47.223144+00:00",
+  "updatedAt": "2026-05-05T01:41:47.229137+00:00"
+}

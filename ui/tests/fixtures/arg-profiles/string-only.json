@@ -1,0 +1,14 @@
+{
+  "id": 2,
+  "toolName": "semgrep",
+  "name": "timeout-30s",
+  "args": [
+    {
+      "name": "--timeout",
+      "value": "30",
+      "type": "string"
+    }
+  ],
+  "createdAt": "2026-05-05T01:41:53.745243+00:00",
+  "updatedAt": "2026-05-05T01:41:53.751303+00:00"
+}

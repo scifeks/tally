@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "name": "Quick Secrets Sweep",
+  "skipEnrichment": false,
+  "repos": [],
+  "tools": [
+    {
+      "toolName": "gitleaks"
+    }
+  ],
+  "argProfiles": [],
+  "createdAt": "2026-05-05T01:42:28.007636+00:00",
+  "updatedAt": "2026-05-05T01:42:28.007636+00:00"
+}
