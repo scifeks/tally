@@ -1,10 +1,3 @@
-/**
- * useScans Hooks
- * ==============
- * Fetches scan history and provides mutations for starting/stopping scans.
- * Also provides SSE subscription for live scan events.
- */
-
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import type {
@@ -74,7 +67,7 @@ function mapScanConfig(api: ScanConfigResponseApi): ProjectScanConfig {
 
 // ─── Scan-history: wire-format types & inline mapper ────────────────────────
 
-interface ScanRunSummaryApi {
+export interface ScanRunSummaryApi {
   id: number
   project_id: number | null
   status: string | null
@@ -94,7 +87,7 @@ interface ScansListResponseApi {
   limit: number
 }
 
-function mapScan(api: ScanRunSummaryApi): Scan {
+export function mapScan(api: ScanRunSummaryApi): Scan {
   return {
     id: api.id,
     projectId: api.project_id ?? 0,
@@ -134,10 +127,8 @@ function buildScanHistoryUrl(
 // ─── Hooks ──────────────────────────────────────────────────────────────────
 
 /**
- * Fetches scan configuration for a project (available repos, tools, domains).
- * Used to populate the advanced scan options UI. Backend serves snake_case;
- * the inline mapper renames `domain`/`domains` → `segment`/`segments` to
- * match the FE Segment vocabulary.
+ * Backend serves snake_case; the inline mapper renames `domain`/`domains` →
+ * `segment`/`segments` to match the FE Segment vocabulary.
  */
 export function useProjectScanConfig(projectId: number) {
   return useQuery({
@@ -157,7 +148,6 @@ export interface UseScanHistoryOptions {
 }
 
 /**
- * Paginated scan history for a project, served by GET /api/v1/projects/:id/scans.
  * Mirrors the `useFindings` infinite-query shape: items are flattened across
  * pages, callers see `data: Scan[]` plus the standard load-more controls.
  */
@@ -204,21 +194,16 @@ export function useScanHistory(projectId: number, options?: UseScanHistoryOption
   }
 }
 
-/**
- * Returns only the running scans for a project. Useful for the running-badge
- * derive and the "scans running" modal. Backed by `useScanHistory` so it
- * stays consistent with the cached list.
- */
+/** Backed by `useScanHistory` so it stays consistent with the cached list. */
 export function useRunningScans(projectId: number) {
   const { data: scans } = useScanHistory(projectId)
   return useMemo(() => scans.filter(s => s.status === 'running'), [scans])
 }
 
 /**
- * Starts a new scan run. Body is camelCase per `ScanStartRequest`. On error,
- * routes the failure into the `scanMutationError` slice so the
- * `ScanMutationErrorModal` can surface it (most importantly the 409 raised
- * when a scan is already running for the project).
+ * Body is camelCase per `ScanStartRequest`. On error, routes the failure into
+ * the `scanMutationError` slice so the `ScanMutationErrorModal` can surface
+ * it, including the 409 raised when a scan is already running for the project.
  */
 export function useStartScan() {
   const queryClient = useQueryClient()
@@ -261,9 +246,9 @@ interface ScanCancelResponseApi {
 }
 
 /**
- * Cancels an in-flight scan run. The backend returns the run with status
- * `cancelling`; the actual `run_cancelled` SSE event arrives later and is
- * the trigger for the page UI to flip to the cancelled state.
+ * The backend returns the run with status `cancelling`; the actual
+ * `run_cancelled` SSE event arrives later and triggers the page UI to flip
+ * to the cancelled state.
  */
 export function useCancelScan() {
   const queryClient = useQueryClient()
@@ -401,16 +386,13 @@ function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
 }
 
 /**
- * Subscribes to project-scoped scan SSE. Forwards each typed event to
- * `onEvent` (mapped to `ScanLogEvent`). Snapshot frames are forwarded
- * separately to `onSnapshot` because the snapshot payload shape differs
- * from the per-event shape (it carries `active_run_ids` instead of the
- * per-run fields).
+ * Snapshot frames are forwarded separately to `onSnapshot` because the
+ * snapshot payload shape differs from the per-event shape (it carries
+ * `active_run_ids` instead of the per-run fields).
  *
- * `enrichment_progress` events MUST be rendered by the page consumer in
- * a single state slot (latest-value-wins); never appended to a logs array.
- * That's a §12.7 mandate from the roadmap - repeated enrichment ticks would
- * otherwise grow the log unbounded.
+ * `enrichment_progress` events must be rendered by the page consumer in
+ * a single state slot (latest-value-wins). Appending them to a logs array
+ * would grow the log unbounded during long enrichment runs.
  */
 export function useScanEvents(
   projectId: number,
@@ -443,15 +425,10 @@ export function useScanEvents(
 }
 
 /**
- * useRunningScansCount Hook (SSE)
- * ===============================
- * Returns the number of scan runs currently in flight for `projectId`. Wired
- * to `GET /api/v1/projects/{id}/scans/events` via `apiEventSource`. The
+ * Wired to `GET /api/v1/projects/{id}/scans/events` via `apiEventSource`. The
  * snapshot frame on connect carries `active_run_ids: number[]`; subsequent
  * `run_started` / `run_completed` / `run_cancelled` / `run_failed` events
- * update the set.
- *
- * Returns 0 (and skips the subscription) when `projectId` is null.
+ * update the set. Returns 0 and skips the subscription when `projectId` is null.
  */
 export function useRunningScansCount(projectId: number | null): number {
   const [count, setCount] = useState(0)

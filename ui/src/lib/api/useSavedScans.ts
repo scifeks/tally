@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, type ApiError } from './client'
 import { REST_ENDPOINTS } from './config'
+import { mapScan, type ScanRunSummaryApi } from './useScans'
 import { useUI } from '../store'
-import type { ApiErrorPayload, SavedScanListItem, SavedScanDetail, Segment } from '../types'
+import type { ApiErrorPayload, SavedScanListItem, SavedScanDetail, Scan, Segment } from '../types'
 
 export interface SavedScanListResponse {
   items: SavedScanListItem[]
@@ -80,6 +81,23 @@ export function useSaveScan() {
     onSuccess: (saved, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['savedScans', projectId] })
       queryClient.invalidateQueries({ queryKey: DETAIL_KEY(projectId, saved.id) })
+    },
+  })
+}
+
+export function useRunSavedScan() {
+  const queryClient = useQueryClient()
+
+  return useMutation<Scan, ApiError, { projectId: number; savedScanId: number }>({
+    mutationFn: async ({ projectId, savedScanId }) => {
+      const data = await apiFetch<ScanRunSummaryApi>(
+        REST_ENDPOINTS.runSavedScan(projectId, savedScanId),
+        { method: 'POST' }
+      )
+      return mapScan(data)
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['scans', projectId] })
     },
   })
 }
