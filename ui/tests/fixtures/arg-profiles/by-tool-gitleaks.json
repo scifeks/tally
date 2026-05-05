@@ -21,7 +21,6 @@
         {
           "name": "--config",
           "path": "arg_files/3/--config",
-          "downloadUrl": null,
           "type": "file"
         }
       ],

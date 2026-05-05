@@ -117,7 +117,7 @@ class TestArgProfilesList:
         assert len(item["args"]) == 1
         file_arg = item["args"][0]
         assert file_arg["name"] == "--rules"
-        assert file_arg.get("downloadUrl") is None
+        assert "downloadUrl" not in file_arg
 
 
 class TestArgProfilesDetail:
