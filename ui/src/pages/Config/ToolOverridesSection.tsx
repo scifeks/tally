@@ -2,7 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { Wrench, ChevronDown, ChevronRight, FileText, Plus, Trash2, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
-import { useToolArgProfile, useSaveToolArgProfile } from '@/lib/api'
+import { useToolArgProfileList, useSaveToolArgProfile, useDeleteToolArgProfile } from '@/lib/api'
+import {
+  mapProfilesToTemplates,
+  mapTemplateToWriteInput,
+  profileMatchesTemplate,
+} from '@/lib/api/useToolArgProfiles'
+import type { ToolArgProfile } from '@/lib/api'
 import type {
   ArgsMode,
   ArgumentTemplate,
@@ -35,20 +41,22 @@ export function ToolOverridesSection({
   const [form, setForm] = useState<Partial<ToolOverrideConfig>>({})
   const [_isDirty, setIsDirty] = useState(false)
 
-  // Argument profile state (CLIENT-SIDE MOCK, see useToolArgProfiles).
-  // Stored separately from `form` so the real ToolOverrideConfig save flow
-  // is unaffected.
   const [argsMode, setArgsMode] = useState<ArgsMode>('stock')
   const [templates, setTemplates] = useState<ArgumentTemplate[]>([])
+  const [serverProfiles, setServerProfiles] = useState<ToolArgProfile[]>([])
   const [templatesExpanded, setTemplatesExpanded] = useState(false)
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
-
-  const argProfileQuery = useToolArgProfile(projectId, selectedToolId)
-  const saveArgProfile = useSaveToolArgProfile()
 
   const selectedTool = catalog.find(t => t.id === selectedToolId)
   const existingOverride = overrides.find(o => o.toolId === selectedToolId)
   const isNew = selectedToolId && !existingOverride
+
+  const argProfileQuery = useToolArgProfileList(
+    projectId,
+    selectedTool ? { toolName: selectedTool.name } : undefined
+  )
+  const saveProfile = useSaveToolArgProfile()
+  const deleteProfile = useDeleteToolArgProfile()
 
   const availableForAdd = catalog.filter(t => !overrides.some(o => o.toolId === t.id))
 
@@ -57,6 +65,7 @@ export function ToolOverridesSection({
       const existing = overrides.find(o => o.toolId === selectedToolId)
       if (existing) {
         setForm({ ...existing })
+        setArgsMode(existing.argsMode ?? 'stock')
       } else {
         const tool = catalog.find(t => t.id === selectedToolId)
         setForm({
@@ -65,22 +74,21 @@ export function ToolOverridesSection({
           type: 'repo',
           location: tool?.supportsLocal ? 'local' : 'docker',
         })
+        setArgsMode('stock')
       }
       setIsDirty(false)
       setTemplatesExpanded(false)
       setEditingTemplateId(null)
+      setServerProfiles([])
+      setTemplates([])
     }
   }, [selectedToolId, overrides, catalog])
 
-  // Sync arg-profile state from the mock store whenever the query resolves.
   useEffect(() => {
-    if (selectedToolId && argProfileQuery.data) {
-      setArgsMode(argProfileQuery.data.argsMode)
-      setTemplates(argProfileQuery.data.argumentTemplates)
-    } else if (selectedToolId) {
-      setArgsMode('stock')
-      setTemplates([])
-    }
+    if (!selectedToolId || !argProfileQuery.data) return
+    const loaded = argProfileQuery.data.items
+    setTemplates(mapProfilesToTemplates(loaded))
+    setServerProfiles(loaded)
   }, [selectedToolId, argProfileQuery.data])
 
   const updateField = <K extends keyof ToolOverrideConfig>(
@@ -91,14 +99,50 @@ export function ToolOverridesSection({
     setIsDirty(true)
   }
 
-  const handleSave = () => {
-    if (!selectedToolId) return
+  const handleSave = async () => {
+    if (!selectedToolId || !selectedTool) return
     onSave({ ...form, argsMode } as ToolOverrideConfig, !!isNew)
-    saveArgProfile.mutate({
-      projectId,
-      toolId: selectedToolId,
-      profile: { argsMode, argumentTemplates: templates },
-    })
+
+    const serverIdSet = new Set(serverProfiles.map(p => String(p.id)))
+    const currentServerIdSet = new Set(templates.filter(t => serverIdSet.has(t.id)).map(t => t.id))
+    const mutations: Promise<ToolArgProfile | void>[] = []
+
+    for (const t of templates) {
+      if (!serverIdSet.has(t.id)) {
+        mutations.push(
+          saveProfile.mutateAsync({
+            projectId,
+            profile: mapTemplateToWriteInput(selectedTool.name, t),
+            files: {},
+          })
+        )
+      } else {
+        const sp = serverProfiles.find(p => String(p.id) === t.id)
+        if (sp && !profileMatchesTemplate(sp, t)) {
+          mutations.push(
+            saveProfile.mutateAsync({
+              projectId,
+              profile: mapTemplateToWriteInput(selectedTool.name, t),
+              files: {},
+              existingId: sp.id,
+            })
+          )
+        }
+      }
+    }
+
+    for (const sp of serverProfiles) {
+      if (!currentServerIdSet.has(String(sp.id))) {
+        mutations.push(deleteProfile.mutateAsync({ projectId, profileId: sp.id }))
+      }
+    }
+
+    if (mutations.length > 0) {
+      await Promise.all(mutations).catch(() => {
+        // errors surfaced per-mutation via onError
+      })
+    }
+
     setIsDirty(false)
   }
 
