@@ -35,7 +35,6 @@
         {
           "name": "--config",
           "path": "arg_files/3/--config",
-          "downloadUrl": null,
           "type": "file"
         }
       ],
@@ -59,7 +58,6 @@
         {
           "name": "--config",
           "path": "arg_files/4/--config",
-          "downloadUrl": null,
           "type": "file"
         }
       ],

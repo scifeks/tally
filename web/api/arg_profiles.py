@@ -165,6 +165,7 @@ def _validation_error_to_envelope(exc: ToolArgProfileValidationError) -> dict:
 @arg_profiles_v1_router.get(
     "/{project_id}/arg-profiles",
     response_model=ArgProfileListResponse,
+    response_model_exclude_none=True,
 )
 async def list_arg_profiles(
     project_id: int,
