@@ -113,4 +113,6 @@ class TestStartScanArgProfiles:
         body = resp.json()
         assert body["error"]["code"] == "VALIDATION_ERROR"
         fields = body["error"]["details"]["fields"]
-        assert any(entry["field"] == "argProfileIds[0]" for entry in fields)
+        match = next((e for e in fields if e["field"] == "argProfileIds[0]"), None)
+        assert match is not None
+        assert "issue" in match

@@ -8,11 +8,14 @@ Owns the cancel orchestration (``cancel_scan``, ``cancel_all``) and
 the SSE on-connect snapshot accessors (``peek_active_run``,
 ``list_active_runs``) so route bodies stop poking the
 ``ScanRunRegistry`` directly.
+Owns scan-start validation rules so route adapters do not contain
+business logic.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
 
 from application.tools.scan_run_registry import (
@@ -21,15 +24,43 @@ from application.tools.scan_run_registry import (
     get_scan_run_registry,
 )
 from core.project_paths import ProjectPaths
+from domain.scans.entry import SCAN_RUN_STATUSES
+from domain.tools.scan_types import SEGMENT_ORDER
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
 
 if TYPE_CHECKING:
     from application.ports.run_repository import RunRepositoryPort
+    from application.ports.tool_arg_profiles import ToolArgProfilesRepositoryPort
     from application.project.registry_service import ProjectRegistryService
+    from application.project.repositories_service import ProjectRepositoriesService
+    from application.tools.registry import ToolRegistry
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class FieldError:
+    """Single field validation failure."""
+
+    field: str
+    issue: str
+
+
+class ScanValidationError(Exception):
+    """Raised when one or more scan request validation rules fail."""
+
+    def __init__(self, fields: list[FieldError]) -> None:
+        self.fields: tuple[FieldError, ...] = tuple(fields)
+        super().__init__(f"validation failed: {len(self.fields)} field error(s)")
+
+
+@dataclass(frozen=True)
+class StartScanResolved:
+    """Values derived during validation that the route needs for dispatch."""
+
+    repo_names: list[str]
 
 
 class ProjectNotFound(LookupError):
@@ -161,6 +192,78 @@ class ScansService:
     def list_active_runs(self) -> list[ScanRunHandle]:
         """Live scan handles for this project."""
         return self._registry.list_for_project(self._project_id)
+
+    def validate_start_request(
+        self,
+        *,
+        repo_ids: list[int],
+        tool_ids: list[str],
+        skip_tool_ids: list[str],
+        domains: list[str],
+        arg_profile_ids: list[int],
+        repos_service: ProjectRepositoriesService,
+        tool_registry: ToolRegistry,
+        profiles_repo: ToolArgProfilesRepositoryPort,
+    ) -> StartScanResolved:
+        """Validate a start-scan request and return resolved values.
+
+        Aggregates all field errors before raising so the caller sees
+        every problem at once.
+        """
+        errors: list[FieldError] = []
+
+        lookup = repos_service.find_by_ids(self._project_id, repo_ids)
+        if lookup.missing:
+            errors.append(
+                FieldError(field="repoIds", issue=f"unknown repo ids: {lookup.missing}")
+            )
+
+        valid_tools = {tw.name for tw in tool_registry.get_all_tools()}
+        bad_tool_ids = [t for t in tool_ids if t not in valid_tools]
+        if bad_tool_ids:
+            errors.append(
+                FieldError(field="toolIds", issue=f"unknown tool names: {bad_tool_ids}")
+            )
+        bad_skip_ids = [t for t in skip_tool_ids if t not in valid_tools]
+        if bad_skip_ids:
+            errors.append(
+                FieldError(
+                    field="skipToolIds", issue=f"unknown tool names: {bad_skip_ids}"
+                )
+            )
+
+        valid_domains = set(SEGMENT_ORDER)
+        bad_domains = [d for d in domains if d not in valid_domains]
+        if bad_domains:
+            errors.append(
+                FieldError(field="domains", issue=f"unknown domains: {bad_domains}")
+            )
+
+        if arg_profile_ids:
+            existing = set(profiles_repo.existing_ids(arg_profile_ids))
+            for idx, pid in enumerate(arg_profile_ids):
+                if pid not in existing:
+                    errors.append(
+                        FieldError(
+                            field=f"argProfileIds[{idx}]",
+                            issue=f"unknown profile id {pid}",
+                        )
+                    )
+
+        if errors:
+            raise ScanValidationError(errors)
+
+        repo_names = [lookup.found[rid].name for rid in repo_ids]
+        return StartScanResolved(repo_names=repo_names)
+
+    def validate_status(self, status: str | None) -> None:
+        """Raise ScanValidationError if status is not a known scan status."""
+        if status is None:
+            return
+        if status not in SCAN_RUN_STATUSES:
+            raise ScanValidationError(
+                [FieldError(field="status", issue=f"unknown scan status {status!r}")]
+            )
 
     def _safe_mark_cancelling(self, run_id: int) -> None:
         try:

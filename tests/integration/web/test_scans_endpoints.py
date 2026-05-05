@@ -278,7 +278,6 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
     repo_repo = RepositoryRepository(factory)
     active = repo_repo.list_active()
     assert active, "Expected at least one repo after seed"
-    seeded_id = active[0].id
 
     # Phase 9: repoIds is list[int]. Send an integer id that doesn't exist
     # in the active repositories table.
@@ -290,10 +289,9 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
     assert resp.status_code == 422
     body = resp.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
-    assert 99999 in body["error"]["details"]["unknown"]
-    # The seeded active repo must surface in `available`; proves the
-    # validator's positive set is wired.
-    assert seeded_id in body["error"]["details"]["available"]
+    fields = body["error"]["details"]["fields"]
+    assert any(f["field"] == "repoIds" for f in fields)
+    assert any("99999" in f.get("issue", "") for f in fields)
 
 
 @pytest.mark.asyncio
@@ -326,10 +324,9 @@ async def test_start_scan_soft_deleted_repo_422(
     assert resp.status_code == 422
     body = resp.json()
     assert body["error"]["code"] == "VALIDATION_ERROR"
-    assert repo_id in body["error"]["details"]["unknown"]
-    # The only seeded repo is now soft-deleted, so available must not
-    # include it (and is otherwise empty in this fixture).
-    assert repo_id not in body["error"]["details"]["available"]
+    fields = body["error"]["details"]["fields"]
+    assert any(f["field"] == "repoIds" for f in fields)
+    assert any(str(repo_id) in f.get("issue", "") for f in fields)
 
 
 @pytest.mark.asyncio

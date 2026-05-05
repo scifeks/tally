@@ -22,7 +22,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
@@ -34,8 +34,16 @@ from application.scans.scans_service import (
     ScanNotCancellable,
     ScanNotFound,
     ScansService,
+    ScanValidationError,
 )
 from application.tools.registry import discover_tools
+from application.tools.scan_service import get_scan_service
+from core.project_paths import ProjectPaths
+from domain.scans.entry import ScanRunRow, ToolRunRow
+from domain.tools.scan_types import SEGMENT_ORDER
+from infrastructure.events.ids import new_event_id
+from infrastructure.events.sse import format_sse_frame
+from infrastructure.events.types import EOS, BusEvent
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 from infrastructure.store.repositories.runs import RunRepository
@@ -45,19 +53,16 @@ from infrastructure.store.repositories.tool_arg_profiles import (
 from infrastructure.store.repositories.tool_overrides import (
     ToolOverridesRepository,
 )
-
-if TYPE_CHECKING:
-    from application.tools.registry import ToolRegistry
-from application.tools.scan_service import get_scan_service
-from core.project_paths import ProjectPaths
-from domain.scans.entry import SCAN_RUN_STATUSES, ScanRunRow, ToolRunRow
-from domain.tools.scan_types import SEGMENT_ORDER
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.sse import format_sse_frame
-from infrastructure.events.types import EOS, BusEvent
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
-from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
+from web.api._errors import (
+    Conflict,
+    JobBusyError,
+    NotFound,
+)
+from web.api._errors import (
+    ValidationError as ApiValidationError,
+)
 from web.api._project_resolver import _resolve_project
 from web.api._scan_run_summary import scan_run_to_summary
 from web.api.schemas import (
@@ -120,14 +125,8 @@ def _tool_run_to_item(row: ToolRunRow) -> ToolRunItem:
     )
 
 
-def _validate_status(status: str | None) -> None:
-    if status is None:
-        return
-    if status not in SCAN_RUN_STATUSES:
-        raise ValidationError(
-            f"unknown scan status {status!r}",
-            details={"allowed": list(SCAN_RUN_STATUSES)},
-        )
+def _validation_error_to_envelope(exc: ScanValidationError) -> dict:
+    return {"fields": [{"field": fe.field, "issue": fe.issue} for fe in exc.fields]}
 
 
 def _build_progress(
@@ -297,7 +296,13 @@ async def list_scans(
 ) -> ScansListResponse:
     """Paginated scan history for a project, newest-first."""
     service = _service(request, project_id)
-    _validate_status(status)
+    try:
+        service.validate_status(status)
+    except ScanValidationError as exc:
+        raise ApiValidationError(
+            "Scan query validation failed",
+            details=_validation_error_to_envelope(exc),
+        ) from exc
     repo = service.run_repo
     rows, total = await asyncio.to_thread(
         repo.list_for_project,
@@ -342,29 +347,35 @@ async def start_scan(
         project_name=project_name,
         overrides_repo=overrides_repo,
     )
-    repo_lookup = ProjectRepositoriesService.build(
+
+    repos_service = ProjectRepositoriesService.build(
         request.app.state.project_registry,
         request.app.state.base_path,
-    ).find_by_ids(project_id, body.repoIds)
-    if repo_lookup.missing:
-        raise ValidationError(
-            f"unknown repo ids: {repo_lookup.missing}",
-            details={
-                "unknown": repo_lookup.missing,
-                "available": repo_lookup.available,
-            },
-        )
-    _validate_tool_ids(tool_registry, body.toolIds + body.skipToolIds)
-    _validate_domains(body.domains)
+    )
+    profiles_repo = ToolArgProfilesRepository(factory)
+    service = _service(request, project_id)
 
-    repo_names = [repo_lookup.found[rid].name for rid in body.repoIds]
+    try:
+        resolved = await asyncio.to_thread(
+            service.validate_start_request,
+            repo_ids=body.repoIds,
+            tool_ids=body.toolIds,
+            skip_tool_ids=body.skipToolIds,
+            domains=body.domains,
+            arg_profile_ids=body.argProfileIds,
+            repos_service=repos_service,
+            tool_registry=tool_registry,
+            profiles_repo=profiles_repo,
+        )
+    except ScanValidationError as exc:
+        raise ApiValidationError(
+            "Scan validation failed",
+            details=_validation_error_to_envelope(exc),
+        ) from exc
 
     sink = EventBusScanSink(request.app.state.event_bus)
-
     run_repo = RunRepository(factory)
     chat_session_repo = ChatSessionRepository(factory)
-    profiles_repo = ToolArgProfilesRepository(factory)
-    _validate_arg_profile_ids(profiles_repo, body.argProfileIds)
 
     try:
         handle = await asyncio.to_thread(
@@ -376,7 +387,7 @@ async def start_scan(
             run_repo=run_repo,
             chat_session_repo=chat_session_repo,
             profiles_repo=profiles_repo,
-            repo_ids=tuple(repo_names),
+            repo_ids=tuple(resolved.repo_names),
             tool_ids=tuple(body.toolIds),
             domains=tuple(body.domains),
             skip_tool_ids=tuple(body.skipToolIds),
@@ -388,7 +399,6 @@ async def start_scan(
     except JobBusy as exc:
         raise JobBusyError("scan", exc.current_holder) from exc
 
-    service = _service(request, project_id)
     fresh = await asyncio.to_thread(service.run_repo.get, handle.run_id)
     if fresh is None:
         raise NotFound(f"scan run {handle.run_id} not found after creation")
@@ -472,55 +482,6 @@ async def get_scan(
         skip_enrichment=scan_row.skip_enrichment,
         tool_runs=[_tool_run_to_item(r) for r in tool_rows],
     )
-
-
-# More helpers (after route declarations to keep the public surface visible)
-
-
-def _validate_tool_ids(tool_registry: ToolRegistry, tool_ids: list[str]) -> None:
-    if not tool_ids:
-        return
-    valid = {tw.name for tw in tool_registry.get_all_tools()}
-    missing = [t for t in tool_ids if t not in valid]
-    if missing:
-        raise ValidationError(
-            f"unknown tool names: {missing}",
-            details={"unknown": missing, "available": sorted(valid)},
-        )
-
-
-def _validate_domains(domains: list[str]) -> None:
-    if not domains:
-        return
-    valid = set(SEGMENT_ORDER)
-    missing = [d for d in domains if d not in valid]
-    if missing:
-        raise ValidationError(
-            f"unknown domains: {missing}",
-            details={"unknown": missing, "available": sorted(valid)},
-        )
-
-
-def _validate_arg_profile_ids(
-    profiles_repo: ToolArgProfilesRepository,
-    arg_profile_ids: list[int],
-) -> None:
-    if not arg_profile_ids:
-        return
-    existing = set(profiles_repo.existing_ids(arg_profile_ids))
-    fields = [
-        {
-            "field": f"argProfileIds[{idx}]",
-            "message": f"unknown profile id {pid}",
-        }
-        for idx, pid in enumerate(arg_profile_ids)
-        if pid not in existing
-    ]
-    if fields:
-        raise ValidationError(
-            "unknown arg profile ids",
-            details={"fields": fields},
-        )
 
 
 async def _build_snapshot(

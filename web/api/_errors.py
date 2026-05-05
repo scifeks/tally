@@ -129,13 +129,11 @@ async def _handle_request_validation(
 ) -> JSONResponse:
     fields = []
     for e in exc.errors():
-        fields.append(
-            {
-                "field": ".".join(str(p) for p in e.get("loc", ())),
-                "type": e.get("type", ""),
-                "message": e.get("msg", ""),
-            }
-        )
+        loc = e.get("loc", ())
+        parts = [str(p) for p in loc]
+        if parts and parts[0] in {"body", "query", "path", "header", "cookie"}:
+            parts = parts[1:]
+        fields.append({"field": ".".join(parts), "issue": e.get("msg", "")})
     return error_response(
         422,
         "VALIDATION_ERROR",

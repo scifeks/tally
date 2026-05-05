@@ -162,8 +162,9 @@ def test_request_validation_error_shape(client: TestClient) -> None:
     assert len(fields) > 0
     field = fields[0]
     assert "field" in field
-    assert "type" in field
-    assert "message" in field
+    assert "issue" in field
+    assert "type" not in field
+    assert "message" not in field
     assert "input" not in field
     assert "ctx" not in field
     assert "url" not in field
