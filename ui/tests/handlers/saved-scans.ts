@@ -41,6 +41,8 @@ export const savedScansHandlers = [
       name?: string
       toolNames?: string[]
       argProfileIds?: number[]
+      skipToolIds?: string[]
+      segments?: string[]
     }
     if (!body.name) {
       return errorEnvelope(422, 'VALIDATION_ERROR', 'Request validation failed', {

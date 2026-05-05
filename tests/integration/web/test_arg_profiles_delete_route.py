@@ -116,6 +116,8 @@ class TestArgProfilesDelete:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -151,6 +153,8 @@ class TestArgProfilesDelete:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
         scan_id_2 = saved_scans_repo.insert(
@@ -158,6 +162,8 @@ class TestArgProfilesDelete:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 

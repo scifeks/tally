@@ -84,6 +84,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=True,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -104,6 +106,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -113,6 +117,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["trufflehog"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -126,6 +132,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -143,6 +151,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -156,6 +166,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["not-a-tool"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -169,6 +181,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[999],
             )
 
@@ -182,6 +196,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -198,6 +214,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -225,6 +243,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -234,6 +254,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=True,
             repo_ids=[repo_b],
             tool_names=["trufflehog"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -253,6 +275,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
         assert excinfo.value.saved_scan_id == 999
@@ -266,6 +290,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         service.create(
@@ -273,6 +299,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -283,6 +311,8 @@ class TestSavedScansServiceIntegration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -297,6 +327,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -333,6 +365,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -349,6 +383,8 @@ class TestSavedScansServiceIntegration:
             skip_enrichment=True,
             repo_ids=[],
             tool_names=["semgrep"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         assert replaced.saved_scan.name == "alpha-2"

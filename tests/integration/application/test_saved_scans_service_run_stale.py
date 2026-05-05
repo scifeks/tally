@@ -103,6 +103,8 @@ class TestRunSavedScanStaleness:
             skip_enrichment=True,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -132,6 +134,8 @@ class TestRunSavedScanStaleness:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -159,6 +163,8 @@ class TestRunSavedScanStaleness:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -187,6 +193,8 @@ class TestRunSavedScanStaleness:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -215,6 +223,8 @@ class TestRunSavedScanStaleness:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["semgrep"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -243,6 +253,8 @@ class TestRunSavedScanStaleness:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 

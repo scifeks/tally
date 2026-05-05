@@ -57,6 +57,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -100,6 +102,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -137,6 +141,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         RepositoryRepository(factory).soft_delete(repo_id)
@@ -170,6 +176,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["definitely-not-a-tool"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -197,6 +205,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -236,6 +246,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -282,6 +294,38 @@ class TestSavedScansRun:
         assert resp.status_code == 404
         assert resp.json()["error"]["code"] == "NOT_FOUND"
 
+    async def test_run_dispatches_segments_and_skip_tool_ids(
+        self, app_client, monkeypatch
+    ) -> None:
+        """Saved-scan segments and skip_tool_names flow into start_scan kwargs."""
+        client, _fid, _kb, factory, mut_headers, project_id = app_client
+        spawned: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            "application.tools.scan_service.ScanService._run_worker",
+            lambda self, **kw: spawned.append(kw),
+        )
+
+        saved = SavedScansRepository(factory)
+        scan_id = saved.insert(
+            name="segments-and-skip",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["semgrep"],
+            segments=["sast", "secrets"],
+            arg_profile_ids=[],
+        )
+
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/saved-scans/{scan_id}/run",
+            headers=mut_headers,
+        )
+        assert resp.status_code == 202, resp.text
+
+        assert len(spawned) == 1
+        assert set(spawned[0]["domains"]) == {"sast", "secrets"}
+        assert spawned[0]["skip_tool_ids"] == ("semgrep",)
+
     async def test_run_403_without_csrf(self, app_client) -> None:
         """POST without CSRF token returns 403."""
         client, _fid, _kb, factory, _mut_headers, project_id = app_client
@@ -291,6 +335,8 @@ class TestSavedScansRun:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 

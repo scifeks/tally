@@ -47,6 +47,8 @@ class SavedScanHydrated:
     saved_scan: SavedScan
     repos: list[SavedScanRepoRef]
     tools: list[SavedScanToolRef]
+    skip_tool_names: list[str]
+    segments: list[str]
     arg_profiles: list[SavedScanArgProfileRef]
 
 
@@ -55,6 +57,8 @@ class SavedScanListItem:
     saved_scan: SavedScan
     repo_ids: list[int]
     tool_names: list[str]
+    skip_tool_names: list[str]
+    segments: list[str]
     arg_profile_ids: list[int]
 
 

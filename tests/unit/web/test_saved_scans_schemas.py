@@ -50,7 +50,25 @@ class TestSavedScansSchemas:
         assert m.skip_enrichment is False
         assert m.repo_ids == []
         assert m.tool_names == []
+        assert m.skip_tool_ids == []
+        assert m.segments == []
         assert m.arg_profile_ids == []
+
+    def test_write_request_skip_tool_ids_camel_and_snake(self) -> None:
+        camel = SavedScanWriteRequest.model_validate(
+            {"name": "x", "skipToolIds": ["xsstrike"]}
+        )
+        snake = SavedScanWriteRequest.model_validate(
+            {"name": "x", "skip_tool_ids": ["xsstrike"]}
+        )
+        assert camel.skip_tool_ids == ["xsstrike"]
+        assert snake.skip_tool_ids == ["xsstrike"]
+
+    def test_write_request_segments(self) -> None:
+        m = SavedScanWriteRequest.model_validate(
+            {"name": "x", "segments": ["sast", "secrets"]}
+        )
+        assert m.segments == ["sast", "secrets"]
 
     def test_write_request_rejects_empty_name(self) -> None:
         with pytest.raises(ValidationError):
@@ -67,6 +85,8 @@ class TestSavedScansSchemas:
             skip_enrichment=False,
             repo_ids=[1, 2],
             tool_names=["gitleaks"],
+            skip_tool_ids=["xsstrike"],
+            segments=["sast", "secrets"],
             arg_profile_ids=[12],
             created_at="2026-05-03T12:00:00Z",
             updated_at="2026-05-03T12:00:00Z",
@@ -75,6 +95,8 @@ class TestSavedScansSchemas:
         assert wire["skipEnrichment"] is False
         assert wire["repoIds"] == [1, 2]
         assert wire["toolNames"] == ["gitleaks"]
+        assert wire["skipToolIds"] == ["xsstrike"]
+        assert wire["segments"] == ["sast", "secrets"]
         assert wire["argProfileIds"] == [12]
         assert wire["createdAt"].startswith("2026-")
 
@@ -87,6 +109,8 @@ class TestSavedScansSchemas:
                     skip_enrichment=False,
                     repo_ids=[],
                     tool_names=["x"],
+                    skip_tool_ids=[],
+                    segments=[],
                     arg_profile_ids=[],
                     created_at="t",
                     updated_at="t",
@@ -112,6 +136,8 @@ class TestSavedScansSchemas:
                 ),
             ],
             tools=[SavedScanToolResponse(tool_name="gitleaks")],
+            skip_tool_ids=["xsstrike"],
+            segments=["sast", "sca", "secrets"],
             arg_profiles=[
                 SavedScanArgProfileResponse(
                     id=12, tool_name="gitleaks", name="verbose-scan"
@@ -125,6 +151,8 @@ class TestSavedScansSchemas:
         assert wire["repos"][0]["deletedAt"] is None
         assert wire["repos"][1]["deletedAt"] == "2026-01-01T00:00:00Z"
         assert wire["tools"] == [{"toolName": "gitleaks"}]
+        assert wire["skipToolIds"] == ["xsstrike"]
+        assert wire["segments"] == ["sast", "sca", "secrets"]
         assert wire["argProfiles"][0]["toolName"] == "gitleaks"
 
     def test_stale_details_discriminated_union(self) -> None:

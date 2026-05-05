@@ -47,6 +47,8 @@ class TestSavedScansList:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -73,6 +75,8 @@ class TestSavedScansList:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -107,6 +111,8 @@ class TestSavedScansList:
             skip_enrichment=True,
             repo_ids=[repo_id_one, repo_id_two],
             tool_names=["gitleaks", "semgrep"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -134,6 +140,8 @@ class TestSavedScansDetail:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
 
@@ -163,6 +171,8 @@ class TestSavedScansDetail:
             skip_enrichment=False,
             repo_ids=[repo_id],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -197,9 +207,51 @@ class TestSavedScansDetail:
             skip_enrichment=True,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
         resp = await client.get(f"/api/v1/projects/{project_id}/saved-scans/{scan_id}")
         assert resp.status_code == 200
         assert resp.json()["skipEnrichment"] is True
+
+    async def test_detail_includes_skip_tool_ids_and_segments(self, app_client) -> None:
+        """GET detail echoes skipToolIds and segments stored on the scan."""
+        client, _finding_id, _kb_mock, factory, _mut_headers, project_id = app_client
+        repo = SavedScansRepository(factory)
+        scan_id = repo.insert(
+            name="with-new-fields",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["semgrep"],
+            segments=["sast", "secrets"],
+            arg_profile_ids=[],
+        )
+
+        resp = await client.get(f"/api/v1/projects/{project_id}/saved-scans/{scan_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["skipToolIds"] == ["semgrep"]
+        assert set(data["segments"]) == {"sast", "secrets"}
+
+    async def test_list_includes_skip_tool_ids_and_segments(self, app_client) -> None:
+        """List items echo skipToolIds and segments."""
+        client, _finding_id, _kb_mock, factory, _mut_headers, project_id = app_client
+        repo = SavedScansRepository(factory)
+        repo.insert(
+            name="list-new-fields",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["semgrep"],
+            segments=["sca"],
+            arg_profile_ids=[],
+        )
+
+        resp = await client.get(f"/api/v1/projects/{project_id}/saved-scans")
+        assert resp.status_code == 200
+        item = resp.json()["items"][0]
+        assert item["skipToolIds"] == ["semgrep"]
+        assert item["segments"] == ["sca"]

@@ -47,6 +47,8 @@ class SavedScansRepositoryPort(Protocol):
         skip_enrichment: bool,
         repo_ids: list[int],
         tool_names: list[str],
+        skip_tool_names: list[str],
+        segments: list[str],
         arg_profile_ids: list[int],
     ) -> int: ...
     def replace(
@@ -57,6 +59,8 @@ class SavedScansRepositoryPort(Protocol):
         skip_enrichment: bool,
         repo_ids: list[int],
         tool_names: list[str],
+        skip_tool_names: list[str],
+        segments: list[str],
         arg_profile_ids: list[int],
     ) -> None: ...
     def delete(self, saved_scan_id: int) -> None: ...
