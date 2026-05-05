@@ -150,7 +150,13 @@ export {
 } from './useConfig'
 
 // Saved scans
-export { useSavedScans, useSavedScan, useSaveScan, useDeleteSavedScan } from './useSavedScans'
+export {
+  useSavedScans,
+  useSavedScan,
+  useSaveScan,
+  useDeleteSavedScan,
+  useRunSavedScan,
+} from './useSavedScans'
 export type { SavedScanListResponse, SavedScanWriteInput } from './useSavedScans'
 
 // Tool argument profiles
