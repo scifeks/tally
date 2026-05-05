@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from fastapi import APIRouter, Query, Request, Response
 
+from application.locking import JobBusy
 from application.ports.saved_scans import SavedScanNameConflict
+from application.saved_scans.errors import StaleSavedScanError
 from application.saved_scans.service import (
     SavedScanNotFound,
     SavedScansService,
     SavedScanValidationError,
 )
+from application.tools.registry import discover_tools
+from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
 from domain.saved_scans.entry import (
     SavedScanArgProfileRef,
@@ -19,15 +24,27 @@ from domain.saved_scans.entry import (
     SavedScanListItem,
     SavedScanRepoRef,
     SavedScanToolRef,
+    StaleSavedScanArgProfileItem,
+    StaleSavedScanItem,
+    StaleSavedScanRepoItem,
+    StaleSavedScanToolItem,
 )
 from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
+from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.saved_scans import SavedScansRepository
 from infrastructure.store.repositories.tool_arg_profiles import (
     ToolArgProfilesRepository,
 )
-from web.api._errors import Conflict, NotFound
+from infrastructure.store.repositories.tool_overrides import (
+    ToolOverridesRepository,
+)
+from web.adapters.event_bus_scan_sink import EventBusScanSink
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
+from web.api._errors import Conflict, JobBusyError, NotFound, StaleSavedScan
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
+from web.api._scan_run_summary import scan_run_to_summary
 from web.api.saved_scans_schemas import (
     SavedScanArgProfileResponse,
     SavedScanDetailResponse,
@@ -36,7 +53,13 @@ from web.api.saved_scans_schemas import (
     SavedScanRepoResponse,
     SavedScanToolResponse,
     SavedScanWriteRequest,
+    StaleSavedScanArgProfileItemDetail,
+    StaleSavedScanDetails,
+    StaleSavedScanItemDetail,
+    StaleSavedScanRepoItemDetail,
+    StaleSavedScanToolItemDetail,
 )
+from web.api.schemas import ScanRunSummary
 
 saved_scans_v1_router = APIRouter()
 
@@ -227,3 +250,99 @@ async def delete_saved_scan(
         raise NotFound(f"Saved scan id={saved_scan_id} not found")
     await asyncio.to_thread(service.delete, saved_scan_id)
     return Response(status_code=204)
+
+
+def _stale_items_to_envelope(
+    items: tuple[StaleSavedScanItem, ...],
+) -> list[dict[str, Any]]:
+    """Translate domain stale items to the STALE_SAVED_SCAN wire shape."""
+    parts: list[StaleSavedScanItemDetail] = []
+    for item in items:
+        if isinstance(item, StaleSavedScanRepoItem):
+            parts.append(StaleSavedScanRepoItemDetail(id=item.id, name=item.name))
+        elif isinstance(item, StaleSavedScanToolItem):
+            parts.append(StaleSavedScanToolItemDetail(name=item.name))
+        elif isinstance(item, StaleSavedScanArgProfileItem):
+            parts.append(StaleSavedScanArgProfileItemDetail(id=item.id))
+    return StaleSavedScanDetails(stale_items=parts).model_dump(by_alias=True)[
+        "staleItems"
+    ]
+
+
+@saved_scans_v1_router.post(
+    "/{project_id}/saved-scans/{saved_scan_id}/run",
+    response_model=ScanRunSummary,
+    status_code=202,
+)
+async def run_saved_scan(
+    project_id: int,
+    saved_scan_id: int,
+    request: Request,
+) -> ScanRunSummary:
+    """Dispatch a saved scan; returns 202 with the new run summary."""
+    row = _resolve_project(request, project_id)
+    project_name = row.name
+    base_path: str = request.app.state.base_path
+    tool_registry = request.app.state.tool_registry
+
+    paths = ProjectPaths.from_registry_row(row)
+    factory = ConnectionFactory(paths.findings_db)
+
+    overrides_repo = ToolOverridesRepository(factory)
+    discover_tools(
+        tool_registry,
+        base_path,
+        project_name=project_name,
+        overrides_repo=overrides_repo,
+    )
+
+    saved_scans_repo = SavedScansRepository(factory)
+    profiles_repo = ToolArgProfilesRepository(factory)
+    saved_scans_service = SavedScansService(
+        saved_scans_repo, profiles_repo, tool_registry
+    )
+
+    try:
+        hydrated = await asyncio.to_thread(
+            saved_scans_service.run_saved_scan, saved_scan_id
+        )
+    except SavedScanNotFound as exc:
+        raise NotFound(str(exc)) from exc
+    except StaleSavedScanError as exc:
+        raise StaleSavedScan(_stale_items_to_envelope(exc.stale_items)) from exc
+
+    run_repo = RunRepository(factory)
+    chat_session_repo = ChatSessionRepository(factory)
+    sink = EventBusScanSink(request.app.state.event_bus)
+
+    repo_names = tuple(r.name for r in hydrated.repos)
+    tool_names = tuple(t.tool_name for t in hydrated.tools)
+    arg_profile_ids = [p.id for p in hydrated.arg_profiles]
+
+    try:
+        handle = await asyncio.to_thread(
+            get_scan_service().start_scan,
+            project_id=project_id,
+            project_name=project_name,
+            base_path=base_path,
+            tool_registry=tool_registry,
+            run_repo=run_repo,
+            chat_session_repo=chat_session_repo,
+            profiles_repo=profiles_repo,
+            repo_ids=repo_names,
+            tool_ids=tool_names,
+            domains=(),
+            skip_tool_ids=(),
+            skip_enrichment=hydrated.saved_scan.skip_enrichment,
+            prompt=NoApprovalPromptAdapter(),
+            event_sink=sink,
+            arg_profile_ids=arg_profile_ids,
+            saved_scan_id=saved_scan_id,
+        )
+    except JobBusy as exc:
+        raise JobBusyError("scan", exc.current_holder) from exc
+
+    fresh = await asyncio.to_thread(run_repo.get, handle.run_id)
+    if fresh is None:
+        raise NotFound(f"scan run {handle.run_id} not found after creation")
+    return scan_run_to_summary(fresh)

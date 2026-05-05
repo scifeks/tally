@@ -59,6 +59,7 @@ from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
+from web.api._scan_run_summary import scan_run_to_summary
 from web.api.schemas import (
     ScanCancelAllResponse,
     ScanCancelResponse,
@@ -90,21 +91,6 @@ def _service(request: Request, project_id: int) -> ScansService:
         return ScansService.for_project(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
-
-
-def _scan_run_to_summary(row: ScanRunRow) -> ScanRunSummary:
-    return ScanRunSummary(
-        id=row.id,
-        project_id=row.project_id,
-        status=row.status,
-        started_at=row.started_at,
-        finished_at=row.finished_at,
-        repo_ids=row.repo_ids,
-        tool_ids=row.tool_ids,
-        domains=row.domains,
-        findings_count=row.findings_count,
-        skip_enrichment=row.skip_enrichment,
-    )
 
 
 def _tool_run_to_item(row: ToolRunRow) -> ToolRunItem:
@@ -321,7 +307,7 @@ async def list_scans(
         limit=limit,
     )
     return ScansListResponse(
-        items=[_scan_run_to_summary(r) for r in rows],
+        items=[scan_run_to_summary(r) for r in rows],
         total=total,
         offset=offset,
         limit=limit,
@@ -378,6 +364,7 @@ async def start_scan(
     run_repo = RunRepository(factory)
     chat_session_repo = ChatSessionRepository(factory)
     profiles_repo = ToolArgProfilesRepository(factory)
+    _validate_arg_profile_ids(profiles_repo, body.argProfileIds)
 
     try:
         handle = await asyncio.to_thread(
@@ -394,6 +381,7 @@ async def start_scan(
             domains=tuple(body.domains),
             skip_tool_ids=tuple(body.skipToolIds),
             skip_enrichment=body.skipEnrichment,
+            arg_profile_ids=body.argProfileIds,
             prompt=NoApprovalPromptAdapter(),
             event_sink=sink,
         )
@@ -404,7 +392,7 @@ async def start_scan(
     fresh = await asyncio.to_thread(service.run_repo.get, handle.run_id)
     if fresh is None:
         raise NotFound(f"scan run {handle.run_id} not found after creation")
-    return _scan_run_to_summary(fresh)
+    return scan_run_to_summary(fresh)
 
 
 @v1_router.post(
@@ -510,6 +498,28 @@ def _validate_domains(domains: list[str]) -> None:
         raise ValidationError(
             f"unknown domains: {missing}",
             details={"unknown": missing, "available": sorted(valid)},
+        )
+
+
+def _validate_arg_profile_ids(
+    profiles_repo: ToolArgProfilesRepository,
+    arg_profile_ids: list[int],
+) -> None:
+    if not arg_profile_ids:
+        return
+    existing = set(profiles_repo.existing_ids(arg_profile_ids))
+    fields = [
+        {
+            "field": f"argProfileIds[{idx}]",
+            "message": f"unknown profile id {pid}",
+        }
+        for idx, pid in enumerate(arg_profile_ids)
+        if pid not in existing
+    ]
+    if fields:
+        raise ValidationError(
+            "unknown arg profile ids",
+            details={"fields": fields},
         )
 
 

@@ -80,6 +80,16 @@ class JobBusyError(Conflict):
         )
 
 
+class StaleSavedScan(Conflict):
+    default_code = "STALE_SAVED_SCAN"
+
+    def __init__(self, stale_items: list[dict[str, Any]]) -> None:
+        super().__init__(
+            "Saved scan references items that no longer exist",
+            details={"staleItems": stale_items},
+        )
+
+
 class ValidationError(APIError):
     status = 422
     default_code = "VALIDATION_ERROR"
