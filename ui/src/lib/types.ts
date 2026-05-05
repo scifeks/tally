@@ -812,22 +812,42 @@ export interface ArgumentTemplate {
 /** Whether an override uses stock args or custom argument templates. */
 export type ArgsMode = 'stock' | 'custom'
 
-/**
- * A saved scan configuration: a named bundle of repos, tools, skip-tools,
- * segments, and skip-enrichment. v0 used `domains: Domain[]`; we use the
- * project's existing `Segment` enum (UI label remains "Domains").
- */
-export interface SavedScan {
-  id: string
-  projectId: number
+/** List-projection row from `GET /saved-scans`. */
+export interface SavedScanListItem {
+  id: number
   name: string
-  /** Empty = all repos. */
+  skipEnrichment: boolean
   repoIds: number[]
-  /** Tool ids; can include template refs like "semgrep:tmpl-1". */
-  toolIds: string[]
+  toolNames: string[]
   skipToolIds: string[]
   segments: Segment[]
+  argProfileIds: number[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SavedScanRepo {
+  id: number
+  name: string
+  deletedAt: string | null
+}
+
+export interface SavedScanArgProfile {
+  id: number
+  toolName: string
+  name: string
+}
+
+/** Hydrated row from `GET /saved-scans/{id}`, `POST`, and `PUT`. */
+export interface SavedScanDetail {
+  id: number
+  name: string
   skipEnrichment: boolean
+  repos: SavedScanRepo[]
+  tools: { toolName: string }[]
+  skipToolIds: string[]
+  segments: Segment[]
+  argProfiles: SavedScanArgProfile[]
   createdAt: string
   updatedAt: string
 }

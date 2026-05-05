@@ -80,16 +80,15 @@ export default function Scans() {
     setSelectedSavedScanId(null)
   }, [activeProjectId])
 
-  // Saved scans (CLIENT-SIDE MOCK — see useSavedScans).
-  const { data: savedScans = [] } = useSavedScans(projectIdNum)
+  const { data: savedScansResponse } = useSavedScans(projectIdNum)
+  const savedScans = useMemo(() => savedScansResponse?.items ?? [], [savedScansResponse])
   const { data: argProfilesResponse } = useToolArgProfileList(projectIdNum)
   const toolArgProfiles = argProfilesResponse?.items ?? []
   const saveScan = useSaveScan()
   const deleteSavedScan = useDeleteSavedScan()
 
-  // Currently-staged saved scan (UI surface only — does not influence the
-  // real Start Scan flow, which still posts ad-hoc scan options).
-  const [selectedSavedScanId, setSelectedSavedScanId] = useState<string | null>(null)
+  // UI-only staging: the real Start Scan button ignores this and posts ad-hoc options.
+  const [selectedSavedScanId, setSelectedSavedScanId] = useState<number | null>(null)
   const selectedSavedScan = useMemo(
     () => savedScans.find(s => s.id === selectedSavedScanId) ?? null,
     [savedScans, selectedSavedScanId]
@@ -409,7 +408,7 @@ export default function Scans() {
                       >
                         <div className="font-bold">{scan.name}</div>
                         <div className="text-[10px] text-dim">
-                          {scan.toolIds.length} tools &middot;{' '}
+                          {scan.toolNames.length + scan.argProfileIds.length} tools &middot;{' '}
                           {scan.segments.length > 0
                             ? scan.segments.map(s => SEGMENT_LABEL[s]).join(', ')
                             : 'all domains'}
@@ -808,14 +807,12 @@ export default function Scans() {
           configuredTools={configuredTools}
           toolArgProfiles={toolArgProfiles}
           configuredSegments={configuredDomains}
-          onSave={(scan, isNew) => saveScan.mutate({ scan, isNew })}
-          onDelete={scanId => deleteSavedScan.mutate({ projectId: projectIdNum, scanId })}
-          onSelect={scanId => {
-            // CLIENT-SIDE MOCK: "Run This" stages the saved scan in the
-            // status bar; it does NOT trigger a real scan run. The plain
-            // Start Scan button continues to use ad-hoc options against
-            // the real backend.
-            setSelectedSavedScanId(scanId)
+          onSave={(payload, existingId) =>
+            saveScan.mutate({ projectId: projectIdNum, payload, existingId })
+          }
+          onDelete={savedScanId => deleteSavedScan.mutate({ projectId: projectIdNum, savedScanId })}
+          onSelect={savedScanId => {
+            setSelectedSavedScanId(savedScanId)
             setActiveTab('live')
           }}
           isSaving={saveScan.isPending}
