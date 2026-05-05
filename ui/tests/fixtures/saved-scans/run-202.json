@@ -1,0 +1,12 @@
+{
+  "id": 2,
+  "project_id": 2,
+  "status": "queued",
+  "started_at": null,
+  "finished_at": null,
+  "repo_ids": [],
+  "tool_ids": ["gitleaks"],
+  "domains": [],
+  "findings_count": null,
+  "skip_enrichment": false
+}

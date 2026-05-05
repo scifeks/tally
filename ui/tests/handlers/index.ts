@@ -1,5 +1,8 @@
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
+import { errorEnvelope } from './_helpers'
+import { argProfilesHandlers } from './arg-profiles'
+import { savedScansHandlers } from './saved-scans'
 import projectsFixture from '../fixtures/projects/list.json'
 import runtimeDepsClaudeInstalledFixture from '../fixtures/runtime/deps-claude-installed.json'
 import findingsCountsPopulatedFixture from '../fixtures/findings/counts-populated.json'
@@ -251,15 +254,6 @@ const CONFIG_PROJECT_INFO_NOT_FOUND = '98'
 const CONFIG_REPO_NOT_FOUND = '999'
 const CONFIG_TOOL_OVERRIDE_NOT_FOUND = 'missing'
 
-function errorEnvelope(
-  status: number,
-  code: string,
-  message: string,
-  details: Record<string, unknown> = {}
-) {
-  return HttpResponse.json({ error: { code, message, details } }, { status })
-}
-
 interface FindingsPage {
   items: Array<Record<string, unknown> & { id: number; severity: string; status: string }>
   total: number
@@ -322,8 +316,7 @@ export const handlers = [
     return HttpResponse.json(fixture)
   }),
   http.get('/api/v1/projects/:projectId/meta', ({ params }) => {
-    const fixture =
-      params.projectId === '3' ? projectMetaEmptyFixture : projectMetaPopulatedFixture
+    const fixture = params.projectId === '3' ? projectMetaEmptyFixture : projectMetaPopulatedFixture
     return HttpResponse.json(fixture)
   }),
   http.get('/api/v1/projects/:projectId/findings', ({ params, request }) => {
@@ -337,9 +330,7 @@ export const handlers = [
     if (offset >= 50) {
       return HttpResponse.json(findingsPage2Fixture)
     }
-    return HttpResponse.json(
-      buildFindingsResponse(url, findingsPopulatedFixture as FindingsPage)
-    )
+    return HttpResponse.json(buildFindingsResponse(url, findingsPopulatedFixture as FindingsPage))
   }),
   http.patch('/api/v1/projects/:projectId/findings/:findingId', () => {
     return HttpResponse.json(findingUpdatedFixture)
@@ -397,10 +388,7 @@ export const handlers = [
     )
   }),
   http.post('/api/v1/projects/:projectId/scans/:runId/cancel', ({ params }) => {
-    return HttpResponse.json(
-      { id: Number(params.runId), status: 'cancelling' },
-      { status: 202 }
-    )
+    return HttpResponse.json({ id: Number(params.runId), status: 'cancelling' }, { status: 202 })
   }),
 
   // ─── Triage ───────────────────────────────────────────────────────────────
@@ -426,8 +414,7 @@ export const handlers = [
     return HttpResponse.json(triageDetailProject1Fixture)
   }),
   http.get('/api/v1/projects/:projectId/triage', ({ params, request }) => {
-    const fixture =
-      TRIAGE_HISTORY_FIXTURES[params.projectId as string] ?? triageHistoryEmptyFixture
+    const fixture = TRIAGE_HISTORY_FIXTURES[params.projectId as string] ?? triageHistoryEmptyFixture
     const url = new URL(request.url)
     const offset = Number(url.searchParams.get('offset') ?? 0)
     const limit = Number(url.searchParams.get('limit') ?? 20)
@@ -456,44 +443,32 @@ export const handlers = [
   }),
   http.post('/api/v1/projects/:projectId/triage/:scanRunId/cancel', ({ params }) => {
     if (params.scanRunId === SCAN_RUN_NOT_CANCELLABLE) {
-      return errorEnvelope(
-        409,
-        'TRIAGE_NOT_CANCELLABLE',
-        'triage run is no longer cancellable'
-      )
+      return errorEnvelope(409, 'TRIAGE_NOT_CANCELLABLE', 'triage run is no longer cancellable')
     }
     return HttpResponse.json(triageCancel202Fixture, { status: 202 })
   }),
-  http.post(
-    '/api/v1/projects/:projectId/triage/:scanRunId/resume',
-    async ({ params, request }) => {
-      if (params.scanRunId === SCAN_RUN_NOT_RESUMABLE) {
-        return errorEnvelope(
-          409,
-          'TRIAGE_NOT_RESUMABLE',
-          'triage run is not in a resumable state'
-        )
-      }
-      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-      if (body.acknowledge_injection_risk !== true) {
-        return errorEnvelope(
-          422,
-          'VALIDATION_ERROR',
-          'acknowledge_injection_risk must be true to resume triage',
-          { field: 'acknowledge_injection_risk' }
-        )
-      }
-      return HttpResponse.json(triageResume202Fixture, { status: 202 })
+  http.post('/api/v1/projects/:projectId/triage/:scanRunId/resume', async ({ params, request }) => {
+    if (params.scanRunId === SCAN_RUN_NOT_RESUMABLE) {
+      return errorEnvelope(409, 'TRIAGE_NOT_RESUMABLE', 'triage run is not in a resumable state')
     }
-  ),
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    if (body.acknowledge_injection_risk !== true) {
+      return errorEnvelope(
+        422,
+        'VALIDATION_ERROR',
+        'acknowledge_injection_risk must be true to resume triage',
+        { field: 'acknowledge_injection_risk' }
+      )
+    }
+    return HttpResponse.json(triageResume202Fixture, { status: 202 })
+  }),
 
   // ─── Reports ──────────────────────────────────────────────────────────────
   // Literal-segment routes registered BEFORE the parameterized
   // `:reportId` route so MSW doesn't bind 'drafts'/'latest'/'generate'/
   // 'events' to the param.
   http.get('/api/v1/projects/:projectId/reports/drafts', ({ params }) => {
-    const fixture =
-      REPORT_DRAFTS_FIXTURES[params.projectId as string] ?? reportDraftsEmptyFixture
+    const fixture = REPORT_DRAFTS_FIXTURES[params.projectId as string] ?? reportDraftsEmptyFixture
     return HttpResponse.json(fixture)
   }),
   http.post('/api/v1/projects/:projectId/reports/drafts', async ({ params, request }) => {
@@ -522,20 +497,17 @@ export const handlers = [
       { status: 202 }
     )
   }),
-  http.get(
-    '/api/v1/projects/:projectId/reports/drafts/:section/download',
-    ({ params }) => {
-      // Return 404 for the failed section in fixture-1 to exercise the
-      // not-yet-generated path. All others get the sample markdown body.
-      if (params.projectId === '1' && params.section === 'general-recommendations') {
-        return errorEnvelope(404, 'NOT_FOUND', 'draft not generated')
-      }
-      return new HttpResponse(reportDraftDownloadMarkdown, {
-        status: 200,
-        headers: { 'Content-Type': 'text/markdown' },
-      })
+  http.get('/api/v1/projects/:projectId/reports/drafts/:section/download', ({ params }) => {
+    // Return 404 for the failed section in fixture-1 to exercise the
+    // not-yet-generated path. All others get the sample markdown body.
+    if (params.projectId === '1' && params.section === 'general-recommendations') {
+      return errorEnvelope(404, 'NOT_FOUND', 'draft not generated')
     }
-  ),
+    return new HttpResponse(reportDraftDownloadMarkdown, {
+      status: 200,
+      headers: { 'Content-Type': 'text/markdown' },
+    })
+  }),
   http.post('/api/v1/projects/:projectId/reports/drafts/upload', async ({ request }) => {
     const form = await request.formData()
     const section = form.get('section')
@@ -565,14 +537,10 @@ export const handlers = [
     if (typeof body.format !== 'string') {
       return errorEnvelope(422, 'VALIDATION_ERROR', 'format is required', { field: 'format' })
     }
-    return HttpResponse.json(
-      { ...reportGenerate202Fixture, format: body.format },
-      { status: 202 }
-    )
+    return HttpResponse.json({ ...reportGenerate202Fixture, format: body.format }, { status: 202 })
   }),
   http.get('/api/v1/projects/:projectId/reports', ({ params, request }) => {
-    const fixture =
-      REPORT_HISTORY_FIXTURES[params.projectId as string] ?? reportHistoryEmptyFixture
+    const fixture = REPORT_HISTORY_FIXTURES[params.projectId as string] ?? reportHistoryEmptyFixture
     const url = new URL(request.url)
     const offset = Number(url.searchParams.get('offset') ?? 0)
     const limit = Number(url.searchParams.get('limit') ?? 20)
@@ -583,11 +551,7 @@ export const handlers = [
   }),
   http.post('/api/v1/projects/:projectId/reports/:reportId/cancel', ({ params }) => {
     if (params.reportId === REPORT_NOT_CANCELLABLE) {
-      return errorEnvelope(
-        409,
-        'REPORT_NOT_CANCELLABLE',
-        'report run is no longer cancellable'
-      )
+      return errorEnvelope(409, 'REPORT_NOT_CANCELLABLE', 'report run is no longer cancellable')
     }
     return HttpResponse.json(reportCancel202Fixture, { status: 202 })
   }),
@@ -600,8 +564,7 @@ export const handlers = [
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
   http.get('/api/v1/projects/:projectId/chat/sessions', ({ params, request }) => {
-    const fixture =
-      CHAT_SESSIONS_FIXTURES[params.projectId as string] ?? chatSessionsEmptyFixture
+    const fixture = CHAT_SESSIONS_FIXTURES[params.projectId as string] ?? chatSessionsEmptyFixture
     const url = new URL(request.url)
     const offset = Number(url.searchParams.get('offset') ?? 0)
     const limit = Number(url.searchParams.get('limit') ?? 50)
@@ -613,23 +576,19 @@ export const handlers = [
   http.post('/api/v1/projects/:projectId/chat/sessions', () => {
     return HttpResponse.json(chatCreateSession201Fixture, { status: 201 })
   }),
-  http.delete(
-    '/api/v1/projects/:projectId/chat/sessions/:sessionId',
-    ({ params }) => {
-      if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
-        return errorEnvelope(404, 'NOT_FOUND', 'session not found')
-      }
-      return new HttpResponse(null, { status: 204 })
+  http.delete('/api/v1/projects/:projectId/chat/sessions/:sessionId', ({ params }) => {
+    if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
+      return errorEnvelope(404, 'NOT_FOUND', 'session not found')
     }
-  ),
+    return new HttpResponse(null, { status: 204 })
+  }),
   http.get(
     '/api/v1/projects/:projectId/chat/sessions/:sessionId/messages',
     ({ params, request }) => {
       if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
         return errorEnvelope(404, 'NOT_FOUND', 'session not found')
       }
-      const fixture =
-        CHAT_MESSAGES_FIXTURES[params.sessionId as string] ?? chatMessagesEmptyFixture
+      const fixture = CHAT_MESSAGES_FIXTURES[params.sessionId as string] ?? chatMessagesEmptyFixture
       const url = new URL(request.url)
       const offset = Number(url.searchParams.get('offset') ?? 0)
       const limit = Number(url.searchParams.get('limit') ?? 50)
@@ -643,12 +602,9 @@ export const handlers = [
     '/api/v1/projects/:projectId/chat/sessions/:sessionId/messages',
     async ({ params, request }) => {
       if (params.sessionId === CHAT_SESSION_EXPIRED_ID) {
-        return errorEnvelope(
-          409,
-          'CHAT_SESSION_EXPIRED',
-          'this chat session has been sealed',
-          { expired_at: '2026-04-26T11:45:00+00:00' }
-        )
+        return errorEnvelope(409, 'CHAT_SESSION_EXPIRED', 'this chat session has been sealed', {
+          expired_at: '2026-04-26T11:45:00+00:00',
+        })
       }
       if (params.sessionId === CHAT_STREAM_ALREADY_RUNNING_ID) {
         return errorEnvelope(
@@ -670,23 +626,17 @@ export const handlers = [
       return HttpResponse.json(chatSendMessage202Fixture, { status: 202 })
     }
   ),
-  http.post(
-    '/api/v1/projects/:projectId/chat/sessions/:sessionId/cancel',
-    ({ params }) => {
-      if (params.sessionId === CHAT_NO_ACTIVE_STREAM_ID) {
-        return errorEnvelope(
-          409,
-          'CHAT_NO_ACTIVE_STREAM',
-          'no in-flight stream to cancel',
-          { session_id: Number(params.sessionId) }
-        )
-      }
-      if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
-        return errorEnvelope(404, 'NOT_FOUND', 'session not found')
-      }
-      return HttpResponse.json(chatCancel202Fixture, { status: 202 })
+  http.post('/api/v1/projects/:projectId/chat/sessions/:sessionId/cancel', ({ params }) => {
+    if (params.sessionId === CHAT_NO_ACTIVE_STREAM_ID) {
+      return errorEnvelope(409, 'CHAT_NO_ACTIVE_STREAM', 'no in-flight stream to cancel', {
+        session_id: Number(params.sessionId),
+      })
     }
-  ),
+    if (params.sessionId === CHAT_SESSION_NOT_FOUND_ID) {
+      return errorEnvelope(404, 'NOT_FOUND', 'session not found')
+    }
+    return HttpResponse.json(chatCancel202Fixture, { status: 202 })
+  }),
 
   // ─── Config ───────────────────────────────────────────────────────────────
   http.get('/api/v1/projects/:projectId/info', ({ params }) => {
@@ -701,12 +651,9 @@ export const handlers = [
   }),
   http.patch('/api/v1/projects/:projectId/info', async ({ params, request }) => {
     if (params.projectId === CONFIG_PROJECT_INFO_VALIDATION) {
-      return errorEnvelope(
-        422,
-        'VALIDATION_ERROR',
-        'abbreviation must be at most 3 characters',
-        { field: 'abbreviation' }
-      )
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'abbreviation must be at most 3 characters', {
+        field: 'abbreviation',
+      })
     }
     const fixture = PROJECT_INFO_FIXTURES[params.projectId as string]
     if (!fixture) {
@@ -714,21 +661,16 @@ export const handlers = [
     }
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     if (typeof body.abbreviation === 'string' && body.abbreviation.length > 3) {
-      return errorEnvelope(
-        422,
-        'VALIDATION_ERROR',
-        'abbreviation must be at most 3 characters',
-        { field: 'abbreviation' }
-      )
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'abbreviation must be at most 3 characters', {
+        field: 'abbreviation',
+      })
     }
     return HttpResponse.json({
       ...fixture,
       company_name:
         typeof body.company_name === 'string' ? body.company_name : fixture.company_name,
       department_name:
-        typeof body.department_name === 'string'
-          ? body.department_name
-          : fixture.department_name,
+        typeof body.department_name === 'string' ? body.department_name : fixture.department_name,
       abbreviation:
         typeof body.abbreviation === 'string' ? body.abbreviation : fixture.abbreviation,
     })
@@ -794,29 +736,26 @@ export const handlers = [
     }
     return HttpResponse.json(repo)
   }),
-  http.patch(
-    '/api/v1/projects/:projectId/repositories/:repoId',
-    async ({ params, request }) => {
-      const fixture = REPOSITORIES_FIXTURES[params.projectId as string]
-      if (!fixture) {
-        return errorEnvelope(404, 'NOT_FOUND', 'project not found')
-      }
-      const repoId = Number(params.repoId)
-      const repo = fixture.items.find(item => item.id === repoId)
-      if (!repo) {
-        return errorEnvelope(404, 'NOT_FOUND', 'repository not found')
-      }
-      const form = await request.formData()
-      const payloadRaw = form.get('payload')
-      if (typeof payloadRaw !== 'string') {
-        return errorEnvelope(422, 'VALIDATION_ERROR', 'payload is required', {
-          field: 'payload',
-        })
-      }
-      const payload = JSON.parse(payloadRaw) as Record<string, unknown>
-      return HttpResponse.json({ ...repo, ...payload })
+  http.patch('/api/v1/projects/:projectId/repositories/:repoId', async ({ params, request }) => {
+    const fixture = REPOSITORIES_FIXTURES[params.projectId as string]
+    if (!fixture) {
+      return errorEnvelope(404, 'NOT_FOUND', 'project not found')
     }
-  ),
+    const repoId = Number(params.repoId)
+    const repo = fixture.items.find(item => item.id === repoId)
+    if (!repo) {
+      return errorEnvelope(404, 'NOT_FOUND', 'repository not found')
+    }
+    const form = await request.formData()
+    const payloadRaw = form.get('payload')
+    if (typeof payloadRaw !== 'string') {
+      return errorEnvelope(422, 'VALIDATION_ERROR', 'payload is required', {
+        field: 'payload',
+      })
+    }
+    const payload = JSON.parse(payloadRaw) as Record<string, unknown>
+    return HttpResponse.json({ ...repo, ...payload })
+  }),
   http.delete('/api/v1/projects/:projectId/repositories/:repoId', ({ params }) => {
     if (params.repoId === CONFIG_REPO_NOT_FOUND) {
       return errorEnvelope(404, 'NOT_FOUND', 'repository not found')
@@ -834,22 +773,21 @@ export const handlers = [
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     return HttpResponse.json({ id: 1, ...body }, { status: 201 })
   }),
-  http.put(
-    '/api/v1/projects/:projectId/tools/overrides/:toolName',
-    async ({ params, request }) => {
-      if (params.toolName === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
-        return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
-      }
-      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-      return HttpResponse.json({ id: 1, toolName: params.toolName, ...body })
+  http.put('/api/v1/projects/:projectId/tools/overrides/:toolName', async ({ params, request }) => {
+    if (params.toolName === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
+      return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
     }
-  ),
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    return HttpResponse.json({ id: 1, toolName: params.toolName, ...body })
+  }),
   http.delete('/api/v1/projects/:projectId/tools/overrides/:toolName', ({ params }) => {
     if (params.toolName === CONFIG_TOOL_OVERRIDE_NOT_FOUND) {
       return errorEnvelope(404, 'NOT_FOUND', 'tool override not found')
     }
     return new HttpResponse(null, { status: 204 })
   }),
+  ...argProfilesHandlers,
+  ...savedScansHandlers,
 ]
 
 export const server = setupServer(...handlers)
