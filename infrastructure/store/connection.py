@@ -366,6 +366,21 @@ class ConnectionFactory:
                     PRIMARY KEY (saved_scan_id, tool_name)
                 );
 
+                CREATE TABLE IF NOT EXISTS saved_scan_skip_tools (
+                    saved_scan_id INTEGER NOT NULL
+                                    REFERENCES saved_scans(id) ON DELETE CASCADE,
+                    tool_name     TEXT    NOT NULL,
+                    PRIMARY KEY (saved_scan_id, tool_name)
+                );
+
+                CREATE TABLE IF NOT EXISTS saved_scan_segments (
+                    saved_scan_id INTEGER NOT NULL
+                                    REFERENCES saved_scans(id) ON DELETE CASCADE,
+                    segment       TEXT    NOT NULL
+                                    CHECK (segment IN ('sast','sca','web','secrets')),
+                    PRIMARY KEY (saved_scan_id, segment)
+                );
+
                 CREATE TABLE IF NOT EXISTS saved_scan_arg_profiles (
                     saved_scan_id  INTEGER NOT NULL
                                      REFERENCES saved_scans(id)

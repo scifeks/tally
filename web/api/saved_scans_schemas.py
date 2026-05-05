@@ -41,6 +41,12 @@ class SavedScanWriteRequest(BaseModel):
         validation_alias=AliasChoices("toolNames", "tool_names"),
         serialization_alias="toolNames",
     )
+    skip_tool_ids: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("skipToolIds", "skip_tool_ids"),
+        serialization_alias="skipToolIds",
+    )
+    segments: list[str] = Field(default_factory=list)
     arg_profile_ids: list[int] = Field(
         default_factory=list,
         validation_alias=AliasChoices("argProfileIds", "arg_profile_ids"),
@@ -58,6 +64,8 @@ class SavedScanListItemResponse(BaseModel):
     skip_enrichment: bool = Field(serialization_alias="skipEnrichment")
     repo_ids: list[int] = Field(serialization_alias="repoIds")
     tool_names: list[str] = Field(serialization_alias="toolNames")
+    skip_tool_ids: list[str] = Field(serialization_alias="skipToolIds")
+    segments: list[str]
     arg_profile_ids: list[int] = Field(serialization_alias="argProfileIds")
     created_at: str = Field(serialization_alias="createdAt")
     updated_at: str = Field(serialization_alias="updatedAt")
@@ -112,6 +120,8 @@ class SavedScanDetailResponse(BaseModel):
     skip_enrichment: bool = Field(serialization_alias="skipEnrichment")
     repos: list[SavedScanRepoResponse]
     tools: list[SavedScanToolResponse]
+    skip_tool_ids: list[str] = Field(serialization_alias="skipToolIds")
+    segments: list[str]
     arg_profiles: list[SavedScanArgProfileResponse] = Field(
         serialization_alias="argProfiles"
     )

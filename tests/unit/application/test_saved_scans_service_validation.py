@@ -51,6 +51,8 @@ def _make_hydrated(saved_scan_id: int, name: str = "weekly") -> SavedScanHydrate
             SavedScanRepoRef(id=1, name="auth", deleted_at=None),
         ],
         tools=[SavedScanToolRef(tool_name="gitleaks")],
+        skip_tool_names=[],
+        segments=[],
         arg_profiles=[
             SavedScanArgProfileRef(id=12, tool_name="gitleaks", name="verbose"),
         ],
@@ -141,6 +143,8 @@ class TestValidateCreate:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -160,6 +164,8 @@ class TestValidateCreate:
                 skip_enrichment=False,
                 repo_ids=[1],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -180,6 +186,8 @@ class TestValidateCreate:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks", "trufflehog"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -201,6 +209,8 @@ class TestValidateCreate:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[12, 99],
             )
 
@@ -220,6 +230,8 @@ class TestValidateCreate:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["semgrep"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[42],
             )
 
@@ -242,6 +254,8 @@ class TestValidateCreate:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -263,6 +277,8 @@ class TestValidateReplace:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -283,6 +299,8 @@ class TestValidateReplace:
                 skip_enrichment=False,
                 repo_ids=[1],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -300,6 +318,8 @@ class TestValidateReplace:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["semgrep"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -320,6 +340,8 @@ class TestCreateOrchestration:
             skip_enrichment=True,
             repo_ids=[1, 2],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[12],
         )
 
@@ -328,6 +350,8 @@ class TestCreateOrchestration:
             skip_enrichment=True,
             repo_ids=[1, 2],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[12],
         )
 
@@ -347,6 +371,8 @@ class TestCreateOrchestration:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -368,6 +394,8 @@ class TestCreateOrchestration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -391,6 +419,8 @@ class TestReplaceOrchestration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -415,6 +445,8 @@ class TestReplaceOrchestration:
             skip_enrichment=True,
             repo_ids=[1],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[12],
         )
 
@@ -424,6 +456,8 @@ class TestReplaceOrchestration:
             skip_enrichment=True,
             repo_ids=[1],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[12],
         )
 
@@ -444,6 +478,8 @@ class TestReplaceOrchestration:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
 
@@ -466,5 +502,140 @@ class TestReplaceOrchestration:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
+
+
+class TestValidateSkipToolNames:
+    def test_unknown_skip_tool_name_raises_indexed_error(self) -> None:
+        service = SavedScansService(
+            _make_repo_mock(),
+            _make_profiles_repo_mock(),
+            _make_registry_mock(["gitleaks", "semgrep"]),
+        )
+
+        with pytest.raises(SavedScanValidationError) as excinfo:
+            service.create(
+                name="weekly",
+                skip_enrichment=False,
+                repo_ids=[],
+                tool_names=["gitleaks"],
+                skip_tool_names=["gitleaks", "xsstrike"],
+                segments=[],
+                arg_profile_ids=[],
+            )
+
+        fields = excinfo.value.fields
+        assert any(
+            f.field == "skipToolNames[1]" and "xsstrike" in f.issue for f in fields
+        )
+
+    def test_known_skip_tool_name_passes(self) -> None:
+        repo = _make_repo_mock()
+        repo.insert.return_value = 1
+        repo.get_hydrated.return_value = _make_hydrated(1)
+        service = SavedScansService(
+            repo,
+            _make_profiles_repo_mock(),
+            _make_registry_mock(["gitleaks", "semgrep"]),
+        )
+
+        service.create(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["semgrep"],
+            segments=[],
+            arg_profile_ids=[],
+        )
+
+        repo.insert.assert_called_once()
+
+    def test_empty_skip_tool_names_skips_validation(self) -> None:
+        repo = _make_repo_mock()
+        registry = _make_registry_mock(["gitleaks"])
+        repo.insert.return_value = 1
+        repo.get_hydrated.return_value = _make_hydrated(1)
+        service = SavedScansService(repo, _make_profiles_repo_mock(), registry)
+
+        service.create(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
+            arg_profile_ids=[],
+        )
+
+        registry.list_tool_names.assert_called()
+
+
+class TestValidateSegments:
+    def test_unknown_segment_raises_indexed_error(self) -> None:
+        service = SavedScansService(
+            _make_repo_mock(),
+            _make_profiles_repo_mock(),
+            _make_registry_mock(["gitleaks"]),
+        )
+
+        with pytest.raises(SavedScanValidationError) as excinfo:
+            service.create(
+                name="weekly",
+                skip_enrichment=False,
+                repo_ids=[],
+                tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=["sast", "badvalue"],
+                arg_profile_ids=[],
+            )
+
+        fields = excinfo.value.fields
+        assert any(f.field == "segments[1]" and "badvalue" in f.issue for f in fields)
+
+    def test_known_segments_pass(self) -> None:
+        repo = _make_repo_mock()
+        repo.insert.return_value = 1
+        repo.get_hydrated.return_value = _make_hydrated(1)
+        service = SavedScansService(
+            repo,
+            _make_profiles_repo_mock(),
+            _make_registry_mock(["gitleaks"]),
+        )
+
+        service.create(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=["sast", "secrets"],
+            arg_profile_ids=[],
+        )
+
+        repo.insert.assert_called_once()
+
+    def test_empty_segments_skips_validation(self) -> None:
+        repo = _make_repo_mock()
+        repo.insert.return_value = 1
+        repo.get_hydrated.return_value = _make_hydrated(1)
+        service = SavedScansService(
+            repo,
+            _make_profiles_repo_mock(),
+            _make_registry_mock(["gitleaks"]),
+        )
+
+        service.create(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
+            arg_profile_ids=[],
+        )
+
+        repo.insert.assert_called_once()

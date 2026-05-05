@@ -18,6 +18,8 @@
     }
   ],
   "argProfiles": [],
+  "skipToolIds": [],
+  "segments": [],
   "createdAt": "2026-05-05T01:42:28.007636+00:00",
   "updatedAt": "2026-05-05T01:45:01.582566+00:00"
 }

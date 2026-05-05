@@ -70,6 +70,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[repo_a, repo_b],
             tool_names=["gitleaks", "trufflehog"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
         assert isinstance(rid, int)
@@ -94,6 +96,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         assert isinstance(rid, int)
@@ -107,6 +111,8 @@ class TestSavedScansRepository:
             skip_enrichment=True,
             repo_ids=[],
             tool_names=[],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         hydrated = repo.get_hydrated(rid)
@@ -134,6 +140,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[active, deleted],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         hydrated = repo.get_hydrated(rid)
@@ -151,6 +159,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[9999],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
 
@@ -164,6 +174,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[9999],
             )
 
@@ -182,6 +194,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_a],
         )
         rid_2 = repo.insert(
@@ -189,6 +203,8 @@ class TestSavedScansRepository:
             skip_enrichment=True,
             repo_ids=[repo_a, repo_b],
             tool_names=["gitleaks", "semgrep"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_a, profile_b],
         )
         items, total = repo.list_for_project()
@@ -210,6 +226,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
             for name in ("zeta", "alpha", "mu")
@@ -226,6 +244,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
             for i in range(5)
@@ -253,6 +273,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=[],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[b, a],
         )
         assert repo.list_arg_profile_ids(rid) == sorted([a, b])
@@ -265,6 +287,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         assert repo.list_arg_profile_ids(rid) == []
@@ -284,6 +308,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_a],
         )
         repo.replace(
@@ -292,6 +318,8 @@ class TestSavedScansRepository:
             skip_enrichment=True,
             repo_ids=[repo_b],
             tool_names=["semgrep", "trufflehog"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_b],
         )
         hydrated = repo.get_hydrated(rid)
@@ -310,6 +338,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         before = repo.get_hydrated(rid)
@@ -320,6 +350,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         after = repo.get_hydrated(rid)
@@ -340,6 +372,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_a],
         )
         repo.replace(
@@ -348,6 +382,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=[],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         hydrated = repo.get_hydrated(rid)
@@ -367,6 +403,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         with pytest.raises(sqlite3.IntegrityError):
@@ -376,6 +414,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[9999],
                 tool_names=[],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
         hydrated = repo.get_hydrated(rid)
@@ -391,6 +431,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         with pytest.raises(SavedScanNameConflict) as excinfo:
@@ -399,6 +441,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["semgrep"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
         assert excinfo.value.name == "dup"
@@ -411,6 +455,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         repo.insert(
@@ -418,6 +464,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         with pytest.raises(SavedScanNameConflict) as excinfo:
@@ -427,6 +475,8 @@ class TestSavedScansRepository:
                 skip_enrichment=False,
                 repo_ids=[],
                 tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=[],
                 arg_profile_ids=[],
             )
         assert excinfo.value.name == "b"
@@ -444,6 +494,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[repo_a],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_a],
         )
         repo.delete(rid)
@@ -486,6 +538,8 @@ class TestSavedScansRepository:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=[],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_a],
         )
         repo.delete(rid)
@@ -513,6 +567,8 @@ class TestFindReferencingArgProfile:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
         result = repo.find_referencing_arg_profile(profile_id)
@@ -531,6 +587,8 @@ class TestFindReferencingArgProfile:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
         scan_id_2 = repo.insert(
@@ -538,6 +596,8 @@ class TestFindReferencingArgProfile:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[profile_id],
         )
         result = repo.find_referencing_arg_profile(profile_id)
@@ -547,3 +607,135 @@ class TestFindReferencingArgProfile:
         assert result[1].id == scan_id_2
         assert result[1].name == "weekly"
         assert [r.id for r in result] == sorted([scan_id_1, scan_id_2])
+
+
+class TestSkipToolNamesAndSegments:
+    def test_round_trip_through_insert_and_get_hydrated(
+        self, repo: SavedScansRepository
+    ) -> None:
+        rid = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["xsstrike", "nuclei"],
+            segments=["sast", "secrets"],
+            arg_profile_ids=[],
+        )
+        hydrated = repo.get_hydrated(rid)
+        assert hydrated is not None
+        assert set(hydrated.skip_tool_names) == {"xsstrike", "nuclei"}
+        assert set(hydrated.segments) == {"sast", "secrets"}
+
+    def test_round_trip_through_replace(self, repo: SavedScansRepository) -> None:
+        rid = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["xsstrike"],
+            segments=["sast"],
+            arg_profile_ids=[],
+        )
+        repo.replace(
+            rid,
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["nuclei", "zap"],
+            segments=["sca", "secrets"],
+            arg_profile_ids=[],
+        )
+        hydrated = repo.get_hydrated(rid)
+        assert hydrated is not None
+        assert set(hydrated.skip_tool_names) == {"nuclei", "zap"}
+        assert set(hydrated.segments) == {"sca", "secrets"}
+
+    def test_replace_to_empty_clears_skip_tools_and_segments(
+        self, repo: SavedScansRepository
+    ) -> None:
+        rid = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["xsstrike"],
+            segments=["sast"],
+            arg_profile_ids=[],
+        )
+        repo.replace(
+            rid,
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
+            arg_profile_ids=[],
+        )
+        hydrated = repo.get_hydrated(rid)
+        assert hydrated is not None
+        assert hydrated.skip_tool_names == []
+        assert hydrated.segments == []
+
+    def test_list_for_project_includes_skip_tools_and_segments(
+        self, repo: SavedScansRepository
+    ) -> None:
+        rid = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["xsstrike"],
+            segments=["sast", "sca"],
+            arg_profile_ids=[],
+        )
+        items, _ = repo.list_for_project()
+        item = next(i for i in items if i.saved_scan.id == rid)
+        assert item.skip_tool_names == ["xsstrike"]
+        assert set(item.segments) == {"sast", "sca"}
+
+    def test_invalid_segment_raises_integrity_error(
+        self, repo: SavedScansRepository
+    ) -> None:
+        with pytest.raises(sqlite3.IntegrityError):
+            repo.insert(
+                name="weekly",
+                skip_enrichment=False,
+                repo_ids=[],
+                tool_names=["gitleaks"],
+                skip_tool_names=[],
+                segments=["badvalue"],
+                arg_profile_ids=[],
+            )
+
+    def test_delete_cascades_to_skip_tools_and_segments(
+        self, repo: SavedScansRepository, factory: ConnectionFactory
+    ) -> None:
+        rid = repo.insert(
+            name="weekly",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["xsstrike"],
+            segments=["sast"],
+            arg_profile_ids=[],
+        )
+        repo.delete(rid)
+        with factory.connect() as conn:
+            assert (
+                conn.execute(
+                    "SELECT COUNT(*) FROM saved_scan_skip_tools"
+                    " WHERE saved_scan_id = ?",
+                    (rid,),
+                ).fetchone()[0]
+                == 0
+            )
+            assert (
+                conn.execute(
+                    "SELECT COUNT(*) FROM saved_scan_segments WHERE saved_scan_id = ?",
+                    (rid,),
+                ).fetchone()[0]
+                == 0
+            )

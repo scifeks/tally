@@ -37,6 +37,8 @@
       "name": "strict-with-rules"
     }
   ],
+  "skipToolIds": ["xsstrike"],
+  "segments": ["sast", "sca", "secrets"],
   "createdAt": "2026-05-05T01:42:28.039735+00:00",
   "updatedAt": "2026-05-05T01:42:28.039735+00:00"
 }

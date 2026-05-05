@@ -19,6 +19,7 @@ from domain.saved_scans.entry import (
     StaleSavedScanRepoItem,
     StaleSavedScanToolItem,
 )
+from domain.tools.scan_types.models import SEGMENT_ORDER
 
 if TYPE_CHECKING:
     from application.ports.saved_scans import SavedScansRepositoryPort
@@ -89,6 +90,8 @@ class SavedScansService:
         skip_enrichment: bool,
         repo_ids: list[int],
         tool_names: list[str],
+        skip_tool_names: list[str],
+        segments: list[str],
         arg_profile_ids: list[int],
     ) -> SavedScanHydrated:
         """Create a new saved scan.
@@ -100,6 +103,8 @@ class SavedScansService:
         self._validate_input(
             name=name,
             tool_names=tool_names,
+            skip_tool_names=skip_tool_names,
+            segments=segments,
             arg_profile_ids=arg_profile_ids,
         )
         new_id = self._repo.insert(
@@ -107,6 +112,8 @@ class SavedScansService:
             skip_enrichment=skip_enrichment,
             repo_ids=repo_ids,
             tool_names=tool_names,
+            skip_tool_names=skip_tool_names,
+            segments=segments,
             arg_profile_ids=arg_profile_ids,
         )
         result = self._repo.get_hydrated(new_id)
@@ -121,6 +128,8 @@ class SavedScansService:
         skip_enrichment: bool,
         repo_ids: list[int],
         tool_names: list[str],
+        skip_tool_names: list[str],
+        segments: list[str],
         arg_profile_ids: list[int],
     ) -> SavedScanHydrated:
         """Replace an existing saved scan.
@@ -133,6 +142,8 @@ class SavedScansService:
         self._validate_input(
             name=name,
             tool_names=tool_names,
+            skip_tool_names=skip_tool_names,
+            segments=segments,
             arg_profile_ids=arg_profile_ids,
         )
         existing = self._repo.get_hydrated(saved_scan_id)
@@ -144,6 +155,8 @@ class SavedScansService:
             skip_enrichment=skip_enrichment,
             repo_ids=repo_ids,
             tool_names=tool_names,
+            skip_tool_names=skip_tool_names,
+            segments=segments,
             arg_profile_ids=arg_profile_ids,
         )
         result = self._repo.get_hydrated(saved_scan_id)
@@ -201,6 +214,8 @@ class SavedScansService:
         *,
         name: str,
         tool_names: list[str],
+        skip_tool_names: list[str],
+        segments: list[str],
         arg_profile_ids: list[int],
     ) -> None:
         """Collect every field error in one pass before raising."""
@@ -219,14 +234,36 @@ class SavedScansService:
                 )
             )
 
+        registered = set(self._tool_registry.list_tool_names())
+
         if tool_names:
-            registered = set(self._tool_registry.list_tool_names())
             for idx, n in enumerate(tool_names):
                 if n not in registered:
                     errors.append(
                         FieldError(
                             field=f"toolNames[{idx}]",
                             issue=f"unknown tool name {n!r}",
+                        )
+                    )
+
+        if skip_tool_names:
+            for idx, n in enumerate(skip_tool_names):
+                if n not in registered:
+                    errors.append(
+                        FieldError(
+                            field=f"skipToolNames[{idx}]",
+                            issue=f"unknown tool name {n!r}",
+                        )
+                    )
+
+        if segments:
+            valid_segments = set(SEGMENT_ORDER)
+            for idx, seg in enumerate(segments):
+                if seg not in valid_segments:
+                    errors.append(
+                        FieldError(
+                            field=f"segments[{idx}]",
+                            issue=f"unknown segment {seg!r}",
                         )
                     )
 

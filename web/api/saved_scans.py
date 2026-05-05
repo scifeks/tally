@@ -102,6 +102,8 @@ def _to_detail_response(hydrated: SavedScanHydrated) -> SavedScanDetailResponse:
         skip_enrichment=scan.skip_enrichment,
         repos=[_repo_to_response(r) for r in hydrated.repos],
         tools=[_tool_to_response(t) for t in hydrated.tools],
+        skip_tool_ids=hydrated.skip_tool_names,
+        segments=hydrated.segments,
         arg_profiles=[_arg_profile_to_response(p) for p in hydrated.arg_profiles],
         created_at=scan.created_at,
         updated_at=scan.updated_at,
@@ -116,6 +118,8 @@ def _to_list_item_response(item: SavedScanListItem) -> SavedScanListItemResponse
         skip_enrichment=scan.skip_enrichment,
         repo_ids=item.repo_ids,
         tool_names=item.tool_names,
+        skip_tool_ids=item.skip_tool_names,
+        segments=item.segments,
         arg_profile_ids=item.arg_profile_ids,
         created_at=scan.created_at,
         updated_at=scan.updated_at,
@@ -186,6 +190,8 @@ async def create_saved_scan(
             skip_enrichment=body.skip_enrichment,
             repo_ids=body.repo_ids,
             tool_names=body.tool_names,
+            skip_tool_names=body.skip_tool_ids,
+            segments=body.segments,
             arg_profile_ids=body.arg_profile_ids,
         )
     except SavedScanValidationError as exc:
@@ -219,6 +225,8 @@ async def replace_saved_scan(
             skip_enrichment=body.skip_enrichment,
             repo_ids=body.repo_ids,
             tool_names=body.tool_names,
+            skip_tool_names=body.skip_tool_ids,
+            segments=body.segments,
             arg_profile_ids=body.arg_profile_ids,
         )
     except SavedScanNotFound as exc:
@@ -331,8 +339,8 @@ async def run_saved_scan(
             profiles_repo=profiles_repo,
             repo_ids=repo_names,
             tool_ids=tool_names,
-            domains=(),
-            skip_tool_ids=(),
+            domains=tuple(hydrated.segments),
+            skip_tool_ids=tuple(hydrated.skip_tool_names),
             skip_enrichment=hydrated.saved_scan.skip_enrichment,
             prompt=NoApprovalPromptAdapter(),
             event_sink=sink,

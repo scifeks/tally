@@ -267,6 +267,8 @@ class TestSavedScansReplace:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         body = {
@@ -315,6 +317,8 @@ class TestSavedScansReplace:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         body = {
@@ -341,6 +345,8 @@ class TestSavedScansReplace:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         beta_id = repo.insert(
@@ -348,6 +354,8 @@ class TestSavedScansReplace:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         body = {
@@ -374,6 +382,8 @@ class TestSavedScansReplace:
             skip_enrichment=False,
             repo_ids=[],
             tool_names=["gitleaks"],
+            skip_tool_names=[],
+            segments=[],
             arg_profile_ids=[],
         )
         body = {
@@ -388,3 +398,122 @@ class TestSavedScansReplace:
             json=body,
         )
         assert resp.status_code == 403
+
+
+class TestSkipToolIdsAndSegmentsWireFields:
+    """POST and PUT round-trip the new skipToolIds and segments fields."""
+
+    async def test_create_with_skip_tool_ids_and_segments_echoed_in_response(
+        self, app_client
+    ) -> None:
+        client, _fid, _kb, _factory, mut_headers, project_id = app_client
+        body = {
+            "name": "with-new-fields",
+            "skipEnrichment": False,
+            "repoIds": [],
+            "toolNames": ["gitleaks"],
+            "skipToolIds": ["semgrep"],
+            "segments": ["sast", "secrets"],
+            "argProfileIds": [],
+        }
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/saved-scans",
+            json=body,
+            headers=mut_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["skipToolIds"] == ["semgrep"]
+        assert set(data["segments"]) == {"sast", "secrets"}
+
+    async def test_create_without_new_fields_defaults_to_empty(
+        self, app_client
+    ) -> None:
+        client, _fid, _kb, _factory, mut_headers, project_id = app_client
+        body = {
+            "name": "no-new-fields",
+            "skipEnrichment": False,
+            "repoIds": [],
+            "toolNames": ["gitleaks"],
+            "argProfileIds": [],
+        }
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/saved-scans",
+            json=body,
+            headers=mut_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["skipToolIds"] == []
+        assert data["segments"] == []
+
+    async def test_replace_updates_skip_tool_ids_and_segments(self, app_client) -> None:
+        client, _fid, _kb, factory, mut_headers, project_id = app_client
+        repo = SavedScansRepository(factory)
+        scan_id = repo.insert(
+            name="initial",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=["gitleaks"],
+            skip_tool_names=["semgrep"],
+            segments=["sast"],
+            arg_profile_ids=[],
+        )
+        body = {
+            "name": "initial",
+            "skipEnrichment": False,
+            "repoIds": [],
+            "toolNames": ["gitleaks"],
+            "skipToolIds": ["semgrep"],
+            "segments": ["secrets", "sca"],
+            "argProfileIds": [],
+        }
+        resp = await client.put(
+            f"/api/v1/projects/{project_id}/saved-scans/{scan_id}",
+            json=body,
+            headers=mut_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["skipToolIds"] == ["semgrep"]
+        assert set(data["segments"]) == {"secrets", "sca"}
+
+    async def test_validation_error_on_unknown_skip_tool_id(self, app_client) -> None:
+        client, _fid, _kb, _factory, mut_headers, project_id = app_client
+        body = {
+            "name": "bad-skip-tool",
+            "skipEnrichment": False,
+            "repoIds": [],
+            "toolNames": ["gitleaks"],
+            "skipToolIds": ["not-a-real-tool"],
+            "segments": [],
+            "argProfileIds": [],
+        }
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/saved-scans",
+            json=body,
+            headers=mut_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        errors = resp.json()["error"]["details"]["fields"]
+        assert any("skipToolNames" in e["field"] for e in errors)
+
+    async def test_validation_error_on_unknown_segment(self, app_client) -> None:
+        client, _fid, _kb, _factory, mut_headers, project_id = app_client
+        body = {
+            "name": "bad-segment",
+            "skipEnrichment": False,
+            "repoIds": [],
+            "toolNames": ["gitleaks"],
+            "skipToolIds": [],
+            "segments": ["badvalue"],
+            "argProfileIds": [],
+        }
+        resp = await client.post(
+            f"/api/v1/projects/{project_id}/saved-scans",
+            json=body,
+            headers=mut_headers,
+        )
+        assert resp.status_code == 422, resp.text
+        errors = resp.json()["error"]["details"]["fields"]
+        assert any("segments" in e["field"] for e in errors)

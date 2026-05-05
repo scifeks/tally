@@ -65,6 +65,8 @@ class TestSavedScanHydrated:
             saved_scan=scan,
             repos=[SavedScanRepoRef(id=1, name="auth-service", deleted_at=None)],
             tools=[SavedScanToolRef(tool_name="gitleaks")],
+            skip_tool_names=[],
+            segments=[],
             arg_profiles=[
                 SavedScanArgProfileRef(id=12, tool_name="gitleaks", name="verbose-scan")
             ],
@@ -73,6 +75,25 @@ class TestSavedScanHydrated:
         assert hydrated.repos[0].name == "auth-service"
         assert hydrated.tools[0].tool_name == "gitleaks"
         assert hydrated.arg_profiles[0].name == "verbose-scan"
+
+    def test_skip_tool_names_and_segments_present(self) -> None:
+        scan = SavedScan(
+            id=1,
+            name="x",
+            skip_enrichment=False,
+            created_at="2026-05-03T12:00:00Z",
+            updated_at="2026-05-03T12:00:00Z",
+        )
+        hydrated = SavedScanHydrated(
+            saved_scan=scan,
+            repos=[],
+            tools=[],
+            skip_tool_names=["xsstrike"],
+            segments=["sast", "secrets"],
+            arg_profiles=[],
+        )
+        assert hydrated.skip_tool_names == ["xsstrike"]
+        assert hydrated.segments == ["sast", "secrets"]
 
 
 class TestStaleSavedScanItems:
