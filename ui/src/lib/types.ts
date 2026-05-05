@@ -205,6 +205,8 @@ export interface ScanOptions {
   skipToolIds?: string[]
   /** Skip LLM enrichment step. */
   skipEnrichment?: boolean
+  /** Run extra invocations with custom arg profiles (ids). Additive to toolIds. */
+  argProfileIds?: number[]
 }
 
 /** Project scan configuration fetched from the server. */

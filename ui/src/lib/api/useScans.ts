@@ -218,6 +218,8 @@ export function useStartScan() {
       if (options?.skipToolIds && options.skipToolIds.length > 0)
         body.skipToolIds = options.skipToolIds
       if (options?.skipEnrichment) body.skipEnrichment = true
+      if (options?.argProfileIds && options.argProfileIds.length > 0)
+        body.argProfileIds = options.argProfileIds
 
       const data = await apiFetch<ScanRunSummaryApi>(REST_ENDPOINTS.startScan(projectId), {
         method: 'POST',

@@ -69,6 +69,7 @@ export default function Scans() {
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set())
   const [skipTools, setSkipTools] = useState<Set<string>>(new Set())
   const [skipEnrichment, setSkipEnrichment] = useState(false)
+  const [selectedArgProfiles, setSelectedArgProfiles] = useState<Set<number>>(new Set())
 
   // Reset advanced options when project changes
   useEffect(() => {
@@ -77,6 +78,7 @@ export default function Scans() {
     setSelectedTools(new Set())
     setSkipTools(new Set())
     setSkipEnrichment(false)
+    setSelectedArgProfiles(new Set())
     setSelectedSavedScanId(null)
   }, [activeProjectId])
 
@@ -143,15 +145,24 @@ export default function Scans() {
     if (selectedTools.size > 0) opts.toolIds = Array.from(selectedTools)
     if (skipTools.size > 0) opts.skipToolIds = Array.from(skipTools)
     if (skipEnrichment) opts.skipEnrichment = true
+    if (selectedArgProfiles.size > 0) opts.argProfileIds = Array.from(selectedArgProfiles)
     return opts
-  }, [selectedRepos, selectedDomains, selectedTools, skipTools, skipEnrichment])
+  }, [
+    selectedRepos,
+    selectedDomains,
+    selectedTools,
+    skipTools,
+    skipEnrichment,
+    selectedArgProfiles,
+  ])
 
   const hasAdvancedOptions =
     selectedRepos.size > 0 ||
     selectedDomains.size > 0 ||
     selectedTools.size > 0 ||
     skipTools.size > 0 ||
-    skipEnrichment
+    skipEnrichment ||
+    selectedArgProfiles.size > 0
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -173,9 +184,9 @@ export default function Scans() {
     timerRef.current = setInterval(() => setElapsedSec(s => s + 1), 1000)
   }, [stopElapsedTimer])
 
-  // Per-event SSE handler. `enrichment_progress` is stored in a single state
-  // slot (latest-value-wins) per the §12.7 mandate - never appended to logs.
-  // The live row in the scan log is rendered from that same slot below.
+  // Per-event SSE handler. `enrichment_progress` is kept in a single state
+  // slot (latest-value-wins) because appending it to the log would grow
+  // unboundedly during long enrichment runs. The live row is rendered below.
   const handleScanEvent = useCallback((event: ScanLogEvent) => {
     if (event.type === 'enrichment_progress') {
       setEnrichmentProgress({
@@ -208,8 +219,8 @@ export default function Scans() {
     }
   }, [])
 
-  // Snapshot frame on (re)connect - seed runId/runStatus only when there is
-  // exactly one active run for the project so we don't latch onto a stranger.
+  // Snapshot frame on (re)connect. Seeds runId/runStatus only when there is
+  // exactly one active run for the project, so we don't latch onto a stranger.
   const handleSnapshot = useCallback((snap: SnapshotPayload) => {
     if (snap.runId === null) {
       const ids = snap.activeRunIds ?? []
@@ -256,8 +267,8 @@ export default function Scans() {
     )
   }, [projectIdNum, startScanMutation, buildScanOptions, startElapsedTimer])
 
-  // Cancel scan - POST cancel; UI flips to 'cancelled' on the run_cancelled
-  // SSE event, not synthetically. While the backend is processing the cancel,
+  // Cancel scan. UI flips to 'cancelled' on the run_cancelled SSE event,
+  // not synthetically. While the backend is processing the cancel,
   // show 'cancelling'.
   const stopScan = useCallback(() => {
     if (runId === null || projectIdNum === 0) return
@@ -501,6 +512,7 @@ export default function Scans() {
                 setSelectedTools(new Set())
                 setSkipTools(new Set())
                 setSkipEnrichment(false)
+                setSelectedArgProfiles(new Set())
               }}
               className="text-[10px] text-dim hover:text-muted-foreground uppercase tracking-wider"
             >
@@ -727,6 +739,47 @@ export default function Scans() {
                     tool(s) disabled by domain filter
                   </div>
                 )}
+              </div>
+
+              {/* Custom arg profile multi-select */}
+              <div>
+                <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                  Run Only These Custom Profiles{' '}
+                  {selectedArgProfiles.size > 0 && `(${selectedArgProfiles.size} selected)`}
+                </div>
+                <div className="max-h-24 overflow-y-auto border border-border bg-background p-2 space-y-1">
+                  {toolArgProfiles.length === 0 ? (
+                    <div className="text-[10px] text-dim">No custom arg profiles defined</div>
+                  ) : (
+                    toolArgProfiles.map(p => {
+                      const isSelected = selectedArgProfiles.has(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            const next = new Set(selectedArgProfiles)
+                            if (isSelected) next.delete(p.id)
+                            else next.add(p.id)
+                            setSelectedArgProfiles(next)
+                          }}
+                          className={cn(
+                            'w-full flex items-center justify-between px-2 h-6 text-[10px] transition-colors',
+                            isSelected
+                              ? 'bg-accent/20 text-accent'
+                              : 'hover:bg-muted/30 text-muted-foreground'
+                          )}
+                        >
+                          <span>
+                            {p.toolName} &mdash; {p.name}
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+                <div className="text-[10px] text-dim mt-1">
+                  Run extra tool invocations with custom args. Additive to the tools selected above.
+                </div>
               </div>
             </div>
           </div>
