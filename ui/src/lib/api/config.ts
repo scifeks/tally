@@ -261,4 +261,7 @@ export const REST_ENDPOINTS = {
   /** DELETE: remove an argument profile. */
   deleteArgProfile: (projectId: number, id: number) =>
     `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}`,
+  /** GET: stream bytes for a single file-type arg (used to populate editor state). */
+  downloadArgProfileFile: (projectId: number, id: number, argName: string) =>
+    `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}/files/${encodeURIComponent(argName)}`,
 } as const

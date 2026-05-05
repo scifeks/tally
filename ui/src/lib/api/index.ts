@@ -149,7 +149,7 @@ export {
   useDeleteToolOverride,
 } from './useConfig'
 
-// Saved scans (CLIENT-SIDE MOCK — no backend yet)
+// Saved scans (CLIENT-SIDE MOCK: no real backend yet)
 export { useSavedScans, useSaveScan, useDeleteSavedScan } from './useSavedScans'
 
 // Tool argument profiles
@@ -161,6 +161,7 @@ export {
   mapTemplateToWriteInput,
   profileMatchesTemplate,
 } from './useToolArgProfiles'
+export { useDownloadFileArg } from './useDownloadFileArg'
 export type {
   ToolArgProfile,
   ToolArgProfileListResponse,
