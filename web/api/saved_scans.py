@@ -222,7 +222,7 @@ async def replace_saved_scan(
             arg_profile_ids=body.arg_profile_ids,
         )
     except SavedScanNotFound as exc:
-        raise NotFound(str(exc)) from exc
+        raise NotFound(f"Saved scan id={saved_scan_id} not found") from exc
     except SavedScanValidationError as exc:
         raise ApiValidationError(
             "Saved scan validation failed",
@@ -307,7 +307,7 @@ async def run_saved_scan(
             saved_scans_service.run_saved_scan, saved_scan_id
         )
     except SavedScanNotFound as exc:
-        raise NotFound(str(exc)) from exc
+        raise NotFound(f"Saved scan id={saved_scan_id} not found") from exc
     except StaleSavedScanError as exc:
         raise StaleSavedScan(_stale_items_to_envelope(exc.stale_items)) from exc
 

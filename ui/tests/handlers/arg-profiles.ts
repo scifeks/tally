@@ -103,11 +103,11 @@ export const argProfilesHandlers = [
   }),
   http.put('/api/v1/projects/:projectId/arg-profiles/:profileId', async ({ params }) => {
     if (params.profileId === ARG_PROFILE_NOT_FOUND_ID) {
-      return errorEnvelope(404, 'NOT_FOUND', `tool_arg_profile id=${params.profileId} not found`)
+      return errorEnvelope(404, 'NOT_FOUND', `Arg profile id=${params.profileId} not found`)
     }
     const detail = DETAIL_BY_ID[params.profileId as string]
     if (!detail) {
-      return errorEnvelope(404, 'NOT_FOUND', `tool_arg_profile id=${params.profileId} not found`)
+      return errorEnvelope(404, 'NOT_FOUND', `Arg profile id=${params.profileId} not found`)
     }
     return HttpResponse.json(detail)
   }),

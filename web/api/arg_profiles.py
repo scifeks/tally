@@ -276,7 +276,7 @@ async def replace_arg_profile(
             args=inputs,
         )
     except ToolArgProfileNotFound as exc:
-        raise NotFound(str(exc)) from exc
+        raise NotFound(f"Arg profile id={profile_id} not found") from exc
     except ToolArgProfileValidationError as exc:
         raise ApiValidationError(
             "Arg profile validation failed",
