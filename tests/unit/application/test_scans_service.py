@@ -14,6 +14,7 @@ from application.scans.scans_service import (
     ScanNotCancellable,
     ScanNotFound,
     ScansService,
+    ScanValidationError,
 )
 from application.tools.scan_run_registry import ScanRunRegistry
 from domain.projects.entry import ProjectRow
@@ -227,3 +228,148 @@ class TestScansServiceRecordRunToolCounts:
         service.record_run_tool_counts(42, {})
 
         repo.add_run_tools.assert_not_called()
+
+
+def _stub_repos_service(
+    *,
+    found: dict | None = None,
+    missing: list | None = None,
+) -> Any:
+    result = SimpleNamespace(found=found or {}, missing=missing or [], available=[])
+    return SimpleNamespace(find_by_ids=lambda _pid, _ids: result)
+
+
+def _stub_tool_registry(names: tuple[str, ...] = ("semgrep", "gitleaks")) -> Any:
+    wrappers = [SimpleNamespace(name=n) for n in names]
+    return SimpleNamespace(get_all_tools=lambda: wrappers)
+
+
+def _stub_profiles_repo(existing: tuple[int, ...] = ()) -> Any:
+    existing_set = set(existing)
+    return SimpleNamespace(
+        existing_ids=lambda ids: [i for i in ids if i in existing_set]
+    )
+
+
+class TestValidateStartRequest:
+    def _svc(self) -> ScansService:
+        return ScansService(run_repo=MagicMock(), project_id=1)
+
+    def test_happy_path_returns_repo_names(self) -> None:
+        resolved = self._svc().validate_start_request(
+            repo_ids=[1],
+            tool_ids=["semgrep"],
+            skip_tool_ids=[],
+            domains=[],
+            arg_profile_ids=[],
+            repos_service=_stub_repos_service(
+                found={1: SimpleNamespace(name="my-repo")}
+            ),
+            tool_registry=_stub_tool_registry(),
+            profiles_repo=_stub_profiles_repo(),
+        )
+        assert resolved.repo_names == ["my-repo"]
+
+    def test_unknown_repo_ids_raises_with_repo_ids_field(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_start_request(
+                repo_ids=[99],
+                tool_ids=[],
+                skip_tool_ids=[],
+                domains=[],
+                arg_profile_ids=[],
+                repos_service=_stub_repos_service(missing=[99]),
+                tool_registry=_stub_tool_registry(),
+                profiles_repo=_stub_profiles_repo(),
+            )
+        assert exc_info.value.fields[0].field == "repoIds"
+
+    def test_unknown_tool_ids_raises_with_tool_ids_field(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_start_request(
+                repo_ids=[],
+                tool_ids=["no-such-tool"],
+                skip_tool_ids=[],
+                domains=[],
+                arg_profile_ids=[],
+                repos_service=_stub_repos_service(),
+                tool_registry=_stub_tool_registry(),
+                profiles_repo=_stub_profiles_repo(),
+            )
+        assert exc_info.value.fields[0].field == "toolIds"
+
+    def test_unknown_skip_tool_ids_raises_with_skip_tool_ids_field(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_start_request(
+                repo_ids=[],
+                tool_ids=[],
+                skip_tool_ids=["ghost"],
+                domains=[],
+                arg_profile_ids=[],
+                repos_service=_stub_repos_service(),
+                tool_registry=_stub_tool_registry(),
+                profiles_repo=_stub_profiles_repo(),
+            )
+        assert exc_info.value.fields[0].field == "skipToolIds"
+
+    def test_unknown_domain_raises_with_domains_field(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_start_request(
+                repo_ids=[],
+                tool_ids=[],
+                skip_tool_ids=[],
+                domains=["bad-domain"],
+                arg_profile_ids=[],
+                repos_service=_stub_repos_service(),
+                tool_registry=_stub_tool_registry(),
+                profiles_repo=_stub_profiles_repo(),
+            )
+        assert exc_info.value.fields[0].field == "domains"
+
+    def test_unknown_arg_profile_id_raises_with_indexed_field(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_start_request(
+                repo_ids=[],
+                tool_ids=[],
+                skip_tool_ids=[],
+                domains=[],
+                arg_profile_ids=[9999],
+                repos_service=_stub_repos_service(),
+                tool_registry=_stub_tool_registry(),
+                profiles_repo=_stub_profiles_repo(),
+            )
+        assert exc_info.value.fields[0].field == "argProfileIds[0]"
+
+    def test_multiple_failures_aggregated_into_single_raise(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_start_request(
+                repo_ids=[42],
+                tool_ids=["ghost"],
+                skip_tool_ids=[],
+                domains=["nowhere"],
+                arg_profile_ids=[],
+                repos_service=_stub_repos_service(missing=[42]),
+                tool_registry=_stub_tool_registry(),
+                profiles_repo=_stub_profiles_repo(),
+            )
+        field_names = [f.field for f in exc_info.value.fields]
+        assert "repoIds" in field_names
+        assert "toolIds" in field_names
+        assert "domains" in field_names
+        assert len(field_names) == 3
+
+
+class TestValidateStatus:
+    def _svc(self) -> ScansService:
+        return ScansService(run_repo=MagicMock(), project_id=1)
+
+    def test_none_passes_without_exception(self) -> None:
+        self._svc().validate_status(None)
+
+    def test_known_status_passes_without_exception(self) -> None:
+        self._svc().validate_status("running")
+
+    def test_unknown_status_raises_with_status_field(self) -> None:
+        with pytest.raises(ScanValidationError) as exc_info:
+            self._svc().validate_status("bad-status")
+        assert exc_info.value.fields[0].field == "status"
