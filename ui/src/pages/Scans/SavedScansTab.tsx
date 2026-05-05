@@ -16,7 +16,7 @@ interface SavedScansTabProps {
   savedScans: SavedScan[]
   configuredRepos: ConfiguredRepo[]
   configuredTools: ConfiguredTool[]
-  toolArgProfiles: Array<{ toolId: string; profile: ToolArgProfile }>
+  toolArgProfiles: ToolArgProfile[]
   configuredSegments: Segment[]
   onSave: (scan: SavedScan, isNew: boolean) => void
   onDelete: (scanId: string) => void
@@ -54,16 +54,14 @@ export function SavedScansTab({
       options.push({ id: t.id, name: t.name, segment: t.segment })
     })
 
-    toolArgProfiles.forEach(({ toolId, profile }) => {
-      if (profile.argsMode !== 'custom') return
-      const baseTool = configuredTools.find(t => t.id === toolId)
-      profile.argumentTemplates.forEach(tmpl => {
-        options.push({
-          id: `${toolId}:${tmpl.id}`,
-          name: `${baseTool?.name ?? toolId} [${tmpl.name}]`,
-          segment: baseTool?.segment ?? 'sast',
-          isTemplate: true,
-        })
+    toolArgProfiles.forEach(profile => {
+      const baseTool = configuredTools.find(t => t.id === profile.toolName)
+      if (!baseTool) return
+      options.push({
+        id: `${profile.toolName}:${profile.id}`,
+        name: `${baseTool.name} [${profile.name}]`,
+        segment: baseTool.segment,
+        isTemplate: true,
       })
     })
 

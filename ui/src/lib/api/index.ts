@@ -152,11 +152,18 @@ export {
 // Saved scans (CLIENT-SIDE MOCK — no backend yet)
 export { useSavedScans, useSaveScan, useDeleteSavedScan } from './useSavedScans'
 
-// Tool argument profiles (CLIENT-SIDE MOCK — no backend yet)
+// Tool argument profiles
 export {
-  useToolArgProfile,
   useToolArgProfileList,
   useSaveToolArgProfile,
   useDeleteToolArgProfile,
+  mapProfilesToTemplates,
+  mapTemplateToWriteInput,
+  profileMatchesTemplate,
 } from './useToolArgProfiles'
-export type { ToolArgProfile } from './useToolArgProfiles'
+export type {
+  ToolArgProfile,
+  ToolArgProfileListResponse,
+  ToolArgProfileWriteInput,
+  ArgProfileArg,
+} from './useToolArgProfiles'

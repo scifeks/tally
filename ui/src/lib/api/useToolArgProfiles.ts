@@ -1,171 +1,166 @@
-/**
- * Tool Argument Profiles hooks (CLIENT-SIDE MOCK)
- * ===============================================
- * Backs the v0-ported "Argument Templates" panel on the tool override card.
- * Holds `argsMode` and `argumentTemplates` for each (projectId, toolId)
- * pair entirely client-side; the real `useToolOverrides` save flow is not
- * touched, so the production override save endpoint remains unaware of
- * these new fields. State resets on full page reload — intentional.
- *
- * When the backend lands, this module retires in favour of fields on
- * ToolOverrideConfig (or a separate `tool_arg_profiles` resource per the
- * schema doc). The hook signatures stay stable so the consumer doesn't
- * change.
- */
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ArgsMode, ArgumentTemplate } from '../types'
+import { apiFetch, type ApiError } from './client'
+import { REST_ENDPOINTS } from './config'
+import { useUI } from '../store'
+import type { ApiErrorPayload, ArgumentTemplate } from '../types'
+
+type ArgProfileFlagArg = { name: string; type: 'flag' }
+type ArgProfileStringArg = { name: string; type: 'string'; value: string }
+type ArgProfileFileArg = { name: string; type: 'file'; path: string; downloadUrl?: string }
+
+export type ArgProfileArg = ArgProfileFlagArg | ArgProfileStringArg | ArgProfileFileArg
 
 export interface ToolArgProfile {
-  argsMode: ArgsMode
-  argumentTemplates: ArgumentTemplate[]
+  id: number
+  toolName: string
+  name: string
+  args: ArgProfileArg[]
+  createdAt: string
+  updatedAt: string
 }
 
-const DEFAULT: ToolArgProfile = { argsMode: 'stock', argumentTemplates: [] }
-
-// ─── Seed data ───────────────────────────────────────────────────────────────
-
-const SEED: Record<number, Record<string, ToolArgProfile>> = {
-  1: {
-    gitleaks: {
-      argsMode: 'custom',
-      argumentTemplates: [
-        {
-          id: 'tmpl-verbose-scan',
-          name: 'verbose-scan',
-          arguments: [
-            { id: 'arg-verbose', flag: '--verbose', valueType: 'none' },
-            {
-              id: 'arg-config',
-              flag: '--config',
-              valueType: 'string',
-              value: '.gitleaks.toml',
-            },
-          ],
-        },
-      ],
-    },
-  },
+export interface ToolArgProfileListResponse {
+  items: ToolArgProfile[]
+  total: number
+  offset: number
+  limit: number
 }
 
-// ─── In-memory store ─────────────────────────────────────────────────────────
-
-function cloneProfile(p: ToolArgProfile): ToolArgProfile {
-  return {
-    argsMode: p.argsMode,
-    argumentTemplates: p.argumentTemplates.map(t => ({
-      ...t,
-      arguments: t.arguments.map(a => ({ ...a })),
-    })),
-  }
+export interface ToolArgProfileWriteInput {
+  toolName: string
+  name: string
+  args: ArgProfileArg[]
 }
 
-const store: Map<number, Map<string, ToolArgProfile>> = new Map()
-for (const [pid, byTool] of Object.entries(SEED)) {
-  const inner = new Map<string, ToolArgProfile>()
-  for (const [toolId, profile] of Object.entries(byTool)) {
-    inner.set(toolId, cloneProfile(profile))
-  }
-  store.set(Number(pid), inner)
-}
-
-function getProfile(projectId: number, toolId: string): ToolArgProfile {
-  const inner = store.get(projectId)
-  const found = inner?.get(toolId)
-  return found ? cloneProfile(found) : { ...DEFAULT }
-}
-
-function setProfile(projectId: number, toolId: string, profile: ToolArgProfile): void {
-  let inner = store.get(projectId)
-  if (!inner) {
-    inner = new Map()
-    store.set(projectId, inner)
-  }
-  inner.set(toolId, cloneProfile(profile))
-}
-
-function deleteProfile(projectId: number, toolId: string): void {
-  store.get(projectId)?.delete(toolId)
-}
-
-/** All profiles for a project, used by SavedScansTab to surface templates. */
-export function listProfiles(
-  projectId: number
-): Array<{ toolId: string; profile: ToolArgProfile }> {
-  const inner = store.get(projectId)
-  if (!inner) return []
-  return Array.from(inner.entries()).map(([toolId, profile]) => ({
-    toolId,
-    profile: cloneProfile(profile),
+export function mapProfilesToTemplates(profiles: ToolArgProfile[]): ArgumentTemplate[] {
+  return profiles.map(p => ({
+    id: String(p.id),
+    name: p.name,
+    arguments: p.args.map(a => {
+      if (a.type === 'flag') {
+        return { id: a.name, flag: a.name, valueType: 'none' as const }
+      }
+      if (a.type === 'string') {
+        return { id: a.name, flag: a.name, valueType: 'string' as const, value: a.value }
+      }
+      return { id: a.name, flag: a.name, valueType: 'file' as const, value: a.path }
+    }),
   }))
 }
 
-// ─── Hooks ───────────────────────────────────────────────────────────────────
+export function mapTemplateToWriteInput(
+  toolName: string,
+  template: ArgumentTemplate
+): ToolArgProfileWriteInput {
+  return {
+    toolName,
+    name: template.name,
+    args: template.arguments.map(a => {
+      if (a.valueType === 'none') return { name: a.flag, type: 'flag' as const }
+      if (a.valueType === 'string') {
+        return { name: a.flag, type: 'string' as const, value: a.value ?? '' }
+      }
+      return { name: a.flag, type: 'file' as const, path: a.value ?? '' }
+    }),
+  }
+}
 
-const QUERY_KEY = (projectId: number, toolId: string) =>
-  ['toolArgProfile', projectId, toolId] as const
-
-const LIST_QUERY_KEY = (projectId: number) => ['toolArgProfiles', projectId] as const
-
-export function useToolArgProfile(projectId: number, toolId: string | null) {
-  return useQuery({
-    queryKey: QUERY_KEY(projectId, toolId ?? ''),
-    queryFn: async (): Promise<ToolArgProfile> => {
-      await new Promise(resolve => setTimeout(resolve, 50))
-      return getProfile(projectId, toolId ?? '')
-    },
-    enabled: Boolean(projectId) && Boolean(toolId),
-    staleTime: 5 * 60 * 1000,
+export function profileMatchesTemplate(
+  profile: ToolArgProfile,
+  template: ArgumentTemplate
+): boolean {
+  if (profile.name !== template.name) return false
+  if (profile.args.length !== template.arguments.length) return false
+  return profile.args.every((a, i) => {
+    const t = template.arguments[i]
+    if (!t) return false
+    if (a.type === 'flag') return t.valueType === 'none' && t.flag === a.name
+    if (a.type === 'string') {
+      return t.valueType === 'string' && t.flag === a.name && t.value === a.value
+    }
+    return t.valueType === 'file' && t.flag === a.name
   })
 }
 
-/**
- * Lists every profile in the project. Used by SavedScansTab to render the
- * tool list with `tool:templateId` template entries alongside base tools.
- */
-export function useToolArgProfileList(projectId: number) {
+const LIST_KEY = (projectId: number, toolName?: string, offset?: number, limit?: number) =>
+  ['argProfiles', projectId, toolName ?? null, offset ?? null, limit ?? null] as const
+
+const DETAIL_KEY = (projectId: number, id: number) => ['argProfiles', projectId, id] as const
+
+function toErrorPayload(err: ApiError): ApiErrorPayload {
+  return { code: err.code, message: err.message, details: err.details, status: err.status }
+}
+
+export function useToolArgProfileList(
+  projectId: number,
+  opts?: { toolName?: string; offset?: number; limit?: number }
+) {
+  const params = new URLSearchParams()
+  if (opts?.toolName) params.set('tool_name', opts.toolName)
+  if (opts?.offset !== undefined) params.set('offset', String(opts.offset))
+  if (opts?.limit !== undefined) params.set('limit', String(opts.limit))
+  const qs = params.toString()
+
   return useQuery({
-    queryKey: LIST_QUERY_KEY(projectId),
-    queryFn: async (): Promise<Array<{ toolId: string; profile: ToolArgProfile }>> => {
-      await new Promise(resolve => setTimeout(resolve, 50))
-      return listProfiles(projectId)
+    queryKey: LIST_KEY(projectId, opts?.toolName, opts?.offset, opts?.limit),
+    queryFn: async (): Promise<ToolArgProfileListResponse> => {
+      const url = `${REST_ENDPOINTS.listArgProfiles(projectId)}${qs ? `?${qs}` : ''}`
+      return apiFetch<ToolArgProfileListResponse>(url)
     },
-    enabled: Boolean(projectId),
     staleTime: 5 * 60 * 1000,
+    enabled: Boolean(projectId),
   })
 }
 
 export function useSaveToolArgProfile() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
   return useMutation<
     ToolArgProfile,
-    Error,
-    { projectId: number; toolId: string; profile: ToolArgProfile }
+    ApiError,
+    {
+      projectId: number
+      profile: ToolArgProfileWriteInput
+      files: Record<string, File>
+      existingId?: number
+    }
   >({
-    mutationFn: async ({ projectId, toolId, profile }) => {
-      await new Promise(resolve => setTimeout(resolve, 50))
-      setProfile(projectId, toolId, profile)
-      return cloneProfile(profile)
+    mutationFn: async ({ projectId, profile, files, existingId }) => {
+      const formData = new FormData()
+      formData.append('payload', JSON.stringify(profile))
+      for (const [argName, file] of Object.entries(files)) {
+        formData.append(argName, file)
+      }
+      const url = existingId
+        ? REST_ENDPOINTS.updateArgProfile(projectId, existingId)
+        : REST_ENDPOINTS.createArgProfile(projectId)
+      return apiFetch<ToolArgProfile>(url, {
+        method: existingId ? 'PUT' : 'POST',
+        body: formData,
+      })
     },
-    onSuccess: (_, { projectId, toolId }) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY(projectId, toolId) })
-      queryClient.invalidateQueries({ queryKey: LIST_QUERY_KEY(projectId) })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (saved, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['argProfiles', projectId] })
+      queryClient.invalidateQueries({ queryKey: DETAIL_KEY(projectId, saved.id) })
     },
   })
 }
 
 export function useDeleteToolArgProfile() {
   const queryClient = useQueryClient()
+  const setError = useUI(s => s.setConfigMutationError)
 
-  return useMutation<void, Error, { projectId: number; toolId: string }>({
-    mutationFn: async ({ projectId, toolId }) => {
-      await new Promise(resolve => setTimeout(resolve, 50))
-      deleteProfile(projectId, toolId)
+  return useMutation<void, ApiError, { projectId: number; profileId: number }>({
+    mutationFn: async ({ projectId, profileId }) => {
+      await apiFetch<void>(REST_ENDPOINTS.deleteArgProfile(projectId, profileId), {
+        method: 'DELETE',
+      })
     },
-    onSuccess: (_, { projectId, toolId }) => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY(projectId, toolId) })
-      queryClient.invalidateQueries({ queryKey: LIST_QUERY_KEY(projectId) })
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['argProfiles', projectId] })
     },
   })
 }

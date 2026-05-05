@@ -246,4 +246,19 @@ export const REST_ENDPOINTS = {
   /** DELETE: remove a tool override (reverts to global) */
   deleteToolOverride: (projectId: number, toolId: string) =>
     `${API_BASE_URL}/projects/${projectId}/tools/overrides/${toolId}`,
+
+  // ─── Argument Profiles ──────────────────────────────────────────────────────
+  /** GET: list argument profiles for a project. Query: tool_name?, offset?, limit?. */
+  listArgProfiles: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/arg-profiles`,
+  /** GET: single argument profile by ID. */
+  getArgProfile: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}`,
+  /** POST (multipart): create an argument profile. */
+  createArgProfile: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/arg-profiles`,
+  /** PUT (multipart): replace an argument profile. */
+  updateArgProfile: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}`,
+  /** DELETE: remove an argument profile. */
+  deleteArgProfile: (projectId: number, id: number) =>
+    `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}`,
 } as const

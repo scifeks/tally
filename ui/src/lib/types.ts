@@ -785,10 +785,7 @@ export interface RepositoryAuthUpdate {
   password?: string
 }
 
-// ─── Saved Scans & Tool Argument Profiles (client-side mocks) ───────────────
-// These types back the v0-ported Saved Scans tab on Scans and the Argument
-// Templates surface on the tool override card. The data is stored in-memory
-// only; no backend persistence yet (see useSavedScans / useToolArgProfiles).
+// ─── Saved Scans & Tool Argument Profiles ────────────────────────────────────
 
 /** Whether an argument carries no value, a string value, or a file path. */
 export type ArgValueType = 'none' | 'string' | 'file'

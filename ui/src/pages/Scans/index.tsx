@@ -82,7 +82,8 @@ export default function Scans() {
 
   // Saved scans (CLIENT-SIDE MOCK — see useSavedScans).
   const { data: savedScans = [] } = useSavedScans(projectIdNum)
-  const { data: toolArgProfiles = [] } = useToolArgProfileList(projectIdNum)
+  const { data: argProfilesResponse } = useToolArgProfileList(projectIdNum)
+  const toolArgProfiles = argProfilesResponse?.items ?? []
   const saveScan = useSaveScan()
   const deleteSavedScan = useDeleteSavedScan()
 
