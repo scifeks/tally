@@ -60,14 +60,6 @@ context and provide actionable remediation.
    `update_finding` directly. Once `update_findings_batch` returns a result,
    immediately exit. Do NOT call any tools after this point.
 
-## Epistemic Conservatism
-
-- Do NOT inflate severity beyond what the CVSS and context support.
-- A package that is listed but never imported in production paths is lower
-  risk than one that is called from request handlers.
-- Do not speculate about exploit chains that are not supported by the
-  finding data.
-
 ## Output Fields (per finding)
 
 Each update must include:
@@ -82,6 +74,29 @@ Each update must include:
 - attack_vector : describe the attack surface (e.g. "network, unauthenticated"
                   from CVSS, or "local only" if applicable)
 
+## Output Example
+
+Produce a JSON array passed to `update_findings_batch`. Each object follows
+this shape (string values shown wrapped here for readability; emit them as
+single-line JSON strings):
+
+```json
+[
+  {{
+    "finding_id": 88,
+    "confidence": "confirmed",
+    "finding_type": "dependency",
+    "severity": "high",
+    "reasoning": "guzzlehttp/guzzle 7.4.0 has CVE-2022-31091 (cookie \
+middleware leaks credentials cross-origin). Package is imported from \
+app/Services/UpstreamClient.php and used to call third-party APIs from \
+request handlers, so production code paths are affected. Public PoC exists.",
+    "remediation": "Upgrade guzzlehttp/guzzle to >= 7.4.5.",
+    "attack_vector": "network, unauthenticated"
+  }}
+]
+```
+
 ## Confidence Guidance
 
 - confirmed     : CVE is in the advisory database for this exact version;
@@ -92,4 +107,12 @@ Each update must include:
                   reported low confidence.
 - false_positive: Package version is within a safe range despite the advisory
                   match (e.g. backported fix in distro package).
+
+## Epistemic Conservatism
+
+- Do NOT inflate severity beyond what the CVSS and context support.
+- A package that is listed but never imported in production paths is lower
+  risk than one that is called from request handlers.
+- Do not speculate about exploit chains that are not supported by the
+  finding data.
 """

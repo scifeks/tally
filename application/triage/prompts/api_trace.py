@@ -54,16 +54,6 @@ Finding IDs: [{ids_repr}]
    `update_finding` directly. Once `update_findings_batch` returns a result,
    immediately exit. Do NOT call any tools after this point.
 
-## Epistemic Conservatism
-
-- Do NOT upgrade confidence without concrete evidence from the handler code.
-- Do NOT mark `confirmed` unless the data flow from request to vulnerable
-  operation is visible in the source.
-- When uncertain, prefer `potential` over `probable`, and `probable` over
-  `confirmed`.
-- Dynamic scanners produce false positives; a finding with no locatable
-  handler should remain `potential`.
-
 ## Output Fields (per finding)
 
 Each update must include:
@@ -72,9 +62,35 @@ Each update must include:
 - finding_type  : one of vulnerability | weakness | misconfiguration |
                   exposure | dependency | informational | secret
 - severity      : critical | high | medium | low | informational
-- reasoning     : explanation of the handler code path and your conclusion
+- reasoning     : explanation of the handler code path and your conclusion;
+                  state whether the route requires authentication
 - remediation   : specific, actionable fix (not generic advice)
 - attack_vector : HTTP method, path, and parameter(s) observed in the scan
+
+## Output Example
+
+Produce a JSON array passed to `update_findings_batch`. Each object follows
+this shape (string values shown wrapped here for readability; emit them as
+single-line JSON strings):
+
+```json
+[
+  {{
+    "finding_id": 17,
+    "confidence": "probable",
+    "finding_type": "vulnerability",
+    "severity": "medium",
+    "reasoning": "Handler at SearchController.php:54 echoes the 'q' query \
+param into a JSON response without HTML-encoding. Route is unauthenticated. \
+Browsers will not render JSON as HTML, so reflected XSS is unlikely, but a \
+misconfigured client that renders the body as text/html would be \
+vulnerable. Marking probable rather than confirmed.",
+    "remediation": "Set Content-Type: application/json explicitly and wrap \
+output in json_encode with JSON_HEX_TAG | JSON_HEX_AMP.",
+    "attack_vector": "GET /search?q=<script>alert(1)</script>"
+  }}
+]
+```
 
 ## Confidence Guidance
 
@@ -87,4 +103,17 @@ Each update must include:
 - false_positive: The handler demonstrates the input is sanitised or the
                   scan trigger is a false positive (e.g. reflected but
                   HTML-encoded).
+
+## Epistemic Conservatism
+
+- Do NOT upgrade confidence without concrete evidence from the handler code.
+- Do NOT mark `confirmed` unless the data flow from request to vulnerable
+  operation is visible in the source.
+- When uncertain, prefer `potential` over `probable`, and `probable` over
+  `confirmed`.
+- Dynamic scanners produce false positives; a finding with no locatable
+  handler should remain `potential`.
+- Check whether the handler's route is registered behind authentication
+  middleware or an authorization guard. State whether the finding requires
+  an authenticated session and, if so, what role.
 """

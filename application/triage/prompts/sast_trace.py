@@ -49,6 +49,71 @@ Finding IDs: [{ids_repr}]
    `update_finding` directly. Once `update_findings_batch` returns a result,
    immediately exit. Do NOT call any tools after this point.
 
+## Output Fields (per finding)
+
+Each update must include:
+- finding_id    : the finding ID (required; never omit)
+- confidence    : one of confirmed | probable | potential | false_positive
+- finding_type  : one of vulnerability | weakness | misconfiguration |
+                  exposure | dependency | informational | secret
+                  (Derive this from YOUR analysis; do NOT copy the semgrep
+                  rule label)
+- severity      : critical | high | medium | low | informational
+- reasoning     : must explicitly address all five runtime layers; explain
+                  what the attacker controls, what preprocessing occurs,
+                  what the sink does, what authorization is enforced, and
+                  what outcome is observable
+- remediation   : specific, actionable fix (not generic advice)
+- attack_vector : HTTP method, path, and parameter(s) that carry user input
+- call_stack    : list of "file:line function" (confirmed findings only;
+                  empty list otherwise)
+
+## Output Example
+
+Produce a JSON array passed to `update_findings_batch`. Each object follows
+this shape (string values shown wrapped here for readability; emit them as
+single-line JSON strings):
+
+```json
+[
+  {{
+    "finding_id": 42,
+    "confidence": "confirmed",
+    "finding_type": "vulnerability",
+    "severity": "high",
+    "reasoning": "POST /files/delete passes 'name' to unlink() at \
+FilesController.php:87 with no path canonicalisation. Route is behind \
+'auth' middleware but lacks an ownership check, so any authenticated user \
+can delete any file. POST-body traversal is not normalised by the HTTP \
+layer. Success vs 404 is observable via the file index.",
+    "remediation": "Resolve the path with realpath() under the user's \
+storage root and enforce an ownership check via FileRepository::ownedBy() \
+before unlink().",
+    "attack_vector": "POST /files/delete name=../shared/secret.txt",
+    "call_stack": ["routes/web.php:42 Route::post", \
+"app/Http/Controllers/FilesController.php:87 delete"]
+  }}
+]
+```
+
+## Confidence Guidance
+
+- confirmed     : You traced user input to the vulnerable sink through real,
+                  production code; runtime preprocessing does not neutralise
+                  the payload; the sink causes demonstrable harm; and the
+                  attacker can observe a meaningful outcome.
+                  ALL FOUR conditions must hold.
+- probable      : The pattern strongly suggests a vulnerability but you
+                  could not complete the full trace. Runtime preprocessing
+                  is unlikely to neutralise the input.
+- potential     : The finding is plausible but one or more of the four
+                  runtime layers introduces significant uncertainty. Includes
+                  cases where the entrypoint is dev-only, the sink effect
+                  is weak, or HTTP normalization likely collapses the payload.
+- false_positive: The flagged pattern is safe in context (sanitised,
+                  constant value, dead code, upstream normalization fully
+                  neutralises input, or the semgrep rule is misclassified).
+
 ## Epistemic Conservatism
 
 This is the most important section. Read it carefully before assigning
@@ -58,14 +123,14 @@ any confidence level.
   in the code path.
 - Do NOT mark a finding `confirmed` unless you can trace user input
   to the sink through real, executing code (an AST data-flow match
-  alone is NOT sufficient).  
+  alone is NOT sufficient).
 - Do NOT mark a finding `confirmed` unless you can trace user input to the
   sink through the actual code.
 - When uncertain, prefer `potential` over `probable`, and `probable` over
   `confirmed`.
 - If the file cannot be read or the path cannot be resolved, set
   confidence=potential and note the reason in `reasoning`.
-  
+
 For any finding involving user-supplied input, explicitly answer each
 question in your `reasoning` field:
 **1. Does user input actually reach the sink at runtime?**
@@ -87,7 +152,16 @@ question in your `reasoning` field:
 **4. Is there a meaningful, attacker-observable outcome?**
    - Can the attacker tell the difference between success and failure?
    - If exploit path and normal path produce identical responses,
-     there is no practical vulnerability even if code is reachable.  
+     there is no practical vulnerability even if code is reachable.
+**5. Is the route protected by authentication or authorization?**
+   - Does middleware reject unauthenticated requests before reaching this
+     code? Look for `auth`, `auth:api`, `Auth::check()`, framework-specific
+     guards, or equivalent.
+   - Is the action restricted to a specific role or to an owner check on
+     the affected record?
+   - An authenticated-admin-only sink is still a vulnerability if exploitable,
+     but the realistic attacker pool and severity differ sharply from an
+     unauthenticated one. State which applies.
 
 Semgrep rules match syntactic or dataflow patterns. The rule label
 (e.g. `tainted-filename`, `ssrf`) reflects the pattern family, not a
@@ -99,40 +173,4 @@ actual risk. Examples of common misclassifications:
   scheme and host; network SSRF is not achievable via this extraction.
 - `xss` on a value echoed into a JSON response → not XSS.
 Always re-derive the vulnerability class from the code, not the rule.
-
-## Output Fields (per finding)
-
-Each update must include:
-- finding_id    : the finding ID (required; never omit)
-- confidence    : one of confirmed | probable | potential | false_positive
-- finding_type  : one of vulnerability | weakness | misconfiguration |
-                  exposure | dependency | informational | secret
-                  (Derive this from YOUR analysis; do NOT copy the semgrep
-                  rule label)
-- severity      : critical | high | medium | low | informational
-- reasoning     : must explicitly address all four runtime layers; explain
-                  what the attacker controls, what preprocessing occurs,
-                  what the sink does, and what outcome is observable
-- remediation   : specific, actionable fix (not generic advice)
-- attack_vector : HTTP method, path, and parameter(s) that carry user input
-- call_stack    : list of "file:line function" (confirmed findings only;
-                  empty list otherwise)
-
-## Confidence Guidance
-
-- confirmed     : You traced user input to the vulnerable sink through real,
-                  production code; runtime preprocessing does not neutralise
-                  the payload; the sink causes demonstrable harm; and the
-                  attacker can observe a meaningful outcome.
-                  ALL FOUR conditions must hold.
-- probable      : The pattern strongly suggests a vulnerability but you
-                  could not complete the full trace. Runtime preprocessing
-                  is unlikely to neutralise the input.
-- potential     : The finding is plausible but one or more of the four
-                  runtime layers introduces significant uncertainty. Includes
-                  cases where the entrypoint is dev-only, the sink effect
-                  is weak, or HTTP normalization likely collapses the payload.
-- false_positive: The flagged pattern is safe in context (sanitised,
-                  constant value, dead code, upstream normalization fully
-                  neutralises input, or the semgrep rule is misclassified).
 """
