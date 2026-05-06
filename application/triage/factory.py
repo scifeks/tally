@@ -32,11 +32,6 @@ def ensure_triage_backend_configured(*, app_root: Path | None = None) -> str:
             "Triage is disabled. Set `triage_agent_provider` in config/global.json "
             "to `claude_code` or `open_code` to enable it."
         )
-    if provider == "open_code":
-        raise NotImplementedError(
-            "Triage provider `open_code` is configured, but the OpenCode backend "
-            "is not implemented yet."
-        )
     return provider
 
 
@@ -53,6 +48,10 @@ class TriageAgentFactory(TriageBackendFactoryPort):
             from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
 
             return ClaudeTriageAgent()
+        if provider == "open_code":
+            from infrastructure.agents.opencode_triage_agent import OpenCodeTriageAgent
+
+            return OpenCodeTriageAgent()
         raise RuntimeError(f"Unsupported triage agent provider: {provider!r}")
 
 

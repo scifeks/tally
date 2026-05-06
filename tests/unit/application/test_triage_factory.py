@@ -46,6 +46,24 @@ def test_triage_agent_factory_builds_claude_agent() -> None:
     mock_agent.assert_called_once_with()
 
 
+def test_triage_agent_factory_builds_opencode_agent() -> None:
+    with (
+        patch(
+            "application.triage.factory.load_triage_provider",
+            return_value="open_code",
+        ),
+        patch(
+            "infrastructure.agents.opencode_triage_agent.OpenCodeTriageAgent"
+        ) as mock_agent,
+    ):
+        factory = TriageAgentFactory()
+
+        agent = factory.create()
+
+    assert agent is mock_agent.return_value
+    mock_agent.assert_called_once_with()
+
+
 def test_load_triage_provider_reads_global_config(tmp_path: Path) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
@@ -65,17 +83,14 @@ def test_ensure_triage_backend_configured_raises_when_disabled(tmp_path: Path) -
         ensure_triage_backend_configured(app_root=tmp_path)
 
 
-def test_ensure_triage_backend_configured_raises_for_open_code(tmp_path: Path) -> None:
+def test_ensure_triage_backend_configured_accepts_open_code(tmp_path: Path) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "global.json").write_text(
         json.dumps({"triage_agent_provider": "open_code"})
     )
 
-    with pytest.raises(
-        NotImplementedError, match="OpenCode backend is not implemented"
-    ):
-        ensure_triage_backend_configured(app_root=tmp_path)
+    assert ensure_triage_backend_configured(app_root=tmp_path) == "open_code"
 
 
 def test_build_triage_runner_uses_factory_agent(tmp_path: Path) -> None:

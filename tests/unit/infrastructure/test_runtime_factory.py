@@ -37,4 +37,6 @@ def test_build_runtime_dependency_probes_skips_open_code_until_supported(
 ) -> None:
     _write_global_config(tmp_path, {"triage_agent_provider": "open_code"})
 
-    assert build_runtime_dependency_probes(base_path=tmp_path) == []
+    probes = build_runtime_dependency_probes(base_path=tmp_path)
+
+    assert [probe.requirement.name for probe in probes] == ["opencode"]

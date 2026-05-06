@@ -246,7 +246,7 @@ class TestRuntimeDependencies:
         assert "version" in item
         assert "error" in item
 
-    async def test_open_code_config_skips_runtime_dependency_until_probe_exists(
+    async def test_open_code_config_registers_runtime_dependency(
         self, tmp_path: Path
     ) -> None:
         client = await _authed_client_for_config(
@@ -259,7 +259,16 @@ class TestRuntimeDependencies:
             await client.aclose()
 
         assert resp.status_code == 200
-        assert resp.json() == {"dependencies": []}
+        deps = resp.json()["dependencies"]
+        assert len(deps) == 1
+        item = deps[0]
+        assert item["name"] == "opencode"
+        assert isinstance(item["installed"], bool)
+        assert isinstance(item["required_for"], list)
+        assert isinstance(item["install_hint"], str)
+        assert "binary_path" in item
+        assert "version" in item
+        assert "error" in item
 
     async def test_requires_auth(self, tmp_path: Path) -> None:
         (tmp_path / "config").mkdir(parents=True)

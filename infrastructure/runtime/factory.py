@@ -8,6 +8,7 @@ from application.triage.factory import load_triage_provider
 from domain.runtime.probe import RuntimeDependencyProbe
 
 from .claude_probe import ClaudeCodeProbe
+from .opencode_probe import OpenCodeProbe
 
 
 def build_runtime_dependency_probes(
@@ -22,4 +23,6 @@ def build_runtime_dependency_probes(
     probes: list[RuntimeDependencyProbe] = []
     if provider == "claude_code":
         probes.append(ClaudeCodeProbe())
+    if provider == "open_code":
+        probes.append(OpenCodeProbe())
     return probes
