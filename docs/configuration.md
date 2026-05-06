@@ -85,7 +85,7 @@ enrichment, and reporting.
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
   "embedding_provider": "ollama_embedding",
-  "triage_agent_provider": "claude_code",
+  "triage_agent_provider": "",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
@@ -114,7 +114,7 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "claude",
   "embedding_provider": "ollama_embedding",
-  "triage_agent_provider": "claude_code",
+  "triage_agent_provider": "",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
@@ -139,6 +139,32 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
 
 With `api_key` left empty, Tally reads the key from the `ANTHROPIC_API_KEY`
 environment variable at startup.
+
+### Example — Enable Claude Code Triage
+
+Use a triage backend example only when you want automated triage enabled:
+
+```json
+{
+  "triage_agent_provider": "claude_code"
+}
+```
+
+This requires the `claude` runtime plus an Anthropic API key. See
+[MCP Triage System](./mcp.md) and
+[Claude Code Triage Backend](./mcp-claude-code.md).
+
+### Example — Enable OpenCode Triage
+
+```json
+{
+  "triage_agent_provider": "open_code"
+}
+```
+
+This requires the `opencode` runtime. See
+[MCP Triage System](./mcp.md) and
+[OpenCode Triage Backend](./mcp-opencode.md).
 
 ### Enrichment Concurrency
 
@@ -176,7 +202,7 @@ Ollama instance runs on a different host or port:
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
   "embedding_provider": "ollama_embedding",
-  "triage_agent_provider": "claude_code",
+  "triage_agent_provider": "",
   "ollama": {
     "base_url": "http://192.168.1.50:11434",
     "model": "qwen3:14b",
