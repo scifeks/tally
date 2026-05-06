@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 # Injected at startup by server.py
 _ctx: FindingsContext | None = None
 _service: FindingUpdateService | None = None
+_DEFAULT_TRIAGED_BY = "claudecode"
 
 
 def init(ctx: FindingsContext, config_manager: ConfigManager | None = None) -> None:
@@ -22,7 +24,10 @@ def init(ctx: FindingsContext, config_manager: ConfigManager | None = None) -> N
     global _ctx, _service
     _ctx = ctx
     _service = FindingUpdateService(
-        ctx.finding_repo, ctx.audit_repo, config_manager=config_manager
+        ctx.finding_repo,
+        ctx.audit_repo,
+        config_manager=config_manager,
+        triaged_by=os.environ.get("TALLY_TRIAGED_BY", _DEFAULT_TRIAGED_BY),
     )
 
 

@@ -50,6 +50,7 @@ class FindingRepositoryPort(Protocol):
         call_stack: str | None,
         strategy: str,
         *,
+        triaged_by: str = "claudecode",
         source: str = "auto_triage",
     ) -> bool: ...
     def get_reportable_findings(self) -> list[Finding]: ...

@@ -380,6 +380,7 @@ class FindingRepository(FindingRepositoryPort):
         call_stack: str | None,
         strategy: str,
         *,
+        triaged_by: str = "claudecode",
         source: str = "auto_triage",
     ) -> bool:
         """Update enrichment fields on a finding row.
@@ -401,7 +402,7 @@ class FindingRepository(FindingRepositoryPort):
             "remediation": remediation,
             "attack_vector": attack_vector,
             "call_stack": call_stack,
-            "triaged_by": "claude-code",
+            "triaged_by": triaged_by,
             "triaged_at": now_iso,
             "strategy": strategy,
         }
@@ -417,7 +418,7 @@ class FindingRepository(FindingRepositoryPort):
                 "    enriched = 1, "
                 "    last_seen = ?, "
                 "    triaged_at = ?, "
-                "    triaged_by = 'claude-code', "
+                "    triaged_by = ?, "
                 "    meta = ? "
                 "WHERE id = ?",
                 (
@@ -426,6 +427,7 @@ class FindingRepository(FindingRepositoryPort):
                     Severity.from_label(severity).rank,
                     now_iso,
                     now_iso,
+                    triaged_by,
                     updated_meta,
                     finding_id,
                 ),

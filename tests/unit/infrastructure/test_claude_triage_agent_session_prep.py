@@ -75,6 +75,7 @@ def test_prepare_session_mcp_json_contains_run_id_env(tmp_path: Path) -> None:
 
     env = data["mcpServers"]["tally-mcp"]["env"]
     assert env["TALLY_TRIAGE_RUN_ID"] == "42"
+    assert env["TALLY_TRIAGED_BY"] == "claudecode"
 
 
 def test_prepare_session_raises_runtime_error_if_venv_python_missing(

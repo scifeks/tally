@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -86,15 +87,13 @@ def test_prepare_session_writes_mcp_config_payload(tmp_path: Path) -> None:
         "proj",
     ]
     assert server["environment"]["TALLY_TRIAGE_RUN_ID"] == "42"
+    assert server["environment"]["TALLY_TRIAGED_BY"] == "opencode"
     assert permission["edit"] == "deny"
     assert permission["bash"] == {"*": "deny"}
     assert permission["webfetch"] == "deny"
     assert permission["tally-mcp_*"] == "allow"
-    assert permission["rules"] == [
-        {"permission": "read", "action": "allow", "pattern": "**/*"},
-        {"permission": "write", "action": "deny", "pattern": "**/*"},
-        {"permission": "bash", "action": "deny", "pattern": "*"},
-    ]
+    assert permission["read"] == {"*": "allow"}
+    assert permission["write"] == {"*": "deny"}
 
 
 def test_prepare_session_raises_runtime_error_if_venv_python_missing(
@@ -107,17 +106,23 @@ def test_prepare_session_raises_runtime_error_if_venv_python_missing(
             pass
 
 
-def test_run_session_raises_not_implemented() -> None:
+def test_run_session_merges_opencode_config_into_subprocess_env(
+    tmp_path: Path,
+) -> None:
     agent = OpenCodeTriageAgent()
+    _create_venv_python(tmp_path)
 
-    with pytest.raises(
-        NotImplementedError, match="Phase 3.3 now prepares disposable config material"
-    ):
-        agent.run_session(
-            "prompt",
-            timeout_seconds=30,
-            cwd=Path("/tmp"),
-        )
+    with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
+        with patch("subprocess.run") as mock_run:
+            agent.run_session(
+                "prompt",
+                timeout_seconds=30,
+                cwd=tmp_path,
+            )
+
+    env = mock_run.call_args.kwargs["env"]
+    assert "OPENCODE_CONFIG" in env
+    assert env["OPENCODE_CONFIG"].endswith("opencode.json")
 
 
 def test_build_run_command_uses_dir_and_json_format(tmp_path: Path) -> None:

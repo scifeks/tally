@@ -122,6 +122,37 @@ def test_build_triage_runner_uses_factory_agent(tmp_path: Path) -> None:
     assert agent_factory.calls == 1
 
 
+def test_build_triage_runner_resets_for_resume_before_running(tmp_path: Path) -> None:
+    findings_db = tmp_path / "projects" / "proj" / "sqlite" / "findings.db"
+    findings_db.parent.mkdir(parents=True, exist_ok=True)
+    findings_db.touch()
+
+    agent = MagicMock()
+    agent_factory = _StubAgentFactory(agent)
+    triage_repo = MagicMock()
+
+    with (
+        patch("application.triage.factory.make_store") as mock_make_store,
+        patch("application.triage.factory.load_mcp_defaults", return_value=(1, 2, 300)),
+    ):
+        mock_make_store.return_value = (
+            MagicMock(),
+            MagicMock(),
+            triage_repo,
+            MagicMock(),
+        )
+
+        build_triage_runner(
+            "proj",
+            MagicMock(),
+            app_root=tmp_path,
+            reset_for_resume_scan_run_id=17,
+            triage_agent_factory=agent_factory,
+        )
+
+    triage_repo.reset_for_resume.assert_called_once_with(17)
+
+
 def test_build_triage_runner_raises_when_project_db_missing(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="Project database not found"):
         build_triage_runner("proj", MagicMock(), app_root=tmp_path)

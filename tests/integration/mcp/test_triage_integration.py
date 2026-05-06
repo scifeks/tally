@@ -6,16 +6,18 @@ updates, with the triage backend port replaced by a stub. The argv
 contract for the real Claude adapter is covered separately under
 ``tests/integration/agents/``.
 """
+# ruff: noqa: E402, I001
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,18 +25,25 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.locking.cancellation import CancellationToken  # noqa: E402
 from application.ports.triage_agent import (  # noqa: E402
     PreparedTriageSession,
     TriageBackendPort,
     TriageSessionResult,
 )
-from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
+from application.triage.runner import (  # noqa: E402
+    TriageCancelled,
+    TriageResult,
+    TriageRunner,
+)
 from domain.triage.entry import TriageBatchRow  # noqa: E402
 from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent  # noqa: E402
+from infrastructure.agents.opencode_triage_agent import OpenCodeTriageAgent  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from tally_mcp.context import FindingsContext  # noqa: E402
 from tally_mcp.tools import findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
@@ -150,7 +159,11 @@ def _make_synthetic_handler() -> Callable[[int, Callable[..., str], list[int]], 
 
 
 def _make_runner_real(
-    tmp_path: Path, project: str = "testproject"
+    tmp_path: Path,
+    project: str = "testproject",
+    *,
+    triage_backend: TriageBackendPort | None = None,
+    cancel_token=None,
 ) -> tuple[TriageRunner, ConnectionFactory, RunRepository, FindingRepository]:
     """Return a TriageRunner backed by real repositories."""
     venv_python = tmp_path / ".venv" / "bin" / "python"
@@ -180,7 +193,8 @@ def _make_runner_real(
         audit_repo,
         tmp_path,
         tool_registry=MagicMock(),
-        triage_backend=_StubTriageAgent(),
+        triage_backend=triage_backend or _StubTriageAgent(),
+        cancel_token=cancel_token,
         session_timeout_seconds=300,
     )
     return runner, factory, run_repo, finding_repo
@@ -188,6 +202,63 @@ def _make_runner_real(
 
 def _mock_reg(runner: TriageRunner) -> MagicMock:
     return runner._tool_registry  # type: ignore[return-value]
+
+
+def _parse_ids_from_prompt(prompt: str) -> list[int]:
+    match = re.search(r"Finding IDs: \[([^\]]*)\]", prompt)
+    assert match is not None, f"Finding IDs not found in prompt: {prompt!r}"
+    raw_ids = match.group(1).strip()
+    if not raw_ids:
+        return []
+    return [int(chunk.strip()) for chunk in raw_ids.split(",")]
+
+
+def _ok_completed(*, stdout: str = "", stderr: str = "") -> MagicMock:
+    completed = MagicMock()
+    completed.returncode = 0
+    completed.stdout = stdout
+    completed.stderr = stderr
+    return completed
+
+
+def _make_fake_opencode_run(
+    *,
+    stdout: str = '{"ok":true}',
+    write_updates: bool = True,
+    cancel_token: CancellationToken | None = None,
+):
+    def _fake_run(cmd, **kwargs):
+        assert cmd[0] == "opencode"
+        assert cmd[1] == "run"
+        env = kwargs["env"]
+        assert env["OPENCODE_CONFIG"].endswith("opencode.json")
+        prompt = kwargs["input"]
+        finding_ids = _parse_ids_from_prompt(prompt)
+        if write_updates:
+            asyncio.run(findings.get_findings_batch(finding_ids))
+            updates = [{"finding_id": fid, **_VALID_UPDATE} for fid in finding_ids]
+            asyncio.run(findings.update_findings_batch(updates))
+        if cancel_token is not None:
+            cancel_token.set()
+        return _ok_completed(stdout=stdout)
+
+    return _fake_run
+
+
+def _init_findings_for_triaged_by(
+    runner: TriageRunner,
+    finding_repo: FindingRepository,
+    *,
+    project_name: str,
+) -> None:
+    findings.init(
+        FindingsContext(
+            finding_repo=finding_repo,
+            audit_repo=runner._audit_repo,  # type: ignore[arg-type]
+            triage_repo=runner._triage_repo,  # type: ignore[arg-type]
+            project_name=project_name,
+        )
+    )
 
 
 # Claude session preparation
@@ -308,7 +379,7 @@ def test_pipeline_finding_marked_enriched(tmp_path: Path) -> None:
         ).fetchone()
     assert row["enriched"] == 1
     assert row["triaged_at"] is not None
-    assert row["triaged_by"] == "claude-code"
+    assert row["triaged_by"] == "claudecode"
 
 
 def test_pipeline_audit_log_written(tmp_path: Path) -> None:
@@ -463,4 +534,136 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
     with factory.connect() as conn:
         rows = conn.execute("SELECT enriched, triaged_by FROM findings").fetchall()
     assert all(r["enriched"] == 1 for r in rows)
-    assert all(r["triaged_by"] == "claude-code" for r in rows)
+    assert all(r["triaged_by"] == "claudecode" for r in rows)
+
+
+# Group 4: OpenCode parity
+
+
+def test_opencode_multi_batch_marks_all_findings(tmp_path: Path) -> None:
+    runner, factory, run_repo, finding_repo = _make_runner_real(
+        tmp_path,
+        triage_backend=OpenCodeTriageAgent(),
+    )
+    repo_id = _seed_repo(factory)
+    seed_run_id = run_repo.create_run({})
+    finding_repo.insert_findings(
+        seed_run_id,
+        [
+            {
+                **_BASE_FINDING,
+                "file_path": f"/src/file{i}.py",
+                "rule_id": f"python.rule{i}",
+                "repo_id": repo_id,
+            }
+            for i in range(11)
+        ],
+    )
+    mock_semgrep = _make_mock_semgrep()
+    mock_reg = _mock_reg(runner)
+    if True:
+        with patch.dict("os.environ", {"TALLY_TRIAGED_BY": "opencode"}):
+            _init_findings_for_triaged_by(
+                runner,
+                finding_repo,
+                project_name="testproject",
+            )
+            mock_reg.get_all_tools.return_value = []
+            mock_reg.get_tool.return_value = mock_semgrep
+            with patch("subprocess.run", side_effect=_make_fake_opencode_run()):
+                result = runner.run()
+
+    with factory.connect() as conn:
+        rows = conn.execute(
+            "SELECT enriched, triaged_by FROM findings ORDER BY id"
+        ).fetchall()
+        batches = conn.execute(
+            "SELECT status FROM triage_batches ORDER BY id"
+        ).fetchall()
+    assert result.sessions_run > 1
+    assert result.success == result.sessions_run
+    assert all(r["enriched"] == 1 for r in rows)
+    assert all(r["triaged_by"] == "opencode" for r in rows)
+    assert all(r["status"] == "success" for r in batches)
+
+
+def test_opencode_session_incomplete_without_audit_writes(tmp_path: Path) -> None:
+    runner, factory, run_repo, finding_repo = _make_runner_real(
+        tmp_path,
+        triage_backend=OpenCodeTriageAgent(),
+    )
+    _seed(run_repo, finding_repo, factory=factory)
+    mock_semgrep = _make_mock_semgrep()
+    mock_reg = _mock_reg(runner)
+    if True:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        with patch(
+            "subprocess.run",
+            side_effect=_make_fake_opencode_run(
+                stdout='{"assistant":"updated findings"}',
+                write_updates=False,
+            ),
+        ):
+            result = runner.run()
+
+    with factory.connect() as conn:
+        row = conn.execute(
+            "SELECT enriched, triaged_by FROM findings LIMIT 1"
+        ).fetchone()
+        audits = conn.execute(
+            "SELECT COUNT(*) AS n FROM tool_audit_log WHERE tool_name IN "
+            "('update_finding', 'update_findings_batch')"
+        ).fetchone()
+    assert result.sessions_run == 1
+    assert result.success == 0
+    assert result.incomplete == 1
+    assert row["enriched"] == 0
+    assert row["triaged_by"] is None
+    assert audits["n"] == 0
+
+
+def test_opencode_cancel_marks_remaining_batches_cancelled(tmp_path: Path) -> None:
+    cancel_token = CancellationToken()
+    runner, factory, run_repo, finding_repo = _make_runner_real(
+        tmp_path,
+        triage_backend=OpenCodeTriageAgent(),
+        cancel_token=cancel_token,
+    )
+    repo_id = _seed_repo(factory)
+    seed_run_id = run_repo.create_run({})
+    finding_repo.insert_findings(
+        seed_run_id,
+        [
+            {
+                **_BASE_FINDING,
+                "file_path": f"/src/file{i}.py",
+                "rule_id": f"python.rule{i}",
+                "repo_id": repo_id,
+            }
+            for i in range(11)
+        ],
+    )
+    mock_semgrep = _make_mock_semgrep()
+    mock_reg = _mock_reg(runner)
+    if True:
+        with patch.dict("os.environ", {"TALLY_TRIAGED_BY": "opencode"}):
+            _init_findings_for_triaged_by(
+                runner,
+                finding_repo,
+                project_name="testproject",
+            )
+            mock_reg.get_all_tools.return_value = []
+            mock_reg.get_tool.return_value = mock_semgrep
+            with patch(
+                "subprocess.run",
+                side_effect=_make_fake_opencode_run(cancel_token=cancel_token),
+            ):
+                with pytest.raises(TriageCancelled):
+                    runner.run()
+
+    with factory.connect() as conn:
+        rows = conn.execute("SELECT status FROM triage_batches ORDER BY id").fetchall()
+    statuses = [r["status"] for r in rows]
+    assert statuses.count("success") == 1
+    assert statuses.count("cancelled") >= 1

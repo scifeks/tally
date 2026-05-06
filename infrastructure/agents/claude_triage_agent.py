@@ -13,6 +13,8 @@ from application.ports.triage_agent import (
     TriageSessionResult,
 )
 
+_TRIAGED_BY = "claudecode"
+
 # Keep these flags paired so noninteractive triage cannot gain shell,
 # edit, or web access through the Claude process.
 _DISALLOWED_TOOLS = "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch"
@@ -95,7 +97,10 @@ class ClaudeTriageAgent(TriageBackendPort):
                         "--project",
                         project,
                     ],
-                    "env": {"TALLY_TRIAGE_RUN_ID": str(run_id)},
+                    "env": {
+                        "TALLY_TRIAGE_RUN_ID": str(run_id),
+                        "TALLY_TRIAGED_BY": _TRIAGED_BY,
+                    },
                     "permissions": {
                         "allow": ["get_findings_batch", "update_findings_batch"],
                         "deny": ["*"],

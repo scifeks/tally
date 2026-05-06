@@ -52,10 +52,12 @@ class FindingUpdateService:
         finding_repo: FindingRepositoryPort,
         audit_repo: AuditRepositoryPort,
         config_manager: ConfigManager | None = None,
+        triaged_by: str = "claudecode",
     ) -> None:
         self._finding_repo = finding_repo
         self._audit_repo = audit_repo
         self._config_manager = config_manager
+        self._triaged_by = triaged_by
 
     def resolve_finding_paths(
         self,
@@ -178,6 +180,7 @@ class FindingUpdateService:
                 attack_vector,
                 call_stack,
                 strategy,
+                triaged_by=self._triaged_by,
                 source="auto_triage",
             )
         except Exception as exc:

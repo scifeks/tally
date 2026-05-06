@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -16,6 +18,7 @@ from application.ports.triage_agent import (
 _MCP_SERVER_NAME = "tally-mcp"
 _MCP_TOOL_PERMISSION_PATTERN = "tally-mcp_*"
 _RUN_OUTPUT_FORMAT = "json"
+_TRIAGED_BY = "opencode"
 
 
 class OpenCodeTriageAgent(TriageBackendPort):
@@ -61,12 +64,39 @@ class OpenCodeTriageAgent(TriageBackendPort):
         timeout_seconds: int,
         cwd: Path,
     ) -> TriageSessionResult:
-        del prompt, timeout_seconds, cwd
-        raise NotImplementedError(
-            "OpenCode triage execution is not implemented yet. "
-            "Phase 3.3 now prepares disposable config material plus a hardened "
-            "permission profile, but final execution still depends on the "
-            "remaining B1/B3 decisions."
+        try:
+            completed = subprocess.run(
+                self._build_run_command(cwd=cwd),
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                cwd=str(cwd),
+                env=self._build_session_env(),
+            )
+        except subprocess.TimeoutExpired:
+            return TriageSessionResult(
+                success=False,
+                returncode=-1,
+                stderr="",
+                error=f"timed out after {timeout_seconds}s",
+            )
+        except Exception as exc:
+            return TriageSessionResult(
+                success=False,
+                returncode=-1,
+                stderr="",
+                error=str(exc),
+            )
+
+        stderr = completed.stderr or ""
+        if completed.stdout:
+            stderr = f"{stderr}\n{completed.stdout}" if stderr else completed.stdout
+
+        return TriageSessionResult(
+            success=completed.returncode == 0,
+            returncode=completed.returncode,
+            stderr=stderr,
         )
 
     def _build_run_command(self, *, cwd: Path) -> list[str]:
@@ -78,6 +108,12 @@ class OpenCodeTriageAgent(TriageBackendPort):
             "--format",
             _RUN_OUTPUT_FORMAT,
         ]
+
+    def _build_session_env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        if self._session_env is not None:
+            env.update(self._session_env)
+        return env
 
     def _build_config_payload(
         self,
@@ -104,6 +140,7 @@ class OpenCodeTriageAgent(TriageBackendPort):
                     ],
                     "environment": {
                         "TALLY_TRIAGE_RUN_ID": str(run_id),
+                        "TALLY_TRIAGED_BY": _TRIAGED_BY,
                     },
                 }
             },
@@ -116,21 +153,6 @@ class OpenCodeTriageAgent(TriageBackendPort):
             "bash": {"*": "deny"},
             "webfetch": "deny",
             _MCP_TOOL_PERMISSION_PATTERN: "allow",
-            "rules": [
-                {
-                    "permission": "read",
-                    "action": "allow",
-                    "pattern": "**/*",
-                },
-                {
-                    "permission": "write",
-                    "action": "deny",
-                    "pattern": "**/*",
-                },
-                {
-                    "permission": "bash",
-                    "action": "deny",
-                    "pattern": "*",
-                },
-            ],
+            "read": {"*": "allow"},
+            "write": {"*": "deny"},
         }
