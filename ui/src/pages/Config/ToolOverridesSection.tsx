@@ -20,6 +20,14 @@ import type {
 import { SectionHeader } from './shared'
 import { ArgumentTemplateEditor } from './ArgumentTemplateEditor'
 
+function collectFreshFiles(template: ArgumentTemplate): Record<string, File> {
+  const out: Record<string, File> = {}
+  for (const arg of template.arguments) {
+    if (arg.valueType === 'file' && arg.file) out[arg.flag] = arg.file
+  }
+  return out
+}
+
 // ─── Tool Overrides Section ───────────────────────────────────────────────────
 
 export function ToolOverridesSection({
@@ -108,22 +116,24 @@ export function ToolOverridesSection({
     const mutations: Promise<ToolArgProfile | void>[] = []
 
     for (const t of templates) {
+      const files = collectFreshFiles(t)
+      const hasFreshFile = Object.keys(files).length > 0
       if (!serverIdSet.has(t.id)) {
         mutations.push(
           saveProfile.mutateAsync({
             projectId,
             profile: mapTemplateToWriteInput(selectedTool.name, t),
-            files: {},
+            files,
           })
         )
       } else {
         const sp = serverProfiles.find(p => String(p.id) === t.id)
-        if (sp && !profileMatchesTemplate(sp, t)) {
+        if (sp && (!profileMatchesTemplate(sp, t) || hasFreshFile)) {
           mutations.push(
             saveProfile.mutateAsync({
               projectId,
               profile: mapTemplateToWriteInput(selectedTool.name, t),
-              files: {},
+              files,
               existingId: sp.id,
             })
           )
@@ -252,7 +262,7 @@ export function ToolOverridesSection({
             )}
           </div>
 
-          {/* Type / Location / Args - all on one row */}
+          {/* Type / Location / Args row */}
           <div className="grid grid-cols-3 gap-4">
             {/* Type */}
             <div>

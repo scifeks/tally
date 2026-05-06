@@ -75,6 +75,7 @@ export function ArgumentTemplateEditor({
                     valueType: e.target.value as ArgValueType,
                     value: undefined,
                     fileName: undefined,
+                    file: undefined,
                   })
                 }
                 aria-label="value type"
@@ -106,7 +107,11 @@ export function ArgumentTemplateEditor({
                       <span className="truncate">{arg.fileName}</span>
                       <button
                         onClick={() =>
-                          updateArgument(arg.id, { value: undefined, fileName: undefined })
+                          updateArgument(arg.id, {
+                            value: undefined,
+                            fileName: undefined,
+                            file: undefined,
+                          })
                         }
                         className="text-muted-foreground hover:text-crit"
                         aria-label="remove file"
@@ -126,7 +131,8 @@ export function ArgumentTemplateEditor({
                           if (file) {
                             updateArgument(arg.id, {
                               fileName: file.name,
-                              value: `/uploads/${file.name}`,
+                              value: '',
+                              file,
                             })
                           }
                         }}

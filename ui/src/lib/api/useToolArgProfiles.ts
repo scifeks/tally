@@ -43,7 +43,13 @@ export function mapProfilesToTemplates(profiles: ToolArgProfile[]): ArgumentTemp
       if (a.type === 'string') {
         return { id: a.name, flag: a.name, valueType: 'string' as const, value: a.value }
       }
-      return { id: a.name, flag: a.name, valueType: 'file' as const, value: a.path }
+      return {
+        id: a.name,
+        flag: a.name,
+        valueType: 'file' as const,
+        value: a.path,
+        fileName: a.name,
+      }
     }),
   }))
 }
@@ -60,7 +66,7 @@ export function mapTemplateToWriteInput(
       if (a.valueType === 'string') {
         return { name: a.flag, type: 'string' as const, value: a.value ?? '' }
       }
-      return { name: a.flag, type: 'file' as const, path: a.value ?? '' }
+      return { name: a.flag, type: 'file' as const, path: '' }
     }),
   }
 }
