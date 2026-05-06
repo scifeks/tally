@@ -2,7 +2,7 @@
 
 These tests exercise the full pipeline end-to-end against real
 repositories, real batch creation, real claiming, and real finding
-updates, with the triage agent port replaced by a stub. The argv
+updates, with the triage backend port replaced by a stub. The argv
 contract for the real Claude adapter is covered separately under
 ``tests/integration/agents/``.
 """
@@ -10,8 +10,10 @@ contract for the real Claude adapter is covered separately under
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -22,11 +24,13 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.ports.triage_agent import (  # noqa: E402
-    TriageAgentPort,
+    PreparedTriageSession,
+    TriageBackendPort,
     TriageSessionResult,
 )
 from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
 from domain.triage.entry import TriageBatchRow  # noqa: E402
+from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
@@ -59,8 +63,18 @@ _VALID_UPDATE = {
 }
 
 
-class _StubTriageAgent(TriageAgentPort):
+class _StubTriageAgent(TriageBackendPort):
     """Returns a successful TriageSessionResult on every call."""
+
+    @contextmanager
+    def prepare_session(
+        self,
+        *,
+        project: str,
+        run_id: int,
+        app_root: Path,
+    ):
+        yield PreparedTriageSession(cwd=app_root)
 
     def run_session(
         self,
@@ -166,7 +180,7 @@ def _make_runner_real(
         audit_repo,
         tmp_path,
         tool_registry=MagicMock(),
-        triage_agent=_StubTriageAgent(),
+        triage_backend=_StubTriageAgent(),
         session_timeout_seconds=300,
     )
     return runner, factory, run_repo, finding_repo
@@ -176,58 +190,58 @@ def _mock_reg(runner: TriageRunner) -> MagicMock:
     return runner._tool_registry  # type: ignore[return-value]
 
 
-# Group 1: .mcp.json structure
+# Claude session preparation
 
 
 def test_mcp_json_server_type_is_stdio(tmp_path: Path) -> None:
-    runner, factory, run_repo, finding_repo = _make_runner_real(tmp_path)
+    _, _, run_repo, finding_repo = _make_runner_real(tmp_path)
     _seed(run_repo, finding_repo)
-    mcp_path = runner._write_mcp_config(42)
-    import json
+    agent = ClaudeTriageAgent()
 
-    payload = json.loads(mcp_path.read_text())
-    assert payload["mcpServers"]["tally-mcp"]["type"] == "stdio"
+    with agent.prepare_session(project="testproject", run_id=42, app_root=tmp_path):
+        payload = json.loads((tmp_path / ".mcp.json").read_text())
+        assert payload["mcpServers"]["tally-mcp"]["type"] == "stdio"
 
 
 def test_mcp_json_command_is_venv_python(tmp_path: Path) -> None:
-    runner, _, _, _ = _make_runner_real(tmp_path)
-    mcp_path = runner._write_mcp_config(42)
-    import json
+    _make_runner_real(tmp_path)
+    agent = ClaudeTriageAgent()
 
-    payload = json.loads(mcp_path.read_text())
-    expected = str(tmp_path / ".venv" / "bin" / "python")
-    assert payload["mcpServers"]["tally-mcp"]["command"] == expected
+    with agent.prepare_session(project="testproject", run_id=42, app_root=tmp_path):
+        payload = json.loads((tmp_path / ".mcp.json").read_text())
+        expected = str(tmp_path / ".venv" / "bin" / "python")
+        assert payload["mcpServers"]["tally-mcp"]["command"] == expected
 
 
 def test_mcp_json_args_contain_project(tmp_path: Path) -> None:
-    runner, _, _, _ = _make_runner_real(tmp_path, project="myproject")
-    mcp_path = runner._write_mcp_config(42)
-    import json
+    _make_runner_real(tmp_path, project="myproject")
+    agent = ClaudeTriageAgent()
 
-    payload = json.loads(mcp_path.read_text())
-    args = payload["mcpServers"]["tally-mcp"]["args"]
-    assert "--project" in args
-    assert "myproject" in args
+    with agent.prepare_session(project="myproject", run_id=42, app_root=tmp_path):
+        payload = json.loads((tmp_path / ".mcp.json").read_text())
+        args = payload["mcpServers"]["tally-mcp"]["args"]
+        assert "--project" in args
+        assert "myproject" in args
 
 
 def test_mcp_json_only_triage_tools_allowed(tmp_path: Path) -> None:
-    runner, _, _, _ = _make_runner_real(tmp_path)
-    mcp_path = runner._write_mcp_config(42)
-    import json
+    _make_runner_real(tmp_path)
+    agent = ClaudeTriageAgent()
 
-    payload = json.loads(mcp_path.read_text())
-    allow = payload["mcpServers"]["tally-mcp"]["permissions"]["allow"]
-    assert allow == ["get_findings_batch", "update_findings_batch"]
+    with agent.prepare_session(project="testproject", run_id=42, app_root=tmp_path):
+        payload = json.loads((tmp_path / ".mcp.json").read_text())
+        allow = payload["mcpServers"]["tally-mcp"]["permissions"]["allow"]
+        assert allow == ["get_findings_batch", "update_findings_batch"]
 
 
 def test_mcp_json_deny_star(tmp_path: Path) -> None:
-    runner, _, _, _ = _make_runner_real(tmp_path)
-    mcp_path = runner._write_mcp_config(42)
-    import json
+    _make_runner_real(tmp_path)
+    agent = ClaudeTriageAgent()
 
-    payload = json.loads(mcp_path.read_text())
-    deny = payload["mcpServers"]["tally-mcp"]["permissions"]["deny"]
-    assert deny == ["*"]
+    with agent.prepare_session(project="testproject", run_id=42, app_root=tmp_path):
+        payload = json.loads((tmp_path / ".mcp.json").read_text())
+        deny = payload["mcpServers"]["tally-mcp"]["permissions"]["deny"]
+        assert deny == ["*"]
 
 
 # Group 2: End-to-end pipeline with real store + synthetic handler

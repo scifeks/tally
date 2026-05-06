@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Self
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
+from application.triage.factory import ensure_triage_backend_configured
 from application.triage.orchestrator import (
     resume_triage_for_project,
     run_triage_for_project,
@@ -146,6 +147,7 @@ class TriageService:
             JobBusy: another triage already holds the lock.
         """
         del finding_ids  # finding-scoped triage is reserved for later
+        ensure_triage_backend_configured(app_root=Path(base_path))
         scan_run_id = self._run_repo.latest_run_id()
         if scan_run_id is None:
             raise NoScanRunError(
@@ -179,6 +181,7 @@ class TriageService:
                 terminal state. The lock is not acquired in this case.
             JobBusy: another triage already holds the lock.
         """
+        ensure_triage_backend_configured(app_root=Path(base_path))
         summary = self._triage_repo.summarize_for_run(scan_run_id)
         if summary is None:
             raise TriageNotResumableError(scan_run_id, status=None)

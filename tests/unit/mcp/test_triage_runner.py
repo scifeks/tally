@@ -1,8 +1,9 @@
-"""Unit tests for TriageRunner (application.triage.runner)."""
+"""Tests TriageRunner."""
 
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,25 +14,49 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.ports.triage_agent import (  # noqa: E402
-    TriageAgentPort,
+    PreparedTriageSession,
+    TriageBackendPort,
     TriageSessionResult,
 )
 from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
 from domain.triage.entry import TriageBatchRow  # noqa: E402
 
 
-class _StubTriageAgent(TriageAgentPort):
-    """TriageAgentPort double driven by a canned result or side_effect."""
+class _StubTriageBackend(TriageBackendPort):
+    """Backend stub with configurable prep and results."""
 
     def __init__(
         self,
         *,
         result: TriageSessionResult | None = None,
         side_effect: BaseException | None = None,
+        prepared_cwd: Path | None = None,
+        marker_dir: Path | None = None,
     ) -> None:
         self._result = result
         self._side_effect = side_effect
+        self._prepared_cwd = prepared_cwd
+        self._marker_dir = marker_dir
         self.calls: list[tuple[str, int, Path]] = []
+        self.prepare_calls: list[tuple[str, int, Path]] = []
+
+    @contextmanager
+    def prepare_session(
+        self,
+        *,
+        project: str,
+        run_id: int,
+        app_root: Path,
+    ):
+        self.prepare_calls.append((project, run_id, app_root))
+        marker = self._marker_dir / ".mcp.json" if self._marker_dir else None
+        if marker is not None:
+            marker.write_text("{}")
+        try:
+            yield PreparedTriageSession(cwd=self._prepared_cwd or app_root)
+        finally:
+            if marker is not None:
+                marker.unlink(missing_ok=True)
 
     def run_session(
         self,
@@ -65,9 +90,9 @@ def _make_runner(
     tmp_path: Path,
     project: str = "proj",
     *,
-    agent: TriageAgentPort | None = None,
-) -> tuple[TriageRunner, MagicMock, _StubTriageAgent]:
-    """Return a TriageRunner with a mock store + stub agent."""
+    agent: TriageBackendPort | None = None,
+) -> tuple[TriageRunner, MagicMock, _StubTriageBackend]:
+    """Builds a runner with stubbed dependencies."""
     venv_python = tmp_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True, exist_ok=True)
     venv_python.touch()
@@ -78,18 +103,22 @@ def _make_runner(
     store.get_active_finding_combos.return_value = []
     store.count_events_since.return_value = 0
 
-    triage_agent = agent if agent is not None else _StubTriageAgent(result=_ok_result())
+    triage_backend = (
+        agent
+        if agent is not None
+        else _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
+    )
     runner = TriageRunner(
         project,
         store,
         store,
         store,
         tmp_path,
-        triage_agent=triage_agent,
+        triage_backend=triage_backend,
         session_timeout_seconds=300,
         tool_registry=MagicMock(),
     )
-    return runner, store, triage_agent  # type: ignore[return-value]
+    return runner, store, triage_backend  # type: ignore[return-value]
 
 
 def _mock_reg(runner: TriageRunner) -> MagicMock:
@@ -203,62 +232,66 @@ def test_batch_error_raises_runtime_error(tmp_path: Path) -> None:
 
 
 def test_run_session_success(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(result=_ok_result())
+    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
     runner, store, _ = _make_runner(tmp_path, agent=agent)
     store.count_events_since.return_value = 3
 
-    outcome = runner._run_session(_render_stub, [1, 2])
+    outcome = runner._run_session(_render_stub, [1, 2], cwd=tmp_path)
 
     assert outcome == "success"
 
 
 def test_run_session_incomplete_when_no_audit_rows(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(result=_ok_result())
+    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
     runner, store, _ = _make_runner(tmp_path, agent=agent)
     store.count_events_since.return_value = 0
 
-    outcome = runner._run_session(_render_stub, [1])
+    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
 
     assert outcome == "incomplete"
 
 
 def test_run_session_failed_nonzero_exit(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(result=_failed_result(returncode=1, stderr="some error"))
+    agent = _StubTriageBackend(
+        result=_failed_result(returncode=1, stderr="some error"),
+        prepared_cwd=tmp_path,
+    )
     runner, store, _ = _make_runner(tmp_path, agent=agent)
 
-    outcome = runner._run_session(_render_stub, [1])
+    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
 
     assert outcome == "failed"
     store.count_events_since.assert_not_called()
 
 
 def test_run_session_failed_on_timeout(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(result=_timeout_result())
+    agent = _StubTriageBackend(result=_timeout_result(), prepared_cwd=tmp_path)
     runner, _, _ = _make_runner(tmp_path, agent=agent)
 
-    outcome = runner._run_session(_render_stub, [1])
+    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
 
     assert outcome == "failed"
 
 
 def test_run_session_failed_on_subprocess_exception(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(
+    agent = _StubTriageBackend(
         result=TriageSessionResult(
             success=False, returncode=-1, stderr="", error="command not found"
-        )
+        ),
+        prepared_cwd=tmp_path,
     )
     runner, _, _ = _make_runner(tmp_path, agent=agent)
 
-    outcome = runner._run_session(_render_stub, [1])
+    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
 
     assert outcome == "failed"
 
 
 def test_run_session_passes_prompt_timeout_and_cwd_to_agent(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(result=_ok_result())
+    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
     runner, _, _ = _make_runner(tmp_path, agent=agent)
 
-    runner._run_session(_render_stub, [42])
+    runner._run_session(_render_stub, [42], cwd=tmp_path)
 
     assert len(agent.calls) == 1
     prompt, timeout, cwd = agent.calls[0]
@@ -271,7 +304,7 @@ def test_run_session_passes_prompt_timeout_and_cwd_to_agent(tmp_path: Path) -> N
 
 
 def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
-    agent = _StubTriageAgent(result=_ok_result())
+    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
     runner, store, _ = _make_runner(tmp_path, agent=agent)
     store.claim_batch.side_effect = [_make_semgrep_batch(1, [1]), None]
     store.count_events_since.return_value = 1
@@ -322,7 +355,12 @@ def test_run_skips_skip_strategy_tools(tmp_path: Path) -> None:
 
 
 def test_run_deletes_mcp_json_on_success(tmp_path: Path) -> None:
-    runner, store, _ = _make_runner(tmp_path)
+    agent = _StubTriageBackend(
+        result=_ok_result(),
+        prepared_cwd=tmp_path,
+        marker_dir=tmp_path,
+    )
+    runner, store, _ = _make_runner(tmp_path, agent=agent)
     store.claim_batch.return_value = None
 
     runner.run()
@@ -331,8 +369,13 @@ def test_run_deletes_mcp_json_on_success(tmp_path: Path) -> None:
 
 
 def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
-    """finally block cleans up .mcp.json even when a session raises."""
-    runner, store, _ = _make_runner(tmp_path)
+    """Session cleanup still runs after a failure."""
+    agent = _StubTriageBackend(
+        result=_ok_result(),
+        prepared_cwd=tmp_path,
+        marker_dir=tmp_path,
+    )
+    runner, store, _ = _make_runner(tmp_path, agent=agent)
     store.claim_batch.side_effect = [_make_semgrep_batch(1, [1]), None]
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
@@ -345,6 +388,27 @@ def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
                 runner.run()
 
     assert not (tmp_path / ".mcp.json").exists()
+
+
+def test_run_uses_agent_prepared_session_context(tmp_path: Path) -> None:
+    agent = _StubTriageBackend(
+        result=_ok_result(),
+        prepared_cwd=tmp_path,
+        marker_dir=tmp_path,
+    )
+    runner, store, _ = _make_runner(tmp_path, agent=agent)
+    store.claim_batch.side_effect = [_make_semgrep_batch(1, [42]), None]
+    store.count_events_since.return_value = 1
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+
+    mock_reg = _mock_reg(runner)
+    if True:
+        mock_reg.get_all_tools.return_value = []
+        mock_reg.get_tool.return_value = mock_semgrep
+        runner.run()
+
+    assert agent.prepare_calls == [("proj", 1, tmp_path)]
+    assert agent.calls[0][2] == tmp_path
 
 
 # run_dry_run()
@@ -424,9 +488,9 @@ def test_run_dry_run_prompt_logged(
 def test_run_dry_run_does_not_start_mcp(tmp_path: Path) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.return_value = None
-    with patch.object(runner, "_write_mcp_config") as mock_write:
+    with patch.object(runner, "_prepare_session") as mock_prepare:
         runner.run_dry_run()
-    mock_write.assert_not_called()
+    mock_prepare.assert_not_called()
 
 
 # _run_batch_loop()

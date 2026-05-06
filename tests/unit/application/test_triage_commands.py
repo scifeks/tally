@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.repl.commands.triage_commands import TriageCommands
+from application.triage.factory import TriageProviderNotConfiguredError
 
 
 @pytest.fixture()
@@ -38,10 +39,16 @@ class TestTriageCommands:
     def test_batch_flag_calls_run_triage_batch_only(
         self, commands: TriageCommands, mock_repl: MagicMock
     ) -> None:
-        with patch(
-            "application.repl.commands.triage_commands.run_triage_batch_only",
-            return_value=3,
-        ) as mock_batch:
+        with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
+            patch(
+                "application.repl.commands.triage_commands.run_triage_batch_only",
+                return_value=3,
+            ) as mock_batch,
+        ):
             commands.cmd_triage("triage", ["--batch"])
 
         mock_batch.assert_called_once_with("test-project", mock_repl.tool_registry)
@@ -51,10 +58,16 @@ class TestTriageCommands:
     def test_dry_run_flag_calls_run_triage_dry_run(
         self, commands: TriageCommands, mock_repl: MagicMock
     ) -> None:
-        with patch(
-            "application.repl.commands.triage_commands.run_triage_dry_run",
-            return_value=2,
-        ) as mock_dry:
+        with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
+            patch(
+                "application.repl.commands.triage_commands.run_triage_dry_run",
+                return_value=2,
+            ) as mock_dry,
+        ):
             commands.cmd_triage("triage", ["--dry-run"])
 
         mock_dry.assert_called_once_with("test-project", mock_repl.tool_registry)
@@ -63,6 +76,10 @@ class TestTriageCommands:
         self, commands: TriageCommands, mock_repl: MagicMock
     ) -> None:
         with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
             patch("builtins.input", return_value="n"),
             patch(
                 "application.repl.commands.triage_commands.TriageService"
@@ -90,6 +107,10 @@ class TestTriageCommands:
         service.start_triage.return_value = handle
 
         with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
             patch("builtins.input", return_value="y"),
             patch(
                 "application.repl.commands.triage_commands.TriageService"
@@ -106,3 +127,21 @@ class TestTriageCommands:
         assert kwargs["project_id"] == 42
         assert kwargs["project_name"] == "test-project"
         assert kwargs["tool_registry"] is mock_repl.tool_registry
+
+    def test_disabled_provider_prints_error_before_running(
+        self, commands: TriageCommands, mock_repl: MagicMock
+    ) -> None:
+        with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                side_effect=TriageProviderNotConfiguredError("Triage is disabled."),
+            ),
+            patch(
+                "application.repl.commands.triage_commands.run_triage_batch_only"
+            ) as mock_batch,
+        ):
+            commands.cmd_triage("triage", ["--batch"])
+
+        mock_batch.assert_not_called()
+        printed = " ".join(str(call) for call in mock_repl.console.print.call_args_list)
+        assert "Triage is disabled" in printed

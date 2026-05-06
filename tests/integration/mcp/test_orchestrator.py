@@ -403,7 +403,7 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
 
 
 def test_batching_error_aborts_before_mcp_json(project_db) -> None:
-    """A batching error raises RuntimeError and _write_mcp_config is not called."""
+    """Batching failures abort before session prep."""
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
@@ -417,12 +417,12 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
             "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
-        patch.object(TriageRunner, "_write_mcp_config") as mock_write,
+        patch.object(TriageRunner, "_prepare_session") as mock_prepare,
     ):
         with pytest.raises(RuntimeError, match="Batching failed"):
             run_triage(project, _make_tool_registry_mock())
 
-    mock_write.assert_not_called()
+    mock_prepare.assert_not_called()
 
 
 def test_batch_count_reported(project_db, capsys) -> None:

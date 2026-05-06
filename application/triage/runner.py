@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,7 +18,6 @@ from application.ports.triage_event_sink import (
 from application.tools.registry import ToolRegistry
 from application.triage.batching import compute_batches
 from application.triage.prompts import api_trace, sast_trace, sca_trace
-from core.project_paths import ProjectPaths
 from domain.pipeline.triage_events import (
     BatchCompleted,
     BatchCreated,
@@ -34,7 +32,7 @@ from domain.pipeline.triage_events import (
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
-    from application.ports.triage_agent import TriageAgentPort
+    from application.ports.triage_agent import TriageBackendPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
 _PROMPT_RENDERERS: dict[str, Callable[[list[int], str], str]] = {
@@ -89,7 +87,7 @@ class TriageRunner:
         cancel_token: CancellationToken | None = None,
         project_id: int | None = None,
         scan_run_id: int | None = None,
-        triage_agent: TriageAgentPort,
+        triage_backend: TriageBackendPort,
         session_timeout_seconds: int,
         tool_registry: ToolRegistry,
     ) -> None:
@@ -103,38 +101,9 @@ class TriageRunner:
         self._cancel_token: CancellationToken = cancel_token or no_op_token()
         self._project_id = project_id
         self._scan_run_id = scan_run_id
-        self._triage_agent = triage_agent
+        self._triage_backend = triage_backend
         self._session_timeout_seconds = session_timeout_seconds
         self._tool_registry = tool_registry
-
-    @classmethod
-    def for_project(
-        cls,
-        project: str,
-        tool_registry: ToolRegistry,
-        app_root: Path | None = None,
-    ) -> TriageRunner:
-        from application.config.mcp_defaults import load_mcp_defaults
-
-        root = app_root or _APP_ROOT
-        paths = ProjectPaths.from_canonical(root, project)
-        if not paths.findings_db.exists():
-            raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
-        from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
-        from infrastructure.store import make_store
-
-        run_repo, _, triage_repo, audit_repo = make_store(root, project)
-        _, _, session_timeout_seconds = load_mcp_defaults(str(root))
-        return cls(
-            project,
-            run_repo,
-            triage_repo,
-            audit_repo,
-            root,
-            triage_agent=ClaudeTriageAgent(),
-            session_timeout_seconds=session_timeout_seconds,
-            tool_registry=tool_registry,
-        )
 
     # Public API
 
@@ -201,14 +170,7 @@ class TriageRunner:
         return run_id, total
 
     def run(self, *, holder_token: str | None = None) -> TriageResult:
-        """Run full triage pipeline (batch → MCP setup → Claude sessions).
-
-        The "triage" job lock is owned by the caller (the application
-        service that started this run, or the REPL helper). When
-        ``holder_token`` is provided, per-batch finding-id locks are
-        acquired against that token so concurrent analyst PATCHes are
-        blocked while a batch is being written.
-        """
+        """Runs one triage pass for a scan run."""
         run_id, _total = self.batch()
         self._emit(
             RunStarted(
@@ -217,15 +179,15 @@ class TriageRunner:
                 message=f"Triage starting for scan_run_id={run_id}",
             )
         )
-        mcp_json_path = self._write_mcp_config(run_id)
         try:
-            result = self._run_batch_loop(
-                run_id,
-                lambda batch_id, render_fn, finding_ids: self._run_session(
-                    render_fn, finding_ids
-                ),
-                holder_token=holder_token,
-            )
+            with self._prepare_session(run_id) as prepared:
+                result = self._run_batch_loop(
+                    run_id,
+                    lambda batch_id, render_fn, finding_ids: self._run_session(
+                        render_fn, finding_ids, cwd=prepared.cwd
+                    ),
+                    holder_token=holder_token,
+                )
         except TriageCancelled:
             self._triage_repo.cancel_remaining(run_id)
             self._emit(
@@ -239,8 +201,6 @@ class TriageRunner:
         except Exception as exc:
             self._emit_run_failed(run_id, exc)
             raise
-        finally:
-            mcp_json_path.unlink(missing_ok=True)
         self._emit(
             RunCompleted(
                 scan_run_id=run_id,
@@ -252,10 +212,7 @@ class TriageRunner:
         return result
 
     def run_dry_run(self) -> int:
-        """Batch phase + render prompts to DEBUG log. No MCP server, no Claude.
-
-        Returns the number of non-skip batches processed.
-        """
+        """Logs prompts without starting MCP or backend sessions."""
         run_id, _total = self.batch()
 
         def _handler(
@@ -365,7 +322,7 @@ class TriageRunner:
         Skip-flagged tools are auto-completed without calling handler.
         When holder_token is set, finding-id locks are acquired per batch
         so that analyst PATCH requests are blocked for the duration of the
-        Claude session writing those findings.
+        agent session writing those findings.
         """
         sessions_run = success = failed = incomplete = 0
         while True:
@@ -453,7 +410,11 @@ class TriageRunner:
         )
 
     def _run_session(
-        self, render_fn: Callable[..., str], finding_ids: list[int]
+        self,
+        render_fn: Callable[..., str],
+        finding_ids: list[int],
+        *,
+        cwd: Path,
     ) -> str:
         """Run one triage-agent session.
 
@@ -462,10 +423,10 @@ class TriageRunner:
         prompt_text = render_fn(finding_ids, self._project)
         session_start = datetime.now(UTC).isoformat()
 
-        result = self._triage_agent.run_session(
+        result = self._triage_backend.run_session(
             prompt_text,
             timeout_seconds=self._session_timeout_seconds,
-            cwd=self._app_root,
+            cwd=cwd,
         )
         if not result.success:
             _log.error(
@@ -492,32 +453,9 @@ class TriageRunner:
         )
         return "incomplete"
 
-    def _write_mcp_config(self, run_id: int) -> Path:
-        """Write .mcp.json for Claude's MCP server and return its path."""
-        mcp_json_path = self._app_root / ".mcp.json"
-        venv_python = self._app_root / ".venv" / "bin" / "python"
-
-        if not venv_python.exists():
-            raise RuntimeError(f"Venv Python not found at {venv_python}")
-
-        payload = {
-            "mcpServers": {
-                "tally-mcp": {
-                    "type": "stdio",
-                    "command": str(venv_python),
-                    "args": [
-                        "-m",
-                        "tally_mcp.server",
-                        "--project",
-                        self._project,
-                    ],
-                    "env": {"TALLY_TRIAGE_RUN_ID": str(run_id)},
-                    "permissions": {
-                        "allow": ["get_findings_batch", "update_findings_batch"],
-                        "deny": ["*"],
-                    },
-                }
-            }
-        }
-        mcp_json_path.write_text(json.dumps(payload, indent=2))
-        return mcp_json_path
+    def _prepare_session(self, run_id: int):
+        return self._triage_backend.prepare_session(
+            project=self._project,
+            run_id=run_id,
+            app_root=self._app_root,
+        )

@@ -3,6 +3,7 @@
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama_report",
   "embedding_provider": "ollama_embedding",
+  "triage_agent_provider": "claude_code",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen2.5:14b",

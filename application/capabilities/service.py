@@ -1,4 +1,5 @@
 from application.runtime.dependency_service import RuntimeDependencyService
+from application.triage.readiness import compute_triage_readiness
 from core.config.manager import ConfigManager
 from domain.capabilities.models import Capabilities
 
@@ -8,8 +9,7 @@ class CapabilitiesService:
 
     Sources:
       - chat_enabled: GlobalConfig.chat_llm_provider == "ollama".
-      - triage_enabled: ClaudeCodeProbe (via RuntimeDependencyService) is
-        installed.
+      - triage_enabled: configured triage backend is usable.
       - report_retention_enabled: hardcoded False; no retention sweep
         mechanism exists yet.
       - max_report_history: GlobalConfig.report_retention_count.
@@ -32,9 +32,14 @@ class CapabilitiesService:
             chat_enabled = False
             max_report_history = 10
 
+        triage_enabled = compute_triage_readiness(
+            base_path=self._base_path,
+            runtime_service=self._runtime_service,
+        ).enabled
+
         return Capabilities(
             chat_enabled=chat_enabled,
-            triage_enabled=self._runtime_service.is_installed("claude"),
+            triage_enabled=triage_enabled,
             report_retention_enabled=False,
             max_report_history=max_report_history,
         )

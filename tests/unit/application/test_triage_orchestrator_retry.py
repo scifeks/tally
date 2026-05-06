@@ -16,13 +16,13 @@ _SUCCESS = TriageResult(sessions_run=1, success=1, failed=0, incomplete=0)
 
 class TestRetryOnce:
     @patch("application.triage.orchestrator.time.sleep")
-    @patch("application.triage.runner.TriageRunner.for_project")
+    @patch("application.triage.orchestrator.build_triage_runner")
     def test_retries_once_on_busy_then_succeeds(
-        self, mock_for_project: MagicMock, mock_sleep: MagicMock
+        self, mock_build_runner: MagicMock, mock_sleep: MagicMock
     ) -> None:
         runner = MagicMock()
         runner.run.side_effect = [_BUSY, _SUCCESS]
-        mock_for_project.return_value = runner
+        mock_build_runner.return_value = runner
 
         result = run_triage("test-project", MagicMock())
 
@@ -31,13 +31,13 @@ class TestRetryOnce:
         assert runner.run.call_count == 2
 
     @patch("application.triage.orchestrator.time.sleep")
-    @patch("application.triage.runner.TriageRunner.for_project")
+    @patch("application.triage.orchestrator.build_triage_runner")
     def test_propagates_findings_busy_on_second_failure(
-        self, mock_for_project: MagicMock, mock_sleep: MagicMock
+        self, mock_build_runner: MagicMock, mock_sleep: MagicMock
     ) -> None:
         runner = MagicMock()
         runner.run.side_effect = _BUSY
-        mock_for_project.return_value = runner
+        mock_build_runner.return_value = runner
 
         with pytest.raises(FindingsBusy):
             run_triage("test-project", MagicMock())
@@ -45,13 +45,13 @@ class TestRetryOnce:
         mock_sleep.assert_called_once_with(5)
         assert runner.run.call_count == 2
 
-    @patch("application.triage.runner.TriageRunner.for_project")
+    @patch("application.triage.orchestrator.build_triage_runner")
     def test_no_sleep_when_first_call_succeeds(
-        self, mock_for_project: MagicMock
+        self, mock_build_runner: MagicMock
     ) -> None:
         runner = MagicMock()
         runner.run.return_value = _SUCCESS
-        mock_for_project.return_value = runner
+        mock_build_runner.return_value = runner
 
         with patch("application.triage.orchestrator.time.sleep") as mock_sleep:
             run_triage("test-project", MagicMock())

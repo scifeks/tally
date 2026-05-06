@@ -1,5 +1,7 @@
 """GlobalConfig schema."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
@@ -22,6 +24,7 @@ class GlobalConfig(BaseModel):
     enrichment_llm_provider: str = "ollama"
     report_llm_provider: str = "ollama"
     embedding_provider: str = "ollama_embedding"
+    triage_agent_provider: Literal["", "claude_code", "open_code"] = ""
     ollama: OllamaConfig | None = None
     ollama_report: OllamaConfig | None = None
     ollama_noir: OllamaConfig | None = None

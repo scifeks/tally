@@ -111,6 +111,25 @@ def _make_unauthed_app(tmp_path: Path) -> Any:
     return app
 
 
+async def _authed_client_for_config(tmp_path: Path, payload: dict[str, Any]):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "global.json").write_text(json.dumps(payload))
+
+    db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    ConnectionFactory(db_path).init_schema()
+
+    app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
+    transport = httpx.ASGITransport(app=app)
+    client = httpx.AsyncClient(
+        transport=transport,
+        base_url=f"http://127.0.0.1:{TEST_PORT}",
+    )
+    await _authenticate(client)
+    return client
+
+
 class TestToolsCatalog:
     async def test_catalog_returns_items(self, app_client) -> None:
         client, *_ = app_client
@@ -201,15 +220,23 @@ class TestRuntimeDependencies:
         resp = await client.get("/api/v1/runtime-dependencies")
         assert resp.status_code == 200
         data = resp.json()
-        assert "dependencies" in data
-        assert isinstance(data["dependencies"], list)
+        assert data == {"dependencies": []}
 
-    async def test_dependency_item_fields(self, app_client) -> None:
-        client, *_ = app_client
-        resp = await client.get("/api/v1/runtime-dependencies")
+    async def test_claude_config_registers_runtime_dependency(
+        self, tmp_path: Path
+    ) -> None:
+        client = await _authed_client_for_config(
+            tmp_path,
+            {"triage_agent_provider": "claude_code"},
+        )
+        try:
+            resp = await client.get("/api/v1/runtime-dependencies")
+        finally:
+            await client.aclose()
+
         assert resp.status_code == 200
         deps = resp.json()["dependencies"]
-        assert len(deps) >= 1
+        assert len(deps) == 1
         item = deps[0]
         assert item["name"] == "claude"
         assert isinstance(item["installed"], bool)
@@ -218,6 +245,21 @@ class TestRuntimeDependencies:
         assert "binary_path" in item
         assert "version" in item
         assert "error" in item
+
+    async def test_open_code_config_skips_runtime_dependency_until_probe_exists(
+        self, tmp_path: Path
+    ) -> None:
+        client = await _authed_client_for_config(
+            tmp_path,
+            {"triage_agent_provider": "open_code"},
+        )
+        try:
+            resp = await client.get("/api/v1/runtime-dependencies")
+        finally:
+            await client.aclose()
+
+        assert resp.status_code == 200
+        assert resp.json() == {"dependencies": []}
 
     async def test_requires_auth(self, tmp_path: Path) -> None:
         (tmp_path / "config").mkdir(parents=True)

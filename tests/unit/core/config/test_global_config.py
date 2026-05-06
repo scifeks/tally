@@ -25,6 +25,10 @@ class TestDefaults:
         cfg = GlobalConfig()
         assert cfg.web_ui_allowed_origins is None
 
+    def test_triage_agent_provider_default(self) -> None:
+        cfg = GlobalConfig()
+        assert cfg.triage_agent_provider == ""
+
 
 class TestHostValidator:
     @pytest.mark.parametrize("bad_host", ["0.0.0.0", "::", ""])
@@ -71,6 +75,20 @@ class TestExtraFieldsIgnored:
     def test_unknown_key_silently_ignored(self) -> None:
         cfg = GlobalConfig.model_validate({"subprocess_stream_chunk_bytes": 268435456})
         assert not hasattr(cfg, "subprocess_stream_chunk_bytes")
+
+
+class TestTriageAgentProvider:
+    def test_empty_string_disables_triage(self) -> None:
+        cfg = GlobalConfig(triage_agent_provider="")
+        assert cfg.triage_agent_provider == ""
+
+    def test_open_code_accepted(self) -> None:
+        cfg = GlobalConfig(triage_agent_provider="open_code")
+        assert cfg.triage_agent_provider == "open_code"
+
+    def test_unknown_provider_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            GlobalConfig.model_validate({"triage_agent_provider": "something_else"})
 
 
 class TestChatSessionRetention:

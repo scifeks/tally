@@ -1,4 +1,4 @@
-"""Tests for the Claude Code gate in TriageCommands."""
+"""Tests triage runtime gating."""
 
 from __future__ import annotations
 
@@ -24,6 +24,10 @@ class TestTriageCommandsClaudeGate:
         repl = _repl()
         cmds = TriageCommands(repl, runtime_service=_runtime(installed=False))
         with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
             patch(
                 "application.repl.commands.triage_commands.TriageService"
             ) as mock_service,
@@ -51,9 +55,15 @@ class TestTriageCommandsClaudeGate:
     def test_claude_present_proceeds_to_project_check(self) -> None:
         repl = _repl(active_project=None)
         cmds = TriageCommands(repl, runtime_service=_runtime(installed=True))
-        with patch(
-            "application.repl.commands.triage_commands.TriageService"
-        ) as mock_service:
+        with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
+            patch(
+                "application.repl.commands.triage_commands.TriageService"
+            ) as mock_service,
+        ):
             cmds.cmd_triage("triage", [])
         mock_service.for_project.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
@@ -62,10 +72,35 @@ class TestTriageCommandsClaudeGate:
     def test_no_runtime_service_skips_gate(self) -> None:
         repl = _repl(active_project=None)
         cmds = TriageCommands(repl, runtime_service=None)
-        with patch(
-            "application.repl.commands.triage_commands.TriageService"
-        ) as mock_service:
+        with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="claude_code",
+            ),
+            patch(
+                "application.repl.commands.triage_commands.TriageService"
+            ) as mock_service,
+        ):
             cmds.cmd_triage("triage", [])
         mock_service.for_project.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
         assert "No active" in printed
+
+    def test_non_claude_provider_skips_claude_gate(self) -> None:
+        repl = _repl()
+        cmds = TriageCommands(repl, runtime_service=_runtime(installed=False))
+        with (
+            patch(
+                "application.repl.commands.triage_commands.ensure_triage_backend_configured",
+                return_value="open_code",
+            ),
+            patch(
+                "application.repl.commands.triage_commands.run_triage_batch_only",
+                return_value=1,
+            ) as mock_batch,
+        ):
+            cmds.cmd_triage("triage", ["--batch"])
+
+        mock_batch.assert_called_once()
+        printed = " ".join(str(c) for c in repl.console.print.call_args_list)
+        assert "Claude Code is required" not in printed

@@ -18,7 +18,7 @@ from application.project.registry_service import ProjectRegistryService
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
 from infrastructure.events.bus import EventBus
-from infrastructure.runtime.claude_probe import ClaudeCodeProbe
+from infrastructure.runtime.factory import build_runtime_dependency_probes
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
@@ -116,7 +116,9 @@ def create_app(
     app.state.tool_registry = tool_registry
     app.state.installed_tools = InstalledToolsProbe(tool_registry)
 
-    app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
+    app.state.runtime_dependency_service = RuntimeDependencyService(
+        build_runtime_dependency_probes(base_path=base_path)
+    )
 
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,

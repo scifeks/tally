@@ -26,6 +26,11 @@ Each role can be set to `"ollama"` or `"claude"` independently. The correspondin
 provider block (`ollama` or `claude`) must be present in `global.json` for any role
 that references it.
 
+Triage backend selection is configured separately through
+`triage_agent_provider`. This setting selects the agent runtime used by the
+`triage` workflow rather than the LLM provider blocks used for chat,
+enrichment, and reporting.
+
 ### Top-level Fields
 
 | Field | Type | Default | Description |
@@ -34,6 +39,7 @@ that references it.
 | `enrichment_llm_provider` | string | `"ollama"` | Provider for finding enrichment: `"ollama"` or `"claude"`. |
 | `report_llm_provider` | string | `"ollama"` | Provider for report generation: `"ollama"` or `"claude"`. |
 | `embedding_provider` | string | `"ollama_embedding"` | Provider for ChromaDB embeddings. Currently only `"ollama_embedding"` is supported. |
+| `triage_agent_provider` | string | `""` | Triage agent backend. `""` or omission disables triage. `"claude_code"` and `"open_code"` enable their respective runtimes. |
 | `ollama` | object | — | Ollama connection settings. Required when any LLM role is set to `"ollama"`. |
 | `ollama_embedding` | object | — | Ollama embedding settings. Required when `embedding_provider` is `"ollama_embedding"`. |
 | `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"`. |
@@ -79,6 +85,7 @@ that references it.
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
   "embedding_provider": "ollama_embedding",
+  "triage_agent_provider": "claude_code",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
@@ -107,6 +114,7 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "claude",
   "embedding_provider": "ollama_embedding",
+  "triage_agent_provider": "claude_code",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
@@ -168,6 +176,7 @@ Ollama instance runs on a different host or port:
   "enrichment_llm_provider": "ollama",
   "report_llm_provider": "ollama",
   "embedding_provider": "ollama_embedding",
+  "triage_agent_provider": "claude_code",
   "ollama": {
     "base_url": "http://192.168.1.50:11434",
     "model": "qwen3:14b",

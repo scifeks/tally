@@ -1,49 +1,42 @@
-"""ClaudeTriageAgent: concrete TriageAgentPort backed by the Claude Code CLI.
-
-Owns the argv that invokes the ``claude`` binary plus the security policy
-that pins the flag set. The application service hands over a rendered prompt
-and a timeout; this adapter handles the spawn, captures the result, and
-translates timeouts and unexpected errors into a TriageSessionResult.
-"""
+"""Claude-backed triage backend."""
 
 from __future__ import annotations
 
+import json
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
-from application.ports.triage_agent import TriageAgentPort, TriageSessionResult
+from application.ports.triage_agent import (
+    PreparedTriageSession,
+    TriageBackendPort,
+    TriageSessionResult,
+)
 
-# SECURITY: --dangerously-skip-permissions and --disallowedTools must
-# ALWAYS be present together. Removing or weakening either flag creates
-# a privilege-escalation path. Rationale:
-#
-# 1. --dangerously-skip-permissions is required because the MCP server
-#    startup otherwise triggers interactive permission prompts that
-#    cannot be answered in a non-interactive subprocess.
-#
-# 2. --disallowedTools is the compensating control that prevents Claude
-#    from using any tool that directly modifies the filesystem or makes
-#    network requests (Bash, Write, Edit, MultiEdit, WebFetch,
-#    WebSearch). Without this list, --dangerously-skip-permissions
-#    would grant the Claude subprocess full filesystem and network
-#    access under the operator's user identity.
-#
-# 3. The MCP permission manifest in .mcp.json
-#    (allow: [get_findings_batch, update_findings_batch], deny: [*])
-#    is a third layer of defense: the MCP server itself refuses calls
-#    to any tool not explicitly allow-listed.
-#
-# 4. If --disallowedTools is removed or its tool list is shortened,
-#    the Claude subprocess gains unrestricted filesystem write and
-#    network access as the current user. That is a critical security
-#    regression.
-#
-# NEVER remove --dangerously-skip-permissions or --disallowedTools,
-# and NEVER reduce the set of tools listed in --disallowedTools.
+# Keep these flags paired so noninteractive triage cannot gain shell,
+# edit, or web access through the Claude process.
 _DISALLOWED_TOOLS = "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch"
 
 
-class ClaudeTriageAgent(TriageAgentPort):
+class ClaudeTriageAgent(TriageBackendPort):
+    @contextmanager
+    def prepare_session(
+        self,
+        *,
+        project: str,
+        run_id: int,
+        app_root: Path,
+    ):
+        mcp_json_path = app_root / ".mcp.json"
+        payload = self._build_mcp_payload(
+            project=project, run_id=run_id, app_root=app_root
+        )
+        mcp_json_path.write_text(json.dumps(payload, indent=2))
+        try:
+            yield PreparedTriageSession(cwd=app_root)
+        finally:
+            mcp_json_path.unlink(missing_ok=True)
+
     def run_session(
         self,
         prompt: str,
@@ -86,3 +79,27 @@ class ClaudeTriageAgent(TriageAgentPort):
             returncode=completed.returncode,
             stderr=completed.stderr or "",
         )
+
+    def _build_mcp_payload(self, *, project: str, run_id: int, app_root: Path) -> dict:
+        venv_python = app_root / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            raise RuntimeError(f"Venv Python not found at {venv_python}")
+        return {
+            "mcpServers": {
+                "tally-mcp": {
+                    "type": "stdio",
+                    "command": str(venv_python),
+                    "args": [
+                        "-m",
+                        "tally_mcp.server",
+                        "--project",
+                        project,
+                    ],
+                    "env": {"TALLY_TRIAGE_RUN_ID": str(run_id)},
+                    "permissions": {
+                        "allow": ["get_findings_batch", "update_findings_batch"],
+                        "deny": ["*"],
+                    },
+                }
+            }
+        }

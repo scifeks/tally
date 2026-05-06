@@ -1,12 +1,14 @@
-"""Unit tests for the RunFailed emit path on TriageRunner."""
+"""Tests RunFailed emission."""
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from application.ports.triage_agent import PreparedTriageSession
 from application.triage.runner import TriageRunner
 from domain.pipeline.triage_events import RunFailed
 from domain.triage.entry import TriageBatchRow
@@ -69,6 +71,10 @@ def _make_runner(tmp_path: Path) -> tuple[TriageRunner, _RecordingSink, MagicMoc
             completed_at=None,
         ),
     ]
+    triage_backend = MagicMock()
+    triage_backend.prepare_session.return_value = nullcontext(
+        PreparedTriageSession(cwd=tmp_path)
+    )
     runner = TriageRunner(
         project="proj",
         run_repo=MagicMock(),
@@ -78,7 +84,7 @@ def _make_runner(tmp_path: Path) -> tuple[TriageRunner, _RecordingSink, MagicMoc
         tool_registry=MagicMock(),
         event_sink=sink,
         project_id=42,
-        triage_agent=MagicMock(),
+        triage_backend=triage_backend,
         session_timeout_seconds=300,
     )
     return runner, sink, triage_repo
@@ -138,10 +144,6 @@ def test_run_emits_run_failed_and_reraises_on_uncaught(
 
     # Make batch() return a stable run_id without touching the DB.
     monkeypatch.setattr(runner, "batch", lambda: (7, 0))
-    # Stub MCP config so _write_mcp_config doesn't need a real venv.
-    fake_path = tmp_path / ".mcp.json"
-    fake_path.write_text("{}")
-    monkeypatch.setattr(runner, "_write_mcp_config", lambda _run_id: fake_path)
 
     def _explode(*_a, **_kw):
         raise RuntimeError("db unavailable")

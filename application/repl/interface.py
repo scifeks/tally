@@ -38,7 +38,7 @@ from application.repl.help_renderer import HELP_BOX, HelpRenderer
 from application.runtime import RuntimeDependencyService
 from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
-from infrastructure.runtime import ClaudeCodeProbe
+from infrastructure.runtime import build_runtime_dependency_probes
 
 if TYPE_CHECKING:
     from application.rag.knowledge_base import FindingKnowledgeBase
@@ -247,7 +247,9 @@ class REPL:
         self.active_project: str | None = None
         self.knowledge_base_cache: dict[str, FindingKnowledgeBase | None] = {}
         if runtime_service is None:
-            runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
+            runtime_service = RuntimeDependencyService(
+                build_runtime_dependency_probes(base_path=base_path)
+            )
         self._runtime_service = runtime_service
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
@@ -257,7 +259,11 @@ class REPL:
             tool_registry = ToolRegistry()
             discover_tools(tool_registry, base_path)
         self.tool_registry = tool_registry
-        self.help_renderer = HelpRenderer(self.console, runtime_service=runtime_service)
+        self.help_renderer = HelpRenderer(
+            self.console,
+            base_path=base_path,
+            runtime_service=runtime_service,
+        )
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
