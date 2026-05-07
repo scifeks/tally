@@ -1,7 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Bookmark, Check, Play, Save, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { ConfiguredRepo, ConfiguredTool, SavedScanListItem, Segment } from '@/lib/types'
+import type {
+  ConfiguredRepo,
+  ConfiguredTool,
+  SavedScanDetail,
+  SavedScanListItem,
+  Segment,
+} from '@/lib/types'
 import type { SavedScanWriteInput } from '@/lib/api/useSavedScans'
 import { useRunSavedScan } from '@/lib/api'
 import { StaleSavedScanModal } from '@/components/StaleSavedScanModal'
@@ -32,9 +38,13 @@ interface SavedScansTabProps {
   configuredTools: ConfiguredTool[]
   toolArgProfiles: ToolArgProfile[]
   configuredSegments: Segment[]
-  onSave: (payload: SavedScanWriteInput, existingId?: number) => void
+  onSave: (
+    payload: SavedScanWriteInput,
+    existingId?: number
+  ) => Promise<SavedScanDetail | undefined>
   onDelete: (savedScanId: number) => void
   onSelect: (savedScanId: number) => void
+  onRunStarted: (scan: { id: number }) => void
   isSaving: boolean
 }
 
@@ -47,7 +57,8 @@ export function SavedScansTab({
   configuredSegments,
   onSave,
   onDelete,
-  onSelect,
+  onSelect: _onSelect,
+  onRunStarted,
   isSaving,
 }: SavedScansTabProps) {
   const [selectedScanId, setSelectedScanId] = useState<number | null>(null)
@@ -125,7 +136,7 @@ export function SavedScansTab({
     setIsCreatingNew(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name?.trim()) return
     const toolNames: string[] = []
     const argProfileIds: number[] = []
@@ -149,8 +160,9 @@ export function SavedScansTab({
       segments: form.segments ?? [],
       argProfileIds,
     }
-    onSave(payload, form.id)
-    if (isCreatingNew) {
+    const saved = await onSave(payload, form.id)
+    if (saved && isCreatingNew) {
+      setSelectedScanId(saved.id)
       setIsCreatingNew(false)
     }
   }
@@ -424,7 +436,7 @@ export function SavedScansTab({
                           runScan.mutate(
                             { projectId, savedScanId: selectedScanId },
                             {
-                              onSuccess: () => onSelect(selectedScanId),
+                              onSuccess: scan => onRunStarted(scan),
                               onError: err => {
                                 if (err.code === 'STALE_SAVED_SCAN') {
                                   const details = err.details as {
