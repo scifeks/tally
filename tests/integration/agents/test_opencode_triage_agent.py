@@ -1,9 +1,9 @@
 """Adapter contract tests for OpenCodeTriageAgent.
 
-These pin the argv shape, cwd, stdin, env, and error-translation behavior of
+These pin the argv shape, cwd, stdin, env and error-translation behavior of
 the OpenCode adapter. They do not invoke the real ``opencode`` binary;
 ``subprocess.run`` is patched so the command shape can be inspected and
-exceptions can be injected.
+exceptions injected.
 """
 # ruff: noqa: E402, I001
 
@@ -71,6 +71,16 @@ def test_json_format_flag_present(tmp_path: Path) -> None:
     cmd = mock_run.call_args[0][0]
     idx = cmd.index("--format")
     assert cmd[idx + 1] == "json"
+
+
+def test_dangerously_skip_permissions_flag_present_in_subprocess(
+    tmp_path: Path,
+) -> None:
+    agent = OpenCodeTriageAgent()
+    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
+        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
+    cmd = mock_run.call_args[0][0]
+    assert "--dangerously-skip-permissions" in cmd
 
 
 def test_cwd_passed_to_subprocess(tmp_path: Path) -> None:

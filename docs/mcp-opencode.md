@@ -23,7 +23,7 @@ When `triage_agent_provider` is `"open_code"`, Tally:
 
 - generates a disposable `opencode.json` for the session
 - points OpenCode at it with `OPENCODE_CONFIG`
-- launches `opencode run --dir <app_root> --format json`
+- launches `opencode run --dangerously-skip-permissions --dir <app_root> --format json`
 - passes the triage prompt over stdin
 - sets `TALLY_TRIAGED_BY=opencode` for MCP-side persistence
 
@@ -41,13 +41,23 @@ The generated `opencode.json` carries a hardened minimum triage profile:
 - deny `edit`
 - deny `bash`
 - deny `webfetch`
-- allow filesystem reads
+- allow filesystem reads (see scope note below)
 - deny filesystem writes
-- allow only the Tally MCP namespace via `tally-mcp_*`
+- allow `tally-mcp_get_findings_batch`
+- allow `tally-mcp_update_findings_batch`
+- deny every other `tally-mcp_*` tool by default
 
-This keeps OpenCode aligned with the current triage safety posture: read and
-analyze findings, but do not edit files, run arbitrary shell commands, or use
-the network.
+OpenCode is launched with `--dangerously-skip-permissions`, which
+auto-approves any permission that is not explicitly denied. Explicit
+`allow` and `deny` rules still apply; the flag only removes the
+interactive `ask` step. Without it, headless triage hangs whenever
+OpenCode encounters a permission that resolves to `ask`.
+
+This keeps OpenCode aligned with the current triage safety posture: read
+and analyze findings, but do not edit files, run arbitrary shell commands
+or use the network. Filesystem read scope is currently open (`*: allow`)
+and will be tightened in a follow-up substep that adds a user-configurable
+deny list to `config/global.json`.
 
 ## Troubleshooting
 
@@ -59,7 +69,7 @@ Verify:
 opencode --version
 ```
 
-If this fails, install OpenCode or ensure the binary is available either at
+If this fails, install OpenCode or place the binary at
 `~/.opencode/bin/opencode` or on `PATH`.
 
 ### OpenCode session fails before MCP updates
@@ -70,7 +80,9 @@ entries. If no update calls happened, the batch will be marked `incomplete` or
 
 ### Permission profile errors
 
-Tally writes explicit `read` and `write` permission maps into the generated
-`opencode.json`. If a future OpenCode release changes that schema, start by
-checking the generated config path from `OPENCODE_CONFIG` and comparing it
-against the installed runtime's accepted format.
+Tally writes an explicit `permission` block into the generated
+`opencode.json` covering `edit`, `bash`, `webfetch`, `read`, `write` and
+the per-tool `tally-mcp_*` MCP keys. If a future OpenCode release changes
+that schema, start by checking the generated config path from
+`OPENCODE_CONFIG` and comparing it against the installed runtime's
+accepted format.

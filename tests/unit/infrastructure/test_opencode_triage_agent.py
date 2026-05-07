@@ -91,9 +91,33 @@ def test_prepare_session_writes_mcp_config_payload(tmp_path: Path) -> None:
     assert permission["edit"] == "deny"
     assert permission["bash"] == {"*": "deny"}
     assert permission["webfetch"] == "deny"
-    assert permission["tally-mcp_*"] == "allow"
+    assert permission["tally-mcp_get_findings_batch"] == "allow"
+    assert permission["tally-mcp_update_findings_batch"] == "allow"
+    assert permission["tally-mcp_*"] == "deny"
     assert permission["read"] == {"*": "allow"}
     assert permission["write"] == {"*": "deny"}
+
+
+def test_prepare_session_does_not_use_mcp_wildcard_allow(tmp_path: Path) -> None:
+    agent = OpenCodeTriageAgent()
+    _create_venv_python(tmp_path)
+
+    with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
+        assert agent._session_env is not None
+        config_path = Path(agent._session_env["OPENCODE_CONFIG"])
+        payload = json.loads(config_path.read_text())
+
+    assert payload["permission"]["tally-mcp_*"] != "allow"
+
+
+def test_build_run_command_passes_dangerously_skip_permissions(
+    tmp_path: Path,
+) -> None:
+    agent = OpenCodeTriageAgent()
+
+    command = agent._build_run_command(cwd=tmp_path)
+
+    assert "--dangerously-skip-permissions" in command
 
 
 def test_prepare_session_raises_runtime_error_if_venv_python_missing(
@@ -133,6 +157,7 @@ def test_build_run_command_uses_dir_and_json_format(tmp_path: Path) -> None:
     assert command == [
         "opencode",
         "run",
+        "--dangerously-skip-permissions",
         "--dir",
         str(tmp_path),
         "--format",

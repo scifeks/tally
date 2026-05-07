@@ -16,18 +16,12 @@ from application.ports.triage_agent import (
 )
 
 _MCP_SERVER_NAME = "tally-mcp"
-_MCP_TOOL_PERMISSION_PATTERN = "tally-mcp_*"
 _RUN_OUTPUT_FORMAT = "json"
 _TRIAGED_BY = "opencode"
 
 
 class OpenCodeTriageAgent(TriageBackendPort):
-    """OpenCode-backed triage backend.
-
-    Phase 3.2 prepares disposable OpenCode config material locally and points
-    the runtime at it via ``OPENCODE_CONFIG``. The actual ``opencode run``
-    invocation remains blocked by B1/B3.
-    """
+    """OpenCode-backed triage backend."""
 
     def __init__(self) -> None:
         self._session_env: dict[str, str] | None = None
@@ -103,6 +97,7 @@ class OpenCodeTriageAgent(TriageBackendPort):
         return [
             "opencode",
             "run",
+            "--dangerously-skip-permissions",
             "--dir",
             str(cwd),
             "--format",
@@ -148,11 +143,18 @@ class OpenCodeTriageAgent(TriageBackendPort):
         }
 
     def _build_permission_payload(self) -> dict:
+        # TODO(opencode-triage 1.5): replace `read: *: allow` with an
+        # explicit deny list sourced from a user-configurable global-config
+        # field. With --dangerously-skip-permissions in effect, only
+        # explicit denies stop the read tool from accessing any path the
+        # Tally process can see.
         return {
             "edit": "deny",
             "bash": {"*": "deny"},
             "webfetch": "deny",
-            _MCP_TOOL_PERMISSION_PATTERN: "allow",
+            "tally-mcp_get_findings_batch": "allow",
+            "tally-mcp_update_findings_batch": "allow",
+            "tally-mcp_*": "deny",
             "read": {"*": "allow"},
             "write": {"*": "deny"},
         }
