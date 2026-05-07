@@ -15,10 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
+from application.runtime import build_runtime_dependency_probes
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
 from infrastructure.events.bus import EventBus
-from infrastructure.runtime.factory import build_runtime_dependency_probes
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware

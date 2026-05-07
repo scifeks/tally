@@ -33,12 +33,6 @@ def _ok_completed(*, stdout: str = "", stderr: str = "") -> MagicMock:
     return completed
 
 
-def _create_venv_python(tmp_path: Path) -> None:
-    venv_python = tmp_path / ".venv" / "bin" / "python"
-    venv_python.parent.mkdir(parents=True)
-    venv_python.touch()
-
-
 def test_invokes_opencode_binary(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
     with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
@@ -99,7 +93,6 @@ def test_prompt_passed_via_stdin(tmp_path: Path) -> None:
 
 def test_prepared_session_sets_opencode_config_env(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
         with patch("subprocess.run", return_value=_ok_completed()) as mock_run:

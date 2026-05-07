@@ -6,9 +6,8 @@ from pathlib import Path
 
 from application.triage.factory import load_triage_provider
 from domain.runtime.probe import RuntimeDependencyProbe
-
-from .claude_probe import ClaudeCodeProbe
-from .opencode_probe import OpenCodeProbe
+from infrastructure.runtime.claude_probe import ClaudeCodeProbe
+from infrastructure.runtime.opencode_probe import OpenCodeProbe
 
 
 def build_runtime_dependency_probes(
@@ -17,7 +16,7 @@ def build_runtime_dependency_probes(
     """Registers probes for configured runtimes."""
     try:
         provider = load_triage_provider(app_root=Path(base_path))
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         provider = ""
 
     probes: list[RuntimeDependencyProbe] = []

@@ -69,10 +69,3 @@ class TriageSessionPreparerPort(Protocol):
 @runtime_checkable
 class TriageBackendPort(TriageAgentPort, TriageSessionPreparerPort, Protocol):
     """Backend contract used by the runner."""
-
-
-@runtime_checkable
-class TriageBackendFactoryPort(Protocol):
-    """Builds the configured backend."""
-
-    def create(self) -> TriageBackendPort: ...

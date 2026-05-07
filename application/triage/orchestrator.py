@@ -27,22 +27,28 @@ def _retry_once[T](fn: Callable[[], T]) -> T:
         return fn()
 
 
-def run_triage(project: str, tool_registry: ToolRegistry) -> dict[str, int]:
+def run_triage(
+    project: str, tool_registry: ToolRegistry, *, app_root: Path
+) -> dict[str, int]:
     """Run AI triage sessions for untriaged findings."""
-    runner = build_triage_runner(project, tool_registry)
+    runner = build_triage_runner(project, tool_registry, app_root=app_root)
     return dataclasses.asdict(_retry_once(runner.run))
 
 
-def run_triage_batch_only(project: str, tool_registry: ToolRegistry) -> int:
+def run_triage_batch_only(
+    project: str, tool_registry: ToolRegistry, *, app_root: Path
+) -> int:
     """Builds batches without starting backend sessions."""
-    runner = build_triage_runner(project, tool_registry)
+    runner = build_triage_runner(project, tool_registry, app_root=app_root)
     _run_id, total = runner.batch()
     return total
 
 
-def run_triage_dry_run(project: str, tool_registry: ToolRegistry) -> int:
-    """Logs prompts without starting MCP or backend sessions."""
-    runner = build_triage_runner(project, tool_registry)
+def run_triage_dry_run(
+    project: str, tool_registry: ToolRegistry, *, app_root: Path
+) -> int:
+    """Logs prompts without starting backend sessions."""
+    runner = build_triage_runner(project, tool_registry, app_root=app_root)
     return _retry_once(runner.run_dry_run)
 
 
@@ -53,19 +59,11 @@ def run_triage_for_project(
     tool_registry: ToolRegistry,
     event_sink: TriageEventSink | None = None,
     cancel_token: CancellationToken | None = None,
-    app_root: Path | None = None,
+    app_root: Path,
     scan_run_id: int | None = None,
     holder_token: str | None = None,
 ) -> dict[str, int]:
-    """Service-path entry: full triage with sink + cancel token wired in.
-
-    Resolves the latest scan_run for the project's findings.db and
-    triages it. The caller (``TriageService.start_triage``) owns the
-    Tier-1 ``triage`` job lock. ``holder_token`` is forwarded to
-    ``TriageRunner.run`` so per-batch finding-id locks acquire under
-    the same identity, blocking analyst PATCHes for the duration of
-    each batch.
-    """
+    """Service-path entry: full triage with sink + cancel token wired in."""
     runner = build_triage_runner(
         project,
         tool_registry,
@@ -88,16 +86,10 @@ def resume_triage_for_project(
     tool_registry: ToolRegistry,
     event_sink: TriageEventSink | None = None,
     cancel_token: CancellationToken | None = None,
-    app_root: Path | None = None,
+    app_root: Path,
     holder_token: str | None = None,
 ) -> dict[str, int]:
-    """Service-path entry: explicit resume of an existing triage run.
-
-    Flips stranded ``in_progress`` and retryable ``failed`` batches
-    back to ``pending`` (via ``TriageBatchRepository.reset_for_resume``)
-    before running, so ``claim_batch`` can pick them up. ``scan_run_id``
-    is mandatory; there is no "resume the latest run" semantic.
-    """
+    """Service-path entry: resume an existing triage run."""
     runner = build_triage_runner(
         project,
         tool_registry,
@@ -118,9 +110,10 @@ if __name__ == "__main__":
 
     from application.tools.registry import ToolRegistry, discover_tools
 
+    _app_root = Path(__file__).resolve().parent.parent.parent
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", required=True)
     args = parser.parse_args()
     _registry = ToolRegistry()
     discover_tools(_registry)
-    print(run_triage(args.project, _registry))
+    print(run_triage(args.project, _registry, app_root=_app_root))

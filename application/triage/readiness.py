@@ -16,6 +16,7 @@ _TRIAGE_BACKEND_LABELS = {
 
 _TRIAGE_RUNTIME_NAMES = {
     "claude_code": "claude",
+    "open_code": "opencode",
 }
 
 
@@ -50,14 +51,6 @@ def compute_triage_readiness(
             backend_label=backend_label,
             enabled=False,
             reason="Triage disabled in config",
-        )
-
-    if provider == "open_code":
-        return TriageReadiness(
-            provider=provider,
-            backend_label=backend_label,
-            enabled=False,
-            reason="OpenCode backend not implemented yet",
         )
 
     runtime_name = _TRIAGE_RUNTIME_NAMES.get(provider)

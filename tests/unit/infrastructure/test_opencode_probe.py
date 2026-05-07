@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from domain.runtime.models import RuntimeDependencyStatus
@@ -18,70 +17,24 @@ def _make_proc(stdout: str = "", returncode: int = 0) -> MagicMock:
     return proc
 
 
-class TestOpenCodeProbeDiscovery:
-    def test_prefers_managed_install_path(self) -> None:
-        managed_binary = Path("/tmp/test-opencode-managed")
-        with (
-            patch(
-                "infrastructure.runtime.opencode_probe._MANAGED_BINARY", managed_binary
-            ),
-            patch("shutil.which", return_value="/usr/bin/opencode"),
-            patch(
-                "subprocess.run",
-                return_value=_make_proc("OpenCode 1.2.3"),
-            ),
-            patch.object(Path, "exists", return_value=True),
-        ):
+class TestOpenCodeProbeNotOnPath:
+    def test_not_on_path_returns_not_installed(self) -> None:
+        with patch("shutil.which", return_value=None):
             status = OpenCodeProbe().probe()
-
-        assert status.installed is True
-        assert status.binary_path == str(managed_binary)
-
-    def test_falls_back_to_path(self) -> None:
-        managed_binary = Path("/tmp/test-opencode-managed")
-        with (
-            patch(
-                "infrastructure.runtime.opencode_probe._MANAGED_BINARY", managed_binary
-            ),
-            patch("shutil.which", return_value="/usr/bin/opencode"),
-            patch(
-                "subprocess.run",
-                return_value=_make_proc("OpenCode 1.2.3"),
-            ),
-            patch.object(Path, "exists", return_value=False),
-        ):
-            status = OpenCodeProbe().probe()
-
-        assert status.installed is True
-        assert status.binary_path == "/usr/bin/opencode"
-
-    def test_missing_everywhere_returns_not_installed(self) -> None:
-        managed_binary = Path("/tmp/test-opencode-managed")
-        with (
-            patch(
-                "infrastructure.runtime.opencode_probe._MANAGED_BINARY", managed_binary
-            ),
-            patch("shutil.which", return_value=None),
-            patch.object(Path, "exists", return_value=False),
-        ):
-            status = OpenCodeProbe().probe()
-
         assert status.installed is False
         assert status.binary_path is None
         assert status.version is None
-        assert "not found" in (status.error or "")
+        assert status.error == "opencode not on PATH"
 
 
 class TestOpenCodeProbeVersionInvocation:
     def _probe_with(self, stdout: str, returncode: int = 0) -> RuntimeDependencyStatus:
-        managed_binary = Path("/tmp/test-opencode-managed")
         with (
-            patch(
-                "infrastructure.runtime.opencode_probe._MANAGED_BINARY", managed_binary
-            ),
             patch("shutil.which", return_value="/usr/bin/opencode"),
-            patch("subprocess.run", return_value=_make_proc(stdout, returncode)),
-            patch.object(Path, "exists", return_value=False),
+            patch(
+                "subprocess.run",
+                return_value=_make_proc(stdout, returncode),
+            ),
         ):
             return OpenCodeProbe().probe()
 
@@ -113,31 +66,24 @@ class TestOpenCodeProbeVersionInvocation:
         assert status.version is None
 
     def test_timeout_returns_not_installed(self) -> None:
-        managed_binary = Path("/tmp/test-opencode-managed")
         with (
-            patch(
-                "infrastructure.runtime.opencode_probe._MANAGED_BINARY", managed_binary
-            ),
             patch("shutil.which", return_value="/usr/bin/opencode"),
             patch(
                 "subprocess.run",
                 side_effect=subprocess.TimeoutExpired("opencode", 10),
             ),
-            patch.object(Path, "exists", return_value=False),
         ):
             status = OpenCodeProbe().probe()
         assert status.installed is False
         assert "timed out" in (status.error or "")
 
     def test_unexpected_exception_returns_not_installed(self) -> None:
-        managed_binary = Path("/tmp/test-opencode-managed")
         with (
-            patch(
-                "infrastructure.runtime.opencode_probe._MANAGED_BINARY", managed_binary
-            ),
             patch("shutil.which", return_value="/usr/bin/opencode"),
-            patch("subprocess.run", side_effect=OSError("permission denied")),
-            patch.object(Path, "exists", return_value=False),
+            patch(
+                "subprocess.run",
+                side_effect=OSError("permission denied"),
+            ),
         ):
             status = OpenCodeProbe().probe()
         assert status.installed is False

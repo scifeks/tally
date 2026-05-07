@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from infrastructure.runtime.factory import build_runtime_dependency_probes
+from application.runtime import build_runtime_dependency_probes
 
 
 def _write_global_config(base_path: Path, payload: dict) -> None:

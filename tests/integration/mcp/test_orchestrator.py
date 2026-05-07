@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from datetime import UTC, datetime
@@ -15,7 +16,6 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-import application.triage.runner as triage_mod  # noqa: E402
 from application.triage.orchestrator import run_triage  # noqa: E402
 from application.triage.runner import TriageRunner  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
@@ -32,13 +32,7 @@ def _init_store(db_path: Path) -> None:
 
 
 def _seed_scan_run(db_path: Path) -> None:
-    """Insert a minimal scan_runs row so triage has something to operate on.
-
-    Phase 6: triage runs against the latest scan_run; the runner raises
-    NoScanRunError if no scan_runs exist. These integration tests don't
-    care which scan_run id is used; they just need the lookup to
-    return something non-None.
-    """
+    """Insert a minimal scan_runs row so triage has something to operate on."""
     conn = sqlite3.connect(str(db_path))
     conn.execute("INSERT INTO scan_runs (args) VALUES ('{}')")
     conn.commit()
@@ -101,12 +95,19 @@ def _insert_audit_row(db_path: Path, tool_name: str, called_at: str) -> None:
 
 @pytest.fixture()
 def project_db(tmp_path: Path):
-    """Create a minimal project DB and patch _APP_ROOT."""
+    """Create a minimal project DB with global config."""
     project = "test-project"
     db = tmp_path / "projects" / project / "sqlite" / "findings.db"
     venv_python = tmp_path / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True)
     venv_python.touch()
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "global.json").write_text(
+        json.dumps({"triage_agent_provider": "claude_code"})
+    )
+
     return project, tmp_path, db
 
 
@@ -127,9 +128,8 @@ def _make_tool_registry_mock(
 
 
 def _run_with_root(project: str, tmp_root: Path) -> dict:
-    """Invoke run_triage with _APP_ROOT patched."""
-    with patch.object(triage_mod, "_APP_ROOT", tmp_root):
-        return run_triage(project, _make_tool_registry_mock())
+    """Invoke run_triage with app_root set to tmp_root."""
+    return run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
 
 # Tests
@@ -149,9 +149,7 @@ def test_all_skip_tools(project_db, caplog) -> None:
 
 def test_mcp_json_written(project_db) -> None:
     project, tmp_root, db = project_db
-    _make_db_active(db, [("semgrep", "repo1", "sast")])  # non-skip → session runs
-
-    import json
+    _make_db_active(db, [("semgrep", "repo1", "sast")])
 
     captured: dict = {}
     mock_result = MagicMock()
@@ -165,11 +163,8 @@ def test_mcp_json_written(project_db) -> None:
             captured["data"] = json.loads(mcp_json.read_text())
         return mock_result
 
-    with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("subprocess.run", side_effect=fake_run),
-    ):
-        run_triage(project, _make_tool_registry_mock())
+    with patch("subprocess.run", side_effect=fake_run):
+        run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     assert captured.get("exists") is True
     assert project in str(captured.get("data", {}))
@@ -186,17 +181,13 @@ def test_success_outcome(project_db) -> None:
     session_start_holder: list[str] = []
 
     def fake_run(*args, **kwargs):
-        # Insert an audit row so the session is "success"
         ts = datetime.now(UTC).isoformat()
         session_start_holder.append(ts)
         _insert_audit_row(db, "update_finding", ts)
         return mock_result
 
-    with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("subprocess.run", side_effect=fake_run),
-    ):
-        result = run_triage(project, _make_tool_registry_mock())
+    with patch("subprocess.run", side_effect=fake_run):
+        result = run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     assert result["sessions_run"] == 1
     assert result["success"] == 1
@@ -212,11 +203,8 @@ def test_incomplete_outcome(project_db) -> None:
     mock_result.returncode = 0
     mock_result.stderr = ""
 
-    with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("subprocess.run", return_value=mock_result),
-    ):
-        result = run_triage(project, _make_tool_registry_mock())
+    with patch("subprocess.run", return_value=mock_result):
+        result = run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     assert result["sessions_run"] == 1
     assert result["incomplete"] == 1
@@ -228,11 +216,11 @@ def test_timeout_outcome(project_db) -> None:
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
-    with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("subprocess.run", side_effect=TimeoutExpired(cmd="claude", timeout=300)),
+    with patch(
+        "subprocess.run",
+        side_effect=TimeoutExpired(cmd="claude", timeout=300),
     ):
-        result = run_triage(project, _make_tool_registry_mock())
+        result = run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     assert result["sessions_run"] == 1
     assert result["failed"] == 1
@@ -248,11 +236,8 @@ def test_nonzero_exit_outcome(project_db) -> None:
     mock_result.returncode = 1
     mock_result.stderr = "some error"
 
-    with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
-        patch("subprocess.run", return_value=mock_result),
-    ):
-        result = run_triage(project, _make_tool_registry_mock())
+    with patch("subprocess.run", return_value=mock_result):
+        result = run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     assert result["sessions_run"] == 1
     assert result["failed"] == 1
@@ -261,9 +246,12 @@ def test_nonzero_exit_outcome(project_db) -> None:
 
 
 def test_missing_db_raises(tmp_path: Path) -> None:
-    with patch.object(triage_mod, "_APP_ROOT", tmp_path):
-        with pytest.raises(FileNotFoundError):
-            run_triage("nonexistent-project", _make_tool_registry_mock())
+    with pytest.raises(FileNotFoundError):
+        run_triage(
+            "nonexistent-project",
+            _make_tool_registry_mock(),
+            app_root=tmp_path,
+        )
 
 
 def test_standalone_import() -> None:
@@ -286,7 +274,6 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
     factory = ConnectionFactory(db)
     run_id = run_repo.create_run({})
 
-    # Insert a stale in_progress batch for this run
     with factory.connect() as conn:
         conn.execute(
             "INSERT INTO triage_batches"
@@ -300,14 +287,13 @@ def test_stale_batches_for_current_run_are_reset(project_db) -> None:
     mock_result.stderr = ""
 
     with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
             "infrastructure.store.repositories.runs.RunRepository.create_run",
             return_value=run_id,
         ),
         patch("subprocess.run", return_value=mock_result),
     ):
-        run_triage(project, _make_tool_registry_mock())
+        run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     with factory.connect() as conn:
         row = conn.execute(
@@ -343,14 +329,13 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
     mock_result.stderr = ""
 
     with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
             "infrastructure.store.repositories.runs.RunRepository.latest_run_id",
             return_value=run_id_a,
         ),
         patch("subprocess.run", return_value=mock_result),
     ):
-        run_triage(project, _make_tool_registry_mock())
+        run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     with factory.connect() as conn:
         rows = conn.execute(
@@ -363,13 +348,13 @@ def test_stale_batches_other_run_not_touched(project_db) -> None:
 
 
 def test_create_triage_batches_called_per_combo(project_db) -> None:
-    """create_triage_batches is called once per distinct tool/repo/segment combo."""
+    """create_triage_batches is called once per distinct combo."""
     project, tmp_root, db = project_db
     _make_db_active(
         db,
         [
             ("semgrep", "repo1", "sast"),
-            ("semgrep", "repo1", "sast"),  # duplicate; same combo
+            ("semgrep", "repo1", "sast"),
             ("zap", "repo1", "api"),
         ],
     )
@@ -379,22 +364,25 @@ def test_create_triage_batches_called_per_combo(project_db) -> None:
     mock_run.stderr = ""
 
     with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.fetch_active_findings_for_batching",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository"
+            ".fetch_active_findings_for_batching",
             return_value=[],
         ) as mock_fetch,
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository.create_batches",
             return_value=1,
         ),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch("subprocess.run", return_value=mock_run),
     ):
-        run_triage(project, _make_tool_registry_mock())
+        run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     assert mock_fetch.call_count == 2
     calls = {(c.args[0], c.args[1], c.args[2]) for c in mock_fetch.call_args_list}
@@ -408,19 +396,25 @@ def test_batching_error_aborts_before_mcp_json(project_db) -> None:
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
     with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.fetch_active_findings_for_batching",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository"
+            ".fetch_active_findings_for_batching",
             side_effect=RuntimeError("db locked"),
         ),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch.object(TriageRunner, "_prepare_session") as mock_prepare,
     ):
         with pytest.raises(RuntimeError, match="Batching failed"):
-            run_triage(project, _make_tool_registry_mock())
+            run_triage(
+                project,
+                _make_tool_registry_mock(),
+                app_root=tmp_root,
+            )
 
     mock_prepare.assert_not_called()
 
@@ -435,22 +429,25 @@ def test_batch_count_reported(project_db, capsys) -> None:
     mock_run.stderr = ""
 
     with (
-        patch.object(triage_mod, "_APP_ROOT", tmp_root),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.fetch_active_findings_for_batching",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository"
+            ".fetch_active_findings_for_batching",
             return_value=[],
         ),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.create_batches",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository.create_batches",
             return_value=3,
         ),
         patch(
-            "infrastructure.store.repositories.triage.TriageBatchRepository.reset_stale_batches",
+            "infrastructure.store.repositories.triage"
+            ".TriageBatchRepository.reset_stale_batches",
             return_value=0,
         ),
         patch("subprocess.run", return_value=mock_run),
     ):
-        run_triage(project, _make_tool_registry_mock())
+        run_triage(project, _make_tool_registry_mock(), app_root=tmp_root)
 
     out = capsys.readouterr().out
     assert "3" in out

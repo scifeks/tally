@@ -15,10 +15,12 @@ from application.repl import REPL
 from application.repl.adapters.dependency_summary_display import (
     print_dependency_summary,
 )
-from application.runtime import RuntimeDependencyService
+from application.runtime import (
+    RuntimeDependencyService,
+    build_runtime_dependency_probes,
+)
 from application.startup.checker import DependencyChecker
 from application.tools.registry import ToolRegistry
-from infrastructure.runtime import build_runtime_dependency_probes
 from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.web_ui.runner import WebUiRunner
 

@@ -43,8 +43,6 @@ _PROMPT_RENDERERS: dict[str, Callable[[list[int], str], str]] = {
 
 _log = logging.getLogger(__name__)
 
-_APP_ROOT = Path(__file__).parent.parent.parent
-
 _AUDIT_WRITE_TOOLS = ("update_finding", "update_findings_batch")
 
 

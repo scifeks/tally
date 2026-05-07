@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -42,7 +43,6 @@ class OpenCodeTriageAgent(TriageBackendPort):
             payload = self._build_config_payload(
                 project=project,
                 run_id=run_id,
-                app_root=app_root,
             )
             config_path.write_text(json.dumps(payload, indent=2))
             self._session_env = {"OPENCODE_CONFIG": str(config_path)}
@@ -115,11 +115,7 @@ class OpenCodeTriageAgent(TriageBackendPort):
         *,
         project: str,
         run_id: int,
-        app_root: Path,
     ) -> dict:
-        venv_python = app_root / ".venv" / "bin" / "python"
-        if not venv_python.exists():
-            raise RuntimeError(f"Venv Python not found at {venv_python}")
         return {
             "$schema": "https://opencode.ai/config.json",
             "mcp": {
@@ -127,7 +123,7 @@ class OpenCodeTriageAgent(TriageBackendPort):
                     "type": "local",
                     "enabled": True,
                     "command": [
-                        str(venv_python),
+                        sys.executable,
                         "-m",
                         "tally_mcp.server",
                         "--project",

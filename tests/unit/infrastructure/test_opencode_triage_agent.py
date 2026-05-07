@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,16 +12,8 @@ import pytest
 from infrastructure.agents.opencode_triage_agent import OpenCodeTriageAgent
 
 
-def _create_venv_python(tmp_path: Path) -> Path:
-    venv_python = tmp_path / ".venv" / "bin" / "python"
-    venv_python.parent.mkdir(parents=True)
-    venv_python.touch()
-    return venv_python
-
-
 def test_prepare_session_yields_app_root_as_cwd(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path) as session:
         assert session.cwd == tmp_path
@@ -28,7 +21,6 @@ def test_prepare_session_yields_app_root_as_cwd(tmp_path: Path) -> None:
 
 def test_prepare_session_sets_opencode_config_env(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
         assert agent._session_env is not None
@@ -39,7 +31,6 @@ def test_prepare_session_sets_opencode_config_env(tmp_path: Path) -> None:
 
 def test_prepare_session_removes_generated_config_after_exit(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
         assert agent._session_env is not None
@@ -53,7 +44,6 @@ def test_prepare_session_cleans_up_generated_config_on_exception(
     tmp_path: Path,
 ) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with pytest.raises(RuntimeError, match="boom"):
         with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
@@ -67,7 +57,6 @@ def test_prepare_session_cleans_up_generated_config_on_exception(
 
 def test_prepare_session_writes_mcp_config_payload(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    venv_python = _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
         assert agent._session_env is not None
@@ -80,7 +69,7 @@ def test_prepare_session_writes_mcp_config_payload(tmp_path: Path) -> None:
     assert server["type"] == "local"
     assert server["enabled"] is True
     assert server["command"] == [
-        str(venv_python),
+        sys.executable,
         "-m",
         "tally_mcp.server",
         "--project",
@@ -100,7 +89,6 @@ def test_prepare_session_writes_mcp_config_payload(tmp_path: Path) -> None:
 
 def test_prepare_session_does_not_use_mcp_wildcard_allow(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
         assert agent._session_env is not None
@@ -120,21 +108,10 @@ def test_build_run_command_passes_dangerously_skip_permissions(
     assert "--dangerously-skip-permissions" in command
 
 
-def test_prepare_session_raises_runtime_error_if_venv_python_missing(
-    tmp_path: Path,
-) -> None:
-    agent = OpenCodeTriageAgent()
-
-    with pytest.raises(RuntimeError, match="Venv Python not found"):
-        with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
-            pass
-
-
 def test_run_session_merges_opencode_config_into_subprocess_env(
     tmp_path: Path,
 ) -> None:
     agent = OpenCodeTriageAgent()
-    _create_venv_python(tmp_path)
 
     with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
         with patch("subprocess.run") as mock_run:

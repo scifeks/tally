@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -30,9 +31,7 @@ class ClaudeTriageAgent(TriageBackendPort):
         app_root: Path,
     ):
         mcp_json_path = app_root / ".mcp.json"
-        payload = self._build_mcp_payload(
-            project=project, run_id=run_id, app_root=app_root
-        )
+        payload = self._build_mcp_payload(project=project, run_id=run_id)
         mcp_json_path.write_text(json.dumps(payload, indent=2))
         try:
             yield PreparedTriageSession(cwd=app_root)
@@ -82,15 +81,12 @@ class ClaudeTriageAgent(TriageBackendPort):
             stderr=completed.stderr or "",
         )
 
-    def _build_mcp_payload(self, *, project: str, run_id: int, app_root: Path) -> dict:
-        venv_python = app_root / ".venv" / "bin" / "python"
-        if not venv_python.exists():
-            raise RuntimeError(f"Venv Python not found at {venv_python}")
+    def _build_mcp_payload(self, *, project: str, run_id: int) -> dict:
         return {
             "mcpServers": {
                 "tally-mcp": {
                     "type": "stdio",
-                    "command": str(venv_python),
+                    "command": sys.executable,
                     "args": [
                         "-m",
                         "tally_mcp.server",

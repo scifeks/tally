@@ -35,10 +35,12 @@ from application.repl.commands import (
     UiCommands,
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
-from application.runtime import RuntimeDependencyService
+from application.runtime import (
+    RuntimeDependencyService,
+    build_runtime_dependency_probes,
+)
 from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
-from infrastructure.runtime import build_runtime_dependency_probes
 
 if TYPE_CHECKING:
     from application.rag.knowledge_base import FindingKnowledgeBase

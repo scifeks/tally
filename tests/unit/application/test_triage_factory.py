@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.ports.triage_agent import TriageBackendFactoryPort
 from application.triage.factory import (
     TriageAgentFactory,
     TriageProviderNotConfiguredError,
@@ -16,16 +15,6 @@ from application.triage.factory import (
     ensure_triage_backend_configured,
     load_triage_provider,
 )
-
-
-class _StubAgentFactory(TriageBackendFactoryPort):
-    def __init__(self, agent) -> None:
-        self.agent = agent
-        self.calls = 0
-
-    def create(self):
-        self.calls += 1
-        return self.agent
 
 
 def test_triage_agent_factory_builds_claude_agent() -> None:
@@ -38,7 +27,7 @@ def test_triage_agent_factory_builds_claude_agent() -> None:
             "infrastructure.agents.claude_triage_agent.ClaudeTriageAgent"
         ) as mock_agent,
     ):
-        factory = TriageAgentFactory()
+        factory = TriageAgentFactory(app_root=Path("/unused"))
 
         agent = factory.create()
 
@@ -56,7 +45,7 @@ def test_triage_agent_factory_builds_opencode_agent() -> None:
             "infrastructure.agents.opencode_triage_agent.OpenCodeTriageAgent"
         ) as mock_agent,
     ):
-        factory = TriageAgentFactory()
+        factory = TriageAgentFactory(app_root=Path("/unused"))
 
         agent = factory.create()
 
@@ -93,47 +82,60 @@ def test_ensure_triage_backend_configured_accepts_open_code(tmp_path: Path) -> N
     assert ensure_triage_backend_configured(app_root=tmp_path) == "open_code"
 
 
-def test_build_triage_runner_uses_factory_agent(tmp_path: Path) -> None:
+def test_build_triage_runner_uses_factory_agent(
+    tmp_path: Path,
+) -> None:
     findings_db = tmp_path / "projects" / "proj" / "sqlite" / "findings.db"
     findings_db.parent.mkdir(parents=True, exist_ok=True)
     findings_db.touch()
 
     agent = MagicMock()
-    agent_factory = _StubAgentFactory(agent)
     tool_registry = MagicMock()
 
     with (
         patch("application.triage.factory.make_store") as mock_make_store,
-        patch("application.triage.factory.load_mcp_defaults", return_value=(1, 2, 300)),
+        patch(
+            "application.triage.factory.load_mcp_defaults",
+            return_value=(1, 2, 300),
+        ),
+        patch("application.triage.factory.TriageAgentFactory") as mock_factory_cls,
     ):
-        repos = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
-        mock_make_store.return_value = repos
+        mock_make_store.return_value = (
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        )
+        mock_factory_cls.return_value.create.return_value = agent
 
         runner = build_triage_runner(
             "proj",
             tool_registry,
             app_root=tmp_path,
-            triage_agent_factory=agent_factory,
         )
 
     assert runner._triage_backend is agent
     assert runner._session_timeout_seconds == 300
     assert runner._tool_registry is tool_registry
-    assert agent_factory.calls == 1
+    mock_factory_cls.assert_called_once_with(app_root=tmp_path)
 
 
-def test_build_triage_runner_resets_for_resume_before_running(tmp_path: Path) -> None:
+def test_build_triage_runner_resets_for_resume_before_running(
+    tmp_path: Path,
+) -> None:
     findings_db = tmp_path / "projects" / "proj" / "sqlite" / "findings.db"
     findings_db.parent.mkdir(parents=True, exist_ok=True)
     findings_db.touch()
 
-    agent = MagicMock()
-    agent_factory = _StubAgentFactory(agent)
     triage_repo = MagicMock()
 
     with (
         patch("application.triage.factory.make_store") as mock_make_store,
-        patch("application.triage.factory.load_mcp_defaults", return_value=(1, 2, 300)),
+        patch(
+            "application.triage.factory.load_mcp_defaults",
+            return_value=(1, 2, 300),
+        ),
+        patch("application.triage.factory.TriageAgentFactory"),
     ):
         mock_make_store.return_value = (
             MagicMock(),
@@ -147,7 +149,6 @@ def test_build_triage_runner_resets_for_resume_before_running(tmp_path: Path) ->
             MagicMock(),
             app_root=tmp_path,
             reset_for_resume_scan_run_id=17,
-            triage_agent_factory=agent_factory,
         )
 
     triage_repo.reset_for_resume.assert_called_once_with(17)

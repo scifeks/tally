@@ -7,15 +7,11 @@ from typing import TYPE_CHECKING
 
 from application.locking import JobBusy
 from application.repl.adapters.console_triage_event_sink import ConsoleTriageEventSink
-from application.triage.factory import (
-    TriageProviderNotConfiguredError,
-    ensure_triage_backend_configured,
-)
 from application.triage.orchestrator import (
     run_triage_batch_only,
     run_triage_dry_run,
 )
-from application.triage.readiness import triage_backend_label
+from application.triage.readiness import compute_triage_readiness
 from application.triage.runner import NoScanRunError
 from application.triage.triage_service import ProjectNotFound, TriageService
 
@@ -37,30 +33,26 @@ class TriageCommands:
         if not self._repl.active_project:
             self._repl.console.print("[red]Error:[/red] No active project set.")
             return
-        try:
-            provider = ensure_triage_backend_configured(
-                app_root=Path(self._repl.base_path)
-            )
-        except (TriageProviderNotConfiguredError, NotImplementedError) as exc:
-            self._repl.console.print(f"[red]Error:[/red] {exc}")
-            return
-        if (
-            provider == "claude_code"
-            and self._runtime_service is not None
-            and not self._runtime_service.is_installed("claude")
-        ):
-            label = triage_backend_label(provider) or provider
-            self._repl.console.print(f"[red]{label} is required for Triage[/red]")
+        readiness = compute_triage_readiness(
+            base_path=self._repl.base_path,
+            runtime_service=self._runtime_service,
+        )
+        if not readiness.enabled:
+            self._repl.console.print(f"[red]Error:[/red] {readiness.reason}")
             return
         if "--batch" in args:
             count = run_triage_batch_only(
-                self._repl.active_project, self._repl.tool_registry
+                self._repl.active_project,
+                self._repl.tool_registry,
+                app_root=Path(self._repl.base_path),
             )
             self._repl.console.print(f"Created {count} batches")
             return
         elif "--dry-run" in args:
             count = run_triage_dry_run(
-                self._repl.active_project, self._repl.tool_registry
+                self._repl.active_project,
+                self._repl.tool_registry,
+                app_root=Path(self._repl.base_path),
             )
             self._repl.console.print(f"Rendered {count} batch prompt(s); see DEBUG log")
             return

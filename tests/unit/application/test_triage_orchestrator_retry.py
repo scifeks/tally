@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,7 +25,7 @@ class TestRetryOnce:
         runner.run.side_effect = [_BUSY, _SUCCESS]
         mock_build_runner.return_value = runner
 
-        result = run_triage("test-project", MagicMock())
+        result = run_triage("test-project", MagicMock(), app_root=Path("/unused"))
 
         assert result == {"sessions_run": 1, "success": 1, "failed": 0, "incomplete": 0}
         mock_sleep.assert_called_once_with(5)
@@ -40,7 +41,7 @@ class TestRetryOnce:
         mock_build_runner.return_value = runner
 
         with pytest.raises(FindingsBusy):
-            run_triage("test-project", MagicMock())
+            run_triage("test-project", MagicMock(), app_root=Path("/unused"))
 
         mock_sleep.assert_called_once_with(5)
         assert runner.run.call_count == 2
@@ -54,7 +55,7 @@ class TestRetryOnce:
         mock_build_runner.return_value = runner
 
         with patch("application.triage.orchestrator.time.sleep") as mock_sleep:
-            run_triage("test-project", MagicMock())
+            run_triage("test-project", MagicMock(), app_root=Path("/unused"))
 
         mock_sleep.assert_not_called()
         assert runner.run.call_count == 1

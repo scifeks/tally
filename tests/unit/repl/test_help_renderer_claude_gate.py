@@ -77,13 +77,21 @@ class TestHelpRendererOtherProviders:
         )
         assert "Triage disabled in config" in output
 
-    def test_open_code_shows_not_implemented_notice(self, tmp_path: Path) -> None:
+    def test_open_code_not_dimmed_when_runtime_present(self, tmp_path: Path) -> None:
         output = _render_table(
             tmp_path,
             config={"triage_agent_provider": "open_code"},
             installed=True,
         )
-        assert "OpenCode backend not implemented yet" in output
+        assert "(OpenCode required for Triage)" not in output
+
+    def test_open_code_dimmed_when_runtime_missing(self, tmp_path: Path) -> None:
+        output = _render_table(
+            tmp_path,
+            config={"triage_agent_provider": "open_code"},
+            installed=False,
+        )
+        assert "OpenCode required for Triage" in output
 
     def test_non_triage_rows_unaffected(self, tmp_path: Path) -> None:
         output = _render_table(
