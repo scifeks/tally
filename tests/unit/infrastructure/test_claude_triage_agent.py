@@ -1,9 +1,8 @@
-"""Adapter contract tests for ClaudeTriageAgent.
+"""Unit tests for ClaudeTriageAgent.
 
-Pin the argv shape, stdin piping, JSON wrapper parsing, and error
-translation of the one-shot Claude Code adapter running inside a
-Docker container. ``subprocess.run`` is patched so the command
-shape can be inspected and exceptions injected.
+Pin the argv shape, stdin piping, JSON wrapper parsing, session prep,
+and error translation of the one-shot Claude Code adapter running
+inside a Docker container. ``subprocess.run`` is patched throughout.
 """
 
 from __future__ import annotations
@@ -22,8 +21,6 @@ from application.triage.verdict import (
 from infrastructure.agents.claude_triage_agent import (
     ClaudeTriageAgent,
 )
-
-pytestmark = pytest.mark.integration
 
 _MODEL = "sonnet"
 _FINDING_ID = 42
@@ -76,7 +73,40 @@ def _happy_completed() -> MagicMock:
     return _ok_completed(json.dumps(_valid_verdict()))
 
 
-# -- argv shape tests -----------------------------------------------
+# -- session prep ----------------------------------------------------
+
+
+def test_prepare_session_yields_app_root_as_cwd(
+    tmp_path: Path,
+) -> None:
+    agent = ClaudeTriageAgent(
+        model="sonnet",
+        compose_path=tmp_path / "compose.yaml",
+    )
+    with agent.prepare_session(
+        project="test-project",
+        run_id=42,
+        app_root=tmp_path,
+    ) as prepared:
+        assert prepared.cwd == tmp_path
+
+
+def test_prepare_session_does_not_write_mcp_json(
+    tmp_path: Path,
+) -> None:
+    agent = ClaudeTriageAgent(
+        model="sonnet",
+        compose_path=tmp_path / "compose.yaml",
+    )
+    with agent.prepare_session(
+        project="test-project",
+        run_id=42,
+        app_root=tmp_path,
+    ):
+        assert not (tmp_path / ".mcp.json").exists()
+
+
+# -- argv shape ------------------------------------------------------
 
 
 def test_command_starts_with_docker_compose(
@@ -156,7 +186,9 @@ def test_tools_disabled(tmp_path: Path) -> None:
     assert cmd[idx + 1] == ""
 
 
-def test_model_passed_from_constructor(tmp_path: Path) -> None:
+def test_model_passed_from_constructor(
+    tmp_path: Path,
+) -> None:
     agent = ClaudeTriageAgent(model="opus", compose_path=_COMPOSE_PATH)
     with patch("subprocess.run", return_value=_happy_completed()) as m:
         agent.run_triage(
@@ -211,7 +243,9 @@ def test_no_host_cwd_passed(tmp_path: Path) -> None:
 # -- happy path ------------------------------------------------------
 
 
-def test_happy_path_returns_verdict(tmp_path: Path) -> None:
+def test_happy_path_returns_verdict(
+    tmp_path: Path,
+) -> None:
     agent = _agent()
     with patch("subprocess.run", return_value=_happy_completed()):
         verdict = agent.run_triage(
@@ -224,6 +258,27 @@ def test_happy_path_returns_verdict(tmp_path: Path) -> None:
     assert verdict.finding_id == _FINDING_ID
     assert verdict.confidence == "confirmed"
     assert verdict.severity == "high"
+
+
+def test_multi_json_in_result_succeeds(
+    tmp_path: Path,
+) -> None:
+    verdict_json = json.dumps(_valid_verdict())
+    extra_json = json.dumps({"extra": "data"})
+    result_text = verdict_json + "\n" + extra_json
+    agent = _agent()
+    with patch(
+        "subprocess.run",
+        return_value=_ok_completed(result_text),
+    ):
+        verdict = agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    assert isinstance(verdict, Verdict)
+    assert verdict.finding_id == _FINDING_ID
 
 
 # -- error handling --------------------------------------------------
@@ -257,7 +312,9 @@ def test_timeout_propagates(tmp_path: Path) -> None:
             )
 
 
-def test_docker_not_found_propagates(tmp_path: Path) -> None:
+def test_docker_not_found_propagates(
+    tmp_path: Path,
+) -> None:
     agent = _agent()
     with patch(
         "subprocess.run",
@@ -306,6 +363,24 @@ def test_malformed_wrapper_json_raises(
             )
 
 
+def test_wrapper_not_a_dict_raises(
+    tmp_path: Path,
+) -> None:
+    completed = MagicMock()
+    completed.returncode = 0
+    completed.stdout = json.dumps([1, 2, 3])
+    completed.stderr = ""
+    agent = _agent()
+    with patch("subprocess.run", return_value=completed):
+        with pytest.raises(VerdictParseError, match="not an object"):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
+
+
 def test_wrapper_is_error_raises(tmp_path: Path) -> None:
     completed = MagicMock()
     completed.returncode = 0
@@ -332,6 +407,49 @@ def test_wrapper_missing_result_field_raises(
     agent = _agent()
     with patch("subprocess.run", return_value=completed):
         with pytest.raises(VerdictParseError, match="missing 'result'"):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
+
+
+def test_finding_id_mismatch_raises(
+    tmp_path: Path,
+) -> None:
+    verdict_text = json.dumps(_valid_verdict(finding_id=99))
+    agent = _agent()
+    with patch(
+        "subprocess.run",
+        return_value=_ok_completed(verdict_text),
+    ):
+        with pytest.raises(
+            VerdictParseError,
+            match="finding_id mismatch",
+        ):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
+
+
+def test_missing_verdict_field_raises(
+    tmp_path: Path,
+) -> None:
+    incomplete = {
+        "finding_id": _FINDING_ID,
+        "confidence": "confirmed",
+    }
+    verdict_text = json.dumps(incomplete)
+    agent = _agent()
+    with patch(
+        "subprocess.run",
+        return_value=_ok_completed(verdict_text),
+    ):
+        with pytest.raises(VerdictParseError, match="missing fields"):
             agent.run_triage(
                 "prompt",
                 finding_id=_FINDING_ID,
