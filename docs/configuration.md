@@ -39,15 +39,17 @@ enrichment, and reporting.
 | `enrichment_llm_provider` | string | `"ollama"` | Provider for finding enrichment: `"ollama"` or `"claude"`. |
 | `report_llm_provider` | string | `"ollama"` | Provider for report generation: `"ollama"` or `"claude"`. |
 | `embedding_provider` | string | `"ollama_embedding"` | Provider for ChromaDB embeddings. Currently only `"ollama_embedding"` is supported. |
-| `triage_agent_provider` | string | `""` | Triage agent backend. `""` or omission disables triage. `"claude_code"` and `"open_code"` enable their respective runtimes. |
+| `triage_agent_provider` | string | `""` | Triage agent backend: `""` disables triage, `"claude_code"` or `"open_code"` enables it. Requires Docker. See [docs/triage.md](triage.md). |
+| `triage_session_timeout_seconds` | int | `300` | Timeout in seconds for a single triage agent invocation. |
 | `ollama` | object | — | Ollama connection settings. Required when any LLM role is set to `"ollama"`. |
 | `ollama_embedding` | object | — | Ollama embedding settings. Required when `embedding_provider` is `"ollama_embedding"`. |
-| `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"`. |
+| `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"` or when `triage_agent_provider` is `"claude_code"`. |
+| `opencode` | object | — | OpenCode triage settings. Required when `triage_agent_provider` is `"open_code"`. |
 | `projects_dir` | string | `"./projects"` | Directory where project workspaces are stored. |
 | `report_finding_prefix` | string | `"TAL"` | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. |
 | `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
 | `enrichment_max_concurrency` | int | `4` | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). |
-| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected — use an explicit loopback or LAN IP. |
+| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected; use an explicit loopback or LAN IP. |
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
 | `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
@@ -72,12 +74,19 @@ enrichment, and reporting.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). |
-| `model` | string | `"claude-opus-4-5"` | Anthropic model ID (e.g. `claude-opus-4-5`, `claude-haiku-4-5-20251001`). |
+| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_agent_provider` is `"claude_code"`. |
+| `model` | string | `"claude-opus-4-5"` | Anthropic model ID (e.g. `claude-opus-4-5`, `claude-haiku-4-5-20251001`). Also controls the triage model when using the Claude Code backend. |
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
 | `timeout_seconds` | int | `60` | Request timeout for all Anthropic API calls. |
 
-### Example — Ollama Only
+### `opencode` Block Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `api_key` | string | `""` | API key passed to the OpenCode agent. Set to any non-empty value when running against Ollama (e.g. `"ollama"`). |
+| `api_provider` | string | `""` | LLM endpoint URL (e.g. `http://localhost:11434`). Used for network egress allowlisting in the triage container. |
+
+### Example: Ollama Only
 
 ```json
 {
@@ -102,7 +111,7 @@ enrichment, and reporting.
 }
 ```
 
-### Example — Claude for Chat and Reporting, Ollama for Enrichment and Embeddings
+### Example: Claude for Chat and Reporting, Ollama for Enrichment and Embeddings
 
 ChromaDB requires an embedding model. The `ollama_embedding` block is always
 required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
@@ -140,27 +149,43 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
 With `api_key` left empty, Tally reads the key from the `ANTHROPIC_API_KEY`
 environment variable at startup.
 
-### Example — Enable Claude Code Triage
+### Example: Enable Claude Code Triage
 
-Use a triage backend example only when you want automated triage enabled:
-
-```json
-{
-  "triage_agent_provider": "claude_code"
-}
-```
-
-This requires the `claude` runtime plus an Anthropic API key.
-
-### Example — Enable OpenCode Triage
+Triage runs inside a Docker container. Docker must be installed and running.
+Set `triage_agent_provider` and provide credentials in the `claude` block.
+See [docs/triage.md](triage.md) for setup details and the full security model.
 
 ```json
 {
-  "triage_agent_provider": "open_code"
+  "triage_agent_provider": "claude_code",
+  "claude": {
+    "api_key": "",
+    "model": "claude-opus-4-5",
+    "max_tokens": 1024,
+    "timeout_seconds": 60
+  }
 }
 ```
 
-This requires the `opencode` runtime.
+With `api_key` left empty, Tally uses the `ANTHROPIC_API_KEY` environment
+variable for LLM API calls and falls back to OAuth file mounts for triage
+container authentication.
+
+### Example: Enable OpenCode Triage
+
+Triage runs inside a Docker container. Docker must be installed and running.
+Set `triage_agent_provider` and provide Ollama connection details in the
+`opencode` block. See [docs/triage.md](triage.md) for setup details.
+
+```json
+{
+  "triage_agent_provider": "open_code",
+  "opencode": {
+    "api_key": "ollama",
+    "api_provider": "http://localhost:11434"
+  }
+}
+```
 
 ### Enrichment Concurrency
 
@@ -187,7 +212,7 @@ holds an independent KV cache for the model. As a rough guide, if your model
 occupies X GB at rest, each additional parallel slot adds roughly 10–20% of that
 in KV cache overhead at typical enrichment prompt lengths.
 
-### Example — Ollama on a Remote Host
+### Example: Ollama on a Remote Host
 
 Update `base_url` in both `ollama` and `ollama_embedding` blocks if your
 Ollama instance runs on a different host or port:
@@ -226,7 +251,7 @@ Each project lives under `projects/<project-name>/`. All project config files ar
 **File:** `projects/<name>/config/project.json`
 **Created:** When `new-project` is run.
 
-Stores project metadata. The `repositories` list is kept in sync with `repositories.json` — do not edit it here directly.
+Stores project metadata. The `repositories` list is kept in sync with `repositories.json`. Do not edit it here directly.
 
 #### Fields
 
@@ -267,7 +292,7 @@ Stores the list of repositories configured for the project.
 |---|---|---|---|
 | `name` | string | yes | Short identifier used in commands (e.g. `api-server`). |
 | `type` | array of string | yes | Repository type(s): `library`, `api`, `ui`. `library` is mutually exclusive with other types. |
-| `path` | string | yes | Absolute filesystem path to the repository on the host. Required in all modes — used for language detection and locally-executed tools. |
+| `path` | string | yes | Absolute filesystem path to the repository on the host. Required in all modes; used for language detection and locally-executed tools. |
 | `docker_path` | string | no | Mount path for the repository inside Docker containers. Set when any tool runs in Docker mode. |
 | `container_name` | string | yes (Docker) | Name of the running Docker container (as shown by `docker ps`). Required when `docker_path` is set. |
 | `languages` | array of string | yes | Programming languages in the repo (e.g. `["python", "javascript"]`). Used to select SCA tools. |
@@ -400,7 +425,7 @@ The `container` object has two fields:
 | `name` | string | yes | Name of the running Docker container (as shown by `docker ps`). |
 | `tool_path` | string | yes | Absolute path to the tool binary inside the container. |
 
-### Example — Local Tool
+### Example: Local Tool
 
 ```json
 {
@@ -412,7 +437,7 @@ The `container` object has two fields:
 }
 ```
 
-### Example — Docker Tool
+### Example: Docker Tool
 
 ```json
 {

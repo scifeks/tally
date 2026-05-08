@@ -2,16 +2,16 @@
 
 [![CI](https://github.com/scifeks/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/scifeks/tally/actions/workflows/ci.yml)
 
-Tally is a CLI REPL for orchestrating web application security auditing. It wraps common security tools, stores findings in a RAG knowledge base (ChromaDB + Ollama), and lets you search, chat over, and report on findings — all within a single terminal session.
+Tally is a CLI REPL for orchestrating web application security auditing. It wraps common security tools, stores findings in a RAG knowledge base (ChromaDB + Ollama), and lets you search, chat over, and report on findings, all within a single terminal session.
 
 ## Features
 
 - Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
 - Project-based isolation: each project has its own config, vector store, and outputs
-- Automatic tool discovery on startup — skips tools that are not installed
-- RAG-powered search and chat over ingested findings — search runs on Ollama or Anthropic Claude; chat is Ollama-only ([docs/chat.md](docs/chat.md))
+- Automatic tool discovery on startup: skips tools that are not installed
+- RAG-powered search and chat over ingested findings. Search runs on Ollama or Anthropic Claude; chat is Ollama-only ([docs/chat.md](docs/chat.md))
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
-- Browser-based findings reviewer with inline editing — launched on demand from the REPL via `ui serve`
+- Browser-based findings reviewer with inline editing, launched on demand from the REPL via `ui serve`
 - Human-in-the-loop approval before each tool execution
 - Dependency checker validates required packages on every startup
 - Docker execution support for all tools
@@ -19,10 +19,10 @@ Tally is a CLI REPL for orchestrating web application security auditing. It wrap
 ## Requirements
 
 - **Python 3.10+**
-- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled — required for ChromaDB embeddings and for any role configured to use the `"ollama"` provider. Can be skipped if all three roles are set to `"claude"` and you manage embeddings separately, but the default configuration uses Ollama.
-- **Anthropic API key** — required only when any role is set to `"claude"` in `config/global.json`. Set via `ANTHROPIC_API_KEY` environment variable or the `claude.api_key` config field.
+- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled. Required for ChromaDB embeddings and for any role configured to use the `"ollama"` provider. Can be skipped if all three roles are set to `"claude"` and you manage embeddings separately, but the default configuration uses Ollama.
+- **Anthropic API key**: required only when any role is set to `"claude"` in `config/global.json`. Set via `ANTHROPIC_API_KEY` environment variable or the `claude.api_key` config field.
 - Linux or macOS
-- System tools are optional — Tally skips tools that are not installed
+- System tools are optional. Tally skips tools that are not installed
 
 ## Quick Start
 
@@ -102,7 +102,7 @@ report
 | `chat <message>` | RAG-augmented chat with the LLM                                        |
 | `stats` | Show knowledge base statistics                                         |
 | `purge` | Delete ALL findings, tool outputs, and reports |
-| `purge --tool=<tool,...>` | Delete findings for specific tool(s) only — reports unaffected |
+| `purge --tool=<tool,...>` | Delete findings for specific tool(s) only; reports unaffected |
 | `purge --keep-reports` | Delete all findings and tool outputs but keep generated reports |
 
 ### Web UI
@@ -117,8 +117,9 @@ report
 | Command | Description |
 |---|---|
 | `triage` | Run AI triage on untriaged findings for the active project |
-| `triage --batch` | Run batching phase only — no Claude sessions |
+| `triage --batch` | Run batching phase only, no agent invocation |
 | `triage --dry-run` | Batch + render prompts to DEBUG log, no agent invocation |
+| `triage --rebuild-container` | Stop containers and rebuild the triage agent Docker image |
 
 ### Reporting
 
@@ -150,7 +151,7 @@ See [docs/report.md](docs/report.md) for the full PDF assembly workflow and argu
 
 Tools can run locally or inside a Docker container. The execution mode is configured per-tool in `config/commands.json`.
 
-**Local execution** — Tally runs the tool binary directly:
+**Local execution.** Tally runs the tool binary directly:
 
 ```json
 {
@@ -162,7 +163,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 }
 ```
 
-**Docker execution** — Tally uses `docker exec` to run the tool inside a running container:
+**Docker execution.** Tally uses `docker exec` to run the tool inside a running container:
 
 ```json
 {
@@ -192,6 +193,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/report.md](docs/report.md) — Report generation guide: quick reports, PDF assembly, and shell preview
 - [docs/ui.md](docs/ui.md) — Web UI: browser-based findings browser with inline editing, configuration, and security model
 - [docs/chat.md](docs/chat.md) — RAG chat configuration and usage (Ollama-only)
+- [docs/triage.md](docs/triage.md) — AI triage: setup, container lifecycle, and security model
 - [docs/configuration.md](docs/configuration.md) — Config file reference
 - [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
 - [docs/url-discovery.md](docs/url-discovery.md) — URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers
@@ -206,11 +208,11 @@ Tools can run locally or inside a Docker container. The execution mode is config
 
 Noir does not support every web framework. It is skipped automatically for:
 
-- **Node.js apps** — Noir's JavaScript parser has a known defect that causes it
+- **Node.js apps.** Noir's JavaScript parser has a known defect that causes it
   to loop indefinitely on complex Node.js codebases. Tally detects Node.js apps
   automatically by the presence of `package.json` at the repo root and skips
   Noir for them.
-- **Unsupported Python frameworks** — aiohttp, bottle, cherrypy, falcon, and
+- **Unsupported Python frameworks.** aiohttp, bottle, cherrypy, falcon, and
   pyramid are not recognised by Noir v0.25.1. Tally detects them via the
   repository's `dependencies_file` and skips Noir automatically.
 
@@ -227,7 +229,7 @@ setup.
 
 This software is **not intended for use in the States of California or Colorado**.
 
-Recent legislation — including **California Assembly Bill AB 1043 (Digital Age Assurance Act)** and **Colorado Senate Bill SB26-051 (Age Attestation on Computing Devices)** — establishes frameworks in which operating systems collect a user's age or birth date and expose an **age-bracket signal via an API**. Under these frameworks, **applications are required to request this signal when an application is downloaded or launched**.
+Recent legislation, including **California Assembly Bill AB 1043 (Digital Age Assurance Act)** and **Colorado Senate Bill SB26-051 (Age Attestation on Computing Devices)**, establishes frameworks in which operating systems collect a user's age or birth date and expose an **age-bracket signal via an API**. Under these frameworks, **applications are required to request this signal when an application is downloaded or launched**.
 
 This project does **not implement functionality to request or process operating-system age signals**, and the maintainers do not intend to add such functionality.
 
@@ -240,4 +242,4 @@ See the full policy here:
 
 ## License
 
-GNU Affero General Public License v3.0 — see [LICENSE](LICENSE) for details.
+GNU Affero General Public License v3.0. See [LICENSE](LICENSE) for details.
