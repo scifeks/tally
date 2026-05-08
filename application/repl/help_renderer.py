@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from application.triage.readiness import compute_triage_readiness
-
 if TYPE_CHECKING:
-    from application.runtime import RuntimeDependencyService
+    from application.triage.readiness import TriageReadiness
 
 # Custom box: vertical edge/divider lines with a header separator only.
 # Each line = 4 chars: left-edge, fill, column-divider, right-edge.
@@ -301,12 +298,10 @@ class HelpRenderer:
     def __init__(
         self,
         console: Console,
-        base_path: str = ".",
-        runtime_service: RuntimeDependencyService | None = None,
+        triage_readiness: TriageReadiness,
     ) -> None:
         self.console = console
-        self._base_path = Path(base_path)
-        self._runtime_service = runtime_service
+        self._triage_readiness = triage_readiness
 
     def render(self, group: str) -> None:
         """Render a help table filtered to a single group."""
@@ -329,10 +324,7 @@ class HelpRenderer:
 
         entries = [e for e in _HELP_REGISTRY if group is None or e[0] == group]
 
-        triage_readiness = compute_triage_readiness(
-            base_path=self._base_path,
-            runtime_service=self._runtime_service,
-        )
+        triage_readiness = self._triage_readiness
 
         # Collect titles of section headers that need a divider above them;
         # every header except the first one in the (filtered) list.

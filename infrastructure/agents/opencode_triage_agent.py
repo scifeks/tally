@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
-import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -19,20 +17,14 @@ from application.triage.verdict import (
     parse_verdict,
 )
 
-_PERMISSION_CONFIG = {
-    "$schema": "https://opencode.ai/config.json",
-    "permission": {
-        "edit": "deny",
-        "bash": {"*": "deny"},
-        "webfetch": "deny",
-        "read": {"*": "allow"},
-        "write": {"*": "deny"},
-    },
-}
+_OC_CONFIG_PATH = "/etc/opencode/permissions.json"
 
 
 class OpenCodeTriageAgent:
     """OpenCode-backed one-shot triage adapter."""
+
+    def __init__(self, *, compose_path: Path) -> None:
+        self._compose_path = compose_path
 
     @contextmanager
     def prepare_session(
@@ -52,21 +44,30 @@ class OpenCodeTriageAgent:
         timeout_seconds: int,
         cwd: Path,
     ) -> Verdict:
-        with tempfile.TemporaryDirectory(prefix=".tally-oc-") as tmpdir:
-            config_path = Path(tmpdir) / "opencode.json"
-            config_path.write_text(json.dumps(_PERMISSION_CONFIG, indent=2))
-            completed = subprocess.run(
-                self._build_run_command(cwd=cwd),
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                cwd=str(cwd),
-                env={
-                    **os.environ,
-                    "OPENCODE_CONFIG": str(config_path),
-                },
-            )
+        completed = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(self._compose_path),
+                "exec",
+                "-T",
+                "-e",
+                f"OPENCODE_CONFIG={_OC_CONFIG_PATH}",
+                "triage-agent",
+                "opencode",
+                "run",
+                "--dangerously-skip-permissions",
+                "--dir",
+                "/workspace",
+                "--format",
+                "json",
+            ],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
@@ -85,17 +86,6 @@ class OpenCodeTriageAgent:
         cwd: Path,
     ) -> TriageSessionResult:
         raise NotImplementedError("use run_triage")
-
-    def _build_run_command(self, *, cwd: Path) -> list[str]:
-        return [
-            "opencode",
-            "run",
-            "--dangerously-skip-permissions",
-            "--dir",
-            str(cwd),
-            "--format",
-            "json",
-        ]
 
     def _extract_text(self, stdout: str) -> str:
         if not stdout.strip():

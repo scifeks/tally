@@ -40,6 +40,7 @@ from application.runtime import (
     build_runtime_dependency_probes,
 )
 from application.tools.registry import ToolRegistry, discover_tools
+from application.triage.readiness import compute_triage_readiness
 from core.config import ConfigManager
 
 if TYPE_CHECKING:
@@ -253,6 +254,10 @@ class REPL:
                 build_runtime_dependency_probes(base_path=base_path)
             )
         self._runtime_service = runtime_service
+        self.triage_readiness = compute_triage_readiness(
+            base_path=base_path,
+            docker_available=runtime_service.is_installed("docker"),
+        )
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
 
@@ -263,8 +268,7 @@ class REPL:
         self.tool_registry = tool_registry
         self.help_renderer = HelpRenderer(
             self.console,
-            base_path=base_path,
-            runtime_service=runtime_service,
+            triage_readiness=self.triage_readiness,
         )
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
@@ -272,7 +276,7 @@ class REPL:
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
-        self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
+        self.triage_commands = TriageCommands(self)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
     def run(self) -> None:

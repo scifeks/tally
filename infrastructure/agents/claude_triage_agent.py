@@ -15,8 +15,9 @@ from application.triage.verdict import Verdict, VerdictParseError, parse_verdict
 
 
 class ClaudeTriageAgent:
-    def __init__(self, *, model: str) -> None:
+    def __init__(self, *, model: str, compose_path: Path) -> None:
         self._model = model
+        self._compose_path = compose_path
 
     @contextmanager
     def prepare_session(
@@ -38,6 +39,13 @@ class ClaudeTriageAgent:
     ) -> Verdict:
         completed = subprocess.run(
             [
+                "docker",
+                "compose",
+                "-f",
+                str(self._compose_path),
+                "exec",
+                "-T",
+                "triage-agent",
                 "claude",
                 "--print",
                 "--output-format",
@@ -46,7 +54,7 @@ class ClaudeTriageAgent:
                 "--model",
                 self._model,
                 "--add-dir",
-                str(cwd),
+                "/workspace",
                 "--tools",
                 "",
             ],
@@ -54,7 +62,6 @@ class ClaudeTriageAgent:
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
-            cwd=str(cwd),
         )
 
         if completed.returncode != 0:

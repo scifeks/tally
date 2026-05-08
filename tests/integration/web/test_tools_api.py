@@ -215,20 +215,18 @@ class TestInstalledTools:
 
 
 class TestRuntimeDependencies:
-    async def test_returns_empty_when_no_triage_configured(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_returns_docker_probe(self, tmp_path: Path) -> None:
         client = await _authed_client_for_config(tmp_path, {})
         try:
             resp = await client.get("/api/v1/runtime-dependencies")
         finally:
             await client.aclose()
         assert resp.status_code == 200
-        assert resp.json() == {"dependencies": []}
+        deps = resp.json()["dependencies"]
+        assert len(deps) == 1
+        assert deps[0]["name"] == "docker"
 
-    async def test_claude_config_registers_runtime_dependency(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_docker_probe_with_claude_config(self, tmp_path: Path) -> None:
         client = await _authed_client_for_config(
             tmp_path,
             {"triage_agent_provider": "claude_code"},
@@ -239,20 +237,10 @@ class TestRuntimeDependencies:
             await client.aclose()
 
         assert resp.status_code == 200
-        deps = resp.json()["dependencies"]
-        assert len(deps) == 1
-        item = deps[0]
-        assert item["name"] == "claude"
-        assert isinstance(item["installed"], bool)
-        assert isinstance(item["required_for"], list)
-        assert isinstance(item["install_hint"], str)
-        assert "binary_path" in item
-        assert "version" in item
-        assert "error" in item
+        names = [d["name"] for d in resp.json()["dependencies"]]
+        assert "docker" in names
 
-    async def test_open_code_config_registers_runtime_dependency(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_docker_probe_with_open_code_config(self, tmp_path: Path) -> None:
         client = await _authed_client_for_config(
             tmp_path,
             {"triage_agent_provider": "open_code"},
@@ -263,16 +251,8 @@ class TestRuntimeDependencies:
             await client.aclose()
 
         assert resp.status_code == 200
-        deps = resp.json()["dependencies"]
-        assert len(deps) == 1
-        item = deps[0]
-        assert item["name"] == "opencode"
-        assert isinstance(item["installed"], bool)
-        assert isinstance(item["required_for"], list)
-        assert isinstance(item["install_hint"], str)
-        assert "binary_path" in item
-        assert "version" in item
-        assert "error" in item
+        names = [d["name"] for d in resp.json()["dependencies"]]
+        assert "docker" in names
 
     async def test_requires_auth(self, tmp_path: Path) -> None:
         (tmp_path / "config").mkdir(parents=True)

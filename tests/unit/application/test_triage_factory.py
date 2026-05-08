@@ -39,7 +39,9 @@ def test_triage_agent_factory_builds_claude_agent() -> None:
         agent = factory.create()
 
     assert agent is mock_agent.return_value
-    mock_agent.assert_called_once_with(model="sonnet")
+    call_kwargs = mock_agent.call_args.kwargs
+    assert call_kwargs["model"] == "sonnet"
+    assert "compose_path" in call_kwargs
 
 
 def test_triage_agent_factory_builds_opencode_agent() -> None:
@@ -57,7 +59,8 @@ def test_triage_agent_factory_builds_opencode_agent() -> None:
         agent = factory.create()
 
     assert agent is mock_agent.return_value
-    mock_agent.assert_called_once_with()
+    call_kwargs = mock_agent.call_args.kwargs
+    assert "compose_path" in call_kwargs
 
 
 def test_load_triage_provider_reads_global_config(

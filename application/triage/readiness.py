@@ -5,18 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from application.runtime.dependency_service import RuntimeDependencyService
-
 from .factory import load_triage_provider
 
 _TRIAGE_BACKEND_LABELS = {
     "claude_code": "Claude Code",
     "open_code": "OpenCode",
-}
-
-_TRIAGE_RUNTIME_NAMES = {
-    "claude_code": "claude",
-    "open_code": "opencode",
 }
 
 
@@ -35,12 +28,16 @@ def triage_backend_label(provider: str) -> str | None:
 def compute_triage_readiness(
     *,
     base_path: str | Path,
-    runtime_service: RuntimeDependencyService | None,
+    docker_available: bool,
 ) -> TriageReadiness:
-    """Resolves whether triage can run."""
+    """Resolves whether triage is structurally available.
+
+    Checks provider config and Docker availability. Does not check
+    image existence; that is a runtime concern handled on first use.
+    """
     try:
         provider = load_triage_provider(app_root=Path(base_path))
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         provider = ""
 
     backend_label = triage_backend_label(provider)
@@ -53,27 +50,17 @@ def compute_triage_readiness(
             reason="Triage disabled in config",
         )
 
-    runtime_name = _TRIAGE_RUNTIME_NAMES.get(provider)
-    if runtime_name is None or runtime_service is None:
+    if not docker_available:
         return TriageReadiness(
             provider=provider,
             backend_label=backend_label,
-            enabled=True,
-            reason=None,
+            enabled=False,
+            reason="Docker is not installed or not running",
         )
 
-    if runtime_service.is_installed(runtime_name):
-        return TriageReadiness(
-            provider=provider,
-            backend_label=backend_label,
-            enabled=True,
-            reason=None,
-        )
-
-    label = backend_label or provider
     return TriageReadiness(
         provider=provider,
         backend_label=backend_label,
-        enabled=False,
-        reason=f"{label} required for Triage",
+        enabled=True,
+        reason=None,
     )

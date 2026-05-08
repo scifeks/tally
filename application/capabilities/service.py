@@ -1,7 +1,12 @@
-from application.runtime.dependency_service import RuntimeDependencyService
-from application.triage.readiness import compute_triage_readiness
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from core.config.manager import ConfigManager
 from domain.capabilities.models import Capabilities
+
+if TYPE_CHECKING:
+    from application.triage.readiness import TriageReadiness
 
 
 class CapabilitiesService:
@@ -9,7 +14,7 @@ class CapabilitiesService:
 
     Sources:
       - chat_enabled: GlobalConfig.chat_llm_provider == "ollama".
-      - triage_enabled: configured triage backend is usable.
+      - triage_enabled: boot-time readiness check result.
       - report_retention_enabled: hardcoded False; no retention sweep
         mechanism exists yet.
       - max_report_history: GlobalConfig.report_retention_count.
@@ -18,10 +23,10 @@ class CapabilitiesService:
     def __init__(
         self,
         base_path: str,
-        runtime_service: RuntimeDependencyService,
+        triage_readiness: TriageReadiness,
     ) -> None:
         self._base_path = base_path
-        self._runtime_service = runtime_service
+        self._triage_readiness = triage_readiness
 
     def compute(self) -> Capabilities:
         try:
@@ -32,14 +37,9 @@ class CapabilitiesService:
             chat_enabled = False
             max_report_history = 10
 
-        triage_enabled = compute_triage_readiness(
-            base_path=self._base_path,
-            runtime_service=self._runtime_service,
-        ).enabled
-
         return Capabilities(
             chat_enabled=chat_enabled,
-            triage_enabled=triage_enabled,
+            triage_enabled=self._triage_readiness.enabled,
             report_retention_enabled=False,
             max_report_history=max_report_history,
         )

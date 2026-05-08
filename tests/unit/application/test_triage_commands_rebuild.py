@@ -13,6 +13,7 @@ from application.triage.container import (
 )
 
 _REBUILD_PATCH = "application.repl.commands.triage_commands.rebuild_triage_image"
+_TEARDOWN_PATCH = "application.repl.commands.triage_commands.teardown_triage_containers"
 
 
 def _printed(repl: MagicMock) -> str:
@@ -29,7 +30,7 @@ def mock_repl() -> MagicMock:
 class TestRebuildContainer:
     def test_calls_rebuild_and_prints_success(self, mock_repl: MagicMock) -> None:
         cmds = TriageCommands(mock_repl)
-        with patch(_REBUILD_PATCH) as mock_rebuild:
+        with patch(_TEARDOWN_PATCH), patch(_REBUILD_PATCH) as mock_rebuild:
             cmds.cmd_triage("triage", ["--rebuild-container"])
         mock_rebuild.assert_called_once()
         assert "rebuilt" in _printed(mock_repl).lower()
@@ -37,15 +38,18 @@ class TestRebuildContainer:
     def test_does_not_require_active_project(self, mock_repl: MagicMock) -> None:
         mock_repl.active_project = None
         cmds = TriageCommands(mock_repl)
-        with patch(_REBUILD_PATCH):
+        with patch(_TEARDOWN_PATCH), patch(_REBUILD_PATCH):
             cmds.cmd_triage("triage", ["--rebuild-container"])
         assert "No active" not in _printed(mock_repl)
 
     def test_prints_error_on_docker_not_available(self, mock_repl: MagicMock) -> None:
         cmds = TriageCommands(mock_repl)
-        with patch(
-            _REBUILD_PATCH,
-            side_effect=DockerNotAvailableError("no docker"),
+        with (
+            patch(_TEARDOWN_PATCH),
+            patch(
+                _REBUILD_PATCH,
+                side_effect=DockerNotAvailableError("no docker"),
+            ),
         ):
             cmds.cmd_triage("triage", ["--rebuild-container"])
         printed = _printed(mock_repl)
@@ -54,9 +58,12 @@ class TestRebuildContainer:
 
     def test_prints_error_on_build_failure(self, mock_repl: MagicMock) -> None:
         cmds = TriageCommands(mock_repl)
-        with patch(
-            _REBUILD_PATCH,
-            side_effect=TriageImageBuildError("build broke"),
+        with (
+            patch(_TEARDOWN_PATCH),
+            patch(
+                _REBUILD_PATCH,
+                side_effect=TriageImageBuildError("build broke"),
+            ),
         ):
             cmds.cmd_triage("triage", ["--rebuild-container"])
         printed = _printed(mock_repl)
@@ -65,9 +72,12 @@ class TestRebuildContainer:
 
     def test_prints_error_on_missing_dockerfile(self, mock_repl: MagicMock) -> None:
         cmds = TriageCommands(mock_repl)
-        with patch(
-            _REBUILD_PATCH,
-            side_effect=FileNotFoundError("Dockerfile not found"),
+        with (
+            patch(_TEARDOWN_PATCH),
+            patch(
+                _REBUILD_PATCH,
+                side_effect=FileNotFoundError("Dockerfile not found"),
+            ),
         ):
             cmds.cmd_triage("triage", ["--rebuild-container"])
         printed = _printed(mock_repl)

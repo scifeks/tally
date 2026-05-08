@@ -18,6 +18,7 @@ from application.project.registry_service import ProjectRegistryService
 from application.runtime import build_runtime_dependency_probes
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
+from application.triage.readiness import compute_triage_readiness
 from infrastructure.events.bus import EventBus
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
@@ -120,9 +121,13 @@ def create_app(
         build_runtime_dependency_probes(base_path=base_path)
     )
 
+    triage_readiness = compute_triage_readiness(
+        base_path=base_path,
+        docker_available=app.state.runtime_dependency_service.is_installed("docker"),
+    )
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,
-        runtime_service=app.state.runtime_dependency_service,
+        triage_readiness=triage_readiness,
     )
 
     app.include_router(auth_router, prefix="/api/v1/auth")

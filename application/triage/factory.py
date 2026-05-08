@@ -47,6 +47,10 @@ class TriageAgentFactory:
     def create(self) -> OneshotTriageBackendPort:
         provider = ensure_triage_backend_configured(app_root=self._app_root)
 
+        from application.triage.compose import COMPOSE_RELATIVE_PATH
+
+        compose_path = self._app_root / COMPOSE_RELATIVE_PATH
+
         if provider == "claude_code":
             from infrastructure.agents.claude_triage_agent import (
                 ClaudeTriageAgent,
@@ -54,13 +58,13 @@ class TriageAgentFactory:
 
             cfg = ConfigManager(str(self._app_root)).global_config
             model = cfg.claude.model if cfg.claude else "sonnet"
-            return ClaudeTriageAgent(model=model)
+            return ClaudeTriageAgent(model=model, compose_path=compose_path)
         if provider == "open_code":
             from infrastructure.agents.opencode_triage_agent import (
                 OpenCodeTriageAgent,
             )
 
-            return OpenCodeTriageAgent()
+            return OpenCodeTriageAgent(compose_path=compose_path)
         raise RuntimeError(f"Unsupported triage agent provider: {provider!r}")
 
 

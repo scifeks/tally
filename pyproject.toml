@@ -21,6 +21,7 @@ dependencies = [
     "openapi-spec-validator>=0.7",
     "fuzzywuzzy>=0.18",
     "python-Levenshtein>=0.12",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

@@ -5,14 +5,14 @@ from domain.runtime.models import (
 from infrastructure.runtime._probe_runner import run_version_probe
 
 _REQUIREMENT = RuntimeDependencyRequirement(
-    name="opencode",
-    binary="opencode",
-    install_hint="See https://opencode.ai/docs/cli/",
+    name="docker",
+    binary="docker",
+    install_hint="https://docs.docker.com/get-docker/",
     required_for=("triage",),
 )
 
 
-class OpenCodeProbe:
+class DockerProbe:
     @property
     def requirement(self) -> RuntimeDependencyRequirement:
         return _REQUIREMENT

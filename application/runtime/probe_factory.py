@@ -4,24 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from application.triage.factory import load_triage_provider
 from domain.runtime.probe import RuntimeDependencyProbe
-from infrastructure.runtime.claude_probe import ClaudeCodeProbe
-from infrastructure.runtime.opencode_probe import OpenCodeProbe
+from infrastructure.runtime.docker_probe import DockerProbe
 
 
 def build_runtime_dependency_probes(
-    *, base_path: str | Path
+    *,
+    base_path: str | Path,  # kept for caller compatibility
 ) -> list[RuntimeDependencyProbe]:
     """Registers probes for configured runtimes."""
-    try:
-        provider = load_triage_provider(app_root=Path(base_path))
-    except (FileNotFoundError, PermissionError):
-        provider = ""
-
-    probes: list[RuntimeDependencyProbe] = []
-    if provider == "claude_code":
-        probes.append(ClaudeCodeProbe())
-    if provider == "open_code":
-        probes.append(OpenCodeProbe())
-    return probes
+    _ = base_path
+    return [DockerProbe()]

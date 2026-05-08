@@ -9,34 +9,35 @@ from application.locking import JobBusy
 from application.repl.adapters.console_triage_event_sink import (
     ConsoleTriageEventSink,
 )
+from application.triage.compose import ComposeGenerationError
 from application.triage.container import (
     DockerNotAvailableError,
+    TriageContainerStartError,
     TriageImageBuildError,
+    ensure_triage_containers,
     ensure_triage_image,
     rebuild_triage_image,
+    teardown_triage_containers,
+    triage_containers_running,
     triage_image_ready,
 )
 from application.triage.orchestrator import (
     run_triage_batch_only,
     run_triage_dry_run,
 )
-from application.triage.readiness import compute_triage_readiness
 from application.triage.runner import NoScanRunError
 from application.triage.triage_service import ProjectNotFound, TriageService
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
-    from application.runtime import RuntimeDependencyService
 
 
 class TriageCommands:
     def __init__(
         self,
         repl: REPL,
-        runtime_service: RuntimeDependencyService | None = None,
     ) -> None:
         self._repl = repl
-        self._runtime_service = runtime_service
 
     def cmd_triage(self, _cmd: str, args: list[str]) -> None:
         if "--rebuild-container" in args:
@@ -46,10 +47,7 @@ class TriageCommands:
         if not self._repl.active_project:
             self._repl.console.print("[red]Error:[/red] No active project set.")
             return
-        readiness = compute_triage_readiness(
-            base_path=self._repl.base_path,
-            runtime_service=self._runtime_service,
-        )
+        readiness = self._repl.triage_readiness
         if not readiness.enabled:
             self._repl.console.print(f"[red]Error:[/red] {readiness.reason}")
             return
@@ -89,6 +87,8 @@ class TriageCommands:
             return
 
         if not self._ensure_image():
+            return
+        if not self._ensure_containers():
             return
 
         row = self._repl.project_registry.resolve_by_name(self._repl.active_project)
@@ -152,11 +152,42 @@ class TriageCommands:
             return False
         return True
 
+    def _ensure_containers(self) -> bool:
+        """Check triage containers; start if not running.
+
+        Returns False on error.
+        """
+        app_root = Path(self._repl.base_path)
+        project = self._repl.active_project
+        if not project:
+            return False
+        try:
+            if not triage_containers_running(app_root):
+                self._repl.console.print(
+                    "[yellow]Starting triage containers...[/yellow]"
+                )
+            started = ensure_triage_containers(app_root, project)
+            if started:
+                self._repl.console.print("[green]Triage containers ready.[/green]")
+        except DockerNotAvailableError:
+            self._repl.console.print(
+                "[red]Error:[/red] Docker is not installed or not running."
+            )
+            return False
+        except (
+            ComposeGenerationError,
+            TriageContainerStartError,
+        ) as exc:
+            self._repl.console.print(f"[red]Error:[/red] {exc}")
+            return False
+        return True
+
     def _rebuild_container(self) -> None:
         """Tear down containers and rebuild the triage agent image."""
         app_root = Path(self._repl.base_path)
         self._repl.console.print("Stopping triage agent containers...")
         try:
+            teardown_triage_containers(app_root)
             rebuild_triage_image(app_root)
         except DockerNotAvailableError:
             self._repl.console.print(

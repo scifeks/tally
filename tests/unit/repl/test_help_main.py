@@ -18,6 +18,14 @@ from application.repl.help_renderer import (  # noqa: E402
     _NOTE,
     HelpRenderer,
 )
+from application.triage.readiness import TriageReadiness  # noqa: E402
+
+_ENABLED_READINESS = TriageReadiness(
+    provider="claude_code",
+    backend_label="Claude Code",
+    enabled=True,
+    reason=None,
+)
 
 
 def _render(table: Table) -> str:
@@ -30,7 +38,10 @@ def _render(table: Table) -> str:
 def _build_help_table(group: str | None = None) -> Table:
     """Call HelpRenderer._build_table without a live REPL instance."""
     buf = StringIO()
-    renderer = HelpRenderer(Console(file=buf, width=200))
+    renderer = HelpRenderer(
+        Console(file=buf, width=200),
+        triage_readiness=_ENABLED_READINESS,
+    )
     return renderer._build_table(group=group)
 
 
