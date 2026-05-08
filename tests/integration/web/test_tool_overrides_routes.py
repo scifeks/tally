@@ -109,7 +109,7 @@ class TestToolOverridesRoutes:
         client, _, _, factory, mut_headers, project_id = app_client
         body = {
             "toolName": "gitleaks",
-            "argsMode": "custom",
+            "argsMode": "stock",
             "type": "repo",
             "location": "docker",
         }

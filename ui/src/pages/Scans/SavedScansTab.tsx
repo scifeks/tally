@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Bookmark, Check, Play, Save, Trash2 } from 'lucide-react'
+import { Bookmark, Check, ChevronDown, ChevronRight, Play, Save, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
   ConfiguredRepo,
@@ -44,7 +44,7 @@ interface SavedScansTabProps {
   ) => Promise<SavedScanDetail | undefined>
   onDelete: (savedScanId: number) => void
   onSelect: (savedScanId: number) => void
-  onRunStarted: (scan: { id: number }) => void
+  onRunStarted: (scan: { id: number }, savedScanId: number) => void
   isSaving: boolean
 }
 
@@ -70,47 +70,96 @@ export function SavedScansTab({
 
   const selectedScan = savedScans.find(s => s.id === selectedScanId)
 
-  const allToolOptions = useMemo(() => {
-    const options: Array<{
-      id: string
-      name: string
-      segment: Segment
-      isTemplate?: boolean
-    }> = []
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
 
-    configuredTools.forEach(t => {
-      options.push({ id: t.id, name: t.name, segment: t.segment })
-    })
-
-    toolArgProfiles.forEach(profile => {
-      const baseTool = configuredTools.find(
-        t => t.id === profile.toolName || t.name === profile.toolName
-      )
-      if (!baseTool) return
-      options.push({
-        id: `${profile.toolName}:${profile.id}`,
-        name: `${baseTool.name} [${profile.name}]`,
-        segment: baseTool.segment,
-        isTemplate: true,
-      })
-    })
-
-    return options
+  const toolGroups = useMemo(() => {
+    const profilesByTool = new Map<string, Array<{ id: number; name: string }>>()
+    for (const p of toolArgProfiles) {
+      const baseTool = configuredTools.find(t => t.id === p.toolName || t.name === p.toolName)
+      if (!baseTool) continue
+      const key = baseTool.id
+      const existing = profilesByTool.get(key)
+      if (existing) {
+        existing.push({ id: p.id, name: p.name })
+      } else {
+        profilesByTool.set(key, [{ id: p.id, name: p.name }])
+      }
+    }
+    return configuredTools.map(t => ({
+      id: t.id,
+      name: t.name,
+      segment: t.segment,
+      profiles: profilesByTool.get(t.id) ?? [],
+    }))
   }, [configuredTools, toolArgProfiles])
+
+  const baseToolId = (compositeId: string) => {
+    const idx = compositeId.lastIndexOf(':')
+    return idx === -1 ? compositeId : compositeId.slice(0, idx)
+  }
+
+  const toggleExpanded = (toolId: string) =>
+    setExpandedTools(prev => {
+      const next = new Set(prev)
+      if (next.has(toolId)) next.delete(toolId)
+      else next.add(toolId)
+      return next
+    })
+
+  const toggleTool = (toolId: string, hasProfiles: boolean) => {
+    const current = form.toolIds ?? []
+    const isSelected = current.some(id => baseToolId(id) === toolId)
+    if (isSelected) {
+      updateForm(
+        'toolIds',
+        current.filter(id => baseToolId(id) !== toolId)
+      )
+      setExpandedTools(prev => {
+        const n = new Set(prev)
+        n.delete(toolId)
+        return n
+      })
+    } else {
+      updateForm('toolIds', [...current, toolId])
+      if (hasProfiles) {
+        setExpandedTools(prev => {
+          const n = new Set(prev)
+          n.add(toolId)
+          return n
+        })
+      } else {
+        setExpandedTools(prev => {
+          const n = new Set(prev)
+          n.delete(toolId)
+          return n
+        })
+      }
+    }
+  }
+
+  const selectProfile = (toolId: string, profileId: number | null) => {
+    const current = form.toolIds ?? []
+    const without = current.filter(id => baseToolId(id) !== toolId)
+    const entry = profileId === null ? toolId : `${toolId}:${profileId}`
+    updateForm('toolIds', [...without, entry])
+  }
 
   useEffect(() => {
     if (selectedScanId && selectedScan) {
-      // The form's Tools list merges tool names and `toolName:profileId` template
-      // strings into one id space; reconstruct that from the server's split arrays.
-      const toolIds: string[] = [
-        ...selectedScan.toolNames,
-        ...selectedScan.argProfileIds.map(pid => {
-          const opt = allToolOptions.find(
-            o => o.id === `${toolArgProfiles.find(p => p.id === pid)?.toolName}:${pid}`
-          )
-          return opt?.id ?? String(pid)
-        }),
-      ]
+      const toolIds: string[] = [...selectedScan.toolNames]
+      for (const pid of selectedScan.argProfileIds) {
+        const profile = toolArgProfiles.find(p => p.id === pid)
+        if (!profile) continue
+        const baseTool = configuredTools.find(
+          t => t.id === profile.toolName || t.name === profile.toolName
+        )
+        if (!baseTool) continue
+        const idx = toolIds.indexOf(baseTool.id)
+        if (idx !== -1) toolIds.splice(idx, 1)
+        const existing = toolIds.findIndex(id => baseToolId(id) === baseTool.id)
+        if (existing !== -1) toolIds.splice(existing, 1)
+        toolIds.push(`${baseTool.id}:${pid}`)
+      }
       setForm({
         id: selectedScan.id,
         name: selectedScan.name,
@@ -131,7 +180,7 @@ export function SavedScansTab({
         skipEnrichment: false,
       })
     }
-  }, [selectedScanId, selectedScan, isCreatingNew, projectId, allToolOptions, toolArgProfiles])
+  }, [selectedScanId, selectedScan, isCreatingNew, projectId, configuredTools, toolArgProfiles])
 
   const handleCreateNew = () => {
     setSelectedScanId(null)
@@ -297,49 +346,127 @@ export function SavedScansTab({
                 </div>
               </div>
 
-              {/* Tools (including templates) */}
-              <div>
+              {/* Tools (with accordion profiles) */}
+              <div data-testid="tools-section">
                 <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
                   Tools
                   {(form.toolIds?.length ?? 0) > 0 ? ` (${form.toolIds?.length} selected)` : null}
                 </div>
-                <div className="max-h-40 overflow-y-auto border border-border bg-background p-2 space-y-1">
-                  {allToolOptions.length === 0 ? (
+                <div className="max-h-48 overflow-y-auto border border-border bg-background p-2">
+                  {toolGroups.length === 0 ? (
                     <div className="text-[10px] text-dim">No tools configured</div>
                   ) : (
-                    allToolOptions.map(t => {
-                      const isSelected = form.toolIds?.includes(t.id) ?? false
+                    toolGroups.map(group => {
+                      const currentEntry = (form.toolIds ?? []).find(
+                        id => baseToolId(id) === group.id
+                      )
+                      const isSelected = currentEntry !== undefined
+                      const hasProfiles = group.profiles.length > 0
+                      const isExpanded = expandedTools.has(group.id)
+                      const activeProfileId = (() => {
+                        if (!currentEntry) return null
+                        const colonIdx = currentEntry.lastIndexOf(':')
+                        if (colonIdx === -1) return null
+                        const parsed = Number(currentEntry.slice(colonIdx + 1))
+                        return isNaN(parsed) ? null : parsed
+                      })()
+                      const activeProfileName = activeProfileId
+                        ? group.profiles.find(p => p.id === activeProfileId)?.name
+                        : null
+
                       return (
-                        <button
-                          key={t.id}
-                          onClick={() =>
-                            updateForm('toolIds', toggleInList(form.toolIds ?? [], t.id))
-                          }
-                          className={cn(
-                            'w-full flex items-center justify-between px-2 h-6 text-[10px] transition-colors',
-                            isSelected
-                              ? 'bg-accent/20 text-accent'
-                              : 'hover:bg-muted/30 text-muted-foreground'
-                          )}
-                        >
-                          <span className="flex items-center gap-2">
-                            {t.name}
-                            {t.isTemplate && (
-                              <span className="px-1 py-0.5 text-[8px] uppercase bg-high/20 text-high">
-                                template
+                        <div key={group.id}>
+                          <div className="flex items-center">
+                            <button
+                              onClick={() => toggleTool(group.id, hasProfiles)}
+                              className={cn(
+                                'flex-1 flex items-center px-2 h-6 text-[10px] transition-colors',
+                                isSelected
+                                  ? 'bg-accent/20 text-accent'
+                                  : 'hover:bg-muted/30 text-muted-foreground'
+                              )}
+                            >
+                              <span className="flex items-center gap-2 flex-1 min-w-0">
+                                <span className="truncate">{group.name}</span>
+                                {hasProfiles && isSelected && !isExpanded && activeProfileName && (
+                                  <span className="text-[8px] text-dim shrink-0">
+                                    ▸ {activeProfileName}
+                                  </span>
+                                )}
                               </span>
+                              <span className="uppercase text-[9px] text-dim shrink-0 ml-1">
+                                {group.segment}
+                              </span>
+                            </button>
+                            {hasProfiles && isSelected && (
+                              <button
+                                aria-label={`${group.name} profiles`}
+                                onClick={() => toggleExpanded(group.id)}
+                                className="px-1 h-6 flex items-center text-dim hover:text-foreground"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3" />
+                                )}
+                              </button>
                             )}
-                          </span>
-                          <span className="uppercase text-[9px] text-dim">{t.segment}</span>
-                        </button>
+                          </div>
+
+                          {hasProfiles && isSelected && isExpanded && (
+                            <div className="ml-4 border-l border-border pl-2 py-1 space-y-0.5">
+                              <button
+                                onClick={() => selectProfile(group.id, null)}
+                                className={cn(
+                                  'w-full flex items-center gap-2 px-2 h-5 text-[10px] transition-colors',
+                                  activeProfileId === null
+                                    ? 'text-accent'
+                                    : 'text-muted-foreground hover:bg-muted/30'
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    'w-2.5 h-2.5 rounded-full border shrink-0',
+                                    activeProfileId === null
+                                      ? 'border-accent bg-accent'
+                                      : 'border-border'
+                                  )}
+                                />
+                                Default
+                              </button>
+                              {group.profiles.map(p => (
+                                <button
+                                  key={p.id}
+                                  onClick={() => selectProfile(group.id, p.id)}
+                                  className={cn(
+                                    'w-full flex items-center gap-2 px-2 h-5 text-[10px] transition-colors',
+                                    activeProfileId === p.id
+                                      ? 'text-accent'
+                                      : 'text-muted-foreground hover:bg-muted/30'
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'w-2.5 h-2.5 rounded-full border shrink-0',
+                                      activeProfileId === p.id
+                                        ? 'border-accent bg-accent'
+                                        : 'border-border'
+                                    )}
+                                  />
+                                  <span className="flex-1 text-left truncate">{p.name}</span>
+                                  <span className="px-1 py-0.5 text-[8px] uppercase bg-high/20 text-high shrink-0">
+                                    template
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )
                     })
                   )}
                 </div>
-                <div className="text-[10px] text-dim mt-1">
-                  Leave empty to run all tools. Templates from Config &gt; Tool Overrides appear
-                  here.
-                </div>
+                <div className="text-[10px] text-dim mt-1">Leave empty to run all tools</div>
               </div>
 
               {/* Skip Tools */}
@@ -438,7 +565,7 @@ export function SavedScansTab({
                           runScan.mutate(
                             { projectId, savedScanId: selectedScanId },
                             {
-                              onSuccess: scan => onRunStarted(scan),
+                              onSuccess: scan => onRunStarted(scan, selectedScanId as number),
                               onError: err => {
                                 if (err.code === 'STALE_SAVED_SCAN') {
                                   const details = err.details as {

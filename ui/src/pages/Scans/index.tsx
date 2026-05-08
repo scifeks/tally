@@ -924,7 +924,8 @@ export default function Scans() {
             setSelectedSavedScanId(savedScanId)
             setActiveTab('live')
           }}
-          onRunStarted={scan => {
+          onRunStarted={(scan, savedScanId) => {
+            setSelectedSavedScanId(savedScanId)
             setLogs([])
             setEnrichmentProgress(null)
             setActiveTab('live')

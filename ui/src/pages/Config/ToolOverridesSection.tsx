@@ -520,13 +520,15 @@ export function ToolOverridesSection({
                 onClick={handleSave}
                 disabled={
                   isSaving ||
-                  (form.location === 'local' && !form.path) ||
-                  (form.location === 'docker' &&
+                  (argsMode !== 'custom' && form.location === 'local' && !form.path) ||
+                  (argsMode !== 'custom' &&
+                    form.location === 'docker' &&
                     (!form.container?.name || !form.container?.toolPath))
                 }
                 className={cn(
                   'flex items-center gap-1 px-4 h-8 text-[10px] uppercase tracking-wider transition-colors',
-                  (form.location === 'local' && form.path) ||
+                  argsMode === 'custom' ||
+                    (form.location === 'local' && form.path) ||
                     (form.location === 'docker' && form.container?.name && form.container?.toolPath)
                     ? 'bg-accent text-background hover:bg-accent/80'
                     : 'bg-muted text-dim cursor-not-allowed'

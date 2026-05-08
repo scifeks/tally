@@ -190,25 +190,29 @@ class ToolOverridesService:
                 FieldError(field="location", issue="must be one of local, docker")
             )
 
-        if location == "local" and not path:
-            errors.append(
-                FieldError(field="path", issue="required when location is 'local'")
-            )
-        elif location == "docker":
-            if not container_name:
+        if args_mode != "custom":
+            if location == "local" and not path:
                 errors.append(
                     FieldError(
-                        field="container.name",
-                        issue="required when location is 'docker'",
+                        field="path",
+                        issue="required when location is 'local'",
                     )
                 )
-            if not container_tool_path:
-                errors.append(
-                    FieldError(
-                        field="container.toolPath",
-                        issue="required when location is 'docker'",
+            elif location == "docker":
+                if not container_name:
+                    errors.append(
+                        FieldError(
+                            field="container.name",
+                            issue="required when location is 'docker'",
+                        )
                     )
-                )
+                if not container_tool_path:
+                    errors.append(
+                        FieldError(
+                            field="container.toolPath",
+                            issue="required when location is 'docker'",
+                        )
+                    )
 
         if errors:
             raise ToolOverrideValidationError(errors)
