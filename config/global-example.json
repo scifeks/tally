@@ -21,6 +21,7 @@
     "api_key": "",
     "api_provider": ""
   },
+  "triage_agent_provider": "",
   "chat_inference": null,
   "enrichment_inference": {
     "provider": "ollama"
