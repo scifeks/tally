@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from application.config.mcp_defaults import load_mcp_defaults
-from application.ports.triage_agent import TriageBackendPort
+from application.ports.triage_agent import OneshotTriageBackendPort
 from application.tools.registry import ToolRegistry
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from infrastructure.store import make_store
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.repositories import (
+    RepositoryRepository,
+)
 
 from .runner import TriageRunner
 
@@ -28,8 +31,9 @@ def ensure_triage_backend_configured(*, app_root: Path) -> str:
     provider = load_triage_provider(app_root=app_root)
     if provider == "":
         raise TriageProviderNotConfiguredError(
-            "Triage is disabled. Set `triage_agent_provider` in config/global.json "
-            "to `claude_code` or `open_code` to enable it."
+            "Triage is disabled. Set `triage_agent_provider`"
+            " in config/global.json"
+            " to `claude_code` or `open_code` to enable it."
         )
     return provider
 
@@ -40,15 +44,21 @@ class TriageAgentFactory:
     def __init__(self, *, app_root: Path) -> None:
         self._app_root = app_root
 
-    def create(self) -> TriageBackendPort:
+    def create(self) -> OneshotTriageBackendPort:
         provider = ensure_triage_backend_configured(app_root=self._app_root)
 
         if provider == "claude_code":
-            from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
+            from infrastructure.agents.claude_triage_agent import (
+                ClaudeTriageAgent,
+            )
 
-            return ClaudeTriageAgent()
+            cfg = ConfigManager(str(self._app_root)).global_config
+            model = cfg.claude.model if cfg.claude else "sonnet"
+            return ClaudeTriageAgent(model=model)
         if provider == "open_code":
-            from infrastructure.agents.opencode_triage_agent import OpenCodeTriageAgent
+            from infrastructure.agents.opencode_triage_agent import (
+                OpenCodeTriageAgent,
+            )
 
             return OpenCodeTriageAgent()
         raise RuntimeError(f"Unsupported triage agent provider: {provider!r}")
@@ -70,10 +80,20 @@ def build_triage_runner(
     if not paths.findings_db.exists():
         raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
 
-    run_repo, _, triage_repo, audit_repo = make_store(app_root, project)
+    run_repo, finding_repo, triage_repo, audit_repo = make_store(app_root, project)
     if reset_for_resume_scan_run_id is not None:
         triage_repo.reset_for_resume(reset_for_resume_scan_run_id)
-    _, _, session_timeout_seconds = load_mcp_defaults(str(app_root))
+    session_timeout_seconds = ConfigManager(
+        str(app_root)
+    ).global_config.triage_session_timeout_seconds
+
+    factory = ConnectionFactory(paths.findings_db)
+    repos = RepositoryRepository(factory).list_active()
+    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
+    provider = load_triage_provider(app_root=app_root)
+    triaged_by = "claudecode" if provider == "claude_code" else "opencode"
+
     agent_factory = TriageAgentFactory(app_root=app_root)
 
     return TriageRunner(
@@ -89,4 +109,7 @@ def build_triage_runner(
         triage_backend=agent_factory.create(),
         session_timeout_seconds=session_timeout_seconds,
         tool_registry=tool_registry,
+        finding_repo=finding_repo,
+        repo_paths=repo_paths,
+        triaged_by=triaged_by,
     )

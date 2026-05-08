@@ -150,9 +150,7 @@ Use a triage backend example only when you want automated triage enabled:
 }
 ```
 
-This requires the `claude` runtime plus an Anthropic API key. See
-[MCP Triage System](./mcp.md) and
-[Claude Code Triage Backend](./mcp-claude-code.md).
+This requires the `claude` runtime plus an Anthropic API key.
 
 ### Example — Enable OpenCode Triage
 
@@ -162,9 +160,7 @@ This requires the `claude` runtime plus an Anthropic API key. See
 }
 ```
 
-This requires the `opencode` runtime. See
-[MCP Triage System](./mcp.md) and
-[OpenCode Triage Backend](./mcp-opencode.md).
+This requires the `opencode` runtime.
 
 ### Enrichment Concurrency
 

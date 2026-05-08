@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from application.triage.batching import compute_batches
-from tests.unit.mcp.conftest import _f
+from tests.unit.application.conftest import _f
 
 
 class TestSiblingFill:

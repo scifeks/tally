@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from application.locking import LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken, no_op_token
@@ -18,6 +18,7 @@ from application.ports.triage_event_sink import (
 from application.tools.registry import ToolRegistry
 from application.triage.batching import compute_batches
 from application.triage.prompts import api_trace, sast_trace, sca_trace
+from application.triage.verdict import Verdict, VerdictParseError
 from domain.pipeline.triage_events import (
     BatchCompleted,
     BatchCreated,
@@ -30,20 +31,19 @@ from domain.pipeline.triage_events import (
 )
 
 if TYPE_CHECKING:
-    from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
-    from application.ports.triage_agent import TriageBackendPort
+    from application.ports.triage_agent import OneshotTriageBackendPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
-_PROMPT_RENDERERS: dict[str, Callable[[list[int], str], str]] = {
+
+_PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
     "api": api_trace.render,
     "sast": sast_trace.render,
     "sca": sca_trace.render,
 }
 
 _log = logging.getLogger(__name__)
-
-_AUDIT_WRITE_TOOLS = ("update_finding", "update_findings_batch")
 
 
 class TriageCancelled(Exception):
@@ -77,7 +77,7 @@ class TriageRunner:
         project: str,
         run_repo: RunRepositoryPort,
         triage_repo: TriageBatchRepositoryPort,
-        audit_repo: AuditRepositoryPort,
+        audit_repo: object | None,
         app_root: Path,
         registry: LockRegistry | None = None,
         *,
@@ -85,9 +85,12 @@ class TriageRunner:
         cancel_token: CancellationToken | None = None,
         project_id: int | None = None,
         scan_run_id: int | None = None,
-        triage_backend: TriageBackendPort,
+        triage_backend: OneshotTriageBackendPort,
         session_timeout_seconds: int,
         tool_registry: ToolRegistry,
+        finding_repo: FindingRepositoryPort | None = None,
+        repo_paths: dict[str, Path] | None = None,
+        triaged_by: str = "claudecode",
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -102,6 +105,9 @@ class TriageRunner:
         self._triage_backend = triage_backend
         self._session_timeout_seconds = session_timeout_seconds
         self._tool_registry = tool_registry
+        self._finding_repo = finding_repo
+        self._repo_paths: dict[str, Path] = repo_paths or {}
+        self._triaged_by = triaged_by
 
     # Public API
 
@@ -181,8 +187,8 @@ class TriageRunner:
             with self._prepare_session(run_id) as prepared:
                 result = self._run_batch_loop(
                     run_id,
-                    lambda batch_id, render_fn, finding_ids: self._run_session(
-                        render_fn, finding_ids, cwd=prepared.cwd
+                    lambda bid, bd, seg: self._run_batch_findings(
+                        bid, bd, seg, cwd=prepared.cwd
                     ),
                     holder_token=holder_token,
                 )
@@ -210,23 +216,32 @@ class TriageRunner:
         return result
 
     def run_dry_run(self) -> int:
-        """Logs prompts without starting MCP or backend sessions."""
+        """Logs prompts without running the triage backend."""
         run_id, _total = self.batch()
 
         def _handler(
             batch_id: int,
-            render_fn: Callable[..., str],
-            finding_ids: list[int],
+            batch_data: list[dict[str, Any]],
+            segment: str,
         ) -> str:
-            prompt_text = render_fn(finding_ids, self._project)
-            _log.debug(
-                "========== BATCH %d (%d findings) ==========\n%s\n"
-                "========== END BATCH %d ==========",
-                batch_id,
-                len(finding_ids),
-                prompt_text,
-                batch_id,
-            )
+            render_fn = _PROMPT_RENDERERS[segment]
+            for finding in batch_data:
+                fid = finding.get("id", "?")
+                file_contents = self._read_source_file(finding)
+                prompt = render_fn(
+                    finding,
+                    file_contents=file_contents,
+                    project=self._project,
+                )
+                _log.debug(
+                    "========== FINDING %s (batch %d)"
+                    " ==========\n%s\n"
+                    "========== END FINDING %s ==========",
+                    fid,
+                    batch_id,
+                    prompt,
+                    fid,
+                )
             return "success"
 
         result = self._run_batch_loop(run_id, _handler)
@@ -310,17 +325,17 @@ class TriageRunner:
     def _run_batch_loop(
         self,
         run_id: int,
-        handler: Callable[[int, Callable[..., str], list[int]], str],
+        handler: Callable[[int, list[dict[str, Any]], str], str],
         *,
         holder_token: str | None = None,
     ) -> TriageResult:
         """Claim and process every pending batch for run_id.
 
-        handler(batch_id, render_fn, finding_ids) -> outcome string.
+        handler(batch_id, batch_data, segment) -> outcome string.
         Skip-flagged tools are auto-completed without calling handler.
-        When holder_token is set, finding-id locks are acquired per batch
-        so that analyst PATCH requests are blocked for the duration of the
-        agent session writing those findings.
+        When holder_token is set, finding-id locks are acquired per
+        batch so that analyst PATCH requests are blocked while the
+        agent writes those findings.
         """
         sessions_run = success = failed = incomplete = 0
         while True:
@@ -344,7 +359,6 @@ class TriageRunner:
                 continue
 
             segment = tool_obj.scan_segment
-            render_fn = _PROMPT_RENDERERS[segment]
 
             sessions_run += 1
             self._emit(
@@ -353,14 +367,14 @@ class TriageRunner:
                     project_id=self._project_id,
                     batch_id=batch_id,
                     segment=segment,
-                    message=f"Batch {batch_id} started ({len(finding_ids)} findings)",
+                    message=(f"Batch {batch_id} started ({len(finding_ids)} findings)"),
                 )
             )
             if holder_token:
                 with self._registry.findings(finding_ids, holder_token):
-                    outcome = handler(batch_id, render_fn, finding_ids)
+                    outcome = handler(batch_id, batch_data, segment)
             else:
-                outcome = handler(batch_id, render_fn, finding_ids)
+                outcome = handler(batch_id, batch_data, segment)
             self._triage_repo.complete_batch(batch_id, outcome)
 
             if outcome == "success":
@@ -407,49 +421,91 @@ class TriageRunner:
             incomplete=incomplete,
         )
 
-    def _run_session(
+    def _run_batch_findings(
         self,
-        render_fn: Callable[..., str],
-        finding_ids: list[int],
+        batch_id: int,
+        batch_data: list[dict[str, Any]],
+        segment: str,
         *,
         cwd: Path,
     ) -> str:
-        """Run one triage-agent session.
+        """Triage each finding in the batch via the one-shot adapter.
 
-        Returns 'success', 'failed', or 'incomplete'.
+        Returns 'success' (all ok), 'failed' (all failed), or
+        'incomplete' (mixed).
         """
-        prompt_text = render_fn(finding_ids, self._project)
-        session_start = datetime.now(UTC).isoformat()
+        render_fn = _PROMPT_RENDERERS[segment]
+        succeeded = 0
+        total = len(batch_data)
 
-        result = self._triage_backend.run_session(
-            prompt_text,
-            timeout_seconds=self._session_timeout_seconds,
-            cwd=cwd,
-        )
-        if not result.success:
-            _log.error(
-                "Triage session failed (rc=%d, error=%s): %s",
-                result.returncode,
-                result.error or "-",
-                result.stderr,
-            )
-            return "failed"
+        for finding in batch_data:
+            fid = finding.get("id", -1)
+            try:
+                file_contents = self._read_source_file(finding)
+                prompt = render_fn(
+                    finding,
+                    file_contents=file_contents,
+                    project=self._project,
+                )
+                verdict = self._triage_backend.run_triage(
+                    prompt,
+                    finding_id=fid,
+                    timeout_seconds=self._session_timeout_seconds,
+                    cwd=cwd,
+                )
+                self._write_verdict(verdict, segment)
+                succeeded += 1
+            except VerdictParseError as exc:
+                _log.warning(
+                    "Verdict parse failed for finding %d in batch %d: %s",
+                    fid,
+                    batch_id,
+                    exc.problem,
+                )
+            except Exception as exc:
+                _log.error(
+                    "Triage failed for finding %d in batch %d: %s",
+                    fid,
+                    batch_id,
+                    exc,
+                )
 
-        updated_count = self._audit_repo.count_events_since(
-            _AUDIT_WRITE_TOOLS, session_start
-        )
-        if updated_count > 0:
-            _log.info(
-                "Triage session success (updates=%d)",
-                updated_count,
-            )
+        if succeeded == total:
             return "success"
-
-        _log.warning(
-            "Session completed but no findings updated; "
-            "possible prompt failure or empty batch"
-        )
+        if succeeded == 0:
+            return "failed"
         return "incomplete"
+
+    def _read_source_file(self, finding: dict[str, Any]) -> str:
+        repo_name = finding.get("repo", "")
+        file_path = finding.get("file") or finding.get("url", "")
+        if not file_path or not repo_name:
+            return ""
+        repo_root = self._repo_paths.get(repo_name)
+        if repo_root is None:
+            return ""
+        full_path = repo_root / file_path
+        if not full_path.is_file():
+            return ""
+        return full_path.read_text(errors="replace")
+
+    def _write_verdict(self, verdict: Verdict, segment: str) -> None:
+        if self._finding_repo is None:
+            raise RuntimeError("finding_repo not configured on TriageRunner")
+        call_stack_str = json.dumps(verdict.call_stack) if verdict.call_stack else None
+        self._finding_repo.update_finding(
+            verdict.finding_id,
+            verdict.confidence,
+            verdict.finding_type,
+            verdict.severity,
+            verdict.reasoning,
+            verdict.remediation,
+            verdict.attack_vector,
+            call_stack_str,
+            segment,
+            triaged_by=self._triaged_by,
+            source="auto_triage",
+        )
 
     def _prepare_session(self, run_id: int):
         return self._triage_backend.prepare_session(

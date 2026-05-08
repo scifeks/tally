@@ -5,7 +5,8 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,29 +16,45 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.ports.triage_agent import (  # noqa: E402
     PreparedTriageSession,
-    TriageBackendPort,
-    TriageSessionResult,
 )
-from application.triage.runner import TriageResult, TriageRunner  # noqa: E402
+from application.triage.runner import (  # noqa: E402
+    TriageResult,
+    TriageRunner,
+)
+from application.triage.verdict import (  # noqa: E402
+    Verdict,
+    VerdictParseError,
+)
 from domain.triage.entry import TriageBatchRow  # noqa: E402
 
 
-class _StubTriageBackend(TriageBackendPort):
-    """Backend stub with configurable prep and results."""
+def _make_verdict(finding_id: int = 1) -> Verdict:
+    return Verdict(
+        finding_id=finding_id,
+        confidence="confirmed",
+        finding_type="vulnerability",
+        severity="high",
+        reasoning="test reasoning",
+        remediation="test remediation",
+        attack_vector="test attack vector",
+        call_stack=[],
+    )
+
+
+class _StubTriageBackend:
+    """Backend stub returning canned Verdicts."""
 
     def __init__(
         self,
         *,
-        result: TriageSessionResult | None = None,
+        verdict: Verdict | None = None,
         side_effect: BaseException | None = None,
         prepared_cwd: Path | None = None,
-        marker_dir: Path | None = None,
     ) -> None:
-        self._result = result
+        self._verdict = verdict
         self._side_effect = side_effect
         self._prepared_cwd = prepared_cwd
-        self._marker_dir = marker_dir
-        self.calls: list[tuple[str, int, Path]] = []
+        self.calls: list[tuple[str, int, int, Path]] = []
         self.prepare_calls: list[tuple[str, int, Path]] = []
 
     @contextmanager
@@ -49,85 +66,60 @@ class _StubTriageBackend(TriageBackendPort):
         app_root: Path,
     ):
         self.prepare_calls.append((project, run_id, app_root))
-        marker = self._marker_dir / ".mcp.json" if self._marker_dir else None
-        if marker is not None:
-            marker.write_text("{}")
-        try:
-            yield PreparedTriageSession(cwd=self._prepared_cwd or app_root)
-        finally:
-            if marker is not None:
-                marker.unlink(missing_ok=True)
+        yield PreparedTriageSession(cwd=self._prepared_cwd or app_root)
 
-    def run_session(
+    def run_triage(
         self,
         prompt: str,
         *,
+        finding_id: int,
         timeout_seconds: int,
         cwd: Path,
-    ) -> TriageSessionResult:
-        self.calls.append((prompt, timeout_seconds, cwd))
+    ) -> Verdict:
+        self.calls.append((prompt, finding_id, timeout_seconds, cwd))
         if self._side_effect is not None:
             raise self._side_effect
-        assert self._result is not None
-        return self._result
-
-
-def _ok_result() -> TriageSessionResult:
-    return TriageSessionResult(success=True, returncode=0, stderr="")
-
-
-def _failed_result(returncode: int = 1, stderr: str = "") -> TriageSessionResult:
-    return TriageSessionResult(success=False, returncode=returncode, stderr=stderr)
-
-
-def _timeout_result() -> TriageSessionResult:
-    return TriageSessionResult(
-        success=False, returncode=-1, stderr="", error="timed out after 300s"
-    )
+        assert self._verdict is not None
+        return self._verdict
 
 
 def _make_runner(
     tmp_path: Path,
     project: str = "proj",
     *,
-    agent: TriageBackendPort | None = None,
+    agent: _StubTriageBackend | None = None,
+    finding_repo: MagicMock | None = None,
+    repo_paths: dict[str, Path] | None = None,
 ) -> tuple[TriageRunner, MagicMock, _StubTriageBackend]:
     """Builds a runner with stubbed dependencies."""
-    venv_python = tmp_path / ".venv" / "bin" / "python"
-    venv_python.parent.mkdir(parents=True, exist_ok=True)
-    venv_python.touch()
-
     store = MagicMock()
     store.latest_run_id.return_value = 1
     store.reset_stale_batches.return_value = 0
     store.get_active_finding_combos.return_value = []
-    store.count_events_since.return_value = 0
 
-    triage_backend = (
-        agent
-        if agent is not None
-        else _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
+    triage_backend = agent or _StubTriageBackend(
+        verdict=_make_verdict(), prepared_cwd=tmp_path
     )
+    fr = finding_repo or MagicMock()
+    fr.update_finding.return_value = True
     runner = TriageRunner(
         project,
         store,
         store,
-        store,
+        None,
         tmp_path,
         triage_backend=triage_backend,
         session_timeout_seconds=300,
         tool_registry=MagicMock(),
+        finding_repo=fr,
+        repo_paths=repo_paths or {},
+        triaged_by="claudecode",
     )
     return runner, store, triage_backend  # type: ignore[return-value]
 
 
 def _mock_reg(runner: TriageRunner) -> MagicMock:
-    """Return runner._tool_registry typed as a MagicMock for assertions."""
     return runner._tool_registry  # type: ignore[return-value]
-
-
-def _render_stub(finding_ids: list[int], project: str) -> str:
-    return "stub prompt text"
 
 
 def _make_mock_tool(name: str, *, skip: bool, scan_segment: str = "sast") -> MagicMock:
@@ -144,7 +136,12 @@ def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow
         run_id=1,
         finding_ids=finding_ids,
         batch_data=[
-            {"id": fid, "tool": "semgrep", "file": f"src/file{fid}.py"}
+            {
+                "id": fid,
+                "tool": "semgrep",
+                "file": f"src/file{fid}.py",
+                "repo": "testrepo",
+            }
             for fid in finding_ids
         ],
         status="pending",
@@ -158,7 +155,9 @@ def _make_semgrep_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow
 # batch()
 
 
-def test_batch_resets_stale_before_creating(tmp_path: Path) -> None:
+def test_batch_resets_stale_before_creating(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.get_active_finding_combos.return_value = []
 
@@ -188,8 +187,9 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
     assert total == 4  # 2 + 2
 
 
-def test_batch_passes_skip_tools_to_store(tmp_path: Path) -> None:
-    """get_active_finding_combos receives a frozenset containing skip tools."""
+def test_batch_passes_skip_tools_to_store(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.get_active_finding_combos.return_value = []
     mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
@@ -203,8 +203,9 @@ def test_batch_passes_skip_tools_to_store(tmp_path: Path) -> None:
     assert "nmap" in skip_tools
 
 
-def test_batch_resets_before_fetching_combos(tmp_path: Path) -> None:
-    """reset_stale_batches is called before get_active_finding_combos."""
+def test_batch_resets_before_fetching_combos(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     call_order: list[str] = []
     store.reset_stale_batches.side_effect = lambda *a, **k: (
@@ -219,7 +220,9 @@ def test_batch_resets_before_fetching_combos(tmp_path: Path) -> None:
     assert call_order == ["reset", "combos"]
 
 
-def test_batch_error_raises_runtime_error(tmp_path: Path) -> None:
+def test_batch_error_raises_runtime_error(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.get_active_finding_combos.return_value = [("semgrep", "repo1", "sast")]
     store.create_batches.side_effect = RuntimeError("db locked")
@@ -228,86 +231,178 @@ def test_batch_error_raises_runtime_error(tmp_path: Path) -> None:
         runner.batch()
 
 
-# _run_session()
+# _run_batch_findings()
 
 
-def test_run_session_success(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
-    store.count_events_since.return_value = 3
+def test_run_batch_findings_all_succeed(
+    tmp_path: Path,
+) -> None:
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    agent = _StubTriageBackend(verdict=_make_verdict(1), prepared_cwd=tmp_path)
+    runner, _, _ = _make_runner(tmp_path, agent=agent, finding_repo=finding_repo)
 
-    outcome = runner._run_session(_render_stub, [1, 2], cwd=tmp_path)
+    batch_data = [{"id": 1, "tool": "semgrep", "file": "a.py", "repo": "r"}]
+    outcome = runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
 
     assert outcome == "success"
+    finding_repo.update_finding.assert_called_once()
 
 
-def test_run_session_incomplete_when_no_audit_rows(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
-    store.count_events_since.return_value = 0
+def test_run_batch_findings_all_fail_parse_error(
+    tmp_path: Path,
+) -> None:
+    agent = _StubTriageBackend(
+        side_effect=VerdictParseError("bad json"),
+        prepared_cwd=tmp_path,
+    )
+    runner, _, _ = _make_runner(tmp_path, agent=agent)
 
-    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
+    batch_data = [{"id": 1, "tool": "semgrep", "file": "a.py", "repo": "r"}]
+    outcome = runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
+
+    assert outcome == "failed"
+
+
+def test_run_batch_findings_mixed_outcomes(
+    tmp_path: Path,
+) -> None:
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    call_count = 0
+
+    class _MixedBackend(_StubTriageBackend):
+        def run_triage(self, prompt, *, finding_id, **kw):
+            nonlocal call_count
+            call_count += 1
+            if finding_id == 2:
+                raise VerdictParseError("bad")
+            return _make_verdict(finding_id)
+
+    agent = _MixedBackend(prepared_cwd=tmp_path)
+    runner, _, _ = _make_runner(tmp_path, agent=agent, finding_repo=finding_repo)
+
+    batch_data = [
+        {"id": 1, "tool": "semgrep", "file": "a.py", "repo": "r"},
+        {"id": 2, "tool": "semgrep", "file": "b.py", "repo": "r"},
+    ]
+    outcome = runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
 
     assert outcome == "incomplete"
+    assert finding_repo.update_finding.call_count == 1
 
 
-def test_run_session_failed_nonzero_exit(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(
-        result=_failed_result(returncode=1, stderr="some error"),
-        prepared_cwd=tmp_path,
+def test_run_batch_findings_writes_verdict_fields(
+    tmp_path: Path,
+) -> None:
+    verdict = Verdict(
+        finding_id=42,
+        confidence="confirmed",
+        finding_type="vulnerability",
+        severity="critical",
+        reasoning="sql injection",
+        remediation="use parameterized queries",
+        attack_vector="network input",
+        call_stack=["main.py:10", "db.py:5"],
     )
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    agent = _StubTriageBackend(verdict=verdict, prepared_cwd=tmp_path)
+    runner, _, _ = _make_runner(tmp_path, agent=agent, finding_repo=finding_repo)
 
-    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
+    batch_data = [
+        {
+            "id": 42,
+            "tool": "semgrep",
+            "file": "a.py",
+            "repo": "r",
+        }
+    ]
+    runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
 
-    assert outcome == "failed"
-    store.count_events_since.assert_not_called()
-
-
-def test_run_session_failed_on_timeout(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(result=_timeout_result(), prepared_cwd=tmp_path)
-    runner, _, _ = _make_runner(tmp_path, agent=agent)
-
-    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
-
-    assert outcome == "failed"
-
-
-def test_run_session_failed_on_subprocess_exception(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(
-        result=TriageSessionResult(
-            success=False, returncode=-1, stderr="", error="command not found"
-        ),
-        prepared_cwd=tmp_path,
+    finding_repo.update_finding.assert_called_once_with(
+        42,
+        "confirmed",
+        "vulnerability",
+        "critical",
+        "sql injection",
+        "use parameterized queries",
+        "network input",
+        '["main.py:10", "db.py:5"]',
+        "sast",
+        triaged_by="claudecode",
+        source="auto_triage",
     )
-    runner, _, _ = _make_runner(tmp_path, agent=agent)
-
-    outcome = runner._run_session(_render_stub, [1], cwd=tmp_path)
-
-    assert outcome == "failed"
 
 
-def test_run_session_passes_prompt_timeout_and_cwd_to_agent(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
-    runner, _, _ = _make_runner(tmp_path, agent=agent)
+# _read_source_file()
 
-    runner._run_session(_render_stub, [42], cwd=tmp_path)
 
-    assert len(agent.calls) == 1
-    prompt, timeout, cwd = agent.calls[0]
-    assert prompt == "stub prompt text"
-    assert timeout > 0
-    assert cwd == tmp_path
+def test_read_source_file_returns_contents(
+    tmp_path: Path,
+) -> None:
+    repo_dir = tmp_path / "myrepo"
+    repo_dir.mkdir()
+    src = repo_dir / "src" / "app.py"
+    src.parent.mkdir(parents=True)
+    src.write_text("print('hello')")
+
+    runner, _, _ = _make_runner(tmp_path, repo_paths={"myrepo": repo_dir})
+    finding: dict[str, Any] = {
+        "repo": "myrepo",
+        "file": "src/app.py",
+    }
+
+    assert runner._read_source_file(finding) == "print('hello')"
+
+
+def test_read_source_file_missing_repo(
+    tmp_path: Path,
+) -> None:
+    runner, _, _ = _make_runner(tmp_path, repo_paths={})
+    finding: dict[str, Any] = {
+        "repo": "missing",
+        "file": "a.py",
+    }
+
+    assert runner._read_source_file(finding) == ""
+
+
+def test_read_source_file_missing_file(
+    tmp_path: Path,
+) -> None:
+    runner, _, _ = _make_runner(tmp_path, repo_paths={"r": tmp_path})
+    finding: dict[str, Any] = {
+        "repo": "r",
+        "file": "nonexistent.py",
+    }
+
+    assert runner._read_source_file(finding) == ""
+
+
+def test_read_source_file_no_file_field(
+    tmp_path: Path,
+) -> None:
+    runner, _, _ = _make_runner(tmp_path, repo_paths={"r": tmp_path})
+    finding: dict[str, Any] = {"repo": "r"}
+
+    assert runner._read_source_file(finding) == ""
 
 
 # run()
 
 
-def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(result=_ok_result(), prepared_cwd=tmp_path)
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
-    store.claim_batch.side_effect = [_make_semgrep_batch(1, [1]), None]
-    store.count_events_since.return_value = 1
+def test_run_calls_batch_then_sessions(
+    tmp_path: Path,
+) -> None:
+    agent = _StubTriageBackend(verdict=_make_verdict(1), prepared_cwd=tmp_path)
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    runner, store, _ = _make_runner(tmp_path, agent=agent, finding_repo=finding_repo)
+    store.claim_batch.side_effect = [
+        _make_semgrep_batch(1, [1]),
+        None,
+    ]
 
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
@@ -317,7 +412,7 @@ def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
         mock_reg.get_tool.return_value = mock_semgrep
         result = runner.run()
 
-    store.latest_run_id.assert_called_once()  # from batch()
+    store.latest_run_id.assert_called_once()
     assert isinstance(result, TriageResult)
     assert result.sessions_run == 1
     assert result.success == 1
@@ -325,7 +420,9 @@ def test_run_calls_batch_then_sessions(tmp_path: Path) -> None:
     assert result.incomplete == 0
 
 
-def test_run_skips_skip_strategy_tools(tmp_path: Path) -> None:
+def test_run_skips_skip_strategy_tools(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     nmap_batch = TriageBatchRow(
         id=1,
@@ -354,51 +451,17 @@ def test_run_skips_skip_strategy_tools(tmp_path: Path) -> None:
     store.complete_batch.assert_called_once_with(1, "success")
 
 
-def test_run_deletes_mcp_json_on_success(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(
-        result=_ok_result(),
-        prepared_cwd=tmp_path,
-        marker_dir=tmp_path,
-    )
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
-    store.claim_batch.return_value = None
-
-    runner.run()
-
-    assert not (tmp_path / ".mcp.json").exists()
-
-
-def test_run_deletes_mcp_json_on_exception(tmp_path: Path) -> None:
-    """Session cleanup still runs after a failure."""
-    agent = _StubTriageBackend(
-        result=_ok_result(),
-        prepared_cwd=tmp_path,
-        marker_dir=tmp_path,
-    )
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
-    store.claim_batch.side_effect = [_make_semgrep_batch(1, [1]), None]
-    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
-
-    mock_reg = _mock_reg(runner)
-    if True:
-        mock_reg.get_all_tools.return_value = []
-        mock_reg.get_tool.return_value = mock_semgrep
-        with patch.object(runner, "_run_session", side_effect=RuntimeError("crash")):
-            with pytest.raises(RuntimeError, match="crash"):
-                runner.run()
-
-    assert not (tmp_path / ".mcp.json").exists()
-
-
-def test_run_uses_agent_prepared_session_context(tmp_path: Path) -> None:
-    agent = _StubTriageBackend(
-        result=_ok_result(),
-        prepared_cwd=tmp_path,
-        marker_dir=tmp_path,
-    )
-    runner, store, _ = _make_runner(tmp_path, agent=agent)
-    store.claim_batch.side_effect = [_make_semgrep_batch(1, [42]), None]
-    store.count_events_since.return_value = 1
+def test_run_uses_agent_prepared_session_context(
+    tmp_path: Path,
+) -> None:
+    agent = _StubTriageBackend(verdict=_make_verdict(42), prepared_cwd=tmp_path)
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    runner, store, _ = _make_runner(tmp_path, agent=agent, finding_repo=finding_repo)
+    store.claim_batch.side_effect = [
+        _make_semgrep_batch(1, [42]),
+        None,
+    ]
     mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
 
     mock_reg = _mock_reg(runner)
@@ -408,7 +471,7 @@ def test_run_uses_agent_prepared_session_context(tmp_path: Path) -> None:
         runner.run()
 
     assert agent.prepare_calls == [("proj", 1, tmp_path)]
-    assert agent.calls[0][2] == tmp_path
+    assert agent.calls[0][3] == tmp_path
 
 
 # run_dry_run()
@@ -418,10 +481,12 @@ def test_run_dry_run_calls_batch(tmp_path: Path) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.return_value = None
     runner.run_dry_run()
-    store.latest_run_id.assert_called_once()  # batch() is invoked
+    store.latest_run_id.assert_called_once()
 
 
-def test_run_dry_run_marks_all_batches_success(tmp_path: Path) -> None:
+def test_run_dry_run_marks_all_batches_success(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.side_effect = [
         _make_semgrep_batch(10, [1, 2]),
@@ -441,8 +506,9 @@ def test_run_dry_run_marks_all_batches_success(tmp_path: Path) -> None:
     store.complete_batch.assert_any_call(11, "success")
 
 
-def test_run_dry_run_no_pending_remain(tmp_path: Path) -> None:
-    """Every claimed batch is completed; none left pending/in_progress."""
+def test_run_dry_run_no_pending_remain(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.side_effect = [
         _make_semgrep_batch(5, [1]),
@@ -477,17 +543,24 @@ def test_run_dry_run_prompt_logged(
     if True:
         mock_reg.get_all_tools.return_value = []
         mock_reg.get_tool.return_value = mock_semgrep
-        with caplog.at_level(logging.DEBUG, logger="application.triage.runner"):
+        with caplog.at_level(
+            logging.DEBUG,
+            logger="application.triage.runner",
+        ):
             runner.run_dry_run()
 
     log_text = " ".join(r.message for r in caplog.records)
-    assert "42" in log_text  # finding ID from batch_data appears
-    assert "BATCH 7" in log_text  # delimiter present
+    assert "42" in log_text
+    assert "FINDING 42" in log_text
 
 
-def test_run_dry_run_does_not_start_mcp(tmp_path: Path) -> None:
+def test_run_dry_run_does_not_call_prepare(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.return_value = None
+    from unittest.mock import patch
+
     with patch.object(runner, "_prepare_session") as mock_prepare:
         runner.run_dry_run()
     mock_prepare.assert_not_called()
@@ -510,10 +583,14 @@ def _make_nmap_batch(batch_id: int, finding_ids: list[int]) -> TriageBatchRow:
     )
 
 
-def test_run_batch_loop_skip_completes_without_handler(tmp_path: Path) -> None:
-    """skip-strategy batches are auto-completed; handler is never called."""
+def test_run_batch_loop_skip_completes_without_handler(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
-    store.claim_batch.side_effect = [_make_nmap_batch(1, [10, 11]), None]
+    store.claim_batch.side_effect = [
+        _make_nmap_batch(1, [10, 11]),
+        None,
+    ]
     mock_nmap = _make_mock_tool("nmap", skip=True, scan_segment="network")
 
     handler = MagicMock(return_value="success")
@@ -528,8 +605,9 @@ def test_run_batch_loop_skip_completes_without_handler(tmp_path: Path) -> None:
     assert result.success == 0
 
 
-def test_run_batch_loop_returns_correct_counts(tmp_path: Path) -> None:
-    """sessions_run / success / failed / incomplete are tallied correctly."""
+def test_run_batch_loop_returns_correct_counts(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.side_effect = [
         _make_semgrep_batch(1, [1]),
@@ -552,8 +630,9 @@ def test_run_batch_loop_returns_correct_counts(tmp_path: Path) -> None:
     assert result.incomplete == 1
 
 
-def test_run_batch_loop_exhausts_all_batches(tmp_path: Path) -> None:
-    """Loop exits only when claim_batch returns None."""
+def test_run_batch_loop_exhausts_all_batches(
+    tmp_path: Path,
+) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.claim_batch.side_effect = [
         _make_semgrep_batch(1, [1]),
@@ -569,5 +648,5 @@ def test_run_batch_loop_exhausts_all_batches(tmp_path: Path) -> None:
         mock_reg.get_tool.return_value = mock_semgrep
         runner._run_batch_loop(99, handler)
 
-    assert store.claim_batch.call_count == 4  # 3 batches + None sentinel
+    assert store.claim_batch.call_count == 4
     assert handler.call_count == 3

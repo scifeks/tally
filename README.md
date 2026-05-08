@@ -118,7 +118,7 @@ report
 |---|---|
 | `triage` | Run AI triage on untriaged findings for the active project |
 | `triage --batch` | Run batching phase only — no Claude sessions |
-| `triage --dry-run` | Batch + render prompts to DEBUG log — no MCP server, no Claude |
+| `triage --dry-run` | Batch + render prompts to DEBUG log, no agent invocation |
 
 ### Reporting
 
@@ -190,7 +190,6 @@ Tools can run locally or inside a Docker container. The execution mode is config
 
 - [docs/usage.md](docs/usage.md) — Full usage guide with examples
 - [docs/report.md](docs/report.md) — Report generation guide: quick reports, PDF assembly, and shell preview
-- [docs/mcp.md](docs/mcp.md) — MCP triage system setup and usage guide
 - [docs/ui.md](docs/ui.md) — Web UI: browser-based findings browser with inline editing, configuration, and security model
 - [docs/chat.md](docs/chat.md) — RAG chat configuration and usage (Ollama-only)
 - [docs/configuration.md](docs/configuration.md) — Config file reference

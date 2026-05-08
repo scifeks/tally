@@ -1,14 +1,15 @@
 """Adapter contract tests for OpenCodeTriageAgent.
 
-These pin the argv shape, cwd, stdin, env and error-translation behavior of
-the OpenCode adapter. They do not invoke the real ``opencode`` binary;
-``subprocess.run`` is patched so the command shape can be inspected and
-exceptions injected.
+Pin the argv shape, stdin piping, JSON event stream parsing, and error
+translation of the one-shot OpenCode adapter. ``subprocess.run`` is
+patched so the command shape can be inspected and exceptions injected.
 """
+
 # ruff: noqa: E402, I001
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -20,132 +21,312 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from infrastructure.agents.opencode_triage_agent import OpenCodeTriageAgent  # noqa: E402
+from application.triage.verdict import (  # noqa: E402
+    Verdict,
+    VerdictParseError,
+)
+from infrastructure.agents.opencode_triage_agent import (  # noqa: E402
+    OpenCodeTriageAgent,
+)
 
 pytestmark = pytest.mark.integration
 
+_FINDING_ID = 42
 
-def _ok_completed(*, stdout: str = "", stderr: str = "") -> MagicMock:
+
+def _valid_verdict(**overrides: object) -> dict:
+    base: dict = {
+        "finding_id": _FINDING_ID,
+        "confidence": "confirmed",
+        "finding_type": "vulnerability",
+        "severity": "high",
+        "reasoning": "User input reaches the sink.",
+        "remediation": "Use parameterized queries.",
+        "attack_vector": "POST /login password",
+        "call_stack": ["app.php:10 handle"],
+    }
+    base.update(overrides)
+    return base
+
+
+def _opencode_event_stream(verdict_text: str) -> str:
+    events = [
+        json.dumps(
+            {
+                "type": "step_start",
+                "timestamp": 1000,
+                "sessionID": "ses_test",
+                "part": {"type": "step-start"},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "text",
+                "timestamp": 1001,
+                "sessionID": "ses_test",
+                "part": {"type": "text", "text": verdict_text},
+            }
+        ),
+        json.dumps(
+            {
+                "type": "step_finish",
+                "timestamp": 1002,
+                "sessionID": "ses_test",
+                "part": {"type": "step-finish"},
+            }
+        ),
+    ]
+    return "\n".join(events) + "\n"
+
+
+def _ok_completed(verdict_text: str) -> MagicMock:
     completed = MagicMock()
     completed.returncode = 0
-    completed.stdout = stdout
-    completed.stderr = stderr
+    completed.stdout = _opencode_event_stream(verdict_text)
+    completed.stderr = ""
     return completed
+
+
+def _happy_completed() -> MagicMock:
+    return _ok_completed(json.dumps(_valid_verdict()))
+
+
+# -- argv shape tests -----------------------------------------------
 
 
 def test_invokes_opencode_binary(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    cmd = mock_run.call_args[0][0]
-    assert cmd[0] == "opencode"
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    assert m.call_args[0][0][0] == "opencode"
 
 
 def test_run_subcommand_present(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    cmd = mock_run.call_args[0][0]
-    assert cmd[1] == "run"
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    assert m.call_args[0][0][1] == "run"
 
 
 def test_dir_flag_present_with_cwd(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    cmd = mock_run.call_args[0][0]
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    cmd = m.call_args[0][0]
     idx = cmd.index("--dir")
     assert cmd[idx + 1] == str(tmp_path)
 
 
 def test_json_format_flag_present(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    cmd = mock_run.call_args[0][0]
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    cmd = m.call_args[0][0]
     idx = cmd.index("--format")
     assert cmd[idx + 1] == "json"
 
 
-def test_dangerously_skip_permissions_flag_present_in_subprocess(
+def test_dangerously_skip_permissions_present(
     tmp_path: Path,
 ) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    cmd = mock_run.call_args[0][0]
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    cmd = m.call_args[0][0]
     assert "--dangerously-skip-permissions" in cmd
-
-
-def test_cwd_passed_to_subprocess(tmp_path: Path) -> None:
-    agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    assert mock_run.call_args[1]["cwd"] == str(tmp_path)
 
 
 def test_prompt_passed_via_stdin(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-        agent.run_session("hello finding 42", timeout_seconds=60, cwd=tmp_path)
-    assert mock_run.call_args[1]["input"] == "hello finding 42"
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "hello finding 42",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    assert m.call_args[1]["input"] == "hello finding 42"
 
 
-def test_prepared_session_sets_opencode_config_env(tmp_path: Path) -> None:
+def test_cwd_passed_to_subprocess(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
+    with patch("subprocess.run", return_value=_happy_completed()) as m:
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    assert m.call_args[1]["cwd"] == str(tmp_path)
 
-    with agent.prepare_session(project="proj", run_id=42, app_root=tmp_path):
-        with patch("subprocess.run", return_value=_ok_completed()) as mock_run:
-            agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
 
-    env = mock_run.call_args[1]["env"]
-    assert env["OPENCODE_CONFIG"].endswith("opencode.json")
+def test_permission_config_passed_via_env(
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, str] = {}
 
+    def _capture(args, **kwargs):
+        assert args
+        config_path = kwargs["env"]["OPENCODE_CONFIG"]
+        captured["content"] = Path(config_path).read_text()
+        return _happy_completed()
 
-def test_success_when_returncode_zero(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed()):
-        result = agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    assert result.success is True
-    assert result.returncode == 0
-    assert result.error is None
+    with patch("subprocess.run", side_effect=_capture):
+        agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+
+    config = json.loads(captured["content"])
+    assert "mcp" not in config
+    perm = config["permission"]
+    assert perm["read"] == {"*": "allow"}
+    assert perm["edit"] == "deny"
+    assert perm["bash"] == {"*": "deny"}
+    assert perm["write"] == {"*": "deny"}
+    assert perm["webfetch"] == "deny"
 
 
-def test_failure_when_returncode_nonzero(tmp_path: Path) -> None:
+# -- happy path ------------------------------------------------------
+
+
+def test_happy_path_returns_verdict(tmp_path: Path) -> None:
+    agent = OpenCodeTriageAgent()
+    with patch("subprocess.run", return_value=_happy_completed()):
+        verdict = agent.run_triage(
+            "prompt",
+            finding_id=_FINDING_ID,
+            timeout_seconds=60,
+            cwd=tmp_path,
+        )
+    assert isinstance(verdict, Verdict)
+    assert verdict.finding_id == _FINDING_ID
+    assert verdict.confidence == "confirmed"
+    assert verdict.severity == "high"
+
+
+# -- error handling --------------------------------------------------
+
+
+def test_nonzero_exit_raises(tmp_path: Path) -> None:
     completed = MagicMock()
-    completed.returncode = 2
-    completed.stdout = ""
-    completed.stderr = "boom"
+    completed.returncode = 1
+    completed.stderr = "something went wrong"
     agent = OpenCodeTriageAgent()
     with patch("subprocess.run", return_value=completed):
-        result = agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    assert result.success is False
-    assert result.returncode == 2
-    assert result.stderr == "boom"
+        with pytest.raises(VerdictParseError, match="exited with code 1"):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
 
 
-def test_stdout_is_captured_for_json_diagnostics(tmp_path: Path) -> None:
+def test_timeout_propagates(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", return_value=_ok_completed(stdout='{"ok":true}')):
-        result = agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    assert result.stderr == '{"ok":true}'
+    exc = subprocess.TimeoutExpired(cmd=["opencode"], timeout=60)
+    with patch("subprocess.run", side_effect=exc):
+        with pytest.raises(subprocess.TimeoutExpired):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
 
 
-def test_timeout_translated_to_failed_result(tmp_path: Path) -> None:
+def test_binary_not_found_propagates(tmp_path: Path) -> None:
     agent = OpenCodeTriageAgent()
-    timeout = subprocess.TimeoutExpired(cmd=["opencode"], timeout=60)
-    with patch("subprocess.run", side_effect=timeout):
-        result = agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    assert result.success is False
-    assert result.returncode == -1
-    assert result.error is not None
-    assert "60" in result.error
+    with patch(
+        "subprocess.run",
+        side_effect=FileNotFoundError("no opencode"),
+    ):
+        with pytest.raises(FileNotFoundError):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
 
 
-def test_unexpected_exception_translated_to_failed_result(tmp_path: Path) -> None:
+def test_empty_stdout_raises(tmp_path: Path) -> None:
+    completed = MagicMock()
+    completed.returncode = 0
+    completed.stdout = ""
+    completed.stderr = ""
     agent = OpenCodeTriageAgent()
-    with patch("subprocess.run", side_effect=FileNotFoundError("no opencode")):
-        result = agent.run_session("prompt", timeout_seconds=60, cwd=tmp_path)
-    assert result.success is False
-    assert result.returncode == -1
-    assert result.error == "no opencode"
+    with patch("subprocess.run", return_value=completed):
+        with pytest.raises(VerdictParseError, match="empty stdout"):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
+
+
+def test_no_text_events_raises(tmp_path: Path) -> None:
+    non_text_stream = "\n".join(
+        [
+            json.dumps({"type": "step_start", "part": {}}),
+            json.dumps({"type": "step_finish", "part": {}}),
+        ]
+    )
+    completed = MagicMock()
+    completed.returncode = 0
+    completed.stdout = non_text_stream
+    completed.stderr = ""
+    agent = OpenCodeTriageAgent()
+    with patch("subprocess.run", return_value=completed):
+        with pytest.raises(VerdictParseError, match="no text events"):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )
+
+
+def test_malformed_verdict_json_raises(tmp_path: Path) -> None:
+    agent = OpenCodeTriageAgent()
+    with patch(
+        "subprocess.run",
+        return_value=_ok_completed("not valid json {{{"),
+    ):
+        with pytest.raises(VerdictParseError):
+            agent.run_triage(
+                "prompt",
+                finding_id=_FINDING_ID,
+                timeout_seconds=60,
+                cwd=tmp_path,
+            )

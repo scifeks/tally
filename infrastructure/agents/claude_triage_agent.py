@@ -1,27 +1,23 @@
-"""Claude-backed triage backend."""
+"""Claude-backed one-shot triage adapter."""
 
 from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from contextlib import contextmanager
 from pathlib import Path
 
 from application.ports.triage_agent import (
     PreparedTriageSession,
-    TriageBackendPort,
     TriageSessionResult,
 )
-
-_TRIAGED_BY = "claudecode"
-
-# Keep these flags paired so noninteractive triage cannot gain shell,
-# edit, or web access through the Claude process.
-_DISALLOWED_TOOLS = "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch"
+from application.triage.verdict import Verdict, VerdictParseError, parse_verdict
 
 
-class ClaudeTriageAgent(TriageBackendPort):
+class ClaudeTriageAgent:
+    def __init__(self, *, model: str) -> None:
+        self._model = model
+
     @contextmanager
     def prepare_session(
         self,
@@ -30,13 +26,45 @@ class ClaudeTriageAgent(TriageBackendPort):
         run_id: int,
         app_root: Path,
     ):
-        mcp_json_path = app_root / ".mcp.json"
-        payload = self._build_mcp_payload(project=project, run_id=run_id)
-        mcp_json_path.write_text(json.dumps(payload, indent=2))
-        try:
-            yield PreparedTriageSession(cwd=app_root)
-        finally:
-            mcp_json_path.unlink(missing_ok=True)
+        yield PreparedTriageSession(cwd=app_root)
+
+    def run_triage(
+        self,
+        prompt: str,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> Verdict:
+        completed = subprocess.run(
+            [
+                "claude",
+                "--print",
+                "--output-format",
+                "json",
+                "--dangerously-skip-permissions",
+                "--model",
+                self._model,
+                "--add-dir",
+                str(cwd),
+                "--tools",
+                "",
+            ],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            cwd=str(cwd),
+        )
+
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            raise VerdictParseError(
+                f"claude exited with code {completed.returncode}: {stderr[:200]}"
+            )
+
+        result_text = self._extract_result(completed.stdout)
+        return parse_verdict(result_text, expected_finding_id=finding_id)
 
     def run_session(
         self,
@@ -45,62 +73,32 @@ class ClaudeTriageAgent(TriageBackendPort):
         timeout_seconds: int,
         cwd: Path,
     ) -> TriageSessionResult:
+        raise NotImplementedError("use run_triage")
+
+    def _extract_result(self, stdout: str) -> str:
+        if not stdout.strip():
+            raise VerdictParseError("empty stdout from claude")
+
         try:
-            completed = subprocess.run(
-                [
-                    "claude",
-                    "--print",
-                    "--dangerously-skip-permissions",
-                    "--disallowedTools",
-                    _DISALLOWED_TOOLS,
-                ],
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                cwd=str(cwd),
-            )
-        except subprocess.TimeoutExpired:
-            return TriageSessionResult(
-                success=False,
-                returncode=-1,
-                stderr="",
-                error=f"timed out after {timeout_seconds}s",
-            )
-        except Exception as exc:
-            return TriageSessionResult(
-                success=False,
-                returncode=-1,
-                stderr="",
-                error=str(exc),
+            wrapper = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise VerdictParseError(f"claude output is not valid JSON: {exc}") from exc
+
+        if not isinstance(wrapper, dict):
+            raise VerdictParseError(
+                f"claude output is not an object: {type(wrapper).__name__}"
             )
 
-        return TriageSessionResult(
-            success=completed.returncode == 0,
-            returncode=completed.returncode,
-            stderr=completed.stderr or "",
-        )
+        if wrapper.get("is_error"):
+            raise VerdictParseError(
+                f"claude reported an error: {wrapper.get('result', 'unknown')}"
+            )
 
-    def _build_mcp_payload(self, *, project: str, run_id: int) -> dict:
-        return {
-            "mcpServers": {
-                "tally-mcp": {
-                    "type": "stdio",
-                    "command": sys.executable,
-                    "args": [
-                        "-m",
-                        "tally_mcp.server",
-                        "--project",
-                        project,
-                    ],
-                    "env": {
-                        "TALLY_TRIAGE_RUN_ID": str(run_id),
-                        "TALLY_TRIAGED_BY": _TRIAGED_BY,
-                    },
-                    "permissions": {
-                        "allow": ["get_findings_batch", "update_findings_batch"],
-                        "deny": ["*"],
-                    },
-                }
-            }
-        }
+        result = wrapper.get("result")
+        if not isinstance(result, str):
+            raise VerdictParseError(
+                f"claude wrapper missing 'result' string field; "
+                f"keys={list(wrapper.keys())}"
+            )
+
+        return result

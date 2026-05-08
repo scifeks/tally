@@ -1,31 +1,38 @@
-"""OpenCode-backed triage backend."""
+"""OpenCode-backed one-shot triage adapter."""
 
 from __future__ import annotations
 
 import json
 import os
 import subprocess
-import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
 from application.ports.triage_agent import (
     PreparedTriageSession,
-    TriageBackendPort,
     TriageSessionResult,
 )
+from application.triage.verdict import (
+    Verdict,
+    VerdictParseError,
+    parse_verdict,
+)
 
-_MCP_SERVER_NAME = "tally-mcp"
-_RUN_OUTPUT_FORMAT = "json"
-_TRIAGED_BY = "opencode"
+_PERMISSION_CONFIG = {
+    "$schema": "https://opencode.ai/config.json",
+    "permission": {
+        "edit": "deny",
+        "bash": {"*": "deny"},
+        "webfetch": "deny",
+        "read": {"*": "allow"},
+        "write": {"*": "deny"},
+    },
+}
 
 
-class OpenCodeTriageAgent(TriageBackendPort):
-    """OpenCode-backed triage backend."""
-
-    def __init__(self) -> None:
-        self._session_env: dict[str, str] | None = None
+class OpenCodeTriageAgent:
+    """OpenCode-backed one-shot triage adapter."""
 
     @contextmanager
     def prepare_session(
@@ -35,21 +42,40 @@ class OpenCodeTriageAgent(TriageBackendPort):
         run_id: int,
         app_root: Path,
     ):
-        with tempfile.TemporaryDirectory(
-            prefix=".tally-opencode-", dir=app_root
-        ) as temp_dir:
-            session_dir = Path(temp_dir)
-            config_path = session_dir / "opencode.json"
-            payload = self._build_config_payload(
-                project=project,
-                run_id=run_id,
+        yield PreparedTriageSession(cwd=app_root)
+
+    def run_triage(
+        self,
+        prompt: str,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> Verdict:
+        with tempfile.TemporaryDirectory(prefix=".tally-oc-") as tmpdir:
+            config_path = Path(tmpdir) / "opencode.json"
+            config_path.write_text(json.dumps(_PERMISSION_CONFIG, indent=2))
+            completed = subprocess.run(
+                self._build_run_command(cwd=cwd),
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                cwd=str(cwd),
+                env={
+                    **os.environ,
+                    "OPENCODE_CONFIG": str(config_path),
+                },
             )
-            config_path.write_text(json.dumps(payload, indent=2))
-            self._session_env = {"OPENCODE_CONFIG": str(config_path)}
-            try:
-                yield PreparedTriageSession(cwd=app_root)
-            finally:
-                self._session_env = None
+
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            raise VerdictParseError(
+                f"opencode exited with code {completed.returncode}: {stderr[:200]}"
+            )
+
+        text = self._extract_text(completed.stdout)
+        return parse_verdict(text, expected_finding_id=finding_id)
 
     def run_session(
         self,
@@ -58,40 +84,7 @@ class OpenCodeTriageAgent(TriageBackendPort):
         timeout_seconds: int,
         cwd: Path,
     ) -> TriageSessionResult:
-        try:
-            completed = subprocess.run(
-                self._build_run_command(cwd=cwd),
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                cwd=str(cwd),
-                env=self._build_session_env(),
-            )
-        except subprocess.TimeoutExpired:
-            return TriageSessionResult(
-                success=False,
-                returncode=-1,
-                stderr="",
-                error=f"timed out after {timeout_seconds}s",
-            )
-        except Exception as exc:
-            return TriageSessionResult(
-                success=False,
-                returncode=-1,
-                stderr="",
-                error=str(exc),
-            )
-
-        stderr = completed.stderr or ""
-        if completed.stdout:
-            stderr = f"{stderr}\n{completed.stdout}" if stderr else completed.stdout
-
-        return TriageSessionResult(
-            success=completed.returncode == 0,
-            returncode=completed.returncode,
-            stderr=stderr,
-        )
+        raise NotImplementedError("use run_triage")
 
     def _build_run_command(self, *, cwd: Path) -> list[str]:
         return [
@@ -101,56 +94,30 @@ class OpenCodeTriageAgent(TriageBackendPort):
             "--dir",
             str(cwd),
             "--format",
-            _RUN_OUTPUT_FORMAT,
+            "json",
         ]
 
-    def _build_session_env(self) -> dict[str, str]:
-        env = dict(os.environ)
-        if self._session_env is not None:
-            env.update(self._session_env)
-        return env
-
-    def _build_config_payload(
-        self,
-        *,
-        project: str,
-        run_id: int,
-    ) -> dict:
-        return {
-            "$schema": "https://opencode.ai/config.json",
-            "mcp": {
-                _MCP_SERVER_NAME: {
-                    "type": "local",
-                    "enabled": True,
-                    "command": [
-                        sys.executable,
-                        "-m",
-                        "tally_mcp.server",
-                        "--project",
-                        project,
-                    ],
-                    "environment": {
-                        "TALLY_TRIAGE_RUN_ID": str(run_id),
-                        "TALLY_TRIAGED_BY": _TRIAGED_BY,
-                    },
-                }
-            },
-            "permission": self._build_permission_payload(),
-        }
-
-    def _build_permission_payload(self) -> dict:
-        # TODO(opencode-triage 1.5): replace `read: *: allow` with an
-        # explicit deny list sourced from a user-configurable global-config
-        # field. With --dangerously-skip-permissions in effect, only
-        # explicit denies stop the read tool from accessing any path the
-        # Tally process can see.
-        return {
-            "edit": "deny",
-            "bash": {"*": "deny"},
-            "webfetch": "deny",
-            "tally-mcp_get_findings_batch": "allow",
-            "tally-mcp_update_findings_batch": "allow",
-            "tally-mcp_*": "deny",
-            "read": {"*": "allow"},
-            "write": {"*": "deny"},
-        }
+    def _extract_text(self, stdout: str) -> str:
+        if not stdout.strip():
+            raise VerdictParseError("empty stdout from opencode")
+        chunks: list[str] = []
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(obj, dict):
+                continue
+            if obj.get("type") != "text":
+                continue
+            part = obj.get("part")
+            if isinstance(part, dict):
+                txt = part.get("text")
+                if isinstance(txt, str):
+                    chunks.append(txt)
+        if not chunks:
+            raise VerdictParseError("no text events in opencode output")
+        return "".join(chunks)

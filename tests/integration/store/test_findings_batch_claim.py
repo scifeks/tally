@@ -4,11 +4,37 @@ from __future__ import annotations
 
 import json
 import threading
+from pathlib import Path
+
+import pytest
 
 from domain.triage.entry import TriageBatchRow
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.triage import TriageBatchRepository
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture()
+def factory(tmp_path: Path) -> ConnectionFactory:
+    f = ConnectionFactory(
+        tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
+    )
+    f.init_schema()
+    return f
+
+
+@pytest.fixture()
+def run_repo(factory: ConnectionFactory) -> RunRepository:
+    return RunRepository(factory)
+
+
+@pytest.fixture()
+def triage_repo(
+    factory: ConnectionFactory,
+) -> TriageBatchRepository:
+    return TriageBatchRepository(factory)
 
 
 def _seed_batch(
@@ -40,8 +66,6 @@ class TestAtomicBatchClaim:
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_id = _seed_batch(factory, run_repo)
         result = triage_repo.claim_batch(run_id)
@@ -55,8 +79,6 @@ class TestAtomicBatchClaim:
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_id = _seed_batch(factory, run_repo)
         results: list[TriageBatchRow | None] = [None, None]
@@ -78,8 +100,6 @@ class TestAtomicBatchClaim:
         self,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_id = run_repo.create_run({})
         result = triage_repo.claim_batch(run_id)
@@ -90,8 +110,6 @@ class TestAtomicBatchClaim:
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_id = _seed_batch(factory, run_repo, status="pending", attempts=3)
         result = triage_repo.claim_batch(run_id)
@@ -102,8 +120,6 @@ class TestAtomicBatchClaim:
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_id = _seed_batch(factory, run_repo)
         batch = triage_repo.claim_batch(run_id)
@@ -124,8 +140,6 @@ class TestAtomicBatchClaim:
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_id = _seed_batch(factory, run_repo)
         batch = triage_repo.claim_batch(run_id)
@@ -146,8 +160,6 @@ class TestAtomicBatchClaim:
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
-        finding_repo: object,
-        audit_repo: object,
     ) -> None:
         run_a = run_repo.create_run({})
         run_b = _seed_batch(factory, run_repo)

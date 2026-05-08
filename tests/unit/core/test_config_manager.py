@@ -66,7 +66,7 @@ class TestConfigManager:
         config_dir = tmp_path / "config"
         config_dir.mkdir(parents=True, exist_ok=True)
         (config_dir / "global.json").write_text(
-            json.dumps({"mcp_batch_size": "definitely-not-a-number"})
+            json.dumps({"enrichment_max_concurrency": "not-a-number"})
         )
         with pytest.raises(ValueError):
             ConfigManager(str(tmp_path))

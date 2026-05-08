@@ -215,12 +215,16 @@ class TestInstalledTools:
 
 
 class TestRuntimeDependencies:
-    async def test_returns_dependencies_list(self, app_client) -> None:
-        client, *_ = app_client
-        resp = await client.get("/api/v1/runtime-dependencies")
+    async def test_returns_empty_when_no_triage_configured(
+        self, tmp_path: Path
+    ) -> None:
+        client = await _authed_client_for_config(tmp_path, {})
+        try:
+            resp = await client.get("/api/v1/runtime-dependencies")
+        finally:
+            await client.aclose()
         assert resp.status_code == 200
-        data = resp.json()
-        assert data == {"dependencies": []}
+        assert resp.json() == {"dependencies": []}
 
     async def test_claude_config_registers_runtime_dependency(
         self, tmp_path: Path

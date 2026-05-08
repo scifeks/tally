@@ -24,6 +24,7 @@ def _seed_global_config(base_path: Path) -> None:
     (config_dir / "global.json").write_text(
         json.dumps(
             {
+                "triage_agent_provider": "claude_code",
                 "ollama": {"model": "test-model", "host": "http://localhost:11434"},
                 "ollama_embedding": {
                     "model": "test-embed",

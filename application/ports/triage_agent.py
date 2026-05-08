@@ -5,7 +5,10 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from application.triage.verdict import Verdict
 
 
 @dataclass(frozen=True)
@@ -69,3 +72,22 @@ class TriageSessionPreparerPort(Protocol):
 @runtime_checkable
 class TriageBackendPort(TriageAgentPort, TriageSessionPreparerPort, Protocol):
     """Backend contract used by the runner."""
+
+
+@runtime_checkable
+class OneshotTriagePort(Protocol):
+    """Run one finding through a one-shot triage agent."""
+
+    def run_triage(
+        self,
+        prompt: str,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> Verdict: ...
+
+
+@runtime_checkable
+class OneshotTriageBackendPort(OneshotTriagePort, TriageSessionPreparerPort, Protocol):
+    """One-shot backend contract. Adapters implement this from 2.2."""

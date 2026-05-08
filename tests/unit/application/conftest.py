@@ -1,4 +1,4 @@
-"""Shared helpers for tests/unit/mcp/."""
+"""Shared helpers for tests/unit/application/."""
 
 from __future__ import annotations
 
