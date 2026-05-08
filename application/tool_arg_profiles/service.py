@@ -52,6 +52,7 @@ class FileArgInput:
 
     name: str
     data: bytes | None
+    original_filename: str | None = None
     type: Literal["file"] = "file"
 
 
@@ -146,6 +147,7 @@ class ToolArgProfilesService:
 
         written_names: list[str] = []
         paths_by_name: dict[str, str] = {}
+        orig_filenames: dict[str, str | None] = {}
 
         try:
             for arg in args:
@@ -154,8 +156,9 @@ class ToolArgProfilesService:
                     path = self._storage.write(profile_id, arg.name, arg.data)
                     written_names.append(arg.name)
                     paths_by_name[arg.name] = path
+                    orig_filenames[arg.name] = arg.original_filename
 
-            domain_args = self._build_domain_args(args, paths_by_name)
+            domain_args = self._build_domain_args(args, paths_by_name, orig_filenames)
             self._repo.update(
                 profile_id, tool_name=tool_name, name=name, args=domain_args
             )
@@ -211,18 +214,22 @@ class ToolArgProfilesService:
 
         written_names: list[str] = []
         paths_by_name: dict[str, str] = {}
+        orig_filenames: dict[str, str | None] = {}
 
         try:
             for arg in args:
                 if isinstance(arg, FileArgInput):
                     if arg.data is None:
-                        paths_by_name[arg.name] = old_file_args[arg.name].path
+                        old = old_file_args[arg.name]
+                        paths_by_name[arg.name] = old.path
+                        orig_filenames[arg.name] = old.original_filename
                     else:
                         path = self._storage.write(profile_id, arg.name, arg.data)
                         written_names.append(arg.name)
                         paths_by_name[arg.name] = path
+                        orig_filenames[arg.name] = arg.original_filename
 
-            domain_args = self._build_domain_args(args, paths_by_name)
+            domain_args = self._build_domain_args(args, paths_by_name, orig_filenames)
             self._repo.update(
                 profile_id, tool_name=tool_name, name=name, args=domain_args
             )
@@ -261,6 +268,7 @@ class ToolArgProfilesService:
         self,
         args: list[ProfileArgInput],
         paths_by_name: dict[str, str],
+        orig_filenames: dict[str, str | None],
     ) -> list[ToolArgProfileArg]:
         """Build domain arg objects from input args and resolved paths."""
         domain_args: list[ToolArgProfileArg] = []
@@ -271,9 +279,13 @@ class ToolArgProfilesService:
                 domain_args.append(
                     ToolArgProfileStringArg(name=arg.name, value=arg.value)
                 )
-            else:  # FileArgInput
+            else:
                 domain_args.append(
-                    ToolArgProfileFileArg(name=arg.name, path=paths_by_name[arg.name])
+                    ToolArgProfileFileArg(
+                        name=arg.name,
+                        path=paths_by_name[arg.name],
+                        original_filename=orig_filenames.get(arg.name),
+                    )
                 )
         return domain_args
 

@@ -83,7 +83,9 @@ export function SavedScansTab({
     })
 
     toolArgProfiles.forEach(profile => {
-      const baseTool = configuredTools.find(t => t.id === profile.toolName)
+      const baseTool = configuredTools.find(
+        t => t.id === profile.toolName || t.name === profile.toolName
+      )
       if (!baseTool) return
       options.push({
         id: `${profile.toolName}:${profile.id}`,
@@ -185,7 +187,7 @@ export function SavedScansTab({
 
   return (
     <>
-      <div className="flex-1 min-h-0 flex border border-border bg-background">
+      <div className="flex-1 min-h-[400px] flex border border-border bg-background">
         {/* Left: Saved scans list */}
         <div className="w-64 border-r border-border flex flex-col">
           <div className="p-3 border-b border-border flex items-center justify-between">

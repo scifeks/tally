@@ -6,7 +6,13 @@ import type { ApiErrorPayload, ArgumentTemplate } from '../types'
 
 type ArgProfileFlagArg = { name: string; type: 'flag' }
 type ArgProfileStringArg = { name: string; type: 'string'; value: string }
-type ArgProfileFileArg = { name: string; type: 'file'; path: string; downloadUrl?: string }
+type ArgProfileFileArg = {
+  name: string
+  type: 'file'
+  path: string
+  originalFilename?: string
+  downloadUrl?: string
+}
 
 export type ArgProfileArg = ArgProfileFlagArg | ArgProfileStringArg | ArgProfileFileArg
 
@@ -48,7 +54,7 @@ export function mapProfilesToTemplates(profiles: ToolArgProfile[]): ArgumentTemp
         flag: a.name,
         valueType: 'file' as const,
         value: a.path,
-        fileName: a.name,
+        fileName: a.originalFilename || a.name,
       }
     }),
   }))

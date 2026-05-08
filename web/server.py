@@ -114,6 +114,7 @@ def create_app(
     app.state.project_registry = project_registry
     app.state.knowledge_base_cache = {}
     app.state.tool_registry = tool_registry
+    app.state.tool_catalog_snapshot = tool_registry.snapshot()
     app.state.installed_tools = InstalledToolsProbe(tool_registry)
 
     app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])

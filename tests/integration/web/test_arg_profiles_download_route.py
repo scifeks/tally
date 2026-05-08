@@ -73,6 +73,35 @@ class TestArgProfilesDownload:
         assert resp.status_code == 200
         assert resp.headers["content-disposition"] == 'inline; filename="--rules"'
 
+    async def test_download_uses_original_filename_in_disposition(
+        self, app_client, tmp_path: Path
+    ) -> None:
+        """Content-Disposition uses original_filename when set."""
+        client, _f, _kb, factory, _h, project_id = app_client
+        repo = ToolArgProfilesRepository(factory)
+        pid = repo.insert(tool_name="gitleaks", name="dl-fn", args=[])
+        afd = tmp_path / "projects" / "testproject" / "arg_files"
+        afd.mkdir(parents=True, exist_ok=True)
+        storage = ArgFilesStorageAdapter(afd)
+        path = storage.write(pid, "--rules", b"x")
+        repo.update(
+            pid,
+            tool_name="gitleaks",
+            name="dl-fn",
+            args=[
+                ToolArgProfileFileArg(
+                    name="--rules",
+                    path=path,
+                    original_filename="my_rules.yml",
+                )
+            ],
+        )
+        resp = await client.get(
+            f"/api/v1/projects/{project_id}/arg-profiles/{pid}/files/--rules"
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-disposition"] == 'inline; filename="my_rules.yml"'
+
     async def test_download_unknown_project_returns_404(self, app_client) -> None:
         """GET on a missing project returns 404 NOT_FOUND."""
         client, _f, _kb, _factory, _h, _project_id = app_client

@@ -366,6 +366,7 @@ export function useToolCatalog() {
       return api.items.map(mapToolCatalog)
     },
     staleTime: 30 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   })
 }
 

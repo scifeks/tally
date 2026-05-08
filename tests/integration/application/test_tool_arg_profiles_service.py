@@ -76,6 +76,87 @@ class TestToolArgProfilesServiceIntegration:
         assert retrieved.id == profile.id
         assert len(retrieved.args) == 3
 
+    def test_create_preserves_original_filename(
+        self,
+        service: ToolArgProfilesService,
+    ) -> None:
+        profile = service.create(
+            tool_name="gitleaks",
+            name="with-filename",
+            args=[
+                FileArgInput(
+                    "--rules",
+                    data=b"data",
+                    original_filename="my_rules.yml",
+                ),
+            ],
+        )
+        file_arg = profile.args[0]
+        assert isinstance(file_arg, ToolArgProfileFileArg)
+        assert file_arg.original_filename == "my_rules.yml"
+
+        retrieved = service.get(profile.id)
+        assert retrieved is not None
+        ret_arg = retrieved.args[0]
+        assert isinstance(ret_arg, ToolArgProfileFileArg)
+        assert ret_arg.original_filename == "my_rules.yml"
+
+    def test_replace_preserves_original_filename_on_keep(
+        self,
+        service: ToolArgProfilesService,
+    ) -> None:
+        profile = service.create(
+            tool_name="gitleaks",
+            name="keep-fn",
+            args=[
+                FileArgInput(
+                    "--x",
+                    data=b"bytes",
+                    original_filename="seeds.txt",
+                ),
+            ],
+        )
+        replaced = service.replace(
+            profile.id,
+            tool_name="gitleaks",
+            name="keep-fn",
+            args=[FileArgInput("--x", data=None)],
+        )
+        kept = replaced.args[0]
+        assert isinstance(kept, ToolArgProfileFileArg)
+        assert kept.original_filename == "seeds.txt"
+
+    def test_replace_updates_original_filename_on_reupload(
+        self,
+        service: ToolArgProfilesService,
+    ) -> None:
+        profile = service.create(
+            tool_name="gitleaks",
+            name="reup-fn",
+            args=[
+                FileArgInput(
+                    "--x",
+                    data=b"old",
+                    original_filename="old.txt",
+                ),
+            ],
+        )
+        replaced = service.replace(
+            profile.id,
+            tool_name="gitleaks",
+            name="reup-fn",
+            args=[
+                FileArgInput(
+                    "--x",
+                    data=b"new",
+                    original_filename="new.txt",
+                ),
+            ],
+        )
+        arg = replaced.args[0]
+        assert isinstance(arg, ToolArgProfileFileArg)
+        assert arg.original_filename == "new.txt"
+
     def test_create_unique_conflict_is_typed(
         self,
         service: ToolArgProfilesService,

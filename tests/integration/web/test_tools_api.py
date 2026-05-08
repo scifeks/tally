@@ -114,10 +114,12 @@ def _make_unauthed_app(tmp_path: Path) -> Any:
 class TestToolsCatalog:
     async def test_catalog_returns_items(self, app_client) -> None:
         client, *_ = app_client
-        registry = client._transport.app.state.tool_registry
+        app = client._transport.app
+        registry = app.state.tool_registry
         registry.clear()
         registry.register(_FakeTool("bandit", "sast", "Python security linter"))
         registry.register(_FakeTool("gitleaks", "secrets", "Secret scanner"))
+        app.state.tool_catalog_snapshot = registry.snapshot()
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
@@ -126,9 +128,11 @@ class TestToolsCatalog:
 
     async def test_catalog_item_fields(self, app_client) -> None:
         client, *_ = app_client
-        registry = client._transport.app.state.tool_registry
+        app = client._transport.app
+        registry = app.state.tool_registry
         registry.clear()
         registry.register(_FakeTool("bandit", "sast", "Python security linter"))
+        app.state.tool_catalog_snapshot = registry.snapshot()
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         item = resp.json()["items"][0]
@@ -139,14 +143,19 @@ class TestToolsCatalog:
         assert isinstance(item["supports_docker"], bool)
         assert item["description"] == "Python security linter"
 
-    async def test_catalog_empty_when_no_tools(self, app_client) -> None:
+    async def test_catalog_stable_after_registry_mutation(self, app_client) -> None:
         client, *_ = app_client
-        client._transport.app.state.tool_registry.clear()
+        app = client._transport.app
+        registry = app.state.tool_registry
+        registry.clear()
+        registry.register(_FakeTool("bandit", "sast", "Python linter"))
+        registry.register(_FakeTool("gitleaks", "secrets", "Secret scanner"))
+        app.state.tool_catalog_snapshot = registry.snapshot()
+        registry.clear()
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 0
-        assert data["items"] == []
+        assert data["total"] == 2
 
     async def test_catalog_requires_auth(self, tmp_path: Path) -> None:
         (tmp_path / "config").mkdir(parents=True)

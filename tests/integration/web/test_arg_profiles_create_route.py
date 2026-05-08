@@ -98,6 +98,7 @@ class TestArgProfilesCreate:
 
         assert body["args"][0]["type"] == "file"
         assert body["args"][0]["name"] == "--rules"
+        assert body["args"][0]["originalFilename"] == "rules.yml"
         assert body["args"][0]["downloadUrl"].endswith(
             f"/arg-profiles/{profile_id}/files/--rules"
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import importlib.util
 import inspect
 import sys
 from dataclasses import dataclass
@@ -40,6 +41,18 @@ def _parse_version(version_str: str) -> tuple[int, ...] | None:
         return tuple(int(p) for p in cleaned.split("."))
     except ValueError:
         return None
+
+
+# Map package names in requirements.txt to importable module names
+_PACKAGE_IMPORT_MAP = {
+    "pydantic": "pydantic",
+    "rich": "rich",
+    "prompt_toolkit": "prompt_toolkit",
+    "chromadb": "chromadb",
+    "ollama": "ollama",
+    "pytest": "pytest",
+    "pytest-timeout": "pytest_timeout",
+}
 
 
 @dataclass
@@ -118,7 +131,9 @@ class DependencyChecker:
             return results
 
         with open(req_path) as f:
-            lines = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
+            lines = [
+                ln.strip() for ln in f if ln.strip() and not ln.strip().startswith("#")
+            ]
 
         for line in lines:
             # Strip version specifiers (>=, ==, etc.)
@@ -128,12 +143,16 @@ class DependencyChecker:
             if not pkg_name:
                 continue
 
-            try:
-                version = importlib.metadata.version(pkg_name)
-                installed = True
-            except importlib.metadata.PackageNotFoundError:
-                version = None
-                installed = False
+            module_name = _PACKAGE_IMPORT_MAP.get(pkg_name, pkg_name.replace("-", "_"))
+
+            spec = importlib.util.find_spec(module_name)
+            installed = spec is not None
+            version = None
+            if installed:
+                try:
+                    version = importlib.metadata.version(pkg_name)
+                except importlib.metadata.PackageNotFoundError:
+                    pass
 
             results.append(
                 DepCheck(

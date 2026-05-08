@@ -153,7 +153,13 @@ def _args_from_json(raw: str) -> list[ToolArgProfileArg]:
                 ToolArgProfileStringArg(name=entry["name"], value=entry["value"])
             )
         elif kind == "file":
-            out.append(ToolArgProfileFileArg(name=entry["name"], path=entry["path"]))
+            out.append(
+                ToolArgProfileFileArg(
+                    name=entry["name"],
+                    path=entry["path"],
+                    original_filename=entry.get("original_filename"),
+                )
+            )
         else:
             raise ValueError(f"unknown tool_arg_profile arg type: {kind!r}")
     return out

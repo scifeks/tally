@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-import chromadb
-from chromadb.api import ClientAPI
-from chromadb.api.types import Documents, Embeddable, EmbeddingFunction, Embeddings
+if TYPE_CHECKING:
+    import chromadb
+    from chromadb.api import ClientAPI
+    from chromadb.api.types import Documents, Embeddings
 
 from application.ports.embedding_provider import EmbeddingProvider
 from application.ports.filters import And, Contains, Eq, Filter, Or
@@ -53,6 +54,9 @@ class ChromaDBVectorIndex(VectorIndex):
         embedding_provider: EmbeddingProvider,
         collection_metadata: Mapping[str, Any] | None = None,
     ) -> None:
+        import chromadb
+        from chromadb.api.types import Embeddable, EmbeddingFunction
+
         self._chroma_path = chroma_path
         self._collection_name = collection_name
         self._collection_metadata: dict[str, Any] = dict(

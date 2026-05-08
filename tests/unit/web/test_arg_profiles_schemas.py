@@ -126,6 +126,17 @@ class TestArgProfilesSchemas:
         assert wire["args"][2]["downloadUrl"].endswith("/files/--rules")
         assert wire["args"][0] == {"name": "--verbose", "type": "flag"}
 
+    def test_response_file_arg_serializes_original_filename(
+        self,
+    ) -> None:
+        r = ArgProfileFileArgResponse(
+            name="--rules",
+            path="arg_files/1/--rules",
+            original_filename="custom_rules.yml",
+        )
+        wire = r.model_dump(by_alias=True)
+        assert wire["originalFilename"] == "custom_rules.yml"
+
     def test_response_file_arg_omits_download_url_when_none(self) -> None:
         r = ArgProfileResponse(
             id=1,

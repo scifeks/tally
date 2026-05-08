@@ -41,7 +41,7 @@ export function ToolOverridesSection({
   catalog: ToolCatalogEntry[]
   overrides: ToolOverrideConfig[]
   projectId: number
-  onSave: (override: ToolOverrideConfig, isNew: boolean) => void
+  onSave: (override: ToolOverrideConfig, isNew: boolean) => Promise<void>
   onDelete: (toolId: string) => void
   isSaving: boolean
 }) {
@@ -59,10 +59,7 @@ export function ToolOverridesSection({
   const existingOverride = overrides.find(o => o.toolId === selectedToolId)
   const isNew = selectedToolId && !existingOverride
 
-  const argProfileQuery = useToolArgProfileList(
-    projectId,
-    selectedTool ? { toolName: selectedTool.name } : undefined
-  )
+  const argProfileQuery = useToolArgProfileList(projectId)
   const saveProfile = useSaveToolArgProfile()
   const deleteProfile = useDeleteToolArgProfile()
 
@@ -94,10 +91,12 @@ export function ToolOverridesSection({
 
   useEffect(() => {
     if (!selectedToolId || !argProfileQuery.data) return
-    const loaded = argProfileQuery.data.items
+    const loaded = argProfileQuery.data.items.filter(
+      p => p.toolName === selectedToolId || p.toolName === selectedTool?.name
+    )
     setTemplates(mapProfilesToTemplates(loaded))
     setServerProfiles(loaded)
-  }, [selectedToolId, argProfileQuery.data])
+  }, [selectedToolId, selectedTool, argProfileQuery.data])
 
   const updateField = <K extends keyof ToolOverrideConfig>(
     field: K,
@@ -109,7 +108,7 @@ export function ToolOverridesSection({
 
   const handleSave = async () => {
     if (!selectedToolId || !selectedTool) return
-    onSave({ ...form, argsMode } as ToolOverrideConfig, !!isNew)
+    await onSave({ ...form, argsMode } as ToolOverrideConfig, !!isNew)
 
     const serverIdSet = new Set(serverProfiles.map(p => String(p.id)))
     const currentServerIdSet = new Set(templates.filter(t => serverIdSet.has(t.id)).map(t => t.id))
@@ -122,7 +121,7 @@ export function ToolOverridesSection({
         mutations.push(
           saveProfile.mutateAsync({
             projectId,
-            profile: mapTemplateToWriteInput(selectedTool.name, t),
+            profile: mapTemplateToWriteInput(selectedTool.id, t),
             files,
           })
         )
@@ -132,7 +131,7 @@ export function ToolOverridesSection({
           mutations.push(
             saveProfile.mutateAsync({
               projectId,
-              profile: mapTemplateToWriteInput(selectedTool.name, t),
+              profile: mapTemplateToWriteInput(selectedTool.id, t),
               files,
               existingId: sp.id,
             })
