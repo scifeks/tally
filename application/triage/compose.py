@@ -40,7 +40,7 @@ def resolve_egress_target(
     """Returns (host, port) for the proxy allowlist.
 
     Claude targets api.anthropic.com:443. OpenCode targets
-    the configured Ollama endpoint parsed from the provider URL.
+    the configured inference endpoint parsed from the provider URL.
     """
     if provider == "claude_code":
         return ("api.anthropic.com", 443)
@@ -66,7 +66,7 @@ def _dockerize_url(url: str) -> str:
     Inside a Docker container, localhost refers to the
     container's own loopback. This rewrites to the special
     Docker hostname that resolves to the host machine.
-    Intended for Ollama endpoints that bind to localhost
+    Intended for inference endpoints that bind to localhost
     on the host but must be reached from inside the container.
     """
     parsed = urlparse(url)

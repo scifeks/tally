@@ -1,4 +1,4 @@
-"""Factory for instantiating LLMProvider adapters from global config."""
+"""Factory for instantiating LLMProvider adapters."""
 
 from __future__ import annotations
 
@@ -9,52 +9,65 @@ from application.ports.llm_provider import LLMProvider
 from core.config.manager import ConfigManager
 
 from .claude_adapter import ClaudeAdapter
+from .llama_cpp_adapter import LlamaCppAdapter
 from .ollama_adapter import OllamaAdapter
 
 Role = Literal["chat", "enrichment", "report"]
 
+_FEATURE_FIELDS: dict[Role, str] = {
+    "chat": "chat_inference",
+    "enrichment": "enrichment_inference",
+    "report": "report_inference",
+}
+
 
 def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
-    """Instantiate the LLMProvider configured for the given role.
-
-    Reads the appropriate *_llm_provider key from global.json and returns
-    the matching adapter.
-
-    Raises:
-        ValueError: For unknown provider names.
-    """
     config = ConfigManager(str(base_path)).global_config
-    provider_name: str = {
-        "chat": config.chat_llm_provider,
-        "enrichment": config.enrichment_llm_provider,
-        "report": config.report_llm_provider,
-    }[role]
+    feature_field = _FEATURE_FIELDS[role]
+    feature = getattr(config, feature_field, None)
+    if feature is None:
+        raise ValueError(f"{feature_field!r} not configured in global.json")
 
-    if provider_name == "ollama_report":
-        assert config.ollama_report is not None
-        return OllamaAdapter(
-            base_url=config.ollama_report.base_url,
-            model=config.ollama_report.model,
-            timeout_seconds=config.ollama_report.timeout_seconds,
-            num_ctx=config.ollama_report.num_ctx,
-        )
+    provider_name = feature.provider
+    provider_config = getattr(config, provider_name, None)
+    if provider_config is None:
+        raise ValueError(f"Provider {provider_name!r} not configured in global.json")
+
+    merged = provider_config.model_dump()
+    for key in (
+        "base_url",
+        "model",
+        "timeout_seconds",
+        "num_ctx",
+        "max_tokens",
+    ):
+        val = getattr(feature, key, None)
+        if val is not None:
+            merged[key] = val
+
     if provider_name == "ollama":
-        assert config.ollama is not None
         return OllamaAdapter(
-            base_url=config.ollama.base_url,
-            model=config.ollama.model,
-            timeout_seconds=config.ollama.timeout_seconds,
-            num_ctx=config.ollama.num_ctx,
+            base_url=merged["base_url"],
+            model=merged["model"],
+            timeout_seconds=merged.get("timeout_seconds", 60),
+            num_ctx=merged.get("num_ctx"),
+        )
+    if provider_name == "llama_cpp":
+        return LlamaCppAdapter(
+            base_url=merged["base_url"],
+            model=merged["model"],
+            timeout_seconds=merged.get("timeout_seconds", 60),
+            num_ctx=merged.get("num_ctx"),
         )
     if provider_name == "claude":
-        assert config.claude is not None
         return ClaudeAdapter(
-            api_key=config.claude.api_key,
-            model=config.claude.model,
-            max_tokens=config.claude.max_tokens,
-            timeout_seconds=config.claude.timeout_seconds,
+            api_key=merged["api_key"],
+            model=merged["model"],
+            max_tokens=merged.get("max_tokens", 1024),
+            timeout_seconds=merged.get("timeout_seconds", 60),
         )
     raise ValueError(
-        f"Unknown llm_provider {provider_name!r} for role {role!r}. "
-        "Registered providers: ollama, ollama_report, claude"
+        f"Unknown provider {provider_name!r} for "
+        f"role {role!r}. "
+        "Registered providers: ollama, llama_cpp, claude"
     )

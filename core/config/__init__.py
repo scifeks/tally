@@ -3,8 +3,9 @@
 from .manager import ConfigManager
 from .schemas import (
     EndpointConfig,
+    FeatureInferenceConfig,
     GlobalConfig,
-    OllamaConfig,
+    LocalInferenceConfig,
     ProjectConfig,
     RepoAuth,
     Repository,
@@ -12,10 +13,11 @@ from .schemas import (
 
 __all__ = [
     "ConfigManager",
+    "EndpointConfig",
+    "FeatureInferenceConfig",
     "GlobalConfig",
-    "OllamaConfig",
+    "LocalInferenceConfig",
     "ProjectConfig",
     "RepoAuth",
     "Repository",
-    "EndpointConfig",
 ]

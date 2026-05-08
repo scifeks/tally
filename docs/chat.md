@@ -13,28 +13,27 @@ Chat is available in two places:
 
 ## Provider support
 
-**Ollama is the only chat provider currently supported.** The SPA's
-Chat tab is gated on this and will be hidden if chat is not configured
-correctly. The capabilities probe (`GET /api/v1/capabilities`) returns
-`chat_enabled: false` when the conditions below are not met.
-
-Other roles (enrichment, report drafting, embeddings) can still use
-Claude or Ollama independently — only the chat role is restricted.
+Chat works with any configured provider: `ollama`, `llama_cpp`, or
+`claude`. The SPA's Chat tab is shown when `chat_inference` is
+configured in `config/global.json`. The capabilities probe (`GET
+/api/v1/capabilities`) returns `chat_enabled: true` when
+`chat_inference` is present.
 
 ## Configuration
 
 To enable chat, edit `config/global.json`:
 
-1. Set the chat provider to Ollama:
+1. Add a `chat_inference` feature config with your chosen provider:
 
    ```json
    {
-     "chat_llm_provider": "ollama"
+     "chat_inference": { "provider": "ollama" }
    }
    ```
 
-2. Configure the `ollama` provider block with the model, host, and
-   port for your Ollama runtime:
+   Other providers are `"llama_cpp"` and `"claude"`.
+
+2. Configure the provider block with the model, host, and port:
 
    ```json
    {
@@ -47,17 +46,19 @@ To enable chat, edit `config/global.json`:
    }
    ```
 
-3. Make sure Ollama is running and the configured model has been
-   pulled:
+3. If using the `ollama` provider, make sure Ollama is running and the
+   configured model has been pulled:
 
    ```bash
    ollama pull qwen2.5:14b
    ollama serve
    ```
 
-If `chat_llm_provider` is empty, missing, or set to anything other than
-`"ollama"`, the SPA hides the Chat tab and any direct call to the chat
-endpoints will fail.
+   If using `llama_cpp`, start llama-server instead. If using `claude`,
+   set the `ANTHROPIC_API_KEY` environment variable.
+
+If `chat_inference` is absent or null in `config/global.json`, the SPA
+hides the Chat tab and any direct call to the chat endpoints will fail.
 
 ## Usage
 
@@ -82,5 +83,3 @@ tab. The SPA queries the same project knowledge base used by the REPL.
   conversation history yet.
 - **Per-project.** Chat answers are scoped to the active project's
   findings.
-- **Provider-locked.** Claude is not supported as a chat provider at
-  this time.

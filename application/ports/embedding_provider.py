@@ -1,7 +1,8 @@
 """Embedding adapter contract.
 
 Adapters:
-  infrastructure/embedding/ollama_embedding_adapter.py  (local Ollama HTTP)
+  infrastructure/embedding/ollama_embedding_adapter.py      (local Ollama HTTP)
+  infrastructure/embedding/llama_cpp_embedding_adapter.py   (local llama.cpp HTTP)
 """
 
 from __future__ import annotations

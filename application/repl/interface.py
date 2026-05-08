@@ -440,7 +440,7 @@ class REPL:
 
         content = (
             f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
-            "LlamaIndex + Chroma + Ollama\n"
+            "LlamaIndex + Chroma + Local Inference\n"
             f"{project_line}"
         )
         self.console.print(Panel(content, title="[cyan]Welcome[/cyan]", expand=False))

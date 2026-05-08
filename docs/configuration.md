@@ -13,71 +13,87 @@ This file must exist before Tally starts. If it is missing or invalid, Tally exi
 
 ### LLM Provider System
 
-Tally supports multiple LLM backends. Three independent roles determine which provider
-handles each type of LLM call:
+Tally uses a two-layer provider configuration system. **Provider configs** define
+connection profiles (Ollama, Llama.cpp, or Claude), and **feature configs** reference
+a provider and optionally override settings per feature.
 
-| Role key | Used by |
+Each of five inference features can use a different provider independently:
+
+| Feature config | Used by |
 |---|---|
-| `chat_llm_provider` | The `chat` REPL command |
-| `enrichment_llm_provider` | Finding enrichment during ingest |
-| `report_llm_provider` | The `report` command |
-
-Each role can be set to `"ollama"` or `"claude"` independently. The corresponding
-provider block (`ollama` or `claude`) must be present in `global.json` for any role
-that references it.
+| `chat_inference` | The `chat` REPL command |
+| `enrichment_inference` | Finding enrichment during ingest |
+| `report_inference` | The `report` command |
+| `embedding_inference` | ChromaDB vector embeddings |
+| `noir_inference` | NOIR security API |
 
 Triage backend selection is configured separately through
 `triage_agent_provider`. This setting selects the agent runtime used by the
-`triage` workflow rather than the LLM provider blocks used for chat,
-enrichment, and reporting.
+`triage` workflow rather than the inference feature configs.
 
 ### Top-level Fields
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `chat_llm_provider` | string | `"ollama"` | Provider for the `chat` command: `"ollama"` or `"claude"`. |
-| `enrichment_llm_provider` | string | `"ollama"` | Provider for finding enrichment: `"ollama"` or `"claude"`. |
-| `report_llm_provider` | string | `"ollama"` | Provider for report generation: `"ollama"` or `"claude"`. |
-| `embedding_provider` | string | `"ollama_embedding"` | Provider for ChromaDB embeddings. Currently only `"ollama_embedding"` is supported. |
-| `triage_agent_provider` | string | `""` | Triage agent backend: `""` disables triage, `"claude_code"` or `"open_code"` enables it. Requires Docker. See [docs/triage.md](triage.md). |
-| `triage_session_timeout_seconds` | int | `300` | Timeout in seconds for a single triage agent invocation. |
-| `ollama` | object | — | Ollama connection settings. Required when any LLM role is set to `"ollama"`. |
-| `ollama_embedding` | object | — | Ollama embedding settings. Required when `embedding_provider` is `"ollama_embedding"`. |
-| `claude` | object | — | Anthropic API settings. Required when any role is set to `"claude"` or when `triage_agent_provider` is `"claude_code"`. |
-| `opencode` | object | — | OpenCode triage settings. Required when `triage_agent_provider` is `"open_code"`. |
-| `projects_dir` | string | `"./projects"` | Directory where project workspaces are stored. |
-| `report_finding_prefix` | string | `"TAL"` | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. |
-| `location_attestation_confirmed` | bool | `false` | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). |
-| `enrichment_max_concurrency` | int | `4` | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). |
-| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected; use an explicit loopback or LAN IP. |
-| `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
-| `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
-| `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
+| Field | Type | Description |
+|---|---|---|
+| `ollama` | object | Ollama provider config. Connection profile for local or remote Ollama instances. See [Provider Config Fields](#provider-config-fields). |
+| `llama_cpp` | object | Llama.cpp provider config. Connection profile for Llama.cpp servers. See [Provider Config Fields](#provider-config-fields). |
+| `claude` | object | Claude provider config. Anthropic API settings. Required when any feature references `"claude"` or when `triage_agent_provider` is `"claude_code"`. See [Claude Provider Fields](#claude-provider-fields). |
+| `chat_inference` | object | Feature config for the `chat` REPL command. See [Feature Config Fields](#feature-config-fields). |
+| `enrichment_inference` | object | Feature config for finding enrichment during ingest. See [Feature Config Fields](#feature-config-fields). |
+| `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
+| `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
+| `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
+| `triage_agent_provider` | string | Triage agent backend: `""` disables triage, `"claude_code"` or `"open_code"` enables it. Requires Docker. See [docs/triage.md](triage.md). |
+| `triage_session_timeout_seconds` | int | Timeout in seconds for a single triage agent invocation. Default: `300`. |
+| `opencode` | object | OpenCode triage settings. Required when `triage_agent_provider` is `"open_code"`. See [OpenCode Block Fields](#opencode-block-fields). |
+| `projects_dir` | string | Directory where project workspaces are stored. Default: `"./projects"`. |
+| `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
+| `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
+| `enrichment_max_concurrency` | int | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). Default: `4`. |
+| `web_ui_host` | string | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected; use an explicit loopback or LAN IP. Default: `"127.0.0.1"`. |
+| `web_ui_port` | int | TCP port for the FastAPI server started by `ui serve`. Default: `8080`. |
+| `web_ui_vite_port` | int | TCP port for the Vite dev server started by `ui serve`. Default: `3000`. |
+| `web_ui_allowed_origins` | list\[string\] | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
 
-### `ollama` Block Fields
+### Provider Config Fields
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `base_url` | string | `"http://localhost:11434"` | Ollama API endpoint. Must start with `http://` or `https://`. |
-| `model` | string | — | Chat/enrichment/report model name (e.g. `qwen3:14b`). Must be pulled before use. |
-| `timeout_seconds` | int | `60` | Request timeout for all Ollama LLM calls. |
+The `ollama` and `llama_cpp` provider configs share the same schema:
 
-### `ollama_embedding` Block Fields
+#### Fields
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `base_url` | string | `"http://localhost:11434"` | Ollama API endpoint for the embedding service. Must start with `http://` or `https://`. |
-| `model` | string | `"nomic-embed-text:latest"` | Embedding model name. Must be pulled before use (`ollama pull nomic-embed-text`). ChromaDB uses this for all vector indexing. |
-| `timeout_seconds` | int | `60` | Request timeout for embedding calls. |
+| `base_url` | string | `"http://localhost:11434"` (ollama only) | Server endpoint. Must start with `http://` or `https://`. |
+| `model` | string | — | Model name (e.g. `qwen3:14b`). Required. Must be available on the server before use. |
+| `timeout_seconds` | int | `60` | Request timeout in seconds for LLM calls. |
+| `num_ctx` | int or null | `null` | Context window size. Pass `null` to use the model's default. |
 
-### `claude` Block Fields
+### Claude Provider Fields
+
+#### Fields
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_agent_provider` is `"claude_code"`. |
 | `model` | string | `"claude-opus-4-5"` | Anthropic model ID (e.g. `claude-opus-4-5`, `claude-haiku-4-5-20251001`). Also controls the triage model when using the Claude Code backend. |
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
-| `timeout_seconds` | int | `60` | Request timeout for all Anthropic API calls. |
+| `timeout_seconds` | int | `60` | Request timeout in seconds for Anthropic API calls. |
+
+### Feature Config Fields
+
+Each of the five inference features (`chat_inference`, `enrichment_inference`,
+`report_inference`, `embedding_inference`, `noir_inference`) uses the same
+feature config schema:
+
+#### Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `provider` | string | — | Name of a provider config block: `"ollama"`, `"llama_cpp"`, or `"claude"`. Required. |
+| `model` | string or null | `null` | Overrides the provider's model for this feature only. If `null`, uses the provider's model. |
+| `timeout_seconds` | int or null | `null` | Overrides the provider's timeout in seconds. Must be positive if set. If `null`, uses the provider's timeout. |
+| `num_ctx` | int or null | `null` | Overrides the provider's context window (local providers only). Must be positive if set. If `null`, uses the provider's value. |
+| `max_tokens` | int or null | `null` | Overrides the provider's max tokens (Claude only). Must be positive if set. If `null`, uses the provider's value. |
 
 ### `opencode` Block Fields
 
@@ -90,20 +106,23 @@ enrichment, and reporting.
 
 ```json
 {
-  "chat_llm_provider": "ollama",
-  "enrichment_llm_provider": "ollama",
-  "report_llm_provider": "ollama",
-  "embedding_provider": "ollama_embedding",
-  "triage_agent_provider": "",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
     "timeout_seconds": 60
   },
-  "ollama_embedding": {
-    "base_url": "http://localhost:11434",
-    "model": "nomic-embed-text:latest",
-    "timeout_seconds": 60
+  "chat_inference": {
+    "provider": "ollama"
+  },
+  "enrichment_inference": {
+    "provider": "ollama"
+  },
+  "report_inference": {
+    "provider": "ollama"
+  },
+  "embedding_inference": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest"
   },
   "projects_dir": "./projects",
   "report_finding_prefix": "TAL",
@@ -113,25 +132,13 @@ enrichment, and reporting.
 
 ### Example: Claude for Chat and Reporting, Ollama for Enrichment and Embeddings
 
-ChromaDB requires an embedding model. The `ollama_embedding` block is always
-required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
-`enrichment`, `report`) and the embedding provider are configured independently:
+Each feature can use a different provider independently:
 
 ```json
 {
-  "chat_llm_provider": "claude",
-  "enrichment_llm_provider": "ollama",
-  "report_llm_provider": "claude",
-  "embedding_provider": "ollama_embedding",
-  "triage_agent_provider": "",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen3:14b",
-    "timeout_seconds": 60
-  },
-  "ollama_embedding": {
-    "base_url": "http://localhost:11434",
-    "model": "nomic-embed-text:latest",
     "timeout_seconds": 60
   },
   "claude": {
@@ -139,6 +146,19 @@ required when `embedding_provider` is `"ollama_embedding"`. LLM roles (`chat`,
     "model": "claude-opus-4-5",
     "max_tokens": 1024,
     "timeout_seconds": 60
+  },
+  "chat_inference": {
+    "provider": "claude"
+  },
+  "enrichment_inference": {
+    "provider": "ollama"
+  },
+  "report_inference": {
+    "provider": "claude"
+  },
+  "embedding_inference": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest"
   },
   "projects_dir": "./projects",
   "report_finding_prefix": "TAL",
@@ -152,17 +172,20 @@ environment variable at startup.
 ### Example: Enable Claude Code Triage
 
 Triage runs inside a Docker container. Docker must be installed and running.
-Set `triage_agent_provider` and provide credentials in the `claude` block.
+Set `triage_agent_provider` and configure the `claude` provider block.
 See [docs/triage.md](triage.md) for setup details and the full security model.
 
 ```json
 {
-  "triage_agent_provider": "claude_code",
   "claude": {
     "api_key": "",
     "model": "claude-opus-4-5",
     "max_tokens": 1024,
     "timeout_seconds": 60
+  },
+  "triage_agent_provider": "claude_code",
+  "chat_inference": {
+    "provider": "claude"
   }
 }
 ```
@@ -194,10 +217,11 @@ to produce fields such as `severity`, `risk_type`, `remediation`, and `descripti
 By default these calls are dispatched concurrently using a thread pool with up to
 `enrichment_max_concurrency` (default: `4`) workers.
 
-**Important:** sending concurrent requests only reduces wall-clock time if your
-Ollama instance is configured to process them in parallel. Ollama's default is one
-request at a time. Set the `OLLAMA_NUM_PARALLEL` environment variable before
-starting Ollama to enable parallel slots:
+**Important:** when using the `ollama` provider for enrichment, sending concurrent
+requests only reduces wall-clock time if your Ollama instance is configured to
+process them in parallel. Ollama's default is one request at a time. Set the
+`OLLAMA_NUM_PARALLEL` environment variable before starting Ollama to enable
+parallel slots:
 
 ```bash
 OLLAMA_NUM_PARALLEL=2 ollama serve
@@ -214,25 +238,28 @@ in KV cache overhead at typical enrichment prompt lengths.
 
 ### Example: Ollama on a Remote Host
 
-Update `base_url` in both `ollama` and `ollama_embedding` blocks if your
-Ollama instance runs on a different host or port:
+Update `base_url` in the `ollama` provider block if your Ollama instance runs
+on a different host or port:
 
 ```json
 {
-  "chat_llm_provider": "ollama",
-  "enrichment_llm_provider": "ollama",
-  "report_llm_provider": "ollama",
-  "embedding_provider": "ollama_embedding",
-  "triage_agent_provider": "",
   "ollama": {
     "base_url": "http://192.168.1.50:11434",
     "model": "qwen3:14b",
     "timeout_seconds": 60
   },
-  "ollama_embedding": {
-    "base_url": "http://192.168.1.50:11434",
-    "model": "nomic-embed-text:latest",
-    "timeout_seconds": 60
+  "chat_inference": {
+    "provider": "ollama"
+  },
+  "enrichment_inference": {
+    "provider": "ollama"
+  },
+  "report_inference": {
+    "provider": "ollama"
+  },
+  "embedding_inference": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest"
   },
   "projects_dir": "./projects",
   "report_finding_prefix": "TAL",

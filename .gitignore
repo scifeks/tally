@@ -75,3 +75,6 @@ patches/
 
 #SQLite
 tally.db*
+
+#Worktrees
+.worktrees/

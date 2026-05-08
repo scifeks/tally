@@ -13,7 +13,7 @@ class CapabilitiesService:
     """Compute SPA-facing feature flags.
 
     Sources:
-      - chat_enabled: GlobalConfig.chat_llm_provider == "ollama".
+      - chat_enabled: GlobalConfig.chat_inference is not None.
       - triage_enabled: boot-time readiness check result.
       - report_retention_enabled: hardcoded False; no retention sweep
         mechanism exists yet.
@@ -31,7 +31,7 @@ class CapabilitiesService:
     def compute(self) -> Capabilities:
         try:
             config = ConfigManager(self._base_path).global_config
-            chat_enabled = config.chat_llm_provider == "ollama"
+            chat_enabled = config.chat_inference is not None
             max_report_history = int(config.report_retention_count or 0)
         except FileNotFoundError:
             chat_enabled = False

@@ -5,8 +5,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
-from .ollama_config import OllamaConfig
-from .ollama_embedding_config import OllamaEmbeddingConfig
+from .feature_inference_config import FeatureInferenceConfig
+from .local_inference_config import LocalInferenceConfig
 from .opencode_config import OpenCodeConfig
 
 TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT: int = 300
@@ -19,18 +19,16 @@ class GlobalConfig(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    chat_llm_provider: str = "ollama"
-    enrichment_llm_provider: str = "ollama"
-    report_llm_provider: str = "ollama"
-    embedding_provider: str = "ollama_embedding"
     triage_agent_provider: Literal["", "claude_code", "open_code"] = ""
-    ollama: OllamaConfig | None = None
-    ollama_report: OllamaConfig | None = None
-    ollama_noir: OllamaConfig | None = None
+    ollama: LocalInferenceConfig | None = None
+    llama_cpp: LocalInferenceConfig | None = None
     claude: ClaudeConfig | None = None
     opencode: OpenCodeConfig | None = None
-    ollama_embedding: OllamaEmbeddingConfig | None = None
-    noir_provider: str = ""
+    chat_inference: FeatureInferenceConfig | None = None
+    enrichment_inference: FeatureInferenceConfig | None = None
+    report_inference: FeatureInferenceConfig | None = None
+    noir_inference: FeatureInferenceConfig | None = None
+    embedding_inference: FeatureInferenceConfig | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
     enrichment_max_concurrency: int = Field(default=4)

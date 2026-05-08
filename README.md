@@ -9,7 +9,7 @@ Tally is a CLI REPL for orchestrating web application security auditing. It wrap
 - Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup: skips tools that are not installed
-- RAG-powered search and chat over ingested findings. Search runs on Ollama or Anthropic Claude; chat is Ollama-only ([docs/chat.md](docs/chat.md))
+- RAG-powered search and chat over ingested findings. Any configured provider can be used for each role ([docs/chat.md](docs/chat.md))
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
 - Browser-based findings reviewer with inline editing, launched on demand from the REPL via `ui serve`
 - Human-in-the-loop approval before each tool execution
@@ -35,10 +35,11 @@ ollama pull qwen3:14b
 ollama pull nomic-embed-text
 ollama serve
 
-# 3. Edit global config (set your LLM provider and models)
+# 3. Edit global config (configure providers and feature inference blocks)
 cp config/global-example.json config/global.json
-# edit config/global.json — set ollama.model, ollama_embedding.model,
-# and optionally switch any role to "claude" (requires ANTHROPIC_API_KEY)
+# edit config/global.json — configure provider blocks (ollama, llama_cpp,
+# or claude) and feature inference blocks (search_inference, chat_inference,
+# report_inference, and embeddings_inference)
 
 # 4. Start Tally — first run launches an interactive tool setup wizard
 .venv/bin/python3 tally.py

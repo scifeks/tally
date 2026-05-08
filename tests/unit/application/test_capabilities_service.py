@@ -26,12 +26,18 @@ def _readiness(enabled: bool = True) -> TriageReadiness:
 
 class TestChatEnabled:
     def test_true_when_provider_is_ollama(self, tmp_path: Path) -> None:
-        _write_global_config(tmp_path, {"chat_llm_provider": "ollama"})
+        _write_global_config(
+            tmp_path,
+            {
+                "ollama": {"base_url": "http://localhost:11434", "model": "test"},
+                "chat_inference": {"provider": "ollama"},
+            },
+        )
         svc = CapabilitiesService(str(tmp_path), triage_readiness=_readiness())
         assert svc.compute().chat_enabled is True
 
     def test_false_when_provider_is_other(self, tmp_path: Path) -> None:
-        _write_global_config(tmp_path, {"chat_llm_provider": "claude"})
+        _write_global_config(tmp_path, {})
         svc = CapabilitiesService(str(tmp_path), triage_readiness=_readiness())
         assert svc.compute().chat_enabled is False
 
@@ -100,7 +106,8 @@ class TestComputeShape:
         _write_global_config(
             tmp_path,
             {
-                "chat_llm_provider": "ollama",
+                "ollama": {"base_url": "http://localhost:11434", "model": "test"},
+                "chat_inference": {"provider": "ollama"},
                 "triage_agent_provider": "claude_code",
             },
         )
