@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .claude_config import ClaudeConfig
 from .ollama_config import OllamaConfig
 from .ollama_embedding_config import OllamaEmbeddingConfig
+from .opencode_config import OpenCodeConfig
 
 TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT: int = 300
 
@@ -27,6 +28,7 @@ class GlobalConfig(BaseModel):
     ollama_report: OllamaConfig | None = None
     ollama_noir: OllamaConfig | None = None
     claude: ClaudeConfig | None = None
+    opencode: OpenCodeConfig | None = None
     ollama_embedding: OllamaEmbeddingConfig | None = None
     noir_provider: str = ""
     projects_dir: str = Field(default="./projects")

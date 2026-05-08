@@ -138,6 +138,14 @@ class TestTriageCommands:
             patch(_READINESS_PATCH, return_value=_readiness_enabled()),
             patch("builtins.input", return_value="y"),
             patch(
+                "application.repl.commands.triage_commands.ensure_triage_image",
+                return_value=False,
+            ),
+            patch(
+                "application.repl.commands.triage_commands.triage_image_ready",
+                return_value=True,
+            ),
+            patch(
                 "application.repl.commands.triage_commands.TriageService"
             ) as mock_service_cls,
         ):
