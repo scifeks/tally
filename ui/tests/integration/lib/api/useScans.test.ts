@@ -391,8 +391,6 @@ describe('useScanEvents', () => {
       }
     })
 
-    // The hook itself just forwards; the page is responsible for the
-    // single-state-slot replacement that satisfies §12.7.
     expect(events).toHaveLength(5)
     expect(events.every(e => e.type === 'enrichment_progress')).toBe(true)
     expect(events[4].enrichedCount).toBe(5)

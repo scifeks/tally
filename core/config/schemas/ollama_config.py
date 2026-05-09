@@ -14,7 +14,7 @@ class OllamaConfig(BaseModel):
     @field_validator("base_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
-        """Ensure URL format is valid."""
+        """Validate URL format."""
         if not v.startswith(("http://", "https://")):
             raise ValueError("Ollama URL must start with http:// or https://")
         return v.rstrip("/")

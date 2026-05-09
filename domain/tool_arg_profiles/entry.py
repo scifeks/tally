@@ -23,6 +23,7 @@ class ToolArgProfileStringArg:
 class ToolArgProfileFileArg:
     name: str
     path: str
+    original_filename: str | None = None
     type: Literal["file"] = "file"
 
 

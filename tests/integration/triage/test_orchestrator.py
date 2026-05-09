@@ -129,7 +129,15 @@ def project_db(tmp_path: Path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "global.json").write_text(
-        json.dumps({"triage_agent_provider": "claude_code"})
+        json.dumps(
+            {
+                "ollama": {
+                    "base_url": "http://localhost:11434",
+                    "model": "test-model",
+                },
+                "triage_inference": {"provider": "ollama"},
+            }
+        )
     )
 
     return project, tmp_path, db

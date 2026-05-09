@@ -74,7 +74,6 @@ class TestGenericTable:
         table = _build_generic_table(results, is_semantic=False)
         rendered = _render(table)
         # "Line" also appears in "Finding"; check header row only
-        # Both tools share columns, just verify Line column header absent
         assert "Line " not in rendered  # trailing space excludes "Finding"
 
     def test_relevance_absent_for_metadata_only(self) -> None:

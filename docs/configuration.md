@@ -49,10 +49,10 @@ other features.
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
 | `enrichment_max_concurrency` | int | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). Default: `4`. |
-| `web_ui_host` | string | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected; use an explicit loopback or LAN IP. Default: `"127.0.0.1"`. |
-| `web_ui_port` | int | TCP port for the FastAPI server started by `ui serve`. Default: `8080`. |
-| `web_ui_vite_port` | int | TCP port for the Vite dev server started by `ui serve`. Default: `3000`. |
-| `web_ui_allowed_origins` | list\[string\] | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
+| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected — use an explicit loopback or LAN IP. |
+| `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
+| `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
+| `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
 
 ### Provider Config Fields
 
@@ -351,7 +351,7 @@ Supported language values for SCA tool selection:
     },
     {
       "name": "frontend",
-      "type": ["ui-old"],
+      "type": ["ui"],
       "path": "/home/user/projects/acme/frontend",
       "languages": ["javascript", "typescript"],
       "base_urls": []

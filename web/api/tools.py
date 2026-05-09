@@ -15,7 +15,6 @@ from application.tool_overrides.service import (
     ToolOverridesService,
     ToolOverrideValidationError,
 )
-from application.tools.registry import discover_tools
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.tool_overrides import ToolOverridesRepository
@@ -88,20 +87,6 @@ def _build_service(
     return ToolOverridesService(repo), repo, paths, row.name
 
 
-def _refresh_registry_with_repo(
-    request: Request,
-    project_name: str,
-    overrides_repo: ToolOverridesRepository,
-) -> None:
-    base_path: str = request.app.state.base_path
-    discover_tools(
-        request.app.state.tool_registry,
-        base_path,
-        project_name=project_name,
-        overrides_repo=overrides_repo,
-    )
-
-
 def _to_response(override) -> ToolOverrideResponse:
     container = None
     if override.container_name and override.container_tool_path:
@@ -122,8 +107,14 @@ def _to_response(override) -> ToolOverrideResponse:
 
 @tools_v1_router.get("/catalog", response_model=ToolCatalogResponse)
 def get_tools_catalog(request: Request) -> ToolCatalogResponse:
-    """Return metadata for all registered tool wrappers."""
-    tools = request.app.state.tool_registry.get_all_tools()
+    """Return metadata for all registered tool wrappers.
+
+    Reads from the startup snapshot so that per-project
+    ``discover_tools`` calls (scans, saved-scan runs) cannot shrink
+    the catalog that the Config page sees.
+    """
+    tools_dict, _configs = request.app.state.tool_catalog_snapshot
+    tools = list(tools_dict.values())
     items = [
         ToolCatalogItem(
             id=tool.name,
@@ -185,7 +176,7 @@ async def create_tool_override(
     body: ToolOverrideCreateRequest,
 ) -> ToolOverrideResponse:
     """Create a new project-scoped tool override."""
-    service, repo, _paths, project_name = await asyncio.to_thread(
+    service, _repo, _paths, _name = await asyncio.to_thread(
         _build_service, request, project_id
     )
     container_name = body.container.name if body.container else None
@@ -209,7 +200,6 @@ async def create_tool_override(
     except ToolOverrideNameConflict as exc:
         raise Conflict(f"Tool override {body.tool_name!r} already exists") from exc
 
-    await asyncio.to_thread(_refresh_registry_with_repo, request, project_name, repo)
     return _to_response(override)
 
 
@@ -236,7 +226,7 @@ async def replace_tool_override(
                 ]
             },
         )
-    service, repo, _paths, project_name = await asyncio.to_thread(
+    service, _repo, _paths, _name = await asyncio.to_thread(
         _build_service, request, project_id
     )
     container_name = body.container.name if body.container else None
@@ -260,7 +250,6 @@ async def replace_tool_override(
     except ToolOverrideNotFound as exc:
         raise NotFound(f"Tool override {tool_name!r} not found") from exc
 
-    await asyncio.to_thread(_refresh_registry_with_repo, request, project_name, repo)
     return _to_response(override)
 
 
@@ -274,12 +263,11 @@ async def delete_tool_override(
     request: Request,
 ) -> Response:
     """Delete a project-scoped tool override."""
-    service, repo, _paths, project_name = await asyncio.to_thread(
+    service, _repo, _paths, _name = await asyncio.to_thread(
         _build_service, request, project_id
     )
     existing = await asyncio.to_thread(service.get, tool_name)
     if existing is None:
         raise NotFound(f"Tool override {tool_name!r} not found")
     await asyncio.to_thread(service.delete, tool_name)
-    await asyncio.to_thread(_refresh_registry_with_repo, request, project_name, repo)
     return Response(status_code=204)

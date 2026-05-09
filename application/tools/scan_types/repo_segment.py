@@ -298,6 +298,7 @@ class RepoSegmentScan(ScanType):
                     config,
                     executor,
                     remaining_tools=_remaining,
+                    command_config=tool_config,
                 )
 
                 if result is None:

@@ -202,7 +202,7 @@ class TestCreateOrchestration:
             ],
         )
 
-        storage.write.assert_called_once_with(1, "rules", data)
+        storage.write.assert_called_once_with(1, "rules", data, original_filename=None)
 
     def test_repo_update_called_with_paths_from_storage(self) -> None:
         repo = _make_repo_mock()
@@ -437,7 +437,9 @@ class TestReplaceOrchestration:
             args=[FileArgInput(name="rules", data=b"new rules")],
         )
 
-        storage.write.assert_called_once_with(1, "rules", b"new rules")
+        storage.write.assert_called_once_with(
+            1, "rules", b"new rules", original_filename=None
+        )
 
     def test_no_write_for_keep_existing(self) -> None:
         repo = _make_repo_mock()

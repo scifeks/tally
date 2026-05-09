@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square, RotateCcw, Settings2, Terminal, Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
@@ -13,6 +14,7 @@ import {
   useSaveScan,
   useDeleteSavedScan,
   useToolArgProfileList,
+  useRunSavedScan,
 } from '@/lib/api'
 import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
 import type { Segment, ScanLogEvent, ScanRunStatus, ScanOptions } from '@/lib/types'
@@ -21,6 +23,8 @@ import { LogRow } from './LogRow'
 import { HistoryTable } from './HistoryTable'
 import { SavedScansTab } from './SavedScansTab'
 import { ScanMutationErrorModal } from '@/components/ScanMutationErrorModal'
+import { StaleSavedScanModal } from '@/components/StaleSavedScanModal'
+import type { StaleSavedScanItem } from '@/components/StaleSavedScanModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 const SEGMENT_LABEL: Record<Segment, string> = {
@@ -42,6 +46,9 @@ export default function Scans() {
 
   const { mutate: startScanMutation } = useStartScan()
   const { mutate: cancelScanMutation } = useCancelScan()
+  const { mutate: runSavedScanMutation } = useRunSavedScan()
+  const queryClient = useQueryClient()
+  const setScanMutationError = useUI(s => s.setScanMutationError)
 
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
@@ -89,7 +96,7 @@ export default function Scans() {
   const saveScan = useSaveScan()
   const deleteSavedScan = useDeleteSavedScan()
 
-  // UI-only staging: the real Start Scan button ignores this and posts ad-hoc options.
+  // Selected saved scan — when set, startScan runs this instead of ad-hoc options.
   const [selectedSavedScanId, setSelectedSavedScanId] = useState<number | null>(null)
   const selectedSavedScan = useMemo(
     () => savedScans.find(s => s.id === selectedSavedScanId) ?? null,
@@ -99,6 +106,7 @@ export default function Scans() {
   // Split-button dropdown state for picking a saved scan.
   const [showScanDropdown, setShowScanDropdown] = useState(false)
   const scanDropdownRef = useRef<HTMLDivElement>(null)
+  const [staleItems, setStaleItems] = useState<StaleSavedScanItem[]>([])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -187,37 +195,43 @@ export default function Scans() {
   // Per-event SSE handler. `enrichment_progress` is kept in a single state
   // slot (latest-value-wins) because appending it to the log would grow
   // unboundedly during long enrichment runs. The live row is rendered below.
-  const handleScanEvent = useCallback((event: ScanLogEvent) => {
-    if (event.type === 'enrichment_progress') {
-      setEnrichmentProgress({
-        enrichedCount: event.enrichedCount ?? 0,
-        totalToEnrich: event.totalToEnrich ?? 0,
-        timestamp: event.timestamp,
-      })
-      return
-    }
+  const handleScanEvent = useCallback(
+    (event: ScanLogEvent) => {
+      if (event.type === 'enrichment_progress') {
+        setEnrichmentProgress({
+          enrichedCount: event.enrichedCount ?? 0,
+          totalToEnrich: event.totalToEnrich ?? 0,
+          timestamp: event.timestamp,
+        })
+        return
+      }
 
-    // Filter to the current run once one has been claimed by this page.
-    const currentRunId = runIdRef.current
-    if (currentRunId !== null && event.runId !== currentRunId) return
+      // Filter to the current run once one has been claimed by this page.
+      const currentRunId = runIdRef.current
+      if (currentRunId !== null && event.runId !== currentRunId) return
 
-    setLogs(prev => [...prev, event])
+      setLogs(prev => [...prev, event])
 
-    if (event.type === 'enrichment_complete') {
-      setEnrichmentProgress(null)
-    } else if (event.type === 'run_started') {
-      setRunStatus('running')
-    } else if (event.type === 'run_completed') {
-      setRunStatus('completed')
-      setEnrichmentProgress(null)
-    } else if (event.type === 'run_cancelled') {
-      setRunStatus('cancelled')
-      setEnrichmentProgress(null)
-    } else if (event.type === 'run_failed') {
-      setRunStatus('failed')
-      setEnrichmentProgress(null)
-    }
-  }, [])
+      if (event.type === 'enrichment_complete') {
+        setEnrichmentProgress(null)
+      } else if (event.type === 'run_started') {
+        setRunStatus('running')
+      } else if (event.type === 'run_completed') {
+        setRunStatus('completed')
+        setEnrichmentProgress(null)
+        queryClient.invalidateQueries({ queryKey: ['scans', projectIdNum] })
+      } else if (event.type === 'run_cancelled') {
+        setRunStatus('cancelled')
+        setEnrichmentProgress(null)
+        queryClient.invalidateQueries({ queryKey: ['scans', projectIdNum] })
+      } else if (event.type === 'run_failed') {
+        setRunStatus('failed')
+        setEnrichmentProgress(null)
+        queryClient.invalidateQueries({ queryKey: ['scans', projectIdNum] })
+      }
+    },
+    [queryClient, projectIdNum]
+  )
 
   // Snapshot frame on (re)connect. Seeds runId/runStatus only when there is
   // exactly one active run for the project, so we don't latch onto a stranger.
@@ -249,23 +263,58 @@ export default function Scans() {
     if (runStatus !== 'running') stopElapsedTimer()
   }, [runStatus, stopElapsedTimer])
 
-  // Start scan - POST to backend, capture runId from 202, flip to live tab.
   const startScan = useCallback(() => {
     if (projectIdNum === 0) return
     setLogs([])
     setEnrichmentProgress(null)
     setActiveTab('live')
-    startScanMutation(
-      { projectId: projectIdNum, options: buildScanOptions() },
-      {
-        onSuccess: scan => {
-          setRunId(scan.id)
-          setRunStatus('running')
-          startElapsedTimer()
+
+    const onSuccess = (scan: { id: number }) => {
+      setRunId(scan.id)
+      setRunStatus('running')
+      startElapsedTimer()
+    }
+
+    if (selectedSavedScanId !== null) {
+      runSavedScanMutation(
+        {
+          projectId: projectIdNum,
+          savedScanId: selectedSavedScanId,
         },
-      }
-    )
-  }, [projectIdNum, startScanMutation, buildScanOptions, startElapsedTimer])
+        {
+          onSuccess: scan => {
+            onSuccess(scan)
+            setSelectedSavedScanId(null)
+          },
+          onError: err => {
+            if (err.code === 'STALE_SAVED_SCAN') {
+              const details = err.details as {
+                staleItems?: StaleSavedScanItem[]
+              }
+              setStaleItems(details.staleItems ?? [])
+            } else {
+              setScanMutationError({
+                code: err.code,
+                message: err.message,
+                details: err.details,
+                status: err.status,
+              })
+            }
+          },
+        }
+      )
+    } else {
+      startScanMutation({ projectId: projectIdNum, options: buildScanOptions() }, { onSuccess })
+    }
+  }, [
+    projectIdNum,
+    selectedSavedScanId,
+    runSavedScanMutation,
+    startScanMutation,
+    buildScanOptions,
+    startElapsedTimer,
+    setScanMutationError,
+  ])
 
   // Cancel scan. UI flips to 'cancelled' on the run_cancelled SSE event,
   // not synthetically. While the backend is processing the cancel,
@@ -324,6 +373,11 @@ export default function Scans() {
   return (
     <div className="h-full flex flex-col overflow-y-auto p-4 gap-4">
       <ScanMutationErrorModal />
+      <StaleSavedScanModal
+        open={staleItems.length > 0}
+        staleItems={staleItems}
+        onDismiss={() => setStaleItems([])}
+      />
       {/* Header row: radar + controls + stats */}
       <div className="flex items-start gap-6 shrink-0">
         {/* Radar */}
@@ -401,7 +455,7 @@ export default function Scans() {
                   </button>
                 )}
                 {showScanDropdown && savedScans.length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-64 border border-border bg-background z-50 shadow-lg">
+                  <div className="absolute top-full left-0 mt-1 w-64 border border-border bg-background z-50 shadow-lg isolate">
                     <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-dim border-b border-border">
                       [ saved scans ]
                     </div>
@@ -861,12 +915,23 @@ export default function Scans() {
           toolArgProfiles={toolArgProfiles}
           configuredSegments={configuredDomains}
           onSave={(payload, existingId) =>
-            saveScan.mutate({ projectId: projectIdNum, payload, existingId })
+            saveScan
+              .mutateAsync({ projectId: projectIdNum, payload, existingId })
+              .catch(() => undefined)
           }
           onDelete={savedScanId => deleteSavedScan.mutate({ projectId: projectIdNum, savedScanId })}
           onSelect={savedScanId => {
             setSelectedSavedScanId(savedScanId)
             setActiveTab('live')
+          }}
+          onRunStarted={(scan, savedScanId) => {
+            setSelectedSavedScanId(savedScanId)
+            setLogs([])
+            setEnrichmentProgress(null)
+            setActiveTab('live')
+            setRunId(scan.id)
+            setRunStatus('running')
+            startElapsedTimer()
           }}
           isSaving={saveScan.isPending}
         />

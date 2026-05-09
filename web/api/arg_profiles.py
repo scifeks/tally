@@ -96,7 +96,12 @@ def _arg_to_response(
         if with_download_url
         else None
     )
-    return ArgProfileFileArgResponse(name=arg.name, path=arg.path, download_url=url)
+    return ArgProfileFileArgResponse(
+        name=arg.name,
+        path=arg.path,
+        original_filename=arg.original_filename,
+        download_url=url,
+    )
 
 
 def _to_response(
@@ -142,7 +147,13 @@ async def _build_inputs(
         upload = form.get(arg.name)
         if isinstance(upload, UploadFile):
             data = await upload.read()
-            inputs.append(FileArgInput(name=arg.name, data=data))
+            inputs.append(
+                FileArgInput(
+                    name=arg.name,
+                    data=data,
+                    original_filename=upload.filename,
+                )
+            )
         elif allow_keep_existing:
             inputs.append(FileArgInput(name=arg.name, data=None))
         else:
@@ -312,10 +323,17 @@ async def download_arg_file(
         raise NotFound(
             f"No file persisted for arg {arg_name!r} on profile {profile_id}"
         )
+    disp_name = arg_name
+    profile = await asyncio.to_thread(service.get, profile_id)
+    if profile:
+        for a in profile.args:
+            if isinstance(a, ToolArgProfileFileArg) and a.name == arg_name:
+                disp_name = a.original_filename or arg_name
+                break
     return Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'inline; filename="{arg_name}"'},
+        headers={"Content-Disposition": (f'inline; filename="{disp_name}"')},
     )
 
 

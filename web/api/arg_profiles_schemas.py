@@ -118,6 +118,10 @@ class ArgProfileFileArgResponse(BaseModel):
 
     name: str
     path: str
+    original_filename: str | None = Field(
+        default=None,
+        serialization_alias="originalFilename",
+    )
     download_url: str | None = Field(
         default=None,
         serialization_alias="downloadUrl",

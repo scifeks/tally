@@ -1,5 +1,5 @@
 """Embedding adapter contract.
-
+todo: This is invalid, app layer should have no idea about adapters
 Adapters:
   infrastructure/embedding/ollama_embedding_adapter.py      (local Ollama HTTP)
   infrastructure/embedding/llama_cpp_embedding_adapter.py   (local llama.cpp HTTP)

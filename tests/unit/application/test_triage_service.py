@@ -63,7 +63,9 @@ class TestTriageService:
         with pytest.raises(ProjectNotFound):
             TriageService.for_project(registry, 7)  # type: ignore[arg-type]
 
-    def test_start_triage_validates_provider_before_repo_access(self) -> None:
+    def test_start_triage_validates_provider_before_repo_access(
+        self,
+    ) -> None:
         run_repo = MagicMock()
         triage_repo = MagicMock()
         service = TriageService(run_repo=run_repo, triage_repo=triage_repo)
@@ -82,7 +84,9 @@ class TestTriageService:
 
         run_repo.latest_run_id.assert_not_called()
 
-    def test_resume_triage_validates_provider_before_repo_access(self) -> None:
+    def test_resume_triage_validates_provider_before_repo_access(
+        self,
+    ) -> None:
         run_repo = MagicMock()
         triage_repo = MagicMock()
         service = TriageService(run_repo=run_repo, triage_repo=triage_repo)

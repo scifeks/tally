@@ -132,6 +132,8 @@ def discover_tools(
                     f"tool_overrides has {total} rows; exceeds discover_tools ceiling"
                 )
             for override in rows:
+                if override.args_mode == "custom" and not override.path:
+                    continue
                 commands_config[override.tool_name] = _override_to_command_entry(
                     override
                 )

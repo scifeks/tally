@@ -5,7 +5,7 @@ export type Segment = 'sast' | 'web' | 'secrets' | 'sca'
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
 /**
- * Free-form string on purpose - analysts may target protocols we don't know
+ * Free-form string on purpose: analysts may target protocols we don't know
  * about yet (ws/wss, ftp, smb, sip, coap, ...). Backend is the source of truth.
  */
 export type UrlProtocol = string
@@ -58,7 +58,7 @@ export interface Finding {
   domain: 'code' | 'web'
   severity: Severity
   status: Status
-  /** confidence label - confirmed / probable / potential / false_positive. */
+  /** Confidence label: confirmed / probable / potential / false_positive. */
   confidence: string
   /** Backend always returns an array (possibly empty) for finding_type. */
   findingType: string[]
@@ -70,12 +70,12 @@ export interface Finding {
   line?: number
   /** Backend always returns an array (possibly empty) for cwe. */
   cwe: string[]
-  /** Free-form analyst notes - editable in the detail panel. */
+  /** Free-form analyst notes, editable in the detail panel. */
   notes?: string
   discoveredAt: string
   triagedAt?: string
   triagedBy?: 'claude-code' | 'analyst_web'
-  /** Live lock state - true while a scan/triage job holds the row. */
+  /** Live lock state. True while a scan/triage job holds the row. */
   isLocked: boolean
   /** Identifier of the job currently holding the lock, when locked. */
   lockHolder: string | null
@@ -155,7 +155,7 @@ export interface Scan {
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled'
   startedAt: string
   finishedAt: string | null
-  /** Repository names included in the run (backend serialises as strings). */
+  /** Repository names included in the run (backend serializes as strings). */
   repoIds: string[]
   /** Tool ids included in the run. */
   toolIds: string[]
@@ -552,7 +552,7 @@ export interface ChatMessage {
   model: string | null
   /** ISO-8601 timestamp; backend column name is `created_at`. */
   timestamp: string
-  /** Reserved for future RAG citations surface - always null in v1. */
+  /** Reserved for future RAG citations surface. Always null in v1. */
   citations: null
   /** UI-only: true while the assistant turn is streaming tokens. */
   isStreaming?: boolean
@@ -568,7 +568,7 @@ export interface ChatSession {
   id: number
   /** Numeric project id (matches backend `project_id: int`). */
   projectId: number
-  /** Server-set timestamp title - never null. */
+  /** Server-set timestamp title. Never null. */
   title: string
   createdAt: string
   /** Null until the first message is sent. */
@@ -630,7 +630,7 @@ export type ChatStreamEvent =
 
 /**
  * 202 response from `POST .../sessions/:sid/messages`. The assistant id is
- * always null here - the SPA learns it from the `stream_end` SSE event.
+ * always null here. The SPA learns it from the `stream_end` SSE event.
  */
 export interface ChatSendMessageResponse {
   userMessageId: number
@@ -651,7 +651,7 @@ export interface ChatCancelResponse {
 // ─── Configuration Types ────────────────────────────────────────────────────
 // Used by the Config page for project, repository, and tool override management.
 
-/** Repository type - library is mutually exclusive with api/ui */
+/** Repository type. Library is mutually exclusive with api/ui. */
 export type RepoType = 'library' | 'api' | 'ui'
 
 /** Repository location mode */
@@ -718,7 +718,7 @@ export type ToolType = 'repo' | 'api'
 /** Tool location mode */
 export type ToolLocationMode = 'local' | 'docker'
 
-/** Tool catalog entry - the available tools that can be overridden */
+/** Tool catalog entry: the available tools that can be overridden. */
 export interface ToolCatalogEntry {
   id: string
   name: string
@@ -775,7 +775,7 @@ export interface ProjectInfoUpdate {
 /**
  * PATCH body for `useUpdateRepoAuth`. Mirrors the backend
  * `RepoAuthPatchRequest`. All fields optional; provided values
- * overwrite the auth block. Write-only - never echoed by GET.
+ * overwrite the auth block. Never echoed by GET.
  */
 export interface RepositoryAuthUpdate {
   loginUrl?: string
@@ -802,6 +802,8 @@ export interface ToolArgument {
   value?: string
   /** Original filename for file type (display only). */
   fileName?: string
+  /** Fresh upload chosen in the editor; undefined when keeping existing bytes. */
+  file?: File
 }
 
 /** A named, ordered list of arguments for one tool. */

@@ -16,6 +16,7 @@ from application.ports.tool_arg_profiles import (  # noqa: E402
     ToolArgProfileNameConflict,
 )
 from domain.tool_arg_profiles.entry import (  # noqa: E402
+    ToolArgProfileArg,
     ToolArgProfileFileArg,
     ToolArgProfileFlagArg,
     ToolArgProfileStringArg,
@@ -56,6 +57,34 @@ class TestToolArgProfilesRepository:
         assert row.tool_name == "gitleaks"
         assert row.name == "verbose"
         assert row.args == args
+
+    def test_insert_round_trip_preserves_original_filename(
+        self, repo: ToolArgProfilesRepository
+    ) -> None:
+        args: list[ToolArgProfileArg] = [
+            ToolArgProfileFileArg(
+                name="--rules",
+                path="arg_files/1/--rules",
+                original_filename="custom.yml",
+            ),
+        ]
+        rid = repo.insert(tool_name="gitleaks", name="fn-test", args=args)
+        row = repo.get(rid)
+        assert row is not None
+        assert isinstance(row.args[0], ToolArgProfileFileArg)
+        assert row.args[0].original_filename == "custom.yml"
+
+    def test_insert_round_trip_handles_missing_original_filename(
+        self, repo: ToolArgProfilesRepository
+    ) -> None:
+        args: list[ToolArgProfileArg] = [
+            ToolArgProfileFileArg(name="--rules", path="arg_files/1/--rules"),
+        ]
+        rid = repo.insert(tool_name="gitleaks", name="no-fn", args=args)
+        row = repo.get(rid)
+        assert row is not None
+        assert isinstance(row.args[0], ToolArgProfileFileArg)
+        assert row.args[0].original_filename is None
 
     def test_insert_returns_lastrowid_as_integer(
         self, repo: ToolArgProfilesRepository

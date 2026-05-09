@@ -6,7 +6,13 @@ import type { ApiErrorPayload, ArgumentTemplate } from '../types'
 
 type ArgProfileFlagArg = { name: string; type: 'flag' }
 type ArgProfileStringArg = { name: string; type: 'string'; value: string }
-type ArgProfileFileArg = { name: string; type: 'file'; path: string; downloadUrl?: string }
+type ArgProfileFileArg = {
+  name: string
+  type: 'file'
+  path: string
+  originalFilename?: string
+  downloadUrl?: string
+}
 
 export type ArgProfileArg = ArgProfileFlagArg | ArgProfileStringArg | ArgProfileFileArg
 
@@ -43,7 +49,13 @@ export function mapProfilesToTemplates(profiles: ToolArgProfile[]): ArgumentTemp
       if (a.type === 'string') {
         return { id: a.name, flag: a.name, valueType: 'string' as const, value: a.value }
       }
-      return { id: a.name, flag: a.name, valueType: 'file' as const, value: a.path }
+      return {
+        id: a.name,
+        flag: a.name,
+        valueType: 'file' as const,
+        value: a.path,
+        fileName: a.originalFilename || a.name,
+      }
     }),
   }))
 }
@@ -60,7 +72,7 @@ export function mapTemplateToWriteInput(
       if (a.valueType === 'string') {
         return { name: a.flag, type: 'string' as const, value: a.value ?? '' }
       }
-      return { name: a.flag, type: 'file' as const, path: a.value ?? '' }
+      return { name: a.flag, type: 'file' as const, path: '' }
     }),
   }
 }

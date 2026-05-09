@@ -35,9 +35,11 @@ class TestArgFilesStorageAdapter:
         storage: ArgFilesStorageAdapter,
         arg_files_dir: Path,
     ) -> None:
-        rel = storage.write(12, "--rules.yml", b"rule: a\n")
-        assert rel == "arg_files/12/--rules.yml"
-        assert (arg_files_dir / "12" / "--rules.yml").read_bytes() == b"rule: a\n"
+        rel = storage.write(12, "--rules", b"rule: a\n", original_filename="rules.yml")
+        assert rel == "arg_files/12/--rules/rules.yml"
+        assert (
+            arg_files_dir / "12" / "--rules" / "rules.yml"
+        ).read_bytes() == b"rule: a\n"
 
     def test_write_creates_profile_dir_when_absent(
         self,
@@ -55,7 +57,7 @@ class TestArgFilesStorageAdapter:
     ) -> None:
         storage.write(3, "--rules", b"first")
         storage.write(3, "--rules", b"second")
-        assert (arg_files_dir / "3" / "--rules").read_bytes() == b"second"
+        assert storage.read(3, "--rules") == b"second"
 
     def test_write_leaves_no_temp_files(
         self,
@@ -63,7 +65,8 @@ class TestArgFilesStorageAdapter:
         arg_files_dir: Path,
     ) -> None:
         storage.write(4, "--rules", b"x")
-        names = sorted(p.name for p in (arg_files_dir / "4").iterdir())
+        arg_dir = arg_files_dir / "4" / "--rules"
+        names = sorted(p.name for p in arg_dir.iterdir())
         assert names == ["--rules"]
 
     def test_read_returns_bytes(self, storage: ArgFilesStorageAdapter) -> None:
@@ -99,7 +102,7 @@ class TestArgFilesStorageAdapter:
         storage.write(6, "--config", b"b")
         storage.delete(6, "--rules")
         assert not (arg_files_dir / "6" / "--rules").exists()
-        assert (arg_files_dir / "6" / "--config").read_bytes() == b"b"
+        assert storage.read(6, "--config") == b"b"
 
     def test_delete_silent_when_file_missing(
         self, storage: ArgFilesStorageAdapter

@@ -27,7 +27,12 @@ class TestRetryOnce:
 
         result = run_triage("test-project", MagicMock(), app_root=Path("/unused"))
 
-        assert result == {"sessions_run": 1, "success": 1, "failed": 0, "incomplete": 0}
+        assert result == {
+            "sessions_run": 1,
+            "success": 1,
+            "failed": 0,
+            "incomplete": 0,
+        }
         mock_sleep.assert_called_once_with(5)
         assert runner.run.call_count == 2
 
@@ -41,7 +46,11 @@ class TestRetryOnce:
         mock_build_runner.return_value = runner
 
         with pytest.raises(FindingsBusy):
-            run_triage("test-project", MagicMock(), app_root=Path("/unused"))
+            run_triage(
+                "test-project",
+                MagicMock(),
+                app_root=Path("/unused"),
+            )
 
         mock_sleep.assert_called_once_with(5)
         assert runner.run.call_count == 2
@@ -55,7 +64,11 @@ class TestRetryOnce:
         mock_build_runner.return_value = runner
 
         with patch("application.triage.orchestrator.time.sleep") as mock_sleep:
-            run_triage("test-project", MagicMock(), app_root=Path("/unused"))
+            run_triage(
+                "test-project",
+                MagicMock(),
+                app_root=Path("/unused"),
+            )
 
         mock_sleep.assert_not_called()
         assert runner.run.call_count == 1

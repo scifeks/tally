@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -56,25 +56,29 @@ async function openEditor(user: ReturnType<typeof userEvent.setup>, scanName: st
   await screen.findByDisplayValue(scanName)
 }
 
-describe('Scans page — SavedScansTab editor multi-select (5.8)', () => {
-  it('renders merged tool options including template entries with badge', async () => {
+describe('Scans page — SavedScansTab editor accordion tools (5.8)', () => {
+  it('shows template badges in accordion when a profiled tool is expanded', async () => {
     const user = await openSavedScansTab()
     await openEditor(user, 'Full SAST + SCA')
 
-    // gitleaks/with-config and semgrep/strict-with-rules come from arg-profile fixture ids 3 and 4.
-    await screen.findByText(/gitleaks \[with-config\]/i)
-    expect(screen.getByText(/semgrep \[strict-with-rules\]/i)).toBeInTheDocument()
+    // gitleaks has profile "with-config" (id 3) selected; expand its accordion.
+    await user.click(await screen.findByRole('button', { name: /gitleaks profiles/i }))
 
-    const badges = screen.getAllByText(/^template$/i)
-    expect(badges.length).toBeGreaterThanOrEqual(2)
+    // Expanded accordion shows profile radio options with TEMPLATE badges.
+    const toolsSection = screen.getByTestId('tools-section')
+    await within(toolsSection).findByText('with-config')
+    const badges = within(toolsSection).getAllByText(/^template$/i)
+    expect(badges.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('hydrates selection count from toolNames + argProfileIds on an existing scan', async () => {
+  it('hydrates selection count from merged toolNames + argProfileIds', async () => {
     const user = await openSavedScansTab()
     await openEditor(user, 'Full SAST + SCA')
 
-    // Scan id=2 has 3 toolNames and 2 argProfileIds, so 5 selected entries total.
-    await screen.findByText(/tools \(5 selected\)/i)
+    // Scan id=2: toolNames=[gitleaks, osv-scanner, semgrep], argProfileIds=[3, 4].
+    // Profiles supersede base entries: gitleaks:3 replaces gitleaks, semgrep:4 replaces semgrep.
+    // Result: [osv-scanner, gitleaks:3, semgrep:4] = 3 selected.
+    await screen.findByText(/tools \(3 selected\)/i)
   })
 
   it('posts argProfileIds as a distinct array from toolNames on create', async () => {
@@ -109,10 +113,18 @@ describe('Scans page — SavedScansTab editor multi-select (5.8)', () => {
 
     await user.type(screen.getByPlaceholderText(/full-sast-scan/i), 'my-profile-only-scan')
 
-    // Template entries only appear in the Tools section, not Skip Tools, so getByText resolves without scoping.
-    await screen.findByText(/gitleaks \[verbose-only\]/i)
-    await user.click(screen.getByText(/gitleaks \[verbose-only\]/i))
-    await user.click(screen.getByText(/semgrep \[timeout-30s\]/i))
+    // Scope clicks to the Tools section (gitleaks also appears in Skip Tools).
+    const toolsSection = screen.getByTestId('tools-section')
+
+    // Select gitleaks (auto-expands accordion), pick the "verbose-only" profile.
+    await user.click(within(toolsSection).getByText('gitleaks'))
+    await within(toolsSection).findByText('verbose-only')
+    await user.click(within(toolsSection).getByText('verbose-only'))
+
+    // Select semgrep (auto-expands), pick "timeout-30s".
+    await user.click(within(toolsSection).getByText('semgrep'))
+    await within(toolsSection).findByText('timeout-30s')
+    await user.click(within(toolsSection).getByText('timeout-30s'))
 
     await screen.findByText(/tools \(2 selected\)/i)
 
@@ -124,7 +136,7 @@ describe('Scans page — SavedScansTab editor multi-select (5.8)', () => {
     })
   })
 
-  it('sends updated argProfileIds on PUT when a template is deselected', async () => {
+  it('sends updated argProfileIds on PUT when profile reverted to default', async () => {
     let captured: Record<string, unknown> = {}
     server.use(
       http.put(
@@ -153,17 +165,25 @@ describe('Scans page — SavedScansTab editor multi-select (5.8)', () => {
     const user = await openSavedScansTab()
     await openEditor(user, 'Full SAST + SCA')
 
-    await screen.findByText(/gitleaks \[with-config\]/i)
-    await user.click(screen.getByText(/gitleaks \[with-config\]/i))
+    await screen.findByText(/tools \(3 selected\)/i)
 
-    await screen.findByText(/tools \(4 selected\)/i)
+    // Expand gitleaks accordion via its aria-labelled chevron.
+    await user.click(screen.getByRole('button', { name: /gitleaks profiles/i }))
+
+    // Click "Default" radio to revert gitleaks from profile to base tool.
+    const toolsSection = screen.getByTestId('tools-section')
+    await within(toolsSection).findByText('Default')
+    await user.click(within(toolsSection).getByText('Default'))
+
+    // Still 3 selected: gitleaks (default), osv-scanner, semgrep:4.
+    await screen.findByText(/tools \(3 selected\)/i)
 
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => {
       expect(captured.argProfileIds).toEqual([4])
       expect(captured.toolNames).toEqual(
-        expect.arrayContaining(['gitleaks', 'osv-scanner', 'semgrep'])
+        expect.arrayContaining(['gitleaks', 'osv-scanner'])
       )
     })
   })

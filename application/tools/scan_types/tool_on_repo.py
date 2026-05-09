@@ -119,6 +119,7 @@ class ToolOnRepoScan(ScanType):
             config,
             executor,
             remaining_tools=config.remaining_peers,
+            command_config=tool_config,
         )
 
         results: list[ToolResult] = []

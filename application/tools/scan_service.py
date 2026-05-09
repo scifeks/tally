@@ -147,6 +147,7 @@ class ScanService:
                 "cancel_token": cancel_token,
                 "run_repo": run_repo,
                 "chat_session_repo": chat_session_repo,
+                "snapshots": snapshots,
             },
             name=f"scan-run-{run_id}",
             daemon=True,
@@ -176,6 +177,7 @@ class ScanService:
         cancel_token: CancellationToken,
         run_repo: RunRepositoryPort,
         chat_session_repo: ChatSessionRepositoryPort,
+        snapshots: dict[str, str] | None = None,
     ) -> None:
         # Imports deferred to thread entry to avoid circular-import risk
         # and to keep module import side-effects minimal.
@@ -211,6 +213,7 @@ class ScanService:
                 project_id=project_id,
                 chat_session_repo=chat_session_repo,
                 display=display,
+                arg_snapshots=snapshots,
             )
             setup_ok = True
 

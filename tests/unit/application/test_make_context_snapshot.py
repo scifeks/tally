@@ -51,8 +51,6 @@ class TestBuildToolExecutionConfig:
         assert result.noir_provider is None
 
     def test_provider_without_base_url_yields_none(self) -> None:
-        # ClaudeConfig has no base_url; the snapshot tolerates the misuse
-        # by returning None rather than crashing the wrapper.
         gc = GlobalConfig.model_construct(
             noir_inference=FeatureInferenceConfig(provider="claude")
         )

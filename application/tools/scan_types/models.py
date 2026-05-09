@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from application.ports.user_prompt import UserPromptPort
 from domain.tools.execution_config import ToolExecutionConfig
@@ -17,3 +17,4 @@ class ScanTypeConfig:
     prompt: UserPromptPort
     remaining_peers: int = 0
     project_id: int | None = None
+    arg_snapshots: dict[str, str] = field(default_factory=dict)

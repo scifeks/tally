@@ -81,7 +81,7 @@ class TestArgProfilesReplace:
         )
         assert resp.status_code == 200, resp.text
 
-        on_disk = _arg_files_dir(tmp_path) / str(profile_id) / "--rules"
+        on_disk = _arg_files_dir(tmp_path) / str(profile_id) / "--rules" / "rules.yml"
         assert on_disk.read_bytes() == b"new-bytes"
 
     async def test_replace_keep_existing_preserves_bytes(
@@ -117,7 +117,7 @@ class TestArgProfilesReplace:
         )
         assert resp.status_code == 200, resp.text
 
-        on_disk = _arg_files_dir(tmp_path) / str(profile_id) / "--rules"
+        on_disk = _arg_files_dir(tmp_path) / str(profile_id) / "--rules" / "--rules"
         assert on_disk.read_bytes() == b"original-bytes"
         body = resp.json()
         assert body["args"][0]["path"] == path

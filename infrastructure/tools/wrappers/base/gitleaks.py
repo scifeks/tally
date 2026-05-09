@@ -110,7 +110,7 @@ class BaseGitleaksTool(ToolInterface):
         ]
 
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        """Mirrors _run_gitleaks_both_scans in orchestrator.py."""
+        """Combine dir-scan and git-scan passes into a single result."""
         if self._last_ignore_path is not None:
             Path(self._last_ignore_path).unlink(missing_ok=True)
             self._last_ignore_path = None
@@ -138,5 +138,4 @@ class BaseGitleaksTool(ToolInterface):
         result = parsed_data.get("summary", {}).get(
             "total_secrets", len(parsed_data.get("secrets", []))
         )
-        # TODO: revisit when normalized schema is introduced
         return result

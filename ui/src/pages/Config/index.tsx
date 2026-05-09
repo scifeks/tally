@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Wrench } from 'lucide-react'
 import { useUI } from '@/lib/store'
 import {
   useProjects,
@@ -13,10 +14,12 @@ import {
   useSaveToolOverride,
   useDeleteToolOverride,
 } from '@/lib/api'
+import { Panel } from '@/components/tty'
 import { ConfigPanel } from './ConfigPanel'
 import { ProjectInfoSection } from './ProjectInfoSection'
 import { RepositorySection } from './RepositorySection'
 import { ToolOverridesSection } from './ToolOverridesSection'
+import { SectionHeader } from './shared'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
 
@@ -29,8 +32,10 @@ export default function Config() {
   const { data: projects = [] } = useProjects()
   const { data: projectInfo } = useProjectInfo(projectId)
   const { data: repositories = [] } = useRepositories(projectId)
-  const { data: toolCatalog = [] } = useToolCatalog()
-  const { data: toolOverrides = [] } = useToolOverrides(projectId)
+  const toolCatalogQuery = useToolCatalog()
+  const toolOverridesQuery = useToolOverrides(projectId)
+  const toolCatalog = toolCatalogQuery.data ?? []
+  const toolOverrides = toolOverridesQuery.data ?? []
 
   const updateProjectInfo = useUpdateProjectInfo()
   const saveRepository = useSaveRepository()
@@ -95,14 +100,27 @@ export default function Config() {
             saveCompletedAt={repoSaveCompletedAt}
           />
 
-          <ToolOverridesSection
-            catalog={toolCatalog}
-            overrides={toolOverrides}
-            projectId={projectId}
-            onSave={(override, isNew) => saveToolOverride.mutate({ projectId, override, isNew })}
-            onDelete={toolId => deleteToolOverride.mutate({ projectId, toolId })}
-            isSaving={saveToolOverride.isPending}
-          />
+          {toolCatalogQuery.data && toolOverridesQuery.data ? (
+            <ToolOverridesSection
+              catalog={toolCatalog}
+              overrides={toolOverrides}
+              projectId={projectId}
+              onSave={async (override, isNew) => {
+                await saveToolOverride.mutateAsync({
+                  projectId,
+                  override,
+                  isNew,
+                })
+              }}
+              onDelete={toolId => deleteToolOverride.mutate({ projectId, toolId })}
+              isSaving={saveToolOverride.isPending}
+            />
+          ) : (
+            <Panel>
+              <SectionHeader icon={Wrench} title="TOOL OVERRIDES" />
+              <div className="text-sm text-dim py-8 text-center">Loading tool configuration…</div>
+            </Panel>
+          )}
         </div>
       </div>
 

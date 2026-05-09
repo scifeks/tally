@@ -20,6 +20,14 @@ import type {
 import { SectionHeader } from './shared'
 import { ArgumentTemplateEditor } from './ArgumentTemplateEditor'
 
+function collectFreshFiles(template: ArgumentTemplate): Record<string, File> {
+  const out: Record<string, File> = {}
+  for (const arg of template.arguments) {
+    if (arg.valueType === 'file' && arg.file) out[arg.flag] = arg.file
+  }
+  return out
+}
+
 // ─── Tool Overrides Section ───────────────────────────────────────────────────
 
 export function ToolOverridesSection({
@@ -33,7 +41,7 @@ export function ToolOverridesSection({
   catalog: ToolCatalogEntry[]
   overrides: ToolOverrideConfig[]
   projectId: number
-  onSave: (override: ToolOverrideConfig, isNew: boolean) => void
+  onSave: (override: ToolOverrideConfig, isNew: boolean) => Promise<void>
   onDelete: (toolId: string) => void
   isSaving: boolean
 }) {
@@ -51,10 +59,7 @@ export function ToolOverridesSection({
   const existingOverride = overrides.find(o => o.toolId === selectedToolId)
   const isNew = selectedToolId && !existingOverride
 
-  const argProfileQuery = useToolArgProfileList(
-    projectId,
-    selectedTool ? { toolName: selectedTool.name } : undefined
-  )
+  const argProfileQuery = useToolArgProfileList(projectId)
   const saveProfile = useSaveToolArgProfile()
   const deleteProfile = useDeleteToolArgProfile()
 
@@ -86,10 +91,12 @@ export function ToolOverridesSection({
 
   useEffect(() => {
     if (!selectedToolId || !argProfileQuery.data) return
-    const loaded = argProfileQuery.data.items
+    const loaded = argProfileQuery.data.items.filter(
+      p => p.toolName === selectedToolId || p.toolName === selectedTool?.name
+    )
     setTemplates(mapProfilesToTemplates(loaded))
     setServerProfiles(loaded)
-  }, [selectedToolId, argProfileQuery.data])
+  }, [selectedToolId, selectedTool, argProfileQuery.data])
 
   const updateField = <K extends keyof ToolOverrideConfig>(
     field: K,
@@ -101,29 +108,31 @@ export function ToolOverridesSection({
 
   const handleSave = async () => {
     if (!selectedToolId || !selectedTool) return
-    onSave({ ...form, argsMode } as ToolOverrideConfig, !!isNew)
+    await onSave({ ...form, argsMode } as ToolOverrideConfig, !!isNew)
 
     const serverIdSet = new Set(serverProfiles.map(p => String(p.id)))
     const currentServerIdSet = new Set(templates.filter(t => serverIdSet.has(t.id)).map(t => t.id))
     const mutations: Promise<ToolArgProfile | void>[] = []
 
     for (const t of templates) {
+      const files = collectFreshFiles(t)
+      const hasFreshFile = Object.keys(files).length > 0
       if (!serverIdSet.has(t.id)) {
         mutations.push(
           saveProfile.mutateAsync({
             projectId,
-            profile: mapTemplateToWriteInput(selectedTool.name, t),
-            files: {},
+            profile: mapTemplateToWriteInput(selectedTool.id, t),
+            files,
           })
         )
       } else {
         const sp = serverProfiles.find(p => String(p.id) === t.id)
-        if (sp && !profileMatchesTemplate(sp, t)) {
+        if (sp && (!profileMatchesTemplate(sp, t) || hasFreshFile)) {
           mutations.push(
             saveProfile.mutateAsync({
               projectId,
-              profile: mapTemplateToWriteInput(selectedTool.name, t),
-              files: {},
+              profile: mapTemplateToWriteInput(selectedTool.id, t),
+              files,
               existingId: sp.id,
             })
           )
@@ -252,7 +261,7 @@ export function ToolOverridesSection({
             )}
           </div>
 
-          {/* Type / Location / Args - all on one row */}
+          {/* Type / Location / Args row */}
           <div className="grid grid-cols-3 gap-4">
             {/* Type */}
             <div>
@@ -511,13 +520,15 @@ export function ToolOverridesSection({
                 onClick={handleSave}
                 disabled={
                   isSaving ||
-                  (form.location === 'local' && !form.path) ||
-                  (form.location === 'docker' &&
+                  (argsMode !== 'custom' && form.location === 'local' && !form.path) ||
+                  (argsMode !== 'custom' &&
+                    form.location === 'docker' &&
                     (!form.container?.name || !form.container?.toolPath))
                 }
                 className={cn(
                   'flex items-center gap-1 px-4 h-8 text-[10px] uppercase tracking-wider transition-colors',
-                  (form.location === 'local' && form.path) ||
+                  argsMode === 'custom' ||
+                    (form.location === 'local' && form.path) ||
                     (form.location === 'docker' && form.container?.name && form.container?.toolPath)
                     ? 'bg-accent text-background hover:bg-accent/80'
                     : 'bg-muted text-dim cursor-not-allowed'

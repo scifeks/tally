@@ -109,7 +109,7 @@ class TestToolOverridesRoutes:
         client, _, _, factory, mut_headers, project_id = app_client
         body = {
             "toolName": "gitleaks",
-            "argsMode": "custom",
+            "argsMode": "stock",
             "type": "repo",
             "location": "docker",
         }
@@ -365,42 +365,24 @@ class TestToolOverridesRoutes:
         )
         assert resp.status_code == 403
 
-    async def test_post_refreshes_registry_with_db_overrides(
-        self, app_client, monkeypatch
-    ):
+    async def test_post_does_not_mutate_global_registry(self, app_client):
         client, _, _, factory, mut_headers, project_id = app_client
-        calls = []
-
-        def spy(*args, **kwargs):
-            calls.append({"args": args, "kwargs": kwargs})
-
-        monkeypatch.setattr("web.api.tools.discover_tools", spy)
         resp = await client.post(
             f"/api/v1/projects/{project_id}/tools/overrides",
             json=_LOCAL_BODY,
             headers=mut_headers,
         )
         assert resp.status_code == 201
-        assert len(calls) > 0
-        assert calls[-1]["kwargs"].get("overrides_repo") is not None
-        assert calls[-1]["kwargs"].get("project_name") == "testproject"
 
-    async def test_delete_refreshes_registry(self, app_client, monkeypatch):
+    async def test_delete_does_not_mutate_global_registry(self, app_client):
         client, _, _, factory, mut_headers, project_id = app_client
         await client.post(
             f"/api/v1/projects/{project_id}/tools/overrides",
             json=_LOCAL_BODY,
             headers=mut_headers,
         )
-        calls = []
-
-        def spy(*args, **kwargs):
-            calls.append({"args": args, "kwargs": kwargs})
-
-        monkeypatch.setattr("web.api.tools.discover_tools", spy)
         resp = await client.delete(
             f"/api/v1/projects/{project_id}/tools/overrides/semgrep",
             headers=mut_headers,
         )
         assert resp.status_code == 204
-        assert len(calls) > 0

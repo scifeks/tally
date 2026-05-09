@@ -104,6 +104,7 @@ class ToolExecutor:
         label: str = "output",
         cwd: str | None = None,
         env: dict[str, str] | None = None,
+        raw_cmd: list[str] | None = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, capture, and return a ToolResult.
@@ -120,11 +121,22 @@ class ToolExecutor:
         timestamp = ToolResult.now_iso()
 
         # 1. Build command argv
-        try:
-            cmd = tool.build_command(**kwargs)
-        except Exception as exc:
-            _log.error("Tool %s: build_command error: %s", tool.name, exc)
-            return self._failure(tool.name, timestamp, f"build_command error: {exc}")
+        if raw_cmd is not None:
+            cmd = raw_cmd
+        else:
+            try:
+                cmd = tool.build_command(**kwargs)
+            except Exception as exc:
+                _log.error(
+                    "Tool %s: build_command error: %s",
+                    tool.name,
+                    exc,
+                )
+                return self._failure(
+                    tool.name,
+                    timestamp,
+                    f"build_command error: {exc}",
+                )
 
         # 2. Basic safety check (no shell=True, but guard against obvious injections)
         try:
@@ -222,6 +234,23 @@ class ToolExecutor:
             cwd=pass_.cwd,
             env=pass_.env,
             **pass_.kwargs,
+        )
+
+    def run_raw(
+        self,
+        raw_cmd: list[str],
+        tool: Any,
+        auto_approve: bool = True,
+        label: str = "custom",
+    ) -> ToolResult:
+        """Execute a pre-built command, bypassing tool.build_command."""
+        tool_timeout: int = getattr(tool, "timeout", None) or DEFAULT_TIMEOUT
+        return self.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=tool_timeout,
+            label=label,
+            raw_cmd=raw_cmd,
         )
 
     # Private helpers

@@ -327,6 +327,19 @@ async def run_saved_scan(
     tool_names = tuple(t.tool_name for t in hydrated.tools)
     arg_profile_ids = [p.id for p in hydrated.arg_profiles]
 
+    if hydrated.arg_profiles:
+        registered = tool_registry.list_tool_names()
+        display_to_id: dict[str, str] = {}
+        for n in registered:
+            display_to_id[n] = n
+            display = n.replace("_", " ").replace("-", " ").title()
+            display_to_id[display] = n
+
+        profile_tools = {
+            display_to_id.get(p.tool_name, p.tool_name) for p in hydrated.arg_profiles
+        }
+        tool_names = tuple(set(tool_names) | profile_tools)
+
     try:
         handle = await asyncio.to_thread(
             get_scan_service().start_scan,

@@ -106,7 +106,10 @@ class TestComputeShape:
         _write_global_config(
             tmp_path,
             {
-                "ollama": {"base_url": "http://localhost:11434", "model": "test"},
+                "ollama": {
+                    "base_url": "http://localhost:11434",
+                    "model": "test",
+                },
                 "chat_inference": {"provider": "ollama"},
                 "triage_agent_provider": "claude_code",
             },

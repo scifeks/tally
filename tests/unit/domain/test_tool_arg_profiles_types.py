@@ -45,6 +45,18 @@ class TestToolArgProfileFileArg:
         assert arg.path == "arg_files/12/--rules.yml"
         assert arg.type == "file"
 
+    def test_original_filename_defaults_to_none(self) -> None:
+        arg = ToolArgProfileFileArg(name="--rules", path="arg_files/1/--rules")
+        assert arg.original_filename is None
+
+    def test_original_filename_preserved(self) -> None:
+        arg = ToolArgProfileFileArg(
+            name="--rules",
+            path="arg_files/1/--rules",
+            original_filename="custom_rules.yml",
+        )
+        assert arg.original_filename == "custom_rules.yml"
+
     def test_is_frozen(self) -> None:
         arg = ToolArgProfileFileArg(name="--rules", path="some/path.yml")
         with pytest.raises(Exception):

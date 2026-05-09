@@ -66,15 +66,96 @@ class TestToolArgProfilesServiceIntegration:
         file_arg = profile.args[2]
         assert file_arg.name == "--rules"
         assert isinstance(file_arg, ToolArgProfileFileArg)
-        assert file_arg.path == f"arg_files/{profile.id}/--rules"
+        assert file_arg.path == f"arg_files/{profile.id}/--rules/--rules"
 
-        file_path = tmp_path / "arg_files" / str(profile.id) / "--rules"
+        file_path = tmp_path / "arg_files" / str(profile.id) / "--rules" / "--rules"
         assert file_path.read_bytes() == b"rules-bytes"
 
         retrieved = service.get(profile.id)
         assert retrieved is not None
         assert retrieved.id == profile.id
         assert len(retrieved.args) == 3
+
+    def test_create_preserves_original_filename(
+        self,
+        service: ToolArgProfilesService,
+    ) -> None:
+        profile = service.create(
+            tool_name="gitleaks",
+            name="with-filename",
+            args=[
+                FileArgInput(
+                    "--rules",
+                    data=b"data",
+                    original_filename="my_rules.yml",
+                ),
+            ],
+        )
+        file_arg = profile.args[0]
+        assert isinstance(file_arg, ToolArgProfileFileArg)
+        assert file_arg.original_filename == "my_rules.yml"
+
+        retrieved = service.get(profile.id)
+        assert retrieved is not None
+        ret_arg = retrieved.args[0]
+        assert isinstance(ret_arg, ToolArgProfileFileArg)
+        assert ret_arg.original_filename == "my_rules.yml"
+
+    def test_replace_preserves_original_filename_on_keep(
+        self,
+        service: ToolArgProfilesService,
+    ) -> None:
+        profile = service.create(
+            tool_name="gitleaks",
+            name="keep-fn",
+            args=[
+                FileArgInput(
+                    "--x",
+                    data=b"bytes",
+                    original_filename="seeds.txt",
+                ),
+            ],
+        )
+        replaced = service.replace(
+            profile.id,
+            tool_name="gitleaks",
+            name="keep-fn",
+            args=[FileArgInput("--x", data=None)],
+        )
+        kept = replaced.args[0]
+        assert isinstance(kept, ToolArgProfileFileArg)
+        assert kept.original_filename == "seeds.txt"
+
+    def test_replace_updates_original_filename_on_reupload(
+        self,
+        service: ToolArgProfilesService,
+    ) -> None:
+        profile = service.create(
+            tool_name="gitleaks",
+            name="reup-fn",
+            args=[
+                FileArgInput(
+                    "--x",
+                    data=b"old",
+                    original_filename="old.txt",
+                ),
+            ],
+        )
+        replaced = service.replace(
+            profile.id,
+            tool_name="gitleaks",
+            name="reup-fn",
+            args=[
+                FileArgInput(
+                    "--x",
+                    data=b"new",
+                    original_filename="new.txt",
+                ),
+            ],
+        )
+        arg = replaced.args[0]
+        assert isinstance(arg, ToolArgProfileFileArg)
+        assert arg.original_filename == "new.txt"
 
     def test_create_unique_conflict_is_typed(
         self,
@@ -144,9 +225,9 @@ class TestToolArgProfilesServiceIntegration:
         assert arg_names == {"--a", "--c"}
 
         arg_files = tmp_path / "arg_files" / str(profile_id)
-        assert (arg_files / "--a").read_bytes() == b"new-A"
+        assert (arg_files / "--a" / "--a").read_bytes() == b"new-A"
         assert not (arg_files / "--b").exists()
-        assert (arg_files / "--c").read_bytes() == b"new-C"
+        assert (arg_files / "--c" / "--c").read_bytes() == b"new-C"
 
     def test_replace_keep_existing(
         self,
@@ -177,7 +258,7 @@ class TestToolArgProfilesServiceIntegration:
         assert kept_file_arg.path == original_path
 
         arg_files = tmp_path / "arg_files" / str(profile_id)
-        assert (arg_files / "--x").read_bytes() == b"original"
+        assert (arg_files / "--x" / "--x").read_bytes() == b"original"
 
     def test_replace_keep_existing_unknown_name_rejected(
         self,
