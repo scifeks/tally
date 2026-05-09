@@ -1,14 +1,15 @@
 """GlobalConfig schema."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
-from .ollama_config import OllamaConfig
-from .ollama_embedding_config import OllamaEmbeddingConfig
+from .feature_inference_config import FeatureInferenceConfig
+from .local_inference_config import LocalInferenceConfig
+from .opencode_config import OpenCodeConfig
 
-MCP_BATCH_SIZE_DEFAULT: int = 10
-MCP_BATCH_TIMEOUT_SECONDS_DEFAULT: int = 30
-MCP_SESSION_TIMEOUT_SECONDS_DEFAULT: int = 300
+TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT: int = 300
 
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 
@@ -18,26 +19,23 @@ class GlobalConfig(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    chat_llm_provider: str = "ollama"
-    enrichment_llm_provider: str = "ollama"
-    report_llm_provider: str = "ollama"
-    embedding_provider: str = "ollama_embedding"
-    ollama: OllamaConfig | None = None
-    ollama_report: OllamaConfig | None = None
-    ollama_noir: OllamaConfig | None = None
+    triage_agent_provider: Literal["", "claude_code", "open_code"] = ""
+    ollama: LocalInferenceConfig | None = None
+    llama_cpp: LocalInferenceConfig | None = None
     claude: ClaudeConfig | None = None
-    ollama_embedding: OllamaEmbeddingConfig | None = None
-    noir_provider: str = ""
+    opencode: OpenCodeConfig | None = None
+    chat_inference: FeatureInferenceConfig | None = None
+    enrichment_inference: FeatureInferenceConfig | None = None
+    report_inference: FeatureInferenceConfig | None = None
+    noir_inference: FeatureInferenceConfig | None = None
+    embedding_inference: FeatureInferenceConfig | None = None
+    triage_inference: FeatureInferenceConfig | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
     enrichment_max_concurrency: int = Field(default=4)
-    mcp_batch_size: int = Field(default=MCP_BATCH_SIZE_DEFAULT, ge=1)
-    mcp_batch_timeout_seconds: int = Field(
-        default=MCP_BATCH_TIMEOUT_SECONDS_DEFAULT, ge=1
-    )
-    mcp_session_timeout_seconds: int = Field(
-        default=MCP_SESSION_TIMEOUT_SECONDS_DEFAULT,
-        description="Max seconds for a single Claude triage session",
+    triage_session_timeout_seconds: int = Field(
+        default=TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT,
+        description=("Max seconds for a single triage session"),
     )
     report_finding_prefix: str = Field(default="TAL")
     report_retention_count: int = Field(

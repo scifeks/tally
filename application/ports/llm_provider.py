@@ -1,8 +1,9 @@
 """Language-model adapter contract.
 
 Adapters:
-  infrastructure/llm/claude_adapter.py  (Anthropic Messages API)
-  infrastructure/llm/ollama_adapter.py  (local Ollama HTTP)
+  infrastructure/llm/claude_adapter.py     (Anthropic Messages API)
+  infrastructure/llm/ollama_adapter.py     (local Ollama HTTP)
+  infrastructure/llm/llama_cpp_adapter.py  (local llama.cpp HTTP)
 """
 
 from __future__ import annotations

@@ -65,3 +65,49 @@ class TestProfileArgsToCli:
         ]
         result = profile_args_to_cli(args)
         assert result == ["--user", "admin", "--pass", "secret"]
+
+    def test_string_arg_equals_operator(self) -> None:
+        args = [ToolArgProfileStringArg(name="--redact", value="50", operator="=")]
+        result = profile_args_to_cli(args)
+        assert result == ["--redact=50"]
+
+    def test_string_arg_empty_operator(self) -> None:
+        args = [ToolArgProfileStringArg(name="--redact", value="50", operator="")]
+        result = profile_args_to_cli(args)
+        assert result == ["--redact", "50"]
+
+    def test_file_arg_equals_operator(self) -> None:
+        args = [
+            ToolArgProfileFileArg(
+                name="--config",
+                path="/path/to/file",
+                operator="=",
+            )
+        ]
+        result = profile_args_to_cli(args)
+        assert result == ["--config=/path/to/file"]
+
+    def test_file_arg_empty_operator(self) -> None:
+        args = [
+            ToolArgProfileFileArg(
+                name="--config",
+                path="/path/to/file",
+                operator="",
+            )
+        ]
+        result = profile_args_to_cli(args)
+        assert result == ["--config", "/path/to/file"]
+
+    def test_mixed_args_with_operators(self) -> None:
+        args = [
+            ToolArgProfileFlagArg(name="-v"),
+            ToolArgProfileStringArg(name="--redact", value="50", operator="="),
+            ToolArgProfileStringArg(name="--timeout", value="30", operator=""),
+        ]
+        result = profile_args_to_cli(args)
+        assert result == [
+            "-v",
+            "--redact=50",
+            "--timeout",
+            "30",
+        ]

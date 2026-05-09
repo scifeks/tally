@@ -39,6 +39,7 @@ class ArgProfilePayloadStringArg(BaseModel):
 
     name: str = Field(min_length=1)
     value: str
+    operator: str = Field(default="")
     type: Literal["string"]
 
 
@@ -48,6 +49,7 @@ class ArgProfilePayloadFileArg(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str = Field(min_length=1)
+    operator: str = Field(default="")
     type: Literal["file"]
 
 
@@ -108,6 +110,7 @@ class ArgProfileStringArgResponse(BaseModel):
 
     name: str
     value: str
+    operator: str = ""
     type: Literal["string"] = "string"
 
 
@@ -118,6 +121,7 @@ class ArgProfileFileArgResponse(BaseModel):
 
     name: str
     path: str
+    operator: str = ""
     original_filename: str | None = Field(
         default=None,
         serialization_alias="originalFilename",

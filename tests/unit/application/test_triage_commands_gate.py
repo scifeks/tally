@@ -1,28 +1,55 @@
-"""Tests for the Claude Code gate in TriageCommands."""
+"""Tests triage readiness gating."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
 from application.repl.commands.triage_commands import TriageCommands
+from application.triage.readiness import TriageReadiness
 
 
 def _repl(active_project: str | None = "test-project") -> MagicMock:
     repl = MagicMock()
     repl.active_project = active_project
+    repl.triage_readiness = TriageReadiness(
+        provider="claude_code",
+        backend_label="Claude Code",
+        enabled=True,
+        reason=None,
+    )
     return repl
 
 
-def _runtime(installed: bool) -> MagicMock:
-    svc = MagicMock()
-    svc.is_installed.return_value = installed
-    return svc
+def _readiness_disabled(
+    provider: str = "claude_code",
+    label: str = "Claude Code",
+    reason: str = "Docker is not installed or not running",
+) -> TriageReadiness:
+    return TriageReadiness(
+        provider=provider,
+        backend_label=label,
+        enabled=False,
+        reason=reason,
+    )
 
 
-class TestTriageCommandsClaudeGate:
-    def _assert_gated(self, args: list[str]) -> None:
+def _readiness_enabled(
+    provider: str = "claude_code",
+    label: str = "Claude Code",
+) -> TriageReadiness:
+    return TriageReadiness(
+        provider=provider,
+        backend_label=label,
+        enabled=True,
+        reason=None,
+    )
+
+
+class TestTriageCommandsReadinessGate:
+    def _assert_gated(self, args: list[str], reason: str) -> None:
         repl = _repl()
-        cmds = TriageCommands(repl, runtime_service=_runtime(installed=False))
+        repl.triage_readiness = _readiness_disabled(reason=reason)
+        cmds = TriageCommands(repl)
         with (
             patch(
                 "application.repl.commands.triage_commands.TriageService"
@@ -37,20 +64,27 @@ class TestTriageCommandsClaudeGate:
         rb.assert_not_called()
         rd.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
-        assert "Claude Code" in printed
+        assert reason in printed
 
     def test_no_args_gated(self) -> None:
-        self._assert_gated([])
+        self._assert_gated([], "Docker is not installed or not running")
 
     def test_batch_flag_gated(self) -> None:
-        self._assert_gated(["--batch"])
+        self._assert_gated(
+            ["--batch"],
+            "Docker is not installed or not running",
+        )
 
     def test_dry_run_flag_gated(self) -> None:
-        self._assert_gated(["--dry-run"])
+        self._assert_gated(
+            ["--dry-run"],
+            "Docker is not installed or not running",
+        )
 
-    def test_claude_present_proceeds_to_project_check(self) -> None:
+    def test_enabled_proceeds_to_project_check(self) -> None:
         repl = _repl(active_project=None)
-        cmds = TriageCommands(repl, runtime_service=_runtime(installed=True))
+        repl.triage_readiness = _readiness_enabled()
+        cmds = TriageCommands(repl)
         with patch(
             "application.repl.commands.triage_commands.TriageService"
         ) as mock_service:
@@ -59,13 +93,32 @@ class TestTriageCommandsClaudeGate:
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
         assert "No active" in printed
 
-    def test_no_runtime_service_skips_gate(self) -> None:
-        repl = _repl(active_project=None)
-        cmds = TriageCommands(repl, runtime_service=None)
+    def test_disabled_opencode_is_gated(self) -> None:
+        repl = _repl()
+        repl.triage_readiness = _readiness_disabled(
+            provider="open_code",
+            label="OpenCode",
+            reason="Docker is not installed or not running",
+        )
+        cmds = TriageCommands(repl)
         with patch(
-            "application.repl.commands.triage_commands.TriageService"
-        ) as mock_service:
-            cmds.cmd_triage("triage", [])
-        mock_service.for_project.assert_not_called()
+            "application.repl.commands.triage_commands.run_triage_batch_only"
+        ) as mock_batch:
+            cmds.cmd_triage("triage", ["--batch"])
+        mock_batch.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
-        assert "No active" in printed
+        assert "Docker is not installed" in printed
+
+    def test_enabled_opencode_proceeds(self) -> None:
+        repl = _repl()
+        repl.triage_readiness = _readiness_enabled(
+            provider="open_code",
+            label="OpenCode",
+        )
+        cmds = TriageCommands(repl)
+        with patch(
+            "application.repl.commands.triage_commands.run_triage_batch_only",
+            return_value=1,
+        ) as mock_batch:
+            cmds.cmd_triage("triage", ["--batch"])
+        mock_batch.assert_called_once()

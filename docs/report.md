@@ -41,8 +41,6 @@ LLM draft generation reads only findings that have been triaged and marked for i
 [acme-audit]> triage
 ```
 
-See [docs/mcp.md](mcp.md) for the full triage guide.
-
 If you want to generate drafts before triage is complete (e.g. for development or preview),
 pass `--skip-triage` to `report draft` — see [Step 2](#step-2--generate-llm-drafts) below.
 

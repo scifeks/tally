@@ -17,15 +17,17 @@ def _write_global_config(base_path: Path, overrides: dict | None = None) -> None
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     base: dict = {
-        "chat_llm_provider": "ollama",
-        "enrichment_llm_provider": "ollama",
-        "report_llm_provider": "ollama",
-        "embedding_provider": "ollama_embedding",
         "ollama": {
             "base_url": _OLLAMA_URL,
             "model": "qwen3:14b",
         },
-        "ollama_embedding": {"model": "nomic-embed-text:latest"},
+        "chat_inference": {"provider": "ollama"},
+        "enrichment_inference": {"provider": "ollama"},
+        "report_inference": {"provider": "ollama"},
+        "embedding_inference": {
+            "provider": "ollama",
+            "model": "nomic-embed-text:latest",
+        },
     }
     if overrides:
         base.update(overrides)
@@ -34,7 +36,10 @@ def _write_global_config(base_path: Path, overrides: dict | None = None) -> None
 
 class TestRolesResolveIndependently:
     def test_chat_unknown_enrichment_ok(self, tmp_path: Path) -> None:
-        _write_global_config(tmp_path, {"chat_llm_provider": "unknown"})
+        _write_global_config(
+            tmp_path,
+            {"chat_inference": {"provider": "unknown"}},
+        )
         with pytest.raises(ValueError):
             get_llm_provider("chat", tmp_path)
         provider = get_llm_provider("enrichment", tmp_path)

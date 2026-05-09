@@ -115,7 +115,7 @@ class QueryEngine:
             return "Please provide a message."
 
         if not self._provider.is_available():
-            return "Cannot connect to Ollama. Is it running? (ollama serve)"
+            return "Cannot connect to inference provider. Is it running?"
 
         results = self.search(message, n_results=n_context)
         if not results:

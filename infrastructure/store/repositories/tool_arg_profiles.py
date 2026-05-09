@@ -150,7 +150,11 @@ def _args_from_json(raw: str) -> list[ToolArgProfileArg]:
             out.append(ToolArgProfileFlagArg(name=entry["name"]))
         elif kind == "string":
             out.append(
-                ToolArgProfileStringArg(name=entry["name"], value=entry["value"])
+                ToolArgProfileStringArg(
+                    name=entry["name"],
+                    value=entry["value"],
+                    operator=entry.get("operator", ""),
+                )
             )
         elif kind == "file":
             out.append(
@@ -158,6 +162,7 @@ def _args_from_json(raw: str) -> list[ToolArgProfileArg]:
                     name=entry["name"],
                     path=entry["path"],
                     original_filename=entry.get("original_filename"),
+                    operator=entry.get("operator", ""),
                 )
             )
         else:

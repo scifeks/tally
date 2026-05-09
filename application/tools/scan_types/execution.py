@@ -36,9 +36,9 @@ def _build_tool_execution_config(
     """Snapshot the slice of ConfigManager state that wrappers need."""
     gc = config_manager.global_config
     noir_snapshot: NoirProviderSnapshot | None = None
-    provider_name = gc.noir_provider
-    if provider_name:
-        provider_config = getattr(gc, provider_name, None)
+    feature = gc.noir_inference
+    if feature is not None:
+        provider_config = getattr(gc, feature.provider, None)
         if provider_config is not None and hasattr(provider_config, "base_url"):
             noir_snapshot = NoirProviderSnapshot(
                 base_url=provider_config.base_url,

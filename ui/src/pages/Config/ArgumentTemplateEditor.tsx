@@ -51,8 +51,11 @@ export function ArgumentTemplateEditor({
       </div>
 
       <div className="space-y-2">
-        <div className="block text-[10px] uppercase tracking-wider text-muted-foreground">
-          Arguments
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="w-32">Argument</div>
+          <div className="w-20">Operator</div>
+          <div className="w-24">Type</div>
+          <div className="flex-1">Value</div>
         </div>
         {template.arguments.map(arg => (
           <div key={arg.id} className="flex items-start gap-2">
@@ -67,12 +70,27 @@ export function ArgumentTemplateEditor({
               />
             </div>
 
+            <div className="relative w-20">
+              <select
+                value={arg.operator ?? ''}
+                onChange={e => updateArgument(arg.id, { operator: e.target.value })}
+                disabled={arg.valueType === 'none'}
+                aria-label="operator"
+                className="w-full h-7 pl-2 pr-6 bg-background border border-border text-xs text-foreground appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:border-accent focus:outline-none"
+              >
+                <option value="">None</option>
+                <option value="=">=</option>
+              </select>
+              <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-dim pointer-events-none" />
+            </div>
+
             <div className="relative w-24">
               <select
                 value={arg.valueType}
                 onChange={e =>
                   updateArgument(arg.id, {
                     valueType: e.target.value as ArgValueType,
+                    operator: e.target.value === 'none' ? '' : arg.operator,
                     value: undefined,
                     fileName: undefined,
                     file: undefined,

@@ -89,7 +89,11 @@ def _arg_to_response(
     if isinstance(arg, ToolArgProfileFlagArg):
         return ArgProfileFlagArgResponse(name=arg.name)
     if isinstance(arg, ToolArgProfileStringArg):
-        return ArgProfileStringArgResponse(name=arg.name, value=arg.value)
+        return ArgProfileStringArgResponse(
+            name=arg.name,
+            value=arg.value,
+            operator=arg.operator,
+        )
     assert isinstance(arg, ToolArgProfileFileArg)
     url = (
         _build_download_url(project_id, profile_id, arg.name)
@@ -99,6 +103,7 @@ def _arg_to_response(
     return ArgProfileFileArgResponse(
         name=arg.name,
         path=arg.path,
+        operator=arg.operator,
         original_filename=arg.original_filename,
         download_url=url,
     )
@@ -141,7 +146,13 @@ async def _build_inputs(
             inputs.append(FlagArgInput(name=arg.name))
             continue
         if isinstance(arg, ArgProfilePayloadStringArg):
-            inputs.append(StringArgInput(name=arg.name, value=arg.value))
+            inputs.append(
+                StringArgInput(
+                    name=arg.name,
+                    value=arg.value,
+                    operator=arg.operator,
+                )
+            )
             continue
         assert isinstance(arg, ArgProfilePayloadFileArg)
         upload = form.get(arg.name)
@@ -152,10 +163,17 @@ async def _build_inputs(
                     name=arg.name,
                     data=data,
                     original_filename=upload.filename,
+                    operator=arg.operator,
                 )
             )
         elif allow_keep_existing:
-            inputs.append(FileArgInput(name=arg.name, data=None))
+            inputs.append(
+                FileArgInput(
+                    name=arg.name,
+                    data=None,
+                    operator=arg.operator,
+                )
+            )
         else:
             missing_files.append({"field": arg.name, "issue": "missing upload field"})
     if missing_files:

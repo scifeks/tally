@@ -89,7 +89,7 @@ class TestUpdateFinding:
             ).fetchone()
         assert row["confidence"] == "probable"
         assert row["severity"] == 1
-        assert row["triaged_by"] == "claude-code"
+        assert row["triaged_by"] == "claudecode"
 
     def test_raises_for_missing_id(self, repo: FindingRepository) -> None:
         with pytest.raises(ValueError, match="not found"):
@@ -115,5 +115,5 @@ class TestUpdateFinding:
         triage = meta["triage"]
         assert triage["confidence"] == "probable"
         assert triage["strategy"] == "manual"
-        assert triage["triaged_by"] == "claude-code"
+        assert triage["triaged_by"] == "claudecode"
         assert "triaged_at" in triage

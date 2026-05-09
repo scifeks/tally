@@ -1,37 +1,43 @@
 {
-  "chat_llm_provider": "",
-  "enrichment_llm_provider": "ollama",
-  "report_llm_provider": "ollama_report",
-  "embedding_provider": "ollama_embedding",
   "ollama": {
     "base_url": "http://localhost:11434",
     "model": "qwen2.5:14b",
     "timeout_seconds": 60,
     "num_ctx": null
   },
-  "ollama_report": {
-    "base_url": "http://localhost:11434",
-    "model": "qwen2.5:14b",
-    "timeout_seconds": 120,
-    "num_ctx": null
-  },
-  "ollama_noir": {
-    "base_url": "http://localhost:11434",
-    "model": "gemma3:27b",
-    "timeout_seconds": 120,
-    "num_ctx": null
-  },
-  "noir_provider": "ollama_noir",
-  "ollama_embedding": {
-    "base_url": "http://localhost:11434",
-    "model": "nomic-embed-text:latest",
-    "timeout_seconds": 60
+  "llama_cpp": {
+    "base_url": "http://localhost:8080",
+    "model": "qwen3:30b",
+    "timeout_seconds": 60,
+    "num_ctx": 8192
   },
   "claude": {
     "api_key": "",
     "model": "claude-opus-4-5",
     "max_tokens": 1024,
     "timeout_seconds": 60
+  },
+  "triage_inference": {
+    "provider": "ollama",
+    "timeout_seconds": 600,
+    "retry_count": 2,
+    "debug": false
+  },
+  "chat_inference": null,
+  "enrichment_inference": {
+    "provider": "ollama"
+  },
+  "report_inference": {
+    "provider": "ollama",
+    "timeout_seconds": 120
+  },
+  "embedding_inference": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest"
+  },
+  "noir_inference": {
+    "provider": "ollama",
+    "timeout_seconds": 120
   },
   "projects_dir": "./projects",
   "location_attestation_confirmed": false,

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from application.runtime import RuntimeDependencyService
+    from application.triage.readiness import TriageReadiness
 
 # Custom box: vertical edge/divider lines with a header separator only.
 # Each line = 4 chars: left-edge, fill, column-divider, right-edge.
@@ -268,13 +268,13 @@ _HELP_REGISTRY = [
         "triage",
         "triage",
         "--batch",
-        "Run batching phase only; no Claude sessions",
+        "Run batching phase only; no backend sessions",
     ),
     (
         "triage",
         "triage",
         "--dry-run",
-        "Batch + render prompts to DEBUG log; no MCP server, no Claude",
+        "Batch + render prompts to DEBUG log; no MCP server, no backend session",
     ),
     # Web UI
     ("ui", None, None, "Web UI"),
@@ -298,10 +298,10 @@ class HelpRenderer:
     def __init__(
         self,
         console: Console,
-        runtime_service: RuntimeDependencyService | None = None,
+        triage_readiness: TriageReadiness,
     ) -> None:
         self.console = console
-        self._runtime_service = runtime_service
+        self._triage_readiness = triage_readiness
 
     def render(self, group: str) -> None:
         """Render a help table filtered to a single group."""
@@ -324,10 +324,7 @@ class HelpRenderer:
 
         entries = [e for e in _HELP_REGISTRY if group is None or e[0] == group]
 
-        claude_missing = (
-            self._runtime_service is not None
-            and not self._runtime_service.is_installed("claude")
-        )
+        triage_readiness = self._triage_readiness
 
         # Collect titles of section headers that need a divider above them;
         # every header except the first one in the (filtered) list.
@@ -356,10 +353,11 @@ class HelpRenderer:
             else:
                 cmd_cell = cmd if cmd != prev_cmd else ""
                 arg_cell = arg if arg is not None else ""
-                if claude_missing and grp == "triage":
+                if grp == "triage" and not triage_readiness.enabled:
                     cmd_cell = f"[dim]{cmd_cell}[/dim]"
                     arg_cell = f"[dim]{arg_cell}[/dim]"
-                    desc = f"[red](Claude Code required)[/red] {desc}"
+                    reason = triage_readiness.reason or "Triage unavailable"
+                    desc = f"[red]({reason})[/red] {desc}"
                 table.add_row(cmd_cell, arg_cell, desc, end_section=needs_end_section)
                 prev_cmd = cmd
 

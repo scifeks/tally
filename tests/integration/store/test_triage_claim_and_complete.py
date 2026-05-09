@@ -103,14 +103,16 @@ class TestClaimAndComplete:
         run_id = run_repo.create_run({})
         assert repo.claim_batch(run_id) is None
 
-    def test_exhausted_attempts_never_claimed(
+    def test_high_attempt_count_still_claimable(
         self,
         factory: ConnectionFactory,
         repo: TriageBatchRepository,
         run_repo: RunRepository,
     ) -> None:
-        run_id = _seed_batch(factory, run_repo, status="pending", attempts=3)
-        assert repo.claim_batch(run_id) is None
+        run_id = _seed_batch(factory, run_repo, status="pending", attempts=5)
+        result = repo.claim_batch(run_id)
+        assert result is not None
+        assert result.run_attempts == 6
 
     def test_complete_success(
         self,

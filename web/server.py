@@ -15,10 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from application.capabilities.service import CapabilitiesService
 from application.project.registry_service import ProjectRegistryService
+from application.runtime import build_runtime_dependency_probes
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
+from application.triage.readiness import compute_triage_readiness
 from infrastructure.events.bus import EventBus
-from infrastructure.runtime.claude_probe import ClaudeCodeProbe
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
@@ -117,11 +118,17 @@ def create_app(
     app.state.tool_catalog_snapshot = tool_registry.snapshot()
     app.state.installed_tools = InstalledToolsProbe(tool_registry)
 
-    app.state.runtime_dependency_service = RuntimeDependencyService([ClaudeCodeProbe()])
+    app.state.runtime_dependency_service = RuntimeDependencyService(
+        build_runtime_dependency_probes(base_path=base_path)
+    )
 
+    triage_readiness = compute_triage_readiness(
+        base_path=base_path,
+        docker_available=app.state.runtime_dependency_service.is_installed("docker"),
+    )
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,
-        runtime_service=app.state.runtime_dependency_service,
+        triage_readiness=triage_readiness,
     )
 
     app.include_router(auth_router, prefix="/api/v1/auth")
@@ -190,6 +197,11 @@ def create_app(
     return app
 
 
+# todo: Add cross-midnight rollover, rquest-ID inner layer correlation
+#  (context var), retention policy
+# todo: Add a concept of log/run levels for debug vs normal logging
+# todo: Turn off logging by default
+# todo: Logging does not need to be duplicated and it is not the concern of the server.
 def _attach_file_logging(base_path: str) -> None:
     """Attach a dated FileHandler to uvicorn loggers.
 

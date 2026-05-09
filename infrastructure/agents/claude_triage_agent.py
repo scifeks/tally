@@ -1,49 +1,80 @@
-"""ClaudeTriageAgent: concrete TriageAgentPort backed by the Claude Code CLI.
-
-Owns the argv that invokes the ``claude`` binary plus the security policy
-that pins the flag set. The application service hands over a rendered prompt
-and a timeout; this adapter handles the spawn, captures the result, and
-translates timeouts and unexpected errors into a TriageSessionResult.
-"""
+"""Claude-backed one-shot triage adapter."""
 
 from __future__ import annotations
 
+import json
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
-from application.ports.triage_agent import TriageAgentPort, TriageSessionResult
-
-# SECURITY: --dangerously-skip-permissions and --disallowedTools must
-# ALWAYS be present together. Removing or weakening either flag creates
-# a privilege-escalation path. Rationale:
-#
-# 1. --dangerously-skip-permissions is required because the MCP server
-#    startup otherwise triggers interactive permission prompts that
-#    cannot be answered in a non-interactive subprocess.
-#
-# 2. --disallowedTools is the compensating control that prevents Claude
-#    from using any tool that directly modifies the filesystem or makes
-#    network requests (Bash, Write, Edit, MultiEdit, WebFetch,
-#    WebSearch). Without this list, --dangerously-skip-permissions
-#    would grant the Claude subprocess full filesystem and network
-#    access under the operator's user identity.
-#
-# 3. The MCP permission manifest in .mcp.json
-#    (allow: [get_findings_batch, update_findings_batch], deny: [*])
-#    is a third layer of defense: the MCP server itself refuses calls
-#    to any tool not explicitly allow-listed.
-#
-# 4. If --disallowedTools is removed or its tool list is shortened,
-#    the Claude subprocess gains unrestricted filesystem write and
-#    network access as the current user. That is a critical security
-#    regression.
-#
-# NEVER remove --dangerously-skip-permissions or --disallowedTools,
-# and NEVER reduce the set of tools listed in --disallowedTools.
-_DISALLOWED_TOOLS = "Bash,Write,Edit,MultiEdit,WebFetch,WebSearch"
+from application.ports.triage_agent import (
+    PreparedTriageSession,
+    TriageSessionResult,
+)
+from application.triage.verdict import Verdict, VerdictParseError, parse_verdict
 
 
-class ClaudeTriageAgent(TriageAgentPort):
+class ClaudeTriageAgent:
+    def __init__(self, *, model: str, compose_path: Path) -> None:
+        self._model = model
+        self._compose_path = compose_path
+        self.last_raw_output: str = ""
+
+    @contextmanager
+    def prepare_session(
+        self,
+        *,
+        project: str,
+        run_id: int,
+        app_root: Path,
+    ):
+        yield PreparedTriageSession(cwd=app_root)
+
+    def run_triage(
+        self,
+        prompt: str,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> Verdict:
+        completed = subprocess.run(
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(self._compose_path),
+                "exec",
+                "-T",
+                "triage-agent",
+                "claude",
+                "--print",
+                "--output-format",
+                "json",
+                "--dangerously-skip-permissions",
+                "--model",
+                self._model,
+                "--add-dir",
+                "/workspace",
+                "--tools",
+                "Read,Grep,Glob,Bash",
+            ],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            raise VerdictParseError(
+                f"claude exited with code {completed.returncode}: {stderr[:200]}"
+            )
+
+        self.last_raw_output = completed.stdout
+        result_text = self._extract_result(completed.stdout)
+        return parse_verdict(result_text, expected_finding_id=finding_id)
+
     def run_session(
         self,
         prompt: str,
@@ -51,38 +82,32 @@ class ClaudeTriageAgent(TriageAgentPort):
         timeout_seconds: int,
         cwd: Path,
     ) -> TriageSessionResult:
+        raise NotImplementedError("use run_triage")
+
+    def _extract_result(self, stdout: str) -> str:
+        if not stdout.strip():
+            raise VerdictParseError("empty stdout from claude")
+
         try:
-            completed = subprocess.run(
-                [
-                    "claude",
-                    "--print",
-                    "--dangerously-skip-permissions",
-                    "--disallowedTools",
-                    _DISALLOWED_TOOLS,
-                ],
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                cwd=str(cwd),
-            )
-        except subprocess.TimeoutExpired:
-            return TriageSessionResult(
-                success=False,
-                returncode=-1,
-                stderr="",
-                error=f"timed out after {timeout_seconds}s",
-            )
-        except Exception as exc:
-            return TriageSessionResult(
-                success=False,
-                returncode=-1,
-                stderr="",
-                error=str(exc),
+            wrapper = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            raise VerdictParseError(f"claude output is not valid JSON: {exc}") from exc
+
+        if not isinstance(wrapper, dict):
+            raise VerdictParseError(
+                f"claude output is not an object: {type(wrapper).__name__}"
             )
 
-        return TriageSessionResult(
-            success=completed.returncode == 0,
-            returncode=completed.returncode,
-            stderr=completed.stderr or "",
-        )
+        if wrapper.get("is_error"):
+            raise VerdictParseError(
+                f"claude reported an error: {wrapper.get('result', 'unknown')}"
+            )
+
+        result = wrapper.get("result")
+        if not isinstance(result, str):
+            raise VerdictParseError(
+                f"claude wrapper missing 'result' string field; "
+                f"keys={list(wrapper.keys())}"
+            )
+
+        return result

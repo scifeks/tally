@@ -671,19 +671,21 @@ def test_reset_for_resume_flips_in_progress_and_failed(app_client_sync) -> None:
     assert statuses == ["completed", "pending", "pending"]
 
 
-def test_reset_for_resume_skips_failed_at_3_attempts(app_client_sync) -> None:
-    """Failed batches with run_attempts >= 3 stay failed (the cap holds)."""
+def test_reset_for_resume_resets_failed_regardless_of_attempts(
+    app_client_sync,
+) -> None:
+    """Failed batches are always eligible for manual resume."""
     factory = app_client_sync
     with factory.connect() as conn:
         conn.execute(
             "INSERT INTO triage_batches"
             " (run_id, finding_ids, batch_data, status, run_attempts)"
             " VALUES (?, ?, ?, ?, ?)",
-            (12, json.dumps([1]), json.dumps([{"id": 1}]), "failed", 3),
+            (12, json.dumps([1]), json.dumps([{"id": 1}]), "failed", 5),
         )
     repo = TriageBatchRepository(factory)
     n = repo.reset_for_resume(12)
-    assert n == 0
+    assert n == 1
 
     rows = repo.list_for_run(12)
-    assert rows[0].status == "failed"
+    assert rows[0].status == "pending"

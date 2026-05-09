@@ -1,12 +1,14 @@
-"""Unit tests for the RunFailed emit path on TriageRunner."""
+"""Tests RunFailed emission."""
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from application.ports.triage_agent import PreparedTriageSession
 from application.triage.runner import TriageRunner
 from domain.pipeline.triage_events import RunFailed
 from domain.triage.entry import TriageBatchRow
@@ -21,7 +23,9 @@ class _RecordingSink:
         self.events.append(event)
 
 
-def _make_runner(tmp_path: Path) -> tuple[TriageRunner, _RecordingSink, MagicMock]:
+def _make_runner(
+    tmp_path: Path,
+) -> tuple[TriageRunner, _RecordingSink, MagicMock]:
     sink = _RecordingSink()
     triage_repo = MagicMock()
     triage_repo.summarize_for_run.return_value = TriageRunSummaryRow(
@@ -32,7 +36,11 @@ def _make_runner(tmp_path: Path) -> tuple[TriageRunner, _RecordingSink, MagicMoc
         total_findings=10,
         processed_findings=3,
         total_batches=4,
-        counts_by_status={"pending": 1, "in_progress": 1, "completed": 2},
+        counts_by_status={
+            "pending": 1,
+            "in_progress": 1,
+            "completed": 2,
+        },
     )
     triage_repo.list_for_run.return_value = [
         TriageBatchRow(
@@ -69,17 +77,22 @@ def _make_runner(tmp_path: Path) -> tuple[TriageRunner, _RecordingSink, MagicMoc
             completed_at=None,
         ),
     ]
+    triage_backend = MagicMock()
+    triage_backend.prepare_session.return_value = nullcontext(
+        PreparedTriageSession(cwd=tmp_path)
+    )
     runner = TriageRunner(
         project="proj",
         run_repo=MagicMock(),
         triage_repo=triage_repo,
-        audit_repo=MagicMock(),
+        audit_repo=None,
         app_root=tmp_path,
         tool_registry=MagicMock(),
         event_sink=sink,
         project_id=42,
-        triage_agent=MagicMock(),
+        triage_backend=triage_backend,
         session_timeout_seconds=300,
+        finding_repo=MagicMock(),
     )
     return runner, sink, triage_repo
 
@@ -97,11 +110,12 @@ def test_emit_run_failed_populates_payload(tmp_path: Path) -> None:
     assert event.completed_count == 3
     assert event.total_count == 10
     assert event.resumable is True
-    # First in-progress batch's first finding id surfaces as failed_at.
     assert event.failed_at_finding_id == 201
 
 
-def test_emit_run_failed_falls_back_when_summary_missing(tmp_path: Path) -> None:
+def test_emit_run_failed_falls_back_when_summary_missing(
+    tmp_path: Path,
+) -> None:
     runner, sink, triage_repo = _make_runner(tmp_path)
     triage_repo.summarize_for_run.return_value = None
     triage_repo.list_for_run.return_value = []
@@ -136,12 +150,7 @@ def test_run_emits_run_failed_and_reraises_on_uncaught(
     """End-to-end: an exception in _run_batch_loop emits RunFailed + re-raises."""
     runner, sink, _ = _make_runner(tmp_path)
 
-    # Make batch() return a stable run_id without touching the DB.
     monkeypatch.setattr(runner, "batch", lambda: (7, 0))
-    # Stub MCP config so _write_mcp_config doesn't need a real venv.
-    fake_path = tmp_path / ".mcp.json"
-    fake_path.write_text("{}")
-    monkeypatch.setattr(runner, "_write_mcp_config", lambda _run_id: fake_path)
 
     def _explode(*_a, **_kw):
         raise RuntimeError("db unavailable")

@@ -21,9 +21,15 @@ def profile_args_to_cli(args: Sequence[ToolArgProfileArg]) -> list[str]:
         if isinstance(arg, ToolArgProfileFlagArg):
             result.append(arg.name)
         elif isinstance(arg, ToolArgProfileStringArg):
-            result.extend([arg.name, arg.value])
+            if arg.operator == "=":
+                result.append(f"{arg.name}={arg.value}")
+            else:
+                result.extend([arg.name, arg.value])
         elif isinstance(arg, ToolArgProfileFileArg):
-            result.extend([arg.name, arg.path])
+            if arg.operator == "=":
+                result.append(f"{arg.name}={arg.path}")
+            else:
+                result.extend([arg.name, arg.path])
     return result
 
 
@@ -56,7 +62,13 @@ def snapshot_to_cli(snapshot_json: str) -> list[str]:
                 raise ValueError("Missing required field: name")
             if "value" not in item:
                 raise ValueError("Missing required field: value")
-            args.append(ToolArgProfileStringArg(name=item["name"], value=item["value"]))
+            args.append(
+                ToolArgProfileStringArg(
+                    name=item["name"],
+                    value=item["value"],
+                    operator=item.get("operator", ""),
+                )
+            )
 
         elif arg_type == "file":
             if "name" not in item:
@@ -68,6 +80,7 @@ def snapshot_to_cli(snapshot_json: str) -> list[str]:
                     name=item["name"],
                     path=item["path"],
                     original_filename=item.get("original_filename"),
+                    operator=item.get("operator", ""),
                 )
             )
 

@@ -35,7 +35,7 @@ ENV/
 # Project-specific
 projects/*
 !projects/.gitkeep
-logs/*.log
+logs/**/*.log
 config/global.json
 
 # OS
@@ -49,7 +49,8 @@ config/secrets.json
 /config/commands.json
 
 #Docker
-docker/docker-compose.yaml
+docker/tool-entrypoints/docker-compose.yaml
+docker/triage-agent/docker-compose.yaml
 
 #mocks
 MagicMock
@@ -74,3 +75,6 @@ patches/
 
 #SQLite
 tally.db*
+
+#Worktrees
+.worktrees/

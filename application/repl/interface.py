@@ -35,10 +35,13 @@ from application.repl.commands import (
     UiCommands,
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
-from application.runtime import RuntimeDependencyService
+from application.runtime import (
+    RuntimeDependencyService,
+    build_runtime_dependency_probes,
+)
 from application.tools.registry import ToolRegistry, discover_tools
+from application.triage.readiness import compute_triage_readiness
 from core.config import ConfigManager
-from infrastructure.runtime import ClaudeCodeProbe
 
 if TYPE_CHECKING:
     from application.rag.knowledge_base import FindingKnowledgeBase
@@ -247,8 +250,14 @@ class REPL:
         self.active_project: str | None = None
         self.knowledge_base_cache: dict[str, FindingKnowledgeBase | None] = {}
         if runtime_service is None:
-            runtime_service = RuntimeDependencyService([ClaudeCodeProbe()])
+            runtime_service = RuntimeDependencyService(
+                build_runtime_dependency_probes(base_path=base_path)
+            )
         self._runtime_service = runtime_service
+        self.triage_readiness = compute_triage_readiness(
+            base_path=base_path,
+            docker_available=runtime_service.is_installed("docker"),
+        )
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
 
@@ -257,14 +266,17 @@ class REPL:
             tool_registry = ToolRegistry()
             discover_tools(tool_registry, base_path)
         self.tool_registry = tool_registry
-        self.help_renderer = HelpRenderer(self.console, runtime_service=runtime_service)
+        self.help_renderer = HelpRenderer(
+            self.console,
+            triage_readiness=self.triage_readiness,
+        )
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
-        self.triage_commands = TriageCommands(self, runtime_service=runtime_service)
+        self.triage_commands = TriageCommands(self)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
     def run(self) -> None:
@@ -428,7 +440,7 @@ class REPL:
 
         content = (
             f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
-            "LlamaIndex + Chroma + Ollama\n"
+            "LlamaIndex + Chroma + Local Inference\n"
             f"{project_line}"
         )
         self.console.print(Panel(content, title="[cyan]Welcome[/cyan]", expand=False))

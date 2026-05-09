@@ -56,6 +56,7 @@ class TestArgProfilesCreate:
             "name": "--config",
             "type": "string",
             "value": "/etc/x",
+            "operator": "",
         }
         profile_id = body["id"]
 

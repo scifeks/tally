@@ -18,6 +18,7 @@ from domain.tool_arg_profiles.entry import (
     ToolArgProfile,
     ToolArgProfileFileArg,
     ToolArgProfileFlagArg,
+    ToolArgProfileStringArg,
 )
 
 
@@ -226,6 +227,26 @@ class TestCreateOrchestration:
         assert len(args_list) == 1
         assert isinstance(args_list[0], ToolArgProfileFileArg)
         assert args_list[0].path == "/path/to/rules"
+
+    def test_operator_passed_to_domain_args(self) -> None:
+        repo = _make_repo_mock()
+        storage = _make_storage_mock()
+        repo.insert.return_value = 1
+        repo.get.return_value = _make_profile()
+        svc = ToolArgProfilesService(repo, storage)
+
+        svc.create(
+            tool_name="semgrep",
+            name="test",
+            args=[
+                StringArgInput(name="--redact", value="50", operator="="),
+            ],
+        )
+
+        repo.update.assert_called_once()
+        domain_args = repo.update.call_args[1]["args"]
+        assert isinstance(domain_args[0], ToolArgProfileStringArg)
+        assert domain_args[0].operator == "="
 
     def test_result_returned_from_repo_get(self) -> None:
         repo = _make_repo_mock()

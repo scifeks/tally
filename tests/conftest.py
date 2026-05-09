@@ -48,6 +48,28 @@ requires_ollama = pytest.mark.skipif(
 )
 
 
+def _docker_daemon_running() -> bool:
+    import subprocess
+
+    if shutil.which("docker") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+requires_docker = pytest.mark.skipif(
+    not _docker_daemon_running(),
+    reason="Docker not available or daemon not running",
+)
+
+
 @pytest.fixture(autouse=True)
 def _restore_lock_registry():
     """Isolate lock_registry singleton state across all test scopes."""

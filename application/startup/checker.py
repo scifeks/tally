@@ -50,6 +50,7 @@ _PACKAGE_IMPORT_MAP = {
     "prompt_toolkit": "prompt_toolkit",
     "chromadb": "chromadb",
     "ollama": "ollama",
+    "openai": "openai",
     "pytest": "pytest",
     "pytest-timeout": "pytest_timeout",
 }

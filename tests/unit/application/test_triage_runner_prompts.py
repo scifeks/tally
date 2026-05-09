@@ -1,4 +1,4 @@
-"""Unit tests for the static prompt renderer mapping in TriageRunner."""
+"""Unit tests for the prompt renderer mapping in TriageRunner."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from application.triage.runner import _PROMPT_RENDERERS
 
 class TestPromptRenderers:
     def test_known_segments_render_strings(self) -> None:
-        for segment in ("api", "sast", "sca"):
-            result = _PROMPT_RENDERERS[segment]([1, 2], "demo")
+        for segment in ("api", "sast"):
+            result = _PROMPT_RENDERERS[segment]({"id": 1}, project="demo")
             assert isinstance(result, str)
             assert result
 

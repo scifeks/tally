@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich.panel import Panel
@@ -121,9 +122,21 @@ class ProjectCommands:
         try:
             self.repl.projects.switch_project(name)
             self.repl.active_project = name
+            self._teardown_triage_containers()
             self.repl.console.print(f"[green]✓ Switched to project: {name}[/green]")
         except ValueError:
             self.repl.console.print(f"[red]Project not found: {name}[/red]")
+
+    def _teardown_triage_containers(self) -> None:
+        """Best-effort compose-down after a project switch."""
+        try:
+            from application.triage.container import (
+                teardown_triage_containers,
+            )
+
+            teardown_triage_containers(Path(self.repl.base_path))
+        except Exception:
+            pass
 
     def cmd_new_project(self, _cmd: str, _args: list[str]) -> None:
         """Create a new project interactively."""

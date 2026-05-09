@@ -1,10 +1,14 @@
-"""TriageAgent port: runs one triage-agent session per call."""
+"""Ports for triage backends."""
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from application.triage.verdict import Verdict
 
 
 @dataclass(frozen=True)
@@ -19,6 +23,13 @@ class TriageSessionResult:
     returncode: int
     stderr: str
     error: str | None = None
+
+
+@dataclass(frozen=True)
+class PreparedTriageSession:
+    """Carries backend state into a session."""
+
+    cwd: Path
 
 
 @runtime_checkable
@@ -43,3 +54,40 @@ class TriageAgentPort(Protocol):
         timeout_seconds: int,
         cwd: Path,
     ) -> TriageSessionResult: ...
+
+
+@runtime_checkable
+class TriageSessionPreparerPort(Protocol):
+    """Builds per-run backend state."""
+
+    def prepare_session(
+        self,
+        *,
+        project: str,
+        run_id: int,
+        app_root: Path,
+    ) -> AbstractContextManager[PreparedTriageSession]: ...
+
+
+@runtime_checkable
+class TriageBackendPort(TriageAgentPort, TriageSessionPreparerPort, Protocol):
+    """Backend contract used by the runner."""
+
+
+@runtime_checkable
+class OneshotTriagePort(Protocol):
+    """Run one finding through a one-shot triage agent."""
+
+    def run_triage(
+        self,
+        prompt: str,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> Verdict: ...
+
+
+@runtime_checkable
+class OneshotTriageBackendPort(OneshotTriagePort, TriageSessionPreparerPort, Protocol):
+    """One-shot backend contract. Adapters implement this from 2.2."""

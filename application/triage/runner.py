@@ -6,9 +6,9 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from application.locking import LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken, no_op_token
@@ -18,8 +18,12 @@ from application.ports.triage_event_sink import (
 )
 from application.tools.registry import ToolRegistry
 from application.triage.batching import compute_batches
-from application.triage.prompts import api_trace, sast_trace, sca_trace
-from core.project_paths import ProjectPaths
+from application.triage.prompts import api_trace, sast_trace
+from application.triage.verdict import (
+    SourceNotExaminedError,
+    Verdict,
+    VerdictParseError,
+)
 from domain.pipeline.triage_events import (
     BatchCompleted,
     BatchCreated,
@@ -32,22 +36,18 @@ from domain.pipeline.triage_events import (
 )
 
 if TYPE_CHECKING:
-    from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
-    from application.ports.triage_agent import TriageAgentPort
+    from application.ports.triage_agent import OneshotTriageBackendPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
-_PROMPT_RENDERERS: dict[str, Callable[[list[int], str], str]] = {
+
+_PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
     "api": api_trace.render,
     "sast": sast_trace.render,
-    "sca": sca_trace.render,
 }
 
 _log = logging.getLogger(__name__)
-
-_APP_ROOT = Path(__file__).parent.parent.parent
-
-_AUDIT_WRITE_TOOLS = ("update_finding", "update_findings_batch")
 
 
 class TriageCancelled(Exception):
@@ -81,7 +81,7 @@ class TriageRunner:
         project: str,
         run_repo: RunRepositoryPort,
         triage_repo: TriageBatchRepositoryPort,
-        audit_repo: AuditRepositoryPort,
+        audit_repo: object | None,
         app_root: Path,
         registry: LockRegistry | None = None,
         *,
@@ -89,9 +89,14 @@ class TriageRunner:
         cancel_token: CancellationToken | None = None,
         project_id: int | None = None,
         scan_run_id: int | None = None,
-        triage_agent: TriageAgentPort,
+        triage_backend: OneshotTriageBackendPort,
         session_timeout_seconds: int,
+        retry_count: int = 1,
         tool_registry: ToolRegistry,
+        finding_repo: FindingRepositoryPort | None = None,
+        repo_paths: dict[str, Path] | None = None,
+        triaged_by: str = "claudecode",
+        debug: bool = False,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -103,38 +108,14 @@ class TriageRunner:
         self._cancel_token: CancellationToken = cancel_token or no_op_token()
         self._project_id = project_id
         self._scan_run_id = scan_run_id
-        self._triage_agent = triage_agent
+        self._triage_backend = triage_backend
         self._session_timeout_seconds = session_timeout_seconds
+        self._retry_count = retry_count
         self._tool_registry = tool_registry
-
-    @classmethod
-    def for_project(
-        cls,
-        project: str,
-        tool_registry: ToolRegistry,
-        app_root: Path | None = None,
-    ) -> TriageRunner:
-        from application.config.mcp_defaults import load_mcp_defaults
-
-        root = app_root or _APP_ROOT
-        paths = ProjectPaths.from_canonical(root, project)
-        if not paths.findings_db.exists():
-            raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
-        from infrastructure.agents.claude_triage_agent import ClaudeTriageAgent
-        from infrastructure.store import make_store
-
-        run_repo, _, triage_repo, audit_repo = make_store(root, project)
-        _, _, session_timeout_seconds = load_mcp_defaults(str(root))
-        return cls(
-            project,
-            run_repo,
-            triage_repo,
-            audit_repo,
-            root,
-            triage_agent=ClaudeTriageAgent(),
-            session_timeout_seconds=session_timeout_seconds,
-            tool_registry=tool_registry,
-        )
+        self._finding_repo = finding_repo
+        self._repo_paths: dict[str, Path] = repo_paths or {}
+        self._triaged_by = triaged_by
+        self._debug = debug
 
     # Public API
 
@@ -149,11 +130,11 @@ class TriageRunner:
         """
         run_id = self._resolve_scan_run_id()
 
-        reset_count = self._triage_repo.reset_stale_batches(run_id)
-        if reset_count:
+        stale = self._triage_repo.cancel_remaining(run_id)
+        if stale:
             _log.info(
-                "Reset %d stale in_progress batches for run_id=%d",
-                reset_count,
+                "Cancelled %d stale batches for run_id=%d",
+                stale,
                 run_id,
             )
 
@@ -201,14 +182,7 @@ class TriageRunner:
         return run_id, total
 
     def run(self, *, holder_token: str | None = None) -> TriageResult:
-        """Run full triage pipeline (batch → MCP setup → Claude sessions).
-
-        The "triage" job lock is owned by the caller (the application
-        service that started this run, or the REPL helper). When
-        ``holder_token`` is provided, per-batch finding-id locks are
-        acquired against that token so concurrent analyst PATCHes are
-        blocked while a batch is being written.
-        """
+        """Runs one triage pass for a scan run."""
         run_id, _total = self.batch()
         self._emit(
             RunStarted(
@@ -217,15 +191,15 @@ class TriageRunner:
                 message=f"Triage starting for scan_run_id={run_id}",
             )
         )
-        mcp_json_path = self._write_mcp_config(run_id)
         try:
-            result = self._run_batch_loop(
-                run_id,
-                lambda batch_id, render_fn, finding_ids: self._run_session(
-                    render_fn, finding_ids
-                ),
-                holder_token=holder_token,
-            )
+            with self._prepare_session(run_id) as prepared:
+                result = self._run_batch_loop(
+                    run_id,
+                    lambda bid, bd, seg: self._run_batch_findings(
+                        bid, bd, seg, cwd=prepared.cwd
+                    ),
+                    holder_token=holder_token,
+                )
         except TriageCancelled:
             self._triage_repo.cancel_remaining(run_id)
             self._emit(
@@ -239,8 +213,6 @@ class TriageRunner:
         except Exception as exc:
             self._emit_run_failed(run_id, exc)
             raise
-        finally:
-            mcp_json_path.unlink(missing_ok=True)
         self._emit(
             RunCompleted(
                 scan_run_id=run_id,
@@ -252,26 +224,30 @@ class TriageRunner:
         return result
 
     def run_dry_run(self) -> int:
-        """Batch phase + render prompts to DEBUG log. No MCP server, no Claude.
-
-        Returns the number of non-skip batches processed.
-        """
+        """Logs prompts without running the triage backend."""
         run_id, _total = self.batch()
 
         def _handler(
             batch_id: int,
-            render_fn: Callable[..., str],
-            finding_ids: list[int],
+            batch_data: list[dict[str, Any]],
+            segment: str,
         ) -> str:
-            prompt_text = render_fn(finding_ids, self._project)
-            _log.debug(
-                "========== BATCH %d (%d findings) ==========\n%s\n"
-                "========== END BATCH %d ==========",
-                batch_id,
-                len(finding_ids),
-                prompt_text,
-                batch_id,
-            )
+            render_fn = _PROMPT_RENDERERS[segment]
+            for finding in batch_data:
+                fid = finding.get("id", "?")
+                prompt = render_fn(
+                    finding,
+                    project=self._project,
+                )
+                _log.debug(
+                    "========== FINDING %s (batch %d)"
+                    " ==========\n%s\n"
+                    "========== END FINDING %s ==========",
+                    fid,
+                    batch_id,
+                    prompt,
+                    fid,
+                )
             return "success"
 
         result = self._run_batch_loop(run_id, _handler)
@@ -355,17 +331,17 @@ class TriageRunner:
     def _run_batch_loop(
         self,
         run_id: int,
-        handler: Callable[[int, Callable[..., str], list[int]], str],
+        handler: Callable[[int, list[dict[str, Any]], str], str],
         *,
         holder_token: str | None = None,
     ) -> TriageResult:
         """Claim and process every pending batch for run_id.
 
-        handler(batch_id, render_fn, finding_ids) -> outcome string.
+        handler(batch_id, batch_data, segment) -> outcome string.
         Skip-flagged tools are auto-completed without calling handler.
-        When holder_token is set, finding-id locks are acquired per batch
-        so that analyst PATCH requests are blocked for the duration of the
-        Claude session writing those findings.
+        When holder_token is set, finding-id locks are acquired per
+        batch so that analyst PATCH requests are blocked while the
+        agent writes those findings.
         """
         sessions_run = success = failed = incomplete = 0
         while True:
@@ -389,7 +365,6 @@ class TriageRunner:
                 continue
 
             segment = tool_obj.scan_segment
-            render_fn = _PROMPT_RENDERERS[segment]
 
             sessions_run += 1
             self._emit(
@@ -398,14 +373,14 @@ class TriageRunner:
                     project_id=self._project_id,
                     batch_id=batch_id,
                     segment=segment,
-                    message=f"Batch {batch_id} started ({len(finding_ids)} findings)",
+                    message=(f"Batch {batch_id} started ({len(finding_ids)} findings)"),
                 )
             )
             if holder_token:
                 with self._registry.findings(finding_ids, holder_token):
-                    outcome = handler(batch_id, render_fn, finding_ids)
+                    outcome = handler(batch_id, batch_data, segment)
             else:
-                outcome = handler(batch_id, render_fn, finding_ids)
+                outcome = handler(batch_id, batch_data, segment)
             self._triage_repo.complete_batch(batch_id, outcome)
 
             if outcome == "success":
@@ -452,72 +427,146 @@ class TriageRunner:
             incomplete=incomplete,
         )
 
-    def _run_session(
-        self, render_fn: Callable[..., str], finding_ids: list[int]
+    def _run_batch_findings(
+        self,
+        batch_id: int,
+        batch_data: list[dict[str, Any]],
+        segment: str,
+        *,
+        cwd: Path,
     ) -> str:
-        """Run one triage-agent session.
+        """Triage each finding in the batch via the one-shot adapter.
 
-        Returns 'success', 'failed', or 'incomplete'.
+        Returns 'success' (all ok), 'failed' (all failed), or
+        'incomplete' (mixed).
         """
-        prompt_text = render_fn(finding_ids, self._project)
-        session_start = datetime.now(UTC).isoformat()
+        render_fn = _PROMPT_RENDERERS[segment]
+        succeeded = 0
+        total = len(batch_data)
+        max_attempts = self._retry_count + 1
 
-        result = self._triage_agent.run_session(
-            prompt_text,
-            timeout_seconds=self._session_timeout_seconds,
-            cwd=self._app_root,
-        )
-        if not result.success:
-            _log.error(
-                "Triage session failed (rc=%d, error=%s): %s",
-                result.returncode,
-                result.error or "-",
-                result.stderr,
-            )
-            return "failed"
+        for finding in batch_data:
+            fid = finding.get("id", -1)
+            prompt = render_fn(finding, project=self._project)
+            ok = False
+            for attempt in range(max_attempts):
+                try:
+                    verdict = self._triage_backend.run_triage(
+                        prompt,
+                        finding_id=fid,
+                        timeout_seconds=self._session_timeout_seconds,
+                        cwd=cwd,
+                    )
+                    if self._debug:
+                        raw = getattr(
+                            self._triage_backend,
+                            "last_raw_output",
+                            "",
+                        )
+                        if raw:
+                            self._write_debug_log(batch_id, fid, raw)
+                    self._write_verdict(verdict, segment)
+                    ok = True
+                    break
+                except SourceNotExaminedError as exc:
+                    _log.warning(
+                        "Finding %d in batch %d: source not examined"
+                        " (%s); skipping update",
+                        fid,
+                        batch_id,
+                        exc.reason,
+                    )
+                    break
+                except VerdictParseError as exc:
+                    self._log_verdict_failure(batch_id, fid, exc)
+                    if attempt < max_attempts - 1:
+                        _log.warning(
+                            "Retrying finding %d (attempt %d/%d)",
+                            fid,
+                            attempt + 2,
+                            max_attempts,
+                        )
+                        continue
+                except Exception as exc:
+                    _log.error(
+                        "Triage failed for finding %d in batch %d: %s",
+                        fid,
+                        batch_id,
+                        exc,
+                    )
+                    break
+            if ok:
+                succeeded += 1
 
-        updated_count = self._audit_repo.count_events_since(
-            _AUDIT_WRITE_TOOLS, session_start
-        )
-        if updated_count > 0:
-            _log.info(
-                "Triage session success (updates=%d)",
-                updated_count,
-            )
+        if succeeded == total:
             return "success"
-
-        _log.warning(
-            "Session completed but no findings updated; "
-            "possible prompt failure or empty batch"
-        )
+        if succeeded == 0:
+            return "failed"
         return "incomplete"
 
-    def _write_mcp_config(self, run_id: int) -> Path:
-        """Write .mcp.json for Claude's MCP server and return its path."""
-        mcp_json_path = self._app_root / ".mcp.json"
-        venv_python = self._app_root / ".venv" / "bin" / "python"
+    def _log_verdict_failure(
+        self,
+        batch_id: int,
+        fid: int,
+        exc: VerdictParseError,
+    ) -> None:
+        _log.warning(
+            "Verdict parse failed for finding %d in batch %d: %s",
+            fid,
+            batch_id,
+            exc.problem,
+        )
+        if not self._debug:
+            return
+        raw = getattr(self._triage_backend, "last_raw_output", "")
+        content = raw or exc.raw_output
+        if content:
+            self._write_debug_log(batch_id, fid, content)
 
-        if not venv_python.exists():
-            raise RuntimeError(f"Venv Python not found at {venv_python}")
+    def _write_debug_log(self, batch_id: int, finding_id: int, raw_output: str) -> None:
+        from datetime import datetime
 
-        payload = {
-            "mcpServers": {
-                "tally-mcp": {
-                    "type": "stdio",
-                    "command": str(venv_python),
-                    "args": [
-                        "-m",
-                        "tally_mcp.server",
-                        "--project",
-                        self._project,
-                    ],
-                    "env": {"TALLY_TRIAGE_RUN_ID": str(run_id)},
-                    "permissions": {
-                        "allow": ["get_findings_batch", "update_findings_batch"],
-                        "deny": ["*"],
-                    },
-                }
-            }
-        }
-        mcp_json_path.write_text(json.dumps(payload, indent=2))
-        return mcp_json_path
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        log_dir = self._app_root / "logs" / "triage"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        path = log_dir / f"{batch_id}-{finding_id}-{ts}.log"
+        path.write_text(raw_output, encoding="utf-8")
+        _log.debug("Triage debug log written to %s", path)
+
+    def _read_source_file(self, finding: dict[str, Any]) -> str:
+        repo_name = finding.get("repo", "")
+        file_path = finding.get("file") or finding.get("url", "")
+        if not file_path or not repo_name:
+            return ""
+        repo_root = self._repo_paths.get(repo_name)
+        if repo_root is None:
+            return ""
+        full_path = repo_root / file_path
+        if not full_path.is_file():
+            return ""
+        return full_path.read_text(errors="replace")
+
+    def _write_verdict(self, verdict: Verdict, segment: str) -> None:
+        if self._finding_repo is None:
+            raise RuntimeError("finding_repo not configured on TriageRunner")
+        call_stack_str = json.dumps(verdict.call_stack) if verdict.call_stack else None
+        self._finding_repo.update_finding(
+            verdict.finding_id,
+            verdict.confidence,
+            verdict.finding_type,
+            verdict.severity,
+            verdict.reasoning,
+            verdict.remediation,
+            verdict.attack_vector,
+            call_stack_str,
+            segment,
+            triaged_by=self._triaged_by,
+            source="auto_triage",
+        )
+
+    def _prepare_session(self, run_id: int):
+        return self._triage_backend.prepare_session(
+            project=self._project,
+            run_id=run_id,
+            app_root=self._app_root,
+        )
