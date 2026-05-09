@@ -130,7 +130,8 @@ export async function apiFetch<T = unknown>(input: string, init: ApiFetchInit = 
     }
     const parseAs: ApiResponseFormat = init.parseAs ?? 'json'
     if (parseAs === 'blob') {
-      return (await res.blob()) as T
+      const bytes = await res.arrayBuffer()
+      return new Blob([bytes], { type: res.headers.get('Content-Type') ?? '' }) as T
     }
     if (parseAs === 'text') {
       return (await res.text()) as T
