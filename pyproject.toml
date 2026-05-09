@@ -23,6 +23,7 @@ dependencies = [
     "fuzzywuzzy>=0.18",
     "python-Levenshtein>=0.12",
     "pyyaml>=6.0",
+    "python-multipart>=0.0.20",
 ]
 
 [project.optional-dependencies]
