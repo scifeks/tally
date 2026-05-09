@@ -222,7 +222,7 @@ describe('ArgumentTemplateEditor (integration)', () => {
     const payload = JSON.parse(payloadMatch![1])
     expect(payload.toolName).toBe('gitleaks')
     expect(payload.name).toBe('with-rules')
-    expect(payload.args).toEqual([{ name: '--rules', type: 'file', path: '' }])
+    expect(payload.args).toEqual([{ name: '--rules', type: 'file', path: '', operator: '' }])
   })
 
   it('issues DELETE for a server-backed template the user removed before saving', async () => {
