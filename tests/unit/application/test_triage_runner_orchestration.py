@@ -150,7 +150,7 @@ def _make_runner(
 ]:
     store = MagicMock()
     store.latest_run_id.return_value = 1
-    store.reset_stale_batches.return_value = 0
+    store.cancel_remaining.return_value = 0
     store.get_active_finding_combos.return_value = []
 
     backend = agent or _PerFindingBackend(prepared_cwd=tmp_path)
@@ -353,7 +353,7 @@ def test_cancel_during_batch_loop_cleans_up(
     with pytest.raises(TriageCancelled):
         runner.run()
 
-    store.cancel_remaining.assert_called_once_with(1)
+    store.cancel_remaining.assert_called_with(1)
     cancelled = [e for e in sink.events if isinstance(e, RunCancelled)]
     assert len(cancelled) == 1
     assert cancelled[0].scan_run_id == 1

@@ -54,6 +54,10 @@ class TestParseVerdictHappyPath:
                 id="prose_before_json",
             ),
             pytest.param(
+                lambda: "Analysis: path is `/images/{$id}-{uniqid}`.\n" + _valid_json(),
+                id="prose_with_braces_before_json",
+            ),
+            pytest.param(
                 lambda: _valid_json(call_stack=[]),
                 id="empty_call_stack",
             ),
@@ -180,7 +184,7 @@ class TestParseVerdictFieldValidation:
             parse_verdict(text, expected_finding_id=True)
 
     def test_parsed_object_not_dict(self) -> None:
-        with pytest.raises(VerdictParseError, match="verdict is not an object"):
+        with pytest.raises(VerdictParseError, match="no JSON object found"):
             parse_verdict("[1, 2, 3]", expected_finding_id=42)
 
     def test_partial_attached_on_validation_error(self) -> None:

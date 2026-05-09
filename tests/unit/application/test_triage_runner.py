@@ -96,7 +96,7 @@ def _make_runner(
     """Builds a runner with stubbed dependencies."""
     store = MagicMock()
     store.latest_run_id.return_value = 1
-    store.reset_stale_batches.return_value = 0
+    store.cancel_remaining.return_value = 0
     store.get_active_finding_combos.return_value = []
 
     triage_backend = agent or _StubTriageBackend(
@@ -166,7 +166,7 @@ def test_batch_resets_stale_before_creating(
 
     runner.batch()
 
-    store.reset_stale_batches.assert_called_once()
+    store.cancel_remaining.assert_called_once()
     store.create_batches.assert_not_called()
 
 
@@ -211,9 +211,7 @@ def test_batch_resets_before_fetching_combos(
 ) -> None:
     runner, store, _ = _make_runner(tmp_path)
     call_order: list[str] = []
-    store.reset_stale_batches.side_effect = lambda *a, **k: (
-        call_order.append("reset") or 0
-    )
+    store.cancel_remaining.side_effect = lambda *a, **k: call_order.append("reset") or 0
     store.get_active_finding_combos.side_effect = lambda *a, **k: (
         call_order.append("combos") or []
     )

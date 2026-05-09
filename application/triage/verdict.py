@@ -110,19 +110,24 @@ def _extract_json_object(text: str) -> dict[str, Any]:
 
     try:
         obj = json.loads(s)
+        if isinstance(obj, dict):
+            return obj
     except json.JSONDecodeError:
-        first_brace = s.find("{")
-        if first_brace == -1:
-            raise VerdictParseError("no JSON object found")
-        decoder = json.JSONDecoder()
-        try:
-            obj, _ = decoder.raw_decode(s, idx=first_brace)
-        except json.JSONDecodeError as exc:
-            raise VerdictParseError(f"could not parse JSON: {exc}") from exc
+        pass
 
-    if not isinstance(obj, dict):
-        raise VerdictParseError(f"verdict is not an object (got {type(obj).__name__})")
-    return obj
+    decoder = json.JSONDecoder()
+    pos = 0
+    while True:
+        brace = s.find("{", pos)
+        if brace == -1:
+            raise VerdictParseError("no JSON object found in text")
+        try:
+            obj, _ = decoder.raw_decode(s, brace)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        pos = brace + 1
 
 
 def _strip_code_fences(s: str) -> str:

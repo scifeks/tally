@@ -130,11 +130,11 @@ class TriageRunner:
         """
         run_id = self._resolve_scan_run_id()
 
-        reset_count = self._triage_repo.reset_stale_batches(run_id)
-        if reset_count:
+        stale = self._triage_repo.cancel_remaining(run_id)
+        if stale:
             _log.info(
-                "Reset %d stale in_progress batches for run_id=%d",
-                reset_count,
+                "Cancelled %d stale batches for run_id=%d",
+                stale,
                 run_id,
             )
 

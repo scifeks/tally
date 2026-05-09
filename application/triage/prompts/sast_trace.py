@@ -35,8 +35,8 @@ def render(
         _build_source_section(repo, file_path, line_start),
         POST_DATA_REMINDER,
         _EPISTEMIC_CONSERVATISM,
-        _output_schema(finding_id),
         _CONFIDENCE_GUIDANCE,
+        _output_schema(finding_id),
     ]
     return "\n\n".join(sections)
 

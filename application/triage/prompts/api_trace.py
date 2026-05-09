@@ -33,8 +33,8 @@ finding for project `{project}`."
         metadata_fenced,
         POST_DATA_REMINDER,
         _EPISTEMIC_CONSERVATISM,
-        _output_schema(finding_id),
         _CONFIDENCE_GUIDANCE,
+        _output_schema(finding_id),
     ]
     return "\n\n".join(sections)
 

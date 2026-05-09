@@ -16,6 +16,7 @@ class ToolArgProfileFlagArg:
 class ToolArgProfileStringArg:
     name: str
     value: str
+    operator: str = ""
     type: Literal["string"] = "string"
 
 
@@ -24,6 +25,7 @@ class ToolArgProfileFileArg:
     name: str
     path: str
     original_filename: str | None = None
+    operator: str = ""
     type: Literal["file"] = "file"
 
 
