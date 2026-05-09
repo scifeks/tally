@@ -126,9 +126,8 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                     run_attempts = run_attempts + 1
                 WHERE id = (
                     SELECT id FROM triage_batches
-                    WHERE  status       = 'pending'
-                      AND  run_attempts < 3
-                      AND  run_id       = ?
+                    WHERE  status = 'pending'
+                      AND  run_id = ?
                     ORDER BY id ASC
                     LIMIT 1
                 )
@@ -167,21 +166,17 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             return cur.rowcount
 
     def reset_for_resume(self, run_id: int) -> int:
-        """Flip stranded ``in_progress`` and retryable ``failed`` rows back
+        """Flip stranded ``in_progress`` and ``failed`` rows back
         to ``pending`` so an explicit resume can pick them up.
 
-        ``run_attempts`` is preserved; the existing 3-attempt cap in
-        ``claim_batch`` still applies. Returns the number of rows flipped.
+        Returns the number of rows flipped.
         """
         with self._factory.connect() as conn:
             cur = conn.execute(
                 "UPDATE triage_batches"
                 " SET status = 'pending', started_at = NULL"
                 " WHERE run_id = ?"
-                "   AND ("
-                "     status = 'in_progress'"
-                "     OR (status = 'failed' AND run_attempts < 3)"
-                "   )",
+                "   AND status IN ('in_progress', 'failed')",
                 (run_id,),
             )
             return cur.rowcount

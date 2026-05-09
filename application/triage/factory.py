@@ -73,7 +73,7 @@ def resolve_triage_config(*, app_root: Path) -> ResolvedTriageConfig:
         base_url=merged.get("base_url", ""),
         model=merged.get("model", ""),
         timeout_seconds=merged.get("timeout_seconds", 300),
-        retry_count=merged.get("retry_count", 1),
+        retry_count=merged.get("retry_count", 0),
         debug=feature.debug,
     )
 

@@ -589,8 +589,10 @@ The Markdown report contains:
 
 ## Triaging Findings
 
-Triage uses an AI agent to assess each finding, producing a verdict with confidence,
-severity, and remediation guidance. Triage requires Docker and a configured backend.
+Triage uses an AI agent to assess SAST and API findings, producing a verdict with
+confidence, severity, and remediation guidance. SCA findings are skipped because
+they already reference confirmed CVEs. Triage requires Docker and a configured
+backend.
 See [docs/triage.md](triage.md) for setup, the container security model, and
 backend accuracy tradeoffs.
 

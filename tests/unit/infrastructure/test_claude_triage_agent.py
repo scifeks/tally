@@ -172,7 +172,9 @@ def test_print_and_json_flags(tmp_path: Path) -> None:
     assert cmd[idx + 1] == "json"
 
 
-def test_tools_disabled(tmp_path: Path) -> None:
+def test_tools_restricted_to_read_only(
+    tmp_path: Path,
+) -> None:
     agent = _agent()
     with patch("subprocess.run", return_value=_happy_completed()) as m:
         agent.run_triage(
@@ -183,7 +185,7 @@ def test_tools_disabled(tmp_path: Path) -> None:
         )
     cmd = m.call_args[0][0]
     idx = cmd.index("--tools")
-    assert cmd[idx + 1] == ""
+    assert cmd[idx + 1] == "Read,Grep,Glob,Bash"
 
 
 def test_model_passed_from_constructor(

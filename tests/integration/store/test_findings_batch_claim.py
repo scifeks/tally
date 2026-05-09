@@ -105,15 +105,16 @@ class TestAtomicBatchClaim:
         result = triage_repo.claim_batch(run_id)
         assert result is None
 
-    def test_exhausted_attempts_never_claimed(
+    def test_high_attempt_count_still_claimable(
         self,
         factory: ConnectionFactory,
         run_repo: RunRepository,
         triage_repo: TriageBatchRepository,
     ) -> None:
-        run_id = _seed_batch(factory, run_repo, status="pending", attempts=3)
+        run_id = _seed_batch(factory, run_repo, status="pending", attempts=5)
         result = triage_repo.claim_batch(run_id)
-        assert result is None
+        assert result is not None
+        assert result.run_attempts == 6
 
     def test_complete_success_sets_status_and_completed_at(
         self,

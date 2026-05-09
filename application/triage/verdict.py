@@ -38,6 +38,21 @@ class VerdictParseError(Exception):
         self.raw_output = raw_output
 
 
+class SourceNotExaminedError(Exception):
+    """Agent reported it could not examine the source files."""
+
+    def __init__(
+        self,
+        finding_id: int,
+        reason: str,
+        raw_output: str = "",
+    ) -> None:
+        super().__init__(reason)
+        self.finding_id = finding_id
+        self.reason = reason
+        self.raw_output = raw_output
+
+
 @dataclass(frozen=True)
 class Verdict:
     finding_id: int
@@ -58,6 +73,18 @@ def parse_verdict(text: str, *, expected_finding_id: int) -> Verdict:
     """
     try:
         obj = _extract_json_object(text)
+    except VerdictParseError as exc:
+        exc.raw_output = text
+        raise
+
+    if obj.get("error") == "source_not_examined":
+        raise SourceNotExaminedError(
+            finding_id=obj.get("finding_id", -1),
+            reason=obj.get("reason", "unknown"),
+            raw_output=text,
+        )
+
+    try:
         _validate_fields(obj, expected_finding_id)
     except VerdictParseError as exc:
         exc.raw_output = text

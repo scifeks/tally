@@ -93,7 +93,7 @@ feature config schema:
 | `timeout_seconds` | int or null | `null` | Overrides the provider's timeout in seconds. Must be positive if set. If `null`, uses the provider's timeout. |
 | `num_ctx` | int or null | `null` | Overrides the provider's context window (local providers only). Must be positive if set. If `null`, uses the provider's value. |
 | `max_tokens` | int or null | `null` | Overrides the provider's max tokens (Claude only). Must be positive if set. If `null`, uses the provider's value. |
-| `retry_count` | int or null | `null` | Number of retries when the triage agent produces unparseable output. Applies to `triage_inference` only. Default is 1 when resolved. |
+| `retry_count` | int or null | `null` | Number of per-finding retries when the triage agent produces unparseable output. Applies to `triage_inference` only. Default is 0 (no retry). |
 | `debug` | bool | `false` | Write raw agent output to `logs/triage/` for each finding. Applies to `triage_inference` only. |
 
 ### `opencode` Block Fields

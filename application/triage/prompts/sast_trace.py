@@ -141,8 +141,10 @@ code_snippet from the finding metadata.
   alone is NOT sufficient).
 - When uncertain, prefer `potential` over `probable`, and `probable`
   over `confirmed`.
-- If the source file could not be read, set confidence=potential and
-  note the reason in `reasoning`.
+- If the source file could not be read, you MUST return an error
+  object instead of a verdict:
+  {"error": "source_not_examined", "finding_id": <id>, "reason": "<why>"}
+  Do NOT return a verdict when the source was not examined.
 
 For any finding involving user-supplied input, explicitly answer each
 question in your `reasoning` field:

@@ -57,7 +57,7 @@ class ClaudeTriageAgent:
                 "--add-dir",
                 "/workspace",
                 "--tools",
-                "",
+                "Read,Grep,Glob,Bash",
             ],
             input=prompt,
             capture_output=True,

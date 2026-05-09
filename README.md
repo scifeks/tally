@@ -117,7 +117,7 @@ report
 
 | Command | Description |
 |---|---|
-| `triage` | Run AI triage on untriaged findings for the active project |
+| `triage` | Run AI triage on untriaged SAST and API findings for the active project |
 | `triage --batch` | Run batching phase only, no agent invocation |
 | `triage --dry-run` | Batch + render prompts to DEBUG log, no agent invocation |
 | `triage --rebuild-container` | Stop containers and rebuild the triage agent Docker image |

@@ -2,10 +2,11 @@
 
 ## Overview
 
-Triage uses an AI agent to assess each security finding from your scans. The agent
-reads the finding metadata and associated source file, then produces a **verdict**
-with confidence level, severity, finding type, reasoning, remediation guidance,
-attack vector, and call stack.
+Triage uses an AI agent to assess SAST and API findings from your scans. The agent
+reads the finding metadata and the associated source file, then produces a
+**verdict** with confidence level, severity, finding type, reasoning, remediation
+guidance, attack vector, and call stack. SCA findings are not triaged because they
+already reference confirmed CVEs from advisory databases.
 
 Two backends are supported:
 
@@ -95,7 +96,7 @@ unless explicitly overridden.
 
 ## Running Triage
 
-Run triage on all untriaged findings in the active project:
+Run triage on all untriaged SAST and API findings in the active project:
 
 ```
 [acme-audit]> triage

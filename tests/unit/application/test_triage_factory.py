@@ -24,7 +24,7 @@ def _resolved(
     base_url: str = "http://localhost:11434",
     model: str = "testmodel",
     timeout: int = 300,
-    retry_count: int = 1,
+    retry_count: int = 0,
     debug: bool = False,
 ) -> ResolvedTriageConfig:
     return ResolvedTriageConfig(
@@ -195,7 +195,7 @@ def test_resolve_triage_config_defaults_retry_count(
     )
 
     resolved = resolve_triage_config(app_root=tmp_path)
-    assert resolved.retry_count == 1
+    assert resolved.retry_count == 0
 
 
 def test_resolve_triage_config_uses_provider_defaults(

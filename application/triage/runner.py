@@ -18,8 +18,12 @@ from application.ports.triage_event_sink import (
 )
 from application.tools.registry import ToolRegistry
 from application.triage.batching import compute_batches
-from application.triage.prompts import api_trace, sast_trace, sca_trace
-from application.triage.verdict import Verdict, VerdictParseError
+from application.triage.prompts import api_trace, sast_trace
+from application.triage.verdict import (
+    SourceNotExaminedError,
+    Verdict,
+    VerdictParseError,
+)
 from domain.pipeline.triage_events import (
     BatchCompleted,
     BatchCreated,
@@ -41,7 +45,6 @@ if TYPE_CHECKING:
 _PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
     "api": api_trace.render,
     "sast": sast_trace.render,
-    "sca": sca_trace.render,
 }
 
 _log = logging.getLogger(__name__)
@@ -464,6 +467,15 @@ class TriageRunner:
                             self._write_debug_log(batch_id, fid, raw)
                     self._write_verdict(verdict, segment)
                     ok = True
+                    break
+                except SourceNotExaminedError as exc:
+                    _log.warning(
+                        "Finding %d in batch %d: source not examined"
+                        " (%s); skipping update",
+                        fid,
+                        batch_id,
+                        exc.reason,
+                    )
                     break
                 except VerdictParseError as exc:
                     self._log_verdict_failure(batch_id, fid, exc)
