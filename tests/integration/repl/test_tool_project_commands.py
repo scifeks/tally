@@ -50,12 +50,7 @@ def test_parse_project_flag_bare_with_active_project() -> None:
 
 
 def test_parse_project_flag_bare_without_active_project() -> None:
-    """Bare --project with no active project returns empty string (not None).
-
-    The empty string is passed to _validate_project_arg, which surfaces the
-    'No active project' error rather than silently falling through to the
-    global command path.
-    """
+    """Bare --project with no active project returns empty string."""
     tc, _repl = _make_tc(active_project=None)
     project, remaining = tc._parse_project_flag(["add", "--project"])
     assert project == ""
@@ -65,13 +60,7 @@ def test_parse_project_flag_bare_without_active_project() -> None:
 def test_tool_add_bare_project_flag_routes_to_project_add(
     tmp_path: Path,
 ) -> None:
-    """tool add --project (without =name) must route to the project-level add.
-
-    Regression: previously bare --project was not recognised, so the command
-    fell through to the global _cmd_tool_add, which reported 'All available
-    tools are already configured' even though no project-level overrides
-    existed.
-    """
+    """Bare --project flag routes to project-level add."""
     from core.project_paths import ProjectPaths
     from infrastructure.store.connection import ConnectionFactory
 
@@ -189,7 +178,7 @@ def test_tool_list_project_with_config(tmp_path: Path) -> None:
 
     tc, repl = _make_tc(base_path=str(tmp_path))
     tc._cmd_tool_list_project("myproject")
-    # Table object is passed to print; just verify print was called
+    # Table is passed to console.print
     assert repl.console.print.called
 
 

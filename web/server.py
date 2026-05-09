@@ -190,11 +190,6 @@ def create_app(
     return app
 
 
-# todo: Add cross-midnight rollover, rquest-ID inner layer correlation
-#  (context var), retention policy
-# todo: Add a concept of log/run levels for debug vs normal logging
-# todo: Turn off logging by default
-# todo: Logging does not need to be duplicated and it is not the concern of the server.
 def _attach_file_logging(base_path: str) -> None:
     """Attach a dated FileHandler to uvicorn loggers.
 

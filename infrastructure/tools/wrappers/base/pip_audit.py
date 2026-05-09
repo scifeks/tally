@@ -87,9 +87,6 @@ class BasePipAuditTool(ToolInterface):
         if context.is_docker:
             deps_file = context.repo.dependencies_file
         else:
-            # Local mode: never pass container_name. The repo may have a
-            # container configured for other tools, but pip-audit runs
-            # locally and must check the local filesystem only.
             deps_file = find_or_generate_requirements(repo_path)
             if not deps_file:
                 logger.info(
@@ -116,5 +113,4 @@ class BasePipAuditTool(ToolInterface):
         result = summary.get(
             "total_vulnerabilities", len(parsed_data.get("vulnerabilities", []))
         )
-        # TODO: revisit when normalized schema is introduced
         return result

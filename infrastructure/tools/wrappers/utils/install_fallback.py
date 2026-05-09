@@ -6,7 +6,6 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Keys: (tool_name, repo_path) to prevent retry within a single session.
 _attempted: set[tuple[str, str]] = set()
 
 
@@ -23,22 +22,7 @@ def ensure_lockfile(
     container_name: str = "",
     timeout: int = 120,
 ) -> bool:
-    """Ensure a lockfile exists, attempting to generate it if absent.
-
-    Returns True if the lockfile is present (before or after generation).
-    Returns False if the file is missing and generation failed or was
-    already attempted this session.
-
-    Args:
-        tool_name: Short name used in log messages and dedup key.
-        repo_path: Absolute path to the repository root (local or
-            in-container path for docker mode).
-        lockfile_name: Filename to check for (e.g. ``package-lock.json``).
-        install_cmd: Command list to run in order to generate the file.
-        container_name: If non-empty, run the command via
-            ``docker exec -w <repo_path> <container> <cmd>``.
-        timeout: Seconds before the install command is killed.
-    """
+    """Generate *lockfile_name* if absent; return whether it exists."""
 
     def _file_exists() -> bool:
         if container_name:

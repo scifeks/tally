@@ -1,11 +1,4 @@
-"""DraftRepository: manages the drafts table.
-
-Each row tracks one draft section: generating, draft (LLM-written), or
-reviewed (user-uploaded). The table lives in the per-project findings.db
-alongside the reports table; no project_id column is needed.
-
-Absence of a row represents not_generated.
-"""
+"""CRUD for the per-project ``drafts`` table."""
 
 from __future__ import annotations
 

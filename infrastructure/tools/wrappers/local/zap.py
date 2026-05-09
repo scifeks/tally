@@ -59,9 +59,7 @@ class ZAPLocalTool(BaseZapTool):
         return shutil.which("zap.sh") is not None
 
     def get_version(self) -> str | None:
-        # calling zap.sh with the --version argument
-        # takes a long time and delays boot
-        # todo: Find more performant way to get version at boot
+        # --version starts the full JVM; too slow for boot
         return shutil.which(self._zap_path)
 
     def build_command(self, **kwargs) -> list[str]:
@@ -88,15 +86,12 @@ class ZAPLocalTool(BaseZapTool):
                 Path(tempfile.gettempdir()) / f"zap_report_{os.getpid()}.json"
             )
 
-        # zap.sh cd's to its install dir before launching Java, so any relative
-        # path would be resolved there.  Always pass an absolute path.
+        # zap.sh cds into its install dir, so paths must be absolute
         output_file = str(Path(output_file).resolve())
         self._last_report_path = Path(output_file)
 
         openapi_file: str | None = kwargs.get("openapi_file")
 
-        # zap.sh cd's to its install dir before launching Java, so any relative
-        # path for openapi_file would be resolved there.  Always use absolute.
         if openapi_file:
             openapi_file = str(Path(openapi_file).resolve())
 
@@ -212,12 +207,7 @@ class ZAPLocalTool(BaseZapTool):
 
 
 def _find_free_port() -> int:
-    """Ask the OS to assign a free TCP port and return it.
-
-    Uses ``socket.bind(("", 0))`` so the OS picks an available port.  There is
-    a small TOCTOU window between this call and ZAP starting, but in practice
-    scans run sequentially and the race is negligible.
-    """
+    """Return an OS-assigned free TCP port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]

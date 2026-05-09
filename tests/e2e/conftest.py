@@ -1,22 +1,4 @@
-"""E2e-test configuration.
-
-Autouse fixture:
-
-_cleanup_chromadb_systems: stops all ChromaDB Systems after each test to
-prevent file-handle accumulation (EMFILE) across the full suite.
-
-Note: _restore_tool_registry is defined in tests/conftest.py and covers all
-test scopes including e2e.
-
-Harness fixtures:
-
-tally_harness: isolated TallyHarness backed by tmp_path; calls setup(),
-    spawn(), and teardown() automatically.
-
-tally_harness_live: TallyHarness pointed at the real repo root; useful for
-    interactive debugging sessions where you want to inspect real project data.
-    Does NOT call setup() or teardown() automatically.
-"""
+"""E2e test configuration and harness fixtures."""
 
 from __future__ import annotations
 
