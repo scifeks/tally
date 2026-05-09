@@ -56,6 +56,7 @@ class _StubTriageBackend:
         self._prepared_cwd = prepared_cwd
         self.calls: list[tuple[str, int, int, Path]] = []
         self.prepare_calls: list[tuple[str, int, Path]] = []
+        self.last_raw_output: str = ""
 
     @contextmanager
     def prepare_session(
@@ -90,6 +91,7 @@ def _make_runner(
     agent: _StubTriageBackend | None = None,
     finding_repo: MagicMock | None = None,
     repo_paths: dict[str, Path] | None = None,
+    retry_count: int = 0,
 ) -> tuple[TriageRunner, MagicMock, _StubTriageBackend]:
     """Builds a runner with stubbed dependencies."""
     store = MagicMock()
@@ -110,6 +112,7 @@ def _make_runner(
         tmp_path,
         triage_backend=triage_backend,
         session_timeout_seconds=300,
+        retry_count=retry_count,
         tool_registry=MagicMock(),
         finding_repo=fr,
         repo_paths=repo_paths or {},
@@ -333,6 +336,72 @@ def test_run_batch_findings_writes_verdict_fields(
         triaged_by="claudecode",
         source="auto_triage",
     )
+
+
+# _run_batch_findings() retry behavior
+
+
+def test_retry_succeeds_after_parse_error(
+    tmp_path: Path,
+) -> None:
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    call_count = 0
+
+    class _FailOnceThenSucceed(_StubTriageBackend):
+        def run_triage(self, prompt, *, finding_id, **kw):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise VerdictParseError("bad json")
+            return _make_verdict(finding_id)
+
+    agent = _FailOnceThenSucceed(prepared_cwd=tmp_path)
+    runner, _, _ = _make_runner(
+        tmp_path,
+        agent=agent,
+        finding_repo=finding_repo,
+        retry_count=1,
+    )
+
+    batch_data = [{"id": 1, "tool": "semgrep", "file": "a.py", "repo": "r"}]
+    outcome = runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
+
+    assert outcome == "success"
+    assert call_count == 2
+    finding_repo.update_finding.assert_called_once()
+
+
+def test_retries_exhausted_counts_as_failed(
+    tmp_path: Path,
+) -> None:
+    agent = _StubTriageBackend(
+        side_effect=VerdictParseError("bad"),
+        prepared_cwd=tmp_path,
+    )
+    runner, _, _ = _make_runner(tmp_path, agent=agent, retry_count=2)
+
+    batch_data = [{"id": 1, "tool": "semgrep", "file": "a.py", "repo": "r"}]
+    outcome = runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
+
+    assert outcome == "failed"
+    assert len(agent.calls) == 3
+
+
+def test_non_parse_error_not_retried(
+    tmp_path: Path,
+) -> None:
+    agent = _StubTriageBackend(
+        side_effect=RuntimeError("boom"),
+        prepared_cwd=tmp_path,
+    )
+    runner, _, _ = _make_runner(tmp_path, agent=agent, retry_count=2)
+
+    batch_data = [{"id": 1, "tool": "semgrep", "file": "a.py", "repo": "r"}]
+    outcome = runner._run_batch_findings(1, batch_data, "sast", cwd=tmp_path)
+
+    assert outcome == "failed"
+    assert len(agent.calls) == 1
 
 
 # _read_source_file()

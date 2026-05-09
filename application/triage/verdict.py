@@ -20,7 +20,6 @@ _REQUIRED_FIELDS = (
     "reasoning",
     "remediation",
     "attack_vector",
-    "call_stack",
 )
 
 
@@ -31,10 +30,12 @@ class VerdictParseError(Exception):
         self,
         problem: str,
         partial: dict[str, Any] | None = None,
+        raw_output: str = "",
     ) -> None:
         super().__init__(problem)
         self.problem = problem
         self.partial = partial
+        self.raw_output = raw_output
 
 
 @dataclass(frozen=True)
@@ -55,8 +56,12 @@ def parse_verdict(text: str, *, expected_finding_id: int) -> Verdict:
     Raises VerdictParseError if the text cannot be parsed or
     validated.
     """
-    obj = _extract_json_object(text)
-    _validate_fields(obj, expected_finding_id)
+    try:
+        obj = _extract_json_object(text)
+        _validate_fields(obj, expected_finding_id)
+    except VerdictParseError as exc:
+        exc.raw_output = text
+        raise
     return Verdict(
         finding_id=obj["finding_id"],
         confidence=obj["confidence"],
@@ -65,7 +70,7 @@ def parse_verdict(text: str, *, expected_finding_id: int) -> Verdict:
         reasoning=obj["reasoning"],
         remediation=obj["remediation"],
         attack_vector=obj["attack_vector"],
-        call_stack=[str(e) for e in obj["call_stack"]],
+        call_stack=[str(e) for e in obj.get("call_stack", [])],
     )
 
 
@@ -146,7 +151,8 @@ def _validate_fields(obj: dict[str, Any], expected_finding_id: int) -> None:
             partial=obj,
         )
 
-    if not isinstance(obj["call_stack"], list):
+    cs = obj.get("call_stack")
+    if cs is not None and not isinstance(cs, list):
         raise VerdictParseError(
             "call_stack is not a list",
             partial=obj,

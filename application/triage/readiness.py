@@ -8,6 +8,9 @@ from pathlib import Path
 from .factory import load_triage_provider
 
 _TRIAGE_BACKEND_LABELS = {
+    "claude": "Claude Code",
+    "ollama": "OpenCode (Ollama)",
+    "llama_cpp": "OpenCode (llama.cpp)",
     "claude_code": "Claude Code",
     "open_code": "OpenCode",
 }

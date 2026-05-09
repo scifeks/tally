@@ -13,6 +13,7 @@ from application.triage.compose import (
     ComposeGenerationError,
     _dockerize_url,
     build_compose_dict,
+    build_opencode_config,
     build_proxy_config,
     build_proxy_filter,
     generate_triage_compose,
@@ -37,8 +38,10 @@ def _claude_oauth() -> ClaudeCredentials:
     return ClaudeCredentials(mode=ClaudeAuthMode.OAUTH, api_key="")
 
 
-def _opencode(key: str = "", provider: str = "") -> OpenCodeCredentials:
-    return OpenCodeCredentials(api_key=key, api_provider=provider)
+def _opencode(
+    key: str = "", provider: str = "", model: str = ""
+) -> OpenCodeCredentials:
+    return OpenCodeCredentials(api_key=key, api_provider=provider, model=model)
 
 
 def _base_kwargs(**overrides):
@@ -67,38 +70,38 @@ def _proxy(result: dict) -> dict:
 
 class TestResolveEgressTarget:
     def test_claude_returns_anthropic(self) -> None:
-        host, port = resolve_egress_target("claude_code", "")
+        host, port = resolve_egress_target("claude", "")
         assert host == "api.anthropic.com"
         assert port == 443
 
     def test_opencode_parses_host_and_port(self) -> None:
-        host, port = resolve_egress_target("open_code", "http://myhost:11434/v1")
+        host, port = resolve_egress_target("ollama", "http://myhost:11434/v1")
         assert host == "myhost"
         assert port == 11434
 
     def test_opencode_uses_default_http_port(self) -> None:
-        host, port = resolve_egress_target("open_code", "http://myhost/v1")
+        host, port = resolve_egress_target("llama_cpp", "http://myhost/v1")
         assert host == "myhost"
         assert port == 80
 
     def test_opencode_uses_default_https_port(self) -> None:
-        host, port = resolve_egress_target("open_code", "https://myhost/v1")
+        host, port = resolve_egress_target("ollama", "https://myhost/v1")
         assert host == "myhost"
         assert port == 443
 
     def test_opencode_raises_on_empty_url(self) -> None:
         with pytest.raises(
             ComposeGenerationError,
-            match="opencode.api_provider must be set",
+            match="base_url must be set",
         ):
-            resolve_egress_target("open_code", "")
+            resolve_egress_target("ollama", "")
 
     def test_opencode_raises_on_unparseable_url(self) -> None:
         with pytest.raises(
             ComposeGenerationError,
             match="Cannot parse hostname",
         ):
-            resolve_egress_target("open_code", "not-a-url")
+            resolve_egress_target("ollama", "not-a-url")
 
 
 # -- _dockerize_url --------------------------------------------------
@@ -173,6 +176,58 @@ class TestBuildProxyFilter:
         assert r"host\.docker\.internal" in content
 
 
+# -- build_opencode_config -------------------------------------------
+
+
+class TestBuildOpenCodeConfig:
+    def test_uses_provider_name_as_key(self) -> None:
+        import json
+
+        content = build_opencode_config(
+            provider_name="llama_cpp",
+            base_url="http://localhost:8080",
+            model="qwen3:14b",
+        )
+        cfg = json.loads(content)
+        assert "llama_cpp" in cfg["provider"]
+        assert cfg["provider"]["llama_cpp"]["name"] == "llama_cpp"
+
+    def test_appends_v1_to_base_url(self) -> None:
+        import json
+
+        content = build_opencode_config(
+            provider_name="ollama",
+            base_url="http://localhost:11434",
+            model="gemma3:27b",
+        )
+        cfg = json.loads(content)
+        options = cfg["provider"]["ollama"]["options"]
+        assert options["baseURL"] == "http://localhost:11434/v1"
+
+    def test_includes_model_in_registry(self) -> None:
+        import json
+
+        content = build_opencode_config(
+            provider_name="ollama",
+            base_url="http://localhost:11434",
+            model="gemma3:27b",
+        )
+        cfg = json.loads(content)
+        models = cfg["provider"]["ollama"]["models"]
+        assert "gemma3:27b" in models
+
+    def test_includes_permissions(self) -> None:
+        import json
+
+        content = build_opencode_config(
+            provider_name="ollama",
+            base_url="http://localhost:11434",
+            model="gemma3:27b",
+        )
+        cfg = json.loads(content)
+        assert cfg["permission"]["edit"] == "deny"
+
+
 # -- build_compose_dict ----------------------------------------------
 
 
@@ -208,12 +263,17 @@ class TestBuildComposeDict:
         bind_mounts = [v for v in volumes if v.get("type") == "bind"]
         assert bind_mounts == []
 
-    def test_tmpfs_for_tmp_and_claude_dir(self) -> None:
+    def test_tmpfs_for_tmp_and_runtime_dirs(self) -> None:
         result = build_compose_dict(**_base_kwargs())
         volumes = _service(result)["volumes"]
         tmpfs_targets = [v["target"] for v in volumes if v.get("type") == "tmpfs"]
         assert "/tmp" in tmpfs_targets
         assert "/home/agent/.claude" in tmpfs_targets
+        assert "/home/agent/.opencode" in tmpfs_targets
+        assert "/home/agent/.local/share/opencode" in tmpfs_targets
+        assert "/home/agent/.local/state/opencode" in tmpfs_targets
+        assert "/home/agent/.cache/opencode" in tmpfs_targets
+        assert "/home/agent/.config/opencode" in tmpfs_targets
 
     def test_claude_api_key_mode_sets_env_var(self) -> None:
         result = build_compose_dict(
@@ -289,6 +349,13 @@ class TestBuildComposeDict:
     def test_image_tag_matches_input(self) -> None:
         result = build_compose_dict(**_base_kwargs(image_tag="custom/image:v2"))
         assert _service(result)["image"] == "custom/image:v2"
+
+    def test_agent_has_keepalive_command(self) -> None:
+        result = build_compose_dict(**_base_kwargs())
+        assert _service(result)["command"] == [
+            "sleep",
+            "infinity",
+        ]
 
     def test_no_backend_env_when_no_api_keys(self) -> None:
         result = build_compose_dict(
@@ -376,20 +443,10 @@ class TestBuildComposeDict:
 
 
 class TestGenerateTriageCompose:
-    def _mock_config(
-        self,
-        api_key: str = "",
-        oc_key: str = "",
-        oc_provider: str = "",
-    ) -> MagicMock:
+    def _mock_config(self, api_key: str = "") -> MagicMock:
         mock_cm = MagicMock()
         mock_cm.return_value.global_config.claude = (
             MagicMock(api_key=api_key) if api_key else None
-        )
-        mock_cm.return_value.global_config.opencode = (
-            MagicMock(api_key=oc_key, api_provider=oc_provider)
-            if oc_key or oc_provider
-            else None
         )
         return mock_cm
 
@@ -399,7 +456,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            result = generate_triage_compose(tmp_path, {}, provider="claude_code")
+            result = generate_triage_compose(tmp_path, {}, provider="claude")
         assert result == tmp_path / COMPOSE_RELATIVE_PATH
 
     def test_writes_compose_and_proxy_files(self, tmp_path: Path) -> None:
@@ -408,7 +465,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude_code")
+            generate_triage_compose(tmp_path, {}, provider="claude")
         assert mock_port.write_compose_file.call_count == 3
         paths_written = {
             call[0][1].name for call in mock_port.write_compose_file.call_args_list
@@ -423,7 +480,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude_code")
+            generate_triage_compose(tmp_path, {}, provider="claude")
         filter_call = [
             c
             for c in mock_port.write_compose_file.call_args_list
@@ -432,19 +489,19 @@ class TestGenerateTriageCompose:
         filter_content = filter_call[0][0]
         assert r"^api\.anthropic\.com$" in filter_content
 
-    def test_opencode_filter_includes_ollama_host(self, tmp_path: Path) -> None:
+    def test_ollama_filter_includes_host(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
         with (
             patch(_PORT_PATCH, return_value=mock_port),
-            patch(
-                _CM_PATCH,
-                self._mock_config(
-                    oc_key="k",
-                    oc_provider="http://ollama.local:11434/v1",
-                ),
-            ),
+            patch(_CM_PATCH, self._mock_config()),
         ):
-            generate_triage_compose(tmp_path, {}, provider="open_code")
+            generate_triage_compose(
+                tmp_path,
+                {},
+                provider="ollama",
+                base_url="http://ollama.local:11434/v1",
+                model="testmodel",
+            )
         filter_call = [
             c
             for c in mock_port.write_compose_file.call_args_list
@@ -453,19 +510,19 @@ class TestGenerateTriageCompose:
         filter_content = filter_call[0][0]
         assert r"^ollama\.local$" in filter_content
 
-    def test_opencode_localhost_rewritten_in_compose(self, tmp_path: Path) -> None:
+    def test_localhost_rewritten_in_compose(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
         with (
             patch(_PORT_PATCH, return_value=mock_port),
-            patch(
-                _CM_PATCH,
-                self._mock_config(
-                    oc_key="k",
-                    oc_provider="http://localhost:11434/v1",
-                ),
-            ),
+            patch(_CM_PATCH, self._mock_config()),
         ):
-            generate_triage_compose(tmp_path, {}, provider="open_code")
+            generate_triage_compose(
+                tmp_path,
+                {},
+                provider="llama_cpp",
+                base_url="http://localhost:11434/v1",
+                model="testmodel",
+            )
         compose_call = [
             c
             for c in mock_port.write_compose_file.call_args_list
@@ -492,7 +549,7 @@ class TestGenerateTriageCompose:
                 match="OAuth file not found.*\\.claude\\.json",
             ),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude_code")
+            generate_triage_compose(tmp_path, {}, provider="claude")
 
     def test_claude_oauth_validates_credentials_file(self, tmp_path: Path) -> None:
         fake_home = tmp_path / "fakehome"
@@ -508,7 +565,7 @@ class TestGenerateTriageCompose:
                 match="OAuth file not found.*\\.credentials\\.json",
             ),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude_code")
+            generate_triage_compose(tmp_path, {}, provider="claude")
 
     def test_claude_api_key_skips_oauth_validation(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
@@ -516,20 +573,46 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude_code")
+            generate_triage_compose(tmp_path, {}, provider="claude")
         assert mock_port.write_compose_file.call_count == 3
 
-    def test_opencode_provider_skips_oauth_validation(self, tmp_path: Path) -> None:
+    def test_non_claude_provider_writes_opencode_config(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
         with (
             patch(_PORT_PATCH, return_value=mock_port),
-            patch(
-                _CM_PATCH,
-                self._mock_config(
-                    oc_key="k",
-                    oc_provider="http://localhost:11434/v1",
-                ),
-            ),
+            patch(_CM_PATCH, self._mock_config()),
         ):
-            generate_triage_compose(tmp_path, {}, provider="open_code")
-        assert mock_port.write_compose_file.call_count == 3
+            generate_triage_compose(
+                tmp_path,
+                {},
+                provider="ollama",
+                base_url="http://localhost:11434",
+                model="testmodel",
+            )
+        assert mock_port.write_compose_file.call_count == 4
+        paths_written = {
+            call[0][1].name for call in mock_port.write_compose_file.call_args_list
+        }
+        assert "opencode.json" in paths_written
+
+    def test_relative_app_root_produces_absolute_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "global.json").write_text("{}")
+
+        mock_port = MagicMock()
+        with (
+            patch(_PORT_PATCH, return_value=mock_port),
+            patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
+        ):
+            generate_triage_compose(Path("."), {}, provider="claude")
+        compose_call = [
+            c
+            for c in mock_port.write_compose_file.call_args_list
+            if c[0][1].name == "docker-compose.yaml"
+        ][0]
+        yaml_content = compose_call[0][0]
+        assert "docker/triage-agent/docker/triage-agent" not in yaml_content

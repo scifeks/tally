@@ -51,6 +51,7 @@ class TestResolveOpenCode:
         assert result == OpenCodeCredentials(
             api_key="test-key",
             api_provider="http://localhost:8080/v1",
+            model="",
         )
 
     def test_none_config_returns_empty_defaults(self) -> None:
@@ -58,9 +59,11 @@ class TestResolveOpenCode:
         assert result == OpenCodeCredentials(
             api_key="",
             api_provider="",
+            model="",
         )
 
     def test_default_opencode_config(self) -> None:
         result = resolve_opencode_credentials(OpenCodeConfig())
         assert result.api_key == ""
         assert result.api_provider == ""
+        assert result.model == ""

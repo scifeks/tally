@@ -83,10 +83,12 @@ class TestCapabilities:
     async def test_chat_enabled_true_when_provider_is_ollama(
         self, tmp_path: Path
     ) -> None:
-        """When config sets chat_llm_provider="ollama", chat_enabled is True."""
+        """When chat_inference is configured, chat_enabled is True."""
         config_dir = tmp_path / "config"
         config_dir.mkdir(parents=True)
-        (config_dir / "global.json").write_text('{"chat_llm_provider": "ollama"}')
+        (config_dir / "global.json").write_text(
+            '{"chat_inference": {"provider": "ollama"}}'
+        )
         db_path = tmp_path / "projects" / "p1" / "sqlite" / "findings.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         ConnectionFactory(db_path).init_schema()
@@ -109,13 +111,13 @@ class TestCapabilities:
         assert resp.status_code == 200
         assert resp.json()["chat_enabled"] is True
 
-    async def test_chat_enabled_false_when_provider_is_other(
+    async def test_chat_enabled_false_when_no_chat_inference(
         self, tmp_path: Path
     ) -> None:
-        """A non-ollama provider yields chat_enabled=False."""
+        """Missing chat_inference yields chat_enabled=False."""
         config_dir = tmp_path / "config"
         config_dir.mkdir(parents=True)
-        (config_dir / "global.json").write_text('{"chat_llm_provider": "claude"}')
+        (config_dir / "global.json").write_text("{}")
         db_path = tmp_path / "projects" / "p1" / "sqlite" / "findings.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
         ConnectionFactory(db_path).init_schema()

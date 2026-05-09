@@ -27,9 +27,10 @@ Each of five inference features can use a different provider independently:
 | `embedding_inference` | ChromaDB vector embeddings |
 | `noir_inference` | NOIR security API |
 
-Triage backend selection is configured separately through
-`triage_agent_provider`. This setting selects the agent runtime used by the
-`triage` workflow rather than the inference feature configs.
+Triage uses the same feature-inference pattern through `triage_inference`.
+The `provider` field selects which provider block supplies the base URL and
+default model; optional overrides (e.g. `model`) work the same way as for
+other features.
 
 ### Top-level Fields
 
@@ -37,15 +38,13 @@ Triage backend selection is configured separately through
 |---|---|---|
 | `ollama` | object | Ollama provider config. Connection profile for local or remote Ollama instances. See [Provider Config Fields](#provider-config-fields). |
 | `llama_cpp` | object | Llama.cpp provider config. Connection profile for Llama.cpp servers. See [Provider Config Fields](#provider-config-fields). |
-| `claude` | object | Claude provider config. Anthropic API settings. Required when any feature references `"claude"` or when `triage_agent_provider` is `"claude_code"`. See [Claude Provider Fields](#claude-provider-fields). |
+| `claude` | object | Claude provider config. Anthropic API settings. Required when any feature references `"claude"`. See [Claude Provider Fields](#claude-provider-fields). |
 | `chat_inference` | object | Feature config for the `chat` REPL command. See [Feature Config Fields](#feature-config-fields). |
 | `enrichment_inference` | object | Feature config for finding enrichment during ingest. See [Feature Config Fields](#feature-config-fields). |
 | `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
 | `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
-| `triage_agent_provider` | string | Triage agent backend: `""` disables triage, `"claude_code"` or `"open_code"` enables it. Requires Docker. See [docs/triage.md](triage.md). |
-| `triage_session_timeout_seconds` | int | Timeout in seconds for a single triage agent invocation. Default: `300`. |
-| `opencode` | object | OpenCode triage settings. Required when `triage_agent_provider` is `"open_code"`. See [OpenCode Block Fields](#opencode-block-fields). |
+| `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
 | `projects_dir` | string | Directory where project workspaces are stored. Default: `"./projects"`. |
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
@@ -74,7 +73,7 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_agent_provider` is `"claude_code"`. |
+| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_inference.provider` is `"claude"`. |
 | `model` | string | `"claude-opus-4-5"` | Anthropic model ID (e.g. `claude-opus-4-5`, `claude-haiku-4-5-20251001`). Also controls the triage model when using the Claude Code backend. |
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
 | `timeout_seconds` | int | `60` | Request timeout in seconds for Anthropic API calls. |
@@ -94,6 +93,8 @@ feature config schema:
 | `timeout_seconds` | int or null | `null` | Overrides the provider's timeout in seconds. Must be positive if set. If `null`, uses the provider's timeout. |
 | `num_ctx` | int or null | `null` | Overrides the provider's context window (local providers only). Must be positive if set. If `null`, uses the provider's value. |
 | `max_tokens` | int or null | `null` | Overrides the provider's max tokens (Claude only). Must be positive if set. If `null`, uses the provider's value. |
+| `retry_count` | int or null | `null` | Number of retries when the triage agent produces unparseable output. Applies to `triage_inference` only. Default is 1 when resolved. |
+| `debug` | bool | `false` | Write raw agent output to `logs/triage/` for each finding. Applies to `triage_inference` only. |
 
 ### `opencode` Block Fields
 
@@ -172,7 +173,7 @@ environment variable at startup.
 ### Example: Enable Claude Code Triage
 
 Triage runs inside a Docker container. Docker must be installed and running.
-Set `triage_agent_provider` and configure the `claude` provider block.
+Add a `triage_inference` block referencing the `claude` provider.
 See [docs/triage.md](triage.md) for setup details and the full security model.
 
 ```json
@@ -183,8 +184,7 @@ See [docs/triage.md](triage.md) for setup details and the full security model.
     "max_tokens": 1024,
     "timeout_seconds": 60
   },
-  "triage_agent_provider": "claude_code",
-  "chat_inference": {
+  "triage_inference": {
     "provider": "claude"
   }
 }
@@ -194,18 +194,21 @@ With `api_key` left empty, Tally uses the `ANTHROPIC_API_KEY` environment
 variable for LLM API calls and falls back to OAuth file mounts for triage
 container authentication.
 
-### Example: Enable OpenCode Triage
+### Example: Enable Local Model Triage
 
 Triage runs inside a Docker container. Docker must be installed and running.
-Set `triage_agent_provider` and provide Ollama connection details in the
-`opencode` block. See [docs/triage.md](triage.md) for setup details.
+Add a `triage_inference` block referencing the provider and optionally
+override the model. See [docs/triage.md](triage.md) for setup details.
 
 ```json
 {
-  "triage_agent_provider": "open_code",
-  "opencode": {
-    "api_key": "ollama",
-    "api_provider": "http://localhost:11434"
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen2.5:14b"
+  },
+  "triage_inference": {
+    "provider": "ollama",
+    "model": "qwen3-coder:30b"
   }
 }
 ```

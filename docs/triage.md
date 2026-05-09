@@ -22,8 +22,7 @@ verdict, and exits. No persistent agent state is kept between findings.
 ## Prerequisites
 
 - **Docker** installed and running on the host
-- `triage_agent_provider` set to `"claude_code"` or `"open_code"` in
-  `config/global.json`
+- `triage_inference` configured in `config/global.json` with a valid provider
 - Credentials configured for your chosen backend (see [Host Setup](#host-setup))
 - At least one completed scan with untriaged findings
 
@@ -39,9 +38,11 @@ environment variable. When `claude.api_key` is non-empty, Tally injects it as
 
 ```json
 {
-  "triage_agent_provider": "claude_code",
   "claude": {
     "api_key": "sk-ant-..."
+  },
+  "triage_inference": {
+    "provider": "claude"
   }
 }
 ```
@@ -63,23 +64,28 @@ read-only. For short triage calls (30-60 seconds per finding), in-memory refresh
 is sufficient. If you see authentication errors, re-run `claude` on the host to
 refresh the session.
 
-### OpenCode
+### Local Model (Ollama / Llama.cpp)
 
-Set `opencode.api_key` and `opencode.api_provider` in `config/global.json`. The
-`api_provider` field is the URL of your Ollama instance.
+Add a `triage_inference` block referencing your local provider. The `base_url`
+from the provider block determines the network egress allowlist; the triage
+container can only reach the specified endpoint.
 
 ```json
 {
-  "triage_agent_provider": "open_code",
-  "opencode": {
-    "api_key": "ollama",
-    "api_provider": "http://localhost:11434"
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen2.5:14b"
+  },
+  "triage_inference": {
+    "provider": "ollama",
+    "model": "qwen3-coder:30b"
   }
 }
 ```
 
-The `api_provider` URL is also used to configure the network egress allowlist.
-The triage container can only reach the specified endpoint.
+The `model` override in `triage_inference` selects a different model than the
+provider default. All other provider fields (base_url, timeout) are inherited
+unless explicitly overridden.
 
 > **Note:** If Ollama runs on `localhost`, Tally rewrites the URL to
 > `host.docker.internal` in the compose file so the container can reach the host
@@ -223,7 +229,7 @@ Two Docker networks enforce the egress allowlist:
 
 The proxy uses a filter file that allowlists specific hostnames. For Claude Code,
 the filter allows `api.anthropic.com` on port 443. For OpenCode, the filter allows
-the host and port parsed from `opencode.api_provider`.
+the host and port parsed from the provider's `base_url`.
 
 ---
 
@@ -276,8 +282,9 @@ If `docker ps` fails, start the Docker daemon.
 
 ### "Triage disabled in config"
 
-Set `triage_agent_provider` in `config/global.json` to `"claude_code"` or
-`"open_code"`. An empty string or missing field disables triage.
+Add a `triage_inference` block to `config/global.json` with a valid `provider`
+(e.g. `"ollama"`, `"llama_cpp"`, or `"claude"`). Triage is disabled when this
+block is absent.
 
 ### Image build fails
 

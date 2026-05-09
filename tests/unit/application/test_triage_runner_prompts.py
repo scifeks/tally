@@ -10,9 +10,7 @@ from application.triage.runner import _PROMPT_RENDERERS
 class TestPromptRenderers:
     def test_known_segments_render_strings(self) -> None:
         for segment in ("api", "sast", "sca"):
-            result = _PROMPT_RENDERERS[segment](
-                {"id": 1}, file_contents="", project="demo"
-            )
+            result = _PROMPT_RENDERERS[segment]({"id": 1}, project="demo")
             assert isinstance(result, str)
             assert result
 

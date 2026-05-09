@@ -9,20 +9,15 @@ from application.triage.prompts._fencing import (
     POST_DATA_REMINDER,
     fence,
 )
+from application.triage.prompts._severity import format_severity
 
 
 def render(
     finding: dict[str, Any],
     *,
-    file_contents: str,
     project: str,
 ) -> str:
-    """Build a self-contained one-shot triage prompt.
-
-    The file_contents parameter is accepted for signature parity but
-    is not used. ZAP findings are self-contained from dynamic scan
-    data.
-    """
+    """Build a self-contained one-shot triage prompt."""
     finding_id = finding["id"]
 
     task = f"## Task\n\nTriage the following ZAP/dynamic-analysis \
@@ -48,12 +43,13 @@ finding for project `{project}`."
 
 
 def _format_metadata(finding: dict[str, Any]) -> str:
+    sev = format_severity(finding.get("severity"))
     fid = finding["id"]
     lines: list[str] = [
         f"- finding_id   : {fid}",
         f"- tool         : {_val(finding, 'tool')}",
         f"- alert_name   : {_val(finding, 'alert_name')}",
-        f"- severity     : {_val(finding, 'severity')}",
+        f"- severity     : {sev}",
         f"- method       : {_val(finding, 'method')}",
         f"- url          : {_val(finding, 'url')}",
         f"- param        : {_val(finding, 'param')}",

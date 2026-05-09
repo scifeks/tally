@@ -15,7 +15,6 @@ from application.triage.credentials import (
     ClaudeCredentials,
     OpenCodeCredentials,
     resolve_claude_credentials,
-    resolve_opencode_credentials,
 )
 from core.config.manager import ConfigManager
 
@@ -42,12 +41,12 @@ def resolve_egress_target(
     Claude targets api.anthropic.com:443. OpenCode targets
     the configured inference endpoint parsed from the provider URL.
     """
-    if provider == "claude_code":
+    if provider == "claude":
         return ("api.anthropic.com", 443)
 
     if not api_provider_url:
         raise ComposeGenerationError(
-            "opencode.api_provider must be set in "
+            "triage_inference base_url must be set in "
             "config/global.json for network sandboxing."
         )
     parsed = urlparse(api_provider_url)
@@ -92,7 +91,7 @@ def build_proxy_config(connect_ports: list[int]) -> str:
         f"Port {PROXY_PORT}\n"
         f"Listen 0.0.0.0\n"
         f'LogFile "/dev/stdout"\n'
-        f'PidFile "/dev/null"\n'
+        f'PidFile "/run/tinyproxy.pid"\n'
         f"MaxClients 10\n"
         f"FilterDefaultDeny Yes\n"
         f'Filter "/etc/tinyproxy/filter"\n'
@@ -118,6 +117,40 @@ def build_proxy_filter(allowed_hosts: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def build_opencode_config(
+    *,
+    provider_name: str,
+    base_url: str,
+    model: str,
+) -> str:
+    """Generates the opencode.json config with provider and permissions."""
+    import json
+
+    config: dict[str, Any] = {
+        "$schema": "https://opencode.ai/config.json",
+        "provider": {
+            provider_name: {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": provider_name,
+                "options": {
+                    "baseURL": base_url.rstrip("/") + "/v1",
+                },
+                "models": {
+                    model: {"name": model},
+                },
+            },
+        },
+        "permission": {
+            "edit": "deny",
+            "bash": {"*": "deny"},
+            "webfetch": "deny",
+            "read": {"*": "allow"},
+            "write": {"*": "deny"},
+        },
+    }
+    return json.dumps(config, indent=2) + "\n"
+
+
 def build_compose_dict(
     *,
     repo_paths: dict[str, Path],
@@ -128,6 +161,7 @@ def build_compose_dict(
     proxy_filter_path: Path,
     oauth_identity_path: Path | None = None,
     oauth_credentials_path: Path | None = None,
+    opencode_config_path: Path | None = None,
 ) -> dict[str, Any]:
     """Builds the compose file structure as a dict.
 
@@ -151,6 +185,20 @@ def build_compose_dict(
             "target": "/home/agent/.claude",
         }
     )
+    for oc_dir in (
+        "/home/agent/.opencode",
+        "/home/agent/.local/share/opencode",
+        "/home/agent/.local/state/opencode",
+        "/home/agent/.cache/opencode",
+        "/home/agent/.config/opencode",
+    ):
+        volumes.append(
+            {
+                "type": "tmpfs",
+                "target": oc_dir,
+                "tmpfs": {"mode": 0o1777},
+            }
+        )
 
     if oauth_identity_path is not None:
         volumes.append(
@@ -172,6 +220,16 @@ def build_compose_dict(
             }
         )
 
+    if opencode_config_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(opencode_config_path),
+                "target": "/etc/opencode/opencode.json",
+                "read_only": True,
+            }
+        )
+
     proxy_url = f"http://triage-proxy:{PROXY_PORT}"
     environment: dict[str, str] = {
         "HTTP_PROXY": proxy_url,
@@ -185,6 +243,7 @@ def build_compose_dict(
         environment["OPENCODE_API_KEY"] = opencode_creds.api_key
     if opencode_creds.api_provider:
         environment["OPENCODE_API_PROVIDER"] = opencode_creds.api_provider
+        environment["OLLAMA_HOST"] = opencode_creds.api_provider
 
     agent_service: dict[str, Any] = {
         "image": image_tag,
@@ -192,6 +251,7 @@ def build_compose_dict(
         "read_only": True,
         "cap_drop": ["ALL"],
         "security_opt": ["no-new-privileges:true"],
+        "command": ["sleep", "infinity"],
         "networks": ["triage-internal"],
         "depends_on": {
             "triage-proxy": {"condition": "service_started"},
@@ -215,7 +275,11 @@ def build_compose_dict(
         "networks": ["triage-internal", "triage-external"],
         "extra_hosts": ["host.docker.internal:host-gateway"],
         "volumes": [
-            {"type": "tmpfs", "target": "/run"},
+            {
+                "type": "tmpfs",
+                "target": "/run",
+                "tmpfs": {"mode": 0o1777},
+            },
             {
                 "type": "bind",
                 "source": str(proxy_config_path),
@@ -256,35 +320,49 @@ def generate_triage_compose(
     repo_paths: dict[str, Path],
     *,
     provider: str,
+    base_url: str = "",
+    model: str = "",
 ) -> Path:
     """Resolves credentials, validates OAuth files, generates
     and writes the compose file and proxy config. Returns the
     compose file path.
+
+    ``provider`` is the provider name from ``triage_inference``
+    (e.g. ``ollama``, ``llama_cpp``, ``claude``). For non-Claude
+    providers, ``base_url`` and ``model`` are the merged values
+    from the resolved triage config.
     """
+    app_root = app_root.resolve()
     cfg = ConfigManager(str(app_root)).global_config
     claude_creds = resolve_claude_credentials(cfg.claude)
-    opencode_creds = resolve_opencode_credentials(cfg.opencode)
+
+    is_claude = provider == "claude"
+    api_provider_url = "" if is_claude else base_url
+    opencode_creds = OpenCodeCredentials(
+        api_key="",
+        api_provider=api_provider_url,
+        model=model,
+    )
 
     oauth_identity: Path | None = None
     oauth_credentials: Path | None = None
 
-    if provider == "claude_code" and claude_creds.mode is ClaudeAuthMode.OAUTH:
+    if is_claude and claude_creds.mode is ClaudeAuthMode.OAUTH:
         home = Path.home()
         oauth_identity = home / ".claude.json"
         oauth_credentials = home / ".claude" / ".credentials.json"
         _validate_oauth_file(oauth_identity)
         _validate_oauth_file(oauth_credentials)
 
-    egress_host, egress_port = resolve_egress_target(
-        provider, opencode_creds.api_provider
-    )
+    egress_host, egress_port = resolve_egress_target(provider, api_provider_url)
 
-    if provider == "open_code" and opencode_creds.api_provider:
-        rewritten = _dockerize_url(opencode_creds.api_provider)
-        if rewritten != opencode_creds.api_provider:
+    if not is_claude and api_provider_url:
+        rewritten = _dockerize_url(api_provider_url)
+        if rewritten != api_provider_url:
             opencode_creds = OpenCodeCredentials(
-                api_key=opencode_creds.api_key,
+                api_key="",
                 api_provider=rewritten,
+                model=model,
             )
             rewritten_host = urlparse(rewritten).hostname
             if rewritten_host:
@@ -296,7 +374,7 @@ def generate_triage_compose(
 
     proxy_config_content = build_proxy_config(connect_ports)
 
-    if provider == "claude_code":
+    if is_claude:
         allowed_hosts = ["api.anthropic.com"]
     else:
         allowed_hosts = [egress_host]
@@ -304,6 +382,16 @@ def generate_triage_compose(
 
     proxy_config_path = app_root / PROXY_CONFIG_DIR / "tinyproxy.conf"
     proxy_filter_path = app_root / PROXY_CONFIG_DIR / "filter"
+
+    oc_config_path: Path | None = None
+    oc_config_content: str = ""
+    if not is_claude and model:
+        oc_config_content = build_opencode_config(
+            provider_name=provider,
+            base_url=opencode_creds.api_provider,
+            model=model,
+        )
+        oc_config_path = app_root / PROXY_CONFIG_DIR / "opencode.json"
 
     compose_dict = build_compose_dict(
         repo_paths=repo_paths,
@@ -314,6 +402,7 @@ def generate_triage_compose(
         proxy_filter_path=proxy_filter_path,
         oauth_identity_path=oauth_identity,
         oauth_credentials_path=oauth_credentials,
+        opencode_config_path=oc_config_path,
     )
 
     content = yaml.dump(
@@ -326,6 +415,8 @@ def generate_triage_compose(
     port.write_compose_file(content, compose_path)
     port.write_compose_file(proxy_config_content, proxy_config_path)
     port.write_compose_file(proxy_filter_content, proxy_filter_path)
+    if oc_config_path is not None:
+        port.write_compose_file(oc_config_content, oc_config_path)
     return compose_path
 
 

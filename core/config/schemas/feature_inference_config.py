@@ -12,6 +12,8 @@ class FeatureInferenceConfig(BaseModel):
     timeout_seconds: int | None = None
     num_ctx: int | None = None
     max_tokens: int | None = None
+    retry_count: int | None = None
+    debug: bool = False
 
     @field_validator("base_url")
     @classmethod
@@ -22,7 +24,7 @@ class FeatureInferenceConfig(BaseModel):
             raise ValueError("URL must start with http:// or https://")
         return v.rstrip("/")
 
-    @field_validator("timeout_seconds", "num_ctx", "max_tokens")
+    @field_validator("timeout_seconds", "num_ctx", "max_tokens", "retry_count")
     @classmethod
     def validate_positive(cls, v: int | None) -> int | None:
         if v is not None and v <= 0:

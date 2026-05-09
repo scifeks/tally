@@ -270,7 +270,7 @@ def test_opencode_config_env_in_command(
         )
     cmd = m.call_args[0][0]
     e_idx = cmd.index("-e")
-    assert cmd[e_idx + 1] == ("OPENCODE_CONFIG=/etc/opencode/permissions.json")
+    assert cmd[e_idx + 1] == "OPENCODE_CONFIG=/etc/opencode/opencode.json"
 
 
 def test_prompt_passed_via_stdin(tmp_path: Path) -> None:

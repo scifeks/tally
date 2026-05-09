@@ -26,6 +26,7 @@ class ClaudeCredentials:
 class OpenCodeCredentials:
     api_key: str
     api_provider: str
+    model: str
 
 
 def resolve_claude_credentials(
@@ -49,5 +50,6 @@ def resolve_opencode_credentials(
         return OpenCodeCredentials(
             api_key=opencode_config.api_key,
             api_provider=opencode_config.api_provider,
+            model=opencode_config.model,
         )
-    return OpenCodeCredentials(api_key="", api_provider="")
+    return OpenCodeCredentials(api_key="", api_provider="", model="")

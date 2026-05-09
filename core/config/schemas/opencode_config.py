@@ -8,3 +8,4 @@ class OpenCodeConfig(BaseModel):
 
     api_key: str = ""
     api_provider: str = ""
+    model: str = ""

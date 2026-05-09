@@ -26,11 +26,11 @@ def _seed_global_config(base_path: Path) -> None:
             {
                 "ollama": {
                     "model": "test-model",
-                    "host": "http://localhost:11434",
+                    "base_url": "http://localhost:11434",
                 },
-                "ollama_embedding": {
+                "embedding_inference": {
+                    "provider": "ollama",
                     "model": "test-embed",
-                    "host": "http://localhost:11434",
                 },
             }
         )

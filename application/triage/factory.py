@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from application.ports.triage_agent import OneshotTriageBackendPort
@@ -21,51 +22,119 @@ class TriageProviderNotConfiguredError(RuntimeError):
     """Raised when triage is disabled."""
 
 
+@dataclass(frozen=True)
+class ResolvedTriageConfig:
+    provider_name: str
+    base_url: str
+    model: str
+    timeout_seconds: int
+    retry_count: int
+    debug: bool
+
+
+def resolve_triage_config(*, app_root: Path) -> ResolvedTriageConfig:
+    """Resolves triage provider using the feature-inference
+    merge pattern (provider defaults + feature overrides).
+    """
+    cfg = ConfigManager(str(app_root)).global_config
+
+    feature = cfg.triage_inference
+    if feature is None:
+        raise TriageProviderNotConfiguredError(
+            "Triage is disabled. Set `triage_inference` "
+            "in config/global.json to enable it. "
+            'Example: {"provider": "ollama"}'
+        )
+
+    provider_name = feature.provider
+    provider_config = getattr(cfg, provider_name, None)
+    if provider_config is None:
+        raise TriageProviderNotConfiguredError(
+            f"Provider {provider_name!r} referenced by "
+            "triage_inference is not configured in "
+            "config/global.json"
+        )
+
+    merged = provider_config.model_dump()
+    for key in (
+        "base_url",
+        "model",
+        "timeout_seconds",
+        "num_ctx",
+        "max_tokens",
+        "retry_count",
+    ):
+        val = getattr(feature, key, None)
+        if val is not None:
+            merged[key] = val
+
+    return ResolvedTriageConfig(
+        provider_name=provider_name,
+        base_url=merged.get("base_url", ""),
+        model=merged.get("model", ""),
+        timeout_seconds=merged.get("timeout_seconds", 300),
+        retry_count=merged.get("retry_count", 1),
+        debug=feature.debug,
+    )
+
+
 def load_triage_provider(*, app_root: Path) -> str:
-    """Loads `triage_agent_provider`."""
-    return ConfigManager(str(app_root)).global_config.triage_agent_provider
+    """Returns the configured triage provider name.
+
+    Reads from triage_inference.provider (preferred) or
+    falls back to the legacy triage_agent_provider field.
+    """
+    cfg = ConfigManager(str(app_root)).global_config
+    if cfg.triage_inference is not None:
+        return cfg.triage_inference.provider
+    return cfg.triage_agent_provider
 
 
 def ensure_triage_backend_configured(*, app_root: Path) -> str:
-    """Returns the enabled triage provider."""
+    """Returns the enabled triage provider name."""
     provider = load_triage_provider(app_root=app_root)
     if provider == "":
         raise TriageProviderNotConfiguredError(
-            "Triage is disabled. Set `triage_agent_provider`"
-            " in config/global.json"
-            " to `claude_code` or `open_code` to enable it."
+            "Triage is disabled. Set `triage_inference` "
+            "in config/global.json to enable it."
         )
     return provider
 
 
 class TriageAgentFactory:
-    """Builds the configured backend."""
+    """Builds the configured triage backend adapter."""
 
     def __init__(self, *, app_root: Path) -> None:
         self._app_root = app_root
 
     def create(self) -> OneshotTriageBackendPort:
-        provider = ensure_triage_backend_configured(app_root=self._app_root)
+        resolved = resolve_triage_config(app_root=self._app_root)
 
-        from application.triage.compose import COMPOSE_RELATIVE_PATH
+        from application.triage.compose import (
+            COMPOSE_RELATIVE_PATH,
+        )
 
         compose_path = self._app_root / COMPOSE_RELATIVE_PATH
 
-        if provider == "claude_code":
+        if resolved.provider_name == "claude":
             from infrastructure.agents.claude_triage_agent import (
                 ClaudeTriageAgent,
             )
 
-            cfg = ConfigManager(str(self._app_root)).global_config
-            model = cfg.claude.model if cfg.claude else "sonnet"
-            return ClaudeTriageAgent(model=model, compose_path=compose_path)
-        if provider == "open_code":
-            from infrastructure.agents.opencode_triage_agent import (
-                OpenCodeTriageAgent,
+            return ClaudeTriageAgent(
+                model=resolved.model,
+                compose_path=compose_path,
             )
 
-            return OpenCodeTriageAgent(compose_path=compose_path)
-        raise RuntimeError(f"Unsupported triage agent provider: {provider!r}")
+        from infrastructure.agents.opencode_triage_agent import (
+            OpenCodeTriageAgent,
+        )
+
+        return OpenCodeTriageAgent(
+            compose_path=compose_path,
+            model=resolved.model,
+            provider_name=resolved.provider_name,
+        )
 
 
 def build_triage_runner(
@@ -87,16 +156,14 @@ def build_triage_runner(
     run_repo, finding_repo, triage_repo, audit_repo = make_store(app_root, project)
     if reset_for_resume_scan_run_id is not None:
         triage_repo.reset_for_resume(reset_for_resume_scan_run_id)
-    session_timeout_seconds = ConfigManager(
-        str(app_root)
-    ).global_config.triage_session_timeout_seconds
+
+    resolved = resolve_triage_config(app_root=app_root)
 
     factory = ConnectionFactory(paths.findings_db)
     repos = RepositoryRepository(factory).list_active()
     repo_paths = {r.name: Path(r.path) for r in repos if r.path}
 
-    provider = load_triage_provider(app_root=app_root)
-    triaged_by = "claudecode" if provider == "claude_code" else "opencode"
+    triaged_by = "claudecode" if resolved.provider_name == "claude" else "opencode"
 
     agent_factory = TriageAgentFactory(app_root=app_root)
 
@@ -111,9 +178,11 @@ def build_triage_runner(
         project_id=project_id,
         scan_run_id=scan_run_id,
         triage_backend=agent_factory.create(),
-        session_timeout_seconds=session_timeout_seconds,
+        session_timeout_seconds=resolved.timeout_seconds,
+        retry_count=resolved.retry_count,
         tool_registry=tool_registry,
         finding_repo=finding_repo,
         repo_paths=repo_paths,
         triaged_by=triaged_by,
+        debug=resolved.debug,
     )

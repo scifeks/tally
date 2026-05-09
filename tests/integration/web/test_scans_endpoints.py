@@ -25,10 +25,13 @@ def _seed_global_config(base_path: str) -> None:
     (config_dir / "global.json").write_text(
         json.dumps(
             {
-                "ollama": {"model": "test-model", "host": "http://localhost:11434"},
-                "ollama_embedding": {
+                "ollama": {
+                    "model": "test-model",
+                    "base_url": "http://localhost:11434",
+                },
+                "embedding_inference": {
+                    "provider": "ollama",
                     "model": "test-embed",
-                    "host": "http://localhost:11434",
                 },
             }
         )

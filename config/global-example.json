@@ -17,11 +17,12 @@
     "max_tokens": 1024,
     "timeout_seconds": 60
   },
-  "opencode": {
-    "api_key": "",
-    "api_provider": ""
+  "triage_inference": {
+    "provider": "ollama",
+    "timeout_seconds": 600,
+    "retry_count": 2,
+    "debug": false
   },
-  "triage_agent_provider": "",
   "chat_inference": null,
   "enrichment_inference": {
     "provider": "ollama"

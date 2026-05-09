@@ -123,7 +123,6 @@ class TestParseVerdictFieldValidation:
             "reasoning",
             "remediation",
             "attack_vector",
-            "call_stack",
         ],
     )
     def test_missing_single_field(self, drop_field: str) -> None:
@@ -131,6 +130,12 @@ class TestParseVerdictFieldValidation:
         del obj[drop_field]
         with pytest.raises(VerdictParseError, match="missing fields"):
             parse_verdict(json.dumps(obj), expected_finding_id=42)
+
+    def test_missing_call_stack_defaults_to_empty(self) -> None:
+        obj = _valid_obj()
+        del obj["call_stack"]
+        v = parse_verdict(json.dumps(obj), expected_finding_id=42)
+        assert v.call_stack == []
 
     def test_missing_multiple_fields(self) -> None:
         obj = _valid_obj()

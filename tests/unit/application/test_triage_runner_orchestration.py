@@ -165,6 +165,7 @@ def _make_runner(
         tmp_path,
         triage_backend=backend,
         session_timeout_seconds=300,
+        retry_count=0,
         tool_registry=MagicMock(),
         finding_repo=fr,
         repo_paths={},

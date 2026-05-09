@@ -18,6 +18,7 @@ class ClaudeTriageAgent:
     def __init__(self, *, model: str, compose_path: Path) -> None:
         self._model = model
         self._compose_path = compose_path
+        self.last_raw_output: str = ""
 
     @contextmanager
     def prepare_session(
@@ -70,6 +71,7 @@ class ClaudeTriageAgent:
                 f"claude exited with code {completed.returncode}: {stderr[:200]}"
             )
 
+        self.last_raw_output = completed.stdout
         result_text = self._extract_result(completed.stdout)
         return parse_verdict(result_text, expected_finding_id=finding_id)
 

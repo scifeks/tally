@@ -18,7 +18,7 @@ from application.triage.container import (
 _CONTAINER_PORT = "application.triage.container._resolve_container_port"
 _COMPOSE_PATH = "application.triage.container._compose_path"
 _GENERATE = "application.triage.compose.generate_triage_compose"
-_LOAD_PROVIDER = "application.triage.factory.load_triage_provider"
+_RESOLVE_CONFIG = "application.triage.factory.resolve_triage_config"
 _CONN_FACTORY = "infrastructure.store.connection.ConnectionFactory"
 _REPO_REPO = "infrastructure.store.repositories.repositories.RepositoryRepository"
 _PROJECT_PATHS = "core.project_paths.ProjectPaths"
@@ -84,7 +84,14 @@ class TestEnsureTriageContainers:
         with (
             patch(_CONTAINER_PORT, return_value=mock_port),
             patch(_COMPOSE_PATH, return_value=fake_compose),
-            patch(_LOAD_PROVIDER, return_value="claude_code"),
+            patch(
+                _RESOLVE_CONFIG,
+                return_value=MagicMock(
+                    provider_name="claude",
+                    base_url="",
+                    model="sonnet",
+                ),
+            ),
             patch(
                 _PROJECT_PATHS + ".from_canonical",
                 return_value=mock_paths,
@@ -125,7 +132,14 @@ class TestEnsureTriageContainers:
         with (
             patch(_CONTAINER_PORT, return_value=mock_port),
             patch(_COMPOSE_PATH, return_value=fake_compose),
-            patch(_LOAD_PROVIDER, return_value="claude_code"),
+            patch(
+                _RESOLVE_CONFIG,
+                return_value=MagicMock(
+                    provider_name="claude",
+                    base_url="",
+                    model="sonnet",
+                ),
+            ),
             patch(
                 _PROJECT_PATHS + ".from_canonical",
                 return_value=mock_paths,

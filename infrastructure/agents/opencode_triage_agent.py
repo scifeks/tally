@@ -17,14 +17,23 @@ from application.triage.verdict import (
     parse_verdict,
 )
 
-_OC_CONFIG_PATH = "/etc/opencode/permissions.json"
+_OC_CONFIG_PATH = "/etc/opencode/opencode.json"
 
 
 class OpenCodeTriageAgent:
     """OpenCode-backed one-shot triage adapter."""
 
-    def __init__(self, *, compose_path: Path) -> None:
+    def __init__(
+        self,
+        *,
+        compose_path: Path,
+        model: str = "",
+        provider_name: str = "ollama",
+    ) -> None:
         self._compose_path = compose_path
+        self._model = model
+        self._provider_name = provider_name
+        self.last_raw_output: str = ""
 
     @contextmanager
     def prepare_session(
@@ -44,25 +53,28 @@ class OpenCodeTriageAgent:
         timeout_seconds: int,
         cwd: Path,
     ) -> Verdict:
+        cmd = [
+            "docker",
+            "compose",
+            "-f",
+            str(self._compose_path),
+            "exec",
+            "-T",
+            "-e",
+            f"OPENCODE_CONFIG={_OC_CONFIG_PATH}",
+            "triage-agent",
+            "opencode",
+            "run",
+            "--dangerously-skip-permissions",
+            "--dir",
+            "/workspace",
+            "--format",
+            "json",
+        ]
+        if self._model:
+            cmd.extend(["--model", f"{self._provider_name}/{self._model}"])
         completed = subprocess.run(
-            [
-                "docker",
-                "compose",
-                "-f",
-                str(self._compose_path),
-                "exec",
-                "-T",
-                "-e",
-                f"OPENCODE_CONFIG={_OC_CONFIG_PATH}",
-                "triage-agent",
-                "opencode",
-                "run",
-                "--dangerously-skip-permissions",
-                "--dir",
-                "/workspace",
-                "--format",
-                "json",
-            ],
+            cmd,
             input=prompt,
             capture_output=True,
             text=True,
@@ -75,6 +87,7 @@ class OpenCodeTriageAgent:
                 f"opencode exited with code {completed.returncode}: {stderr[:200]}"
             )
 
+        self.last_raw_output = completed.stdout
         text = self._extract_text(completed.stdout)
         return parse_verdict(text, expected_finding_id=finding_id)
 

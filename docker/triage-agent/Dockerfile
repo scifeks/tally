@@ -18,7 +18,13 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 
 RUN mkdir -p /home/agent/.claude/
 
-RUN curl -fsSL https://opencode.ai/install | bash
+RUN curl -fsSL https://opencode.ai/install | bash \
+    && cp /home/agent/.opencode/bin/opencode /home/agent/.local/bin/opencode
+
+RUN mkdir -p /home/agent/.local/share/opencode \
+             /home/agent/.local/state/opencode \
+             /home/agent/.cache/opencode \
+             /home/agent/.config/opencode
 
 RUN git config --global --add safe.directory '*'
 

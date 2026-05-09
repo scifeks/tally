@@ -6,6 +6,7 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -87,10 +88,12 @@ class TriageRunner:
         scan_run_id: int | None = None,
         triage_backend: OneshotTriageBackendPort,
         session_timeout_seconds: int,
+        retry_count: int = 1,
         tool_registry: ToolRegistry,
         finding_repo: FindingRepositoryPort | None = None,
         repo_paths: dict[str, Path] | None = None,
         triaged_by: str = "claudecode",
+        debug: bool = False,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -104,10 +107,12 @@ class TriageRunner:
         self._scan_run_id = scan_run_id
         self._triage_backend = triage_backend
         self._session_timeout_seconds = session_timeout_seconds
+        self._retry_count = retry_count
         self._tool_registry = tool_registry
         self._finding_repo = finding_repo
         self._repo_paths: dict[str, Path] = repo_paths or {}
         self._triaged_by = triaged_by
+        self._debug = debug
 
     # Public API
 
@@ -227,10 +232,8 @@ class TriageRunner:
             render_fn = _PROMPT_RENDERERS[segment]
             for finding in batch_data:
                 fid = finding.get("id", "?")
-                file_contents = self._read_source_file(finding)
                 prompt = render_fn(
                     finding,
-                    file_contents=file_contents,
                     project=self._project,
                 )
                 _log.debug(
@@ -437,44 +440,86 @@ class TriageRunner:
         render_fn = _PROMPT_RENDERERS[segment]
         succeeded = 0
         total = len(batch_data)
+        max_attempts = self._retry_count + 1
 
         for finding in batch_data:
             fid = finding.get("id", -1)
-            try:
-                file_contents = self._read_source_file(finding)
-                prompt = render_fn(
-                    finding,
-                    file_contents=file_contents,
-                    project=self._project,
-                )
-                verdict = self._triage_backend.run_triage(
-                    prompt,
-                    finding_id=fid,
-                    timeout_seconds=self._session_timeout_seconds,
-                    cwd=cwd,
-                )
-                self._write_verdict(verdict, segment)
+            prompt = render_fn(finding, project=self._project)
+            ok = False
+            for attempt in range(max_attempts):
+                try:
+                    verdict = self._triage_backend.run_triage(
+                        prompt,
+                        finding_id=fid,
+                        timeout_seconds=self._session_timeout_seconds,
+                        cwd=cwd,
+                    )
+                    if self._debug:
+                        raw = getattr(
+                            self._triage_backend,
+                            "last_raw_output",
+                            "",
+                        )
+                        if raw:
+                            self._write_debug_log(batch_id, fid, raw)
+                    self._write_verdict(verdict, segment)
+                    ok = True
+                    break
+                except VerdictParseError as exc:
+                    self._log_verdict_failure(batch_id, fid, exc)
+                    if attempt < max_attempts - 1:
+                        _log.warning(
+                            "Retrying finding %d (attempt %d/%d)",
+                            fid,
+                            attempt + 2,
+                            max_attempts,
+                        )
+                        continue
+                except Exception as exc:
+                    _log.error(
+                        "Triage failed for finding %d in batch %d: %s",
+                        fid,
+                        batch_id,
+                        exc,
+                    )
+                    break
+            if ok:
                 succeeded += 1
-            except VerdictParseError as exc:
-                _log.warning(
-                    "Verdict parse failed for finding %d in batch %d: %s",
-                    fid,
-                    batch_id,
-                    exc.problem,
-                )
-            except Exception as exc:
-                _log.error(
-                    "Triage failed for finding %d in batch %d: %s",
-                    fid,
-                    batch_id,
-                    exc,
-                )
 
         if succeeded == total:
             return "success"
         if succeeded == 0:
             return "failed"
         return "incomplete"
+
+    def _log_verdict_failure(
+        self,
+        batch_id: int,
+        fid: int,
+        exc: VerdictParseError,
+    ) -> None:
+        _log.warning(
+            "Verdict parse failed for finding %d in batch %d: %s",
+            fid,
+            batch_id,
+            exc.problem,
+        )
+        if not self._debug:
+            return
+        raw = getattr(self._triage_backend, "last_raw_output", "")
+        content = raw or exc.raw_output
+        if content:
+            self._write_debug_log(batch_id, fid, content)
+
+    def _write_debug_log(self, batch_id: int, finding_id: int, raw_output: str) -> None:
+        from datetime import datetime
+
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        log_dir = self._app_root / "logs" / "triage"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        path = log_dir / f"{batch_id}-{finding_id}-{ts}.log"
+        path.write_text(raw_output, encoding="utf-8")
+        _log.debug("Triage debug log written to %s", path)
 
     def _read_source_file(self, finding: dict[str, Any]) -> str:
         repo_name = finding.get("repo", "")

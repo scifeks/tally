@@ -31,7 +31,6 @@ class TestRenderBasicContract:
     def test_returns_nonempty_string(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert isinstance(result, str)
@@ -40,7 +39,6 @@ class TestRenderBasicContract:
     def test_includes_project(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert _PROJECT in result
@@ -48,7 +46,6 @@ class TestRenderBasicContract:
     def test_includes_finding_id(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "99" in result
@@ -56,7 +53,6 @@ class TestRenderBasicContract:
     def test_includes_url(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "http://example.com/api/users?id=1" in result
@@ -64,7 +60,6 @@ class TestRenderBasicContract:
     def test_includes_method(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "GET" in result
@@ -74,7 +69,6 @@ class TestFencingStructure:
     def test_finding_metadata_is_fenced(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "<<<TALLY_DATA_START: finding_metadata>>>" in result
@@ -83,7 +77,6 @@ class TestFencingStructure:
     def test_metadata_fence_contains_finding_fields(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         start = result.index("<<<TALLY_DATA_START: finding_metadata>>>")
@@ -103,7 +96,6 @@ class TestFencingStructure:
         }
         result = render(
             injected,
-            file_contents="unused",
             project=_PROJECT,
         )
         start = result.index("<<<TALLY_DATA_START: finding_metadata>>>")
@@ -116,7 +108,6 @@ class TestNoMcpReferences:
     def test_no_get_findings_batch(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "get_findings_batch" not in result
@@ -124,25 +115,15 @@ class TestNoMcpReferences:
     def test_no_update_findings_batch(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "update_findings_batch" not in result
-
-    def test_no_abs_path_instruction(self) -> None:
-        result = render(
-            _SAMPLE_FINDING,
-            file_contents="unused",
-            project=_PROJECT,
-        )
-        assert "abs_path" not in result
 
 
 class TestPromptSections:
     def test_epistemic_guidance_present(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "Epistemic Conservatism" in result
@@ -150,7 +131,6 @@ class TestPromptSections:
     def test_output_schema_present(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "finding_id" in result
@@ -165,7 +145,6 @@ class TestPromptSections:
     def test_confidence_guidance_present(self) -> None:
         result = render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "confirmed" in result
@@ -192,7 +171,6 @@ class TestEdgeCases:
         }
         result = render(
             sparse,
-            file_contents="unused",
             project="test",
         )
         assert isinstance(result, str)
@@ -202,7 +180,6 @@ class TestEdgeCases:
         finding = {**_SAMPLE_FINDING, "cwe_id": 79}
         result = render(
             finding,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "79" in result
@@ -211,7 +188,6 @@ class TestEdgeCases:
         finding = {**_SAMPLE_FINDING, "cwe_id": "89"}
         result = render(
             finding,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "89" in result
@@ -220,30 +196,15 @@ class TestEdgeCases:
         finding = {**_SAMPLE_FINDING, "cwe_id": None}
         result = render(
             finding,
-            file_contents="unused",
             project=_PROJECT,
         )
         assert "n/a" in result
-
-    def test_file_contents_ignored(self) -> None:
-        result1 = render(
-            _SAMPLE_FINDING,
-            file_contents="some file content",
-            project=_PROJECT,
-        )
-        result2 = render(
-            _SAMPLE_FINDING,
-            file_contents="different file content",
-            project=_PROJECT,
-        )
-        assert result1 == result2
 
 
 class TestVerdictRoundtrip:
     def test_valid_verdict_parses(self) -> None:
         render(
             _SAMPLE_FINDING,
-            file_contents="unused",
             project=_PROJECT,
         )
         verdict_json = json.dumps(

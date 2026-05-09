@@ -314,3 +314,14 @@ class TriageService:
                     "triage lock already released for scan_run_id=%d",
                     scan_run_id,
                 )
+            try:
+                from application.triage.container import (
+                    teardown_triage_containers,
+                )
+
+                teardown_triage_containers(Path(base_path))
+            except Exception:
+                logger.debug(
+                    "post-triage container teardown failed",
+                    exc_info=True,
+                )

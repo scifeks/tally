@@ -99,20 +99,26 @@ def ensure_triage_containers(app_root: Path, project: str) -> bool:
         return False
 
     from application.triage.compose import generate_triage_compose
-    from application.triage.factory import load_triage_provider
+    from application.triage.factory import resolve_triage_config
     from core.project_paths import ProjectPaths
     from infrastructure.store.connection import ConnectionFactory
     from infrastructure.store.repositories.repositories import (
         RepositoryRepository,
     )
 
-    provider = load_triage_provider(app_root=app_root)
+    resolved = resolve_triage_config(app_root=app_root)
     paths = ProjectPaths.from_canonical(app_root, project)
     factory = ConnectionFactory(paths.findings_db)
     repos = RepositoryRepository(factory).list_active()
     repo_paths = {r.name: Path(r.path) for r in repos if r.path}
 
-    generate_triage_compose(app_root, repo_paths, provider=provider)
+    generate_triage_compose(
+        app_root,
+        repo_paths,
+        provider=resolved.provider_name,
+        base_url=resolved.base_url,
+        model=resolved.model,
+    )
     port.up(path)
     return True
 
