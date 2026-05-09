@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from application.tools.executor import ToolExecutor
@@ -15,9 +16,14 @@ from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
+from infrastructure.tools.wrappers.docker._docker_exec import (
+    build_docker_exec,
+)
 from infrastructure.tools.wrappers.utils.manifest_check import (
     has_manifests_for_language,
 )
+
+_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
@@ -96,12 +102,39 @@ def make_context(
     )
 
 
+def _build_raw_command(
+    tool_name: str,
+    command_config: Any,
+    cli_args: list[str],
+) -> list[str]:
+    """Build a command from raw CLI args using the tool's command config."""
+    location = getattr(command_config, "location", None)
+    if location == "docker":
+        container = getattr(command_config, "container", None)
+        if container is None:
+            raise ValueError(
+                f"Tool {tool_name!r}: docker location requires container config"
+            )
+        name = getattr(container, "name", None)
+        tool_path = getattr(container, "tool_path", None)
+        if not name or not tool_path:
+            raise ValueError(f"Tool {tool_name!r}: container missing name or tool_path")
+        return build_docker_exec(name, tool_path, cli_args)
+    if location == "local":
+        path = getattr(command_config, "path", None)
+        if not path:
+            raise ValueError(f"Tool {tool_name!r}: local location requires path")
+        return [path, *cli_args]
+    raise ValueError(f"Tool {tool_name!r}: unknown location {location!r}")
+
+
 def execute_tool_passes(
     tool: ToolInterface,
     context: ExecutionContext,
     config: ScanTypeConfig,
     executor: ToolExecutor,
     remaining_tools: int = 0,
+    command_config: Any = None,
 ) -> ToolResult | None:
     """Prompt approval once, run all ExecutionPasses, return merged result."""
     if not config.prompt.confirm(f"  Run {tool.name}?"):
@@ -109,9 +142,37 @@ def execute_tool_passes(
     if remaining_tools > 0:
         config.prompt.approve_all_remaining()
 
+    snapshot_json = config.arg_snapshots.get(tool.name)
+    if snapshot_json is not None and command_config is not None:
+        from domain.tool_arg_profiles.cli import snapshot_to_cli
+
+        try:
+            cli_args = snapshot_to_cli(snapshot_json)
+        except ValueError:
+            _log.exception(
+                "Tool %s: invalid arg profile snapshot",
+                tool.name,
+            )
+            cli_args = None
+        if cli_args is not None:
+            try:
+                raw_cmd = _build_raw_command(tool.name, command_config, cli_args)
+            except ValueError:
+                _log.exception(
+                    "Tool %s: failed to build raw command",
+                    tool.name,
+                )
+                raw_cmd = None
+            if raw_cmd is not None:
+                _log.info(
+                    "Tool %s: using custom arg profile",
+                    tool.name,
+                )
+                return executor.run_raw(raw_cmd, tool)
+
     passes = tool.build_execution_passes(context)
     if not passes:
-        return None  # tool signaled skip via empty pass list
+        return None
     pass_results = [executor.run(p, tool) for p in passes]
     return tool.merge_pass_results(pass_results)
 

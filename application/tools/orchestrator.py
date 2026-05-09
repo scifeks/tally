@@ -70,6 +70,7 @@ class ScanOrchestrator:
         project_id: int | None = None,
         chat_session_repo: ChatSessionRepositoryPort | None = None,
         display: DisplayProtocol | None = None,
+        arg_snapshots: dict[str, str] | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -84,6 +85,7 @@ class ScanOrchestrator:
         self._run_repository = run_repository
         self._project_id = project_id
         self._chat_session_repo = chat_session_repo
+        self._arg_snapshots = arg_snapshots or {}
 
         # Plumb cancellation into the executor so subprocess waits abort.
         if hasattr(tool_executor, "set_cancel_token"):
@@ -103,6 +105,7 @@ class ScanOrchestrator:
             prompt=self._prompt,
             remaining_peers=remaining_peers,
             project_id=self._project_id,
+            arg_snapshots=self._arg_snapshots,
         )
 
     def _make_resources(self) -> ExecutionResources:

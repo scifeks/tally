@@ -153,7 +153,12 @@ class ToolArgProfilesService:
             for arg in args:
                 if isinstance(arg, FileArgInput):
                     assert arg.data is not None
-                    path = self._storage.write(profile_id, arg.name, arg.data)
+                    path = self._storage.write(
+                        profile_id,
+                        arg.name,
+                        arg.data,
+                        original_filename=arg.original_filename,
+                    )
                     written_names.append(arg.name)
                     paths_by_name[arg.name] = path
                     orig_filenames[arg.name] = arg.original_filename
@@ -224,7 +229,12 @@ class ToolArgProfilesService:
                         paths_by_name[arg.name] = old.path
                         orig_filenames[arg.name] = old.original_filename
                     else:
-                        path = self._storage.write(profile_id, arg.name, arg.data)
+                        path = self._storage.write(
+                            profile_id,
+                            arg.name,
+                            arg.data,
+                            original_filename=arg.original_filename,
+                        )
                         written_names.append(arg.name)
                         paths_by_name[arg.name] = path
                         orig_filenames[arg.name] = arg.original_filename

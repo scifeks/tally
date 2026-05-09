@@ -66,9 +66,9 @@ class TestToolArgProfilesServiceIntegration:
         file_arg = profile.args[2]
         assert file_arg.name == "--rules"
         assert isinstance(file_arg, ToolArgProfileFileArg)
-        assert file_arg.path == f"arg_files/{profile.id}/--rules"
+        assert file_arg.path == f"arg_files/{profile.id}/--rules/--rules"
 
-        file_path = tmp_path / "arg_files" / str(profile.id) / "--rules"
+        file_path = tmp_path / "arg_files" / str(profile.id) / "--rules" / "--rules"
         assert file_path.read_bytes() == b"rules-bytes"
 
         retrieved = service.get(profile.id)
@@ -225,9 +225,9 @@ class TestToolArgProfilesServiceIntegration:
         assert arg_names == {"--a", "--c"}
 
         arg_files = tmp_path / "arg_files" / str(profile_id)
-        assert (arg_files / "--a").read_bytes() == b"new-A"
+        assert (arg_files / "--a" / "--a").read_bytes() == b"new-A"
         assert not (arg_files / "--b").exists()
-        assert (arg_files / "--c").read_bytes() == b"new-C"
+        assert (arg_files / "--c" / "--c").read_bytes() == b"new-C"
 
     def test_replace_keep_existing(
         self,
@@ -258,7 +258,7 @@ class TestToolArgProfilesServiceIntegration:
         assert kept_file_arg.path == original_path
 
         arg_files = tmp_path / "arg_files" / str(profile_id)
-        assert (arg_files / "--x").read_bytes() == b"original"
+        assert (arg_files / "--x" / "--x").read_bytes() == b"original"
 
     def test_replace_keep_existing_unknown_name_rejected(
         self,

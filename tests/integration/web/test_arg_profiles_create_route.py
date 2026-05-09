@@ -92,7 +92,7 @@ class TestArgProfilesCreate:
         profile_id = body["id"]
 
         arg_files_dir = tmp_path / "projects" / "testproject" / "arg_files"
-        on_disk = arg_files_dir / str(profile_id) / "--rules"
+        on_disk = arg_files_dir / str(profile_id) / "--rules" / "rules.yml"
         assert on_disk.is_file()
         assert on_disk.read_bytes() == b"rule-bytes"
 
@@ -137,8 +137,12 @@ class TestArgProfilesCreate:
         assert len(body["args"]) == 4
 
         arg_files_dir = tmp_path / "projects" / "testproject" / "arg_files"
-        assert (arg_files_dir / str(profile_id) / "--rules").read_bytes() == b"AAA"
-        assert (arg_files_dir / str(profile_id) / "--allowlist").read_bytes() == b"BBB"
+        assert (
+            arg_files_dir / str(profile_id) / "--rules" / "a"
+        ).read_bytes() == b"AAA"
+        assert (
+            arg_files_dir / str(profile_id) / "--allowlist" / "b"
+        ).read_bytes() == b"BBB"
 
     async def test_create_unique_conflict_returns_409(self, app_client) -> None:
         """POST duplicating (toolName, name) returns 409 CONFLICT."""
