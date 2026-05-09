@@ -98,6 +98,26 @@ class TestSnapshotToCli:
         with pytest.raises(ValueError, match="Missing required field: path"):
             snapshot_to_cli('[{"type": "file", "name": "--config"}]')
 
+    def test_string_arg_with_equals_operator(self) -> None:
+        snapshot = (
+            '[{"type": "string", "name": "--redact", "value": "50", "operator": "="}]'
+        )
+        result = snapshot_to_cli(snapshot)
+        assert result == ["--redact=50"]
+
+    def test_string_arg_without_operator_defaults_space(self) -> None:
+        snapshot = '[{"type": "string", "name": "--timeout", "value": "30"}]'
+        result = snapshot_to_cli(snapshot)
+        assert result == ["--timeout", "30"]
+
+    def test_file_arg_with_equals_operator(self) -> None:
+        snapshot = (
+            '[{"type": "file", "name": "--config",'
+            ' "path": "/etc/app.json", "operator": "="}]'
+        )
+        result = snapshot_to_cli(snapshot)
+        assert result == ["--config=/etc/app.json"]
+
     def test_complex_mixed_snapshot(self) -> None:
         snapshot = """[
             {"type": "flag", "name": "--debug"},

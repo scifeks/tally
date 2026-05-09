@@ -211,7 +211,14 @@ class TestScanServiceArgProfiles:
         )
         assert rows[1]["tool"] == "semgrep"
         assert rows[1]["arg_profile_snapshot"] == json.dumps(
-            [{"name": "--config", "value": "cfg.yaml", "type": "string"}]
+            [
+                {
+                    "name": "--config",
+                    "value": "cfg.yaml",
+                    "operator": "",
+                    "type": "string",
+                }
+            ]
         )
 
     def test_start_scan_snapshot_collision_later_wins(
@@ -251,7 +258,14 @@ class TestScanServiceArgProfiles:
         assert len(rows) == 1
         assert rows[0]["tool"] == "gitleaks"
         assert rows[0]["arg_profile_snapshot"] == json.dumps(
-            [{"name": "--config", "value": "cfg.yaml", "type": "string"}]
+            [
+                {
+                    "name": "--config",
+                    "value": "cfg.yaml",
+                    "operator": "",
+                    "type": "string",
+                }
+            ]
         )
 
     def test_start_scan_no_arg_profile_ids_writes_no_snapshot_rows(

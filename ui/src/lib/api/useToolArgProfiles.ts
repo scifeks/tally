@@ -5,11 +5,12 @@ import { useUI } from '../store'
 import type { ApiErrorPayload, ArgumentTemplate } from '../types'
 
 type ArgProfileFlagArg = { name: string; type: 'flag' }
-type ArgProfileStringArg = { name: string; type: 'string'; value: string }
+type ArgProfileStringArg = { name: string; type: 'string'; value: string; operator: string }
 type ArgProfileFileArg = {
   name: string
   type: 'file'
   path: string
+  operator?: string
   originalFilename?: string
   downloadUrl?: string
 }
@@ -47,12 +48,19 @@ export function mapProfilesToTemplates(profiles: ToolArgProfile[]): ArgumentTemp
         return { id: a.name, flag: a.name, valueType: 'none' as const }
       }
       if (a.type === 'string') {
-        return { id: a.name, flag: a.name, valueType: 'string' as const, value: a.value }
+        return {
+          id: a.name,
+          flag: a.name,
+          valueType: 'string' as const,
+          operator: a.operator ?? '',
+          value: a.value,
+        }
       }
       return {
         id: a.name,
         flag: a.name,
         valueType: 'file' as const,
+        operator: a.operator ?? '',
         value: a.path,
         fileName: a.originalFilename || a.name,
       }
@@ -70,9 +78,14 @@ export function mapTemplateToWriteInput(
     args: template.arguments.map(a => {
       if (a.valueType === 'none') return { name: a.flag, type: 'flag' as const }
       if (a.valueType === 'string') {
-        return { name: a.flag, type: 'string' as const, value: a.value ?? '' }
+        return {
+          name: a.flag,
+          type: 'string' as const,
+          value: a.value ?? '',
+          operator: a.operator ?? '',
+        }
       }
-      return { name: a.flag, type: 'file' as const, path: '' }
+      return { name: a.flag, type: 'file' as const, path: '', operator: a.operator ?? '' }
     }),
   }
 }
@@ -88,7 +101,12 @@ export function profileMatchesTemplate(
     if (!t) return false
     if (a.type === 'flag') return t.valueType === 'none' && t.flag === a.name
     if (a.type === 'string') {
-      return t.valueType === 'string' && t.flag === a.name && t.value === a.value
+      return (
+        t.valueType === 'string' &&
+        t.flag === a.name &&
+        t.value === a.value &&
+        (a.operator ?? '') === (t.operator ?? '')
+      )
     }
     return t.valueType === 'file' && t.flag === a.name
   })

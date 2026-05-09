@@ -40,6 +40,7 @@ class StringArgInput:
 
     name: str
     value: str
+    operator: str = ""
     type: Literal["string"] = "string"
 
 
@@ -53,6 +54,7 @@ class FileArgInput:
     name: str
     data: bytes | None
     original_filename: str | None = None
+    operator: str = ""
     type: Literal["file"] = "file"
 
 
@@ -136,10 +138,20 @@ class ToolArgProfilesService:
                 placeholder_args.append(ToolArgProfileFlagArg(name=arg.name))
             elif isinstance(arg, StringArgInput):
                 placeholder_args.append(
-                    ToolArgProfileStringArg(name=arg.name, value=arg.value)
+                    ToolArgProfileStringArg(
+                        name=arg.name,
+                        value=arg.value,
+                        operator=arg.operator,
+                    )
                 )
             else:  # FileArgInput
-                placeholder_args.append(ToolArgProfileFileArg(name=arg.name, path=""))
+                placeholder_args.append(
+                    ToolArgProfileFileArg(
+                        name=arg.name,
+                        path="",
+                        operator=arg.operator,
+                    )
+                )
 
         profile_id = self._repo.insert(
             tool_name=tool_name, name=name, args=placeholder_args
@@ -287,7 +299,11 @@ class ToolArgProfilesService:
                 domain_args.append(ToolArgProfileFlagArg(name=arg.name))
             elif isinstance(arg, StringArgInput):
                 domain_args.append(
-                    ToolArgProfileStringArg(name=arg.name, value=arg.value)
+                    ToolArgProfileStringArg(
+                        name=arg.name,
+                        value=arg.value,
+                        operator=arg.operator,
+                    )
                 )
             else:
                 domain_args.append(
@@ -295,6 +311,7 @@ class ToolArgProfilesService:
                         name=arg.name,
                         path=paths_by_name[arg.name],
                         original_filename=orig_filenames.get(arg.name),
+                        operator=arg.operator,
                     )
                 )
         return domain_args

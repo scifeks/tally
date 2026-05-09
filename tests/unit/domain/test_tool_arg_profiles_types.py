@@ -32,6 +32,14 @@ class TestToolArgProfileStringArg:
         assert arg.value == "rules.toml"
         assert arg.type == "string"
 
+    def test_operator_defaults_to_empty(self) -> None:
+        arg = ToolArgProfileStringArg(name="--config", value="rules.toml")
+        assert arg.operator == ""
+
+    def test_operator_preserved(self) -> None:
+        arg = ToolArgProfileStringArg(name="--redact", value="50", operator="=")
+        assert arg.operator == "="
+
     def test_is_frozen(self) -> None:
         arg = ToolArgProfileStringArg(name="--config", value="rules.toml")
         with pytest.raises(Exception):
@@ -44,6 +52,16 @@ class TestToolArgProfileFileArg:
         assert arg.name == "--rules"
         assert arg.path == "arg_files/12/--rules.yml"
         assert arg.type == "file"
+
+    def test_operator_defaults_to_empty(self) -> None:
+        arg = ToolArgProfileFileArg(name="--rules", path="arg_files/1/--rules")
+        assert arg.operator == ""
+
+    def test_operator_preserved(self) -> None:
+        arg = ToolArgProfileFileArg(
+            name="--rules", path="arg_files/1/--rules", operator="="
+        )
+        assert arg.operator == "="
 
     def test_original_filename_defaults_to_none(self) -> None:
         arg = ToolArgProfileFileArg(name="--rules", path="arg_files/1/--rules")

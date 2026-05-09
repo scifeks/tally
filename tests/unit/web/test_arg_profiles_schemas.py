@@ -40,6 +40,48 @@ class TestArgProfilesSchemas:
         assert m.args[1].value == ".gitleaks.toml"
         assert isinstance(m.args[2], ArgProfilePayloadFileArg)
 
+    def test_string_arg_operator_defaults_to_empty(self) -> None:
+        m = ArgProfilePayload.model_validate(
+            {
+                "toolName": "x",
+                "name": "y",
+                "args": [
+                    {"name": "--c", "type": "string", "value": "v"},
+                ],
+            }
+        )
+        assert isinstance(m.args[0], ArgProfilePayloadStringArg)
+        assert m.args[0].operator == ""
+
+    def test_string_arg_operator_accepts_equals(self) -> None:
+        m = ArgProfilePayload.model_validate(
+            {
+                "toolName": "x",
+                "name": "y",
+                "args": [
+                    {
+                        "name": "--c",
+                        "type": "string",
+                        "value": "v",
+                        "operator": "=",
+                    },
+                ],
+            }
+        )
+        assert isinstance(m.args[0], ArgProfilePayloadStringArg)
+        assert m.args[0].operator == "="
+
+    def test_file_arg_operator_defaults_to_empty(self) -> None:
+        m = ArgProfilePayload.model_validate(
+            {
+                "toolName": "x",
+                "name": "y",
+                "args": [{"name": "--r", "type": "file"}],
+            }
+        )
+        assert isinstance(m.args[0], ArgProfilePayloadFileArg)
+        assert m.args[0].operator == ""
+
     def test_payload_snake_case_alias(self) -> None:
         m = ArgProfilePayload.model_validate(
             {
@@ -125,6 +167,12 @@ class TestArgProfilesSchemas:
         assert wire["createdAt"] == "2026-05-04T00:00:00Z"
         assert wire["args"][2]["downloadUrl"].endswith("/files/--rules")
         assert wire["args"][0] == {"name": "--verbose", "type": "flag"}
+        assert wire["args"][1]["operator"] == ""
+
+    def test_response_string_arg_operator_serialized(self) -> None:
+        r = ArgProfileStringArgResponse(name="--redact", value="50", operator="=")
+        wire = r.model_dump(by_alias=True)
+        assert wire["operator"] == "="
 
     def test_response_file_arg_serializes_original_filename(
         self,

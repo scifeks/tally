@@ -798,6 +798,8 @@ export interface ToolArgument {
   /** e.g. "--wordlist", "-v" */
   flag: string
   valueType: ArgValueType
+  /** "" for space separator, "=" for equals join. */
+  operator?: string
   /** String value or, for file type, the resolved on-disk path. */
   value?: string
   /** Original filename for file type (display only). */
