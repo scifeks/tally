@@ -132,5 +132,5 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
 
 
 def event_type_name(event: TriageEvent) -> str:
-    """Return the SSE event_type string for *event* per endpoints.md §15.2."""
+    """Return the SSE event_type string for *event*."""
     return _EVENT_TYPE_NAMES[type(event)]

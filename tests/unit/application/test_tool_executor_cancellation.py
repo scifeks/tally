@@ -33,6 +33,7 @@ class _StubRunner(SubprocessRunnerPort):
         env: dict[str, str] | None = None,
         cancel_token: CancellationToken | None = None,
     ) -> SubprocessResult:
+        del cmd, timeout, cwd, env
         self.last_cancel_token = cancel_token
         return SubprocessResult(returncode=0, stdout="", stderr="")
 

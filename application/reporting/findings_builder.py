@@ -12,9 +12,6 @@ from domain.findings.severity import Severity
 logger = logging.getLogger(__name__)
 
 
-# Private helpers
-
-
 def _parse_meta(finding: dict[str, Any]) -> dict[str, Any]:
     """Return the meta dict; defaults to empty when missing or malformed."""
     meta = finding.get("meta")
@@ -140,9 +137,6 @@ def _affected_location(finding: dict[str, Any], meta: dict[str, Any]) -> str:
         return file_path or "(location unavailable)"
 
     return "(location unavailable)"
-
-
-# FindingsBuilder
 
 
 class FindingsBuilder:

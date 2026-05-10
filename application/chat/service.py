@@ -270,9 +270,6 @@ async def _stream_tokens(
     )
 
 
-# Helpers
-
-
 def _retrieve_context(retriever: ChatRetriever, user_message: str) -> str:
     """Run per-turn retrieval; return formatted context lines or ''.
 

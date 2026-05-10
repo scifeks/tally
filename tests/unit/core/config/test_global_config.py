@@ -104,3 +104,14 @@ class TestChatSessionRetention:
     def test_negative_rejected(self) -> None:
         with pytest.raises(ValidationError):
             GlobalConfig(chat_session_retention_count=-1)
+
+
+class TestLocalInferenceConfigBaseUrlNormalization:
+    def test_base_url_strips_trailing_slash(self) -> None:
+        from core.config.schemas import LocalInferenceConfig
+
+        config = LocalInferenceConfig(
+            base_url="http://localhost:11434/",
+            model="qwen3:14b",
+        )
+        assert config.base_url == "http://localhost:11434"

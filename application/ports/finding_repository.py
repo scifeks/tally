@@ -1,8 +1,4 @@
-"""Persistence port for the findings table.
-
-Read methods return Finding instances (JSON deserialized, severity as
-lowercase label). Vector-store methods return dicts.
-"""
+"""Persistence port for the findings table."""
 
 from __future__ import annotations
 

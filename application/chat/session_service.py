@@ -1,12 +1,4 @@
-"""Application service for chat session and message CRUD plus stream
-orchestration.
-
-Owns per-request construction of the chat persistence repos so route
-modules do not import infrastructure persistence directly. Stream
-orchestration (validate, compose, persist user, spawn driver task,
-register handle) and cancellation also live here so the web adapter is
-free of ``asyncio.create_task`` / ``task.cancel()`` plumbing.
-"""
+"""Chat session and message CRUD plus stream orchestration service."""
 
 from __future__ import annotations
 

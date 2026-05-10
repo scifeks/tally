@@ -40,8 +40,6 @@ from infrastructure.store.repositories.runs import (  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# Helpers
-
 _BASE_FINDING = {
     "tool": "semgrep",
     "domain": "sast",

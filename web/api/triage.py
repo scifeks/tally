@@ -43,9 +43,6 @@ logger = logging.getLogger("tally.web.triage")
 v1_router = APIRouter()
 
 
-# Helpers
-
-
 def _service(request: Request, project_id: int) -> TriageService:
     """Build a TriageService for *project_id* or raise 404."""
     try:

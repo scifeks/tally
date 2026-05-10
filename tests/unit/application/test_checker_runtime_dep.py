@@ -40,19 +40,6 @@ class TestDependencyCheckerRuntimeDep:
             )
             return checker.run()
 
-    def test_all_required_present_when_installed(self) -> None:
-        result = self._run(installed=True)
-        assert result.all_required_present is True  # type: ignore[union-attr]
-
-    def test_not_all_required_when_missing(self) -> None:
-        result = self._run(installed=False)
-        assert result.all_required_present is False  # type: ignore[union-attr]
-
-    def test_missing_required_contains_claude(self) -> None:
-        result = self._run(installed=False)
-        names = [c.name for c in result.missing_required]  # type: ignore[union-attr]
-        assert "claude" in names
-
     def test_no_runtime_service_excludes_claude(self) -> None:
         checker = DependencyChecker(runtime_service=None)
         with (

@@ -72,9 +72,6 @@ logger = logging.getLogger("tally.web.scans")
 v1_router = APIRouter()
 
 
-# Helpers
-
-
 def _service(request: Request, project_id: int) -> ScansService:
     """Build a ScansService for *project_id* or raise 404."""
     try:

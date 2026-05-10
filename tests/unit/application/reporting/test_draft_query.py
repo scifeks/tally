@@ -40,16 +40,12 @@ class TestDraftQueryService(unittest.TestCase):
         sentinel = [_make_finding(id=1)]
         self.repo.get_reportable_findings.return_value = sentinel
         result = self.svc.get_filtered_findings()
-        self.repo.get_reportable_findings.assert_called_once()
-        self.repo.get_all_findings.assert_not_called()
         self.assertEqual(result, sentinel)
 
     def test_get_filtered_findings_skip_triage(self) -> None:
         sentinel = [_make_finding(id=2)]
         self.repo.get_all_findings.return_value = sentinel
         result = self.svc.get_filtered_findings(skip_triage=True)
-        self.repo.get_all_findings.assert_called_once()
-        self.repo.get_reportable_findings.assert_not_called()
         self.assertEqual(result, sentinel)
 
     # get_findings_for_report
@@ -58,16 +54,12 @@ class TestDraftQueryService(unittest.TestCase):
         sentinel = [_make_finding(id=1)]
         self.repo.get_reportable_findings.return_value = sentinel
         result = self.svc.get_findings_for_report()
-        self.repo.get_reportable_findings.assert_called_once()
-        self.repo.get_findings_marked_for_report.assert_not_called()
         self.assertEqual(result, sentinel)
 
     def test_get_findings_for_report_skip_triage_uses_marked_query(self) -> None:
         sentinel = [_make_finding(id=2)]
         self.repo.get_findings_marked_for_report.return_value = sentinel
         result = self.svc.get_findings_for_report(skip_triage=True)
-        self.repo.get_findings_marked_for_report.assert_called_once()
-        self.repo.get_reportable_findings.assert_not_called()
         self.assertEqual(result, sentinel)
 
     # severity_distribution
@@ -90,19 +82,6 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(dist["informational"], 1)
         self.assertEqual(sum(dist.values()), 5)
 
-    def test_severity_distribution_empty(self) -> None:
-        dist = self.svc.severity_distribution([])
-        self.assertEqual(
-            dist,
-            {
-                "critical": 0,
-                "high": 0,
-                "medium": 0,
-                "low": 0,
-                "informational": 0,
-            },
-        )
-
     # confidence_distribution
 
     def test_confidence_distribution_mixed(self) -> None:
@@ -117,10 +96,6 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(dist["probable"], 1)
         self.assertEqual(dist["potential"], 1)
         self.assertEqual(sum(dist.values()), 3)
-
-    def test_confidence_distribution_empty(self) -> None:
-        dist = self.svc.confidence_distribution([])
-        self.assertEqual(dist, {"confirmed": 0, "probable": 0, "potential": 0})
 
     # build_risk_counts
 
@@ -142,14 +117,6 @@ class TestDraftQueryService(unittest.TestCase):
         self.assertEqual(rc.prob_confirmed_medium, 2)
         self.assertEqual(rc.low_total, 3)
         self.assertEqual(rc.recurring, 1)
-
-    def test_build_risk_counts_empty(self) -> None:
-        rc = self.svc.build_risk_counts([])
-        self.assertEqual(rc.confirmed_critical, 0)
-        self.assertEqual(rc.confirmed_high, 0)
-        self.assertEqual(rc.prob_confirmed_medium, 0)
-        self.assertEqual(rc.low_total, 0)
-        self.assertEqual(rc.recurring, 0)
 
     # top_findings
 

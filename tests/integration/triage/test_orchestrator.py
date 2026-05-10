@@ -30,8 +30,6 @@ from infrastructure.store.connection import (  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# Helpers
-
 
 def _make_verdict(finding_id: int) -> Verdict:
     return Verdict(

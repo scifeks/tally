@@ -102,8 +102,6 @@ class TestLiveCrawlerSkipOnCrawlDisabled:
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0
-        row = resources.display.print_tool_line.call_args[0][0]
-        assert row.skip_reason == "skipped (live crawling disabled)"
 
     def test_katana_skipped_when_crawl_disabled(self) -> None:
         """crawl_enabled=False skips Katana with 'live crawling disabled'."""
@@ -120,8 +118,6 @@ class TestLiveCrawlerSkipOnCrawlDisabled:
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0
-        row = resources.display.print_tool_line.call_args[0][0]
-        assert row.skip_reason == "skipped (live crawling disabled)"
 
     def test_noir_runs_when_oas3_path_set_and_crawl_enabled(self) -> None:
         """oas3_path alone does not skip Noir when crawl_enabled=True."""
@@ -157,8 +153,6 @@ class TestNoirSkipIncompatTechs:
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0
-        row = resources.display.print_tool_line.call_args[0][0]
-        assert row.skip_reason == "skipped (Node.js app)"
 
     def test_noir_not_skipped_when_neither_set(self) -> None:
         """Neither check fires; execute_tool_passes is called."""

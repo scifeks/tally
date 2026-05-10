@@ -35,9 +35,6 @@ _ZAP_VERSION_ALERT_PREFIX = (
 )
 
 
-# Parse functions (called by BaseZapTool.parse_output)
-
-
 def parse_zap_json(json_path: Path) -> dict[str, Any]:
     """Parse a ZAP JSON report file into structured data."""
     try:
@@ -68,9 +65,6 @@ def parse_zap_xml(xml_path: Path) -> dict[str, Any]:
     except (OSError, ET.ParseError) as exc:
         return {"error": f"XML parse error: {exc}"}
     return _parse_zap_xml_root(root)
-
-
-# Internal parse helpers (JSON)
 
 
 def _parse_zap_data(data: Any) -> dict[str, Any]:
@@ -198,9 +192,6 @@ def _build_alert_record(
     }
 
 
-# Internal parse helpers (XML)
-
-
 def _parse_zap_xml_root(root: ET.Element) -> dict[str, Any]:
     """Parse a ZAP XML report's root element into the canonical output dict."""
     alerts: list[dict[str, Any]] = []
@@ -317,9 +308,6 @@ def _to_int(value: Any) -> int | None:
         return int(value)
     except (ValueError, TypeError):
         return None
-
-
-# Handler (normalize → SQLite rows, render → ChromaDB text)
 
 
 class ZapHandler:

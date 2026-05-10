@@ -1,4 +1,4 @@
-"""End-to-end tests for gitleaks upsert / no-duplicate re-ingest behaviour."""
+"""End-to-end tests for gitleaks upsert / no-duplicate re-ingest behavior."""
 
 from __future__ import annotations
 

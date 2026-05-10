@@ -21,8 +21,6 @@ class DraftRepository(DraftRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # Queries
-
     def get(self, section: str) -> DraftRow | None:
         with self._factory.connect() as conn:
             row = conn.execute(
@@ -34,8 +32,6 @@ class DraftRepository(DraftRepositoryPort):
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM drafts ORDER BY section").fetchall()
         return [_row_to_draft(r) for r in rows]
-
-    # Lifecycle mutations
 
     def upsert_generating(self, section: str) -> None:
         """Insert or update *section* to ``generating``, clearing timestamps."""

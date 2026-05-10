@@ -51,8 +51,6 @@ class ClaudeAdapter(LLMProvider):
         """
         return bool(self._resolved_key)
 
-    # Shared request shaping
-
     def _normalise_kwargs(self, kwargs: dict[str, Any]) -> tuple[int, str]:
         """Pop and resolve max_tokens and model from kwargs.
 
@@ -100,8 +98,6 @@ class ClaudeAdapter(LLMProvider):
 
         system = "\n\n".join(system_parts) if system_parts else None
         return api_messages, system
-
-    # LLMProvider interface
 
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         """Call the Anthropic Messages API and return the text response.

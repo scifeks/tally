@@ -1,12 +1,4 @@
-"""Application service for the reports + drafts persistence surface.
-
-Owns per-request construction of the report and draft repos so route
-modules do not import infrastructure persistence directly. Also owns the
-``start_drafts`` use case: lock acquisition, worker thread spawn, and
-per-section cancellation token registration. Routes do not touch
-``LockRegistry`` directly — they call ``start_drafts`` and translate the
-domain exceptions to HTTP status codes.
-"""
+"""Application service for reports and drafts."""
 
 from __future__ import annotations
 
@@ -61,8 +53,7 @@ class DraftBatchHandle:
 
     ``sections`` is the validated, deduplicated list the worker will iterate.
     ``holder_token`` is the lock holder for the batch and is exposed for
-    diagnostics; callers should not pass it back to release the lock — the
-    worker does that.
+    diagnostics only; the worker releases the lock, not the caller.
     """
 
     sections: tuple[str, ...]

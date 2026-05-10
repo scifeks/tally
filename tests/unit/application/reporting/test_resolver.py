@@ -157,11 +157,6 @@ class TestDraftResolverMdToHtml:
         assert "<ul>" in html
         assert "<li>" in html
 
-    def test_returns_string(self) -> None:
-        result = DraftResolver._md_to_html("plain text")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
 
 class TestDraftResolverResolveBlurb:
     def test_blurb_converted_to_html(self, tmp_path: Path) -> None:

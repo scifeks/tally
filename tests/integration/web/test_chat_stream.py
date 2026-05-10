@@ -75,9 +75,6 @@ class _StubQueryEngine:
         return []
 
 
-# Helpers
-
-
 def _seed_session(factory, *, project_id: int, title: str = "seed") -> int:
     return ChatSessionRepository(factory).create(project_id=project_id, title=title)
 

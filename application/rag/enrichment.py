@@ -207,22 +207,7 @@ _FIELD_PROMPT_TEMPLATE = (
 
 
 class EnrichmentPipeline:
-    """Enriches SQLite findings with LLM-generated semantic fields.
-
-    Reads un-enriched findings from SQLite by primary key, runs LLM calls
-    concurrently, and writes enriched fields back to the same SQLite rows.
-    ChromaDB is not touched during enrichment.
-
-    When a tool handler declares ``enrichment_fields`` (a tuple of
-    ``FieldEnrichmentSpec``), the pipeline makes one focused LLM call per
-    spec using only the declared source metadata keys. When no such attribute
-    is present, the existing batch path fires: all missing fields are requested
-    in a single call over the full chunk text.
-
-    LLM calls run concurrently via ThreadPoolExecutor.
-    SQLite writes are serialized after all LLM calls complete.
-    Skips findings already marked ``enriched = 1``.
-    """
+    """Enriches findings with LLM-generated semantic fields."""
 
     def __init__(
         self,

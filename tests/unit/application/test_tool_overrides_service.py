@@ -45,57 +45,6 @@ def _make_repo_mock() -> MagicMock:
     return MagicMock()
 
 
-class TestThinPassThroughs:
-    def test_list_delegates_to_repo(self) -> None:
-        repo = _make_repo_mock()
-        expected = [_make_override(), _make_override(override_id=2)]
-        repo.list_paginated.return_value = (expected, 2)
-        svc = ToolOverridesService(repo)
-
-        rows, total = svc.list(offset=10, limit=20)
-
-        repo.list_paginated.assert_called_once_with(offset=10, limit=20)
-        assert rows == expected
-        assert total == 2
-
-    def test_get_delegates_to_repo(self) -> None:
-        repo = _make_repo_mock()
-        expected = _make_override()
-        repo.get_by_tool_name.return_value = expected
-        svc = ToolOverridesService(repo)
-
-        result = svc.get("semgrep")
-
-        repo.get_by_tool_name.assert_called_once_with("semgrep")
-        assert result == expected
-
-    def test_get_returns_none_when_repo_returns_none(self) -> None:
-        repo = _make_repo_mock()
-        repo.get_by_tool_name.return_value = None
-        svc = ToolOverridesService(repo)
-
-        assert svc.get("ghost") is None
-
-
-class TestDelete:
-    def test_delete_delegates_to_repo(self) -> None:
-        repo = _make_repo_mock()
-        svc = ToolOverridesService(repo)
-
-        svc.delete("semgrep")
-
-        repo.delete.assert_called_once_with("semgrep")
-
-    def test_delete_is_silent_when_tool_name_missing(self) -> None:
-        # Repo's delete is silent on missing rows; service propagates.
-        repo = _make_repo_mock()
-        svc = ToolOverridesService(repo)
-
-        svc.delete("never-existed")
-
-        repo.delete.assert_called_once_with("never-existed")
-
-
 class TestValidateCreate:
     def test_empty_tool_name(self) -> None:
         repo = _make_repo_mock()

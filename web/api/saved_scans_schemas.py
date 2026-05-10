@@ -1,17 +1,4 @@
-"""Pydantic request and response models for the saved-scans routes.
-
-Wire shape is camelCase per D-1-14. The create and replace bodies share
-one model (their wire shape is identical per endpoints.md §4.3 and §4.4).
-The route layer enforces existence on replace and surfaces conflicts; the
-service layer enforces the at-least-one-non-empty rule and returns
-structured FieldError payloads, so this schema does not duplicate those.
-
-The STALE_SAVED_SCAN error envelope payload (D-1-7) lives here as the
-discriminated union over the three stale-item kinds, mirroring
-domain.saved_scans.entry.StaleSavedScanItem.
-
-No imports from application or infrastructure layers.
-"""
+"""Pydantic request and response models for the saved-scans routes."""
 
 from __future__ import annotations
 

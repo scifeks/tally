@@ -38,7 +38,7 @@ class CancellationToken:
         return self._event.is_set()
 
     def wait(self, timeout: float | None = None) -> bool:
-        """Block until cancellation, returning True if cancelled."""
+        """Block until cancellation; return True if it was set."""
         return self._event.wait(timeout)
 
 

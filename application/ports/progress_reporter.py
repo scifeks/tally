@@ -1,9 +1,4 @@
-"""Port for human-readable tool execution progress.
-
-Adapters:
-  application/repl/adapters/stdout_progress_reporter.py  (REPL: stdout)
-  (web uses the null default; nothing renders to stdout)
-"""
+"""Port for human-readable tool execution progress."""
 
 from __future__ import annotations
 

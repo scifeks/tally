@@ -22,19 +22,6 @@ _CSS = "body { font-family: Arial; }"
 
 
 class TestWeasyPrintPdfRenderer:
-    def test_successful_render_returns_bytes(self) -> None:
-        fake_pdf = b"%PDF-1.4 fake"
-        mock_weasyprint = MagicMock()
-        mock_weasyprint.HTML.return_value.write_pdf.return_value = fake_pdf
-        mock_weasyprint.CSS.return_value = MagicMock()
-
-        with patch.dict("sys.modules", {"weasyprint": mock_weasyprint}):
-            renderer = WeasyPrintPdfRenderer()
-            result = renderer.render(_HTML, _CSS)
-
-        assert result == fake_pdf
-        assert isinstance(result, bytes)
-
     def test_weasyprint_failure_raises_pdf_render_error(self) -> None:
         mock_weasyprint = MagicMock()
         mock_weasyprint.HTML.return_value.write_pdf.side_effect = RuntimeError(

@@ -1,8 +1,4 @@
-"""Persistence port for the per-project repositories table.
-
-Read methods return Repository (a Pydantic model accepted as a domain-shaped
-value). The port boundary stays free of infrastructure dataclasses.
-"""
+"""Persistence port for the per-project repositories table."""
 
 from __future__ import annotations
 

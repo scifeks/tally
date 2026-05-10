@@ -96,7 +96,6 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # Writes
     def insert_many(self, findings: Iterable[UrlFinding]) -> int:
         """Insert all rows; the unique index dedupes silently. Returns count
         of rows actually inserted (excluding ignored duplicates).
@@ -161,7 +160,6 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             cur = conn.execute("DELETE FROM url_findings")
             return cur.rowcount
 
-    # Reads
     def list_for_repo(
         self, repo_id: int, *, source: UrlSource | None = None
     ) -> list[UrlFinding]:
@@ -338,7 +336,6 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             )
             return cur.rowcount
 
-    # Helpers
     @staticmethod
     def _row_to_entity(row: sqlite3.Row) -> UrlFinding:
         try:

@@ -1,8 +1,4 @@
-"""Persistence port for the reports table.
-
-Read methods return ReportRow. The port positions future application
-services that will consume this port directly.
-"""
+"""Persistence port for the reports table."""
 
 from __future__ import annotations
 

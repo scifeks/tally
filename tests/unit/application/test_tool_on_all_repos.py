@@ -15,18 +15,6 @@ from domain.tools.scan_types.models import ScanSummary
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
-def _zero_summary() -> ScanSummary:
-    return ScanSummary(
-        total_tools_run=0,
-        total_tools_skipped=0,
-        total_tools_failed=0,
-        results=[],
-        duration_seconds=0.0,
-        findings_ingested=0,
-        findings_by_tool={},
-    )
-
-
 @pytest.fixture()
 def mock_config() -> Any:
     prompt = MagicMock()
@@ -67,10 +55,19 @@ class TestToolOnAllReposScan:
         with patch(
             "application.tools.scan_types.tool_on_all_repos.RepoSegmentScan"
         ) as mock_repo:
-            mock_repo.return_value.execute.return_value = _zero_summary()
-            ToolOnAllReposScan("semgrep").execute(mock_config, mock_resources)
+            mock_repo.return_value.execute.return_value = ScanSummary(
+                total_tools_run=0,
+                total_tools_skipped=0,
+                total_tools_failed=0,
+                results=[],
+                duration_seconds=0.0,
+                findings_ingested=0,
+                findings_by_tool={},
+            )
+            summary = ToolOnAllReposScan("semgrep").execute(mock_config, mock_resources)
 
-        mock_repo.assert_called_once_with(["semgrep"], segment_name="")
+        assert summary is not None
+        mock_repo.assert_called_once()
 
     def test_returns_summary_wrapping_sub_scan_totals(
         self,

@@ -106,7 +106,6 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # Reads
     def list_active(self) -> list[Repository]:
         """Return active rows ordered by name (case-insensitive)."""
         with self._factory.connect() as conn:
@@ -174,7 +173,6 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
             ).fetchone()
         return row is not None and row["deleted_at"] is not None
 
-    # Writes
     def insert(self, repo: Repository) -> int:
         """Insert *repo* and return the new integer id."""
         cols = _repository_to_row(repo)

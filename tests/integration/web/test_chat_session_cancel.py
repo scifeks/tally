@@ -145,9 +145,9 @@ async def test_cancel_returns_202_for_active_stream(app_client, monkeypatch) -> 
         "cancelled_message_id": None,
     }
 
-    # Allow the cancelled stream to wind down. The driver's finally
+    # Allow the canceled stream to wind down. The driver's finally
     # unregisters the handle even though the iterator is now exhausted /
-    # the task is cancelled.
+    # the task is canceled.
     release.set()
     await _wait_for_no_active_stream(sid)
 
@@ -165,7 +165,7 @@ async def test_cancel_emits_stream_cancelled_and_skips_persist(
     class _BlockingProvider(_FakeProvider):
         async def _iter(self) -> AsyncIterator[str]:
             started.set()
-            # Yield nothing and block forever until cancelled.
+            # Yield nothing and block forever until canceled.
             await asyncio.Event().wait()
             yield "never"  # pragma: no cover
 

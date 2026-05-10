@@ -20,8 +20,6 @@ from infrastructure.store.repositories.runs import RunRepository
 
 pytestmark = pytest.mark.integration
 
-# Helpers
-
 _PROJECT_NAME = "test-proj"
 
 

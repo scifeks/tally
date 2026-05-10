@@ -232,7 +232,7 @@ class TestCountAll:
             ]
         )
         rr.soft_delete(deleted_id)
-        # count_all ignores soft-delete state — all three rows count.
+        # count_all ignores soft-delete state; all three rows count.
         assert url_repo.count_all() == 3
 
 

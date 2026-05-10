@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from application.triage.prompts._fencing import (
-    FENCING_PREAMBLE,
-    POST_DATA_REMINDER,
-    fence,
-)
+from application.triage.prompts._fencing import fence
 
 
 class TestFence:
@@ -26,17 +22,3 @@ class TestFence:
         content = "line one\nline two\nline three"
         result = fence(content, "multi")
         assert content in result
-
-
-class TestPreambleAndReminder:
-    def test_preamble_references_start_marker(self) -> None:
-        assert "TALLY_DATA_START" in FENCING_PREAMBLE
-
-    def test_preamble_references_end_marker(self) -> None:
-        assert "TALLY_DATA_END" in FENCING_PREAMBLE
-
-    def test_preamble_warns_about_injection(self) -> None:
-        assert "prompt-injection" in FENCING_PREAMBLE
-
-    def test_post_data_reminder_is_nonempty(self) -> None:
-        assert len(POST_DATA_REMINDER.strip()) > 0

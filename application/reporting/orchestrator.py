@@ -1,15 +1,4 @@
-"""Wraps report generation behind a single entry point.
-
-Coordinates ``ReportGenerator`` (markdown/html/json) and
-``ReportAssembler`` (pdf) with:
-
-- ``ReportEvent`` emission through a ``ReportEventSink`` port.
-- ``CancellationToken`` support between steps.
-- ``force_overwrite`` flag so the API can never block on stdin.
-
-Does not touch the database or filesystem layout; the caller (REPL command
-or web runner) decides where to write the artifact and what row to update.
-"""
+"""Orchestrate report generation."""
 
 from __future__ import annotations
 

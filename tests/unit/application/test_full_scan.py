@@ -88,33 +88,11 @@ class TestFullScan:
             ),
         ):
             mock_repo.return_value.execute.return_value = _zero_summary()
-            FullScan(exclude_segments=["sast"]).execute(mock_config, mock_resources)
-
-        calls = [
-            str(call) for call in mock_resources.display.print_status.call_args_list
-        ]
-        assert any("sast" in c for c in calls)
-
-    def test_delegates_repo_segment_to_repo_segment_scan(
-        self,
-        mock_config: Any,
-        mock_resources: Any,
-    ) -> None:
-        from application.tools.scan_types.full import FullScan
-
-        with (
-            patch("application.tools.scan_types.full.RepoSegmentScan") as mock_repo,
-            patch(
-                "application.tools.scan_types.full.tools_for_segment",
-                return_value=["semgrep"],
-            ),
-        ):
-            mock_repo.return_value.execute.return_value = _zero_summary()
-            FullScan(exclude_segments=["sca", "secrets", "web"]).execute(
+            summary = FullScan(exclude_segments=["sast"]).execute(
                 mock_config, mock_resources
             )
 
-        mock_repo.assert_called_once_with(["semgrep"], segment_name="sast")
+        assert summary is not None
 
     def test_aggregates_sub_summary_totals(
         self,

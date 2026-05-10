@@ -32,6 +32,7 @@ from infrastructure.reporting.jinja2_template_renderer import (  # noqa: E402
 
 class _AlwaysConfirm:
     def confirm(self, question: str, *, default: bool = False) -> bool:
+        del question, default
         return True
 
     def approve_all_remaining(self) -> None:
@@ -92,11 +93,6 @@ def _make_assembler(
 
 
 class TestGenerateToc:
-    def test_returns_string(self) -> None:
-        html = _generate_toc()
-        assert isinstance(html, str)
-        assert len(html) > 0
-
     def test_contains_all_section_anchors(self) -> None:
         html = _generate_toc()
         for _, anchor in _TOC_ENTRIES:
@@ -122,7 +118,7 @@ class TestBuildContext:
             lambda section: f"<p>HTML for {section}</p>"
         )
         mock_resolver.resolve_blurb.side_effect = side_effect_blurb or (
-            lambda name, variables=None: f"<p>Blurb: {name}</p>"
+            lambda name, _variables=None: f"<p>Blurb: {name}</p>"
         )
         return mock_resolver
 

@@ -1,11 +1,4 @@
-"""Process-singleton tracking active chat streams.
-
-Holds an :class:`asyncio.Task` per in-flight stream. Chat cancellation
-flows through standard asyncio task cancellation by looking up the task
-by ``session_id`` and calling ``task.cancel()``. Multiple sessions may
-stream concurrently across projects; one in-flight stream per
-``session_id`` is enforced by the API.
-"""
+"""Process-singleton tracking active chat streams."""
 
 from __future__ import annotations
 

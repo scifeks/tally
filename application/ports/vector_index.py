@@ -22,12 +22,7 @@ class VectorIndexError(RuntimeError):
 
 
 class VectorIndex(Protocol):
-    """Project-scoped vector store seam.
-
-    Implementations embed documents internally; callers pass raw text plus
-    application-shaped Filter expressions. Storage-engine DSL stays in the
-    adapter.
-    """
+    """Project-scoped vector store seam."""
 
     def upsert(
         self,

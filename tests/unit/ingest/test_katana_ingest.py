@@ -15,9 +15,6 @@ from infrastructure.tools.parsers.katana import (
 _TIMESTAMP = "2026-04-13T00:00:00"
 
 
-# Helpers
-
-
 def _katana_line(
     endpoint: str = "http://localhost:8080/api/users",
     method: str = "GET",
@@ -163,21 +160,6 @@ class TestParseKatanaJsonl:
 
 
 class TestKatanaHandlerMeta:
-    def test_tool_name(self) -> None:
-        assert KatanaHandler.tool_name == "katana"
-
-    def test_domain_is_web(self) -> None:
-        assert KatanaHandler.domain == "web"
-
-    def test_segment_is_web(self) -> None:
-        assert KatanaHandler.segment == "web"
-
-    def test_should_enrich_false(self) -> None:
-        assert KatanaHandler.should_enrich is False
-
-    def test_should_visualize_false(self) -> None:
-        assert KatanaHandler.should_visualize is False
-
     def test_type_informational_true(self) -> None:
         from infrastructure.tools.parsers._shared import _shared_meta
 

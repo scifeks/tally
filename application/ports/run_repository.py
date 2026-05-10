@@ -1,8 +1,4 @@
-"""Persistence port for the scan_runs and run_tools tables.
-
-Read methods return domain row dataclasses. The port boundary stays free
-of infrastructure dataclasses.
-"""
+"""Persistence port for the scan_runs and run_tools tables."""
 
 from __future__ import annotations
 

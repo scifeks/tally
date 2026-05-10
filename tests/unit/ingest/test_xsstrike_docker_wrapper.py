@@ -14,8 +14,6 @@ from infrastructure.tools.wrappers.local.xsstrike import _recommended_thread_cou
 
 _JIT_PATCH_TARGET = "application.url_inventory.jit.jit_rebuild_artifacts"
 
-# Helpers
-
 
 def _make_config(
     container_name: str = "xsstrike", tool_path: str = "/xsstrike.py"

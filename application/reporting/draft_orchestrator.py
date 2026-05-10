@@ -1,13 +1,4 @@
-"""Orchestrates per-section LLM draft generation behind a single entry point.
-
-- Emits ``DraftEvent`` instances through a ``DraftEventSink`` port.
-- Honors a ``CancellationToken`` between steps.
-- Accepts a ``force_overwrite`` flag so the API can never block on stdin.
-
-Owns filesystem writes and DB lifecycle updates; the caller (REPL loop or
-web runner) acquires the job lock and passes in both the sink and the
-repository.
-"""
+"""Orchestrate per-section LLM draft generation."""
 
 from __future__ import annotations
 

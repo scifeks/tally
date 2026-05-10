@@ -56,9 +56,6 @@ class ToolHandlerFactory:
         return None
 
 
-# Handler registry helpers
-
-
 def get_tool_domain(tool_name: str) -> str | None:
     """Return the domain ('code', 'web', 'network') for a tool, or None."""
     handler = ToolHandlerFactory.load(tool_name)

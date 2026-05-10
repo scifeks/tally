@@ -1,8 +1,4 @@
-"""Persistence port for the finding_history table (read-side).
-
-The write path is handled inside FindingRepository so each history row
-is written in the same transaction as the finding mutation.
-"""
+"""Persistence port for the finding_history table (read-side)."""
 
 from __future__ import annotations
 

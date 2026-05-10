@@ -58,9 +58,6 @@ logger = logging.getLogger("tally.web.reports")
 v1_router = APIRouter()
 
 
-# Helpers
-
-
 def _service(request: Request, project_id: int) -> ReportsService:
     """Build a ReportsService for *project_id* or raise 404."""
     try:

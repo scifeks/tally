@@ -10,8 +10,6 @@ from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.local.katana import KatanaLocalTool
 
-# Helpers
-
 
 def _make_repo(
     base_urls: list[str] | None = None,

@@ -1,8 +1,4 @@
-"""Persistence port for the chat_sessions table.
-
-Returned rows are domain types so the port boundary stays free of
-infrastructure dataclasses.
-"""
+"""Persistence port for the chat_sessions table."""
 
 from __future__ import annotations
 

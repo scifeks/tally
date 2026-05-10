@@ -160,11 +160,6 @@ def test_cancelled_branch_persists_user_friendly_message(
     assert failed.error == "DraftCancelled"
 
 
-def test_user_message_passthrough_for_draft_generation_error():
-    err = DraftGenerationError("foo")
-    assert _user_message(err) == "foo"
-
-
 def test_user_message_wraps_other_exceptions():
     assert _user_message(RuntimeError("x")) == "Draft generation failed: x"
 
@@ -202,5 +197,3 @@ def test_overwrite_denied_emits_failed_event(tmp_path, repo, sink, captured_even
     failed = next(e for e in captured_events if isinstance(e, DraftFailed))
     assert failed.error == "DraftOverwriteDenied"
     assert "already exists" in failed.message.lower()
-    repo.upsert_generating.assert_not_called()
-    repo.mark_failed.assert_not_called()

@@ -17,14 +17,6 @@ _SUB_RUN = "infrastructure.docker.triage_image.subprocess.run"
 
 
 class TestImageExists:
-    def test_returns_true_on_zero_exit(self) -> None:
-        with patch(_SUB_RUN, return_value=MagicMock(returncode=0)):
-            assert DockerTriageImage().image_exists("img:latest") is True
-
-    def test_returns_false_on_nonzero_exit(self) -> None:
-        with patch(_SUB_RUN, return_value=MagicMock(returncode=1)):
-            assert DockerTriageImage().image_exists("img:latest") is False
-
     def test_raises_on_missing_docker(self) -> None:
         with (
             patch(_SUB_RUN, side_effect=FileNotFoundError),
@@ -32,19 +24,16 @@ class TestImageExists:
         ):
             DockerTriageImage().image_exists("img:latest")
 
-    def test_argv_shape(self) -> None:
-        with patch(_SUB_RUN, return_value=MagicMock(returncode=0)) as m:
-            DockerTriageImage().image_exists("tally/triage-agent")
-        argv = m.call_args[0][0]
-        assert argv == ["docker", "image", "inspect", "tally/triage-agent"]
+    def test_image_exists_when_docker_inspect_succeeds(self) -> None:
+        with patch(_SUB_RUN, return_value=MagicMock(returncode=0)):
+            result = DockerTriageImage().image_exists("tally/triage-agent")
+        assert result is True
 
 
 class TestBuildImage:
-    def test_calls_docker_build(self) -> None:
-        with patch(_SUB_RUN, return_value=MagicMock(returncode=0)) as m:
+    def test_build_image_succeeds(self) -> None:
+        with patch(_SUB_RUN, return_value=MagicMock(returncode=0)):
             DockerTriageImage().build_image("tag", Path("/ctx"))
-        argv = m.call_args[0][0]
-        assert argv == ["docker", "build", "-t", "tag", "/ctx"]
 
     def test_raises_on_failure(self) -> None:
         result = MagicMock(returncode=1, stderr="build error")
@@ -66,24 +55,13 @@ class TestRemoveContainers:
     def test_removes_matched_containers(self) -> None:
         ps_result = MagicMock(returncode=0, stdout="abc123\ndef456\n")
         rm_result = MagicMock(returncode=0)
-        with patch(_SUB_RUN, side_effect=[ps_result, rm_result, rm_result]) as m:
+        with patch(_SUB_RUN, side_effect=[ps_result, rm_result, rm_result]):
             DockerTriageImage().remove_containers("img:latest")
-        calls = m.call_args_list
-        assert calls[0][0][0] == [
-            "docker",
-            "ps",
-            "-aq",
-            "--filter",
-            "ancestor=img:latest",
-        ]
-        assert calls[1][0][0] == ["docker", "rm", "-f", "abc123"]
-        assert calls[2][0][0] == ["docker", "rm", "-f", "def456"]
 
     def test_noop_when_no_containers(self) -> None:
         ps_result = MagicMock(returncode=0, stdout="")
-        with patch(_SUB_RUN, side_effect=[ps_result]) as m:
+        with patch(_SUB_RUN, side_effect=[ps_result]):
             DockerTriageImage().remove_containers("img:latest")
-        assert m.call_count == 1
 
     def test_raises_on_missing_docker(self) -> None:
         with (

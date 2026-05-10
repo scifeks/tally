@@ -75,7 +75,7 @@ def test_cancel_before_phase2_raises_immediately() -> None:
     repo.get_by_ids.return_value = [_row(1), _row(2)]
 
     token = CancellationToken()
-    token.set()  # pre-cancelled
+    token.set()  # pre-canceled
 
     pipeline = EnrichmentPipeline(
         finding_repo=repo,
@@ -93,7 +93,7 @@ def test_cancel_before_phase2_raises_immediately() -> None:
 
 
 def test_no_cancel_token_runs_to_completion() -> None:
-    """Default behaviour without a token: enrich completes normally."""
+    """Default behavior without a token: enrich completes normally."""
     repo = MagicMock()
     repo.get_by_ids.return_value = [_row(1), _row(2)]
 

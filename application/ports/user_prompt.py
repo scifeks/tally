@@ -1,9 +1,4 @@
-"""Hexagonal port for interactive y/N confirmations.
-
-Adapters:
-  application/repl/adapters/rich_console_prompt.py  (REPL, reads stdin)
-  web/adapters/no_approval_prompt.py                (API, always approves)
-"""
+"""Port for interactive y/N confirmations."""
 
 from __future__ import annotations
 

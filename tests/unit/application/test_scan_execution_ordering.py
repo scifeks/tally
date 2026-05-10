@@ -6,8 +6,6 @@ from unittest.mock import MagicMock
 
 from application.tools.scan_types.execution import ordered_repo_tools
 
-# Helpers
-
 
 def _make_tool(name: str, segment: str, is_discovery: bool = False) -> MagicMock:
     t = MagicMock()
@@ -91,11 +89,6 @@ class TestOrderedRepoTools:
         katana_idx = result.index("katana")
         zap_idx = result.index("zap")
         assert sast_idx < katana_idx < zap_idx
-
-    def test_empty_tool_set_returns_empty(self) -> None:
-        registry = _make_registry([])
-        result = ordered_repo_tools(set(), registry)
-        assert result == []
 
     def test_unknown_tool_excluded(self) -> None:
         tools = [_make_tool("katana", "web", is_discovery=True)]

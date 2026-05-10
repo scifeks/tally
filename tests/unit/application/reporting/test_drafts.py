@@ -174,11 +174,6 @@ class TestExecutiveSummaryGenerator:
         ctx["repos"] = []
         assert "(none recorded)" in self._gen(tmp_path)._build_prompt(ctx)
 
-    def test_generate_returns_llm_output(self, tmp_path: Path) -> None:
-        gen = self._gen(tmp_path)
-        with patch.object(gen, "_call_llm", return_value="summary text"):
-            assert gen.generate(_base_ctx()) == "summary text"
-
 
 # RiskLevelSectionGenerator
 

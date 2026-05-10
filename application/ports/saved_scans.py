@@ -1,12 +1,4 @@
-"""Persistence port for the saved_scans, saved_scan_repos,
-saved_scan_tools, and saved_scan_arg_profiles tables.
-
-Read methods return domain dataclasses. The hydrated read joins
-through repositories and tool_arg_profiles to surface names and the
-deleted_at marker; write methods rewrite all three join tables in one
-transaction. ``insert`` and ``replace`` raise ``SavedScanNameConflict``
-when the ``UNIQUE (name)`` constraint is violated.
-"""
+"""Persistence port for saved scan definitions and related data."""
 
 from __future__ import annotations
 

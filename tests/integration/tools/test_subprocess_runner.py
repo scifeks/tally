@@ -89,7 +89,7 @@ def test_raises_cancelled_when_token_set_mid_run() -> None:
 
 
 def test_cancellation_kills_process_group() -> None:
-    """A cancelled subprocess must not leave its process group running."""
+    """A canceled subprocess must not leave its process group running."""
     token = CancellationToken()
 
     runner = SubprocessRunner()

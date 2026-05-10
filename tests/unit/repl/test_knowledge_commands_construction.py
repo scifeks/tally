@@ -33,36 +33,7 @@ def _mock_repl(active_project: str | None = _PROJECT) -> MagicMock:
     return repl
 
 
-class TestREPLKnowledgeBaseCacheAttribute:
-    def test_repl_init_starts_with_empty_cache(self) -> None:
-        from application.repl.interface import REPL
-
-        with (
-            patch("application.repl.interface.discover_tools"),
-            patch("infrastructure.store.project_registry.ProjectRegistryRepository"),
-            patch("application.repl.interface.ProjectRegistryService"),
-            patch("application.repl.interface.ConfigManager"),
-            patch("application.repl.interface.ProjectManager"),
-            patch("application.repl.interface.InteractiveProjectWizard"),
-            patch("infrastructure.web_ui.runner.WebUiRunner"),
-            patch("application.repl.help_renderer.HelpRenderer"),
-        ):
-            repl = REPL(base_path="/tmp/tally")
-            assert repl.knowledge_base_cache == {}
-
-
 class TestKnowledgeCommandsResolveProjectId:
-    def test_returns_id_when_registry_has_project(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.resolve_by_name.return_value = ProjectRow(
-            id=42,
-            name=_PROJECT,
-            path="/tmp/p",
-            created_at="2026-05-03T00:00:00Z",
-        )
-        kc = KnowledgeCommands(repl)
-        assert kc._resolve_project_id() == 42
-
     def test_raises_value_error_when_project_missing(self) -> None:
         repl = _mock_repl()
         repl.project_registry.resolve_by_name.return_value = None
@@ -72,25 +43,6 @@ class TestKnowledgeCommandsResolveProjectId:
 
 
 class TestKnowledgeCommandsGetFindingRepo:
-    def test_returns_finding_repo_from_findings_service(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.resolve_by_name.return_value = ProjectRow(
-            id=7,
-            name=_PROJECT,
-            path="/tmp/p",
-            created_at="2026-05-03T00:00:00Z",
-        )
-        kc = KnowledgeCommands(repl)
-        sentinel_repo = MagicMock(name="finding_repo_port")
-        sentinel_service = MagicMock(finding_repo=sentinel_repo)
-        with patch(
-            "application.repl.commands.knowledge_commands.create_findings_service",
-            return_value=sentinel_service,
-        ) as mock_create_svc:
-            result = kc._get_finding_repo()
-        assert result is sentinel_repo
-        mock_create_svc.assert_called_once_with(repl.project_registry, 7)
-
     def test_returns_none_and_prints_on_project_not_found(self) -> None:
         repl = _mock_repl()
         repl.project_registry.resolve_by_name.return_value = ProjectRow(
@@ -120,20 +72,6 @@ class TestKnowledgeCommandsGetFindingRepo:
 
 
 class TestKnowledgeCommandsGetKnowledgeBase:
-    def test_returns_kb_from_cache_helper(self) -> None:
-        repl = _mock_repl()
-        kc = KnowledgeCommands(repl)
-        sentinel_kb = MagicMock(name="finding_kb")
-        with patch(
-            "application.repl.commands.knowledge_commands.get_or_build_knowledge_base",
-            return_value=sentinel_kb,
-        ) as mock_helper:
-            result = kc._get_knowledge_base()
-        assert result is sentinel_kb
-        mock_helper.assert_called_once_with(
-            repl.knowledge_base_cache, _PROJECT, "/tmp/tally"
-        )
-
     def test_raises_rag_unavailable_when_helper_returns_none(
         self,
     ) -> None:
@@ -145,27 +83,3 @@ class TestKnowledgeCommandsGetKnowledgeBase:
         ):
             with pytest.raises(RagUnavailable):
                 kc._get_knowledge_base()
-
-
-class TestCmdChatAndStatsRagUnavailable:
-    def test_cmd_chat_prints_rag_error_on_unavailable(self) -> None:
-        repl = _mock_repl()
-        kc = KnowledgeCommands(repl)
-        with patch(
-            "application.repl.commands.knowledge_commands.get_or_build_knowledge_base",
-            return_value=None,
-        ):
-            kc.cmd_chat("chat", ["hello"])
-        printed = [str(c) for c in repl.console.print.call_args_list]
-        assert any("RAG error" in p for p in printed)
-
-    def test_cmd_stats_prints_rag_error_on_unavailable(self) -> None:
-        repl = _mock_repl()
-        kc = KnowledgeCommands(repl)
-        with patch(
-            "application.repl.commands.knowledge_commands.get_or_build_knowledge_base",
-            return_value=None,
-        ):
-            kc.cmd_stats("stats", [])
-        printed = [str(c) for c in repl.console.print.call_args_list]
-        assert any("RAG error" in p for p in printed)

@@ -63,7 +63,6 @@ class ProjectRepositoriesService:
         """Build a service from the registry and the Tally base path."""
         return cls(registry, ConfigManager(base_path, registry=registry))
 
-    # Reads
     def list_active(self, project_id: int) -> list[Repository]:
         """Return every active repository in the project."""
         repo_repo = self._repo_repo(project_id)
@@ -91,7 +90,6 @@ class ProjectRepositoriesService:
             available=sorted(by_id.keys()),
         )
 
-    # Writes
     def create(self, project_id: int, repo: Repository) -> Repository:
         """Insert *repo*; return the persisted Repository with ``id`` set."""
         repo_repo = self._repo_repo(project_id)

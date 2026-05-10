@@ -11,8 +11,6 @@ from application.rag.enrichment import EnrichmentPipeline
 from domain.tools.base import ToolResult
 from infrastructure.tools.parsers.semgrep import SemgrepHandler
 
-# Helpers
-
 
 def _make_semgrep_result(owasp: object = None) -> ToolResult:
     finding: dict = {

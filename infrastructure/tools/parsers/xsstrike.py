@@ -51,9 +51,6 @@ _RETIREJS_CVE_RE = re.compile(r"plugins\.retireJs\s+-\s+INFO\s+-\s+CVE:\s*(.+)")
 _RETIREJS_ANY_RE = re.compile(r"plugins\.retireJs\s+-\s+")
 
 
-# Parse functions
-
-
 def parse_xsstrike_log(log_path: Path) -> dict[str, Any]:
     """Parse an XSStrike log file into structured finding data."""
     try:
@@ -73,9 +70,6 @@ def parse_xsstrike_log_string(text: str) -> dict[str, Any]:
         }
     lines = text.splitlines()
     return _parse_xsstrike_lines(lines)
-
-
-# Internal helpers
 
 
 def _strip_ansi(line: str) -> str:
@@ -198,9 +192,6 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
         "component_findings": component_findings,
         "summary": {"total_findings": total},
     }
-
-
-# Handler
 
 
 class XSSTrikeHandler:

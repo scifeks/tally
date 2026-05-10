@@ -197,9 +197,6 @@ class ZAPLocalTool(BaseZapTool):
         ]
 
 
-# Internal helpers
-
-
 def _find_free_port() -> int:
     """Return an OS-assigned free TCP port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

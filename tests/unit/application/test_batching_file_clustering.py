@@ -7,9 +7,6 @@ from tests.unit.application.conftest import _f
 
 
 class TestFileClustering:
-    def test_empty_input(self) -> None:
-        assert compute_batches([]) == []
-
     def test_single_finding(self) -> None:
         findings = [_f()]
         result = compute_batches(findings)

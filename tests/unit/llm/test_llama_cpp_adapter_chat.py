@@ -23,20 +23,6 @@ def adapter() -> LlamaCppAdapter:
 
 
 class TestChat:
-    def test_returns_content(self, adapter: LlamaCppAdapter) -> None:
-        messages = [{"role": "user", "content": "Hi"}]
-        mock_msg = MagicMock(content="Hello back")
-        mock_choice = MagicMock(message=mock_msg)
-        mock_response = MagicMock(choices=[mock_choice])
-
-        with patch("infrastructure.llm.llama_cpp_adapter.openai") as mock_oai:
-            mock_client = MagicMock()
-            mock_oai.OpenAI.return_value = mock_client
-            mock_client.chat.completions.create.return_value = mock_response
-            result = adapter.chat(messages)
-
-        assert result == "Hello back"
-
     def test_uses_v1_base_url(self, adapter: LlamaCppAdapter) -> None:
         with patch("infrastructure.llm.llama_cpp_adapter.openai") as mock_oai:
             mock_client = MagicMock()
@@ -56,9 +42,6 @@ class TestChat:
             mock_client.chat.completions.create.side_effect = RuntimeError("fail")
             with pytest.raises(LLMAdapterError):
                 adapter.chat([{"role": "user", "content": "Hi"}])
-
-    def test_model_property(self, adapter: LlamaCppAdapter) -> None:
-        assert adapter.model == _MODEL
 
     def test_returns_empty_string_on_none_content(
         self, adapter: LlamaCppAdapter

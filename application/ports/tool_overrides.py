@@ -1,10 +1,4 @@
-"""Persistence port for the tool_overrides table.
-
-Read methods return domain dataclasses. Override resolution is by
-tool_name (UNIQUE column); the saved-scan model does not reference
-override ids directly. ``insert`` raises ``ToolOverrideNameConflict``
-when the ``UNIQUE (tool_name)`` constraint is violated.
-"""
+"""Persistence port for the tool_overrides table."""
 
 from __future__ import annotations
 

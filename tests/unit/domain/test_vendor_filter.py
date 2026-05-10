@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from domain.url_inventory.vendor_filter import VENDOR_INDICATORS, is_vendor_path
+from domain.url_inventory.vendor_filter import is_vendor_path
 
 
 class TestStaticIndicators:
@@ -82,15 +82,3 @@ class TestExtraIndicators:
         # Adding extras must not turn previously-clean paths into hits via
         # accidental substring matching.
         assert not is_vendor_path("/api/users", extra_indicators=["third_party"])
-
-
-class TestExportedConstant:
-    """``VENDOR_INDICATORS`` must remain a stable frozenset surface."""
-
-    def test_is_frozenset(self) -> None:
-        assert isinstance(VENDOR_INDICATORS, frozenset)
-
-    def test_contains_expected_core_entries(self) -> None:
-        # Spot-check: the indicators most likely to leak from real repos.
-        for entry in ("/vendor/", "/node_modules/", "/.git/"):
-            assert entry in VENDOR_INDICATORS

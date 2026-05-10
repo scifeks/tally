@@ -23,9 +23,6 @@ _SEVERITY_MAP = {
 }
 
 
-# Parse functions (called by BaseOsvScannerTool.parse_output)
-
-
 def parse_osv_json(json_path: Path) -> dict[str, Any]:
     """Parse an OSV-Scanner JSON output file into structured data."""
     try:
@@ -43,9 +40,6 @@ def parse_osv_json_string(json_string: str) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         return {"error": f"JSON parse error: {exc}", "raw_output": json_string}
     return _parse_osv_data(data)
-
-
-# Internal parse helpers
 
 
 def _parse_osv_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -193,9 +187,6 @@ def _extract_version_range(
                             fixed = event["fixed"]
                     return introduced, fixed
     return None, None
-
-
-# Handler (normalize → SQLite rows, render → ChromaDB text)
 
 
 class OsvScannerHandler:

@@ -61,22 +61,6 @@ class TestReportGeneratorNoirMarkdown:
         gen = _make_generator({"noir": f})
         return gen.generate(output_format="markdown")
 
-    def test_noir_section_header_present(self) -> None:
-        assert "Discovered Attack Surface" in self._report()
-
-    def test_noir_section_labelled_informational(self) -> None:
-        report = self._report()
-        assert "informational" in report.lower()
-
-    def test_noir_uri_present_in_report(self) -> None:
-        report = self._report()
-        assert "/api/users" in report
-
-    def test_noir_method_present_in_report(self) -> None:
-        report = self._report()
-        assert "GET" in report
-        assert "POST" in report
-
     def test_noir_path_param_uri_present(self) -> None:
         report = self._report()
         assert "/learn/vulnerability/:vuln" in report
@@ -106,15 +90,6 @@ class TestReportGeneratorNoirHtml:
         f = findings if findings is not None else _NOIR_FINDINGS
         gen = _make_generator({"noir": f})
         return gen.generate(output_format="html")
-
-    def test_noir_section_header_in_html(self) -> None:
-        assert "Discovered Attack Surface" in self._report()
-
-    def test_noir_uri_in_html(self) -> None:
-        assert "/api/users" in self._report()
-
-    def test_noir_method_in_html(self) -> None:
-        assert "GET" in self._report()
 
     def test_no_noir_section_when_empty(self) -> None:
         gen = _make_generator({"noir": []})

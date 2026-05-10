@@ -41,20 +41,7 @@ class FindingRepository(FindingRepositoryPort):
         self._factory = factory
 
     def insert_findings(self, run_id: int, findings: list[dict]) -> None:
-        """Insert new findings rows for a scan run.
-
-        Every finding produced by a scan is a new row bound to its run_id.
-        This method is insert-only; it never updates existing rows.
-
-        For each finding:
-
-        - Computes a per-tool fingerprint (sha256) for later lookup.
-        - Maps known ChromaDB field names to named SQLite columns.
-        - Converts comma-joined list fields to JSON arrays in the meta blob.
-        - Stores all remaining fields in the meta JSON blob.
-
-        Wrapped in a single transaction.
-        """
+        """Insert finding rows from a scan, mapping ChromaDB fields to schema."""
         if not findings:
             return
 

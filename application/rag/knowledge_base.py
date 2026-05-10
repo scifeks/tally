@@ -1,8 +1,4 @@
-"""Application service for finding-document storage and retrieval.
-
-Delegates storage to a VectorIndex port; this class never imports the
-underlying engine directly.
-"""
+"""Application service for finding-document storage and retrieval."""
 
 from __future__ import annotations
 

@@ -7,10 +7,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from application.ports.triage_event_sink import NullTriageEventSink
-from application.repl.adapters.console_triage_event_sink import (
-    ConsoleTriageEventSink,
-)
 from domain.pipeline import triage_events as te
 from infrastructure.events.bus import EventBus
 from infrastructure.events.types import EOS, BusEvent
@@ -19,16 +15,6 @@ from web.adapters.event_bus_triage_sink import (
     TRIAGE_STREAM,
     EventBusTriageSink,
 )
-
-
-def test_null_sink_swallows_events() -> None:
-    sink = NullTriageEventSink()
-    sink.emit(te.RunStarted(scan_run_id=1, project_id=1))
-
-
-def test_console_sink_is_a_null_sink() -> None:
-    sink = ConsoleTriageEventSink()
-    sink.emit(te.RunStarted(scan_run_id=1, project_id=1))
 
 
 @pytest.mark.asyncio

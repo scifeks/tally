@@ -26,7 +26,6 @@ class ReportRepository(ReportRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    # Lifecycle
     def create(
         self,
         *,
@@ -113,7 +112,6 @@ class ReportRepository(ReportRepositoryPort):
         with self._factory.connect() as conn:
             conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
 
-    # Queries
     def get(self, report_id: int) -> ReportRow | None:
         with self._factory.connect() as conn:
             row = conn.execute(
@@ -157,7 +155,6 @@ class ReportRepository(ReportRepositoryPort):
             ).fetchone()
         return _row_to_report(row) if row else None
 
-    # Retention sweep
     def select_for_retention(
         self,
         project_id: int,

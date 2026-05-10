@@ -1,8 +1,4 @@
-"""Persistence port for the drafts table.
-
-Read methods return DraftRow. A row's absence represents the not_generated
-state.
-"""
+"""Persistence port for the drafts table."""
 
 from __future__ import annotations
 

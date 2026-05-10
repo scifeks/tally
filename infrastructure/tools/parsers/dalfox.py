@@ -23,9 +23,6 @@ _TYPE_CONFIDENCE: dict[str, str] = {
 }
 
 
-# Parse functions
-
-
 def parse_dalfox_json(json_path: Path) -> dict[str, Any]:
     """Parse a DalFox JSON output file into structured finding data."""
     try:
@@ -57,9 +54,6 @@ def parse_dalfox_json_string(json_string: str) -> dict[str, Any]:
             "summary": {"total_findings": 0},
         }
     return _parse_dalfox_data(data)
-
-
-# Internal helpers
 
 
 def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
@@ -104,9 +98,6 @@ def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
         "findings": findings,
         "summary": {"total_findings": len(findings)},
     }
-
-
-# Handler
 
 
 class DalFoxHandler:

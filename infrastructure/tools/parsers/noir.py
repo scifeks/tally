@@ -49,9 +49,6 @@ __all__ = [
 ]
 
 
-# Parse functions (called by BaseNoirTool.parse_output)
-
-
 def parse_noir_json(json_path: Path) -> dict[str, Any]:
     """Parse a Noir OAS3 output file into structured endpoint data."""
     try:
@@ -81,9 +78,6 @@ def parse_noir_json_string(json_string: str) -> dict[str, Any]:
             "summary": {"total_endpoints": 0, "total_paths": 0},
         }
     return _parse_oas3_data(data)
-
-
-# Internal parse helpers
 
 
 def _parse_oas3_data(data: Any) -> dict[str, Any]:
@@ -209,9 +203,6 @@ def _parse_request_body(request_body: dict[str, Any]) -> list[dict[str, Any]]:
             )
 
     return params
-
-
-# Handler (normalize → SQLite rows, render → ChromaDB text)
 
 
 def _uri_only(raw: str) -> str:

@@ -1,4 +1,4 @@
-"""Integration tests: purge behaviour for endpoint artifacts.
+"""Integration tests: purge behavior for endpoint artifacts.
 
 ``_delete_merged_endpoints`` removes JIT-rebuilt merged files under
 ``endpoints/<repo>/`` while leaving ``config/endpoints/`` untouched.

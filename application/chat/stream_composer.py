@@ -1,10 +1,4 @@
-"""Per-request composer for the chat streaming inputs.
-
-Resolves the project, looks up its knowledge base, builds the per-turn
-``QueryEngine``, and acquires the chat ``LLMProvider``. The route
-calls ``ChatStreamComposer.for_project(...)`` and reads ready-to-use
-objects off the returned instance.
-"""
+"""Per-request composer for chat streaming inputs."""
 
 from __future__ import annotations
 

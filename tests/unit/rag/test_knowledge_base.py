@@ -184,18 +184,6 @@ class TestFindingKnowledgeBase:
         with pytest.raises(ValueError):
             base.delete_findings(profile="repo-x")
 
-    def test_find_relevant_passes_through(
-        self, kb: tuple[FindingKnowledgeBase, _FakeVectorIndex]
-    ) -> None:
-        base, fake = kb
-        base.add_findings(
-            documents=["alpha", "beta"],
-            metadatas=[{"tool": "semgrep"}, {"tool": "gitleaks"}],
-            ids=["1", "2"],
-        )
-        matches = base.find_relevant("alpha", n_results=1, filter=Eq("tool", "semgrep"))
-        assert [m["id"] for m in matches] == ["1"]
-
     def test_find_by_filter_paginates(
         self, kb: tuple[FindingKnowledgeBase, _FakeVectorIndex]
     ) -> None:

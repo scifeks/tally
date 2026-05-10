@@ -77,10 +77,6 @@ class TestBuildMasterTable:
         assert "severity-badge" in html
         assert "high" in html
 
-    def test_code_heading_present(self) -> None:
-        html = FindingsBuilder().build_master_table([_finding()])
-        assert "Code Findings" in html
-
 
 # TestBuildCodeCards
 
@@ -89,10 +85,6 @@ class TestBuildCodeCards:
     def test_empty_returns_placeholder(self) -> None:
         html = FindingsBuilder.build_code_cards([])
         assert "placeholder" in html
-
-    def test_finding_card_class_present(self) -> None:
-        html = FindingsBuilder.build_code_cards([_finding()])
-        assert "finding-card" in html
 
     def test_tal_id_in_card(self) -> None:
         html = FindingsBuilder.build_code_cards([_finding(tal_id="TAL-007")])

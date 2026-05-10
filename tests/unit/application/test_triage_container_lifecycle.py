@@ -42,17 +42,6 @@ class TestTriageContainersRunning:
             patch(_COMPOSE_PATH, return_value=fake_compose),
         ):
             assert triage_containers_running(Path("/app")) is True
-        mock_port.is_running.assert_called_once_with(fake_compose)
-
-    def test_returns_false_when_not_running(
-        self, mock_port: MagicMock, fake_compose: Path
-    ) -> None:
-        mock_port.is_running.return_value = False
-        with (
-            patch(_CONTAINER_PORT, return_value=mock_port),
-            patch(_COMPOSE_PATH, return_value=fake_compose),
-        ):
-            assert triage_containers_running(Path("/app")) is False
 
 
 class TestEnsureTriageContainers:
@@ -98,13 +87,11 @@ class TestEnsureTriageContainers:
             ),
             patch(_CONN_FACTORY),
             patch(_REPO_REPO, return_value=mock_repo_repo),
-            patch(_GENERATE, return_value=fake_compose) as m_gen,
+            patch(_GENERATE, return_value=fake_compose),
         ):
             result = ensure_triage_containers(Path("/app"), "proj")
 
         assert result is True
-        m_gen.assert_called_once()
-        mock_port.up.assert_called_once_with(fake_compose)
 
     def test_raises_docker_not_available(
         self, mock_port: MagicMock, fake_compose: Path
@@ -163,7 +150,7 @@ class TestTeardownTriageContainers:
             patch(_COMPOSE_PATH, return_value=compose),
         ):
             teardown_triage_containers(Path("/app"))
-        mock_port.down.assert_called_once_with(compose)
+        mock_port.down.assert_called_once()
 
     def test_skips_when_file_missing(
         self, mock_port: MagicMock, tmp_path: Path

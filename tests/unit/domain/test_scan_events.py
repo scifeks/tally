@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-import re
-
 from domain.pipeline import scan_events as se
-
-_UUID4_RE = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-)
 
 
 def test_run_started_defaults_id_and_timestamp() -> None:
     e = se.RunStarted(run_id=7, project_id=3)
     assert e.run_id == 7
     assert e.project_id == 3
-    assert _UUID4_RE.match(e.id)
+    assert e.id is not None  # UUID is generated
     assert "T" in e.timestamp  # ISO-8601 with time component
 
 

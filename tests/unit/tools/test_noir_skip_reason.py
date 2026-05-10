@@ -7,8 +7,6 @@ from unittest.mock import MagicMock
 
 from core.detection.noir import _is_node_app, noir_skip_reason
 
-# Helpers
-
 
 def _repo(
     *,

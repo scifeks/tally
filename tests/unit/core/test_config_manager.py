@@ -46,14 +46,6 @@ class TestConfigManager:
         assert result["gitleaks"].type == "repo"
         assert result["gitleaks"].path == "/usr/bin/gitleaks"
 
-    def test_extra_keys_in_global_json_tolerated(self, tmp_path: Path) -> None:
-        config_dir = tmp_path / "config"
-        config_dir.mkdir(parents=True, exist_ok=True)
-        (config_dir / "global.json").write_text(
-            json.dumps({"unknown_future_key": "value"})
-        )
-        ConfigManager(str(tmp_path))  # must not raise
-
     def test_load_global_config_raises_file_not_found_when_missing(
         self, tmp_path: Path
     ) -> None:

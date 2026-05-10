@@ -1,4 +1,4 @@
-"""End-to-end tests for gitleaks delete_findings behaviour."""
+"""End-to-end tests for gitleaks delete_findings behavior."""
 
 from __future__ import annotations
 

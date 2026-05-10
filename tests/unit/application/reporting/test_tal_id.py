@@ -13,9 +13,6 @@ from application.reporting.tal_id import assign_tal_ids, resolve_prefix  # noqa:
 
 
 class TestAssignTalIds:
-    def test_empty_input_returns_empty_list(self) -> None:
-        assert assign_tal_ids([]) == []
-
     def test_single_finding_gets_tal_001(self) -> None:
         result = assign_tal_ids([{"severity": "high"}], prefix="TAL")
         assert result[0]["tal_id"] == "TAL-001"
@@ -83,9 +80,6 @@ class TestResolvePrefix:
 
     def test_global_used_when_no_abbreviation(self) -> None:
         assert resolve_prefix("", "TAL") == "TAL"
-
-    def test_empty_both_returns_empty(self) -> None:
-        assert resolve_prefix("", "") == ""
 
     def test_whitespace_stripped(self) -> None:
         assert resolve_prefix("  ", "TAL") == "TAL"

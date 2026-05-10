@@ -7,8 +7,6 @@ from pathlib import Path
 
 from core.detection.spa import detect_spa
 
-# Helpers
-
 
 def _write_pkg(root: Path, deps: dict[str, str]) -> None:
     (root / "package.json").write_text(

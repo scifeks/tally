@@ -31,8 +31,6 @@ from domain.pipeline.triage_events import (
 )
 from domain.triage.entry import TriageBatchRow
 
-# Helpers
-
 
 def _make_verdict(finding_id: int) -> Verdict:
     return Verdict(

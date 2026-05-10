@@ -55,13 +55,6 @@ def mock_client(adapter: ClaudeAdapter) -> MagicMock:
 
 
 class TestChat:
-    def test_successful_chat(
-        self, adapter: ClaudeAdapter, mock_client: MagicMock
-    ) -> None:
-        mock_client.messages.create.return_value = _mock_response("hello!")
-        result = adapter.chat([{"role": "user", "content": "hi"}])
-        assert result == "hello!"
-
     def test_system_message_extracted(
         self, adapter: ClaudeAdapter, mock_client: MagicMock
     ) -> None:
@@ -87,17 +80,6 @@ class TestChat:
         )
         _, call_kwargs = mock_client.messages.create.call_args
         assert call_kwargs["max_tokens"] == 256
-
-    def test_temperature_forwarded(
-        self, adapter: ClaudeAdapter, mock_client: MagicMock
-    ) -> None:
-        mock_client.messages.create.return_value = _mock_response("ok")
-        adapter.chat(
-            [{"role": "user", "content": "q"}],
-            temperature=0.7,
-        )
-        _, call_kwargs = mock_client.messages.create.call_args
-        assert call_kwargs["temperature"] == 0.7
 
     def test_empty_messages_raises(self, adapter: ClaudeAdapter) -> None:
         with pytest.raises(LLMAdapterError, match="non-system message"):

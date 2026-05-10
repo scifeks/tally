@@ -1,11 +1,4 @@
-"""Storage port for arg-profile file uploads.
-
-Files persist under projects/<name>/arg_files/<profile_id>/<sanitized-arg-name>
-per concept-and-schemas.md section 2.10. The port boundary works in
-profile_id + arg_name, not filesystem paths; the adapter resolves
-paths through ProjectPaths.arg_profile_dir and rejects names that
-escape the profile directory.
-"""
+"""Storage port for arg-profile file uploads."""
 
 from __future__ import annotations
 

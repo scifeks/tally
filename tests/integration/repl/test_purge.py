@@ -18,8 +18,6 @@ from domain.projects.entry import ProjectRow  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# Helpers
-
 
 def _make_repl(tmp_path: Path, active_project: str = "testproj") -> MagicMock:
     """Return a minimal REPL mock with a real tmp_path as base_path."""

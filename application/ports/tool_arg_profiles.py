@@ -1,10 +1,4 @@
-"""Persistence port for the tool_arg_profiles table.
-
-Read methods return domain dataclasses. The port boundary stays free of
-infrastructure dataclasses. ``insert`` and ``update`` raise
-``ToolArgProfileNameConflict`` when the ``UNIQUE (tool_name, name)``
-constraint is violated.
-"""
+"""Persistence port for the tool_arg_profiles table."""
 
 from __future__ import annotations
 

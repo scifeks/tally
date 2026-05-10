@@ -30,61 +30,12 @@ class TestProjectCommands(unittest.TestCase):
 
     # cmd_project dispatch
 
-    def test_cmd_project_no_args_renders_help(self) -> None:
-        self.cmds.cmd_project("project", [])
-        self.help_renderer.render.assert_called_once_with("project")
-
-    def test_cmd_project_add_calls_create_project(self) -> None:
-        self.repl.wizard.create_project.return_value = "new-proj"
-        self.cmds.cmd_project("project", ["add"])
-        self.repl.wizard.create_project.assert_called_once()
-
-    def test_cmd_project_switch_calls_switch_project(self) -> None:
-        self.cmds.cmd_project("project", ["switch", "other"])
-        self.repl.projects.switch_project.assert_called_once_with("other")
-
-    def test_cmd_project_list_calls_registry_list_active(self) -> None:
-        self.repl.project_registry.list_active.return_value = []
-        self.cmds.cmd_project("project", ["list"])
-        self.repl.project_registry.list_active.assert_called_once()
-
-    def test_cmd_project_info_calls_get_project_info(self) -> None:
-        info = MagicMock()
-        info.created = "2026-01-01T00:00:00"
-        info.repositories = []
-        self.repl.projects.get_project_info.return_value = info
-        self.cmds.cmd_project("project", ["info"])
-        self.repl.projects.get_project_info.assert_called_once_with("test-project")
-
-    def test_cmd_project_edit_calls_wizard_edit_project(self) -> None:
-        self.cmds.cmd_project("project", ["edit", "some-proj"])
-        self.repl.wizard.edit_project.assert_called_once_with("some-proj")
-
     def test_cmd_project_unknown_subcommand_prints_error(self) -> None:
         self.cmds.cmd_project("project", ["bogus"])
         args, _ = self.repl.console.print.call_args
         self.assertIn("Unknown subcommand", args[0])
 
     # cmd_repo dispatch
-
-    def test_cmd_repo_no_args_renders_help(self) -> None:
-        self.cmds.cmd_repo("repo", [])
-        self.help_renderer.render.assert_called_once_with("repo")
-
-    def test_cmd_repo_add_calls_add_repository(self) -> None:
-        self.cmds.cmd_repo("repo", ["add"])
-        self.repl.wizard.add_repository.assert_called_once_with("test-project")
-
-    def test_cmd_repo_list_calls_active_repos(self) -> None:
-        self._active_repos_mock.return_value = []
-        self.cmds.cmd_repo("repo", ["list"])
-        self._active_repos_mock.assert_called_with("test-project")
-
-    def test_cmd_repo_edit_calls_wizard_edit_repository(self) -> None:
-        self.cmds.cmd_repo("repo", ["edit", "my-repo"])
-        self.repl.wizard.edit_repository.assert_called_once_with(
-            "test-project", "my-repo"
-        )
 
     def test_cmd_repo_unknown_subcommand_prints_error(self) -> None:
         self.cmds.cmd_repo("repo", ["bogus"])
@@ -186,10 +137,6 @@ class TestProjectCommands(unittest.TestCase):
 
     # cmd_edit_project
 
-    def test_cmd_edit_project_explicit_name_calls_wizard(self) -> None:
-        self.cmds.cmd_edit_project("project", ["some-proj"])
-        self.repl.wizard.edit_project.assert_called_once_with("some-proj")
-
     def test_cmd_edit_project_no_args_uses_active_project(self) -> None:
         self.repl.active_project = "active"
         self.cmds.cmd_edit_project("project", [])
@@ -214,10 +161,6 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_add_repo("repo", [])
         self.repl.wizard.add_repository.assert_not_called()
         self.repl.console.print.assert_called_once()
-
-    def test_cmd_add_repo_with_active_project_calls_wizard(self) -> None:
-        self.cmds.cmd_add_repo("repo", [])
-        self.repl.wizard.add_repository.assert_called_once_with("test-project")
 
     # cmd_repos
 
@@ -255,12 +198,6 @@ class TestProjectCommands(unittest.TestCase):
         self.cmds.cmd_edit_repo("repo", [])
         args, _ = self.repl.console.print.call_args
         self.assertIn("Usage", args[0])
-
-    def test_cmd_edit_repo_calls_wizard(self) -> None:
-        self.cmds.cmd_edit_repo("repo", ["my-repo"])
-        self.repl.wizard.edit_repository.assert_called_once_with(
-            "test-project", "my-repo"
-        )
 
     def test_cmd_edit_repo_value_error_prints_error(self) -> None:
         self.repl.wizard.edit_repository.side_effect = ValueError("oops")

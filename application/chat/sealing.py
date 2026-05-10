@@ -1,24 +1,4 @@
-"""Helpers to seal and purge chat sessions.
-
-Two pure application-layer operations that mutate the chat tables:
-
-- :func:`seal_sessions_for_project`: called from
-  :class:`application.tools.orchestrator.ScanOrchestrator` after scan
-  success. Marks every active session as expired and enforces the
-  ``chat_session_retention_count`` cap by hard-deleting the oldest
-  expired sessions beyond the cap.
-- :func:`purge_chat_for_project`: called from the REPL ``purge`` command.
-  Hard-deletes every chat session and their messages (via
-  ``ON DELETE CASCADE``) for the project regardless of state.
-
-Both helpers operate on a caller-supplied
-:class:`ChatSessionRepositoryPort`; construction of the concrete
-repository is the composition root's responsibility (the REPL command,
-the orchestrator, or a test fixture). They do not catch their own
-exceptions; the caller decides whether to suppress (the orchestrator
-suppresses so a chat-DB hiccup never masks the scan result; the REPL
-surfaces).
-"""
+"""Seal and purge chat sessions for a project."""
 
 from __future__ import annotations
 

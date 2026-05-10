@@ -54,7 +54,7 @@ class TriageCancelled(Exception):
     """Raised when triage observes its CancellationToken set mid-run.
 
     The runner's batch loop catches this, marks remaining batches
-    canceled, emits a ``run_cancelled`` event, and exits cleanly.
+    cancelled, emits a ``run_cancelled`` event, and exits cleanly.
     """
 
 

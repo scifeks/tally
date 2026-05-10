@@ -30,8 +30,6 @@ class OllamaAdapter(LLMProvider):
         self._timeout = timeout_seconds
         self._num_ctx = num_ctx
 
-    # LLMProvider interface
-
     @property
     def model(self) -> str:
         return self._model

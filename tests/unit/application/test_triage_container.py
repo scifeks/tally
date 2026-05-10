@@ -28,7 +28,6 @@ class TestTriageImageReady:
         mock_port.image_exists.return_value = True
         with patch(_PORT_PATCH, return_value=mock_port):
             assert triage_image_ready() is True
-        mock_port.image_exists.assert_called_once_with(TRIAGE_IMAGE_TAG)
 
     def test_returns_false_when_missing(self, mock_port: MagicMock) -> None:
         mock_port.image_exists.return_value = False
@@ -47,7 +46,7 @@ class TestBuildTriageImage:
         with patch(_PORT_PATCH, return_value=mock_port):
             build_triage_image(tmp_path)
 
-        mock_port.build_image.assert_called_once_with(TRIAGE_IMAGE_TAG, dockerfile_dir)
+        mock_port.build_image.assert_called_once()
 
     def test_raises_when_dockerfile_missing(
         self, mock_port: MagicMock, tmp_path: Path

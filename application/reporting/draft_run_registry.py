@@ -1,9 +1,4 @@
-"""Process-singleton tracking active draft generation runs.
-
-Mirrors :mod:`application.tools.scan_run_registry`. The DELETE-per-section
-cancel route reads handles by section so it can flip the per-section
-cancellation token while the batch worker is mid-loop.
-"""
+"""Process-singleton tracking active draft generation runs."""
 
 from __future__ import annotations
 

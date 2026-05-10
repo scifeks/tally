@@ -1,8 +1,4 @@
-"""Port for converting user-uploaded endpoint files to OAS3.
-
-Adapters:
-  infrastructure/endpoints/converters/endpoint_file_converter.py
-"""
+"""Port for converting user-uploaded endpoint files to OAS3."""
 
 from __future__ import annotations
 

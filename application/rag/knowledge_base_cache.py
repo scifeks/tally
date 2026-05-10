@@ -1,8 +1,4 @@
-"""Per-project FindingKnowledgeBase cache lookup.
-
-Builds and caches knowledge bases on first access; adapters own the
-cache dict and call this helper as the single construction point.
-"""
+"""Per-project FindingKnowledgeBase cache lookup."""
 
 from __future__ import annotations
 

@@ -29,6 +29,6 @@ class ScanEventSink(Protocol):
 class NullScanEventSink:
     """Discards every event. Default for tests and the REPL parity path."""
 
-    def emit(self, event: ScanEvent) -> None:  # noqa: D401
+    def emit(self, event: ScanEvent) -> None:
         del event
         return None
