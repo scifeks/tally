@@ -69,7 +69,7 @@ export default function Findings() {
 
   // Project-level counts power the segment tabs and the empty-state gate.
   // They reflect the whole project (Dashboard semantics) and are NOT the
-  // source of dropdown / chip counts — those come from the filter-options
+  // source of dropdown / chip counts. Those come from the filter-options
   // endpoint below.
   const { data: counts } = useFindingsCounts(projectIdParam)
 

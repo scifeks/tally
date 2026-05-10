@@ -66,7 +66,7 @@
       "id_fingerprint": "33b5726e2c57d1cbe2035bc9e482fcc39505c0edc3c802363dd29a57fc8bec51",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 52,
@@ -134,7 +134,7 @@
       "id_fingerprint": "d752df125497502fee14570f18d8afa26461a9bd715c284a7ebba57f065fa3e0",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 53,
@@ -204,7 +204,7 @@
       "id_fingerprint": "988a456fe87fa8188efa9c7e003f9771132cc5b1dc6cc748a203097a540adf5a",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 54,
@@ -272,7 +272,7 @@
       "id_fingerprint": "1e030597868dc14844de434e996a55b1a1c7170424d74377a19f374d8c6be2f1",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 55,
@@ -336,7 +336,7 @@
       "id_fingerprint": "c21c38f1c609cc26a8095612a00914321666f1807c0d1eb6a5a2f71263d1a825",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 56,
@@ -400,7 +400,7 @@
       "id_fingerprint": "10cf4a482c0558bf1726933ee9a805b7beb4134cea65a6835653b5c5299349bb",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 57,
@@ -468,7 +468,7 @@
       "id_fingerprint": "c454ea3f52f6d439879583b1ffb155afc1f90c53b2d305648bf3cd5e293eb92c",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 58,
@@ -537,7 +537,7 @@
       "id_fingerprint": "ae78d1260de345de15ca9b6d54248681beeb0d0ccfe66e1852a05aa8ee47a2ce",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 59,
@@ -606,7 +606,7 @@
       "id_fingerprint": "ae78d1260de345de15ca9b6d54248681beeb0d0ccfe66e1852a05aa8ee47a2ce",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 60,
@@ -675,7 +675,7 @@
       "id_fingerprint": "6931e80eacbe8ea9cd6c23a9361744bc01c67db30ccbb7a4835bccd1a031bab2",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 61,
@@ -744,7 +744,7 @@
       "id_fingerprint": "6b445f71f38e8231dc7463c140645a0a72fcc45a5d6fb307bc878177d9dcc4a6",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 62,
@@ -813,7 +813,7 @@
       "id_fingerprint": "7ef049aab5112af3bb76293f8efd5b3252ac0b0f16f5d96ffde00bce4b064b5f",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 63,
@@ -882,7 +882,7 @@
       "id_fingerprint": "74e3b6ecfc108eb6b730f89784be55e5c0a92a23e168ba0d775cee49289781a2",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 64,
@@ -951,7 +951,7 @@
       "id_fingerprint": "8131ab990d688e2bde7ae2624545d388aae798ad3c8481e97e4be4814b89c201",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 65,
@@ -1021,7 +1021,7 @@
       "id_fingerprint": "af563681caaed3882b669029fc218c9ece6521bd821c58da00bf3583caf5becd",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 66,
@@ -1091,7 +1091,7 @@
       "id_fingerprint": "317c0941f90e3729480b5dcb359c7ec39daecc28969d97fdfb9bff5265751ca5",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 67,
@@ -1159,7 +1159,7 @@
       "id_fingerprint": "7870eba2e84ca4f33ff3605a6170a9e993029482d03ddfbe1ad1bdf116204970",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 68,
@@ -1229,7 +1229,7 @@
       "id_fingerprint": "7b9a409e47794cef2cebeb5cb0b6e19333f0e74ead1c564de3b2d336487ec81e",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 69,
@@ -1297,7 +1297,7 @@
       "id_fingerprint": "ce439a51a8c5ccdb544cf62650e055827dc7ef3e5dd4e9df8a9ed8f6e55cc720",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 70,
@@ -1365,7 +1365,7 @@
       "id_fingerprint": "4323631c4ca17e4eff6b621865da5bd1a8ad59555c4114abb21e618a70095e1f",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 71,
@@ -1433,7 +1433,7 @@
       "id_fingerprint": "6971a0e7748394d1545231568592a15ada5c7fb2d025bc18130a775913b81faa",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 72,
@@ -1501,7 +1501,7 @@
       "id_fingerprint": "d7fc74534befd5019452f3b8580e17a8fe08d23ef4a649061fa2c27b24386bac",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 73,
@@ -1571,7 +1571,7 @@
       "id_fingerprint": "1d26d8fa1bd03f95ab6ae02045ec7578331077288363579e8154482ec25a2798",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 74,
@@ -1640,7 +1640,7 @@
       "id_fingerprint": "6bf4384a3e78cf062e63db125a77107fea0e1dec8b3bb86e0b3e42230d875cc5",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 75,
@@ -1709,7 +1709,7 @@
       "id_fingerprint": "83db590b2834b5918bb75bc79f08dce9304b698ffa121ea4f55f9d0f43e39086",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 76,
@@ -1780,7 +1780,7 @@
       "id_fingerprint": "35cbf0b79f7212509314724f22c3b9a506cdfafa81821ffe926813944f6443af",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 77,
@@ -1851,7 +1851,7 @@
       "id_fingerprint": "35cbf0b79f7212509314724f22c3b9a506cdfafa81821ffe926813944f6443af",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 78,
@@ -1920,7 +1920,7 @@
       "id_fingerprint": "f65c397c5cbb8251ae2da62f5f8e03945316c9ffe39c399fce231223464daf35",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 79,
@@ -1989,7 +1989,7 @@
       "id_fingerprint": "423b37adb7c63913ee9371cf6cda265ca4e990f75aabc6e780f49d8c02fb428f",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 80,
@@ -2057,7 +2057,7 @@
       "id_fingerprint": "8915e4155792fc2795dda53c0567d5d9e7b4803ec6caf70d9e48c3c19d61a181",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 81,
@@ -2126,7 +2126,7 @@
       "id_fingerprint": "4fb0c30edcd0fc9580625e1d04a1e2eee7171b0ac73e79e4e0f3002b938a6c0f",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 82,
@@ -2195,7 +2195,7 @@
       "id_fingerprint": "0974ce69cd553ba5ba11d8816d8d356dc118879e4d9779b87cad29a2b52d035a",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 83,
@@ -2264,7 +2264,7 @@
       "id_fingerprint": "f3a8b4c3fc64ea22e4a582e78a478ac92620711f48273d5e0b572d5e0ac9f9e9",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 84,
@@ -2332,7 +2332,7 @@
       "id_fingerprint": "9c0afdbc86cdb8e7b681149c0d46ae260118663adbc6db1918a818e768f3e930",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 85,
@@ -2401,7 +2401,7 @@
       "id_fingerprint": "774bc3d7d8448f3fb26d340143607b1dc1d464c839eda73a52045e1e4740334e",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 86,
@@ -2470,7 +2470,7 @@
       "id_fingerprint": "3f896d9b285202c334da4c40dd9c5568e67719540d676c715507de2fc28a93d3",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 87,
@@ -2540,7 +2540,7 @@
       "id_fingerprint": "c557dc26fd668110e8204a002720abe66d764d757f0bcebdfcef8094302e10ae",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 88,
@@ -2610,7 +2610,7 @@
       "id_fingerprint": "1afe83ccec05ead482299a8826553f217131ff8d2c6221c41db221fa3ca412c1",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 89,
@@ -2680,7 +2680,7 @@
       "id_fingerprint": "167f3d6c083db587edf6a2cda5625f87e691afddefb00a51685b462786d758d4",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 90,
@@ -2749,7 +2749,7 @@
       "id_fingerprint": "c33962daac19b6bb956b18a64c01151ce66e47559a3f69138da1f73f17cfa794",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 91,
@@ -2817,7 +2817,7 @@
       "id_fingerprint": "7797b685c9c1abc7d9bdca0dbb7e8cce8f08dae0b4b98634ad71651db59f9e14",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 92,
@@ -2886,7 +2886,7 @@
       "id_fingerprint": "4d32b2d63e0be6efcdf1c9c6647e879512633dc2457bfc85870ce31e369db3c3",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 93,
@@ -2955,7 +2955,7 @@
       "id_fingerprint": "9e468c9eae746935daefa42d6757e2516e7bc9c96f9d0fc1e52e76223a5ce7fc",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 94,
@@ -3023,7 +3023,7 @@
       "id_fingerprint": "7623fe872e28ddb0324b285dd410004a6946bfafa3c7b4d198d25c4d6a37049b",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 95,
@@ -3092,7 +3092,7 @@
       "id_fingerprint": "56348a4642c3c47d286f3e560e622cf47597316538aa58ffda5365454ce9bc90",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 96,
@@ -3160,7 +3160,7 @@
       "id_fingerprint": "591db4c07b216b8111179612c59a788cfb38b23d525c8effce255069e9679b71",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 97,
@@ -3228,7 +3228,7 @@
       "id_fingerprint": "43df012336578dc7630ade6430427fd7106c6201def4a0dc64bb23c3222ddeaa",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 98,
@@ -3297,7 +3297,7 @@
       "id_fingerprint": "d86e2e514f2d9d31adfbef88a2d203f6d5ef1ab4a2192b79bca904fc21335f4c",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 99,
@@ -3365,7 +3365,7 @@
       "id_fingerprint": "98f779028e26e1c915cc7ade15dbb84d490a84edb79730026cbf3690e760a9c4",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     },
     {
       "id": 100,
@@ -3433,7 +3433,7 @@
       "id_fingerprint": "90e837f43c3bf6e1233ad15139c9872eb496718d3736926e06db44b8a362222c",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "juice-shop"
     }
   ],
   "total": 572,

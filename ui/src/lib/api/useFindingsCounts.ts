@@ -1,17 +1,6 @@
 /**
- * useFindingsCounts Hook
- * ======================
- * Fetches aggregate finding counts for a project, served by
- * `GET /api/v1/projects/:id/findings/counts` (Phase 3.3 endpoint, formerly
- * 10.9). Powers the Dashboard "at a glance" panel and header summary tiles.
- *
- * Backend response (snake_case) is mapped to the camelCase `FindingsCounts`
- * shape consumed by the SPA. The endpoint is read-only (no CSRF), guarded
- * by the auth session; `apiFetch` surfaces non-2xx as `ApiError`.
- *
- * The query is disabled when `projectIdParam` is the empty string, which is
- * the convention pages use to represent "no project selected" (the
- * `activeProjectId !== null ? String(activeProjectId) : ''` derivation).
+ * Aggregate finding counts for a project, bucketed by severity, status,
+ * domain, segment, repo, and tool.
  */
 
 import { useQuery } from '@tanstack/react-query'

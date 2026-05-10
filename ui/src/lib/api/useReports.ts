@@ -1,25 +1,6 @@
 /**
- * useReports Hooks
- * ================
- * Wires the Reports page (drafts, full-report generation, history, SSE) to
- * the real backend. Mirrors `useTriage.ts`: project-scoped REST + SSE,
- * `useInfiniteQuery` for paginated history, inline snake→camel mappers,
- * mutation errors routed through the `reportMutationError` Zustand slice
- * for the dedicated mutation-error modal.
- *
- * Endpoint contract:
- *   GET    /api/v1/projects/:id/reports/drafts
- *   POST   /api/v1/projects/:id/reports/drafts             - body { sections, force? }
- *   GET    /api/v1/projects/:id/reports/drafts/:section/download  - text/markdown
- *   POST   /api/v1/projects/:id/reports/drafts/upload      - multipart { section, file }
- *   DELETE /api/v1/projects/:id/reports/drafts/:section
- *   GET    /api/v1/projects/:id/reports                    - paginated history
- *   GET    /api/v1/projects/:id/reports/latest             - most recent (or null)
- *   POST   /api/v1/projects/:id/reports/generate           - start full report
- *   POST   /api/v1/projects/:id/reports/:rid/cancel        - cancel in-flight run
- *   GET    /api/v1/projects/:id/reports/:rid/download      - binary file stream
- *   GET    /api/v1/projects/:id/reports/events             - SSE (full report)
- *   GET    /api/v1/projects/:id/reports/drafts/events      - SSE (drafts)
+ * Report hooks: drafts, full-report generation, history, and SSE. Mutation
+ * errors route through the `reportMutationError` Zustand slice.
  */
 
 import { useEffect, useMemo, useRef } from 'react'

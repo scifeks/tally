@@ -44,7 +44,7 @@ afterEach(() => {
 
 async function openAdvanced() {
   const user = userEvent.setup()
-  // Wait until the scan-config fixture has loaded — Advanced toggle exists
+  // Wait until the scan-config fixture has loaded. Advanced toggle exists
   // before that point but the tools list is empty until the query resolves.
   await screen.findByRole('button', { name: /start scan/i })
   await user.click(screen.getByTitle(/advanced scan options/i))

@@ -1,13 +1,6 @@
 /**
- * useUrlListsFilterOptions Hook
- * =============================
- * Fetches per-dimension filter options for the URL Lists page (Phase 12.2)
- * via `GET /api/v1/projects/:id/url-list/filter-options`.
- *
- * Strict semantics: every dimension's counts reflect every active filter,
- * including its own dimension's filter. Zero-count options are omitted by
- * the backend. The query key includes the full filter set so React Query
- * refetches on every filter change.
+ * Per-dimension filter options for URL Lists. Strict semantics: counts
+ * reflect all active filters; zero-count options are omitted by the backend.
  */
 
 import { useQuery } from '@tanstack/react-query'

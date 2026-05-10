@@ -69,7 +69,7 @@
       "id_fingerprint": "ff3fe55e850ca3205da4a9ebcf6c99e88b69329f2bd29641cba56740f76e9994",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 2,
@@ -140,7 +140,7 @@
       "id_fingerprint": "1ce517d218859ebab2ab53f8e098d7c4e59b46c6b36d58eb397a656740488dec",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 3,
@@ -209,7 +209,7 @@
       "id_fingerprint": "835626557b4fd45a8dc3235c9cd5178a916f73a789c9a593e71ff38f8876eeaf",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 4,
@@ -280,7 +280,7 @@
       "id_fingerprint": "2e6daa3524e54f5aa6cce5bf1a6a8dff01182a570a3205599a254258e7c0d91d",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 5,
@@ -356,7 +356,7 @@
       "id_fingerprint": "bbf211a9a32906d3e181d67fb830007128942c34fb7c33e01276f7bb695424e3",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 6,
@@ -425,7 +425,7 @@
       "id_fingerprint": "73f86819e5c480cc8efe4c0dbba4677e874da7a49b6e0db630d0f1eff06eb1c4",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 7,
@@ -493,7 +493,7 @@
       "id_fingerprint": "80cd5d71b1decae35859a2216dbb488e10738df841f8a50c0cea39178c40c955",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 8,
@@ -561,7 +561,7 @@
       "id_fingerprint": "9a4e768505c3fec397d8634caacb79d673c3a01307863eeaa7ff441f207ba8ec",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 9,
@@ -629,7 +629,7 @@
       "id_fingerprint": "7547298133f0575f4f3e4d0e130a8e1270fb4f19156e3db753d0e3bdd452a901",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvpwa"
     },
     {
       "id": 10,
@@ -699,7 +699,7 @@
       "id_fingerprint": "fb2ee284cd2ac1ac6db3b76cddea8b8617e4fafa7949f7b40422dc37b37d10e8",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 11,
@@ -767,7 +767,7 @@
       "id_fingerprint": "43eba7f764b5c3034c4a1db42b17c87b03ca81f5b1daf9c489d71beacec616f7",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 12,
@@ -836,7 +836,7 @@
       "id_fingerprint": "c49d1e87aae6472558c7c7dc34da34db27a5484eee0b514a2fea92bea2baa0ec",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 13,
@@ -904,7 +904,7 @@
       "id_fingerprint": "aaf9ab2db5dfccefccbaf9ae195fe2d9127f0da9b32b53461d1f05f35f0c759c",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 14,
@@ -972,7 +972,7 @@
       "id_fingerprint": "138406e6f9fe8e0c59736cf6c809db42a6ee05b3be0721a9cc0bd77a522be736",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 15,
@@ -1040,7 +1040,7 @@
       "id_fingerprint": "3b8330d1886f6e07464d2f5cd0caa6d953d3ecbc3b7aaa89b3ec6984743f77b8",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 16,
@@ -1108,7 +1108,7 @@
       "id_fingerprint": "3cd23be3b91ff539578417e1af62b4025a54d3f608907daa4da9834afa73b9b9",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 17,
@@ -1177,7 +1177,7 @@
       "id_fingerprint": "b5a1babcd632b6c03b4386455852d87841be88803b558913d4d837527b71574f",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 18,
@@ -1246,7 +1246,7 @@
       "id_fingerprint": "9ce78fc9f4964ca77b6f39d2db87a755eac55b0ec9616208c79b42f49455827e",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 19,
@@ -1315,7 +1315,7 @@
       "id_fingerprint": "7c96424a3e3b0a35f69de0eec8547f84855b4f2064a8a1f79528681b0f961386",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 20,
@@ -1384,7 +1384,7 @@
       "id_fingerprint": "c76ff50ce74eb35d728c0342bc8de0776b5ca1238b144c4e25f2c10554af0686",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 21,
@@ -1453,7 +1453,7 @@
       "id_fingerprint": "1b595569cd9eb014b7d55b8efd88ac3c7fe50af425e362fd55263bd254caa63b",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 22,
@@ -1522,7 +1522,7 @@
       "id_fingerprint": "f5dc89b2c33b199533f9eadf575103b9870944bcf68526f7baa5cfff2bc40471",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 23,
@@ -1591,7 +1591,7 @@
       "id_fingerprint": "d86ccde5e61fe1ae4ee0f60d12c3aa609e204089af2a5ef9ecba7ca3bb918bb9",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 24,
@@ -1655,7 +1655,7 @@
       "id_fingerprint": "d510d5f6a40643e7e74dea65c7167cb9fa64abef446b97cdc202e6fe251c8a9c",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 25,
@@ -1719,7 +1719,7 @@
       "id_fingerprint": "e8c5d508668270e568dfc05685da0d6073851221cbf1152c7b94acc987f82f66",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 26,
@@ -1783,7 +1783,7 @@
       "id_fingerprint": "f0bd553b8e1e64cd4520d97de82d43c6460646ecf9a7937b4f97ad532ea5ad77",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 27,
@@ -1847,7 +1847,7 @@
       "id_fingerprint": "ecce352111fbc29c1f9f50de0c73d001df2507f13b20014f6bdb0db206b41d05",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 28,
@@ -1911,7 +1911,7 @@
       "id_fingerprint": "ecce352111fbc29c1f9f50de0c73d001df2507f13b20014f6bdb0db206b41d05",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 29,
@@ -1975,7 +1975,7 @@
       "id_fingerprint": "6ebf119b75c8ea457de49803e1eb19432662af1b9c96dd6462ff8b0f09caf839",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 30,
@@ -2043,7 +2043,7 @@
       "id_fingerprint": "bb3123d961ba625a54827a23b67ba61ac64b3470034eda17ffb7d17d96f89afe",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 31,
@@ -2111,7 +2111,7 @@
       "id_fingerprint": "732cae1b4d67f862d7aa9d0e5fac70c0998b4f551e1da2241fd6d772a767ecd7",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 32,
@@ -2181,7 +2181,7 @@
       "id_fingerprint": "ec6d8bc0dd5dd878eb41797ee317abd47e4064ada984dd622d2a7b1ca8afd0cd",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 33,
@@ -2249,7 +2249,7 @@
       "id_fingerprint": "cd05df6a4afeed90bf4e475c1cdc68c2aa461fe34badcaef98e24b4ff3e47625",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 34,
@@ -2317,7 +2317,7 @@
       "id_fingerprint": "84305944b6686f2887c126e3ce26df7214e335f00e3991f0a3de73b935e6b87d",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 35,
@@ -2387,7 +2387,7 @@
       "id_fingerprint": "a5c25793354a6373e592ebfbba466ba5c2ec34543115ef28ea49d95b4e44c148",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 36,
@@ -2455,7 +2455,7 @@
       "id_fingerprint": "b9fbbe53e8e185c9400e696711667212a00fdf38b4357e0bf04fb3674210243a",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 37,
@@ -2523,7 +2523,7 @@
       "id_fingerprint": "40cfd6c7684e8b2c46b56977be6735e304b29670e0885f426810490b1748a6a2",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 38,
@@ -2593,7 +2593,7 @@
       "id_fingerprint": "8074a701b527199c135dcafb8b4fc26cd1568ad33fa313a10533e6164461a009",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 39,
@@ -2661,7 +2661,7 @@
       "id_fingerprint": "b20821ec5d496c8827492eeef0ad55eab106ccd0b4a86c9c7a852339a73700c5",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 40,
@@ -2729,7 +2729,7 @@
       "id_fingerprint": "25c5d5dbf1ab2a34af562c5b2b27d8d64cc1930635294816f4491360e01b1df8",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 41,
@@ -2799,7 +2799,7 @@
       "id_fingerprint": "1c59ae84130ccf988b77294e75f50442fa476a2b994489e5d5a1e37773be5a2e",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 42,
@@ -2867,7 +2867,7 @@
       "id_fingerprint": "544f83c98aad1a6f92d793f634f960e2b29aca4af23eeda38ebfc93352f0f577",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 43,
@@ -2935,7 +2935,7 @@
       "id_fingerprint": "f3d3b4f100fe48186f8b904dff650e1ff949b2f731e4e3281ce8be9adf48e4f1",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 44,
@@ -3005,7 +3005,7 @@
       "id_fingerprint": "eea60b0f8ee7b4fd3dc431bef85fbedc33e3b215792c115ed367e8eeb69c2a95",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 45,
@@ -3073,7 +3073,7 @@
       "id_fingerprint": "f5c59f77ec16222034b3f3074378c6fffad7af8a30b8ea982c766e7903a2a871",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 46,
@@ -3141,7 +3141,7 @@
       "id_fingerprint": "a6c02f7f817daf6037c09dc2cd3d2293d1fab925f331b5205e719da5e05904d8",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 47,
@@ -3211,7 +3211,7 @@
       "id_fingerprint": "f282764fe6542f2910f1d0a5403f7c8f33d1299aacdfb46de4c8c385cea73c9d",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 48,
@@ -3279,7 +3279,7 @@
       "id_fingerprint": "3e18c05ec6995146fe6758afe0a5a07d696b27ebfd1e5e800c7849119e877619",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 49,
@@ -3347,7 +3347,7 @@
       "id_fingerprint": "701b98ab85fa2b37ef16bb3870150bc81482a9d6d8146af213ceebb41800a2c6",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     },
     {
       "id": 50,
@@ -3417,7 +3417,7 @@
       "id_fingerprint": "cb5809464707079606c2de5f538dcc0f189b8625bf505d684ee22cd7112e4c60",
       "is_locked": false,
       "lock_holder": null,
-      "project_id": 2
+      "repo_name": "dvwa"
     }
   ],
   "total": 572,

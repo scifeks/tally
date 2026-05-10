@@ -1,10 +1,6 @@
 /**
- * API Configuration
- * =================
- * Central configuration for all API endpoints. The base path is a
- * relative `/api/v1` so the SPA is same-origin in production. In
- * development, Vite proxies `/api` to the FastAPI server (see
- * `vite.config.ts`, which reads `VITE_API_BASE_URL` from `.env.local`).
+ * Base path is relative `/api/v1` so the SPA is same-origin in production.
+ * In dev, Vite proxies `/api` to the FastAPI server via `.env.local`.
  */
 
 export const API_BASE_URL = '/api/v1'

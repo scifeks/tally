@@ -1,17 +1,7 @@
 /**
- * useFindingsFilterOptions Hook
- * =============================
- * Fetches per-dimension filter options under the currently-applied filter
- * set, served by `GET /api/v1/projects/:id/findings/filter-options`.
- *
- * Strict semantics: every dimension's counts reflect every active filter,
- * including its own dimension's filter. Options with zero matches are
- * omitted by the backend. Powers the Findings page filter dropdowns
- * (Phase 12.1).
- *
- * The query key includes the full filter set, so React Query refetches on
- * every filter change. The query is disabled when `projectIdParam` is the
- * empty string (the convention pages use to mean "no project selected").
+ * Per-dimension filter options for the Findings page. Strict semantics:
+ * counts reflect all active filters; zero-count options are omitted by
+ * the backend.
  */
 
 import { useQuery } from '@tanstack/react-query'

@@ -66,6 +66,5 @@
   "repo_id": 2,
   "id_fingerprint": "ff3fe55e850ca3205da4a9ebcf6c99e88b69329f2bd29641cba56740f76e9994",
   "is_locked": false,
-  "lock_holder": null,
-  "project_id": 2
+  "lock_holder": null
 }

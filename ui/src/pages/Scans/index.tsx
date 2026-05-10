@@ -96,7 +96,7 @@ export default function Scans() {
   const saveScan = useSaveScan()
   const deleteSavedScan = useDeleteSavedScan()
 
-  // Selected saved scan — when set, startScan runs this instead of ad-hoc options.
+  // Selected saved scan. When set, startScan runs this instead of ad-hoc options.
   const [selectedSavedScanId, setSelectedSavedScanId] = useState<number | null>(null)
   const selectedSavedScan = useMemo(
     () => savedScans.find(s => s.id === selectedSavedScanId) ?? null,

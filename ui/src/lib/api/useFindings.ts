@@ -1,21 +1,6 @@
 /**
- * useFindings Hook
- * ================
- * Paginated read of findings for a project, served by
- * `GET /api/v1/projects/:id/findings`. Per `decisions.md` B13 the UI uses
- * infinite-scroll pagination (offset+limit, not page numbers). Filters,
- * sorting, and search are server-driven query params; the SPA does not
- * filter the global pool.
- *
- * The backend always returns array-typed `cwe` and `finding_type`; the
- * inline `mapFinding` mapper coerces nullables to safe defaults so the
- * camel-cased `Finding` type is always well-formed at every render.
- *
- * Returns a flattened `data: Finding[]` (across all loaded pages) so
- * non-paginated consumers (Dashboard, Triage) can keep their
- * `const { data: findings = [] } = useFindings(...)` shape. Pagination
- * controls (`fetchNextPage`, `hasNextPage`, `isFetchingNextPage`) and the
- * server-reported `total` are exposed alongside.
+ * Infinite-scroll paginated findings query (offset+limit). Filters, sorting,
+ * and search are server-driven query params.
  */
 
 import { useMemo } from 'react'

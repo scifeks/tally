@@ -18,7 +18,7 @@ if (typeof URL.revokeObjectURL !== 'function') {
 
 // jsdom logs "Not implemented: navigation to another Document" whenever a
 // download anchor is clicked. The download helper has nothing to assert in
-// jsdom anyway — the test verifies the underlying fetch, not the file save.
+// jsdom anyway; the test verifies the underlying fetch, not the file save.
 const anchorClick = HTMLAnchorElement.prototype.click
 HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
   if (this.hasAttribute('download')) return

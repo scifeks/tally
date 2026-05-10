@@ -1,12 +1,6 @@
 /**
- * useUrlLists Hook
- * ================
- * Paginated read of URL entries for a project via
- * `GET /api/v1/projects/:id/url-list/entries`, mirroring the
- * offset+limit infinite-scroll pattern used by `useFindings`.
- *
- * Phase 12.2: filters, search, and sort are all server-side. Filter
- * params are repeatable for multi-value selection.
+ * Paginated URL entries for a project. Infinite-scroll with server-side
+ * filters, search, and sort.
  */
 
 import { useMemo } from 'react'

@@ -1,21 +1,6 @@
 /**
- * useChat Hooks
- * =============
- * Wires the Chat page (sessions, messages, send + streaming, cancel,
- * delete) to the real backend. Mirrors `useReports.ts`: project-scoped
- * REST + SSE, `useInfiniteQuery` for paginated message history, inline
- * snake→camel mappers, mutation errors routed through the
- * `chatMutationError` Zustand slice for the dedicated mutation-error
- * modal.
- *
- * Endpoint contract (endpoints.md §12):
- *   GET    /api/v1/projects/:id/chat/sessions
- *   POST   /api/v1/projects/:id/chat/sessions                    - empty body
- *   DELETE /api/v1/projects/:id/chat/sessions/:sid
- *   GET    /api/v1/projects/:id/chat/sessions/:sid/messages      - paginated
- *   POST   /api/v1/projects/:id/chat/sessions/:sid/messages      - body { content }
- *   POST   /api/v1/projects/:id/chat/sessions/:sid/cancel        - empty body
- *   GET    /api/v1/projects/:id/chat/stream?session_id=:sid      - SSE
+ * Chat hooks: sessions, messages, send + streaming, cancel, delete.
+ * Mutation errors route through the `chatMutationError` Zustand slice.
  */
 
 import { useEffect, useMemo, useRef } from 'react'

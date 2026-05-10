@@ -1,21 +1,9 @@
 /**
- * Tally HTTP client.
- *
- * `apiFetch` is the single entry point every UI hook uses to talk to the
- * FastAPI backend. It enforces three contracts:
- *
- *   1. `credentials: "include"` so the HttpOnly `tally_session` cookie and
- *      the JS-readable `tally_csrf` cookie travel with every request.
- *   2. Mutating verbs (POST/PUT/PATCH/DELETE) read the CSRF token from the
- *      `tally_csrf` cookie and echo it in the `X-CSRF-Token` header. The
- *      double-submit pattern blocks cross-origin attackers.
- *   3. Non-2xx responses are decoded against the backend's canonical error
- *      envelope `{"error": {"code", "message", "details"}}` and surfaced as
- *      typed `ApiError` instances.
- *
- * On 401 the registered session-expired subscriber fires before `apiFetch`
- * throws, so the SPA can mount its blocking modal without each caller
- * having to special-case authentication.
+ * Every request carries `credentials: "include"` for the session cookie.
+ * Mutating verbs echo the `tally_csrf` cookie as an `X-CSRF-Token` header
+ * (double-submit CSRF). Non-2xx responses surface as typed `ApiError`
+ * instances. On 401 the session-expired subscriber fires before the throw
+ * so callers don't need to special-case authentication.
  */
 
 import { readCookie } from './cookies'
@@ -38,7 +26,7 @@ export class ApiError extends Error {
 
 export class MissingCsrfError extends Error {
   constructor() {
-    super('CSRF cookie missing - session not initialised')
+    super('CSRF cookie missing - session not initialized')
     this.name = 'MissingCsrfError'
   }
 }

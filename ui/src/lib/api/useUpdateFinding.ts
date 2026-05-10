@@ -1,23 +1,7 @@
 /**
- * useUpdateFinding Mutation
- * =========================
- * Project-scoped PATCH against
- * `/api/v1/projects/:projectId/findings/:findingId`.
- *
- * Behavior:
- *  - **Optimistic.** `onMutate` snapshots every cached page of
- *    `['findings', projectId, *]` and patches the matching row in place
- *    so the UI reflects the edit before the network resolves.
- *  - **Rollback + error modal on failure.** On error the snapshot is
- *    restored AND the global `findingMutationError` slice is populated so
- *    the user sees a modal explaining the rollback (especially for
- *    `FINDING_LOCKED` 409s - the analyst can't be allowed to silently
- *    miss an unsaved edit).
- *  - **Counts invalidation.** When the canonical response shows that
- *    `severity` or `status` actually changed, invalidate
- *    `['findingsCounts', projectId]` so the dashboard tiles refresh.
- *  - **Cache merge on success.** The backend-canonical row replaces the
- *    optimistic patch across every cached page that contained the id.
+ * Optimistic PATCH for a single finding. On failure the cache is rolled back
+ * and `findingMutationError` is populated so the user sees a modal explaining
+ * the rollback (critical for `FINDING_LOCKED` 409s).
  */
 
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query'

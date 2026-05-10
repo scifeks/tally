@@ -105,7 +105,7 @@ export function RepositorySection({
   const handleSave = () => {
     if (!form.name) return
     const repo = { ...form, projectId } as RepositoryConfig
-    // Do not touch endpointFileUpload or the DOM file ref here — Chrome
+    // Do not touch endpointFileUpload or the DOM file ref here. Chrome
     // detaches the underlying blob when the input's value is cleared, and
     // the mutation reads the bytes asynchronously. The parent triggers
     // cleanup via the saveCompletedAt prop after the request settles.

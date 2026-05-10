@@ -1,22 +1,3 @@
-/**
- * API Module
- * ==========
- * Barrel export for all data fetching hooks. Each hook calls the
- * FastAPI backend via `apiFetch` (REST) or `apiEventSource` (SSE).
- *
- * FILE STRUCTURE:
- * ---------------
- * config.ts       - API URLs and endpoint paths
- * useProjects.ts  - Project list and metadata (GET)
- * useFindings.ts  - Findings list and updates (GET, PATCH)
- * useScans.ts     - Scan history, start/cancel, SSE events (GET, POST, SSE)
- * useTriage.ts    - Triage history, start/cancel, SSE events (GET, POST, SSE)
- * useUrlLists.ts  - Project URL list entries (GET)
- * useReports.ts   - Report drafts, generation, history, SSE events (GET, POST, SSE)
- * useChat.ts      - Chat sessions, messages, streaming responses (GET, POST, SSE)
- * useConfig.ts    - Project info, repositories, tool overrides (GET, PATCH, POST, DELETE)
- */
-
 // Configuration
 export { API_BASE_URL, SSE_ENDPOINTS, REST_ENDPOINTS } from './config'
 

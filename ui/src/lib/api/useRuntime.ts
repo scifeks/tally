@@ -1,13 +1,6 @@
 /**
- * useRuntime Hooks
- * ================
- * Cross-project hooks for runtime dependency probes and installed tool
- * names. Backed by `GET /api/v1/runtime-dependencies` (Phase 2.6) and
- * `GET /api/v1/tools/installed` (Phase 6.8) - both are auth-only and
- * carry no project context.
- *
- * The Triage page consumes `useRuntimeDependencies()` to gate the
- * "Start Triage" button on `claude.installed`.
+ * Cross-project hooks for runtime dependency probes and installed tool names.
+ * Both endpoints are auth-only with no project context.
  */
 
 import { useQuery } from '@tanstack/react-query'

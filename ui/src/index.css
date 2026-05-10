@@ -71,9 +71,9 @@
   }
 
   /* Subtle phosphor scanline backdrop on the whole app.
-     IMPORTANT: keep z-index low (0) so dropdowns, modals, and tooltips render
-     above it. The `screen` blend mode would otherwise smear any content that
-     sits below the overlay and make it unreadable (e.g. the Config dropdown).
+     z-index must stay at 0 so dropdowns, modals, and tooltips render above
+     it. The `screen` blend mode would otherwise smear any content that sits
+     below the overlay (e.g. the Config dropdown).
      Overlay is pointer-events:none so it never blocks interaction. */
   #root::before {
     content: '';

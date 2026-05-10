@@ -1,17 +1,5 @@
 /**
- * useProjectMeta Hook
- * ===================
- * Fetches metadata for a single project, served by
- * `GET /api/v1/projects/:id/meta` (Phase 2.x endpoint). Powers the Dashboard
- * "tools enabled" header tile and the Scans page repo/tool counts.
- *
- * Backend response (snake_case) is mapped to the camelCase `ProjectMeta`
- * shape consumed by the SPA. `enabled_tools` is a list of tool IDs (not a
- * count); call sites that need a count read `enabledTools.length`.
- *
- * The query is disabled when `projectIdParam` is the empty string, which is
- * the convention pages use to represent "no project selected" (the
- * `activeProjectId !== null ? String(activeProjectId) : ''` derivation).
+ * Project metadata query. `enabledTools` is a list of tool IDs, not a count.
  */
 
 import { useQuery } from '@tanstack/react-query'
