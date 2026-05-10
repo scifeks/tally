@@ -1,0 +1,24 @@
+{
+  "id": 4,
+  "toolName": "semgrep",
+  "name": "strict-with-rules",
+  "args": [
+    {
+      "name": "--strict",
+      "type": "flag"
+    },
+    {
+      "name": "--max-target-bytes",
+      "value": "5000000",
+      "type": "string"
+    },
+    {
+      "name": "--config",
+      "path": "arg_files/4/--config",
+      "downloadUrl": "/api/v1/projects/2/arg-profiles/4/files/--config",
+      "type": "file"
+    }
+  ],
+  "createdAt": "2026-05-05T01:42:04.153479+00:00",
+  "updatedAt": "2026-05-05T01:42:04.160440+00:00"
+}

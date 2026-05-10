@@ -23,11 +23,6 @@ _CONFIDENCE_MAP: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Parse functions (called by BaseSemgrepTool.parse_output)
-# ---------------------------------------------------------------------------
-
-
 def parse_semgrep_json(json_path: Path) -> dict[str, Any]:
     """Parse a semgrep JSON output file into structured data."""
     try:
@@ -45,11 +40,6 @@ def parse_semgrep_json_string(json_string: str) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         return {"error": f"JSON parse error: {exc}", "raw_output": json_string}
     return _parse_semgrep_data(data)
-
-
-# ---------------------------------------------------------------------------
-# Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_semgrep_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -130,11 +120,6 @@ def _extract_metadata(extra: dict[str, Any]) -> dict[str, Any]:
         "impact": meta.get("impact"),
         "references": references if isinstance(references, list) else None,
     }
-
-
-# ---------------------------------------------------------------------------
-# Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 class SemgrepHandler:
@@ -261,6 +246,8 @@ class SemgrepHandler:
                 row["impact"] = impact
             if references:
                 row["references"] = ", ".join(references)
+            if rule_id:
+                row["title"] = rule_id.rsplit(".", 1)[-1] or rule_id
             row.update(_shared_meta(self, "vulnerability"))
 
             rows.append(row)

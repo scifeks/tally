@@ -30,7 +30,7 @@ class PipAuditLocalTool(BasePipAuditTool):
         if _install_attempted:
             return False
         _install_attempted = True
-        logger.info("pip-audit not found — attempting auto-install via pip...")
+        logger.info("pip-audit not found; attempting auto-install via pip...")
         try:
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--user", "pip-audit"],

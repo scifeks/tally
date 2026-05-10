@@ -71,7 +71,7 @@ def _resolve_and_copy_deps(
 
 def _install_pip_audit_in_container(container_name: str) -> bool:
     """Install pip-audit inside the container. Returns True on success."""
-    logger.info("pip-audit: not found in container %r — installing...", container_name)
+    logger.info("pip-audit: not found in container %r; installing...", container_name)
     try:
         r = subprocess.run(
             [
@@ -136,7 +136,7 @@ class PipAuditDockerTool(BasePipAuditTool):
             )
             if deps_file is None:
                 logger.info(
-                    "pip-audit: no requirements file available for %r — skipping",
+                    "pip-audit: no requirements file available for %r; skipping",
                     repo.name,
                 )
                 return []

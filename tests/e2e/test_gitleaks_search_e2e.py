@@ -4,31 +4,33 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from application.project import ProjectManager
-from application.rag import RAGEngine
 from application.rag.ingestor import ToolHandlerFactory
+from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.query import QueryEngine
 from application.tools.executor import ToolExecutor
-from application.tools.registry import discover_tools, tool_registry
+from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.tools.runner import SubprocessRunner
+from infrastructure.vector.factory import make_chromadb_vector_index
 from tests.conftest import requires_gitleaks, requires_ollama
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 
 slow = pytest.mark.slow
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -94,11 +96,15 @@ def _run_scan(
     repo_path: Path,
     scan_type: str = "dir",
 ) -> ToolResult:
-    discover_tools(str(base_path))
-    tool = tool_registry.get_tool("gitleaks")
+    registry = ToolRegistry()
+    discover_tools(registry, str(base_path))
+    tool = registry.get_tool("gitleaks")
     assert tool is not None, "gitleaks not registered after discover_tools"
     executor = ToolExecutor(
-        project_name=project_name, base_path=base_path, auto_approve=True
+        project_name=project_name,
+        base_path=base_path,
+        prompt=NoApprovalPromptAdapter(),
+        subprocess_runner=SubprocessRunner(),
     )
     return executor.execute(
         tool,
@@ -108,8 +114,20 @@ def _run_scan(
     )
 
 
-def _make_rag_engine(base_path: Path, project_name: str) -> RAGEngine:
-    return RAGEngine(project_name=project_name, base_path=str(base_path))
+def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 def _ingest(
@@ -127,20 +145,17 @@ def _ingest(
     rows = handler.normalize(result, profile=profile)
     if not rows:
         return []
-    engine = _make_rag_engine(base_path, project_name)
+    kb = _make_kb(base_path, project_name)
     try:
         texts = [handler.render(row) for row in rows]
-        metadatas = [{"tool": row["tool"], "profile": row["profile"]} for row in rows]
+        metadatas: list[Mapping[str, Any]] = [
+            {"tool": row["tool"], "profile": row["profile"]} for row in rows
+        ]
         ids = [row["fingerprint"] for row in rows]
-        engine.add_documents(texts, metadatas, ids)
+        kb.add_findings(documents=texts, metadatas=metadatas, ids=ids)
     finally:
-        engine.close()
+        kb.close()
     return rows
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -151,13 +166,8 @@ def project_env(tmp_path: Path) -> dict:
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
-    pm.save_project(name, [])
+    pm.save_project(name)
     return {"base_path": tmp_path, "project_name": name}
-
-
-# ---------------------------------------------------------------------------
-# Scenario 5b – Search e2e with real gitleaks  (@requires_gitleaks @requires_ollama)
-# ---------------------------------------------------------------------------
 
 
 @requires_gitleaks
@@ -171,9 +181,9 @@ class TestSearchE2E:
         repo = _init_test_repo(tmp_path)
         result = _run_scan(base, name, repo)
         _ingest(base, name, result)
-        engine = _make_rag_engine(base, name)
+        kb = _make_kb(base, name)
         try:
-            results = QueryEngine(engine).search("aws secret", n_results=5)
+            results = QueryEngine(kb).search("aws secret", n_results=5)
         finally:
-            engine.close()
+            kb.close()
         assert len(results) > 0

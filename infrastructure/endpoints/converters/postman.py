@@ -1,4 +1,4 @@
-"""Postman collection adapter — converts to OAS3 via postman-to-openapi."""
+"""Convert Postman collections to OpenAPI 3.x using postman-to-openapi."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ _P2O_MISSING_MSG = (
 
 
 class PostmanAdapter(ConverterAdapter):
-    """Adapter for Postman collections — converts to OAS3."""
+    """Convert Postman collections to OAS3."""
 
     @property
     def supported_extensions(self) -> frozenset[str]:

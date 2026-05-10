@@ -1,4 +1,4 @@
-"""FindingsTableFactory — table rendering logic extracted from knowledge_commands."""
+"""Table rendering logic extracted from knowledge_commands."""
 
 from __future__ import annotations
 
@@ -10,11 +10,9 @@ from rich.table import Table
 from domain.tools.constants import BOOLEAN_TYPE_FIELDS
 
 if TYPE_CHECKING:
-    pass
+    from application.tools.registry import ToolRegistry
 
-# ---------------------------------------------------------------------------
 # Shared utilities
-# ---------------------------------------------------------------------------
 
 _SEVERITY_COLORS = {
     "critical": "red",
@@ -50,9 +48,7 @@ def color_severity(sev: str) -> str:
     return f"[{color}]{sev}[/{color}]" if sev else ""
 
 
-# ---------------------------------------------------------------------------
 # Schema constants
-# ---------------------------------------------------------------------------
 
 _ALL_NORMALIZED_FIELDS: list[str] = [
     "confidence",
@@ -100,9 +96,7 @@ _SQLITE_SCHEMA_FIELDS: frozenset[str] = frozenset(
 )
 
 
-# ---------------------------------------------------------------------------
 # TableRenderer Protocol
-# ---------------------------------------------------------------------------
 
 
 @runtime_checkable
@@ -113,9 +107,7 @@ class TableRenderer(Protocol):
     def build(self, results: list[dict[str, Any]], is_semantic: bool) -> Table: ...
 
 
-# ---------------------------------------------------------------------------
 # Table builder functions (generic / fields)
-# ---------------------------------------------------------------------------
 
 
 def _build_fields_table(results: list[dict[str, Any]], fields: list[str]) -> Table:
@@ -174,22 +166,19 @@ def _build_generic_table(results: list[dict[str, Any]], is_semantic: bool) -> Ta
     return table
 
 
-# ---------------------------------------------------------------------------
 # Factory
-# ---------------------------------------------------------------------------
 
 
 class FindingsTableFactory:
     """Factory that discovers and delegates to tool-specific table renderers."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, tool_registry: ToolRegistry) -> None:
+        self._tool_registry = tool_registry
         self._renderers: dict[str, TableRenderer] = {}
         self._load_renderers()
 
     def _load_renderers(self) -> None:
-        from application.tools.registry import tool_registry
-
-        for tool_name in tool_registry.list_tool_names():
+        for tool_name in self._tool_registry.list_tool_names():
             file_stem = tool_name.replace("-", "_")
             try:
                 mod = importlib.import_module(

@@ -14,9 +14,7 @@ from infrastructure.tools.parsers.dalfox import (
     parse_dalfox_json_string,
 )
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 _FIXTURE_PATH = (
     Path(__file__).parent.parent.parent / "fixtures" / "ingest" / "dalfox_scan.json"
@@ -49,9 +47,7 @@ _REFLECTED_FINDING = {
 }
 
 
-# ---------------------------------------------------------------------------
-# parse_dalfox_json_string — empty / malformed inputs
-# ---------------------------------------------------------------------------
+# parse_dalfox_json_string: empty / malformed inputs
 
 
 class TestParseDalfoxJsonStringEdgeCases:
@@ -82,9 +78,7 @@ class TestParseDalfoxJsonStringEdgeCases:
         assert result["findings"] == []
 
 
-# ---------------------------------------------------------------------------
-# parse_dalfox_json_string — valid findings
-# ---------------------------------------------------------------------------
+# parse_dalfox_json_string: valid findings
 
 
 class TestParseDalfoxJsonStringValid:
@@ -139,9 +133,7 @@ class TestParseDalfoxJsonStringValid:
         assert result["summary"]["total_findings"] == 2
 
 
-# ---------------------------------------------------------------------------
-# parse_dalfox_json — file reading
-# ---------------------------------------------------------------------------
+# parse_dalfox_json: file reading
 
 
 class TestParseDalfoxJson:
@@ -159,9 +151,7 @@ class TestParseDalfoxJson:
         assert result["findings"] == []
 
 
-# ---------------------------------------------------------------------------
-# _parse_dalfox_data — internal helper
-# ---------------------------------------------------------------------------
+# _parse_dalfox_data: internal helper
 
 
 class TestParseDalfoxData:
@@ -191,9 +181,7 @@ class TestParseDalfoxData:
         assert result["findings"][0]["confidence"] == "potential"
 
 
-# ---------------------------------------------------------------------------
 # DalFoxHandler.normalize
-# ---------------------------------------------------------------------------
 
 
 def _make_result(findings: list[dict]) -> ToolResult:
@@ -272,9 +260,7 @@ class TestDalFoxHandlerNormalize:
         assert len(rows) == 2
 
 
-# ---------------------------------------------------------------------------
 # DalFoxHandler.render
-# ---------------------------------------------------------------------------
 
 
 class TestDalFoxHandlerRender:
@@ -336,9 +322,7 @@ class TestDalFoxHandlerRender:
         assert rendered.startswith("[dalfox]")
 
 
-# ---------------------------------------------------------------------------
 # DalFoxHandler.fingerprint_key
-# ---------------------------------------------------------------------------
 
 
 class TestDalFoxHandlerFingerprintKey:

@@ -58,7 +58,7 @@ def _resolve_credentials(auth: RepoAuth) -> tuple[str, str] | None:
     if auth.username and auth.password:
         return auth.username, auth.password
     logger.warning(
-        "No credentials found for auth.login_url=%r — "
+        "No credentials found for auth.login_url=%r; "
         "set credentials_env or inline username/password. "
         "Katana will crawl without authentication.",
         auth.login_url,
@@ -117,7 +117,7 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
 
             cookie_str = "; ".join(f"{k}={v}" for k, v in jar.items())
             logger.info(
-                "Login to %r succeeded — injecting %d cookie(s) into Katana",
+                "Login to %r succeeded; injecting %d cookie(s) into Katana",
                 auth.login_url,
                 len(jar),
             )
@@ -125,7 +125,7 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
 
     except Exception as exc:
         logger.warning(
-            "Pre-crawl login to %r failed: %s — Katana will crawl without auth",
+            "Pre-crawl login to %r failed: %s; Katana will crawl without auth",
             auth.login_url,
             exc,
         )

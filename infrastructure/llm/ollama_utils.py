@@ -1,4 +1,4 @@
-"""Ollama HTTP utility functions — infrastructure layer."""
+"""Query and verify Ollama availability and models."""
 
 from __future__ import annotations
 

@@ -8,22 +8,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.llm.base import LLMProvider
+    from application.ports.llm_provider import LLMProvider
+    from domain.findings.entry import Finding
 
 from application.reporting.risk_level import RiskLevel
+from domain.findings.severity import Severity
 
 logger = logging.getLogger(__name__)
 
 # Maps section name → generator class; populated by @_register.
 SECTION_REGISTRY: dict[str, type[SectionDraftGenerator]] = {}
 
-_SEVERITY_DISPLAY = (
-    "critical",
-    "high",
-    "medium",
-    "low",
-    "informational",
-)
 _CONFIDENCE_DISPLAY = ("confirmed", "probable", "potential")
 
 
@@ -36,9 +31,9 @@ def _register(
 
 def _fmt_sev(dist: dict[str, int]) -> str:
     parts = [
-        f"{s.capitalize()}: {dist.get(s, 0)}"
-        for s in _SEVERITY_DISPLAY
-        if dist.get(s, 0) > 0
+        f"{s.label.capitalize()}: {dist.get(s.label, 0)}"
+        for s in Severity.all_ordered()
+        if dist.get(s.label, 0) > 0
     ]
     return ", ".join(parts) if parts else "None"
 
@@ -187,7 +182,7 @@ class RiskLevelSectionGenerator(SectionDraftGenerator):
             "Requirements:\n"
             f"- Explain what contributed to the {risk_level.value} rating"
             " and what it means for the organisation.\n"
-            "- Interpret the numbers in business context — do not simply"
+            "- Interpret the numbers in business context; do not simply"
             " restate raw counts.\n"
             "- Do not speculate beyond the data provided.\n\n"
             "Write only the paragraph text."
@@ -205,16 +200,16 @@ class CriticalIssuesGenerator(SectionDraftGenerator):
         return self._call_llm(self._build_prompt(context))
 
     def _build_prompt(self, ctx: dict[str, Any]) -> str:
-        findings: list[dict[str, Any]] = ctx["top_findings"]
+        findings: list[Finding] = ctx["top_findings"]
 
         entries: list[str] = []
         for f in findings:
-            tal_id = f.get("tal_id") or "(no finding ID)"
-            severity = (f.get("severity") or "").capitalize()
-            confidence = (f.get("confidence") or "").capitalize()
-            description = f.get("description") or "(no description)"
-            business_impact = f.get("business_impact") or ""
-            tool = f.get("tool") or ""
+            tal_id = f.tal_id or "(no finding ID)"
+            severity = (f.severity or "").capitalize()
+            confidence = (f.confidence or "").capitalize()
+            description = f.description or "(no description)"
+            business_impact = f.business_impact or ""
+            tool = f.tool or ""
 
             lines = [
                 f"Finding ID: {tal_id}",
@@ -347,7 +342,7 @@ class ScopeMethodologyGenerator(SectionDraftGenerator):
             f"{network_section}"
             f"{ecosystem_section}\n"
             "The following pre-written blurb describes the tools used."
-            " Embed it naturally in this section — do not reproduce it"
+            " Embed it naturally in this section; do not reproduce it"
             " verbatim as a separate block:\n\n"
             "---\n"
             f"{tools_blurb}\n"
@@ -356,7 +351,7 @@ class ScopeMethodologyGenerator(SectionDraftGenerator):
             "- What was tested (repositories, endpoints, or ecosystems in"
             " scope).\n"
             "- The testing tools and what security domains they covered.\n"
-            "- The testing approach (white box — full source code access"
+            "- The testing approach (white box with full source code access"
             " provided).\n"
             "- Any relevant limitations.\n\n"
             "The tools-used blurb must appear as a natural part of the"
@@ -377,7 +372,7 @@ class GeneralRecommendationsGenerator(SectionDraftGenerator):
 
     def _build_prompt(self, ctx: dict[str, Any]) -> str:
         groups: list[tuple[str, int]] = ctx["risk_type_groups"]
-        recurring_by_rt: dict[str, list[dict[str, Any]]] = ctx["recurring_by_risk_type"]
+        recurring_by_rt: dict[str, list[Finding]] = ctx["recurring_by_risk_type"]
         sev_dist = ctx["sev_dist"]
         improvement_draft: str | None = ctx.get("improvement_points_draft")
 
@@ -402,7 +397,7 @@ class GeneralRecommendationsGenerator(SectionDraftGenerator):
         if improvement_draft:
             improvement_context = (
                 "\nFor coherence, the improvement points section has already"
-                " been drafted. Your recommendations should complement it —"
+                " been drafted. Your recommendations should complement it;"
                 " improvement points describe what was found; recommendations"
                 " describe what to do about it:\n\n"
                 f"---\n{improvement_draft}\n---\n"

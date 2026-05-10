@@ -6,8 +6,14 @@ from application.rag.ingestor import _normalize_path
 from core.config.schemas import Repository
 
 
-def _repo(name: str, path: str, test_dirs: list[str] | None = None) -> Repository:
+def _repo(
+    name: str,
+    path: str,
+    test_dirs: list[str] | None = None,
+    repo_id: int = 1,
+) -> Repository:
     return Repository.model_construct(
+        id=repo_id,
         name=name,
         path=path,
         type=["library"],
@@ -21,28 +27,28 @@ def _repo(name: str, path: str, test_dirs: list[str] | None = None) -> Repositor
 
 class TestNormalizePath:
     def test_normalize_strips_prefix(self) -> None:
-        repos = [_repo("myapp", "/repos/app")]
-        rel, repo_name = _normalize_path("/repos/app/src/main.py", repos)
+        repos = [_repo("myapp", "/repos/app", repo_id=42)]
+        rel, repo_id = _normalize_path("/repos/app/src/main.py", repos)
         assert rel == "/src/main.py"
-        assert repo_name == "myapp"
+        assert repo_id == 42
 
     def test_normalize_no_match_returns_original(self) -> None:
         repos = [_repo("myapp", "/repos/app")]
-        rel, repo_name = _normalize_path("/other/path/file.py", repos)
+        rel, repo_id = _normalize_path("/other/path/file.py", repos)
         assert rel == "/other/path/file.py"
-        assert repo_name is None
+        assert repo_id is None
 
     def test_normalize_empty_path_returns_empty(self) -> None:
         repos = [_repo("myapp", "/repos/app")]
-        rel, repo_name = _normalize_path("", repos)
+        rel, repo_id = _normalize_path("", repos)
         assert rel == ""
-        assert repo_name is None
+        assert repo_id is None
 
     def test_normalize_repo_path_with_trailing_slash(self) -> None:
-        repos = [_repo("myapp", "/repos/app/")]
-        rel, repo_name = _normalize_path("/repos/app/src/main.py", repos)
+        repos = [_repo("myapp", "/repos/app/", repo_id=7)]
+        rel, repo_id = _normalize_path("/repos/app/src/main.py", repos)
         assert rel == "/src/main.py"
-        assert repo_name == "myapp"
+        assert repo_id == 7
         assert not rel.startswith("//")
 
     def test_normalize_leading_slash_present(self) -> None:
@@ -51,6 +57,6 @@ class TestNormalizePath:
         assert rel.startswith("/")
 
     def test_normalize_empty_repo_list(self) -> None:
-        rel, repo_name = _normalize_path("/some/file.py", [])
+        rel, repo_id = _normalize_path("/some/file.py", [])
         assert rel == "/some/file.py"
-        assert repo_name is None
+        assert repo_id is None

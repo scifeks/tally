@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -18,11 +17,37 @@ from application.reporting.resolver import (  # noqa: E402
 )
 
 
+class _AlwaysConfirm:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
+class _AlwaysDecline:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return False
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
+class _SpyPrompt:
+    def __init__(self) -> None:
+        self.confirm_calls: list[str] = []
+
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        self.confirm_calls.append(question)
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
 class TestDraftResolverResolve:
-    def test_reviewed_file_used_without_prompting(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Reviewed file takes priority; no input() prompt is issued."""
+    def test_reviewed_file_used_without_prompting(self, tmp_path: Path) -> None:
+        """Reviewed file takes priority; confirm() is never called."""
         project = "acme"
         reviewed_dir = tmp_path / "projects" / project / "reports" / "reviewed"
         reviewed_dir.mkdir(parents=True)
@@ -30,85 +55,68 @@ class TestDraftResolverResolve:
             "# Overview\n\nAll good.", encoding="utf-8"
         )
 
-        called: list[str] = []
-        monkeypatch.setattr("builtins.input", lambda _: called.append("called") or "n")
-
-        resolver = DraftResolver(project, tmp_path)
+        spy = _SpyPrompt()
+        resolver = DraftResolver(project, tmp_path, spy)
         html = resolver.resolve("executive-summary")
 
         assert "<h1>" in html
         assert "All good" in html
-        assert called == [], "input() must not be called when a reviewed file exists"
+        assert spy.confirm_calls == [], (
+            "confirm() must not be called for a reviewed file"
+        )
 
-    def test_draft_used_when_user_confirms(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Draft file is used when the user answers 'y'."""
+    def test_draft_used_when_user_confirms(self, tmp_path: Path) -> None:
+        """Draft file is used when the prompt confirms."""
         project = "acme"
         draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "risk-level.md").write_text("**High**", encoding="utf-8")
 
-        monkeypatch.setattr("builtins.input", lambda _: "y")
-
-        resolver = DraftResolver(project, tmp_path)
+        resolver = DraftResolver(project, tmp_path, _AlwaysConfirm())
         html = resolver.resolve("risk-level")
 
         assert "<strong>High</strong>" in html
 
-    def test_draft_accepted_with_yes(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Full word 'yes' is also accepted."""
+    def test_draft_accepted_when_confirm_returns_true(self, tmp_path: Path) -> None:
+        """Draft is used whenever confirm() returns True."""
         project = "acme"
         draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "scope-and-methodology.md").write_text("Scope.", encoding="utf-8")
 
-        monkeypatch.setattr("builtins.input", lambda _: "yes")
-
-        resolver = DraftResolver(project, tmp_path)
+        resolver = DraftResolver(project, tmp_path, _AlwaysConfirm())
         html = resolver.resolve("scope-and-methodology")
 
         assert "Scope" in html
 
-    def test_draft_declined_raises_section_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """User answering 'n' raises SectionMissingError."""
+    def test_draft_declined_raises_section_missing(self, tmp_path: Path) -> None:
+        """confirm() returning False raises SectionMissingError."""
         project = "acme"
         draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "critical-issues.md").write_text("Issues here.", encoding="utf-8")
 
-        monkeypatch.setattr("builtins.input", lambda _: "n")
-
-        resolver = DraftResolver(project, tmp_path)
+        resolver = DraftResolver(project, tmp_path, _AlwaysDecline())
         with pytest.raises(SectionMissingError, match="critical-issues"):
             resolver.resolve("critical-issues")
 
-    def test_empty_answer_treated_as_no(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Pressing Enter (empty string) is treated as 'N'."""
+    def test_decline_raises_section_missing(self, tmp_path: Path) -> None:
+        """Any confirm()=False result raises SectionMissingError."""
         project = "acme"
         draft_dir = tmp_path / "projects" / project / "reports" / "draft"
         draft_dir.mkdir(parents=True)
         (draft_dir / "general-recommendations.md").write_text("Recs.", encoding="utf-8")
 
-        monkeypatch.setattr("builtins.input", lambda _: "")
-
-        resolver = DraftResolver(project, tmp_path)
+        resolver = DraftResolver(project, tmp_path, _AlwaysDecline())
         with pytest.raises(SectionMissingError):
             resolver.resolve("general-recommendations")
 
     def test_neither_file_raises_section_missing(self, tmp_path: Path) -> None:
         """SectionMissingError is raised immediately when no file exists."""
         project = "acme"
-        # Ensure directory hierarchy exists but section file is absent
         (tmp_path / "projects" / project / "report").mkdir(parents=True)
 
-        resolver = DraftResolver(project, tmp_path)
+        resolver = DraftResolver(project, tmp_path, _AlwaysConfirm())
         with pytest.raises(SectionMissingError, match="improvement-points"):
             resolver.resolve("improvement-points")
 
@@ -128,13 +136,13 @@ class TestDraftResolverResolve:
             "Reviewed content.", encoding="utf-8"
         )
 
-        with patch("builtins.input") as mock_input:
-            resolver = DraftResolver(project, tmp_path)
-            html = resolver.resolve("executive-summary")
+        spy = _SpyPrompt()
+        resolver = DraftResolver(project, tmp_path, spy)
+        html = resolver.resolve("executive-summary")
 
         assert "Reviewed content" in html
         assert "Draft content" not in html
-        mock_input.assert_not_called()
+        assert spy.confirm_calls == []
 
 
 class TestDraftResolverMdToHtml:
@@ -149,19 +157,12 @@ class TestDraftResolverMdToHtml:
         assert "<ul>" in html
         assert "<li>" in html
 
-    def test_returns_string(self) -> None:
-        result = DraftResolver._md_to_html("plain text")
-        assert isinstance(result, str)
-        assert len(result) > 0
-
 
 class TestDraftResolverResolveBlurb:
     def test_blurb_converted_to_html(self, tmp_path: Path) -> None:
         """resolve_blurb delegates to load_blurb and converts to HTML."""
-        resolver = DraftResolver("acme", tmp_path)
-        # Glossary has no required variables
+        resolver = DraftResolver("acme", tmp_path, _AlwaysConfirm())
         html = resolver.resolve_blurb("glossary")
         assert isinstance(html, str)
         assert len(html) > 0
-        # Glossary blurb should contain some HTML markup
         assert "<" in html

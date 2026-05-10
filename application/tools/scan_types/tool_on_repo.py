@@ -1,4 +1,4 @@
-"""ToolOnRepoScan — runs a single tool against one named repository."""
+"""ToolOnRepoScan: runs a single tool against one named repository."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, cast
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import (
     dispatch_and_count_ingested,
     execute_tool_passes,
@@ -16,12 +17,13 @@ from application.tools.scan_types.execution import (
     normalize_success,
     should_skip_sca_tool,
 )
+from application.tools.scan_types.models import ScanTypeConfig
 from core.detection.noir import noir_skip_reason
+from domain.pipeline import scan_events as se
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
-from domain.tools.scan_types.base import ScanType
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
 
 logger = logging.getLogger(__name__)
@@ -41,9 +43,10 @@ class ToolOnRepoScan(ScanType):
         factory = cast(ToolWrapperFactory, resources.factory)
         executor = cast(ToolExecutor, resources.executor)
 
-        repos = config.config_manager.load_repositories(config.project_name)
+        repos = config.repo_repo.list_active() if config.repo_repo is not None else []
         repo = next(
-            (r for r in repos if r.name.lower() == self.repo_name.lower()), None
+            (r for r in repos if r.name.lower() == self.repo_name.lower()),
+            None,
         )
         if repo is None:
             raise ValueError(
@@ -79,19 +82,31 @@ class ToolOnRepoScan(ScanType):
         if skip_sca:
             logger.warning(
                 "SCA tool %r has no matching manifests for repo %r"
-                " (%s) — running anyway (explicitly requested).",
+                " (%s); running anyway (explicitly requested).",
                 self.tool_name,
                 repo.name,
                 skip_reason,
             )
 
+        seg = getattr(tool, "scan_segment", "") or ""
+
         resources.display.print_scan_header(
-            f"Repo Tool Scan: {repo.name} — {self.tool_name}"
+            f"Repo Tool Scan: {repo.name} | {self.tool_name}"
+        )
+        resources.event_sink.emit(
+            se.ToolStarted(
+                run_id=config.run_id or 0,
+                project_id=config.project_id,
+                segment=seg,
+                repo=repo.name,
+                tool=self.tool_name,
+                message=f"{self.tool_name} on {repo.name} started",
+            )
         )
 
         start = perf_counter()
         context = make_context(
-            config.config_manager,
+            config.tool_config,
             config.project_name,
             config.base_path,
             registry,
@@ -104,6 +119,7 @@ class ToolOnRepoScan(ScanType):
             config,
             executor,
             remaining_tools=config.remaining_peers,
+            command_config=tool_config,
         )
 
         results: list[ToolResult] = []
@@ -113,6 +129,17 @@ class ToolOnRepoScan(ScanType):
         if result is None:
             resources.display.print_tool_line(
                 ToolDisplayRow(self.tool_name, False, True, 0, 0.0)
+            )
+            resources.event_sink.emit(
+                se.ToolSkipped(
+                    run_id=config.run_id or 0,
+                    project_id=config.project_id,
+                    segment=seg,
+                    repo=repo.name,
+                    tool=self.tool_name,
+                    message=f"{self.tool_name} skipped: no result",
+                    skip_reason="no result",
+                )
             )
             total_skipped += 1
         else:
@@ -144,6 +171,19 @@ class ToolOnRepoScan(ScanType):
                         result.duration_seconds,
                     )
                 )
+                resources.event_sink.emit(
+                    se.ToolCompleted(
+                        run_id=config.run_id or 0,
+                        project_id=config.project_id,
+                        segment=seg,
+                        repo=repo.name,
+                        tool=self.tool_name,
+                        message=f"{self.tool_name} on {repo.name} complete",
+                        findings_count=findings,
+                        duration=result.duration_seconds,
+                        exit_code=0,
+                    )
+                )
                 if self.tool_name == "noir" and findings == 0:
                     resources.display.print_status(
                         "    [yellow]⚠ noir found 0 endpoints. "
@@ -169,6 +209,18 @@ class ToolOnRepoScan(ScanType):
                 resources.display.print_tool_line(
                     ToolDisplayRow(
                         self.tool_name, False, False, 0, result.duration_seconds
+                    )
+                )
+                resources.event_sink.emit(
+                    se.ToolFailed(
+                        run_id=config.run_id or 0,
+                        project_id=config.project_id,
+                        segment=seg,
+                        repo=repo.name,
+                        tool=self.tool_name,
+                        message=f"{self.tool_name} on {repo.name} failed",
+                        exit_code=1,
+                        duration=result.duration_seconds,
                     )
                 )
 

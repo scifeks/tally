@@ -12,12 +12,10 @@ field is the canonical classification.
 ``should_enrich = False`` because LLM enrichment adds no value to raw endpoint
 metadata.
 
-NOTE: The ``file`` field (source file path) cannot be populated from Noir's
-OAS3 output (v0.25.1) because the OAS3 format does not include source file
-metadata. The ``file`` column in findings rows is left as NULL.
-
-The ``source_file`` field captures the OAS3 report file path itself, not the
-source file where each endpoint was discovered.
+The ``file`` field (source file path) is left as NULL because the OAS3 format
+does not include source file metadata. The ``source_file`` field captures the
+OAS3 report file path itself, not the source file where each endpoint was
+discovered.
 """
 
 from __future__ import annotations
@@ -29,40 +27,26 @@ from urllib.parse import urlparse
 
 from domain.tools.base import ToolResult
 
-from ._shared import _first_output_file, _shared_meta
+# Re-exported from the domain so legacy callers (tests, ``count_findings``)
+# can keep importing from here. The canonical rule and its application
+# live in the application/domain layers; this module is a stable import surface.
+from domain.url_inventory.vendor_filter import VENDOR_INDICATORS
+from domain.url_inventory.vendor_filter import (
+    is_vendor_path as is_vendor_or_dependency_path,
+)
 
 # HTTP methods recognised as OAS3 path-item operations.
 _OAS3_METHODS: frozenset[str] = frozenset(
     {"get", "post", "put", "delete", "patch", "head", "options", "trace"}
 )
 
-# Path segments that indicate vendor/dependency directories.
-# Shared with NoirHandler.normalize and BaseNoirTool.count_findings so the
-# vendor-exclusion logic is applied consistently.
-VENDOR_INDICATORS: frozenset[str] = frozenset(
-    {
-        "/vendor/",
-        "/node_modules/",
-        "/venv/",
-        "/.venv/",
-        "/site-packages/",
-        "/__pycache__/",
-        "/.git/",
-        "/build/",
-        "/dist/",
-    }
-)
-
-
-def is_vendor_or_dependency_path(path: str) -> bool:
-    """Return True if *path* looks like a vendor/dependency directory path."""
-    path_lower = path.lower()
-    return any(indicator in path_lower for indicator in VENDOR_INDICATORS)
-
-
-# ---------------------------------------------------------------------------
-# Parse functions (called by BaseNoirTool.parse_output)
-# ---------------------------------------------------------------------------
+__all__ = [
+    "NoirHandler",
+    "VENDOR_INDICATORS",
+    "is_vendor_or_dependency_path",
+    "parse_noir_json",
+    "parse_noir_json_string",
+]
 
 
 def parse_noir_json(json_path: Path) -> dict[str, Any]:
@@ -96,11 +80,6 @@ def parse_noir_json_string(json_string: str) -> dict[str, Any]:
     return _parse_oas3_data(data)
 
 
-# ---------------------------------------------------------------------------
-# Internal parse helpers
-# ---------------------------------------------------------------------------
-
-
 def _parse_oas3_data(data: Any) -> dict[str, Any]:
     """Validate and deserialise an OAS3 document into endpoint records."""
     if not isinstance(data, dict):
@@ -110,7 +89,7 @@ def _parse_oas3_data(data: Any) -> dict[str, Any]:
             "summary": {"total_endpoints": 0, "total_paths": 0},
         }
 
-    # Soft version check — Noir always emits "3.0.x".
+    # Noir always emits "3.0.x".
     openapi_version: str = data.get("openapi") or ""
     if openapi_version and not openapi_version.startswith("3."):
         return {
@@ -212,7 +191,7 @@ def _parse_request_body(request_body: dict[str, Any]) -> list[dict[str, Any]]:
                     }
                 )
         else:
-            # Schema has no named properties — emit a single body placeholder.
+            # Schema has no named properties, so emit a single body placeholder.
             params.append(
                 {
                     "name": "_body",
@@ -224,11 +203,6 @@ def _parse_request_body(request_body: dict[str, Any]) -> list[dict[str, Any]]:
             )
 
     return params
-
-
-# ---------------------------------------------------------------------------
-# Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 def _uri_only(raw: str) -> str:
@@ -280,48 +254,14 @@ class NoirHandler:
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        """Convert Noir ToolResult into one SQLite row per endpoint+method."""
-        parsed: dict[str, Any] = result.parsed_data or {}
-        endpoints: list[dict[str, Any]] = parsed.get("endpoints", [])
+        """Noir emits no findings rows; endpoints land in url_findings instead.
 
-        timestamp = result.timestamp
-        source_file = _first_output_file(result.output_files)
-        rows: list[dict] = []
-
-        for endpoint in endpoints:
-            path: str = endpoint.get("path") or ""
-            method: str = (endpoint.get("method") or "").upper()
-
-            all_params: list[dict[str, Any]] = (
-                endpoint.get("path_params", [])
-                + endpoint.get("query_params", [])
-                + endpoint.get("header_params", [])
-                + endpoint.get("cookie_params", [])
-                + endpoint.get("body_params", [])
-            )
-            param_names = [str(p.get("name", "")) for p in all_params if p.get("name")]
-
-            description = f"Endpoint {method} {path}"
-            if param_names:
-                description += f" — params: {', '.join(param_names)}"
-
-            row: dict[str, Any] = {
-                "tool": "noir",
-                "profile": profile,
-                "finding_type": json.dumps(["informational"]),
-                "severity": "informational",
-                "confidence": "confirmed",
-                "risk_type": "endpoint-discovery",
-                "url": _uri_only(path),
-                "method": method,
-                "description": description,
-                "timestamp": timestamp,
-                "source_file": source_file,
-            }
-            row.update(_shared_meta(self, "informational"))
-            rows.append(row)
-
-        return rows
+        Discovered endpoints are ingested via ``UrlInventoryIngestHandler``.
+        The parser still produces ``parsed_data`` and the OAS3 file for
+        downstream tools (ZAP, XSStrike, DalFox) via URL inventory artifacts.
+        """
+        del result, profile
+        return []
 
     def render(self, row: dict) -> str:
         """Render a normalised endpoint row as ChromaDB document text."""

@@ -11,6 +11,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from domain.findings.entry import Finding  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
@@ -46,15 +47,15 @@ def _seed(
 
 
 class TestGetFinding:
-    def test_returns_dict(
+    def test_returns_finding(
         self, repo: FindingRepository, run_repo: RunRepository
     ) -> None:
         _seed(run_repo, repo, [{"tool": "nmap", "severity": "low"}])
         with repo._factory.connect() as conn:
             fid = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()["id"]
         result = repo.get_finding(fid)
-        assert isinstance(result, dict)
-        assert result["tool"] == "nmap"
+        assert isinstance(result, Finding)
+        assert result.tool == "nmap"
 
     def test_returns_none_for_missing(self, repo: FindingRepository) -> None:
         assert repo.get_finding(999_999) is None

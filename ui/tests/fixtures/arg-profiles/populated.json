@@ -1,0 +1,71 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "toolName": "gitleaks",
+      "name": "verbose-only",
+      "args": [
+        {
+          "name": "--verbose",
+          "type": "flag"
+        }
+      ],
+      "createdAt": "2026-05-05T01:41:47.223144+00:00",
+      "updatedAt": "2026-05-05T01:41:47.229137+00:00"
+    },
+    {
+      "id": 2,
+      "toolName": "semgrep",
+      "name": "timeout-30s",
+      "args": [
+        {
+          "name": "--timeout",
+          "value": "30",
+          "type": "string"
+        }
+      ],
+      "createdAt": "2026-05-05T01:41:53.745243+00:00",
+      "updatedAt": "2026-05-05T01:41:53.751303+00:00"
+    },
+    {
+      "id": 3,
+      "toolName": "gitleaks",
+      "name": "with-config",
+      "args": [
+        {
+          "name": "--config",
+          "path": "arg_files/3/--config",
+          "type": "file"
+        }
+      ],
+      "createdAt": "2026-05-05T01:41:58.313160+00:00",
+      "updatedAt": "2026-05-05T01:41:58.320168+00:00"
+    },
+    {
+      "id": 4,
+      "toolName": "semgrep",
+      "name": "strict-with-rules",
+      "args": [
+        {
+          "name": "--strict",
+          "type": "flag"
+        },
+        {
+          "name": "--max-target-bytes",
+          "value": "5000000",
+          "type": "string"
+        },
+        {
+          "name": "--config",
+          "path": "arg_files/4/--config",
+          "type": "file"
+        }
+      ],
+      "createdAt": "2026-05-05T01:42:04.153479+00:00",
+      "updatedAt": "2026-05-05T01:42:04.160440+00:00"
+    }
+  ],
+  "total": 4,
+  "offset": 0,
+  "limit": 50
+}

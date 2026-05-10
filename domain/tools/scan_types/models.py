@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from domain.tools.base import ToolResult
-
-if TYPE_CHECKING:
-    from core.config.manager import ConfigManager
 
 SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web"]
 
@@ -23,17 +18,6 @@ class ScanSummary:
     duration_seconds: float
     findings_ingested: int
     findings_by_tool: dict[str, int] = field(default_factory=dict)
-
-
-@dataclass
-class ScanTypeConfig:
-    project_name: str
-    base_path: str
-    config_manager: ConfigManager
-    run_id: int | None
-    auto_approve: bool = False
-    on_auto_approve: Callable[[], None] | None = field(default=None, repr=False)
-    remaining_peers: int = 0
 
 
 @dataclass

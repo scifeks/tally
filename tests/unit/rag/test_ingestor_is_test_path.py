@@ -6,8 +6,14 @@ from application.rag.ingestor import _normalize_path, is_excluded_path
 from core.config.schemas import Repository
 
 
-def _repo(name: str, path: str, test_dirs: list[str] | None = None) -> Repository:
+def _repo(
+    name: str,
+    path: str,
+    test_dirs: list[str] | None = None,
+    repo_id: int = 1,
+) -> Repository:
     return Repository.model_construct(
+        id=repo_id,
         name=name,
         path=path,
         type=["library"],
@@ -63,11 +69,11 @@ class TestIsExcludedPath:
 
     def test_unmatched_repo_gives_none_repo_name(self) -> None:
         repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
-        _, repo_name = _normalize_path("/other/tests/x.py", repos)
-        assert repo_name is None
+        _, repo_id = _normalize_path("/other/tests/x.py", repos)
+        assert repo_id is None
 
     def test_matched_repo_gives_repo_name(self) -> None:
-        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"])]
-        rel, repo_name = _normalize_path("/repos/app/tests/x.py", repos)
-        assert repo_name == "myapp"
+        repos = [_repo("myapp", "/repos/app", test_dirs=["tests"], repo_id=42)]
+        rel, repo_id = _normalize_path("/repos/app/tests/x.py", repos)
+        assert repo_id == 42
         assert is_excluded_path(rel, ["tests"]) is True

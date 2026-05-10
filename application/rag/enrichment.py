@@ -8,9 +8,8 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
-from rich.console import Console
-
-from core.llm import LLMProvider, get_llm_provider
+from application.ports.llm_provider import LLMProvider
+from application.ports.progress_reporter import NullProgressReporter, ProgressReporter
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
@@ -18,19 +17,20 @@ from domain.tools.constants import (
     SEVERITY_LEVELS,
 )
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
+from infrastructure.llm.factory import get_llm_provider
 
 from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.findings import FindingRepository
+    from application.locking.cancellation import CancellationToken
+    from application.ports.finding_repository import FindingRepositoryPort
+    from application.ports.scan_event_sink import ScanEventSink
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Legacy batch-path prompt (used when builder has no enrichment_fields).
 # Sends full document text and requests all missing fields at once.
-# ---------------------------------------------------------------------------
 
 _USER_PROMPT_TEMPLATE = (
     "You are a security finding classifier. You output only valid JSON.\n"
@@ -90,7 +90,7 @@ _SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _OWASP_FIELD_DEFINITION = (
     "- owasp_name: The OWASP Top 10 category Name that best describes this finding.\n"
     '  Return ONLY a value from the "Name" column of the tables below'
-    " — copied exactly.\n"
+    " (copied exactly).\n"
     "  Return null if you cannot confidently map this finding to any category.\n"
     "  Do not guess. Do not invent values.\n"
     "\n"
@@ -137,10 +137,8 @@ _OWASP_FIELD_DEFINITION = (
     "  | A10:2017  | Insufficient Logging and Monitoring           |\n"
 )
 
-# ---------------------------------------------------------------------------
 # Per-field path prompt (used when builder declares enrichment_fields).
 # Sends only the declared source_fields as context for a single field.
-# ---------------------------------------------------------------------------
 
 _FIELD_DEFINITIONS: dict[str, str] = {
     "risk_type": (
@@ -209,39 +207,32 @@ _FIELD_PROMPT_TEMPLATE = (
 
 
 class EnrichmentPipeline:
-    """Enriches SQLite findings with LLM-generated semantic fields.
-
-    Reads un-enriched findings from SQLite by primary key, runs LLM calls
-    concurrently, and writes enriched fields back to the same SQLite rows.
-    ChromaDB is not touched during enrichment.
-
-    When a tool handler declares ``enrichment_fields`` (a tuple of
-    ``FieldEnrichmentSpec``), the pipeline makes one focused LLM call per
-    spec using only the declared source metadata keys. When no such attribute
-    is present, the existing batch path fires: all missing fields are requested
-    in a single call over the full chunk text.
-
-    LLM calls run concurrently via ThreadPoolExecutor (Phase 2).
-    SQLite writes are serialized after all LLM calls complete (Phase 3).
-    Skips findings already marked ``enriched = 1``.
-    """
+    """Enriches findings with LLM-generated semantic fields."""
 
     def __init__(
         self,
-        finding_repo: FindingRepository,
-        console: Console | None = None,
+        finding_repo: FindingRepositoryPort,
+        reporter: ProgressReporter | None = None,
         base_path: str = ".",
         run_id: int | None = None,
         llm_provider: LLMProvider | None = None,
         max_workers: int = 4,
+        project_id: int | None = None,
+        event_sink: ScanEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> None:
+        from application.ports.scan_event_sink import NullScanEventSink
+
         self._finding_repo = finding_repo
-        self._console = console
+        self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._base_path = base_path
         self._run_id = run_id
         self._llm_provider = llm_provider  # resolved lazily on first _call_llm
         self._max_workers = max_workers
         self._had_errors: bool = False
+        self._project_id = project_id
+        self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
+        self._cancel_token = cancel_token
 
     @property
     def had_errors(self) -> bool:
@@ -273,6 +264,8 @@ class EnrichmentPipeline:
         Phase 3 (sequential): Write validated fields back to SQLite.
         Failures on individual findings are logged but do not stop the pipeline.
         """
+        from domain.pipeline import scan_events as se
+
         if not ids:
             return
 
@@ -320,6 +313,7 @@ class EnrichmentPipeline:
         # Pre-resolve LLM provider once before spawning threads
         _ = self._provider
 
+        cancelled = False
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_row = {
                 executor.submit(
@@ -330,30 +324,56 @@ class EnrichmentPipeline:
             for future in as_completed(future_to_row):
                 row = future_to_row[future]
                 completed += 1
-                if self._console:
-                    self._console.print(
-                        f"[dim]    Enriching findings... {completed}/{n_work}[/dim]",
-                        end="\r",
+                self._reporter.report(f"    Enriching findings... {completed}/{n_work}")
+                self._event_sink.emit(
+                    se.EnrichmentProgress(
+                        run_id=self._run_id or 0,
+                        project_id=self._project_id,
+                        message=f"Enriching findings... {completed}/{n_work}",
+                        enriched_count=completed,
+                        total_to_enrich=n_work,
                     )
+                )
                 try:
                     validated = future.result()
                     updates.append((row, validated))
                 except Exception as exc:
                     logger.error("Enrichment failed for id %s: %s", row.get("id"), exc)
                     self._had_errors = True
+                if self._cancel_token is not None and self._cancel_token.is_set():
+                    # Stop launching new Ollama calls and let in-flight
+                    # workers wind down. Findings collected up to this
+                    # point are persisted in Phase 3 below.
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    cancelled = True
+                    break
 
-        # Phase 3: SQLite writes (sequential — avoids write contention)
+        # Phase 3: SQLite writes (sequential to avoid write contention).
+        # Runs even on cancel so already-completed work isn't lost.
         for row, validated_fields in updates:
-            self._finding_repo.update_enrichment_fields(row["id"], validated_fields)
+            self._finding_repo.update_enrichment_fields(
+                row["id"], validated_fields, source="llm_inference"
+            )
+
+        if cancelled:
+            from application.tools.orchestrator import ScanCancelled
+
+            raise ScanCancelled
 
         enriched_count = len(updates) + auto_enriched
-        if self._console:
-            self._console.print()  # newline after \r progress
-            msg = (
-                f"[dim]    Enrichment complete."
-                f" {enriched_count}/{total} findings enriched.[/dim]"
+        self._reporter.report(
+            f"    Enrichment complete. {enriched_count}/{total} findings enriched."
+        )
+        self._event_sink.emit(
+            se.EnrichmentComplete(
+                run_id=self._run_id or 0,
+                project_id=self._project_id,
+                message=(
+                    f"Enrichment complete. {enriched_count}/{total} findings enriched."
+                ),
+                enriched_count=enriched_count,
             )
-            self._console.print(msg)
+        )
 
     def _call_llm_worker(
         self,
@@ -370,9 +390,7 @@ class EnrichmentPipeline:
         raw = self._call_llm(doc_text, metadata, legacy_fields)
         return self._validate_response(raw, legacy_fields)
 
-    # ------------------------------------------------------------------
     # Per-field enrichment path
-    # ------------------------------------------------------------------
 
     def _get_enrichment_plan(
         self,
@@ -381,11 +399,11 @@ class EnrichmentPipeline:
         """Determine the enrichment plan for a document.
 
         Returns:
-            ``(legacy_fields, None)`` — batch path: a list of field names to
+            ``(legacy_fields, None)``: batch path; a list of field names to
                 enrich together in one LLM call over the full chunk text.
-            ``(None, specs)`` — per-field path: a list of FieldEnrichmentSpec
+            ``(None, specs)``: per-field path; a list of FieldEnrichmentSpec
                 to call individually.
-            ``([], None)`` — nothing to enrich (skip entirely).
+            ``([], None)``: nothing to enrich (skip entirely).
         """
         tool = metadata.get("tool", "")
         handler = ToolHandlerFactory.load(tool)
@@ -508,9 +526,7 @@ class EnrichmentPipeline:
             return [s.field_name for s in specs]
         return legacy_fields or []
 
-    # ------------------------------------------------------------------
-    # Legacy batch path (unchanged — retained for tools without enrichment_fields)
-    # ------------------------------------------------------------------
+    # Legacy batch path: retained for tools without enrichment_fields
 
     def _call_llm(
         self, doc_text: str, metadata: dict[str, Any], fields: list[str]

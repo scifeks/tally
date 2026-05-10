@@ -4,64 +4,94 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
+from application.pipeline.fingerprint import compute_fingerprint
 from application.rag.ingestor import (
     ToolHandlerFactory,
     filter_code_rows,
 )
-from core.config.manager import ConfigManager
+from application.rag.knowledge_base import FindingKnowledgeBase
 from domain.pipeline.events import (
     EventBus,
     IngestCompleted,
     ToolCompleted,
 )
-from domain.pipeline.fingerprint import compute_fingerprint
-from infrastructure.store import make_store
+from infrastructure.embedding.factory import get_embedding_provider
+from infrastructure.llm.factory import get_llm_provider
+from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
-    from rich.console import Console
+    from pathlib import Path
 
-    from application.rag.engine import RAGEngine
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
+
 
 logger = logging.getLogger(__name__)
 
 
+def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledgeBase:
+    embedding_provider = get_embedding_provider(base_path)
+    chat_provider = get_llm_provider("chat", base_path)
+    vector_index = make_chromadb_vector_index(
+        project_name=project_name,
+        base_path=base_path,
+        embedding_provider=embedding_provider,
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
+
+
 class BaseHandler:
-    """Shared RAGEngine cache and ChromaDB persistence used by pipeline steps."""
+    """Shared FindingKnowledgeBase cache for ChromaDB persistence."""
 
-    def __init__(self) -> None:
-        self._engines: dict[str, RAGEngine] = {}
+    def __init__(self, finding_repo: FindingRepositoryPort) -> None:
+        self._finding_repo = finding_repo
+        self._knowledge_bases: dict[str, FindingKnowledgeBase] = {}
 
-    def _get_engine(self, project_name: str, base_path: str) -> RAGEngine:
+    def _get_knowledge_base(
+        self, project_name: str, base_path: str
+    ) -> FindingKnowledgeBase:
+        from pathlib import Path
+
         key = f"{project_name}:{base_path}"
-        if key not in self._engines:
-            from application.rag.engine import RAGEngine
-
-            self._engines[key] = RAGEngine(
-                project_name=project_name,
-                base_path=base_path,
+        if key not in self._knowledge_bases:
+            self._knowledge_bases[key] = _build_knowledge_base(
+                project_name, Path(base_path)
             )
-        return self._engines[key]
+        return self._knowledge_bases[key]
 
     def _persist_to_chromadb(
         self, ids: list[int], project_name: str, base_path: str
     ) -> None:
         """Write findings to ChromaDB by their SQLite IDs."""
         try:
-            engine = self._get_engine(project_name, base_path)
+            kb = self._get_knowledge_base(project_name, base_path)
         except Exception as exc:
-            logger.warning("%s: RAGEngine init failed: %s", type(self).__name__, exc)
+            logger.warning(
+                "%s: knowledge base init failed: %s",
+                type(self).__name__,
+                exc,
+            )
             return
 
         try:
-            _, finding_repo, _, _ = make_store(base_path, project_name)
-            rows = finding_repo.get_by_ids(ids)
+            rows = self._finding_repo.get_by_ids(ids)
             grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
             for row in rows:
                 grouped[(row["tool"], row["profile"])].append(row)
             for (tool, profile), group_rows in grouped.items():
-                engine.delete_findings(tool, profile)
+                kb.delete_findings(tool, profile)
                 handler = ToolHandlerFactory.load(tool)
                 if handler is None:
                     continue
@@ -69,20 +99,35 @@ class BaseHandler:
                     f"Repository: {profile} | {handler.render(row)}"
                     for row in group_rows
                 ]
-                metadatas = [{"tool": tool, "profile": profile} for _ in group_rows]
+                metadatas: list[Mapping[str, Any]] = [
+                    {"tool": tool, "profile": profile} for _ in group_rows
+                ]
                 doc_ids = [str(row["id"]) for row in group_rows]
-                engine.add_documents(texts=texts, metadatas=metadatas, ids=doc_ids)
+                kb.add_findings(
+                    documents=texts,
+                    metadatas=metadatas,
+                    ids=doc_ids,
+                )
         except Exception as exc:
-            logger.error("%s: ChromaDB write error: %s", type(self).__name__, exc)
+            logger.error(
+                "%s: ChromaDB write error: %s",
+                type(self).__name__,
+                exc,
+            )
 
 
 class IngestHandler(BaseHandler):
     """Handles ToolCompleted: normalizes findings to SQLite, emits IngestCompleted."""
 
-    def __init__(self, bus: EventBus, console: Console | None = None) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        bus: EventBus,
+        finding_repo: FindingRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
+    ) -> None:
+        super().__init__(finding_repo=finding_repo)
         self._bus = bus
-        self._console = console
+        self._repo_repo = repo_repo
 
     def handle(self, event: ToolCompleted) -> None:
         result = event.result
@@ -122,29 +167,28 @@ class IngestHandler(BaseHandler):
 
             if handler.domain == "code":
                 if handler.segment in ("sca", "web"):
-                    # SCA and web-segment code tools (e.g. Noir) have no file
-                    # path to normalise; set repo directly from execution context.
                     if event.repo:
                         for row in rows:
                             row.setdefault("repo", event.repo)
                 else:
                     try:
-                        repos = ConfigManager(event.base_path).load_repositories(
-                            event.project_name
-                        )
+                        active = self._repo_repo.list_active()
                     except Exception:
-                        repos = None
-                    rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
+                        active = None
+                    rows = filter_code_rows(
+                        rows,
+                        active,
+                        event.repo,
+                        result.tool_name,
+                    )
             else:
-                # web/network tools: set repo from execution context
                 if event.repo:
                     for row in rows:
                         row.setdefault("repo", event.repo)
 
-            _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-            finding_repo.insert_findings(event.run_id or 0, rows)
+            self._finding_repo.insert_findings(event.run_id or 0, rows)
             fingerprints = [compute_fingerprint(row) for row in rows]
-            sqlite_ids = finding_repo.get_ids_by_fingerprints(
+            sqlite_ids = self._finding_repo.get_ids_by_fingerprints(
                 fingerprints, run_id=event.run_id or 0
             )
         except Exception as exc:

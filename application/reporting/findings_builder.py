@@ -1,40 +1,21 @@
-"""Segment 5 HTML builders — finding tables and cards for the report."""
+"""Build HTML fragments for finding tables and cards in the report."""
 
 from __future__ import annotations
 
 import html
-import json
 import logging
 from collections import defaultdict
 from typing import Any
 
+from domain.findings.severity import Severity
+
 logger = logging.getLogger(__name__)
-
-_SEVERITY_ORDER: dict[str, int] = {
-    "critical": 0,
-    "high": 1,
-    "medium": 2,
-    "low": 3,
-    "informational": 4,
-}
-
-
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_meta(finding: dict[str, Any]) -> dict[str, Any]:
-    """Parse the meta JSON blob; return empty dict on failure."""
+    """Return the meta dict; defaults to empty when missing or malformed."""
     meta = finding.get("meta")
-    if isinstance(meta, dict):
-        return meta
-    if isinstance(meta, str):
-        try:
-            return json.loads(meta)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {}
+    return meta if isinstance(meta, dict) else {}
 
 
 def _get_title(finding: dict[str, Any]) -> str:
@@ -48,8 +29,8 @@ def _get_remediation(finding: dict[str, Any]) -> str:
     """Return remediation text (HTML-escaped).
 
     Resolution order:
-      1. meta.triage.remediation  (most authoritative — set by triage pipeline)
-      2. meta.remediation         (e.g. ZAP's 'solution' field)
+      1. meta.triage.remediation (set by triage pipeline, most authoritative)
+      2. meta.remediation (e.g. ZAP's 'solution' field)
       3. Fallback string
     """
     meta = _parse_meta(finding)
@@ -69,7 +50,7 @@ def _get_owasp_name(finding: dict[str, Any]) -> str:
 
     Resolution order:
       1. meta.owasp_name
-      2. First CWE from the cwe column (JSON array string)
+      2. First CWE from the cwe list
       3. rule_id column
       4. "Unclassified" (logs a warning)
     """
@@ -78,14 +59,9 @@ def _get_owasp_name(finding: dict[str, Any]) -> str:
     if owasp:
         return html.escape(str(owasp))
 
-    cwe_raw = finding.get("cwe")
-    if cwe_raw:
-        try:
-            cwe_list = json.loads(cwe_raw) if isinstance(cwe_raw, str) else cwe_raw
-            if cwe_list:
-                return html.escape(str(cwe_list[0]))
-        except (json.JSONDecodeError, TypeError, IndexError):
-            pass
+    cwe_list = finding.get("cwe")
+    if isinstance(cwe_list, list) and cwe_list:
+        return html.escape(str(cwe_list[0]))
 
     rule_id = finding.get("rule_id")
     if rule_id:
@@ -113,7 +89,10 @@ def _badge(css_class: str, value: str) -> str:
 
 def _severity_key(finding: dict[str, Any]) -> int:
     """Numeric sort key for severity (lower = more severe)."""
-    return _SEVERITY_ORDER.get((finding.get("severity") or "").lower(), 99)
+    try:
+        return Severity.from_label((finding.get("severity") or "").lower()).rank
+    except ValueError:
+        return 99
 
 
 def _line_number(meta: dict[str, Any]) -> str | None:
@@ -124,12 +103,12 @@ def _line_number(meta: dict[str, Any]) -> str | None:
 def _affected_location(finding: dict[str, Any], meta: dict[str, Any]) -> str:
     """Build the affected location string for a code finding card.
 
-    Keyed on the ``segment`` column — no tool-name checks.
+    Keyed on the ``segment`` column (no tool-name checks).
 
     Segments:
-      ``sca``              → package name, version, ecosystem
-      ``api``              → HTTP method + URL
-      ``sast``, ``secrets`` → file path + line number
+      ``sca``: package name, version, ecosystem
+      ``api``: HTTP method + URL
+      ``sast``, ``secrets``: file path + line number
     """
     segment = (finding.get("segment") or "").lower()
 
@@ -160,11 +139,6 @@ def _affected_location(finding: dict[str, Any], meta: dict[str, Any]) -> str:
     return "(location unavailable)"
 
 
-# ---------------------------------------------------------------------------
-# FindingsBuilder
-# ---------------------------------------------------------------------------
-
-
 class FindingsBuilder:
     """Builds HTML fragments for all Segment 5 report sections.
 
@@ -183,9 +157,7 @@ class FindingsBuilder:
         """Return the column header label for the finding ID column."""
         return f"{self._prefix}-ID" if self._prefix else "ID"
 
-    # ------------------------------------------------------------------ #
-    # 6.2 — Master Findings Table
-    # ------------------------------------------------------------------ #
+    # Master Findings Table
 
     def build_master_table(
         self,
@@ -219,7 +191,7 @@ class FindingsBuilder:
             for f in code_findings:
                 recurring = (f.get("seen_count") or 0) > 1
                 row_class = ' class="recurring-row"' if recurring else ""
-                tal_id = html.escape(str(f.get("tal_id") or "—"))
+                tal_id = html.escape(str(f.get("tal_id") or "-"))
                 title = _get_title(f)
                 sev = (f.get("severity") or "").lower()
                 status = (f.get("status") or "active").lower()
@@ -237,9 +209,7 @@ class FindingsBuilder:
 
         return "\n".join(parts)
 
-    # ------------------------------------------------------------------ #
-    # 6.3 — Code Finding Cards
-    # ------------------------------------------------------------------ #
+    # Code Finding Cards
 
     @staticmethod
     def build_code_cards(code_findings: list[dict[str, Any]]) -> str:
@@ -267,7 +237,7 @@ class FindingsBuilder:
             repo_findings = sorted(groups[repo_name], key=_severity_key)
             for f in repo_findings:
                 meta = _parse_meta(f)
-                tal_id = html.escape(str(f.get("tal_id") or "—"))
+                tal_id = html.escape(str(f.get("tal_id") or "-"))
                 title = _get_title(f)
                 sev = (f.get("severity") or "").lower()
                 conf = (f.get("confidence") or "").lower()
@@ -297,9 +267,7 @@ class FindingsBuilder:
 
         return "\n".join(parts)
 
-    # ------------------------------------------------------------------ #
-    # 6.4 — Secrets Cards
-    # ------------------------------------------------------------------ #
+    # Secrets Cards
 
     @staticmethod
     def build_secrets_cards(secrets_findings: list[dict[str, Any]]) -> str:
@@ -360,9 +328,7 @@ class FindingsBuilder:
 
         return "\n".join(parts)
 
-    # ------------------------------------------------------------------ #
-    # Appendix — Comprehensive Code Findings
-    # ------------------------------------------------------------------ #
+    # Comprehensive Code Findings (Appendix)
 
     def build_comprehensive_code_table(
         self, code_findings: list[dict[str, Any]]
@@ -399,14 +365,14 @@ class FindingsBuilder:
         ]
         for f in sorted_findings:
             meta = _parse_meta(f)
-            tal_id = html.escape(str(f.get("tal_id") or "—"))
+            tal_id = html.escape(str(f.get("tal_id") or "-"))
             owasp = _get_owasp_name(f)
             sev = (f.get("severity") or "").lower()
             conf = (f.get("confidence") or "").lower()
             repo = html.escape(str(f.get("repo") or "Unattributed"))
-            file_path = html.escape(str(f.get("file") or "—"))
+            file_path = html.escape(str(f.get("file") or "-"))
             line = _line_number(meta)
-            line_str = html.escape(str(line)) if line else "—"
+            line_str = html.escape(str(line)) if line else "-"
 
             parts.append(
                 f"<tr>"
@@ -422,9 +388,7 @@ class FindingsBuilder:
         parts.append("</tbody></table>")
         return "\n".join(parts)
 
-    # ------------------------------------------------------------------ #
     # Internal helpers
-    # ------------------------------------------------------------------ #
 
 
 __all__ = ["FindingsBuilder"]

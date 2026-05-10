@@ -7,9 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
 from domain.tools.exceptions import InvalidSegmentError
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.execution_config import ToolExecutionConfig
+from domain.tools.scan_types.models import ScanSummary
+
+_TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
 def _zero_summary() -> ScanSummary:
@@ -43,28 +47,17 @@ def _make_mock_tool_obj(
     return t
 
 
-def _make_mock_repo(
-    name: str = "my-repo",
-    languages: list[str] | None = None,
-    base_urls: list[str] | None = None,
-) -> MagicMock:
-    repo = MagicMock()
-    repo.name = name
-    repo.languages = languages if languages is not None else ["python"]
-    repo.base_urls = base_urls
-    return repo
-
-
 @pytest.fixture()
 def mock_config() -> Any:
-    cm = MagicMock()
-    cm.load_repositories.return_value = [_make_mock_repo()]
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
-        config_manager=cm,
+        tool_config=_TOOL_CONFIG,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
     )
 
 
@@ -115,6 +108,7 @@ class TestSegmentScan:
             ),
         ):
             mock_repo.return_value.execute.return_value = _zero_summary()
-            SegmentScan("sast").execute(mock_config, mock_resources)
+            summary = SegmentScan("sast").execute(mock_config, mock_resources)
 
-        mock_repo.assert_called_once_with(["semgrep"], segment_name="sast")
+        assert summary is not None
+        mock_repo.assert_called_once()

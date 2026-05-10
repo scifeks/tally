@@ -20,10 +20,6 @@ from infrastructure.store.repositories.runs import RunRepository
 
 pytestmark = pytest.mark.integration
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 _PROJECT_NAME = "test-proj"
 
 
@@ -40,6 +36,7 @@ def _make_kc(
     repl = MagicMock()
     repl.active_project = _PROJECT_NAME
     repl.console = MagicMock()
+    repl.tool_registry.list_tool_names.return_value = ["semgrep", "gitleaks", "zap"]
     kc = KnowledgeCommands(repl)
     kc._get_finding_repo = MagicMock(return_value=finding_repo)
     return repl, kc
@@ -56,9 +53,7 @@ def _printed(repl: MagicMock) -> list[str]:
     return [str(c) for c in repl.console.print.call_args_list]
 
 
-# ---------------------------------------------------------------------------
 # Seed data
-# ---------------------------------------------------------------------------
 
 _SEMGREP_WITH_META = [
     {
@@ -70,7 +65,7 @@ _SEMGREP_WITH_META = [
         "rule_id": "python.django.security.injection.sql-injection",
         "file_path": "src/api/users.py",
         "line_start": 42,
-        "category": "security",  # goes into meta blob — used for N/A rendering test
+        "category": "security",  # goes into meta blob; used for N/A rendering test
         "cwe": "CWE-89",
     },
     {
@@ -82,7 +77,7 @@ _SEMGREP_WITH_META = [
         "rule_id": "python.flask.security.audit.hardcoded-password",
         "file_path": "src/views/admin.py",
         "line_start": 15,
-        # no category — row intentionally missing this field to test N/A rendering
+        # no category; row intentionally missing this field to test N/A rendering
     },
 ]
 
@@ -92,9 +87,7 @@ def _seed_semgrep(run_repo: RunRepository, finding_repo: FindingRepository) -> N
     finding_repo.insert_findings(run_id, _SEMGREP_WITH_META)
 
 
-# ---------------------------------------------------------------------------
 # --show-fields tests
-# ---------------------------------------------------------------------------
 
 
 def test_show_fields_with_tool_and_findings(tmp_path: Path) -> None:
@@ -150,9 +143,7 @@ def test_show_fields_tool_with_no_findings(tmp_path: Path) -> None:
     assert any("No findings found" in p for p in printed)
 
 
-# ---------------------------------------------------------------------------
 # --fields tests
-# ---------------------------------------------------------------------------
 
 
 def _get_table(repl: MagicMock) -> Table | None:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -64,10 +63,10 @@ class TestUpdateAnalystFields:
         assert result is True
         row = repo.get_finding(fid)
         assert row is not None
-        meta = json.loads(row["meta"])
+        meta = row.meta
         assert meta["risk_type"] == "xss"
         assert meta["remediation"] == "escape output"
-        assert row["triaged_by"] == "analyst_web"
+        assert row.triaged_by == "analyst_web"
 
     def test_update_analyst_fields_updates_named_columns(
         self,
@@ -83,8 +82,8 @@ class TestUpdateAnalystFields:
         assert result is True
         row = repo.get_finding(fid)
         assert row is not None
-        assert row["severity"] == "critical"
-        assert row["triaged_by"] == "analyst_web"
+        assert row.severity == "critical"
+        assert row.triaged_by == "analyst_web"
 
     def test_update_analyst_fields_returns_false_on_unknown_finding(
         self,
@@ -124,7 +123,7 @@ class TestUpdateAnalystFields:
 
         row = repo.get_finding(fid)
         assert row is not None
-        meta = json.loads(row["meta"])
+        meta = row.meta
         assert meta["risk_type"] == "sqli"
         assert meta.get("extra_field") == "keep_me"
 
@@ -141,7 +140,7 @@ class TestUpdateAnalystFields:
 
         row = repo.get_finding(fid)
         assert row is not None
-        assert row["triaged_at"] is not None
+        assert row.triaged_at is not None
 
     def test_update_analyst_fields_handles_all_meta_keys(
         self,
@@ -166,7 +165,7 @@ class TestUpdateAnalystFields:
 
         row = repo.get_finding(fid)
         assert row is not None
-        meta = json.loads(row["meta"])
+        meta = row.meta
         assert meta["remediation"] == "sanitise input"
         assert meta["risk_type"] == "injection"
         assert meta["owasp_name"] == "A03:2021"
@@ -190,7 +189,7 @@ class TestUpdateAnalystFields:
 
         row = repo.get_finding(fid)
         assert row is not None
-        assert row["severity"] == "high"
-        meta = json.loads(row["meta"])
+        assert row.severity == "high"
+        meta = row.meta
         assert meta["risk_type"] == "rce"
-        assert row["triaged_by"] == "analyst_web"
+        assert row.triaged_by == "analyst_web"

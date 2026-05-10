@@ -1,4 +1,4 @@
-"""Noir support detection — decides whether Noir should run for a repo."""
+"""Decide whether Noir should run for a repository."""
 
 from __future__ import annotations
 

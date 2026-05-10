@@ -23,9 +23,7 @@ def _make_tc(
     return ToolCommands(repl, MagicMock()), repl
 
 
-# ---------------------------------------------------------------------------
 # _parse_project_flag
-# ---------------------------------------------------------------------------
 
 
 def test_parse_project_flag_extracts_name() -> None:
@@ -52,12 +50,7 @@ def test_parse_project_flag_bare_with_active_project() -> None:
 
 
 def test_parse_project_flag_bare_without_active_project() -> None:
-    """Bare --project with no active project returns empty string (not None).
-
-    The empty string is passed to _validate_project_arg, which surfaces the
-    'No active project' error rather than silently falling through to the
-    global command path.
-    """
+    """Bare --project with no active project returns empty string."""
     tc, _repl = _make_tc(active_project=None)
     project, remaining = tc._parse_project_flag(["add", "--project"])
     assert project == ""
@@ -67,17 +60,18 @@ def test_parse_project_flag_bare_without_active_project() -> None:
 def test_tool_add_bare_project_flag_routes_to_project_add(
     tmp_path: Path,
 ) -> None:
-    """tool add --project (without =name) must route to the project-level add.
+    """Bare --project flag routes to project-level add."""
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
 
-    Regression: previously bare --project was not recognised, so the command
-    fell through to the global _cmd_tool_add, which reported 'All available
-    tools are already configured' even though no project-level overrides
-    existed.
-    """
     project_dir = tmp_path / "projects" / "DVPA" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    # No project-level commands.json — zero project overrides
+    # Seed DB with no project-level overrides
+    paths = ProjectPaths.from_canonical(str(tmp_path), "DVPA")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "commands.json").write_text("{}")
@@ -111,9 +105,7 @@ def test_tool_add_bare_project_flag_no_active_project(tmp_path: Path) -> None:
     assert any("No active project" in c for c in printed_calls)
 
 
-# ---------------------------------------------------------------------------
 # _validate_project_arg
-# ---------------------------------------------------------------------------
 
 
 def test_validate_project_no_active_project() -> None:
@@ -141,15 +133,20 @@ def test_validate_project_found(tmp_path: Path) -> None:
     assert result is True
 
 
-# ---------------------------------------------------------------------------
 # tool list --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_list_project_no_config(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+
     tc, repl = _make_tc(base_path=str(tmp_path))
     tc._cmd_tool_list_project("myproject")
     printed = repl.console.print.call_args[0][0]
@@ -157,40 +154,60 @@ def test_tool_list_project_no_config(tmp_path: Path) -> None:
 
 
 def test_tool_list_project_with_config(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text(
-        json.dumps(
-            {
-                "nmap": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/usr/bin/nmap",
-                }
-            }
-        )
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo = ToolOverridesRepository(factory)
+    repo.insert(
+        tool_name="nmap",
+        args_mode="stock",
+        type="repo",
+        location="local",
+        path="/usr/bin/nmap",
     )
+
     tc, repl = _make_tc(base_path=str(tmp_path))
     tc._cmd_tool_list_project("myproject")
-    # Table object is passed to print — just verify print was called
+    # Table is passed to console.print
     assert repl.console.print.called
 
 
-# ---------------------------------------------------------------------------
 # tool add --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_add_project_duplicate_in_project(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text(
-        json.dumps(
-            {"nmap": {"type": "repo", "location": "local", "path": "/usr/bin/nmap"}}
-        )
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo = ToolOverridesRepository(factory)
+    repo.insert(
+        tool_name="nmap",
+        args_mode="stock",
+        type="repo",
+        location="local",
+        path="/usr/bin/nmap",
     )
+
     (tmp_path / "config").mkdir(parents=True, exist_ok=True)
     (tmp_path / "config" / "commands.json").write_text("{}")
 
@@ -207,10 +224,17 @@ def test_tool_add_project_duplicate_in_project(tmp_path: Path) -> None:
 
 
 def test_tool_add_project_warns_global_duplicate(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text("{}")
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+
     (tmp_path / "config").mkdir(parents=True, exist_ok=True)
     (tmp_path / "config" / "commands.json").write_text(
         json.dumps(
@@ -232,10 +256,20 @@ def test_tool_add_project_warns_global_duplicate(tmp_path: Path) -> None:
 
 
 def test_tool_add_project_saves_entry(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text("{}")
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+
     (tmp_path / "config").mkdir(parents=True, exist_ok=True)
     (tmp_path / "config" / "commands.json").write_text("{}")
 
@@ -252,21 +286,26 @@ def test_tool_add_project_saves_entry(tmp_path: Path) -> None:
     ):
         tc._cmd_tool_add_project("myproject")
 
-    saved = json.loads((project_dir / "commands.json").read_text())
-    assert "nmap" in saved
-    assert saved["nmap"]["path"] == "/usr/bin/nmap"
+    repo = ToolOverridesRepository(factory)
+    saved_override = repo.get_by_tool_name("nmap")
+    assert saved_override is not None
+    assert saved_override.path == "/usr/bin/nmap"
 
 
-# ---------------------------------------------------------------------------
 # tool edit --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_edit_project_not_found(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text("{}")
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
 
     tc, repl = _make_tc(base_path=str(tmp_path))
     tc._cmd_tool_edit_project("nmap", "myproject")
@@ -276,11 +315,27 @@ def test_tool_edit_project_not_found(tmp_path: Path) -> None:
 
 
 def test_tool_edit_project_saves_entry(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    existing = {"type": "repo", "location": "local", "path": "/old/nmap"}
-    (project_dir / "commands.json").write_text(json.dumps({"nmap": existing}))
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo = ToolOverridesRepository(factory)
+    repo.insert(
+        tool_name="nmap",
+        args_mode="stock",
+        type="repo",
+        location="local",
+        path="/old/nmap",
+    )
 
     tc, _repl = _make_tc(base_path=str(tmp_path))
     updated = {"type": "repo", "location": "local", "path": "/new/nmap"}
@@ -291,20 +346,25 @@ def test_tool_edit_project_saves_entry(tmp_path: Path) -> None:
     ):
         tc._cmd_tool_edit_project("nmap", "myproject")
 
-    saved = json.loads((project_dir / "commands.json").read_text())
-    assert saved["nmap"]["path"] == "/new/nmap"
+    saved_override = repo.get_by_tool_name("nmap")
+    assert saved_override is not None
+    assert saved_override.path == "/new/nmap"
 
 
-# ---------------------------------------------------------------------------
 # tool remove --project=<name>
-# ---------------------------------------------------------------------------
 
 
 def test_tool_remove_project_not_found(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text("{}")
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
 
     tc, repl = _make_tc(base_path=str(tmp_path))
     tc._cmd_tool_remove_project("nmap", "myproject")
@@ -314,44 +374,79 @@ def test_tool_remove_project_not_found(tmp_path: Path) -> None:
 
 
 def test_tool_remove_project_cancelled(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    existing = {"type": "repo", "location": "local", "path": "/usr/bin/nmap"}
-    (project_dir / "commands.json").write_text(json.dumps({"nmap": existing}))
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo = ToolOverridesRepository(factory)
+    repo.insert(
+        tool_name="nmap",
+        args_mode="stock",
+        type="repo",
+        location="local",
+        path="/usr/bin/nmap",
+    )
 
     tc, repl = _make_tc(base_path=str(tmp_path))
     with patch("builtins.input", return_value="n"):
         tc._cmd_tool_remove_project("nmap", "myproject")
 
-    saved = json.loads((project_dir / "commands.json").read_text())
-    assert "nmap" in saved
+    saved_override = repo.get_by_tool_name("nmap")
+    assert saved_override is not None
     printed_calls = [str(c) for c in repl.console.print.call_args_list]
     assert any("Cancelled" in c for c in printed_calls)
 
 
 def test_tool_remove_project_confirmed(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    existing = {"type": "repo", "location": "local", "path": "/usr/bin/nmap"}
-    (project_dir / "commands.json").write_text(json.dumps({"nmap": existing}))
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo = ToolOverridesRepository(factory)
+    repo.insert(
+        tool_name="nmap",
+        args_mode="stock",
+        type="repo",
+        location="local",
+        path="/usr/bin/nmap",
+    )
 
     tc, _repl = _make_tc(base_path=str(tmp_path))
     with patch("builtins.input", return_value="y"):
         tc._cmd_tool_remove_project("nmap", "myproject")
 
-    saved = json.loads((project_dir / "commands.json").read_text())
-    assert "nmap" not in saved
+    saved_override = repo.get_by_tool_name("nmap")
+    assert saved_override is None
 
 
-# ---------------------------------------------------------------------------
-# discover_tools — project override
-# ---------------------------------------------------------------------------
+# discover_tools project override
 
 
 def test_discover_tools_project_override(tmp_path: Path) -> None:
-    from application.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import ToolRegistry, discover_tools
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.tool_overrides import (
+        ToolOverridesRepository,
+    )
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -369,30 +464,27 @@ def test_discover_tools_project_override(tmp_path: Path) -> None:
 
     project_config = tmp_path / "projects" / "proj" / "config"
     project_config.mkdir(parents=True)
-    (project_config / "commands.json").write_text(
-        json.dumps(
-            {
-                "gitleaks": {
-                    "type": "repo",
-                    "location": "local",
-                    "path": "/custom/gitleaks",
-                }
-            }
-        )
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "proj")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo = ToolOverridesRepository(factory)
+    repo.insert(
+        tool_name="gitleaks",
+        args_mode="stock",
+        type="repo",
+        location="local",
+        path="/custom/gitleaks",
     )
 
-    try:
-        discover_tools(str(tmp_path), project_name="proj")
-        config = tool_registry.get_tool_config("gitleaks")
-        assert config is not None
-        assert config.path == "/custom/gitleaks"
-    finally:
-        discover_tools()
+    registry = ToolRegistry()
+    discover_tools(registry, str(tmp_path), project_name="proj", overrides_repo=repo)
+    config = registry.get_tool_config("gitleaks")
+    assert config is not None
+    assert config.path == "/custom/gitleaks"
 
 
-# ---------------------------------------------------------------------------
 # _get_wrapper_availability path fix
-# ---------------------------------------------------------------------------
 
 
 def test_tool_add_global_shows_unconfigured_wrapper(tmp_path: Path) -> None:
@@ -417,10 +509,17 @@ def test_tool_add_global_shows_unconfigured_wrapper(tmp_path: Path) -> None:
 
 
 def test_tool_add_project_shows_unconfigured_wrapper(tmp_path: Path) -> None:
+    from core.project_paths import ProjectPaths
+    from infrastructure.store.connection import ConnectionFactory
+
     project_dir = tmp_path / "projects" / "myproject" / "config"
     project_dir.mkdir(parents=True)
     (project_dir / "project.json").write_text("{}")
-    (project_dir / "commands.json").write_text("{}")
+
+    paths = ProjectPaths.from_canonical(str(tmp_path), "myproject")
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "commands.json").write_text("{}")
@@ -443,7 +542,7 @@ def test_tool_add_project_shows_unconfigured_wrapper(tmp_path: Path) -> None:
 
 
 def test_discover_tools_no_project(tmp_path: Path) -> None:
-    from application.tools.registry import discover_tools, tool_registry
+    from application.tools.registry import ToolRegistry, discover_tools
 
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -459,10 +558,8 @@ def test_discover_tools_no_project(tmp_path: Path) -> None:
         )
     )
 
-    try:
-        discover_tools(str(tmp_path))
-        config = tool_registry.get_tool_config("gitleaks")
-        assert config is not None
-        assert config.path == "/usr/bin/gitleaks"
-    finally:
-        discover_tools()
+    registry = ToolRegistry()
+    discover_tools(registry, str(tmp_path))
+    config = registry.get_tool_config("gitleaks")
+    assert config is not None
+    assert config.path == "/usr/bin/gitleaks"

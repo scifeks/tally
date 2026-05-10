@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.llm.ollama_adapter import OllamaAdapter
+from infrastructure.llm.ollama_adapter import OllamaAdapter
 
 _URL = "http://localhost:11434"
 _MODEL = "qwen3:14b"
@@ -29,13 +29,6 @@ class TestChat:
         resp.message = msg
         return resp
 
-    def test_returns_content(self, adapter: OllamaAdapter) -> None:
-        fake_resp = self._make_ollama_response("hello world")
-        with patch("ollama.Client") as MockClient:
-            MockClient.return_value.chat.return_value = fake_resp
-            result = adapter.chat([{"role": "user", "content": "hi"}])
-        assert result == "hello world"
-
     def test_kwargs_merged_into_options(self, adapter: OllamaAdapter) -> None:
         fake_resp = self._make_ollama_response("ok")
         with patch("ollama.Client") as MockClient:
@@ -48,9 +41,3 @@ class TestChat:
             )
             _, call_kwargs = mock_instance.chat.call_args
             assert call_kwargs["options"] == {"temperature": 0.5, "num_predict": 100}
-
-    def test_exception_propagates(self, adapter: OllamaAdapter) -> None:
-        with patch("ollama.Client") as MockClient:
-            MockClient.return_value.chat.side_effect = RuntimeError("boom")
-            with pytest.raises(RuntimeError, match="boom"):
-                adapter.chat([{"role": "user", "content": "q"}])

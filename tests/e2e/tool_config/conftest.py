@@ -14,7 +14,7 @@ from tests.e2e.project_lifecycle.conftest import create_project
 # Minimal valid local CommandEntry for seeding commands.json
 _LOCAL = {"type": "repo", "location": "local", "path": "/fake/tool"}
 
-# All tool names derived from wrappers/local/ ∪ wrappers/docker/
+# All tool names derived from wrappers/local/ and wrappers/docker/
 ALL_TOOL_NAMES: list[str] = sorted(
     [
         "composer-audit",

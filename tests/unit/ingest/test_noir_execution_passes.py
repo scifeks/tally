@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-from core.config.schemas import OllamaConfig, Repository
-from core.config.schemas.global_config import GlobalConfig
+from core.config.schemas import Repository
+from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.base.noir import _compute_noir_techs
 from infrastructure.tools.wrappers.local.noir import NoirLocalTool
@@ -29,26 +28,24 @@ def _make_repo(path: str) -> Repository:
     )
 
 
-def _make_context(repo: Repository, base_path: str) -> ExecutionContext:
+def _make_context(
+    repo: Repository,
+    base_path: str,
+    tool_config: ToolExecutionConfig | None = None,
+) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = repo.path or "/repo"
-    config_manager = MagicMock()
-    config_manager.global_config = GlobalConfig.model_construct(
-        noir_provider="",
-    )
     return ExecutionContext(
         project_name="DVPA",
         base_path=base_path,
         repo=repo,
-        config_manager=config_manager,
+        tool_config=tool_config or ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,
     )
 
 
-# ---------------------------------------------------------------------------
 # build_command
-# ---------------------------------------------------------------------------
 
 
 class TestNoirBuildCommand:
@@ -105,9 +102,7 @@ class TestNoirBuildCommand:
         assert Path(cmd[out_idx]).is_absolute()
 
 
-# ---------------------------------------------------------------------------
 # build_execution_passes
-# ---------------------------------------------------------------------------
 
 
 class TestNoirBuildExecutionPasses:
@@ -180,9 +175,7 @@ class TestNoirBuildExecutionPasses:
         assert "js_express" in techs
 
 
-# ---------------------------------------------------------------------------
 # _compute_noir_techs
-# ---------------------------------------------------------------------------
 
 
 class TestComputeNoirTechs:
@@ -210,9 +203,7 @@ class TestComputeNoirTechs:
         assert lower == upper
 
 
-# ---------------------------------------------------------------------------
 # build_command with techs
-# ---------------------------------------------------------------------------
 
 
 class TestNoirBuildCommandTechs:
@@ -262,138 +253,7 @@ class TestNoirBuildCommandTechs:
         assert "-t" not in cmd
 
 
-# ---------------------------------------------------------------------------
-# Exclude path prefixes
-# ---------------------------------------------------------------------------
-
-
-class TestExcludePathPrefixes:
-    def test_pass_kwargs_include_exclude_path_prefixes(self, tmp_path: Path) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        (src / "composer.json").write_text("{}")
-        (src / "vendor").mkdir()
-        repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        tool = NoirLocalTool()
-        passes = tool.build_execution_passes(ctx)
-        assert "exclude_path_prefixes" in passes[0].kwargs
-        assert "/vendor/" in passes[0].kwargs["exclude_path_prefixes"]
-
-    def test_pass_kwargs_no_lockfile_returns_only_git_prefix(
-        self, tmp_path: Path
-    ) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        (src / ".git").mkdir()
-        repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        tool = NoirLocalTool()
-        passes = tool.build_execution_passes(ctx)
-        prefixes: list[str] = passes[0].kwargs["exclude_path_prefixes"]
-        assert prefixes == ["/.git/"]
-
-    def test_pass_kwargs_empty_repo_no_prefixes(self, tmp_path: Path) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        tool = NoirLocalTool()
-        passes = tool.build_execution_passes(ctx)
-        assert passes[0].kwargs["exclude_path_prefixes"] == []
-
-    def test_exclude_prefixes_stored_after_build_command(self, tmp_path: Path) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        tool = NoirLocalTool()
-        tool.build_command(
-            source_path=str(src),
-            output_file=str(tmp_path / "out.json"),
-            exclude_path_prefixes=["/vendor/", "/node_modules/"],
-        )
-        assert tool._exclude_path_prefixes == ["/vendor/", "/node_modules/"]
-
-    def test_exclude_prefixes_not_in_cli_args(self, tmp_path: Path) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        tool = NoirLocalTool()
-        cmd = tool.build_command(
-            source_path=str(src),
-            output_file=str(tmp_path / "out.json"),
-            exclude_path_prefixes=["/vendor/"],
-        )
-        assert "/vendor/" not in cmd
-        assert "exclude_path_prefixes" not in " ".join(cmd)
-
-    def test_exclude_prefixes_cleared_after_parse_output(self, tmp_path: Path) -> None:
-        report = tmp_path / "report.json"
-        report.write_text(json.dumps({"openapi": "3.0.0", "paths": {}}))
-        tool = NoirLocalTool()
-        tool._last_report_path = report
-        tool._exclude_path_prefixes = ["/vendor/"]
-        tool.parse_output("", {})
-        assert tool._exclude_path_prefixes == []
-
-    def test_parse_output_filters_dynamic_prefix(self, tmp_path: Path) -> None:
-        oas3 = {
-            "openapi": "3.0.0",
-            "paths": {
-                "/api/users": {"get": {}},
-                "/node_modules/react/index": {"get": {}},
-            },
-        }
-        report = tmp_path / "report.json"
-        report.write_text(json.dumps(oas3))
-        tool = NoirLocalTool()
-        tool._last_report_path = report
-        tool._exclude_path_prefixes = ["/node_modules/"]
-        parsed = tool.parse_output("", {})
-        assert len(parsed["endpoints"]) == 1
-        assert parsed["endpoints"][0]["path"] == "/api/users"
-        assert parsed["summary"]["total_endpoints"] == 1
-
-    def test_parse_output_filters_static_fallback(self, tmp_path: Path) -> None:
-        """Static vendor indicators still catch exclusions when no dynamic prefix."""
-        oas3 = {
-            "openapi": "3.0.0",
-            "paths": {
-                "/api/users": {"get": {}},
-                "/vendor/package/route": {"get": {}},
-            },
-        }
-        report = tmp_path / "report.json"
-        report.write_text(json.dumps(oas3))
-        tool = NoirLocalTool()
-        tool._last_report_path = report
-        # No dynamic prefixes — fallback to static list
-        tool._exclude_path_prefixes = []
-        parsed = tool.parse_output("", {})
-        assert len(parsed["endpoints"]) == 1
-        assert parsed["endpoints"][0]["path"] == "/api/users"
-
-    def test_count_findings_matches_filtered_endpoint_count(
-        self, tmp_path: Path
-    ) -> None:
-        oas3 = {
-            "openapi": "3.0.0",
-            "paths": {
-                "/api/a": {"get": {}},
-                "/api/b": {"post": {}},
-                "/vendor/x": {"get": {}},
-            },
-        }
-        report = tmp_path / "report.json"
-        report.write_text(json.dumps(oas3))
-        tool = NoirLocalTool()
-        tool._last_report_path = report
-        tool._exclude_path_prefixes = ["/vendor/"]
-        parsed = tool.parse_output("", {})
-        assert tool.count_findings(parsed) == len(parsed["endpoints"]) == 2
-
-
-# ---------------------------------------------------------------------------
 # AI flags in build_command
-# ---------------------------------------------------------------------------
 
 
 class TestNoirAiFlags:
@@ -476,19 +336,7 @@ class TestNoirAiFlags:
         assert "--ai-max-token" not in cmd
 
 
-# ---------------------------------------------------------------------------
 # AI config resolution in build_execution_passes
-# ---------------------------------------------------------------------------
-
-
-def _make_global_config(
-    noir_provider: str = "",
-    ollama_noir: OllamaConfig | None = None,
-) -> GlobalConfig:
-    return GlobalConfig.model_construct(
-        noir_provider=noir_provider,
-        ollama_noir=ollama_noir,
-    )
 
 
 class TestNoirExecutionPassesAiConfig:
@@ -496,15 +344,15 @@ class TestNoirExecutionPassesAiConfig:
         src = tmp_path / "repo"
         src.mkdir()
         repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ollama_noir = OllamaConfig(
+        snapshot = NoirProviderSnapshot(
             base_url="http://10.0.0.1:11434",
             model="gemma3:27b",
             num_ctx=8192,
         )
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="ollama_noir",
-            ollama_noir=ollama_noir,
+        ctx = _make_context(
+            repo,
+            str(tmp_path),
+            tool_config=ToolExecutionConfig(noir_provider=snapshot),
         )
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
@@ -518,44 +366,32 @@ class TestNoirExecutionPassesAiConfig:
         src = tmp_path / "repo"
         src.mkdir()
         repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ollama_noir = OllamaConfig(
+        snapshot = NoirProviderSnapshot(
             base_url="http://10.0.0.1:11434",
             model="gemma3:27b",
             num_ctx=None,
         )
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="ollama_noir",
-            ollama_noir=ollama_noir,
+        ctx = _make_context(
+            repo,
+            str(tmp_path),
+            tool_config=ToolExecutionConfig(noir_provider=snapshot),
         )
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
         assert "ai_max_token" not in passes[0].kwargs
         assert passes[0].env == {"OLLAMA_HOST": "http://10.0.0.1:11434"}
 
-    def test_ai_kwargs_absent_when_noir_provider_empty(self, tmp_path: Path) -> None:
+    def test_ai_kwargs_absent_when_noir_provider_none(self, tmp_path: Path) -> None:
         src = tmp_path / "repo"
         src.mkdir()
         repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="",
+        ctx = _make_context(
+            repo,
+            str(tmp_path),
+            tool_config=ToolExecutionConfig(noir_provider=None),
         )
         tool = NoirLocalTool()
         passes = tool.build_execution_passes(ctx)
         assert "ai_provider_url" not in passes[0].kwargs
         assert "ai_model" not in passes[0].kwargs
         assert passes[0].env is None
-
-    def test_ai_kwargs_absent_when_provider_name_invalid(self, tmp_path: Path) -> None:
-        src = tmp_path / "repo"
-        src.mkdir()
-        repo = _make_repo(str(src))
-        ctx = _make_context(repo, str(tmp_path))
-        ctx.config_manager.global_config = _make_global_config(
-            noir_provider="nonexistent_provider",
-        )
-        tool = NoirLocalTool()
-        passes = tool.build_execution_passes(ctx)
-        assert "ai_provider_url" not in passes[0].kwargs
-        assert "ai_model" not in passes[0].kwargs

@@ -9,22 +9,19 @@ from pathlib import Path
 import pytest
 
 from application.tools.executor import ToolExecutor
-from application.tools.registry import discover_tools, tool_registry
+from application.tools.registry import ToolRegistry, discover_tools
 from core.config import ConfigManager
 from core.config.schemas import CommandEntry
 from domain.tools.base import ToolResult
+from infrastructure.tools.runner import SubprocessRunner
 from tests.conftest import requires_gitleaks
+from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 
 pytestmark = pytest.mark.e2e
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
 
 slow = pytest.mark.slow
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_global_config(base_path: Path) -> None:
@@ -90,11 +87,15 @@ def _run_scan(
     repo_path: Path,
     scan_type: str = "dir",
 ) -> ToolResult:
-    discover_tools(str(base_path))
-    tool = tool_registry.get_tool("gitleaks")
+    registry = ToolRegistry()
+    discover_tools(registry, str(base_path))
+    tool = registry.get_tool("gitleaks")
     assert tool is not None, "gitleaks not registered after discover_tools"
     executor = ToolExecutor(
-        project_name=project_name, base_path=base_path, auto_approve=True
+        project_name=project_name,
+        base_path=base_path,
+        prompt=NoApprovalPromptAdapter(),
+        subprocess_runner=SubprocessRunner(),
     )
     return executor.execute(
         tool,
@@ -104,9 +105,7 @@ def _run_scan(
     )
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
@@ -119,13 +118,11 @@ def project_env(tmp_path: Path) -> dict:
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
-    pm.save_project(name, [])
+    pm.save_project(name)
     return {"base_path": tmp_path, "project_name": name}
 
 
-# ---------------------------------------------------------------------------
 # Scenario 3 – Gitleaks scan execution  (@requires_gitleaks @slow)
-# ---------------------------------------------------------------------------
 
 
 @requires_gitleaks

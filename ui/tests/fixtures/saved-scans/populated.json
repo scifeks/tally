@@ -1,0 +1,43 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "name": "Quick Secrets Sweep",
+      "skipEnrichment": false,
+      "repoIds": [],
+      "toolNames": [
+        "gitleaks"
+      ],
+      "argProfileIds": [],
+      "skipToolIds": [],
+      "segments": [],
+      "createdAt": "2026-05-05T01:42:28.007636+00:00",
+      "updatedAt": "2026-05-05T01:42:28.007636+00:00"
+    },
+    {
+      "id": 2,
+      "name": "Full SAST + SCA",
+      "skipEnrichment": true,
+      "repoIds": [
+        1,
+        2
+      ],
+      "toolNames": [
+        "gitleaks",
+        "osv-scanner",
+        "semgrep"
+      ],
+      "argProfileIds": [
+        3,
+        4
+      ],
+      "skipToolIds": ["xsstrike"],
+      "segments": ["sast", "sca", "secrets"],
+      "createdAt": "2026-05-05T01:42:28.039735+00:00",
+      "updatedAt": "2026-05-05T01:42:28.039735+00:00"
+    }
+  ],
+  "total": 2,
+  "offset": 0,
+  "limit": 50
+}

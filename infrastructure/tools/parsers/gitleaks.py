@@ -9,10 +9,6 @@ from domain.tools.constants import CONFIDENCE_CONFIRMED, SEVERITY_HIGH
 
 from ._shared import _first_output_file, _shared_meta
 
-# ---------------------------------------------------------------------------
-# Parse functions (called by BaseGitleaksTool.parse_output)
-# ---------------------------------------------------------------------------
-
 
 def parse_gitleaks_json(json_path: Path) -> dict[str, Any]:
     """Parse a gitleaks JSON output file into structured data."""
@@ -35,11 +31,6 @@ def parse_gitleaks_json_string(json_string: str) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         return {"error": f"JSON parse error: {exc}", "raw_output": json_string}
     return _parse_gitleaks_data(data)
-
-
-# ---------------------------------------------------------------------------
-# Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_gitleaks_data(findings: Any) -> dict[str, Any]:
@@ -153,11 +144,6 @@ def _redact_secret(secret: str) -> str:
     return secret[:4] + "****"
 
 
-# ---------------------------------------------------------------------------
-# Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
-
-
 class GitleaksHandler:
     tool_name = "gitleaks"
     domain = "code"
@@ -249,6 +235,8 @@ class GitleaksHandler:
                 row["fingerprint"] = fingerprint
             if source:
                 row["source"] = source
+            if rule_id:
+                row["title"] = rule_id
             row.update(_shared_meta(self, "secret"))
 
             rows.append(row)

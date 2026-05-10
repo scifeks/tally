@@ -1,4 +1,4 @@
-"""Katana adapter — converts Katana JSONL crawl output to OAS3.
+"""Convert Katana JSONL crawl output to OpenAPI 3.x.
 
 Actual Katana JSONL schema (verified from katana -j output):
     {
@@ -34,7 +34,7 @@ from .base import ConverterAdapter, ConverterError
 
 
 class KatanaAdapter(ConverterAdapter):
-    """Adapter for Katana JSONL files — converts to OAS3."""
+    """Convert Katana JSONL files to OAS3."""
 
     @property
     def supported_extensions(self) -> frozenset[str]:

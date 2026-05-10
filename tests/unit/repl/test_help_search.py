@@ -24,9 +24,7 @@ def _render(table: Table) -> str:
     return buf.getvalue()
 
 
-# ---------------------------------------------------------------------------
-# _build_search_help_table — no tool (full table)
-# ---------------------------------------------------------------------------
+# _build_search_help_table: no tool (full table)
 
 
 def test_help_search_full_shows_all_domains():
@@ -40,9 +38,7 @@ def test_help_search_full_does_not_show_project_management():
     assert "Project Management" not in rendered
 
 
-# ---------------------------------------------------------------------------
-# _build_search_help_table — gitleaks (code domain)
-# ---------------------------------------------------------------------------
+# _build_search_help_table: gitleaks (code domain)
 
 
 def test_help_search_gitleaks_shows_code_keys():
@@ -52,9 +48,7 @@ def test_help_search_gitleaks_shows_code_keys():
     assert "rule" in rendered
 
 
-# ---------------------------------------------------------------------------
-# _build_search_help_table — zap (web domain)
-# ---------------------------------------------------------------------------
+# _build_search_help_table: zap (web domain)
 
 
 def test_help_search_zap_shows_web_keys():
@@ -66,9 +60,7 @@ def test_help_search_zap_shows_web_keys():
     assert "alert" in rendered
 
 
-# ---------------------------------------------------------------------------
-# _cmd_help_search — unknown tool
-# ---------------------------------------------------------------------------
+# _cmd_help_search: unknown tool
 
 
 def test_cmd_help_search_unknown_tool_prints_error():

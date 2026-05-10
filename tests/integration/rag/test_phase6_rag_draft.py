@@ -1,4 +1,4 @@
-"""Phase 6 integration tests: generate_draft() injects rag_context from ChromaDB."""
+"""Integration tests: run_draft() injects rag_context from ChromaDB."""
 
 from __future__ import annotations
 
@@ -6,16 +6,35 @@ import shutil
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 from application.project import ProjectManager
-from application.rag.engine import RAGEngine
-from application.rag.query import QueryEngine
-from application.reporting.draft_runner import generate_draft
+from application.reporting.draft_orchestrator import DraftRequest, run_draft
 from application.reporting.risk_level import RiskCounts
+from domain.findings.entry import Finding
+
+
+def _seed_finding() -> Finding:
+    return Finding(
+        id=1,
+        fingerprint=None,
+        run_id=None,
+        tool=None,
+        domain=None,
+        segment=None,
+    )
+
 
 pytestmark = pytest.mark.integration
+
+
+class _AlwaysConfirm:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -37,17 +56,10 @@ def _write_global_config(base_path: Path) -> None:
     shutil.copy(real_config, config_dir / "global.json")
 
 
-def _make_rag_engine(base_path: str, project_name: str) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(project_name=project_name, base_path=base_path)
-
-
-def _make_console() -> MagicMock:
-    console = MagicMock()
-    console.status.return_value.__enter__ = MagicMock(return_value=None)
-    console.status.return_value.__exit__ = MagicMock(return_value=False)
-    return console
+def _make_mock_repo() -> MagicMock:
+    repo = MagicMock()
+    repo.get.return_value = None
+    return repo
 
 
 @pytest.fixture()
@@ -56,29 +68,14 @@ def phase6_env(tmp_path: Path) -> dict:
     project_name = "test-phase6"
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(project_name)
-    pm.save_project(project_name, [])
-
-    engine = _make_rag_engine(str(tmp_path), project_name)
-    try:
-        engine.add_documents(
-            texts=[
-                "[semgrep] Rule: python.flask.sqli | Severity: high"
-                " | Description: SQL injection via user input | CWE: CWE-89"
-            ],
-            metadatas=[{"tool": "semgrep", "profile": "default"}],
-            ids=["doc-1"],
-        )
-    finally:
-        engine.close()
+    pm.save_project(project_name)
 
     return {"base_path": str(tmp_path), "project_name": project_name}
 
 
 class TestPhase6RagDraft:
-    def test_rag_context_populated_when_chroma_has_docs(
-        self, phase6_env: dict, tmp_path: Path
-    ) -> None:
-        """generate_draft() passes non-empty rag_context when ChromaDB has docs."""
+    def test_rag_context_populated_when_chroma_has_docs(self, phase6_env: dict) -> None:
+        """run_draft() passes non-empty rag_context when ChromaDB has docs."""
         base_path = phase6_env["base_path"]
         project = phase6_env["project_name"]
         section = "executive-summary"
@@ -90,58 +87,59 @@ class TestPhase6RagDraft:
             return "draft content"
 
         mock_generator = MagicMock()
-        mock_generator.draft_path = (
-            Path(base_path)
-            / "projects"
-            / project
-            / "reports"
-            / "draft"
-            / f"{section}.md"
-        )
         mock_generator.generate.side_effect = _capture_generate
 
-        default_fn = ef.DefaultEmbeddingFunction()
         with (
             patch(
-                "application.reporting.draft_runner.RAGEngine",
-                side_effect=lambda **kw: _make_rag_engine(
-                    kw["base_path"], kw["project_name"]
-                ),
+                "application.reporting.draft_orchestrator.make_chromadb_vector_index"
             ),
+            patch("application.reporting.draft_orchestrator.get_embedding_provider"),
+            patch("application.reporting.draft_orchestrator.FindingKnowledgeBase"),
+            patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
             patch(
-                "application.reporting.draft_runner.QueryEngine",
-                side_effect=lambda engine: QueryEngine(engine),
-            ),
-            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
-            patch("application.reporting.draft_runner.make_store") as mock_store,
-            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
-            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
-            patch.object(
-                RAGEngine, "_build_embedding_function", return_value=default_fn
-            ),
+                "application.reporting.draft_orchestrator.get_llm_provider"
+            ) as mock_llm,
+            patch(
+                "application.reporting.draft_orchestrator.DraftQueryService"
+            ) as mock_qs,
+            patch(
+                "application.reporting.draft_orchestrator.SECTION_REGISTRY"
+            ) as mock_reg,
+            patch("application.reporting.draft_orchestrator.ConfigManager") as mock_cfg,
         ):
             mock_llm.return_value.is_available.return_value = True
+            mock_qe.return_value.search.return_value = [
+                {
+                    "id": "doc-1",
+                    "document": (
+                        "[semgrep] Rule: python.flask.sqli | "
+                        "Severity: high | CWE: CWE-89"
+                    ),
+                    "metadata": {"tool": "semgrep", "profile": "default"},
+                    "distance": 0.1,
+                }
+            ]
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
-            mock_store.return_value = (
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            )
-            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
 
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=project,
-                base_path=base_path,
-                console=_make_console(),
-                force=True,
+                base_path=Path(base_path),
+                section=section,
+                force_overwrite=True,
+            )
+            run_draft(
+                request,
+                prompt=_AlwaysConfirm(),
+                repo=_make_mock_repo(),
+                finding_repo=_make_mock_repo(),
+                repo_repo=_make_mock_repo(),
+                event_sink=None,
             )
 
         assert "rag_context" in captured_context
@@ -160,47 +158,49 @@ class TestPhase6RagDraft:
             return "draft content"
 
         mock_generator = MagicMock()
-        mock_generator.draft_path = (
-            Path(base_path)
-            / "projects"
-            / project
-            / "reports"
-            / "draft"
-            / f"{section}.md"
-        )
         mock_generator.generate.side_effect = _capture_generate
 
         with (
-            patch("application.reporting.draft_runner.RAGEngine"),
-            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
-            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
-            patch("application.reporting.draft_runner.make_store") as mock_store,
-            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
-            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch(
+                "application.reporting.draft_orchestrator.make_chromadb_vector_index"
+            ),
+            patch("application.reporting.draft_orchestrator.get_embedding_provider"),
+            patch("application.reporting.draft_orchestrator.FindingKnowledgeBase"),
+            patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
+            patch(
+                "application.reporting.draft_orchestrator.get_llm_provider"
+            ) as mock_llm,
+            patch(
+                "application.reporting.draft_orchestrator.DraftQueryService"
+            ) as mock_qs,
+            patch(
+                "application.reporting.draft_orchestrator.SECTION_REGISTRY"
+            ) as mock_reg,
+            patch("application.reporting.draft_orchestrator.ConfigManager") as mock_cfg,
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_qe.return_value.search.return_value = []
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
-            mock_store.return_value = (
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            )
-            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
 
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=project,
-                base_path=base_path,
-                console=_make_console(),
-                force=True,
+                base_path=Path(base_path),
+                section=section,
+                force_overwrite=True,
+            )
+            run_draft(
+                request,
+                prompt=_AlwaysConfirm(),
+                repo=_make_mock_repo(),
+                finding_repo=_make_mock_repo(),
+                repo_repo=_make_mock_repo(),
+                event_sink=None,
             )
 
         assert captured_context.get("rag_context", "") == ""
@@ -222,40 +222,49 @@ class TestPhase6RagDraft:
         )
 
         mock_generator = MagicMock()
-        mock_generator.draft_path = draft_path
         mock_generator.generate.return_value = "draft despite error"
 
         with (
-            patch("application.reporting.draft_runner.RAGEngine"),
-            patch("application.reporting.draft_runner.QueryEngine") as mock_qe,
-            patch("application.reporting.draft_runner.get_llm_provider") as mock_llm,
-            patch("application.reporting.draft_runner.make_store") as mock_store,
-            patch("application.reporting.draft_runner.DraftQueryService") as mock_qs,
-            patch("application.reporting.draft_runner.SECTION_REGISTRY") as mock_reg,
-            patch("application.reporting.draft_runner.ConfigManager") as mock_cfg,
+            patch(
+                "application.reporting.draft_orchestrator.make_chromadb_vector_index"
+            ),
+            patch("application.reporting.draft_orchestrator.get_embedding_provider"),
+            patch("application.reporting.draft_orchestrator.FindingKnowledgeBase"),
+            patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
+            patch(
+                "application.reporting.draft_orchestrator.get_llm_provider"
+            ) as mock_llm,
+            patch(
+                "application.reporting.draft_orchestrator.DraftQueryService"
+            ) as mock_qs,
+            patch(
+                "application.reporting.draft_orchestrator.SECTION_REGISTRY"
+            ) as mock_reg,
+            patch("application.reporting.draft_orchestrator.ConfigManager") as mock_cfg,
         ):
             mock_llm.return_value.is_available.return_value = True
             mock_qe.return_value.search.side_effect = RuntimeError("chroma down")
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
-            mock_store.return_value = (
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            )
-            mock_qs.return_value.get_filtered_findings.return_value = [{"id": 1}]
+            mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
             mock_cfg.return_value.load_project_config.return_value = None
 
-            generate_draft(
-                section=section,
+            request = DraftRequest(
                 project=project,
-                base_path=base_path,
-                console=_make_console(),
-                force=True,
+                base_path=Path(base_path),
+                section=section,
+                force_overwrite=True,
+            )
+            run_draft(
+                request,
+                prompt=_AlwaysConfirm(),
+                repo=_make_mock_repo(),
+                finding_repo=_make_mock_repo(),
+                repo_repo=_make_mock_repo(),
+                event_sink=None,
             )
 
         assert draft_path.exists()

@@ -117,7 +117,7 @@ class TestKatanaAdapter:
         result = KatanaAdapter().convert(f, out_dir)
         doc = json.loads(result.read_text(encoding="utf-8"))
         op = doc["paths"]["/dup"]["get"]
-        # First record wins — status 200, param 'a'
+        # First record wins; status 200, param 'a'
         assert "200" in op["responses"]
         param_names = {p["name"] for p in op["parameters"]}
         assert "a" in param_names

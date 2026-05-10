@@ -12,7 +12,6 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.reporting.charts import (  # noqa: E402
-    ChartRenderer,
     CSSChartRenderer,
     get_chart_renderer,
 )
@@ -27,16 +26,9 @@ _COUNTS = {
 
 
 class TestGetChartRenderer:
-    def test_css_returns_css_chart_renderer(self) -> None:
-        renderer = get_chart_renderer("css")
-        assert isinstance(renderer, CSSChartRenderer)
-
     def test_unknown_backend_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="Unknown chart backend"):
             get_chart_renderer("unknown_backend")
-
-    def test_renderer_is_abstract_base(self) -> None:
-        assert issubclass(CSSChartRenderer, ChartRenderer)
 
 
 class TestCSSChartRenderer:

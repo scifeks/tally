@@ -1,8 +1,4 @@
-"""Unit tests for QueryEngine.chat() context label building.
-
-Verifies that profile is included in the LLM prompt context labels
-when metadata contains a profile value.
-"""
+"""Unit tests for QueryEngine.chat() context label building."""
 
 from __future__ import annotations
 
@@ -13,12 +9,12 @@ class TestQueryChatContextLabel:
     """chat() builds context lines that include profile when present."""
 
     def _make_query_engine(self) -> object:
-        """Return a QueryEngine with mocked RAGEngine and LLMProvider."""
+        """Return a QueryEngine with a mocked FindingKnowledgeBase."""
         from application.rag.query import QueryEngine
 
-        rag_engine = MagicMock()
-        rag_engine.base_path = "/tmp/fake"
-        rag_engine.count_documents.return_value = 1
+        kb = MagicMock()
+        kb.base_path = "/tmp/fake"
+        kb.count.return_value = 1
 
         llm_provider = MagicMock()
         llm_provider.is_available.return_value = True
@@ -29,11 +25,11 @@ class TestQueryChatContextLabel:
                 "composer-audit": {}
             }
             engine = QueryEngine(
-                rag_engine=rag_engine,
+                knowledge_base=kb,
                 llm_provider=llm_provider,
             )
 
-        engine._engine = rag_engine
+        engine._kb = kb
         engine._provider = llm_provider
         return engine
 
@@ -43,6 +39,7 @@ class TestQueryChatContextLabel:
 
         search_result = [
             {
+                "id": "1",
                 "document": "Package: lodash@1.0.0",
                 "metadata": {
                     "tool": "composer-audit",
@@ -73,6 +70,7 @@ class TestQueryChatContextLabel:
 
         search_result = [
             {
+                "id": "1",
                 "document": "Package: lodash@1.0.0",
                 "metadata": {
                     "tool": "composer-audit",
@@ -105,6 +103,7 @@ class TestQueryChatContextLabel:
 
         search_result = [
             {
+                "id": "1",
                 "document": "Package: lodash@1.0.0",
                 "metadata": {
                     "tool": "composer-audit",

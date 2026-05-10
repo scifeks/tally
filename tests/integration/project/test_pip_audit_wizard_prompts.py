@@ -7,7 +7,6 @@ and correctly handles docker vs. local branching.
 
 from __future__ import annotations
 
-import datetime
 import shutil
 import sys
 from pathlib import Path
@@ -19,9 +18,12 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.project import ProjectManager  # noqa: E402
+from application.project import (  # noqa: E402
+    ProjectManager,
+    ProjectRepositoriesService,
+)
 from application.project.wizard import InteractiveProjectWizard  # noqa: E402
-from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.config.schemas import Repository  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -36,8 +38,14 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _make_pm(base_path: Path) -> ProjectManager:
+    from infrastructure.store.connection import ConnectionFactory
+
     _write_global_config(base_path)
-    return ProjectManager(base_path=str(base_path))
+
+    def schema_init(db_path):
+        ConnectionFactory(db_path).init_schema()
+
+    return ProjectManager(base_path=str(base_path), schema_initializer=schema_init)
 
 
 def _make_repo(**kwargs: object) -> Repository:
@@ -53,7 +61,7 @@ def _make_repo(**kwargs: object) -> Repository:
 
 class TestInterviewSingleRepoDependenciesFile:
     def test_python_local_repo_with_dependencies_file(self, tmp_path: Path) -> None:
-        """User provides a local dependencies file path — stored on the repo."""
+        """User provides a local dependencies file path; stored on the repo."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -69,14 +77,17 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == "requirements.txt"
 
     def test_python_local_repo_no_dependencies_file(self, tmp_path: Path) -> None:
-        """User skips the dependencies file prompt — field is empty."""
+        """User skips the dependencies file prompt; field is empty."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -92,14 +103,17 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == ""
 
     def test_python_docker_repo_with_dependencies_file(self, tmp_path: Path) -> None:
-        """User provides a container-path dependencies file — stored on the repo."""
+        """User provides a container-path dependencies file; stored on the repo."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -117,14 +131,17 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == "/app/requirements.txt"
 
     def test_python_docker_repo_no_dependencies_file(self, tmp_path: Path) -> None:
-        """Docker repo with no dependencies file — falls back to full env scan."""
+        """Docker repo with no dependencies file falls back to full env scan."""
         repo_dir = tmp_path / "repo"
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
@@ -142,9 +159,12 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == ""
 
@@ -165,9 +185,12 @@ class TestInterviewSingleRepoDependenciesFile:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.dependencies_file == ""
 
@@ -176,16 +199,14 @@ class TestEditRepositoryDependenciesFile:
     def _setup_project(self, base_path: Path, repo: Repository) -> ProjectManager:
         pm = _make_pm(base_path)
         pm.create_project_dirs("test-project")
-        pc = ProjectConfig(
-            project_name="test-project",
-            created=datetime.datetime.now().isoformat(),
-            repositories=[repo],
-        )
-        pm.config.save_project_config("test-project", pc)
+        pm.save_project("test-project")
+        row = pm.registry.resolve_by_name("test-project")
+        assert row is not None
+        ProjectRepositoriesService(pm.registry, pm.config).create(row.id, repo)
         return pm
 
     def test_edit_sets_dependencies_file(self, tmp_path: Path) -> None:
-        """User sets a dependencies file during edit — stored on the repo."""
+        """User sets a dependencies file during edit; stored on the repo."""
         repo = _make_repo(name="my-repo")
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults except dependencies_file.
@@ -200,6 +221,7 @@ class TestEditRepositoryDependenciesFile:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
@@ -213,7 +235,7 @@ class TestEditRepositoryDependenciesFile:
         repo = _make_repo(name="my-repo", dependencies_file="requirements.txt")
         pm = self._setup_project(tmp_path / "pm", repo)
         # All defaults (including dependencies_file).
-        inputs = ["", "", "", "", "", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"
@@ -230,7 +252,7 @@ class TestEditRepositoryDependenciesFile:
         # enforced. Since _prompt returns default on empty input, and default is
         # "requirements.txt", clearing requires a non-default value.
         # This test confirms that supplying "" uses the existing default unchanged.
-        inputs = ["", "", "", "", "", "", "", "", "", ""]
+        inputs = ["", "", "", "", "", "", "", "", "", "", ""]
         with patch("builtins.input", side_effect=inputs):
             updated = InteractiveProjectWizard(pm).edit_repository(
                 "test-project", "my-repo"

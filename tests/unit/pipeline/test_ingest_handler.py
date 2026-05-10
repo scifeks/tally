@@ -47,7 +47,11 @@ class TestIngestHandler:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        handler = IngestHandler(bus)
+        handler = IngestHandler(
+            bus,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+        )
         with patch(
             "application.pipeline.handlers.ToolHandlerFactory.load",
             return_value=None,
@@ -67,7 +71,11 @@ class TestIngestHandler:
         mock_handler.domain = "web"
         mock_handler.normalize.side_effect = RuntimeError("normalize boom")
 
-        handler = IngestHandler(bus)
+        handler = IngestHandler(
+            bus,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+        )
         with patch(
             "application.pipeline.handlers.ToolHandlerFactory.load",
             return_value=mock_handler,
@@ -82,7 +90,11 @@ class TestIngestHandler:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        handler = IngestHandler(bus)
+        handler = IngestHandler(
+            bus,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+        )
         failed_result = _make_tool_result(success=False)
         event = _tool_completed(result=failed_result)
         handler.handle(event)
@@ -107,21 +119,14 @@ class TestIngestHandler:
         mock_finding_repo = MagicMock()
         mock_finding_repo.get_ids_by_fingerprints.return_value = [1, 2]
 
-        handler = IngestHandler(bus)
-        with (
-            patch(
-                "application.pipeline.handlers.ToolHandlerFactory.load",
-                return_value=mock_handler,
-            ),
-            patch(
-                "application.pipeline.handlers.make_store",
-                return_value=(
-                    MagicMock(),
-                    mock_finding_repo,
-                    MagicMock(),
-                    MagicMock(),
-                ),
-            ),
+        handler = IngestHandler(
+            bus,
+            finding_repo=mock_finding_repo,
+            repo_repo=MagicMock(),
+        )
+        with patch(
+            "application.pipeline.handlers.ToolHandlerFactory.load",
+            return_value=mock_handler,
         ):
             handler.handle(_tool_completed())
 
@@ -149,20 +154,15 @@ class TestIngestHandler:
             {"tool": "semgrep", "rule_id": "r1", "file_path": "/src/app.py"}
         ]
 
-        handler = IngestHandler(bus)
+        handler = IngestHandler(
+            bus,
+            finding_repo=mock_finding_repo,
+            repo_repo=MagicMock(),
+        )
         with (
             patch(
                 "application.pipeline.handlers.ToolHandlerFactory.load",
                 return_value=mock_handler,
-            ),
-            patch(
-                "application.pipeline.handlers.make_store",
-                return_value=(
-                    MagicMock(),
-                    mock_finding_repo,
-                    MagicMock(),
-                    MagicMock(),
-                ),
             ),
             patch(
                 "application.pipeline.handlers.filter_code_rows",
@@ -190,20 +190,15 @@ class TestIngestHandler:
         mock_finding_repo = MagicMock()
         mock_finding_repo.get_ids_by_fingerprints.return_value = [42]
 
-        handler = IngestHandler(bus)
+        handler = IngestHandler(
+            bus,
+            finding_repo=mock_finding_repo,
+            repo_repo=MagicMock(),
+        )
         with (
             patch(
                 "application.pipeline.handlers.ToolHandlerFactory.load",
                 return_value=mock_handler,
-            ),
-            patch(
-                "application.pipeline.handlers.make_store",
-                return_value=(
-                    MagicMock(),
-                    mock_finding_repo,
-                    MagicMock(),
-                    MagicMock(),
-                ),
             ),
             patch(
                 "application.pipeline.handlers.filter_code_rows",
@@ -215,11 +210,8 @@ class TestIngestHandler:
         assert received[0].ids == [42]
 
     def test_code_web_segment_tool_skips_filter_code_rows(self) -> None:
-        """filter_code_rows is NOT called for code-domain web-segment tools (noir).
-
-        Noir produces URL findings, not file-path findings, so the file-path
-        normalisation step must be skipped entirely.  Instead, the repo is set
-        directly from the event's repo field.
+        """filter_code_rows is NOT called for code-domain web-segment tools
+        like noir, which produce URL findings rather than file-path findings.
         """
         bus = EventBus()
         received: list[IngestCompleted] = []
@@ -236,20 +228,15 @@ class TestIngestHandler:
         mock_finding_repo = MagicMock()
         mock_finding_repo.get_ids_by_fingerprints.return_value = [99]
 
-        handler = IngestHandler(bus)
+        handler = IngestHandler(
+            bus,
+            finding_repo=mock_finding_repo,
+            repo_repo=MagicMock(),
+        )
         with (
             patch(
                 "application.pipeline.handlers.ToolHandlerFactory.load",
                 return_value=mock_handler,
-            ),
-            patch(
-                "application.pipeline.handlers.make_store",
-                return_value=(
-                    MagicMock(),
-                    mock_finding_repo,
-                    MagicMock(),
-                    MagicMock(),
-                ),
             ),
             patch(
                 "application.pipeline.handlers.filter_code_rows",
@@ -291,21 +278,14 @@ class TestIngestHandler:
             repo="dvna",
         )
 
-        handler = IngestHandler(bus)
-        with (
-            patch(
-                "application.pipeline.handlers.ToolHandlerFactory.load",
-                return_value=mock_handler,
-            ),
-            patch(
-                "application.pipeline.handlers.make_store",
-                return_value=(
-                    MagicMock(),
-                    mock_finding_repo,
-                    MagicMock(),
-                    MagicMock(),
-                ),
-            ),
+        handler = IngestHandler(
+            bus,
+            finding_repo=mock_finding_repo,
+            repo_repo=MagicMock(),
+        )
+        with patch(
+            "application.pipeline.handlers.ToolHandlerFactory.load",
+            return_value=mock_handler,
         ):
             handler.handle(event)
 

@@ -1,4 +1,4 @@
-"""Write safety tests for PATCH /api/findings/{id}.
+"""Write safety tests for PATCH /api/v1/projects/{project_id}/findings/{id}.
 
 Verifies that locked fields cannot be overwritten via the PATCH endpoint,
 and that the meta blob is merged (not replaced) while preserving type_*
@@ -11,18 +11,16 @@ import json
 
 import pytest
 
-from tests.integration.web.conftest import AUTH
-
 pytestmark = pytest.mark.integration
 
 
 class TestLockedFields:
     async def test_url_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"url": "https://attacker.com"},
-            headers=AUTH,
+            headers=mut_headers,
         )
         assert response.status_code == 200
         with factory.connect() as conn:
@@ -32,11 +30,11 @@ class TestLockedFields:
         assert row["url"] == "https://original.com/path"
 
     async def test_tool_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"tool": "gitleaks"},
-            headers=AUTH,
+            headers=mut_headers,
         )
         assert response.status_code == 200
         with factory.connect() as conn:
@@ -46,7 +44,7 @@ class TestLockedFields:
         assert row["tool"] == "semgrep"
 
     async def test_fingerprint_not_updated_on_patch(self, app_client) -> None:
-        client, finding_id, _, factory = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT fingerprint FROM findings WHERE id = ?",
@@ -54,9 +52,9 @@ class TestLockedFields:
             ).fetchone()
         original_fp = row["fingerprint"]
         response = await client.patch(
-            f"/api/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"fingerprint": "tampered"},
-            headers=AUTH,
+            headers=mut_headers,
         )
         assert response.status_code == 200
         with factory.connect() as conn:
@@ -69,11 +67,11 @@ class TestLockedFields:
 
 class TestMetaPreservation:
     async def test_type_flags_preserved_on_meta_update(self, app_client) -> None:
-        client, finding_id, _, factory = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"meta_remediation": "new remediation"},
-            headers=AUTH,
+            headers=mut_headers,
         )
         assert response.status_code == 200
         with factory.connect() as conn:
@@ -87,11 +85,11 @@ class TestMetaPreservation:
         assert "profile" in meta
 
     async def test_meta_update_merges_not_replaces(self, app_client) -> None:
-        client, finding_id, _, factory = app_client
+        client, finding_id, _, factory, mut_headers, project_id = app_client
         response = await client.patch(
-            f"/api/findings/{finding_id}",
+            f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"meta_risk_type": "injection"},
-            headers=AUTH,
+            headers=mut_headers,
         )
         assert response.status_code == 200
         with factory.connect() as conn:
@@ -106,10 +104,10 @@ class TestMetaPreservation:
         assert meta["type_secret"] is True
 
     async def test_patch_unknown_id_returns_404(self, app_client) -> None:
-        client, _, _, _ = app_client
+        client, _, _, _, mut_headers, project_id = app_client
         response = await client.patch(
-            "/api/findings/99999",
+            f"/api/v1/projects/{project_id}/findings/99999",
             json={"severity": "low"},
-            headers=AUTH,
+            headers=mut_headers,
         )
         assert response.status_code == 404

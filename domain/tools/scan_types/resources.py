@@ -11,3 +11,4 @@ class IExecutionResources(Protocol):
     factory: Any
     event_bus: Any
     display: Any
+    event_sink: Any

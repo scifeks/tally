@@ -2,26 +2,60 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
+import struct
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
+from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
-from application.rag.engine import RAGEngine  # noqa: E402
+from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
+from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import IngestCompleted  # noqa: E402
-from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
+from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
+
+_DIM = 8
+
+
+class _DeterministicEmbedding(EmbeddingProvider):
+    def is_available(self) -> bool:
+        return True
+
+    def embed(self, text: str, **kwargs: Any) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
+
+
+def _build_test_kb(project_name: str, base_path: Path) -> FindingKnowledgeBase:
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    paths.chroma_db.mkdir(parents=True, exist_ok=True)
+    chat_provider: Any = object()
+    vector_index = ChromaDBVectorIndex(
+        chroma_path=paths.chroma_db,
+        collection_name=f"findings_{project_name}",
+        embedding_provider=_DeterministicEmbedding(),
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
+
 
 pytestmark = pytest.mark.integration
 
@@ -87,7 +121,7 @@ def project_env(tmp_path: Path) -> dict:
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
-    pm.save_project(name, [])
+    pm.save_project(name)
     run_repo, finding_repo, _, _ = make_store(str(tmp_path), name)
     run_id = run_repo.create_run({})
     return {
@@ -208,7 +242,7 @@ class TestEnrichmentPipeline:
             pipeline.enrich([seeded_env["zap_id"]])
         row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
         assert row is not None
-        assert row["enriched"] == 1
+        assert row.enriched is True
 
     def test_enriched_fields_written_to_metadata(
         self, pipeline: EnrichmentPipeline, seeded_env: dict
@@ -220,7 +254,7 @@ class TestEnrichmentPipeline:
             pipeline.enrich([seeded_env["zap_id"]])
         row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
         assert row is not None
-        meta = json.loads(row["meta"] or "{}")
+        meta = row.meta
         assert meta.get("owasp_name") == "Injection"
 
     def test_invalid_json_leaves_enriched_false(
@@ -234,7 +268,7 @@ class TestEnrichmentPipeline:
             pipeline.enrich([seeded_env["zap_id"]])
         row = seeded_env["finding_repo"].get_finding(seeded_env["zap_id"])
         assert row is not None
-        assert row["enriched"] == 0
+        assert row.enriched is False
 
     def test_pipeline_continues_after_one_failure(self, project_env: dict) -> None:
         finding_repo = project_env["finding_repo"]
@@ -279,7 +313,7 @@ class TestEnrichmentPipeline:
         enriched = [
             r
             for fid in ids
-            if (r := finding_repo.get_finding(fid)) and r["enriched"] == 1
+            if (r := finding_repo.get_finding(fid)) and r.enriched is True
         ]
         assert len(enriched) >= 1
 
@@ -380,10 +414,6 @@ class TestEnrichmentPipeline:
         fields = pipeline._get_fields_to_enrich(metadata)
         assert "confidence" in fields
 
-    # ------------------------------------------------------------------
-    # INT-4: gitleaks (should_enrich=False) still written to ChromaDB
-    # ------------------------------------------------------------------
-
     def test_enrichment_failure_still_writes_to_chroma(self, project_env: dict) -> None:
         """Gitleaks rows skipped by enrichment are still written to ChromaDB.
 
@@ -403,24 +433,21 @@ class TestEnrichmentPipeline:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        default_fn = ef.DefaultEmbeddingFunction()
-        handler = PersistOnlyStrategy()
-        with patch.object(
-            RAGEngine, "_build_embedding_function", return_value=default_fn
+        handler = PersistOnlyStrategy(finding_repo=finding_repo)
+        with patch(
+            "application.pipeline.handlers._build_knowledge_base",
+            side_effect=_build_test_kb,
         ):
             handler.handle(event)
-            engine = RAGEngine(
-                project_name=project_env["project_name"],
-                base_path=str(project_env["base_path"]),
-            )
 
-        assert engine.count_documents() == 1
-        metadatas = engine.get_all_metadatas()
-        assert metadatas[0]["tool"] == "gitleaks"
-
-    # ------------------------------------------------------------------
-    # PIPE-3: single per-field failure leaves other fields intact
-    # ------------------------------------------------------------------
+        kb = _build_test_kb(project_env["project_name"], project_env["base_path"])
+        try:
+            assert kb.count() == 1
+            results = kb.find_by_filter(filter=None, limit=10, offset=0)
+            assert results[0]["metadata"] is not None
+            assert results[0]["metadata"]["tool"] == "gitleaks"
+        finally:
+            kb.close()
 
     def test_single_field_failure_allows_other_fields_to_complete(
         self, project_env: dict
@@ -462,17 +489,13 @@ class TestEnrichmentPipeline:
 
         row = finding_repo.get_finding(ids[0])
         assert row is not None
-        meta = json.loads(row["meta"] or "{}")
+        meta = row.meta
         assert meta.get("remediation") == "fix it"
         assert meta.get("risk_type") is None
         # Per-field exceptions are caught inside _call_per_field; the future
-        # resolves successfully so had_errors stays False and enriched=1.
-        assert row["enriched"] == 1
+        # resolves successfully so had_errors stays False and enriched=True.
+        assert row.enriched is True
         assert p.had_errors is False
-
-    # ------------------------------------------------------------------
-    # PIPE-4: non-JSON LLM response does not crash the pipeline
-    # ------------------------------------------------------------------
 
     def test_generic_field_json_parse_failure_does_not_crash(
         self, project_env: dict
@@ -511,5 +534,5 @@ class TestEnrichmentPipeline:
         assert p.had_errors is False
         row = finding_repo.get_finding(ids[0])
         assert row is not None
-        # update_enrichment_fields always writes enriched=1
-        assert row["enriched"] == 1
+        # update_enrichment_fields always writes enriched=True
+        assert row.enriched is True

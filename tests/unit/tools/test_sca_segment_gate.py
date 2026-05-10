@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
-from domain.tools.scan_types.models import ScanTypeConfig
+from domain.tools.execution_config import ToolExecutionConfig
+
+_TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
 def _make_repo(
@@ -26,15 +29,17 @@ def _make_repo(
     return repo
 
 
-def _make_config(repos: list) -> ScanTypeConfig:
-    cm = MagicMock()
-    cm.load_repositories.return_value = repos
+def _make_config(repo_repo: MagicMock | None = None) -> ScanTypeConfig:
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test",
         base_path="/tmp",
-        config_manager=cm,
+        tool_config=_TOOL_CONFIG,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
+        repo_repo=repo_repo,
     )
 
 
@@ -56,9 +61,11 @@ class TestScaSegmentGate:
     def test_skips_entire_repo_when_no_manifests_found(self, tmp_path) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
-        # empty dir — no dependency manifests
+        # empty dir, no dependency manifests
         repo = _make_repo(path=str(tmp_path), languages=["python"])
-        config = _make_config([repo])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources()
 
         summary = RepoSegmentScan(
@@ -73,11 +80,13 @@ class TestScaSegmentGate:
 
         (tmp_path / "requirements.txt").write_text("requests==2.28.0\n")
         repo = _make_repo(path=str(tmp_path), languages=["python"])
-        config = _make_config([repo])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources()
 
-        # Tools won't actually run (no registry config), but we should NOT
-        # hit the SCA gate — skips come from tool not found, not from gate.
+        # Tools won't actually run (no registry config), but SCA gate should
+        # not fire; skips come from tool not found, not from the gate.
         summary = RepoSegmentScan(["pip-audit"], segment_name="sca").execute(
             config, resources
         )
@@ -88,9 +97,11 @@ class TestScaSegmentGate:
     def test_gate_not_applied_for_non_sca_segment(self, tmp_path) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
-        # empty dir — no manifests, but segment is sast so gate must not fire
+        # empty dir, no manifests, but segment is sast so gate must not fire
         repo = _make_repo(path=str(tmp_path), languages=["python"])
-        config = _make_config([repo])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources()
 
         with patch(
@@ -104,7 +115,9 @@ class TestScaSegmentGate:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
         repo = _make_repo(path=str(tmp_path), languages=["python"])
-        config = _make_config([repo])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources()
 
         with patch(
@@ -123,7 +136,9 @@ class TestScaSegmentGate:
             container_name="my-container",
             languages=["python"],
         )
-        config = _make_config([repo])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         pip_audit_mock = MagicMock()
         pip_audit_mock.language_gates = ["python"]
         pip_audit_mock.scan_segment = "sca"
@@ -155,7 +170,9 @@ class TestScaSegmentGate:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
         repo = _make_repo(path="", docker_path="", container_name="")
-        config = _make_config([repo])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources()
 
         summary = RepoSegmentScan(["pip-audit"], segment_name="sca").execute(
@@ -177,13 +194,15 @@ class TestScaSegmentGate:
         repo_a = _make_repo(name="a", path=str(dir_a), languages=["python"])
         repo_b = _make_repo(name="b", path=str(dir_b), languages=["python"])
 
-        config = _make_config([repo_a, repo_b])
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo_a, repo_b]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources()
 
         summary = RepoSegmentScan(["pip-audit"], segment_name="sca").execute(
             config, resources
         )
 
-        # repo_a: tool not registered (1 skip) — gate passed
+        # repo_a: tool not registered (1 skip), gate passed
         # repo_b: gate skip (1 skip)
         assert summary.total_tools_skipped == 2

@@ -1,113 +1,115 @@
 """Project management for tally Security Auditing REPL."""
 
+from __future__ import annotations
+
 import datetime
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from core.config import ConfigManager, ProjectConfig, Repository
+from application.project.registry_service import ProjectRegistryService
+from core.config import ConfigManager, ProjectConfig
+from core.project_paths import ProjectPaths
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ProjectManager:
     """Manages tally projects: creation, listing, switching, and repositories."""
 
-    def __init__(self, base_path: str = "."):
+    def __init__(
+        self,
+        base_path: str = ".",
+        registry: ProjectRegistryService | None = None,
+        schema_initializer: Callable[[Path], None] | None = None,
+    ):
         self.base_path = Path(base_path)
-        self.projects_dir = self.base_path / "projects"
-        self.active_file = self.projects_dir / ".active"
-        self.config = ConfigManager(base_path)
+        self.projects_dir = ProjectPaths.projects_dir(self.base_path)
+        if registry is None:
+            registry = _build_default_registry(base_path)
+        self.registry = registry
+        self.config = ConfigManager(base_path, registry=registry)
+        self._schema_initializer = schema_initializer
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def list_projects(self) -> list[str]:
-        """Return sorted list of project names found in projects/."""
-        if not self.projects_dir.exists():
-            return []
-        return sorted(
-            d.name
-            for d in self.projects_dir.iterdir()
-            if d.is_dir()
-            and not d.name.startswith(".")
-            and (d / "config" / "project.json").exists()
-        )
-
-    def get_active_project(self) -> str | None:
-        """Return the currently active project name, or None."""
-        if not self.active_file.exists():
-            return None
-        name = self.active_file.read_text().strip()
-        return name if name else None
+        """Return sorted list of active project names from the registry."""
+        return [row.name for row in self.registry.list_active()]
 
     def switch_project(self, project_name: str) -> None:
-        """Set project_name as the active project.
+        """Validate that project_name exists in the registry and is not archived.
 
-        Raises:
-            ValueError: if the project does not exist.
+        Raises ValueError if the project is unknown. Callers update their own
+        in-memory active-project state after this returns successfully. The
+        project's findings.db schema is (re)initialized so a dropped or
+        partial database comes back with every table present.
         """
-        if project_name not in self.list_projects():
+        row = self.registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' does not exist.")
         self.projects_dir.mkdir(parents=True, exist_ok=True)
-        self.active_file.write_text(project_name)
+        paths = ProjectPaths.from_registry_row(row)
+        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+        if self._schema_initializer is None:
+            from factories.persistence import init_project_schema
+
+            init_project_schema(paths.findings_db)
+        else:
+            self._schema_initializer(paths.findings_db)
 
     def get_project_info(self, project_name: str) -> ProjectConfig | None:
         """Load and return ProjectConfig for project_name."""
         return self.config.load_project_config(project_name)
 
     def delete_project(self, project_name: str) -> None:
-        """Delete a project and all its data from disk.
-
-        Raises:
-            ValueError: If the project does not exist.
-        """
-        project_dir = self.projects_dir / project_name
-        if not project_dir.exists():
+        """Delete a project and all its data from disk + registry."""
+        row = self.registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' not found.")
-        shutil.rmtree(project_dir)
-
-        # Clear .active file if it points to the deleted project
-        active_file = self.projects_dir / ".active"
-        if active_file.exists():
-            try:
-                current = active_file.read_text().strip()
-                if current == project_name:
-                    active_file.unlink()
-            except OSError:
-                pass
+        project_dir = Path(row.path)
+        if project_dir.exists():
+            shutil.rmtree(project_dir)
+        self.registry.deregister(project_name)
 
     def delete_repository(self, project_name: str, repo_name: str) -> None:
-        """Remove a repository from project_name by name.
+        """Soft-delete a repository in *project_name* by name."""
+        from application.project.repositories_service import (
+            ProjectRepositoriesService,
+        )
 
-        Raises:
-            ValueError: if the project or repository does not exist.
-        """
-        if project_name not in self.list_projects():
+        row = self.registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
             raise ValueError(f"Project '{project_name}' does not exist.")
-        repos = self.config.load_repositories(project_name)
-        new_repos = [r for r in repos if r.name != repo_name]
-        if len(new_repos) == len(repos):
+        service = ProjectRepositoriesService(self.registry, self.config)
+        project_id = row.id
+        target = next(
+            (r for r in service.list_active(project_id) if r.name == repo_name),
+            None,
+        )
+        if target is None or target.id is None:
             raise ValueError(f"Repository '{repo_name}' not found in '{project_name}'.")
-        self.config.save_repositories(project_name, new_repos)
+        service.delete(project_id, target.id)
 
-    # ------------------------------------------------------------------
     # Filesystem helpers
-    # ------------------------------------------------------------------
 
     def create_project_dirs(self, name: str) -> None:
-        project_root = self.projects_dir / name
+        """Create the standard subdirectory tree for a new project."""
+        paths = ProjectPaths(self.projects_dir / name)
         dirs = [
-            project_root / "config" / "endpoints",
-            project_root / "chroma_db",
-            project_root / "sqlite",
-            project_root / "tool_outputs" / "semgrep",
-            project_root / "tool_outputs" / "osv-scanner",
-            project_root / "tool_outputs" / "pip-audit",
-            project_root / "tool_outputs" / "npm-audit",
-            project_root / "tool_outputs" / "composer-audit",
-            project_root / "tool_outputs" / "gitleaks",
-            project_root / "tool_outputs" / "zap",
-            project_root / "sessions",
-            project_root / "endpoints" / "original",
+            paths.endpoints_config_dir,
+            paths.chroma_db,
+            paths.sqlite_dir,
+            paths.tool_output_dir("semgrep"),
+            paths.tool_output_dir("osv-scanner"),
+            paths.tool_output_dir("pip-audit"),
+            paths.tool_output_dir("npm-audit"),
+            paths.tool_output_dir("composer-audit"),
+            paths.tool_output_dir("gitleaks"),
+            paths.tool_output_dir("zap"),
+            paths.sessions_dir,
+            paths.endpoints_original_dir,
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
@@ -115,17 +117,33 @@ class ProjectManager:
     def save_project(
         self,
         name: str,
-        repositories: list[Repository],
         company_name: str = "",
         department_name: str = "",
         abbreviation: str = "",
     ) -> None:
+        """Persist project-level fields to project.json and register the project.
+
+        Per-repo data is owned by the SQLite ``repositories`` table; callers
+        that need to persist repos do so via ``ProjectRepositoriesService``.
+        """
         project_cfg = ProjectConfig(
             project_name=name,
             created=datetime.datetime.now().isoformat(),
-            repositories=repositories,
             company_name=company_name,
             department_name=department_name,
             abbreviation=abbreviation,
         )
         self.config.save_project_config(name, project_cfg)
+        self.registry.register(name, str(self.base_path))
+
+
+def _build_default_registry(
+    base_path: str,
+) -> ProjectRegistryService:
+    """Load the default registry from factories when none is provided.
+    Composition roots should provide an explicit registry, but tests
+    and other callers can rely on this fallback.
+    """
+    from factories.persistence import build_default_registry
+
+    return build_default_registry(base_path)

@@ -1,9 +1,9 @@
 """Shared base class for the Katana runtime crawler wrapper.
 
 Katana (github.com/projectdiscovery/katana) is a headless-capable web
-crawler from ProjectDiscovery.  It performs runtime URL discovery — following
+crawler from ProjectDiscovery. It performs runtime URL discovery by following
 links, extracting XHR endpoints, and optionally rendering JavaScript via a
-headless browser — and emits results as JSONL.
+headless browser, then emits results as JSONL.
 
 Role in the pipeline
 ---------------------
@@ -45,8 +45,8 @@ class BaseKatanaTool(ToolInterface):
     @property
     def description(self) -> str:
         return (
-            "ProjectDiscovery Katana — headless-capable runtime crawler for "
-            "URL and endpoint discovery; feeds into DAST tools via OAS3 output."
+            "ProjectDiscovery Katana headless crawler for runtime URL and "
+            "endpoint discovery; feeds DAST tools via OAS3 output."
         )
 
     @property

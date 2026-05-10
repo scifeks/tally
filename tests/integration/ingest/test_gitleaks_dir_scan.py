@@ -125,7 +125,7 @@ class TestGitleaksDirScan:
             )
 
     def test_no_duplicates(self, dir_parsed_data: dict) -> None:
-        """normalize() is deterministic — same input produces same count."""
+        """normalize() is deterministic; same input produces same count."""
         handler = ToolHandlerFactory.load("gitleaks")
         assert handler is not None
         result = _make_gitleaks_result(dir_parsed_data)

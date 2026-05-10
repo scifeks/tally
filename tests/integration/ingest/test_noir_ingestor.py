@@ -1,6 +1,9 @@
-"""Integration tests for NoirHandler.normalize() and render().
+"""Integration tests for ``NoirHandler``.
 
-Follows the same pattern as tests/integration/ingest/test_zap.py.
+Noir routes output into ``url_findings`` via ``UrlInventoryIngestHandler``
+instead of emitting rows into ``findings``. The handler's ``normalize`` is
+therefore a no-op, and ``render`` continues to render arbitrary URL
+metadata for any caller that pre-builds rows itself.
 """
 
 from __future__ import annotations
@@ -49,76 +52,20 @@ class TestNoirIngestor:
         assert handler is not None
         assert handler.tool_name == "noir"
 
-    def test_normalize_returns_one_row_per_endpoint(
+    def test_normalize_returns_empty_post_phase_9(
         self, fixture_parsed_data: dict
     ) -> None:
+        """Noir is URL-discovery only; ``normalize`` emits no findings."""
         handler = ToolHandlerFactory.load("noir")
         assert handler is not None
         result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        expected = fixture_parsed_data["summary"]["total_endpoints"]
-        assert len(rows) == expected
-
-    def test_rows_have_correct_tool_and_profile(
-        self, fixture_parsed_data: dict
-    ) -> None:
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        for row in rows:
-            assert row["tool"] == "noir"
-            assert row["profile"] == "dvna"
-
-    def test_rows_have_informational_finding_type(
-        self, fixture_parsed_data: dict
-    ) -> None:
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        for row in rows:
-            assert row["finding_type"] == '["informational"]'
-            assert row["severity"] == "informational"
-
-    def test_rows_have_url_and_method(self, fixture_parsed_data: dict) -> None:
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        for row in rows:
-            assert row["url"], f"url must not be empty: {row}"
-            assert row["method"], f"method must not be empty: {row}"
-
-    def test_login_post_row_includes_param_names(
-        self, fixture_parsed_data: dict
-    ) -> None:
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        login_posts = [
-            r for r in rows if r["url"] == "/login" and r["method"] == "POST"
-        ]
-        assert len(login_posts) == 1
-        desc = login_posts[0]["description"]
-        assert "username" in desc or "password" in desc
-
-    def test_normalize_is_idempotent(self, fixture_parsed_data: dict) -> None:
-        """Calling normalize twice on the same result produces identical rows."""
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows1 = handler.normalize(result, profile="dvna")
-        rows2 = handler.normalize(result, profile="dvna")
-        assert rows1 == rows2
+        assert handler.normalize(result, profile="dvna") == []
 
     def test_empty_parsed_data_returns_empty_list(self) -> None:
         handler = ToolHandlerFactory.load("noir")
         assert handler is not None
         result = _make_noir_result({"endpoints": [], "summary": {"total_endpoints": 0}})
-        rows = handler.normalize(result, profile="dvna")
-        assert rows == []
+        assert handler.normalize(result, profile="dvna") == []
 
     def test_none_parsed_data_returns_empty_list(self) -> None:
         handler = ToolHandlerFactory.load("noir")
@@ -132,41 +79,15 @@ class TestNoirIngestor:
             timestamp=_TIMESTAMP,
             duration_seconds=0.0,
         )
-        rows = handler.normalize(result, profile="dvna")
-        assert rows == []
+        assert handler.normalize(result, profile="dvna") == []
 
-    def test_source_file_preserved_from_output_files(
-        self, fixture_parsed_data: dict, tmp_path: Path
-    ) -> None:
-        oas3_path = tmp_path / "dvna_oas3.json"
-        oas3_path.write_text("{}", encoding="utf-8")
-        result = _make_noir_result(
-            fixture_parsed_data, output_files={"stdout": oas3_path}
+    def test_render_includes_method_and_url(self) -> None:
+        """``render`` works on hand-built rows for any caller."""
+        handler = ToolHandlerFactory.load("noir")
+        assert handler is not None
+        text = handler.render(
+            {"method": "POST", "url": "/login", "description": "auth"}
         )
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        rows = handler.normalize(result, profile="dvna")
-        for row in rows:
-            assert row["source_file"] == str(oas3_path)
-
-    def test_render_returns_string_for_every_row(
-        self, fixture_parsed_data: dict
-    ) -> None:
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        for row in rows:
-            text = handler.render(row)
-            assert isinstance(text, str)
-            assert "[noir]" in text
-
-    def test_render_includes_method_and_path(self, fixture_parsed_data: dict) -> None:
-        handler = ToolHandlerFactory.load("noir")
-        assert handler is not None
-        result = _make_noir_result(fixture_parsed_data)
-        rows = handler.normalize(result, profile="dvna")
-        for row in rows:
-            text = handler.render(row)
-            assert row["method"] in text
-            assert row["url"] in text
+        assert "[noir]" in text
+        assert "POST" in text
+        assert "/login" in text

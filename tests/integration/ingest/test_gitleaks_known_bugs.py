@@ -56,10 +56,7 @@ class TestKnownBugs:
     def test_combine_dedup_dir_git_shared_finding(
         self, dir_parsed_data: dict, git_parsed_data: dict
     ) -> None:
-        """combine_gitleaks_results() deduplicates by (rule_id, file_path, line_number).
-
-        The same secret from dir-scan and git-scan collapses to one entry.
-        """
+        """combine_gitleaks_results() deduplicates findings by identity."""
         combined = combine_gitleaks_results(dir_parsed_data, git_parsed_data)
         shared = [
             s

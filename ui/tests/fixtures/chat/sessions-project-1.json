@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "id": 101,
+      "project_id": 2,
+      "title": "Triage walkthrough — XSS findings",
+      "created_at": "2026-04-30T14:00:00+00:00",
+      "last_message_at": "2026-04-30T14:18:42+00:00",
+      "message_count": 6,
+      "expired_at": null
+    },
+    {
+      "id": 102,
+      "project_id": 2,
+      "title": "Investigating gitleaks AWS key",
+      "created_at": "2026-04-30T11:30:00+00:00",
+      "last_message_at": "2026-04-30T11:42:18+00:00",
+      "message_count": 4,
+      "expired_at": null
+    },
+    {
+      "id": 103,
+      "project_id": 2,
+      "title": "Old session about pip-audit",
+      "created_at": "2026-04-25T09:00:00+00:00",
+      "last_message_at": "2026-04-25T09:20:00+00:00",
+      "message_count": 8,
+      "expired_at": "2026-04-26T11:45:00+00:00"
+    }
+  ],
+  "total": 3,
+  "offset": 0,
+  "limit": 50
+}

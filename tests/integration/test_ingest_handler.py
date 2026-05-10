@@ -1,13 +1,14 @@
-"""Integration tests for IngestHandler — Phase 2 SQLite-first pipeline."""
+"""Integration tests for IngestHandler SQLite-first pipeline."""
 
 from __future__ import annotations
 
+import hashlib
 import shutil
+import struct
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
 _TALLY_ROOT = Path(__file__).resolve().parents[2]
@@ -15,18 +16,34 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.pipeline.handlers import IngestHandler  # noqa: E402
+from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
-from application.rag.engine import RAGEngine  # noqa: E402
+from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
+from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import (  # noqa: E402
     EventBus,
     IngestCompleted,
     ToolCompleted,
 )
 from domain.tools.base import ToolResult  # noqa: E402
+from factories.persistence import create_repo_repo  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.tools.parsers.gitleaks import (  # noqa: E402
     parse_gitleaks_json,
 )
+from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
+
+_DIM = 8
+
+
+class _DeterministicEmbedding(EmbeddingProvider):
+    def is_available(self) -> bool:
+        return True
+
+    def embed(self, text: str, **kwargs: Any) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
+
 
 pytestmark = pytest.mark.integration
 
@@ -48,7 +65,7 @@ def project_env(tmp_path: Path) -> dict:
     _write_global_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
-    pm.save_project(name, [])
+    pm.save_project(name)
     return {"base_path": tmp_path, "project_name": name}
 
 
@@ -91,7 +108,15 @@ class TestIngestHandlerPhase2:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -110,14 +135,22 @@ class TestIngestHandlerPhase2:
         )
         findings = finding_repo.get_all_findings()
         assert len(findings) >= 1
-        assert all(f["tool"] == "gitleaks" for f in findings)
-        assert all(f["domain"] == "code" for f in findings)
+        assert all(f.tool == "gitleaks" for f in findings)
+        assert all(f.domain == "code" for f in findings)
 
     def test_chromadb_not_written_after_tool_completed(
         self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
         bus = EventBus()
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -127,15 +160,26 @@ class TestIngestHandlerPhase2:
         )
         handler.handle(event)
 
-        default_fn = ef.DefaultEmbeddingFunction()
-        with patch.object(
-            RAGEngine, "_build_embedding_function", return_value=default_fn
-        ):
-            engine = RAGEngine(
-                project_name=project_env["project_name"],
-                base_path=str(project_env["base_path"]),
-            )
-        assert engine.count_documents() == 0
+        paths = ProjectPaths.from_canonical(
+            project_env["base_path"], project_env["project_name"]
+        )
+        paths.chroma_db.mkdir(parents=True, exist_ok=True)
+        chat_provider: Any = object()
+        vector_index = ChromaDBVectorIndex(
+            chroma_path=paths.chroma_db,
+            collection_name=f"findings_{project_env['project_name']}",
+            embedding_provider=_DeterministicEmbedding(),
+        )
+        kb = FindingKnowledgeBase(
+            vector_index=vector_index,
+            chat_provider=chat_provider,
+            project_name=project_env["project_name"],
+            base_path=project_env["base_path"],
+        )
+        try:
+            assert kb.count() == 0
+        finally:
+            kb.close()
 
     def test_second_ingest_adds_new_rows(
         self, project_env: dict, gitleaks_result: ToolResult
@@ -146,7 +190,15 @@ class TestIngestHandlerPhase2:
         bound to its run_id.  No deduplication via fingerprint occurs.
         """
         bus = EventBus()
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -155,9 +207,6 @@ class TestIngestHandlerPhase2:
             base_path=str(project_env["base_path"]),
         )
         handler.handle(event)
-        _, finding_repo, _, _ = make_store(
-            str(project_env["base_path"]), project_env["project_name"]
-        )
         count_after_first = len(finding_repo.get_all_findings())
         assert count_after_first >= 1
 
@@ -172,7 +221,15 @@ class TestIngestHandlerPhase2:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -193,14 +250,22 @@ class TestIngestHandlerPhase2:
         for finding_id in ids:
             row = finding_repo.get_finding(finding_id)
             assert row is not None
-            assert row["tool"] == "gitleaks"
+            assert row.tool == "gitleaks"
 
     def test_zap_findings_have_repo_populated(
         self, project_env: dict, zap_result: ToolResult
     ) -> None:
         """ZAP findings must have the repo column populated from event.repo."""
         bus = EventBus()
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=zap_result,
             profile="target-site",
@@ -214,10 +279,10 @@ class TestIngestHandlerPhase2:
         _, finding_repo, _, _ = make_store(
             str(project_env["base_path"]), project_env["project_name"]
         )
-        findings = finding_repo.get_all_findings()
+        findings = finding_repo.get_all_findings_deserialized()
         assert len(findings) >= 1
         assert all(f["tool"] == "zap" for f in findings)
-        assert all(f["repo"] == "target-site" for f in findings), (
+        assert all(f.get("repo") == "target-site" for f in findings), (
             f"Expected repo='target-site' on all ZAP findings, got: "
-            f"{[f['repo'] for f in findings]}"
+            f"{[f.get('repo') for f in findings]}"
         )

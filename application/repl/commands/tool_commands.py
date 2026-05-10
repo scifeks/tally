@@ -6,9 +6,17 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.tool_overrides.service import ToolOverridesService
+from core.project_paths import ProjectPaths
+from factories.persistence import create_overrides_repo
+
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
     from application.repl.interface import REPL
+
+
+def _project_paths(repl: REPL, project_name: str) -> ProjectPaths:
+    return ProjectPaths.from_canonical(repl.base_path, project_name)
 
 
 class ToolCommands:
@@ -18,12 +26,8 @@ class ToolCommands:
         self.repl = repl
         self.help_renderer = help_renderer
 
-    # ------------------------------------------------------------------
-    # Top-level dispatcher
-    # ------------------------------------------------------------------
-
     def cmd_tool(self, _cmd: str, args: list) -> None:
-        """tool [add|edit <name>|remove <name>|list] — manage tool configuration."""
+        """tool [add|edit <name>|remove <name>|list]: manage tool configuration."""
         if not args:
             self.help_renderer.render("tool")
             return
@@ -76,21 +80,18 @@ class ToolCommands:
             self.repl.console.print(f"[red]Unknown subcommand:[/red] {sub}")
             self.help_renderer.render("tool")
 
-    # ------------------------------------------------------------------
-    # Subcommands
-    # ------------------------------------------------------------------
-
     def _cmd_tool_list(self) -> None:
-        from application.tools.registry import build_tool_table, tool_registry
+        from application.repl.adapters.tool_registry_display import build_tool_table
 
-        tools = tool_registry.get_all_tools()
+        registry = self.repl.tool_registry
+        tools = registry.get_all_tools()
         if not tools:
             self.repl.console.print(
                 "[dim]No tools configured. "
                 "Use [bold]tool add[/bold] to add a tool.[/dim]"
             )
             return
-        self.repl.console.print(build_tool_table(tools, tool_registry))
+        self.repl.console.print(build_tool_table(tools, registry))
 
     def _cmd_tool_add(self) -> None:
         from application.setup.commands_setup import interview_tool
@@ -198,10 +199,6 @@ class ToolCommands:
         self._reload_registry()
         self.repl.console.print(f"[green]Tool removed:[/green] {tool_name}")
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
     def _commands_json_path(self) -> Path:
         return Path(self.repl.base_path) / "config" / "commands.json"
 
@@ -221,7 +218,7 @@ class ToolCommands:
     def _reload_registry(self) -> None:
         from application.tools.registry import discover_tools
 
-        discover_tools(self.repl.base_path)
+        discover_tools(self.repl.tool_registry, self.repl.base_path)
 
     def _get_wrapper_availability(self) -> tuple:
         wrappers_dir = (
@@ -243,10 +240,6 @@ class ToolCommands:
             if not f.name.startswith("_")
         }
         return local_tools, docker_tools
-
-    # ------------------------------------------------------------------
-    # Project flag helpers
-    # ------------------------------------------------------------------
 
     def _parse_project_flag(self, args: list) -> tuple[str | None, list]:
         """Extract --project[=<name>] from args. Returns (project_name, remaining).
@@ -270,47 +263,67 @@ class ToolCommands:
                 "before using --project."
             )
             return False
-        config_path = (
-            Path(self.repl.base_path)
-            / "projects"
-            / project_name
-            / "config"
-            / "project.json"
-        )
+        config_path = _project_paths(self.repl, project_name).config_json
         if not config_path.exists():
             self.repl.console.print(f"[red]Project not found:[/red] {project_name}")
             return False
         return True
 
-    # ------------------------------------------------------------------
-    # Project-level file helpers
-    # ------------------------------------------------------------------
-
-    def _project_commands_json_path(self, project_name: str) -> Path:
-        return (
-            Path(self.repl.base_path)
-            / "projects"
-            / project_name
-            / "config"
-            / "commands.json"
-        )
+    def _project_overrides_service(
+        self, project_name: str
+    ) -> tuple[ToolOverridesService, object]:
+        paths = _project_paths(self.repl, project_name)
+        repo = create_overrides_repo(paths.findings_db)
+        return ToolOverridesService(repo), repo
 
     def _load_project_commands_json(self, project_name: str) -> dict:
-        path = self._project_commands_json_path(project_name)
-        if not path.exists():
-            return {}
-        with open(path) as f:
-            return json.load(f)
+        service, _repo = self._project_overrides_service(project_name)
+        rows, _total = service.list(offset=0, limit=10_000)
+        out: dict[str, dict] = {}
+        for o in rows:
+            container = None
+            if o.container_name and o.container_tool_path:
+                container = {
+                    "name": o.container_name,
+                    "tool_path": o.container_tool_path,
+                }
+            out[o.tool_name] = {
+                "type": o.type,
+                "location": o.location,
+                "path": o.path or "",
+                "container": container,
+                "args_mode": o.args_mode,
+            }
+        return out
 
-    def _save_project_commands_json(self, project_name: str, commands: dict) -> None:
-        path = self._project_commands_json_path(project_name)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(commands, f, indent=2)
+    def _save_project_commands_json(
+        self, project_name: str, commands: dict[str, dict]
+    ) -> None:
+        service, _repo = self._project_overrides_service(project_name)
+        current_rows, _ = service.list(offset=0, limit=10_000)
+        current = {r.tool_name: r for r in current_rows}
+        desired_names = set(commands.keys())
+        for tool_name, entry in commands.items():
+            kwargs = self._entry_to_service_kwargs(entry)
+            if tool_name in current:
+                service.replace(tool_name, **kwargs)
+            else:
+                service.create(tool_name=tool_name, **kwargs)
+        for tool_name in current:
+            if tool_name not in desired_names:
+                service.delete(tool_name)
 
-    # ------------------------------------------------------------------
-    # Project-scoped subcommands
-    # ------------------------------------------------------------------
+    @staticmethod
+    def _entry_to_service_kwargs(entry: dict) -> dict:
+        container = entry.get("container")
+        return {
+            "args_mode": entry.get("args_mode", "stock"),
+            "type": entry["type"],
+            "location": entry["location"],
+            "path": entry.get("path") or None,
+            "container_name": container["name"] if container else None,
+            "container_tool_path": container["tool_path"] if container else None,
+        }
 
     def _cmd_tool_list_project(self, project_name: str) -> None:
         from rich.table import Table

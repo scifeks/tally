@@ -4,14 +4,13 @@ from .claude_config import ClaudeConfig
 from .command_entry import CommandEntry
 from .docker_container import DockerContainer
 from .endpoint_config import EndpointConfig
+from .feature_inference_config import FeatureInferenceConfig
 from .global_config import (
-    MCP_BATCH_SIZE_DEFAULT,
-    MCP_BATCH_TIMEOUT_SECONDS_DEFAULT,
-    MCP_SESSION_TIMEOUT_SECONDS_DEFAULT,
+    TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT,
     GlobalConfig,
 )
-from .ollama_config import OllamaConfig
-from .ollama_embedding_config import OllamaEmbeddingConfig
+from .local_inference_config import LocalInferenceConfig
+from .opencode_config import OpenCodeConfig
 from .project_config import ProjectConfig
 from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_dirs
 
@@ -20,12 +19,11 @@ __all__ = [
     "CommandEntry",
     "DockerContainer",
     "EndpointConfig",
+    "FeatureInferenceConfig",
     "GlobalConfig",
-    "MCP_BATCH_SIZE_DEFAULT",
-    "MCP_BATCH_TIMEOUT_SECONDS_DEFAULT",
-    "MCP_SESSION_TIMEOUT_SECONDS_DEFAULT",
-    "OllamaConfig",
-    "OllamaEmbeddingConfig",
+    "LocalInferenceConfig",
+    "TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT",
+    "OpenCodeConfig",
     "ProjectConfig",
     "RepoAuth",
     "Repository",

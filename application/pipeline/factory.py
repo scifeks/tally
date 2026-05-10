@@ -10,70 +10,69 @@ from application.pipeline.strategies import (
     PersistOnlyStrategy,
     PostIngestStrategy,
 )
-from application.pipeline.url_handlers import (
-    ConfigUpdateHandler,
-    URLDedupeHandler,
-    URLOS3Handler,
-    URLSeedsHandler,
-    URLSourceEmitter,
-)
+from application.url_inventory.ingest_handler import UrlInventoryIngestHandler
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
-from domain.pipeline.url_events import URLsConverted, URLsDeduped, URLSourceChanged
 
 if TYPE_CHECKING:
-    from rich.console import Console
+    from application.locking.cancellation import CancellationToken
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.progress_reporter import ProgressReporter
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
+    from application.ports.scan_event_sink import ScanEventSink
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
+    )
 
 
 class PipelineFactory:
-    """Creates a fully-wired EventBus for a single scan run.
-
-    Separates pipeline construction from scan execution so the post-ingest
-    strategy can vary without touching any scan type, orchestrator, or REPL
-    code.
-    """
+    """Creates a fully-wired EventBus for a single scan run."""
 
     @staticmethod
     def create(
-        console: Console | None = None,
+        *,
+        finding_repo: FindingRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
+        url_finding_repo: UrlFindingRepositoryPort,
+        reporter: ProgressReporter | None = None,
         skip_enrichment: bool = False,
+        project_id: int | None = None,
+        event_sink: ScanEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
     ) -> EventBus:
-        """Return an EventBus wired with the appropriate post-ingest strategy.
-
-        Args:
-            console:          Rich console forwarded to handlers for progress output.
-            skip_enrichment:  When ``True``, findings are written to ChromaDB
-                              immediately after ingest — no LLM enrichment calls
-                              are made.  When ``False`` (default), the full
-                              enrich-then-persist path is used.
-        """
+        """Return an EventBus wired with the post-ingest strategy."""
         bus = EventBus()
 
-        # --- Findings ingest pipeline ---
-        ingest = IngestHandler(bus, console=console)
+        ingest = IngestHandler(
+            bus,
+            finding_repo=finding_repo,
+            repo_repo=repo_repo,
+        )
         bus.subscribe(ToolCompleted, ingest.handle)
 
         strategy: PostIngestStrategy
         if skip_enrichment:
-            strategy = PersistOnlyStrategy(console=console)
+            strategy = PersistOnlyStrategy(
+                finding_repo=finding_repo,
+            )
         else:
-            strategy = EnrichThenPersistStrategy(console=console)
+            strategy = EnrichThenPersistStrategy(
+                finding_repo=finding_repo,
+                reporter=reporter,
+                project_id=project_id,
+                event_sink=event_sink,
+                cancel_token=cancel_token,
+            )
 
         bus.subscribe(IngestCompleted, strategy.handle)
 
-        # --- URL discovery pipeline ---
-        # URLSourceEmitter and IngestHandler both subscribe to ToolCompleted;
-        # they run sequentially (SQLite ingest then URL merge) per the bus
-        # registration order.  Neither depends on the other's output.
-        url_emitter = URLSourceEmitter(bus)
-        url_deduper = URLDedupeHandler(bus)
-        url_seeds = URLSeedsHandler()
-        url_oas3 = URLOS3Handler()
-        config_update = ConfigUpdateHandler()
-
-        bus.subscribe(ToolCompleted, url_emitter.handle)
-        bus.subscribe(URLSourceChanged, url_deduper.handle)
-        bus.subscribe(URLsDeduped, url_seeds.handle)
-        bus.subscribe(URLsDeduped, url_oas3.handle)
-        bus.subscribe(URLsConverted, config_update.handle)
+        url_inventory = UrlInventoryIngestHandler(
+            repo_repo=repo_repo,
+            url_finding_repo=url_finding_repo,
+        )
+        bus.subscribe(ToolCompleted, url_inventory.handle)
 
         return bus

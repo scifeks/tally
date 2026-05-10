@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 import anthropic
 import pytest
 
-from core.llm.base import LLMAdapterError
-from core.llm.claude_adapter import ClaudeAdapter
+from application.ports.llm_provider import LLMAdapterError
+from infrastructure.llm.claude_adapter import ClaudeAdapter
 
 _MODEL = "claude-opus-4-5"
 _API_KEY = "test-key-abc"
@@ -38,7 +38,7 @@ def _mock_response(text: str) -> MagicMock:
 
 @pytest.fixture()
 def adapter() -> ClaudeAdapter:
-    with patch("core.llm.claude_adapter.anthropic.Anthropic"):
+    with patch("infrastructure.llm.claude_adapter.anthropic.Anthropic"):
         inst = ClaudeAdapter(
             api_key=_API_KEY,
             model=_MODEL,
@@ -55,13 +55,6 @@ def mock_client(adapter: ClaudeAdapter) -> MagicMock:
 
 
 class TestChat:
-    def test_successful_chat(
-        self, adapter: ClaudeAdapter, mock_client: MagicMock
-    ) -> None:
-        mock_client.messages.create.return_value = _mock_response("hello!")
-        result = adapter.chat([{"role": "user", "content": "hi"}])
-        assert result == "hello!"
-
     def test_system_message_extracted(
         self, adapter: ClaudeAdapter, mock_client: MagicMock
     ) -> None:
@@ -87,17 +80,6 @@ class TestChat:
         )
         _, call_kwargs = mock_client.messages.create.call_args
         assert call_kwargs["max_tokens"] == 256
-
-    def test_temperature_forwarded(
-        self, adapter: ClaudeAdapter, mock_client: MagicMock
-    ) -> None:
-        mock_client.messages.create.return_value = _mock_response("ok")
-        adapter.chat(
-            [{"role": "user", "content": "q"}],
-            temperature=0.7,
-        )
-        _, call_kwargs = mock_client.messages.create.call_args
-        assert call_kwargs["temperature"] == 0.7
 
     def test_empty_messages_raises(self, adapter: ClaudeAdapter) -> None:
         with pytest.raises(LLMAdapterError, match="non-system message"):

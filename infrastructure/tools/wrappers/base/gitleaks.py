@@ -62,7 +62,7 @@ class BaseGitleaksTool(ToolInterface):
 
     @property
     def timeout(self) -> int:
-        return 7200  # 2 hours — large repos with deep git history can be slow
+        return 7200  # Large repos with deep history may be slow
 
     @property
     def candidate_commands(self) -> list[str]:
@@ -78,9 +78,9 @@ class BaseGitleaksTool(ToolInterface):
         exclude = build_excluded_dirs(context.repo)
 
         shared_kwargs: dict[str, object] = {"repo_path": repo_path}
-        # Always exclude .git — the dir scan is a plain filesystem walk and
-        # would otherwise crawl .git/objects/pack files (potentially GBs of
-        # binary data). The git pass handles history via git's own traversal.
+        # Always exclude .git because the dir scan is a plain filesystem walk
+        # that would crawl .git/objects/pack (potentially GBs of binary data).
+        # The git pass handles history via git's own traversal.
         all_excludes = [".git"] + exclude
         patterns = "\n".join(f"**/{d}" for d in all_excludes) + "\n"
         if context.repo.docker_path and context.repo.path:
@@ -110,7 +110,7 @@ class BaseGitleaksTool(ToolInterface):
         ]
 
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        """Mirrors _run_gitleaks_both_scans in orchestrator.py."""
+        """Combine dir-scan and git-scan passes into a single result."""
         if self._last_ignore_path is not None:
             Path(self._last_ignore_path).unlink(missing_ok=True)
             self._last_ignore_path = None
@@ -138,5 +138,4 @@ class BaseGitleaksTool(ToolInterface):
         result = parsed_data.get("summary", {}).get(
             "total_secrets", len(parsed_data.get("secrets", []))
         )
-        # TODO: revisit when normalized schema is introduced
         return result

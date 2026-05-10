@@ -7,39 +7,64 @@ ChromaDB document text by SemgrepHandler.render().
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
+import struct
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
-import chromadb.utils.embedding_functions as ef
 import pytest
 
+from application.pipeline.fingerprint import compute_fingerprint
 from application.pipeline.strategies import PersistOnlyStrategy
-from application.rag.engine import RAGEngine
+from application.ports.embedding_provider import EmbeddingProvider
+from application.rag.knowledge_base import FindingKnowledgeBase
+from core.project_paths import ProjectPaths
 from domain.pipeline.events import IngestCompleted
-from domain.pipeline.fingerprint import compute_fingerprint
 from infrastructure.store import make_store
+from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
 
 pytestmark = pytest.mark.integration
 
 _PROJECT_NAME = "test-enriched-meta"
+_DIM = 8
+
+
+class _DeterministicEmbedding(EmbeddingProvider):
+    def is_available(self) -> bool:
+        return True
+
+    def embed(self, text: str, **kwargs: Any) -> list[float]:
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
+
+
+def _build_test_kb(project_name: str, base_path: Path) -> FindingKnowledgeBase:
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    paths.chroma_db.mkdir(parents=True, exist_ok=True)
+    chat_provider: Any = object()
+    vector_index = ChromaDBVectorIndex(
+        chroma_path=paths.chroma_db,
+        collection_name=f"findings_{project_name}",
+        embedding_provider=_DeterministicEmbedding(),
+    )
+    return FindingKnowledgeBase(
+        vector_index=vector_index,
+        chat_provider=chat_provider,
+        project_name=project_name,
+        base_path=base_path,
+    )
 
 
 def _write_global_config(base_path: Path) -> None:
-    import shutil
-
     real_config = Path(__file__).resolve().parents[3] / "config" / "global.json"
     if not real_config.exists():
         pytest.skip("config/global.json not found")
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(real_config, config_dir / "global.json")
-
-
-def _make_rag_engine(base_path: str, project_name: str) -> RAGEngine:
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
-        return RAGEngine(project_name=project_name, base_path=base_path)
 
 
 def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
@@ -57,8 +82,10 @@ def _dispatch(env: dict, ids: list[int]) -> None:
         project_name=env["project_name"],
         base_path=env["base_path"],
     )
-    default_fn = ef.DefaultEmbeddingFunction()
-    with patch.object(RAGEngine, "_build_embedding_function", return_value=default_fn):
+    with patch(
+        "application.pipeline.handlers._build_knowledge_base",
+        side_effect=_build_test_kb,
+    ):
         env["handler"].handle(event)
 
 
@@ -70,28 +97,20 @@ def env(tmp_path: Path) -> dict:
     run_repo, finding_repo, _, _ = make_store(base_path, _PROJECT_NAME)
     run_id = run_repo.create_run({})
 
-    engine = _make_rag_engine(base_path, _PROJECT_NAME)
-    handler = PersistOnlyStrategy()
+    handler = PersistOnlyStrategy(finding_repo=finding_repo)
 
     return {
         "base_path": base_path,
         "project_name": _PROJECT_NAME,
         "run_id": run_id,
         "finding_repo": finding_repo,
-        "engine": engine,
         "handler": handler,
     }
 
 
 class TestEnrichedChromaText:
     def test_enriched_semgrep_meta_appears_in_chroma_text(self, env: dict) -> None:
-        """risk_type and remediation from meta blob appear in ChromaDB text.
-
-        insert_findings() stores unknown fields (not in _DIRECT_COLUMNS) in the
-        meta blob.  get_by_ids() / deserialise_row() merges the blob back into
-        the row dict at the top level.  SemgrepHandler.render() then writes
-        risk_type and remediation into the ChromaDB document text.
-        """
+        """risk_type and remediation from meta blob appear in ChromaDB text."""
         row = {
             "tool": "semgrep",
             "profile": "default",
@@ -100,7 +119,6 @@ class TestEnrichedChromaText:
             "line_start": 12,
             "severity": "high",
             "finding_type": json.dumps(["vulnerability"]),
-            # These unknown keys are stored in the meta blob by insert_findings
             "risk_type": "injection",
             "remediation": "sanitize inputs",
         }
@@ -108,24 +126,26 @@ class TestEnrichedChromaText:
 
         _dispatch(env, [finding_id])
 
-        doc = env["engine"].get_document_by_id(str(finding_id))
-        assert doc is not None, "ChromaDB document was not written"
-        text = doc["document"]
-        assert "injection" in text, (
-            f"Expected 'injection' (risk_type) in document text; got: {text!r}"
-        )
-        assert "sanitize inputs" in text, (
-            f"Expected 'sanitize inputs' (remediation) in document text; got: {text!r}"
-        )
-        assert doc["metadata"]["tool"] == "semgrep"
+        kb = _build_test_kb(env["project_name"], Path(env["base_path"]))
+        try:
+            doc = kb.get_finding(str(finding_id))
+            assert doc is not None, "ChromaDB document was not written"
+            text = doc["document"]
+            assert text is not None
+            assert "injection" in text, (
+                f"Expected 'injection' (risk_type) in document text; got: {text!r}"
+            )
+            assert "sanitize inputs" in text, (
+                f"Expected 'sanitize inputs' (remediation) in document text; "
+                f"got: {text!r}"
+            )
+            assert doc["metadata"] is not None
+            assert doc["metadata"]["tool"] == "semgrep"
+        finally:
+            kb.close()
 
     def test_unenriched_semgrep_still_written_to_chroma(self, env: dict) -> None:
-        """A semgrep finding without enrichment fields is still written to ChromaDB.
-
-        ChromaDBHandler does not require enriched=1; it writes every row
-        returned by get_by_ids().  The document should be present with correct
-        tool metadata even when no LLM enrichment has run.
-        """
+        """A semgrep finding without enrichment fields is still written to ChromaDB."""
         row = {
             "tool": "semgrep",
             "profile": "default",
@@ -139,6 +159,11 @@ class TestEnrichedChromaText:
 
         _dispatch(env, [finding_id])
 
-        doc = env["engine"].get_document_by_id(str(finding_id))
-        assert doc is not None, "ChromaDB document was not written"
-        assert doc["metadata"]["tool"] == "semgrep"
+        kb = _build_test_kb(env["project_name"], Path(env["base_path"]))
+        try:
+            doc = kb.get_finding(str(finding_id))
+            assert doc is not None, "ChromaDB document was not written"
+            assert doc["metadata"] is not None
+            assert doc["metadata"]["tool"] == "semgrep"
+        finally:
+            kb.close()

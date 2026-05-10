@@ -1,0 +1,93 @@
+{
+  "items": [
+    {
+      "id": 2001,
+      "project_id": 2,
+      "status": "done",
+      "started_at": "2026-04-30T22:50:34.903973+00:00",
+      "finished_at": "2026-04-30T23:02:16.579444+00:00",
+      "repo_ids": [
+        "dvwa",
+        "dvpwa",
+        "juice-shop",
+        "php-goof"
+      ],
+      "tool_ids": [
+        "dalfox",
+        "gitleaks",
+        "katana",
+        "noir",
+        "osv-scanner",
+        "pip-audit",
+        "semgrep",
+        "xsstrike",
+        "zap"
+      ],
+      "domains": [],
+      "findings_count": 564,
+      "skip_enrichment": true
+    },
+    {
+      "id": 2004,
+      "project_id": 2,
+      "status": "done",
+      "started_at": "2026-04-30T14:00:00+00:00",
+      "finished_at": "2026-04-30T14:11:55+00:00",
+      "repo_ids": [
+        "d2d58577-aa07-494b-80aa-19a3cf4fbdb6",
+        "7f34afbd-c000-490a-9768-342a3f65b31c"
+      ],
+      "tool_ids": [
+        "semgrep",
+        "gitleaks",
+        "osv-scanner"
+      ],
+      "domains": [
+        "sast",
+        "secrets",
+        "sca"
+      ],
+      "findings_count": 188,
+      "skip_enrichment": false
+    },
+    {
+      "id": 2002,
+      "project_id": 2,
+      "status": "queued",
+      "started_at": null,
+      "finished_at": null,
+      "repo_ids": [
+        "e08a9e45-188b-428f-ae64-57d18e5af331"
+      ],
+      "tool_ids": [
+        "zap"
+      ],
+      "domains": [
+        "web"
+      ],
+      "findings_count": null,
+      "skip_enrichment": true
+    },
+    {
+      "id": 2003,
+      "project_id": 2,
+      "status": "failed",
+      "started_at": "2026-04-29T18:00:00+00:00",
+      "finished_at": "2026-04-29T18:00:33+00:00",
+      "repo_ids": [
+        "c840af14-e2f0-44a0-bce8-826601fb980c"
+      ],
+      "tool_ids": [
+        "pip-audit"
+      ],
+      "domains": [
+        "sca"
+      ],
+      "findings_count": 0,
+      "skip_enrichment": false
+    }
+  ],
+  "total": 4,
+  "offset": 0,
+  "limit": 20
+}

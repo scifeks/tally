@@ -68,5 +68,4 @@ class BaseZapTool(ToolInterface):
     def count_findings(self, parsed_data: dict[str, Any]) -> int:
         summary = parsed_data.get("summary", {})
         result = summary.get("total_alerts", len(parsed_data.get("alerts", [])))
-        # TODO: revisit when normalized schema is introduced
         return result

@@ -1,4 +1,4 @@
-"""FindingRepository — CRUD and search for the findings table."""
+"""Create, read, update, and search findings in SQLite."""
 
 from __future__ import annotations
 
@@ -6,7 +6,10 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from domain.pipeline.fingerprint import compute_fingerprint
+from application.pipeline.fingerprint import compute_fingerprint
+from application.ports.finding_repository import FindingRepositoryPort
+from domain.findings.entry import Finding
+from domain.findings.severity import Severity
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
 from infrastructure.store.repositories.findings_serial import (
     _COMMA_LIST_FIELDS,
@@ -17,47 +20,32 @@ from infrastructure.store.repositories.findings_serial import (
 )
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from infrastructure.store.connection import ConnectionFactory
 
 logger = logging.getLogger(__name__)
 
 _ENRICHMENT_META_FIELDS: frozenset[str] = frozenset(
-    {"risk_type", "remediation", "owasp_name", "title", "tags"}
+    {"risk_type", "remediation", "owasp_name", "title", "tags", "notes"}
 )
 _ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
     {"severity", "confidence", "description"}
 )
 
-# ---------------------------------------------------------------------------
-# FindingRepository
-# ---------------------------------------------------------------------------
 
-
-class FindingRepository:
+class FindingRepository(FindingRepositoryPort):
     """CRUD and search operations for the findings table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
     def insert_findings(self, run_id: int, findings: list[dict]) -> None:
-        """Insert new findings rows for a scan run.
-
-        Every finding produced by a scan is a new row bound to its run_id.
-        This method never updates existing rows — scans are INSERT-only.
-
-        For each finding:
-
-        - Computes a per-tool fingerprint (sha256) for later lookup.
-        - Maps known ChromaDB field names to named SQLite columns.
-        - Converts comma-joined list fields to JSON arrays in the meta blob.
-        - Stores all remaining fields in the meta JSON blob.
-
-        Wrapped in a single transaction.
-        """
+        """Insert finding rows from a scan, mapping ChromaDB fields to schema."""
         if not findings:
             return
 
-        # Keys handled before the generic loop — excluded from meta blob.
+        # Keys handled before the generic loop are excluded from meta blob.
         _PRE_EXTRACTED: frozenset[str] = frozenset(
             {"finding_type", "cwe", "cwe_id", "cwe_ids"}
         )
@@ -84,6 +72,14 @@ class FindingRepository:
                     continue
                 if key in _DIRECT_COLUMNS:
                     named[key] = str(val) if val is not None else None
+                elif key == "severity":
+                    if val is not None:
+                        try:
+                            named["severity"] = Severity.from_label(str(val)).rank
+                        except ValueError:
+                            named["severity"] = None
+                    else:
+                        named["severity"] = None
                 elif key == "file_path":
                     named["file"] = str(val) if val is not None else None
                 elif key == "lockfile":
@@ -96,6 +92,15 @@ class FindingRepository:
                     else:
                         meta[key] = val
 
+            repo_id_raw = finding.get("repo_id")
+            repo_id_val: int | None
+            if isinstance(repo_id_raw, int):
+                repo_id_val = repo_id_raw
+            elif isinstance(repo_id_raw, str) and repo_id_raw.isdigit():
+                repo_id_val = int(repo_id_raw)
+            else:
+                repo_id_val = None
+
             rows.append(
                 (
                     fingerprint,
@@ -103,7 +108,7 @@ class FindingRepository:
                     named.get("tool"),
                     named.get("domain"),
                     named.get("segment"),
-                    named.get("repo"),
+                    repo_id_val,
                     named.get("finding_type"),
                     named.get("severity"),
                     named.get("confidence"),
@@ -116,7 +121,7 @@ class FindingRepository:
                     named.get("description"),
                     named.get("package_version"),
                     named.get("cwe"),
-                    0,  # enriched — set to 1 by EnrichmentPipeline after LLM processing
+                    0,  # enriched: set to 1 by EnrichmentPipeline after LLM processing
                     json.dumps(meta),
                 )
             )
@@ -128,14 +133,14 @@ class FindingRepository:
 
         sql = """
             INSERT INTO findings (
-                fingerprint, run_id, tool, domain, segment, repo,
+                fingerprint, run_id, tool, domain, segment, repo_id,
                 finding_type, severity,
                 confidence, file, rule_id, url,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe, enriched, meta,
                 first_seen, last_seen, seen_count, status, should_report
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         with self._factory.connect() as conn:
             conn.executemany(sql, rows_with_ts)
@@ -143,10 +148,10 @@ class FindingRepository:
     def delete_findings(self, tools: list[str] | None = None) -> None:
         """Delete findings from the store.
 
-        ``tools=None``   — DELETE all rows from all tables (findings, run_tools,
-                           runs, triage_batches, tool_audit_log).
-        ``tools=[...]``  — DELETE findings, triage_batches, and tool_audit_log
-                           records for those tools only.
+        tools=None: DELETE all rows from all tables (findings, run_tools,
+                    scan_runs, triage_batches, tool_audit_log).
+        tools=[...]: DELETE findings, triage_batches, and tool_audit_log
+                     records for those tools only.
         """
         if tools is not None:
             return self.delete_findings_by_tool_name(tools)
@@ -156,7 +161,7 @@ class FindingRepository:
             conn.execute("DELETE FROM tool_audit_log")
             conn.execute("DELETE FROM findings")
             conn.execute("DELETE FROM run_tools")
-            conn.execute("DELETE FROM runs")
+            conn.execute("DELETE FROM scan_runs")
 
     def delete_findings_by_tool_name(self, tools: list[str]) -> None:
         """Delete all records related to specific tool(s).
@@ -166,7 +171,7 @@ class FindingRepository:
         - Triage batches whose finding_ids are all from those findings
         - Tool audit log entries for those tools
 
-        Does NOT delete: runs, run_tools.
+        Does NOT delete: scan_runs, run_tools.
         """
         if not tools:
             return
@@ -232,25 +237,27 @@ class FindingRepository:
                 pass
         return count, keys
 
-    def get_finding(self, finding_id: int) -> dict | None:
-        """Return a single finding row by primary key, or None if not found."""
+    def _get_row(self, finding_id: int) -> dict | None:
+        """Return the raw findings row dict by primary key, or None."""
         with self._factory.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM findings WHERE id = ?", (finding_id,)
             ).fetchone()
-            return dict(row) if row is not None else None
+        return dict(row) if row is not None else None
 
-    def get_findings(
+    def get_finding(self, finding_id: int) -> Finding | None:
+        """Return a single finding by primary key, or None if not found."""
+        row = self._get_row(finding_id)
+        return Finding.from_row(row) if row is not None else None
+
+    def _build_findings_filter(
         self,
         tools: list[str] | None = None,
         domain: str | None = None,
         status: str | None = None,
-        repo: str | None = None,
         segments: list[str] | None = None,
         require_file: bool = False,
-        limit: int = 10,
-    ) -> list[dict]:
-        """Return findings matching optional filters, capped at *limit* rows."""
+    ) -> tuple[str, list[object]]:
         clauses: list[str] = []
         params: list[object] = []
         if segments:
@@ -269,15 +276,84 @@ class FindingRepository:
         if status:
             clauses.append("status = ?")
             params.append(status)
-        if repo:
-            clauses.append("repo = ?")
-            params.append(repo)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        params.append(limit)
-        sql = f"SELECT * FROM findings {where} LIMIT ?"
+        return where, params
+
+    def get_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        segments: list[str] | None = None,
+        require_file: bool = False,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[Finding]:
+        """Return findings matching optional filters, capped at *limit* rows."""
+        where, base_params = self._build_findings_filter(
+            tools=tools,
+            domain=domain,
+            status=status,
+            segments=segments,
+            require_file=require_file,
+        )
+        params: list[object] = list(base_params) + [limit, offset]
+        sql = (
+            f"SELECT * FROM findings {where}"
+            " ORDER BY first_seen DESC, id DESC"
+            " LIMIT ? OFFSET ?"
+        )
         with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
+
+    def count_findings(
+        self,
+        tools: list[str] | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        segments: list[str] | None = None,
+        require_file: bool = False,
+    ) -> int:
+        """Return total count of findings matching the given filters."""
+        where, params = self._build_findings_filter(
+            tools=tools,
+            domain=domain,
+            status=status,
+            segments=segments,
+            require_file=require_file,
+        )
+        sql = f"SELECT COUNT(*) FROM findings {where}"
+        with self._factory.connect() as conn:
+            return conn.execute(sql, params).fetchone()[0]
+
+    def _insert_history(
+        self,
+        conn: sqlite3.Connection,
+        finding_id: int,
+        before: dict[str, Any],
+        after: dict[str, Any],
+        source: str,
+        inference_context: dict[str, Any] | None = None,
+    ) -> None:
+        from datetime import UTC, datetime
+
+        conn.execute(
+            "INSERT INTO finding_history"
+            " (finding_id, timestamp, before_values, after_values,"
+            "  inference_context, source)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                finding_id,
+                datetime.now(UTC).isoformat(),
+                json.dumps(before),
+                json.dumps(after),
+                json.dumps(inference_context)
+                if inference_context is not None
+                else None,
+                source,
+            ),
+        )
 
     def update_finding(
         self,
@@ -290,6 +366,9 @@ class FindingRepository:
         attack_vector: str | None,
         call_stack: str | None,
         strategy: str,
+        *,
+        triaged_by: str = "claudecode",
+        source: str = "auto_triage",
     ) -> bool:
         """Update enrichment fields on a finding row.
 
@@ -297,7 +376,7 @@ class FindingRepository:
         """
         from datetime import UTC, datetime
 
-        row = self.get_finding(finding_id)
+        row = self._get_row(finding_id)
         if row is None:
             raise ValueError(f"Finding {finding_id} not found")
         previous_confidence = row["confidence"]
@@ -310,10 +389,11 @@ class FindingRepository:
             "remediation": remediation,
             "attack_vector": attack_vector,
             "call_stack": call_stack,
-            "triaged_by": "claude-code",
+            "triaged_by": triaged_by,
             "triaged_at": now_iso,
             "strategy": strategy,
         }
+        before = dict(row)
         updated_meta = json.dumps(existing_meta)
         finding_type_db = json.dumps([finding_type])
         with self._factory.connect() as conn:
@@ -325,22 +405,29 @@ class FindingRepository:
                 "    enriched = 1, "
                 "    last_seen = ?, "
                 "    triaged_at = ?, "
-                "    triaged_by = 'claude-code', "
+                "    triaged_by = ?, "
                 "    meta = ? "
                 "WHERE id = ?",
                 (
                     confidence,
                     finding_type_db,
-                    severity,
+                    Severity.from_label(severity).rank,
                     now_iso,
                     now_iso,
+                    triaged_by,
                     updated_meta,
                     finding_id,
                 ),
             )
+            after_row = conn.execute(
+                "SELECT * FROM findings WHERE id = ?", (finding_id,)
+            ).fetchone()
+            self._insert_history(
+                conn, finding_id, before, dict(after_row) if after_row else {}, source
+            )
         return True
 
-    def get_reportable_findings(self) -> list[dict]:
+    def get_reportable_findings(self) -> list[Finding]:
         """Return findings where triaged_by IS NOT NULL and should_report = 1.
 
         These are the findings that have been confirmed by triage and are
@@ -351,22 +438,38 @@ class FindingRepository:
         )
         with self._factory.connect() as conn:
             rows = conn.execute(sql).fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
 
-    def get_all_findings(self) -> list[dict]:
+    def get_findings_marked_for_report(self) -> list[Finding]:
+        """Return findings where should_report = 1, regardless of triage.
+
+        Used by the report-assembly path when the caller has opted out of
+        the triage-column requirement but still wants only findings the
+        analyst has marked for inclusion.
+        """
+        sql = "SELECT * FROM findings WHERE should_report = 1"
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [Finding.from_row(r) for r in rows]
+
+    def get_all_findings(self) -> list[Finding]:
         """Return all findings with no triage filter."""
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM findings").fetchall()
-        return [dict(r) for r in rows]
+        return [Finding.from_row(r) for r in rows]
 
     def get_all_findings_deserialized(self) -> list[dict]:
         """Return all findings with no triage filter, deserialised."""
-        return [deserialise_row(row) for row in self.get_all_findings()]
+        with self._factory.connect() as conn:
+            rows = conn.execute("SELECT * FROM findings").fetchall()
+        return [deserialise_row(r) for r in rows]
 
     def update_analyst_fields(
         self,
         finding_id: int,
         fields: dict[str, Any],
+        *,
+        source: str = "web_ui",
     ) -> bool:
         """Update analyst-writable fields on a finding row.
 
@@ -385,7 +488,7 @@ class FindingRepository:
         """
         from datetime import UTC, datetime
 
-        row = self.get_finding(finding_id)
+        row = self._get_row(finding_id)
         if row is None:
             return False
 
@@ -395,7 +498,7 @@ class FindingRepository:
             existing_meta = {}
 
         _META_KEYS: frozenset[str] = frozenset(
-            {"remediation", "risk_type", "owasp_name", "title", "tags"}
+            {"remediation", "risk_type", "owasp_name", "title", "tags", "notes"}
         )
 
         column_updates: dict[str, Any] = {}
@@ -415,15 +518,30 @@ class FindingRepository:
 
         for col, val in column_updates.items():
             set_parts.append(f"{col} = ?")
-            params.append(val)
+            if col == "severity" and val is not None:
+                params.append(Severity.from_label(str(val)).rank)
+            else:
+                params.append(val)
 
         set_parts.extend(["meta = ?", "triaged_by = 'analyst_web'", "triaged_at = ?"])
         params.extend([updated_meta, now_iso])
         params.append(finding_id)
 
+        before = dict(row)
         sql = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
         with self._factory.connect() as conn:
             cursor = conn.execute(sql, params)
+            if cursor.rowcount > 0:
+                after_row = conn.execute(
+                    "SELECT * FROM findings WHERE id = ?", (finding_id,)
+                ).fetchone()
+                self._insert_history(
+                    conn,
+                    finding_id,
+                    before,
+                    dict(after_row) if after_row else {},
+                    source,
+                )
             return cursor.rowcount > 0
 
     def batch_update_analyst_fields(
@@ -433,8 +551,8 @@ class FindingRepository:
     ) -> int:
         """Update analyst-writable named columns on multiple findings in one tx.
 
-        Sets ``triaged_by = 'analyst_web'`` and ``triaged_at`` on every row.
-        Does not touch the meta JSON blob — meta keys are not supported for batch.
+        Sets triaged_by = 'analyst_web' and triaged_at on every row.
+        Does not touch the meta JSON blob; meta keys are not supported for batch.
         Returns the count of rows actually updated.
         """
         from datetime import UTC, datetime
@@ -448,7 +566,10 @@ class FindingRepository:
         params: list[Any] = []
         for col, val in fields.items():
             set_parts.append(f"{col} = ?")
-            params.append(val)
+            if col == "severity" and val is not None:
+                params.append(Severity.from_label(str(val)).rank)
+            else:
+                params.append(val)
         set_parts.extend(["triaged_by = 'analyst_web'", "triaged_at = ?"])
         params.append(now_iso)
 
@@ -483,8 +604,8 @@ class FindingRepository:
         """Return SQLite findings.id values for the given fingerprints.
 
         When ``run_id`` is provided, only rows from that run are considered.
-        This is required now that fingerprints are non-unique across runs —
-        multiple rows may share the same fingerprint value.
+        Fingerprints are non-unique across runs, so multiple rows may share
+        the same fingerprint value.
 
         All matching ids are returned (there may be more than one per
         fingerprint). Missing fingerprints are silently omitted.
@@ -526,7 +647,13 @@ class FindingRepository:
             result.append(d)
         return result
 
-    def update_enrichment_fields(self, finding_id: int, fields: dict) -> None:
+    def update_enrichment_fields(
+        self,
+        finding_id: int,
+        fields: dict,
+        *,
+        source: str = "llm_inference",
+    ) -> None:
         """Write LLM-enriched fields back to the SQLite row.
 
         Named columns updated directly: severity, confidence, description.
@@ -535,7 +662,7 @@ class FindingRepository:
         """
         from datetime import UTC, datetime
 
-        row = self.get_finding(finding_id)
+        row = self._get_row(finding_id)
         if row is None:
             return
 
@@ -551,6 +678,7 @@ class FindingRepository:
             elif key in _ENRICHMENT_COLUMN_FIELDS:
                 column_updates[key] = val
 
+        before = dict(row)
         updated_meta = json.dumps(existing_meta)
         now_iso = datetime.now(UTC).isoformat()
 
@@ -559,12 +687,25 @@ class FindingRepository:
 
         for col, val in column_updates.items():
             set_parts.append(f"{col} = ?")
-            params.append(val)
+            if col == "severity" and val is not None:
+                params.append(Severity.from_label(str(val)).rank)
+            else:
+                params.append(val)
 
         params.append(finding_id)
         sql_upd = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
         with self._factory.connect() as conn:
             conn.execute(sql_upd, params)
+            after_row = conn.execute(
+                "SELECT * FROM findings WHERE id = ?", (finding_id,)
+            ).fetchone()
+            self._insert_history(
+                conn,
+                finding_id,
+                before,
+                dict(after_row) if after_row else {},
+                source,
+            )
 
     def search(self, filters: dict) -> list[dict]:
         """Execute a structured SQL search.
@@ -588,3 +729,311 @@ class FindingRepository:
             {"metadata": deserialise_row(row), "distance": None, "document": ""}
             for row in rows
         ]
+
+    def search_raw(self, filters: dict) -> list[Finding]:
+        """Execute a structured SQL search; return parsed Finding rows.
+
+        Unlike search(), rows are not wrapped in ChromaDB-shaped result
+        envelopes; callers receive Finding instances.
+        """
+        sql, params = FindingQueryBuilder(filters).build()
+        with self._factory.connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [Finding.from_row(row) for row in rows]
+
+    def search_count(self, filters: dict) -> int:
+        """Return the total row count matching *filters* (no pagination)."""
+        sql, params = FindingQueryBuilder(filters).build_count()
+        with self._factory.connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return row[0] if row else 0
+
+    def count_aggregates(self) -> dict:
+        """Return finding counts and dashboard aggregates.
+
+        Buckets: severity, domain, segment, repo, status, tool, plus
+        a 2D severity x status crosstab. Also returns ``total``,
+        per-project ``scans_count`` / ``repos_count`` / ``urls_count``,
+        and the ``last_scan_at`` / ``last_triage_at`` timestamps.
+        """
+        canonical_statuses = ("active", "false_positive", "fixed", "wont_fix")
+        canonical_severities = (
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "informational",
+        )
+
+        with self._factory.connect() as conn:
+            by_severity: dict[str, int] = {}
+            for rank, count in conn.execute(
+                "SELECT severity, COUNT(*) FROM findings"
+                " WHERE severity IS NOT NULL GROUP BY severity"
+            ).fetchall():
+                by_severity[Severity.from_rank(rank).label] = count
+
+            by_domain: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT domain, COUNT(*) FROM findings"
+                    " WHERE domain IS NOT NULL GROUP BY domain"
+                ).fetchall()
+            }
+            by_segment: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT segment, COUNT(*) FROM findings"
+                    " WHERE segment IS NOT NULL GROUP BY segment"
+                ).fetchall()
+            }
+            by_repo: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT r.name, COUNT(*) FROM findings f"
+                    " JOIN repositories r ON f.repo_id = r.id"
+                    " WHERE f.repo_id IS NOT NULL GROUP BY f.repo_id"
+                ).fetchall()
+            }
+            by_status: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT status, COUNT(*) FROM findings"
+                    " WHERE status IS NOT NULL GROUP BY status"
+                ).fetchall()
+            }
+            by_tool: dict[str, int] = {
+                row[0]: row[1]
+                for row in conn.execute(
+                    "SELECT tool, COUNT(*) FROM findings"
+                    " WHERE tool IS NOT NULL GROUP BY tool"
+                ).fetchall()
+            }
+
+            # Pre-populate canonical cells at 0 so the crosstab is dense.
+            by_severity_status: dict[str, dict[str, int]] = {
+                sev: dict.fromkeys(canonical_statuses, 0)
+                for sev in canonical_severities
+            }
+            for rank, status, count in conn.execute(
+                "SELECT severity, status, COUNT(*) FROM findings"
+                " WHERE severity IS NOT NULL AND status IS NOT NULL"
+                " GROUP BY severity, status"
+            ).fetchall():
+                sev_label = Severity.from_rank(rank).label
+                row = by_severity_status.setdefault(
+                    sev_label, dict.fromkeys(canonical_statuses, 0)
+                )
+                row[status] = count
+
+            (total_row,) = conn.execute("SELECT COUNT(*) FROM findings").fetchone()
+            total = int(total_row or 0)
+
+            (scans_row,) = conn.execute(
+                "SELECT COUNT(DISTINCT run_id) FROM findings WHERE run_id IS NOT NULL"
+            ).fetchone()
+            scans_count = int(scans_row or 0)
+
+            (repos_row,) = conn.execute(
+                "SELECT COUNT(DISTINCT repo_id) FROM findings WHERE repo_id IS NOT NULL"
+            ).fetchone()
+            repos_count = int(repos_row or 0)
+
+            (urls_row,) = conn.execute("SELECT COUNT(*) FROM url_findings").fetchone()
+            urls_count = int(urls_row or 0)
+
+            (last_scan_row,) = conn.execute(
+                "SELECT MAX(sr.created_at) FROM scan_runs sr"
+                " JOIN findings f ON f.run_id = sr.id"
+            ).fetchone()
+            last_scan_at = last_scan_row
+
+            (last_triage_row,) = conn.execute(
+                "SELECT MAX(triaged_at) FROM findings WHERE triaged_at IS NOT NULL"
+            ).fetchone()
+            last_triage_at = last_triage_row
+
+        return {
+            "by_severity": by_severity,
+            "by_domain": by_domain,
+            "by_segment": by_segment,
+            "by_repo": by_repo,
+            "by_status": by_status,
+            "by_tool": by_tool,
+            "by_severity_status": by_severity_status,
+            "total": total,
+            "scans_count": scans_count,
+            "repos_count": repos_count,
+            "urls_count": urls_count,
+            "last_scan_at": last_scan_at,
+            "last_triage_at": last_triage_at,
+        }
+
+    def distinct_facet_values(self) -> dict:
+        """Return distinct values per filter dimension for UI dropdowns."""
+        with self._factory.connect() as conn:
+            domains = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT domain FROM findings WHERE domain IS NOT NULL"
+                ).fetchall()
+            )
+            severity_ranks = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT severity FROM findings WHERE severity IS NOT NULL"
+                ).fetchall()
+            )
+            severities = [Severity.from_rank(r).label for r in severity_ranks]
+            statuses = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT status FROM findings WHERE status IS NOT NULL"
+                ).fetchall()
+            )
+            confidence_levels = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT confidence FROM findings"
+                    " WHERE confidence IS NOT NULL"
+                ).fetchall()
+            )
+            finding_types = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT je.value FROM findings,"
+                    " json_each(findings.finding_type) AS je"
+                    " WHERE je.value IS NOT NULL"
+                ).fetchall()
+            )
+            tools = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT tool FROM findings WHERE tool IS NOT NULL"
+                ).fetchall()
+            )
+            repos = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT r.name FROM findings f"
+                    " JOIN repositories r ON f.repo_id = r.id"
+                    " WHERE f.repo_id IS NOT NULL"
+                ).fetchall()
+            )
+            segments = sorted(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT segment FROM findings WHERE segment IS NOT NULL"
+                ).fetchall()
+            )
+        return {
+            "domains": domains,
+            "severities": severities,
+            "statuses": statuses,
+            "confidence_levels": confidence_levels,
+            "finding_types": finding_types,
+            "tools": tools,
+            "repos": repos,
+            "segments": segments,
+        }
+
+    def filter_options(self, filters: dict) -> dict:
+        """Return per-dimension counts under the given filter set.
+
+        Strict semantics: every dimension's counts apply every active
+        filter, including its own dimension's filter. Options with
+        ``count = 0`` are omitted (HAVING COUNT > 0). Every dimension key
+        is always present (empty list when no values match).
+
+        Returns::
+
+            {
+                "severity":     [{"value": "high", "count": 12}, ...],
+                "status":       [...],
+                "confidence":   [...],
+                "domain":       [...],
+                "segment":      [...],
+                "tool":         [...],
+                "finding_type": [...],
+                "repo":         [
+                    {"value": <int>, "label": <str>, "count": <int>}, ...
+                ],
+            }
+        """
+        builder = FindingQueryBuilder(filters)
+        where_parts, params = builder.build_where_parts()
+
+        def _where(extra: str) -> str:
+            return " WHERE " + " AND ".join([*where_parts, extra])
+
+        with self._factory.connect() as conn:
+            severity: list[dict[str, Any]] = [
+                {
+                    "value": Severity.from_rank(rank).label,
+                    "count": int(count),
+                }
+                for rank, count in conn.execute(
+                    "SELECT severity, COUNT(*) FROM findings"
+                    + _where("severity IS NOT NULL")
+                    + " GROUP BY severity HAVING COUNT(*) > 0"
+                    " ORDER BY severity",
+                    params,
+                ).fetchall()
+            ]
+
+            def _scalar(col: str) -> list[dict[str, Any]]:
+                return [
+                    {"value": value, "count": int(count)}
+                    for value, count in conn.execute(
+                        f"SELECT {col}, COUNT(*) FROM findings"
+                        + _where(f"{col} IS NOT NULL")
+                        + f" GROUP BY {col} HAVING COUNT(*) > 0"
+                        f" ORDER BY {col}",
+                        params,
+                    ).fetchall()
+                ]
+
+            status = _scalar("status")
+            confidence = _scalar("confidence")
+            domain = _scalar("domain")
+            segment = _scalar("segment")
+            tool = _scalar("tool")
+
+            finding_type: list[dict[str, Any]] = [
+                {"value": value, "count": int(count)}
+                for value, count in conn.execute(
+                    "SELECT je.value, COUNT(DISTINCT findings.id)"
+                    " FROM findings, json_each(findings.finding_type) AS je"
+                    + _where("je.value IS NOT NULL")
+                    + " GROUP BY je.value"
+                    " HAVING COUNT(DISTINCT findings.id) > 0"
+                    " ORDER BY je.value",
+                    params,
+                ).fetchall()
+            ]
+
+            repo: list[dict[str, Any]] = [
+                {"value": int(rid), "label": name, "count": int(count)}
+                for rid, name, count in conn.execute(
+                    "SELECT findings.repo_id, repositories.name, COUNT(*)"
+                    " FROM findings"
+                    " JOIN repositories"
+                    " ON findings.repo_id = repositories.id"
+                    + _where("findings.repo_id IS NOT NULL")
+                    + " GROUP BY findings.repo_id, repositories.name"
+                    " HAVING COUNT(*) > 0"
+                    " ORDER BY repositories.name",
+                    params,
+                ).fetchall()
+            ]
+
+        return {
+            "severity": severity,
+            "status": status,
+            "confidence": confidence,
+            "domain": domain,
+            "segment": segment,
+            "tool": tool,
+            "finding_type": finding_type,
+            "repo": repo,
+        }

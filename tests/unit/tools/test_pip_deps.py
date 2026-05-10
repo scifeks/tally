@@ -153,7 +153,7 @@ class TestFindOrGenerateRequirementsLocal:
         assert mock_run.call_count == 2
 
     def test_requirements_txt_bypasses_dedup_set(self, tmp_path) -> None:
-        """requirements.txt detection bypasses the dedup set — always returned."""
+        """requirements.txt detection bypasses the dedup set; always returned."""
         req = tmp_path / "requirements.txt"
         req.write_text("requests==2.28.0\n")
         result1 = find_or_generate_requirements(str(tmp_path))

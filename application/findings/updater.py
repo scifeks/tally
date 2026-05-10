@@ -10,9 +10,13 @@ from typing import TYPE_CHECKING
 from domain.tools.constants import CONFIDENCE_LEVELS, FINDING_TYPES, SEVERITY_LEVELS
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.finding_repository import FindingRepositoryPort
     from core.config.manager import ConfigManager
-    from infrastructure.store.repositories.audit import AuditRepository
-    from infrastructure.store.repositories.findings import FindingRepository
+    from core.config.schemas import Repository
 
 
 def reconstruct_abs_path(
@@ -49,13 +53,17 @@ class FindingUpdateService:
 
     def __init__(
         self,
-        finding_repo: FindingRepository,
-        audit_repo: AuditRepository,
+        finding_repo: FindingRepositoryPort,
+        audit_repo: AuditRepositoryPort,
         config_manager: ConfigManager | None = None,
+        triaged_by: str = "claudecode",
+        repo_factory: Callable[[str | Path, str], list[Repository]] | None = None,
     ) -> None:
         self._finding_repo = finding_repo
         self._audit_repo = audit_repo
         self._config_manager = config_manager
+        self._triaged_by = triaged_by
+        self._repo_factory = repo_factory
 
     def resolve_finding_paths(
         self,
@@ -68,12 +76,16 @@ class FindingUpdateService:
         Returns (abs_path, repo_path), or (None, None) if resolution fails.
         """
         try:
-            if project_name is None or self._config_manager is None:
+            if (
+                project_name is None
+                or self._config_manager is None
+                or self._repo_factory is None
+            ):
                 return (None, None)
-            config = self._config_manager.load_project_config(project_name)
-            if config is None:
-                return (None, None)
-            repos = [r.model_dump() for r in config.repositories]
+
+            base_path = self._config_manager.base_path
+            active = self._repo_factory(base_path, project_name)
+            repos = [r.model_dump() for r in active]
             return (
                 reconstruct_abs_path(file, repo_name, repos),
                 resolve_repo_path(repo_name, repos),
@@ -167,6 +179,8 @@ class FindingUpdateService:
                 attack_vector,
                 call_stack,
                 strategy,
+                triaged_by=self._triaged_by,
+                source="auto_triage",
             )
         except Exception as exc:
             duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)

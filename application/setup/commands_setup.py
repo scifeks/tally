@@ -47,8 +47,7 @@ def _has_metachar(s: str) -> bool:
 def _warn_metachar(label: str, value: str) -> None:
     if _has_metachar(value):
         print(
-            f"  Warning: {label} contains shell metacharacters "
-            "— verify this is correct."
+            f"  Warning: {label} contains shell metacharacters; verify this is correct."
         )
 
 
@@ -60,6 +59,74 @@ def find_local_binary(tool_name: str) -> str | None:
         if found:
             return found
     return None
+
+
+def _discover_wrapper_tools(location: str) -> list[str]:
+    wrappers_dir = (
+        Path(__file__).parent.parent.parent
+        / "infrastructure"
+        / "tools"
+        / "wrappers"
+        / location
+    )
+    return sorted(
+        p.stem.replace("_", "-")
+        for p in wrappers_dir.glob("*.py")
+        if p.stem != "__init__"
+    )
+
+
+def resolve_local_binary(tool_name: str, configured_path: str | None) -> str | None:
+    if (
+        configured_path
+        and configured_path != "skip"
+        and not _has_metachar(configured_path)
+        and shutil.which(configured_path)
+    ):
+        return configured_path
+    return find_local_binary(tool_name)
+
+
+def load_commands_json(base_path: str) -> dict[str, dict]:
+    path = Path(base_path) / "config" / "commands.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
+
+def reconcile_commands_with_system(existing: dict[str, dict]) -> dict[str, dict]:
+    reconciled: dict[str, dict] = {}
+
+    for name, entry in existing.items():
+        if entry.get("location") == "docker":
+            reconciled[name] = dict(entry)
+
+    for tool_name in _discover_wrapper_tools("local"):
+        if tool_name in reconciled:
+            continue
+        configured_path = (existing.get(tool_name) or {}).get("path")
+        resolved = resolve_local_binary(tool_name, configured_path)
+        if resolved is None:
+            continue
+        meta = _get_wrapper_meta(tool_name, "local")
+        reconciled[tool_name] = {
+            "type": meta["tool_type"],
+            "location": "local",
+            "path": resolved,
+        }
+
+    return dict(sorted(reconciled.items()))
+
+
+def sync_commands_config(base_path: str) -> None:
+    existing = load_commands_json(base_path)
+    reconciled = reconcile_commands_with_system(existing)
+    commands_path = Path(base_path) / "config" / "commands.json"
+    if commands_path.exists() and json.loads(commands_path.read_text()) == reconciled:
+        return
+    commands_path.parent.mkdir(parents=True, exist_ok=True)
+    commands_path.write_text(json.dumps(reconciled, indent=2))
 
 
 def interview_local(tool_name: str, defaults: dict | None = None) -> dict | None:
@@ -248,7 +315,7 @@ def run_commands_setup(base_path: str) -> None:
 
     all_tools = sorted(local_tools | docker_tools)
 
-    print("\nTally — First-Run Tool Setup")
+    print("\nTally - First-Run Tool Setup")
     print("=" * 40)
     print("Configure which security tools to use and how to run them.")
     print("(Delete config/commands.json to re-run this setup at any time.)\n")
@@ -264,7 +331,7 @@ def run_commands_setup(base_path: str) -> None:
         if entry is not None:
             commands[tool_name] = entry
 
-    # Write directly — ConfigManager requires global.json which may not exist yet
+    # Write directly; ConfigManager requires global.json which may not exist yet
     config_dir = Path(base_path) / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_dir / "commands.json", "w") as f:
@@ -277,7 +344,7 @@ def run_commands_setup(base_path: str) -> None:
         detail = entry.get("path", "") or entry.get("container", {}).get("name", "")
         print(f"  + {name:<18} ({loc}) {detail}")
     if not commands:
-        print("  (none — all tools skipped)")
+        print("  (none: all tools skipped)")
     print("\nconfig/commands.json written.")
     print(
         "If anything was misconfigured, delete config/commands.json and re-run tally.\n"

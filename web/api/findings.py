@@ -1,200 +1,398 @@
-"""GET and PATCH /api/findings endpoints."""
+"""Project-scoped findings endpoints (GET, PATCH, SSE)."""
 
 from __future__ import annotations
 
+import asyncio
 import json
-import re
+import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import StreamingResponse
 
-from infrastructure.store import FindingRepository
-from web.api.chroma_sync import sync_finding_to_chroma
-from web.api.schemas import BatchFindingPatchRequest, FindingPatchRequest
+from application.events.types import EOS
+from application.findings.findings_service import FindingsService
+from application.locking import FindingsBusy
+from domain.findings.severity import Severity
+from domain.findings.sort import FindingSortColumn, SortDirection
+from factories.persistence import (
+    ProjectNotFound,
+    create_findings_service,
+)
+from web.adapters.event_bus_finding_sink import EventBusFindingSink
+from web.api._errors import FindingsLocked, NotFound
+from web.api._finding_serialiser import serialise_finding as _serialise_finding
+from web.api._project_resolver import _resolve_project
+from web.api.schemas import (
+    BatchFindingPatchRequest,
+    BatchPatchResponse,
+    FindingHistoryItem,
+    FindingHistoryResponse,
+    FindingPatchRequest,
+    FindingResponse,
+    FindingsCountsResponse,
+    FindingsFacetsResponse,
+    FindingsFilterOptionsResponse,
+    FindingsListResponse,
+)
+from web.sse import format_sse_frame
 
+__all__ = ["router", "v1_router", "_serialise_finding"]
+
+logger = logging.getLogger("tally.web.findings")
+
+# Routes moved to v1_router; kept for backward-compat imports.
 router = APIRouter()
 
-# Matches type_secret, type_vulnerability, type_weakness, etc.
-_TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
 
-
-def _serialise_finding(row: dict[str, Any]) -> dict[str, Any]:
-    """Serialise a raw SQLite findings row for the API response.
-
-    Steps applied:
-    - Parse the ``meta`` JSON blob to a dict; strip all ``type_*`` flags.
-    - Parse ``finding_type`` and ``cwe`` JSON array strings to lists.
-    - Expose the named ``fingerprint`` column as ``id_fingerprint`` to avoid
-      collision with semgrep's scanner fingerprint stored in ``meta``.
-    """
-    result: dict[str, Any] = dict(row)
-
-    # Parse meta JSON blob.
+def _service(request: Request, project_id: int) -> FindingsService:
+    """Build a FindingsService for *project_id* or raise 404."""
     try:
-        meta: dict[str, Any] = json.loads(result.get("meta") or "{}")
-    except (json.JSONDecodeError, TypeError):
-        meta = {}
-
-    # Strip ChromaDB-only type_* flags.
-    meta = {k: v for k, v in meta.items() if not _TYPE_FLAG_RE.match(k)}
-    result["meta"] = meta
-
-    # Parse finding_type JSON array string → list.
-    ft_raw = result.get("finding_type")
-    if ft_raw:
-        try:
-            result["finding_type"] = json.loads(ft_raw)
-        except (json.JSONDecodeError, TypeError):
-            result["finding_type"] = []
-    else:
-        result["finding_type"] = []
-
-    # Parse cwe JSON array string → list.
-    cwe_raw = result.get("cwe")
-    if cwe_raw:
-        try:
-            result["cwe"] = json.loads(cwe_raw)
-        except (json.JSONDecodeError, TypeError):
-            result["cwe"] = []
-    else:
-        result["cwe"] = []
-
-    # Rename named fingerprint column to id_fingerprint.
-    result["id_fingerprint"] = result.pop("fingerprint", None)
-
-    return result
+        return create_findings_service(
+            request.app.state.project_registry,
+            project_id,
+            knowledge_base_cache=request.app.state.knowledge_base_cache,
+            base_path=request.app.state.base_path,
+            event_sink=EventBusFindingSink(request.app.state.event_bus),
+        )
+    except ProjectNotFound as exc:
+        raise NotFound(f"project {project_id} not found") from exc
 
 
-@router.get("/")
-def list_findings(
-    request: Request,
-    tool: str | None = Query(default=None),
-    domain: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    segment: str | None = Query(default=None),
-    visualize_only: bool = Query(default=False),
-) -> list[dict]:
-    """Return findings, optionally filtered by tool, domain, status, or segment."""
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
-    rows = repo.get_findings(
-        tools=[tool] if tool else None,
-        domain=domain,
-        status=status,
-        segments=[segment] if segment else None,
-        limit=10_000,
-    )
-    if visualize_only:
-        from application.rag.ingestor import ToolHandlerFactory
-
-        rows = [
-            r
-            for r in rows
-            if getattr(ToolHandlerFactory.load(r["tool"]), "should_visualize", True)
-        ]
-    return [_serialise_finding(r) for r in rows]
-
-
-@router.get("/{finding_id}")
-def get_finding(request: Request, finding_id: int) -> dict:
-    """Return a single finding by integer primary key."""
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
-    row = repo.get_finding(finding_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Finding not found")
-    return _serialise_finding(row)
-
-
-# Maps FindingPatchRequest field names for meta keys to their blob keys.
-_META_FIELD_MAP: dict[str, str] = {
-    "meta_remediation": "remediation",
-    "meta_risk_type": "risk_type",
-    "meta_owasp_name": "owasp_name",
-    "meta_title": "title",
-    "meta_tags": "tags",
-}
-
-
-@router.patch("/batch")
-async def batch_patch_findings(
-    request: Request,
-    body: BatchFindingPatchRequest,
-) -> dict:
-    """Apply analyst field updates to multiple findings in one transaction.
-
-    Accepts the same patchable fields as the single-finding PATCH.
-    Sets ``triaged_by = 'analyst_web'`` and ``triaged_at = now()`` for
-    every row in the batch.
-
-    Returns ``{"updated": N}`` where N is the count of rows actually updated.
-    Does not sync to ChromaDB — should_report is a UI annotation only.
-    """
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
-
-    raw = body.model_dump(exclude={"ids"}, exclude_none=True)
+def _translate_patch_fields(raw: dict[str, Any]) -> dict[str, Any]:
+    """Reshape a Pydantic patch body into repository column schema."""
     fields: dict[str, Any] = {}
     for k, v in raw.items():
-        if k == "should_report":
-            fields["should_report"] = 1 if v else 0
-        else:
-            fields[k] = v
-
-    updated = repo.batch_update_analyst_fields(body.ids, fields)
-    return {"updated": updated}
-
-
-@router.patch("/{finding_id}")
-async def patch_finding(
-    request: Request,
-    finding_id: int,
-    body: FindingPatchRequest,
-) -> dict:
-    """Apply analyst corrections to a finding's editable fields.
-
-    Only fields explicitly included in the request body are written.
-    Locked fields sent by the client are silently ignored.
-    Sets ``triaged_by = 'analyst_web'`` and ``triaged_at = now()`` on
-    every successful write.
-
-    Returns the updated finding on success, or 404 if not found.
-    After the SQLite write, performs a best-effort ChromaDB metadata
-    sync — the response is 200 regardless of sync outcome.
-    """
-    factory = request.app.state.connection_factory
-    repo = FindingRepository(factory)
-
-    raw = body.model_dump(exclude_none=True)
-    changed_fields: set[str] = set(raw.keys())
-    # triaged_by is set automatically on every analyst write — always sync it.
-    changed_fields.add("triaged_by")
-
-    fields: dict[str, Any] = {}
-    for k, v in raw.items():
-        if k in _META_FIELD_MAP:
-            fields[_META_FIELD_MAP[k]] = v
-        elif k == "finding_type":
-            fields["finding_type"] = json.dumps(v)
-        elif k == "cwe":
-            fields["cwe"] = json.dumps(v)
+        if k.startswith("meta_"):
+            fields[k.removeprefix("meta_")] = v
+        elif k in ("finding_type", "cwe"):
+            fields[k] = json.dumps(v)
         elif k == "should_report":
             fields["should_report"] = 1 if v else 0
         else:
             fields[k] = v
+    return fields
 
-    updated = repo.update_analyst_fields(finding_id, fields)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Finding not found")
 
-    row = repo.get_finding(finding_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Finding not found")
+v1_router = APIRouter()
 
-    serialised = _serialise_finding(row)
-    sync_finding_to_chroma(
-        finding_id=finding_id,
-        rag_engine=request.app.state.rag_engine,
-        finding_repo=repo,
+
+@v1_router.get(
+    "/{project_id}/findings/counts",
+    response_model=FindingsCountsResponse,
+)
+async def get_findings_counts(
+    project_id: int,
+    request: Request,
+) -> FindingsCountsResponse:
+    """Return aggregate finding counts bucketed by five dimensions."""
+    service = _service(request, project_id)
+    data = await asyncio.to_thread(service.analyst.count_aggregates)
+    return FindingsCountsResponse(**data)
+
+
+@v1_router.get(
+    "/{project_id}/findings/facets",
+    response_model=FindingsFacetsResponse,
+)
+async def get_findings_facets(
+    project_id: int,
+    request: Request,
+) -> FindingsFacetsResponse:
+    """Return distinct filter values present in this project's findings."""
+    service = _service(request, project_id)
+    data = await asyncio.to_thread(service.analyst.distinct_facet_values)
+    return FindingsFacetsResponse(**data)
+
+
+@v1_router.get(
+    "/{project_id}/findings/filter-options",
+    response_model=FindingsFilterOptionsResponse,
+)
+async def get_findings_filter_options(
+    project_id: int,
+    request: Request,
+    severity: list[str] | None = Query(default=None),
+    confidence: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    domain: list[str] | None = Query(default=None),
+    tool: list[str] | None = Query(default=None),
+    repo_id: list[int] | None = Query(default=None),
+    segment: list[str] | None = Query(default=None),
+    finding_type: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+) -> FindingsFilterOptionsResponse:
+    """Return filter option counts for each dimension under active filters.
+
+    Counts reflect strict filter semantics (all active filters apply).
+    Options with zero count are omitted to avoid clutter in the UI.
+    """
+    service = _service(request, project_id)
+
+    if severity:
+        for s in severity:
+            Severity.from_label(s)
+
+    conditions: list[tuple[str, str, list[Any]]] = []
+    for col, values in [
+        ("severity", severity),
+        ("confidence", confidence),
+        ("status", status),
+        ("domain", domain),
+        ("tool", tool),
+        ("segment", segment),
+        ("finding_type", finding_type),
+    ]:
+        if values:
+            conditions.append((col, "=", list(values)))
+    if repo_id:
+        conditions.append(("repo_id", "=", [int(v) for v in repo_id]))
+
+    filters: dict = {
+        "conditions": conditions,
+        "search": search,
+    }
+
+    data = await asyncio.to_thread(service.analyst.filter_options, filters)
+    return FindingsFilterOptionsResponse(**data)
+
+
+@v1_router.get(
+    "/{project_id}/findings",
+    response_model=FindingsListResponse,
+)
+async def list_findings(
+    project_id: int,
+    request: Request,
+    severity: list[str] | None = Query(default=None),
+    confidence: list[str] | None = Query(default=None),
+    status: list[str] | None = Query(default=None),
+    domain: list[str] | None = Query(default=None),
+    tool: list[str] | None = Query(default=None),
+    repo_id: list[int] | None = Query(default=None),
+    segment: list[str] | None = Query(default=None),
+    finding_type: list[str] | None = Query(default=None),
+    search: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+    order: str | None = Query(default=None, pattern="^(asc|desc)$"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> FindingsListResponse:
+    """Return a paginated, filtered, sorted list of findings.
+
+    ``repo_id`` (integer DB id) is the canonical repo filter. Each
+    response item carries both ``repo_id`` and ``repo_name`` so callers
+    do not have to JOIN client-side.
+    """
+    service = _service(request, project_id)
+
+    # ValueError from invalid severity labels surfaces as 422 via the
+    # global error handler.
+    if severity:
+        for s in severity:
+            Severity.from_label(s)
+
+    sort_col: FindingSortColumn | None = None
+    if sort:
+        sort_col = FindingSortColumn.from_label(sort)
+    sort_dir: SortDirection | None = None
+    if order:
+        sort_dir = SortDirection.from_label(order)
+
+    conditions: list[tuple[str, str, list[Any]]] = []
+    for col, values in [
+        ("severity", severity),
+        ("confidence", confidence),
+        ("status", status),
+        ("domain", domain),
+        ("tool", tool),
+        ("segment", segment),
+        ("finding_type", finding_type),
+    ]:
+        if values:
+            conditions.append((col, "=", list(values)))
+    if repo_id:
+        conditions.append(("repo_id", "=", [int(v) for v in repo_id]))
+
+    filters: dict = {
+        "conditions": conditions,
+        "sort_by": sort_col,
+        "sort_dir": sort_dir,
+        "offset": offset,
+        "limit": limit,
+        "search": search,
+    }
+
+    total = await asyncio.to_thread(service.analyst.search_count, filters)
+    rows = await asyncio.to_thread(service.analyst.search_raw, filters)
+
+    repo_name_by_id = service.repo_name_lookup()
+    items: list[FindingResponse] = []
+    for r in rows:
+        serial = _serialise_finding(r, service.lock_state_for(r.id))
+        rid = serial.get("repo_id")
+        if isinstance(rid, int):
+            serial["repo_name"] = repo_name_by_id.get(rid, "")
+        else:
+            serial["repo_name"] = ""
+        items.append(FindingResponse.model_validate(serial))
+    return FindingsListResponse(
+        items=items,
+        total=total,
+        offset=offset,
+        limit=limit,
     )
-    return serialised
+
+
+@v1_router.get("/{project_id}/findings/events")
+async def findings_events(
+    project_id: int,
+    request: Request,
+) -> StreamingResponse:
+    """Stream finding_updated events for this project via SSE.
+
+    Sends only new events (no snapshot on connect). Each event carries
+    the full serialized finding record and project_id for routing.
+    """
+    _resolve_project(request, project_id)
+    bus = request.app.state.event_bus
+    sub_id, queue = await bus.subscribe("finding")
+
+    async def event_stream() -> AsyncIterator[str]:
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                if item is EOS:
+                    break
+                if item.payload.get("project_id") != project_id:
+                    continue
+                yield format_sse_frame(item)
+        finally:
+            await bus.unsubscribe("finding", sub_id)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@v1_router.get(
+    "/{project_id}/findings/{finding_id}",
+    response_model=FindingResponse,
+)
+async def get_finding(
+    project_id: int,
+    finding_id: int,
+    request: Request,
+) -> dict:
+    """Return a single finding by integer primary key."""
+    service = _service(request, project_id)
+    finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
+    if finding is None:
+        raise NotFound("Finding not found")
+    return _serialise_finding(finding, service.lock_state_for(finding.id))
+
+
+@v1_router.get(
+    "/{project_id}/findings/{finding_id}/history",
+    response_model=FindingHistoryResponse,
+)
+async def get_finding_history(
+    project_id: int,
+    finding_id: int,
+    request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=500),
+) -> FindingHistoryResponse:
+    """Return paginated mutation history for a single finding."""
+    service = _service(request, project_id)
+    finding = await asyncio.to_thread(service.analyst.get_finding, finding_id)
+    if finding is None:
+        raise NotFound("Finding not found")
+    history_repo = service.history_repo
+    total = await asyncio.to_thread(history_repo.count_for_finding, finding_id)
+    items = await asyncio.to_thread(
+        history_repo.list_for_finding, finding_id, offset=offset, limit=limit
+    )
+    return FindingHistoryResponse(
+        items=[
+            FindingHistoryItem(
+                id=h.id,
+                finding_id=h.finding_id,
+                timestamp=h.timestamp,
+                before_values=h.before_values,
+                after_values=h.after_values,
+                inference_context=h.inference_context,
+                source=h.source,
+            )
+            for h in items
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@v1_router.patch(
+    "/{project_id}/findings/batch",
+    response_model=BatchPatchResponse,
+)
+async def batch_patch_findings(
+    project_id: int,
+    request: Request,
+    body: BatchFindingPatchRequest,
+) -> BatchPatchResponse:
+    """Apply analyst field updates to multiple findings in one request.
+
+    Locked findings are skipped (not errored). Returns three disjoint
+    id buckets: updated, skipped_locked, not_found.
+    """
+    service = _service(request, project_id)
+    raw = body.model_dump(exclude={"ids"}, exclude_none=True)
+    fields = _translate_patch_fields(raw)
+
+    result = await asyncio.to_thread(service.batch_patch_findings, body.ids, fields)
+    return BatchPatchResponse(
+        updated=result.updated,
+        skipped_locked=result.skipped_locked,
+        not_found=result.not_found,
+        skip_reasons=result.skip_reasons,
+    )
+
+
+@v1_router.patch(
+    "/{project_id}/findings/{finding_id}",
+    response_model=FindingResponse,
+)
+async def patch_finding(
+    project_id: int,
+    finding_id: int,
+    request: Request,
+    body: FindingPatchRequest,
+) -> dict:
+    """Update analyst-editable fields on a finding.
+
+    Returns 409 if locked; 404 if not found. Syncs metadata to ChromaDB
+    after the write.
+    """
+    service = _service(request, project_id)
+    raw = body.model_dump(exclude_none=True)
+    fields = _translate_patch_fields(raw)
+
+    try:
+        finding = await asyncio.to_thread(service.patch_finding, finding_id, fields)
+    except FindingsBusy as exc:
+        raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
+
+    if finding is None:
+        raise NotFound("Finding not found")
+
+    return _serialise_finding(finding, service.lock_state_for(finding.id))

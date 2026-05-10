@@ -65,10 +65,6 @@ class TestLoadBlurb:
         result = load_blurb("repeat", {"x": "foo"})
         assert result == "foo and foo again."
 
-    def test_returns_string(self, blurbs_dir: Path) -> None:
-        (blurbs_dir / "s.md").write_text("hello", encoding="utf-8")
-        assert isinstance(load_blurb("s"), str)
-
 
 class TestRealBlurbFiles:
     """Smoke tests against the actual shipped blurb files."""
@@ -86,11 +82,6 @@ class TestRealBlurbFiles:
         assert "2025-06-01" in result
         assert "white box" in result
 
-    def test_severity_definitions_no_placeholders(self) -> None:
-        result = load_blurb("severity-definitions")
-        assert "Critical" in result
-        assert "Informational" in result
-
     def test_tools_used_substitution(self) -> None:
         result = load_blurb("tools-used", {"tool_list": "- semgrep\n- gitleaks"})
         assert "semgrep" in result
@@ -104,8 +95,3 @@ class TestRealBlurbFiles:
             },
         )
         assert "White Box" in result
-
-    def test_glossary_no_placeholders(self) -> None:
-        result = load_blurb("glossary")
-        assert "Authentication" in result
-        assert "Vulnerability" in result

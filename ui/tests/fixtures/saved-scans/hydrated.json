@@ -1,0 +1,44 @@
+{
+  "id": 2,
+  "name": "Full SAST + SCA",
+  "skipEnrichment": true,
+  "repos": [
+    {
+      "id": 1,
+      "name": "dvwa",
+      "deletedAt": null
+    },
+    {
+      "id": 2,
+      "name": "php-goof",
+      "deletedAt": null
+    }
+  ],
+  "tools": [
+    {
+      "toolName": "gitleaks"
+    },
+    {
+      "toolName": "osv-scanner"
+    },
+    {
+      "toolName": "semgrep"
+    }
+  ],
+  "argProfiles": [
+    {
+      "id": 3,
+      "toolName": "gitleaks",
+      "name": "with-config"
+    },
+    {
+      "id": 4,
+      "toolName": "semgrep",
+      "name": "strict-with-rules"
+    }
+  ],
+  "skipToolIds": ["xsstrike"],
+  "segments": ["sast", "sca", "secrets"],
+  "createdAt": "2026-05-05T01:42:28.039735+00:00",
+  "updatedAt": "2026-05-05T01:42:28.039735+00:00"
+}

@@ -20,12 +20,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-from infrastructure.tools.dependency_detection import (
-    build_exclude_path_prefixes,
-    detect_dependency_dirs,
-)
 from infrastructure.tools.parsers.noir import (
     parse_noir_json,
     parse_noir_json_string,
@@ -130,9 +127,7 @@ class BaseNoirTool(ToolInterface):
     _candidate_commands: list[str] = ["noir"]
     _command_entry_type: str = "repo"
 
-    # ------------------------------------------------------------------
-    # ToolInterface — identity
-    # ------------------------------------------------------------------
+    # ToolInterface: identity
 
     @property
     def name(self) -> str:
@@ -149,17 +144,15 @@ class BaseNoirTool(ToolInterface):
     @property
     def description(self) -> str:
         return (
-            "OWASP Noir — attack surface detector that discovers API endpoints "
-            "by static analysis and emits an OAS3 spec for downstream DAST."
+            "OWASP Noir attack surface detector that discovers API endpoints "
+            "via static analysis and emits an OAS3 spec for downstream DAST."
         )
 
     @property
     def scan_segment(self) -> str:
         return "web"
 
-    # ------------------------------------------------------------------
-    # ToolInterface — behaviour flags
-    # ------------------------------------------------------------------
+    # ToolInterface: behaviour flags
 
     @property
     def skip(self) -> bool:
@@ -183,7 +176,7 @@ class BaseNoirTool(ToolInterface):
 
     @property
     def language_gates(self) -> list[str]:
-        # Language-agnostic — scans any source tree.
+        # Language-agnostic; scans any source tree.
         return []
 
     @property
@@ -203,9 +196,7 @@ class BaseNoirTool(ToolInterface):
     def supported_languages(self) -> list[str] | None:
         return self.language_gates or None
 
-    # ------------------------------------------------------------------
-    # ToolInterface — parse + execute
-    # ------------------------------------------------------------------
+    # ToolInterface: parse and execute
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse Noir output.
@@ -223,42 +214,32 @@ class BaseNoirTool(ToolInterface):
         """Return one ExecutionPass that scans the repo source tree."""
         assert context.repo is not None
         repo_path = context.registry.get_repo_path(self.name, context.repo)
-        output_dir = (
-            Path(context.base_path)
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "noir"
-        )
+        output_dir = ProjectPaths.from_canonical(
+            context.base_path, context.project_name
+        ).tool_output_dir("noir")
         output_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{context.repo.name}_{ts}_oas3.json")
 
         techs = _compute_noir_techs(context.repo.languages or [])
-        dep_dirs = detect_dependency_dirs(Path(repo_path))
-        exclude_path_prefixes = build_exclude_path_prefixes(dep_dirs)
 
         kwargs: dict[str, object] = {
             "source_path": repo_path,
             "output_file": output_file,
             "techs": techs,
-            "exclude_path_prefixes": exclude_path_prefixes,
         }
 
         pass_env: dict[str, str] | None = None
-        global_config = context.config_manager.global_config
-        noir_provider = global_config.noir_provider
-        if noir_provider:
-            provider_config = getattr(global_config, noir_provider, None)
-            if provider_config is not None:
-                # Noir's Ollama adapter is only activated by the "ollama"
-                # keyword, not a raw URL. Pass the actual host via OLLAMA_HOST
-                # so the adapter can reach a non-localhost server.
-                kwargs["ai_provider_url"] = "ollama"
-                kwargs["ai_model"] = provider_config.model
-                if provider_config.num_ctx is not None:
-                    kwargs["ai_max_token"] = provider_config.num_ctx
-                pass_env = {"OLLAMA_HOST": provider_config.base_url}
+        noir_provider = context.tool_config.noir_provider
+        if noir_provider is not None:
+            # Noir's Ollama adapter is only activated by the "ollama" keyword,
+            # not a raw URL. Pass the actual host via OLLAMA_HOST so the
+            # adapter can reach a non-localhost server.
+            kwargs["ai_provider_url"] = "ollama"
+            kwargs["ai_model"] = noir_provider.model
+            if noir_provider.num_ctx is not None:
+                kwargs["ai_max_token"] = noir_provider.num_ctx
+            pass_env = {"OLLAMA_HOST": noir_provider.base_url}
 
         return [
             ExecutionPass(

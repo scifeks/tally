@@ -18,11 +18,6 @@ from ._sca_shared import (
 _DEFAULT_SEVERITY = "low"
 
 
-# ---------------------------------------------------------------------------
-# Parse functions (called by BaseComposerAuditTool.parse_output)
-# ---------------------------------------------------------------------------
-
-
 def parse_composer_audit_json(json_path: Path) -> dict[str, Any]:
     """Parse a composer audit JSON output file into structured data."""
     try:
@@ -40,11 +35,6 @@ def parse_composer_audit_json_string(json_string: str) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         return {"error": f"JSON parse error: {exc}", "raw_output": json_string}
     return _parse_composer_audit_data(data)
-
-
-# ---------------------------------------------------------------------------
-# Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -87,11 +77,6 @@ def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
             "ecosystems": ["Packagist"],
         },
     }
-
-
-# ---------------------------------------------------------------------------
-# Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 class ComposerAuditHandler:

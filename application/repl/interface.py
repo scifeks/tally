@@ -5,6 +5,7 @@ import os
 import shlex
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
@@ -14,11 +15,16 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from application.ports.web_ui_runner import WebUiRunnerPort
 from application.project import InteractiveProjectWizard
 from application.project.manager import ProjectManager
+from application.project.registry_service import ProjectRegistryService
 from application.rag.ingestor import get_tool_domain
+from application.repl.adapters.dependency_summary_display import (
+    print_installed_system_tools,
+)
+from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
-    FindingsCommands,
     KnowledgeCommands,
     ProjectCommands,
     PurgeCommand,
@@ -26,19 +32,25 @@ from application.repl.commands import (
     ScanCommands,
     ToolCommands,
     TriageCommands,
+    UiCommands,
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
-from application.startup.checker import print_installed_system_tools
-from application.tools.registry import print_discovery_summary
+from application.runtime import (
+    RuntimeDependencyService,
+    build_runtime_dependency_probes,
+)
+from application.tools.registry import ToolRegistry, discover_tools
+from application.triage.readiness import compute_triage_readiness
 from core.config import ConfigManager
-from web.server import create_server as _create_web_server
+
+if TYPE_CHECKING:
+    from application.rag.knowledge_base import FindingKnowledgeBase
 
 _log = logging.getLogger(__name__)
 
-# When TALLY_HARNESS=1 the REPL skips prompt_toolkit and uses a plain
-# stdin loop.  After each command the sentinel below is printed to stdout
-# so the test harness can reliably detect when the REPL is ready for
-# the next command.
+# When TALLY_HARNESS=1 the REPL uses plain stdin instead of prompt_toolkit.
+# The sentinel is printed to stdout before each prompt so the consumer
+# can reliably detect when the REPL is ready for input.
 _HARNESS_SENTINEL = "__TALLY_PROMPT__"
 
 _VERSION = "1.0"
@@ -59,7 +71,7 @@ _COMPLETIONS = [
     "purge",
     "report",
     "triage",
-    "findings",
+    "ui",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -211,14 +223,49 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
 class REPL:
     """Interactive REPL shell with Rich UI and prompt_toolkit input."""
 
-    def __init__(self, base_path: str = "."):
+    def __init__(
+        self,
+        base_path: str = ".",
+        runtime_service: RuntimeDependencyService | None = None,
+        project_registry: ProjectRegistryService | None = None,
+        web_ui_runner: WebUiRunnerPort | None = None,
+        tool_registry: ToolRegistry | None = None,
+    ):
         self.base_path = base_path
         self.console = Console()
+        if project_registry is None:
+            from factories.persistence import (
+                build_default_registry,
+            )
+
+            project_registry = build_default_registry(base_path)
+        self.project_registry = project_registry
         self.config = ConfigManager(base_path)
-        self.projects = ProjectManager(base_path)
+        self.projects = ProjectManager(base_path, registry=project_registry)
         self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
-        self.help_renderer = HelpRenderer(self.console)
+        self.knowledge_base_cache: dict[str, FindingKnowledgeBase | None] = {}
+        if runtime_service is None:
+            runtime_service = RuntimeDependencyService(
+                build_runtime_dependency_probes(base_path=base_path)
+            )
+        self._runtime_service = runtime_service
+        self.triage_readiness = compute_triage_readiness(
+            base_path=base_path,
+            docker_available=runtime_service.is_installed("docker"),
+        )
+        if web_ui_runner is None:
+            from infrastructure.web_ui.runner import WebUiRunner
+
+            web_ui_runner = WebUiRunner()
+        if tool_registry is None:
+            tool_registry = ToolRegistry()
+            discover_tools(tool_registry, base_path)
+        self.tool_registry = tool_registry
+        self.help_renderer = HelpRenderer(
+            self.console,
+            triage_readiness=self.triage_readiness,
+        )
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
@@ -226,13 +273,7 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self)
-        self.findings_commands = FindingsCommands(
-            self, server_factory=_create_web_server
-        )
-
-    # ------------------------------------------------------------------
-    # Public entry point
-    # ------------------------------------------------------------------
+        self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
     def run(self) -> None:
         """Start the REPL loop."""
@@ -243,8 +284,10 @@ class REPL:
             "[dim]Run 'tally --check' to see full dependency status at any time.[/dim]"
         )
         self._print_banner()
-        print_installed_system_tools(self.console)
-        print_discovery_summary(self.console)
+        print_installed_system_tools(
+            self.console, runtime_deps=self._runtime_service.statuses()
+        )
+        print_discovery_summary(self.console, self.tool_registry)
 
         history_path = Path.home() / ".tally-repl-history"
         session: PromptSession = PromptSession(
@@ -256,10 +299,10 @@ class REPL:
             try:
                 raw = session.prompt(self._get_prompt())
             except KeyboardInterrupt:
-                # Ctrl+C — stay in loop
+                # Ctrl+C: stay in loop
                 continue
             except EOFError:
-                # Ctrl+D — exit
+                # Ctrl+D: exit
                 break
 
             raw = raw.strip()
@@ -281,17 +324,12 @@ class REPL:
         self.console.print("Goodbye!")
 
     def _run_harness(self) -> None:
-        """Plain-stdin REPL loop used by the test harness.
-
-        Prints _HARNESS_SENTINEL to stdout before waiting for each
-        command so pexpect can reliably detect when the REPL is ready.
-        Interactive wizard commands (which call input() directly) work
-        normally — the sentinel only appears at the top-level REPL
-        prompt boundary.
-        """
+        """Plain-stdin REPL loop (prints sentinel before each prompt)."""
         self._print_banner()
-        print_installed_system_tools(self.console)
-        print_discovery_summary(self.console)
+        print_installed_system_tools(
+            self.console, runtime_deps=self._runtime_service.statuses()
+        )
+        print_discovery_summary(self.console, self.tool_registry)
 
         while True:
             sys.stdout.write(_HARNESS_SENTINEL + "\n")
@@ -321,10 +359,6 @@ class REPL:
 
         self.console.print("Goodbye!")
 
-    # ------------------------------------------------------------------
-    # Command dispatch
-    # ------------------------------------------------------------------
-
     def _dispatch(self, cmd: str, args: list) -> None:
         pc = self.project_commands
         sc = self.scan_commands
@@ -346,7 +380,7 @@ class REPL:
             "purge": self.purge_commands.cmd_purge,
             "report": self.report_commands.execute,
             "triage": self.triage_commands.cmd_triage,
-            "findings": self.findings_commands.cmd_findings,
+            "ui": self.ui_commands.cmd_ui,
         }
         handler = handlers.get(cmd)
         if handler is None:
@@ -362,10 +396,6 @@ class REPL:
         except Exception as exc:
             _log.exception("Command %r raised an unhandled exception", cmd)
             self.console.print(f"[red]Error:[/red] {exc}")
-
-    # ------------------------------------------------------------------
-    # Implemented commands
-    # ------------------------------------------------------------------
 
     def _cmd_help(self, _cmd: str, args: list) -> None:
         if args and args[0] == "search":
@@ -391,10 +421,6 @@ class REPL:
     def _cmd_exit(self, _cmd: str, _args: list) -> None:
         raise EOFError  # re-use EOF path to trigger "Goodbye!"
 
-    # ------------------------------------------------------------------
-    # UI helpers
-    # ------------------------------------------------------------------
-
     def _print_banner(self) -> None:
         if self.active_project:
             project_line = f"Active Project: [green]{self.active_project}[/green]"
@@ -403,7 +429,7 @@ class REPL:
 
         content = (
             f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
-            "LlamaIndex + Chroma + Ollama\n"
+            "LlamaIndex + Chroma + Local Inference\n"
             f"{project_line}"
         )
         self.console.print(Panel(content, title="[cyan]Welcome[/cyan]", expand=False))

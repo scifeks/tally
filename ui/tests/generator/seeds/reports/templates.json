@@ -1,0 +1,181 @@
+{
+  "_comment": "Wire-shape report fixtures with {{placeholder}} tokens. ReportSummary requires id, project_id, scan_run_id, format, filename, status, pinned, file_size_bytes, error, created_at, started_at, finished_at, download_url. ReportDraft items use legacy field names matching the existing FE types (generated_at, etc.) since no Pydantic model enforces drafts.",
+  "drafts_project_1": {
+    "drafts": [
+      {
+        "section": "executive-summary",
+        "status": "draft",
+        "generated_at": "{{str:scan_finished_at}}",
+        "reviewed_at": null,
+        "preview": "This security assessment of the DVPA program identified 568 findings across web, SAST, SCA, and secrets domains. 5 critical and 236 high-severity issues require immediate attention.",
+        "word_count": 412,
+        "uploaded_filename": null,
+        "error": null
+      },
+      {
+        "section": "risk-level",
+        "status": "reviewed",
+        "generated_at": "{{str:scan_finished_at}}",
+        "reviewed_at": "2026-04-30T15:45:00+00:00",
+        "preview": "Overall risk: HIGH. Driven by reflected and stored XSS in DVWA + Juice Shop, plus an AWS access key in committed PHP-Goof config.",
+        "word_count": 268,
+        "uploaded_filename": "risk-level-reviewed.md",
+        "error": null
+      },
+      {
+        "section": "general-recommendations",
+        "status": "failed",
+        "generated_at": null,
+        "reviewed_at": null,
+        "preview": null,
+        "word_count": null,
+        "uploaded_filename": null,
+        "error": "LLM call timed out after 60s"
+      },
+      {
+        "section": "findings_summary",
+        "status": "not_generated",
+        "generated_at": null,
+        "reviewed_at": null,
+        "preview": null,
+        "word_count": null,
+        "uploaded_filename": null,
+        "error": null
+      },
+      {
+        "section": "appendix",
+        "status": "generating",
+        "generated_at": null,
+        "reviewed_at": null,
+        "preview": null,
+        "word_count": null,
+        "uploaded_filename": null,
+        "error": null
+      }
+    ]
+  },
+  "drafts_project_2": {
+    "drafts": [
+      {
+        "section": "executive-summary",
+        "status": "not_generated",
+        "generated_at": null,
+        "reviewed_at": null,
+        "preview": null,
+        "word_count": null,
+        "uploaded_filename": null,
+        "error": null
+      },
+      {
+        "section": "risk-level",
+        "status": "not_generated",
+        "generated_at": null,
+        "reviewed_at": null,
+        "preview": null,
+        "word_count": null,
+        "uploaded_filename": null,
+        "error": null
+      }
+    ]
+  },
+  "drafts_empty": {
+    "drafts": []
+  },
+  "history_project_1": {
+    "items": [
+      {
+        "id": 4001,
+        "project_id": "{{int:project_1_id}}",
+        "scan_run_id": "{{int:scan_run_id_real}}",
+        "format": "pdf",
+        "filename": "DVPA-Security-Assessment-2026-04-30.pdf",
+        "status": "done",
+        "pinned": false,
+        "file_size_bytes": 2487290,
+        "error": null,
+        "created_at": "2026-04-30T15:50:00+00:00",
+        "started_at": "2026-04-30T15:48:00+00:00",
+        "finished_at": "2026-04-30T15:50:00+00:00",
+        "download_url": "/api/v1/projects/{{int:project_1_id}}/reports/4001/download"
+      },
+      {
+        "id": 4002,
+        "project_id": "{{int:project_1_id}}",
+        "scan_run_id": 1001,
+        "format": "markdown",
+        "filename": "DVPA-Quick-Triage-2026-04-29.md",
+        "status": "done",
+        "pinned": true,
+        "file_size_bytes": 18420,
+        "error": null,
+        "created_at": "2026-04-29T22:30:00+00:00",
+        "started_at": "2026-04-29T22:28:00+00:00",
+        "finished_at": "2026-04-29T22:30:00+00:00",
+        "download_url": "/api/v1/projects/{{int:project_1_id}}/reports/4002/download"
+      }
+    ],
+    "total": 2,
+    "offset": 0,
+    "limit": 20
+  },
+  "history_empty": {
+    "items": [],
+    "total": 0,
+    "offset": 0,
+    "limit": 20
+  },
+  "latest_project_1": {
+    "id": 4001,
+    "project_id": "{{int:project_1_id}}",
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "format": "pdf",
+    "filename": "DVPA-Security-Assessment-2026-04-30.pdf",
+    "status": "done",
+    "pinned": false,
+    "file_size_bytes": 2487290,
+    "error": null,
+    "created_at": "2026-04-30T15:50:00+00:00",
+    "started_at": "2026-04-30T15:48:00+00:00",
+    "finished_at": "2026-04-30T15:50:00+00:00",
+    "download_url": "/api/v1/projects/{{int:project_1_id}}/reports/4001/download"
+  },
+  "generate_202": {
+    "id": 4003,
+    "project_id": "{{int:project_1_id}}",
+    "scan_run_id": "{{int:scan_run_id_real}}",
+    "format": "pdf",
+    "filename": "DVPA-Security-Assessment-pending.pdf",
+    "status": "generating",
+    "pinned": false,
+    "file_size_bytes": null,
+    "error": null,
+    "created_at": "2026-04-30T16:00:00+00:00",
+    "started_at": "2026-04-30T16:00:00+00:00",
+    "finished_at": null,
+    "download_url": null
+  },
+  "draft_start_202": {
+    "section": "executive-summary",
+    "status": "generating",
+    "generated_at": null,
+    "reviewed_at": null,
+    "preview": null,
+    "word_count": null,
+    "uploaded_filename": null,
+    "error": null
+  },
+  "draft_upload_200": {
+    "section": "executive-summary",
+    "status": "reviewed",
+    "generated_at": "{{str:scan_finished_at}}",
+    "reviewed_at": "2026-04-30T17:00:00+00:00",
+    "preview": "Reviewed executive summary uploaded by analyst.",
+    "word_count": 405,
+    "uploaded_filename": "exec-summary-reviewed.md",
+    "error": null
+  },
+  "cancel_202": {
+    "id": 4003,
+    "status": "cancelling"
+  }
+}

@@ -7,9 +7,22 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from rich.console import Console
+
+from application.bootstrap import BootstrapService
+from application.project.registry_service import ProjectRegistryService
 from application.repl import REPL
+from application.repl.adapters.dependency_summary_display import (
+    print_dependency_summary,
+)
+from application.runtime import (
+    RuntimeDependencyService,
+    build_runtime_dependency_probes,
+)
 from application.startup.checker import DependencyChecker
-from application.tools.registry import discover_tools
+from application.tools.registry import ToolRegistry
+from infrastructure.store.project_registry import ProjectRegistryRepository
+from infrastructure.web_ui.runner import WebUiRunner
 
 _BASE_PATH = "."
 
@@ -36,7 +49,6 @@ def check_location_attestation(base_path: str) -> None:
 
 
 if __name__ == "__main__":
-    # Parse args first so --base-path is available for attestation and setup.
     parser = argparse.ArgumentParser(description="Tally security auditing REPL")
     parser.add_argument(
         "--base-path",
@@ -58,7 +70,7 @@ if __name__ == "__main__":
     _BASE_PATH = args.base_path
 
     check_location_attestation(_BASE_PATH)
-    # --- logging setup (first thing after attestation, before any module does work) ---
+
     _logs_dir = Path("logs")
     _logs_dir.mkdir(exist_ok=True)
     _log_fmt = logging.Formatter(
@@ -80,32 +92,39 @@ if __name__ == "__main__":
     _err_handler.setFormatter(_log_fmt)
 
     logging.basicConfig(level=logging.DEBUG, handlers=[_main_handler, _err_handler])
-    # ---------------------------------------------------------------
 
-    # First-run setup: generate commands.json if absent.
-    # Runs before --check and --skip-checks so the registry is always current.
-    if not (Path(_BASE_PATH) / "config" / "commands.json").exists():
-        from application.setup.commands_setup import run_commands_setup
-
-        run_commands_setup(_BASE_PATH)
-
-    # Re-run discovery with the confirmed base_path so the registry reflects
-    # whatever commands.json now contains (the module-level auto-discovery in
-    # registry.py ran at import time before setup completed).
-    discover_tools(_BASE_PATH)
-
-    checker = DependencyChecker()
+    runtime_service = RuntimeDependencyService(
+        build_runtime_dependency_probes(base_path=_BASE_PATH)
+    )
 
     if args.check:
-        result = checker.run()
+        result = DependencyChecker(runtime_service=runtime_service).run()
+        print_dependency_summary(Console(), result)
         sys.exit(0 if result.all_required_present else 1)
 
     if not args.skip_checks:
-        result = checker.run(silent=True)
+        result = DependencyChecker().run()
         if not result.all_required_present:
             sys.exit(1)
 
+    registry_repo = ProjectRegistryRepository(Path(_BASE_PATH) / "tally.db")
+    project_registry = ProjectRegistryService(registry_repo)
+    tool_registry = ToolRegistry()
+
+    BootstrapService(
+        registry_repo=registry_repo,
+        project_registry=project_registry,
+        tool_registry=tool_registry,
+        base_path=_BASE_PATH,
+    ).run()
+
     try:
-        REPL(base_path=_BASE_PATH).run()
+        REPL(
+            base_path=_BASE_PATH,
+            runtime_service=runtime_service,
+            project_registry=project_registry,
+            web_ui_runner=WebUiRunner(),
+            tool_registry=tool_registry,
+        ).run()
     except KeyboardInterrupt:
         pass

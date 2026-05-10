@@ -96,7 +96,7 @@ class TestDetectDependencyDirs:
         assert "vendor" not in result
 
     def test_deduplicates_across_lockfiles(self, tmp_path: Path) -> None:
-        """Both composer.json and composer.lock imply vendor — should appear once."""
+        """Both composer.json and composer.lock imply vendor; should appear once."""
         _touch(tmp_path / "composer.json")
         _touch(tmp_path / "composer.lock")
         (tmp_path / "vendor").mkdir()

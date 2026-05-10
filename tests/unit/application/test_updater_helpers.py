@@ -1,8 +1,8 @@
-"""Unit tests for reconstruct_abs_path and resolve_repo_path."""
+"""Unit tests for reconstruct_abs_path."""
 
 from __future__ import annotations
 
-from application.findings.updater import reconstruct_abs_path, resolve_repo_path
+from application.findings.updater import reconstruct_abs_path
 
 
 class TestUpdaterHelpers:
@@ -45,21 +45,4 @@ class TestUpdaterHelpers:
         result = reconstruct_abs_path(
             "/src/../../other_repo/secret.key", "myrepo", repos
         )
-        assert result is None
-
-    def test_resolve_found(self) -> None:
-        repos = [{"name": "myrepo", "path": "/home/x/"}]
-        result = resolve_repo_path("myrepo", repos)
-        assert result == "/home/x/"
-
-    def test_resolve_not_found(self) -> None:
-        result = resolve_repo_path("missing", [{"name": "myrepo", "path": "/home/x/"}])
-        assert result is None
-
-    def test_resolve_repo_name_is_none(self) -> None:
-        result = resolve_repo_path(None, [{"name": "myrepo", "path": "/home/x/"}])
-        assert result is None
-
-    def test_resolve_empty_repos(self) -> None:
-        result = resolve_repo_path("myrepo", [])
         assert result is None

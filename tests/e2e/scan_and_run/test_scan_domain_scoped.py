@@ -6,12 +6,12 @@ import pytest
 
 from tests.e2e.harness import TallyHarness
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 @pytest.mark.slow
 @pytest.mark.skip(
-    reason="Runs all code-domain tools across all DVPA repos — too slow until "
+    reason="Runs all code-domain tools across all DVPA repos, too slow until "
     "synthetic test repos are in place"
 )
 def test_scan_domain_code(tally_harness_live: TallyHarness) -> None:

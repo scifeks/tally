@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -9,17 +10,37 @@ from unittest.mock import MagicMock
 import httpx
 import pytest_asyncio
 
+from infrastructure.events.bus import EventBus
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
-from web.server import create_app
+from tests._app_factory import build_test_app
 
-TOKEN = "test-token-abc123"
-AUTH: dict[str, str] = {"Authorization": f"Bearer {TOKEN}"}
 
-# Finding used to seed the test database before each test.
-# Named columns (tool, domain, severity, file_path→file, ip_address→host, etc.)
-# map to SQLite columns; all other keys go to the meta JSON blob.
+def _seed_global_config(base_path: Path) -> None:
+    """Write a minimal ``<base>/config/global.json`` so ConfigManager loads."""
+    config_dir = base_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "global.json").write_text(
+        json.dumps(
+            {
+                "triage_agent_provider": "claude_code",
+                "ollama": {
+                    "model": "test-model",
+                    "base_url": "http://localhost:11434",
+                },
+                "embedding_inference": {
+                    "provider": "ollama",
+                    "model": "test-embed",
+                },
+            }
+        )
+    )
+
+
+TEST_PORT = 12345
+HANDSHAKE = "test-handshake-abc123xyz"
+
 _BASE_FINDING: dict[str, Any] = {
     "tool": "semgrep",
     "domain": "code",
@@ -30,7 +51,6 @@ _BASE_FINDING: dict[str, Any] = {
     "description": "SQL injection risk",
     "segment": "sast",
     "repo": "test-repo",
-    # -- meta blob keys --
     "type_secret": True,
     "type_vulnerability": False,
     "profile": "test_project",
@@ -40,14 +60,34 @@ _BASE_FINDING: dict[str, Any] = {
 }
 
 
+async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
+    """Exchange handshake for session cookies. Returns mutating-request headers."""
+    resp = await client.post(
+        "/api/v1/auth/exchange",
+        json={"token": HANDSHAKE},
+        headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+    )
+    assert resp.status_code == 200, f"exchange failed: {resp.text}"
+    # httpx stores Secure cookies in the jar but won't send them over plain
+    # HTTP. Delete the auto-stored domain-specific entry, then inject a
+    # domain-less copy that bypasses the Secure-flag enforcement.
+    for name, value in resp.cookies.items():
+        client.cookies.delete(name, domain="127.0.0.1")
+        client.cookies.set(name, value)
+    csrf_token = client.cookies["tally_csrf"]
+    return {
+        "X-CSRF-Token": csrf_token,
+        "Origin": f"http://127.0.0.1:{TEST_PORT}",
+    }
+
+
 @pytest_asyncio.fixture()
 async def app_client(tmp_path: Path):
-    """Yield (client, finding_id, rag_mock, factory) for web API tests.
-
-    Sets up a real SQLite database, seeds one finding, wires a mock
-    RAGEngine, and returns an httpx.AsyncClient backed by the FastAPI app.
-    """
-    db_path = tmp_path / "findings.db"
+    """Yield (client, finding_id, rag_mock, factory, mut_headers, project_id)."""
+    _seed_global_config(tmp_path)
+    # DB must live at the canonical path the registry resolves to.
+    db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     factory = ConnectionFactory(db_path)
     factory.init_schema()
 
@@ -60,15 +100,29 @@ async def app_client(tmp_path: Path):
         row = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()
     finding_id: int = row["id"]
 
-    rag_mock = MagicMock()
-    rag_mock.get_documents = MagicMock(
-        return_value={"ids": ["doc-1"], "metadatas": [{}]}
-    )
+    kb_mock = MagicMock()
+    kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]
 
-    app = create_app(str(tmp_path), "testproject", token=TOKEN)
-    app.state.connection_factory = factory
-    app.state.rag_engine = rag_mock
+    app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
+    # Seed the per-project knowledge base cache so chroma sync uses the mock.
+    app.state.knowledge_base_cache = {"testproject": kb_mock}
+
+    _bus = EventBus()
+    await _bus.register_job("finding", "finding")
+    await _bus.register_job("scan", "scan")
+    await _bus.register_job("triage", "triage")
+    await _bus.register_job("report", "report")
+    await _bus.register_job("report_draft", "report_draft")
+    await _bus.register_job("chat", "chat")
+    app.state.event_bus = _bus
+
+    # Seed the registry so project-scoped endpoints can resolve "testproject".
+    project_id = app.state.project_registry.register("testproject", str(tmp_path))
 
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        yield client, finding_id, rag_mock, factory
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url=f"http://127.0.0.1:{TEST_PORT}",
+    ) as client:
+        mut_headers = await _authenticate(client)
+        yield client, finding_id, kb_mock, factory, mut_headers, project_id

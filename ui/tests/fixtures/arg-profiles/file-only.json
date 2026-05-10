@@ -1,0 +1,15 @@
+{
+  "id": 3,
+  "toolName": "gitleaks",
+  "name": "with-config",
+  "args": [
+    {
+      "name": "--config",
+      "path": "arg_files/3/--config",
+      "downloadUrl": "/api/v1/projects/2/arg-profiles/3/files/--config",
+      "type": "file"
+    }
+  ],
+  "createdAt": "2026-05-05T01:41:58.313160+00:00",
+  "updatedAt": "2026-05-05T01:41:58.320168+00:00"
+}

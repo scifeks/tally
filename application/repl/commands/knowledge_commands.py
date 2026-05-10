@@ -7,14 +7,20 @@ from typing import TYPE_CHECKING
 from rich.panel import Panel
 from rich.table import Table
 
+from application.chat.stream_composer import RagUnavailable
+from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+from factories.persistence import (
+    ProjectNotFound,
+    create_findings_service,
+)
+
 if TYPE_CHECKING:
-    from application.rag.engine import RAGEngine
+    from application.ports.finding_repository import FindingRepositoryPort
+    from application.rag.knowledge_base import FindingKnowledgeBase
     from application.rag.query import QueryEngine
     from application.repl.interface import REPL
 
 from application.repl.commands.findings_table import FindingsTableFactory
-
-_findings_table_factory = FindingsTableFactory()
 
 
 class KnowledgeCommands:
@@ -22,13 +28,14 @@ class KnowledgeCommands:
 
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
+        self._findings_table_factory = FindingsTableFactory(
+            tool_registry=repl.tool_registry,
+        )
 
-    # ------------------------------------------------------------------
     # Commands
-    # ------------------------------------------------------------------
 
     def cmd_search(self, _cmd: str, args: list[str]) -> None:
-        """search [--flags...]  — search over ingested findings."""
+        """Search over ingested findings. Usage: search [--flags...]"""
         # --help is allowed without an active project
         if "--help" in args:
             from application.repl.interface import _build_search_help_table
@@ -49,14 +56,15 @@ class KnowledgeCommands:
             return
 
         from application.repl.search_command_parser import parse_sqlite_search_command
-        from application.tools.registry import tool_registry
         from core.exceptions import SearchValidationError
 
         finding_repo = self._get_finding_repo()
         if finding_repo is None:
             return
 
-        known_tools: frozenset[str] = frozenset(tool_registry.list_tool_names())
+        known_tools: frozenset[str] = frozenset(
+            self.repl.tool_registry.list_tool_names()
+        )
 
         try:
             filters = parse_sqlite_search_command(args, known_tools)
@@ -80,9 +88,9 @@ class KnowledgeCommands:
         fields = filters.get("fields", [])
         tool_filter: str | None = filters.get("tool") if not fields else None
         if fields:
-            table = _findings_table_factory.build_fields(results, fields)
+            table = self._findings_table_factory.build_fields(results, fields)
         else:
-            table = _findings_table_factory.build(
+            table = self._findings_table_factory.build(
                 results, is_semantic, tool_filter=tool_filter
             )
 
@@ -99,7 +107,7 @@ class KnowledgeCommands:
             self.repl.console.print(f"[dim]{page_hint}[/dim]")
 
     def cmd_chat(self, _cmd: str, args: list[str]) -> None:
-        """chat <message>  — RAG-augmented chat with the LLM."""
+        """RAG-augmented chat with the LLM. Usage: chat <message>"""
         if not args:
             self.repl.console.print("[red]Usage:[/red] chat <message>")
             return
@@ -112,8 +120,10 @@ class KnowledgeCommands:
             return
 
         message = " ".join(args)
-        query_engine = self._get_query_engine()
-        if query_engine is None:
+        try:
+            query_engine = self._get_query_engine()
+        except RagUnavailable as exc:
+            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
             return
 
         try:
@@ -133,7 +143,7 @@ class KnowledgeCommands:
         )
 
     def cmd_stats(self, _cmd: str, _args: list[str]) -> None:
-        """stats  — show knowledge base statistics for the active project."""
+        """Show knowledge base statistics for the active project."""
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. "
@@ -141,12 +151,14 @@ class KnowledgeCommands:
             )
             return
 
-        rag_engine = self._get_rag_engine()
-        if rag_engine is None:
+        try:
+            kb = self._get_knowledge_base()
+        except RagUnavailable as exc:
+            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
             return
 
-        stats = rag_engine.get_stats()
-        total = stats.get("total_documents", 0)
+        stats = kb.compute_stats()
+        total = stats.total_documents
 
         if total == 0:
             self.repl.console.print("[yellow]No data ingested yet.[/yellow]")
@@ -158,51 +170,51 @@ class KnowledgeCommands:
 
         table.add_row("Total Documents", str(total))
 
-        for tool, count in sorted(stats.get("by_tool", {}).items()):
+        for tool, count in sorted(stats.by_tool.items()):
             table.add_row(f"  {tool}", str(count))
 
-        by_severity = stats.get("by_severity", {})
-        if by_severity:
+        if stats.by_severity:
             table.add_section()
-            for severity, count in sorted(by_severity.items()):
+            for severity, count in sorted(stats.by_severity.items()):
                 table.add_row(f"  Severity: {severity}", str(count))
 
-        last_updated = stats.get("last_updated")
-        if last_updated:
+        if stats.last_updated:
             table.add_section()
-            table.add_row("Last Updated", last_updated[:19].replace("T", " "))
+            table.add_row("Last Updated", stats.last_updated[:19].replace("T", " "))
 
         self.repl.console.print(table)
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
-    def _get_rag_engine(self) -> RAGEngine | None:
-        """Create and return a RAGEngine for the active project, or None on error."""
-        from application.rag import RAGEngine
+    def _get_knowledge_base(self) -> FindingKnowledgeBase:
+        """Return the per-project FindingKnowledgeBase.
 
+        Raises RagUnavailable if ChromaDB or the embedding/LLM provider
+        cannot be reached. The shared cache stores both successful
+        builds and prior failures.
+        """
         assert self.repl.active_project is not None
-        try:
-            return RAGEngine(
-                project_name=self.repl.active_project,
-                base_path=self.repl.base_path,
+        knowledge_base = get_or_build_knowledge_base(
+            self.repl.knowledge_base_cache,
+            self.repl.active_project,
+            self.repl.base_path,
+        )
+        if knowledge_base is None:
+            raise RagUnavailable(
+                "RAG engine unavailable for this project; "
+                "ChromaDB or embedding provider is not reachable"
             )
-        except RuntimeError as exc:
-            self.repl.console.print(f"[red]RAG error:[/red] {exc}")
-            return None
-        except ValueError as exc:
-            self.repl.console.print(f"[red]Project error:[/red] {exc}")
-            return None
+        return knowledge_base
 
-    def _get_query_engine(self) -> QueryEngine | None:
-        """Create and return a QueryEngine for the active project, or None on error."""
+    def _get_query_engine(self) -> QueryEngine:
+        """Return a QueryEngine for the active project.
+
+        Raises RagUnavailable when the underlying knowledge base cannot
+        be built.
+        """
         from application.rag.query import QueryEngine
 
-        rag_engine = self._get_rag_engine()
-        if rag_engine is None:
-            return None
-        return QueryEngine(rag_engine)
+        return QueryEngine(self._get_knowledge_base())
 
     def _cmd_show_fields(self, args: list[str]) -> None:
         """Handle search --show-fields --tool=<name>."""
@@ -245,7 +257,9 @@ class KnowledgeCommands:
         if finding_repo is None:
             return
 
-        result = _findings_table_factory.discover_tool_fields(finding_repo, tool_name)
+        result = self._findings_table_factory.discover_tool_fields(
+            finding_repo, tool_name
+        )
         if result is None:
             self.repl.console.print(
                 f"[yellow]No findings found for tool '{tool_name}'. "
@@ -258,16 +272,21 @@ class KnowledgeCommands:
         if meta_fields:
             self.repl.console.print(f"Meta fields:   {', '.join(meta_fields)}")
 
-    def _get_finding_repo(self):  # type: ignore[return]
-        """Return a FindingRepository for the active project, or None on error."""
-        from infrastructure.store import make_store
-
+    def _get_finding_repo(self) -> FindingRepositoryPort | None:
+        """Return a FindingRepositoryPort for the active project, or None."""
         assert self.repl.active_project is not None
         try:
-            _, finding_repo, _, _ = make_store(
-                self.repl.base_path, self.repl.active_project
+            service = create_findings_service(
+                self.repl.project_registry, self._resolve_project_id()
             )
-            return finding_repo
-        except Exception as exc:
-            self.repl.console.print(f"[red]SQLite error:[/red] {exc}")
+            return service.finding_repo
+        except (ProjectNotFound, ValueError) as exc:
+            self.repl.console.print(f"[red]Project error:[/red] {exc}")
             return None
+
+    def _resolve_project_id(self) -> int:
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            raise ValueError(f"project not found: {self.repl.active_project}")
+        return row.id

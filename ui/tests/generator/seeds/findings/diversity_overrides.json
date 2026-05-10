@@ -1,0 +1,45 @@
+{
+  "_comment": "Patches applied AFTER real findings are loaded but BEFORE serialization. Each entry mutates one DB-row-shape finding so the wire output reflects the mutation. Selection is keyed on tool + position so the script picks deterministic rows regardless of DB ordering: take the Nth finding for a given tool. status_overrides apply triaged_at/triaged_by automatically when status != 'active'. NOTE: severity ranks are INVERTED — rank 0 = critical, 4 = informational.",
+  "severity_promotions_to_critical": [
+    {"tool": "zap", "nth": 0},
+    {"tool": "zap", "nth": 17},
+    {"tool": "semgrep", "nth": 4},
+    {"tool": "osv-scanner", "nth": 9},
+    {"tool": "gitleaks", "nth": 2}
+  ],
+  "status_overrides": [
+    {"tool": "zap", "nth": 1, "status": "false_positive"},
+    {"tool": "zap", "nth": 5, "status": "false_positive"},
+    {"tool": "zap", "nth": 11, "status": "false_positive"},
+    {"tool": "zap", "nth": 23, "status": "false_positive"},
+    {"tool": "semgrep", "nth": 0, "status": "false_positive"},
+    {"tool": "semgrep", "nth": 8, "status": "false_positive"},
+    {"tool": "semgrep", "nth": 14, "status": "false_positive"},
+    {"tool": "osv-scanner", "nth": 1, "status": "false_positive"},
+    {"tool": "osv-scanner", "nth": 6, "status": "false_positive"},
+    {"tool": "gitleaks", "nth": 0, "status": "false_positive"},
+    {"tool": "gitleaks", "nth": 4, "status": "false_positive"},
+
+    {"tool": "zap", "nth": 2, "status": "fixed"},
+    {"tool": "zap", "nth": 7, "status": "fixed"},
+    {"tool": "zap", "nth": 14, "status": "fixed"},
+    {"tool": "semgrep", "nth": 1, "status": "fixed"},
+    {"tool": "semgrep", "nth": 9, "status": "fixed"},
+    {"tool": "semgrep", "nth": 18, "status": "fixed"},
+    {"tool": "osv-scanner", "nth": 2, "status": "fixed"},
+    {"tool": "osv-scanner", "nth": 12, "status": "fixed"},
+    {"tool": "gitleaks", "nth": 1, "status": "fixed"},
+    {"tool": "pip-audit", "nth": 0, "status": "fixed"},
+    {"tool": "pip-audit", "nth": 4, "status": "fixed"},
+
+    {"tool": "zap", "nth": 3, "status": "wont_fix"},
+    {"tool": "zap", "nth": 19, "status": "wont_fix"},
+    {"tool": "semgrep", "nth": 2, "status": "wont_fix"},
+    {"tool": "semgrep", "nth": 22, "status": "wont_fix"},
+    {"tool": "osv-scanner", "nth": 3, "status": "wont_fix"},
+    {"tool": "gitleaks", "nth": 3, "status": "wont_fix"},
+    {"tool": "pip-audit", "nth": 1, "status": "wont_fix"}
+  ],
+  "triaged_timestamp": "2026-04-30T15:30:00+00:00",
+  "triaged_by": "analyst_web"
+}

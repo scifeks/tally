@@ -1,14 +1,32 @@
 import logging
-import os
 import shlex
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Any, NamedTuple
 
+from application.locking.cancellation import CancellationToken, no_op_token
+from application.ports.progress_reporter import (
+    NullProgressReporter,
+    ProgressReporter,
+)
+from application.ports.subprocess_runner import (
+    SubprocessCancelled,
+    SubprocessNotFound,
+    SubprocessPermissionDenied,
+    SubprocessResult,
+    SubprocessRunnerPort,
+    SubprocessTimeout,
+)
+from application.ports.user_prompt import UserPromptPort
+from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
 from domain.tools.interface import ExecutionPass
+
+
+class ToolCancelled(Exception):
+    """Raised when a tool execution is interrupted via the cancellation token."""
+
 
 _log = logging.getLogger(__name__)
 
@@ -45,7 +63,7 @@ def sanitize_command(cmd: list[str]) -> list[str]:
 
 
 class _RunResult(NamedTuple):
-    proc: subprocess.CompletedProcess[str]
+    proc: SubprocessResult
     start: float
     success: bool
 
@@ -55,16 +73,28 @@ class ToolExecutor:
         self,
         project_name: str,
         base_path: Path,
-        auto_approve: bool = False,
+        prompt: UserPromptPort,
+        subprocess_runner: SubprocessRunnerPort,
+        reporter: ProgressReporter | None = None,
     ) -> None:
         self.project_name = project_name
         self.base_path = Path(base_path)
-        self.auto_approve = auto_approve
+        self._prompt = prompt
+        self._subprocess_runner = subprocess_runner
+        self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._sudo_approved = False
+        self._cancel_token: CancellationToken = no_op_token()
 
-    # ------------------------------------------------------------------
+    def set_cancel_token(self, token: CancellationToken) -> None:
+        """Install a cooperative cancellation flag for subprocess waits.
+
+        Called by ``ScanOrchestrator`` so cancellation requests reach the
+        running tool and SIGTERM the process group. Default is a shared
+        no-op token that is never set, so REPL behavior is unchanged.
+        """
+        self._cancel_token = token
+
     # Public API
-    # ------------------------------------------------------------------
 
     def execute(
         self,
@@ -74,29 +104,39 @@ class ToolExecutor:
         label: str = "output",
         cwd: str | None = None,
         env: dict[str, str] | None = None,
+        raw_cmd: list[str] | None = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, capture, and return a ToolResult.
 
         Args:
             tool:         The ToolWrapper to run.
-            auto_approve: Override instance-level auto_approve for this call.
-            timeout:      Seconds before the subprocess is killed (default 300).
+            auto_approve: Pass True to skip the approval prompt (when already
+                          obtained by a parent context).
+            timeout:      Seconds before the subprocess is killed.
             label:        Prefix for saved output filenames (e.g. "webservers").
-            cwd:          Working directory for the subprocess. Required for
-                          tools like npm-audit and composer-audit that must run
-                          inside the project directory.
+            cwd:          Working directory for the subprocess.
             **kwargs:     Passed verbatim to tool.build_command().
         """
         timestamp = ToolResult.now_iso()
-        effective_auto = self.auto_approve if auto_approve is None else auto_approve
 
         # 1. Build command argv
-        try:
-            cmd = tool.build_command(**kwargs)
-        except Exception as exc:
-            _log.error("Tool %s: build_command error: %s", tool.name, exc)
-            return self._failure(tool.name, timestamp, f"build_command error: {exc}")
+        if raw_cmd is not None:
+            cmd = raw_cmd
+        else:
+            try:
+                cmd = tool.build_command(**kwargs)
+            except Exception as exc:
+                _log.error(
+                    "Tool %s: build_command error: %s",
+                    tool.name,
+                    exc,
+                )
+                return self._failure(
+                    tool.name,
+                    timestamp,
+                    f"build_command error: {exc}",
+                )
 
         # 2. Basic safety check (no shell=True, but guard against obvious injections)
         try:
@@ -106,7 +146,7 @@ class ToolExecutor:
             return self._failure(tool.name, timestamp, str(exc))
 
         # 3. Human approval gate
-        if not effective_auto:
+        if not auto_approve:
             if not self._prompt_approval(tool.name, cmd):
                 return self._failure(tool.name, timestamp, "Execution denied by user.")
 
@@ -143,7 +183,7 @@ class ToolExecutor:
         if not success and proc.stderr:
             combined = (combined + "\n" + proc.stderr).strip()
 
-        # 6. Parse output (failures are silently swallowed — parsed_data stays None)
+        # 6. Parse output (failures are silently swallowed; parsed_data stays None)
         parsed: dict[str, Any] | None = None
         try:
             parsed = tool.parse_output(combined, output_files)
@@ -151,7 +191,7 @@ class ToolExecutor:
             _log.exception("Tool %s: parse_output raised an exception", tool.name)
 
         status = "✓ Complete" if success else "✗ Failed "
-        print(f"    {status} (exit {proc.returncode}, {duration}s)")
+        self._reporter.report(f"    {status} (exit {proc.returncode}, {duration}s)")
         _log.info(
             "Tool %s: exit=%d duration=%.1fs", tool.name, proc.returncode, duration
         )
@@ -196,41 +236,43 @@ class ToolExecutor:
             **pass_.kwargs,
         )
 
-    # ------------------------------------------------------------------
+    def run_raw(
+        self,
+        raw_cmd: list[str],
+        tool: Any,
+        auto_approve: bool = True,
+        label: str = "custom",
+    ) -> ToolResult:
+        """Execute a pre-built command, bypassing tool.build_command."""
+        tool_timeout: int = getattr(tool, "timeout", None) or DEFAULT_TIMEOUT
+        return self.execute(
+            tool,
+            auto_approve=auto_approve,
+            timeout=tool_timeout,
+            label=label,
+            raw_cmd=raw_cmd,
+        )
+
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _ensure_output_dir(self, tool_name: str) -> Path:
-        path = (
-            self.base_path / "projects" / self.project_name / "tool_outputs" / tool_name
-        )
+        paths = ProjectPaths.from_canonical(self.base_path, self.project_name)
+        path = paths.tool_output_dir(tool_name)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    @staticmethod
-    def _prompt_approval(tool_name: str, cmd: list[str]) -> bool:
-        print()
-        print("!!HUMAN APPROVAL REQUIRED!!")
-        print(f"Tool:    {tool_name}")
-        print(f"Command: {' '.join(cmd)}")
-        try:
-            answer = input("Approve execution? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return False
-        return answer in ("y", "yes")
+    def _prompt_approval(self, tool_name: str, cmd: list[str]) -> bool:
+        self._reporter.report("")
+        self._reporter.report("!!HUMAN APPROVAL REQUIRED!!")
+        self._reporter.report(f"Tool:    {tool_name}")
+        self._reporter.report(f"Command: {' '.join(cmd)}")
+        return self._prompt.confirm("Approve execution?")
 
-    @staticmethod
-    def _prompt_sudo(tool_name: str, sudo_cmd: list[str]) -> bool:
-        print()
-        print(f"[{tool_name}] This scan type requires root privileges.")
-        print(f"Command: {' '.join(sudo_cmd)}")
-        try:
-            answer = input("Retry with sudo? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return False
-        return answer in ("y", "yes")
+    def _prompt_sudo(self, tool_name: str, sudo_cmd: list[str]) -> bool:
+        self._reporter.report("")
+        self._reporter.report(f"[{tool_name}] This scan type requires root privileges.")
+        self._reporter.report(f"Command: {' '.join(sudo_cmd)}")
+        return self._prompt.confirm("Retry with sudo?")
 
     @staticmethod
     def _failure(tool_name: str, timestamp: str, message: str) -> ToolResult:
@@ -244,13 +286,12 @@ class ToolExecutor:
             duration_seconds=0.0,
         )
 
-    @staticmethod
     def _timeout_result(
-        tool_name: str, timestamp: str, start: float, timeout: int
+        self, tool_name: str, timestamp: str, start: float, timeout: int
     ) -> ToolResult:
         duration = round(perf_counter() - start, 3)
         _log.error("Tool %s: timed out after %ds", tool_name, timeout)
-        print(f"    ✗ Failed  (timeout after {timeout}s)")
+        self._reporter.report(f"    ✗ Failed  (timeout after {timeout}s)")
         return ToolResult(
             tool_name=tool_name,
             success=False,
@@ -261,45 +302,24 @@ class ToolExecutor:
             duration_seconds=duration,
         )
 
-    def _run_subprocess(
+    def _spawn(
         self,
         cmd: list[str],
         timeout: int,
         cwd: str | None,
-        env: dict[str, str] | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        import signal as _signal
-
-        effective_env = {**os.environ, **env} if env else None
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=cwd,
-            env=effective_env,
-            start_new_session=True,
-        )
+        env: dict[str, str] | None,
+    ) -> SubprocessResult:
+        """Delegate to the SubprocessRunner port; translate cancellation."""
         try:
-            stdout, stderr = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            # Drain pipes so the OS buffers are freed, then re-raise so the
-            # caller's TimeoutExpired handler fires as before.
-            try:
-                proc.communicate()
-            except Exception:
-                pass
-            raise
-        return subprocess.CompletedProcess(
-            args=proc.args,
-            returncode=proc.returncode,
-            stdout=stdout,
-            stderr=stderr,
-        )
+            return self._subprocess_runner.run(
+                cmd,
+                timeout=timeout,
+                cwd=cwd,
+                env=env,
+                cancel_token=self._cancel_token,
+            )
+        except SubprocessCancelled as exc:
+            raise ToolCancelled from exc
 
     def _run_with_escalation(
         self,
@@ -313,15 +333,15 @@ class ToolExecutor:
         env: dict[str, str] | None = None,
     ) -> _RunResult | ToolResult:
         try:
-            proc = self._run_subprocess(cmd, timeout, cwd, env)
-        except subprocess.TimeoutExpired:
+            proc = self._spawn(cmd, timeout, cwd, env)
+        except SubprocessTimeout:
             return self._timeout_result(tool_name, timestamp, start, timeout)
-        except FileNotFoundError:
-            print("    ✗ Failed  (command not found)")
+        except SubprocessNotFound:
+            self._reporter.report("    ✗ Failed  (command not found)")
             _log.error("Tool %s: command not found: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Command not found: {cmd[0]!r}")
-        except PermissionError:
-            print("    ✗ Failed  (permission denied)")
+        except SubprocessPermissionDenied:
+            self._reporter.report("    ✗ Failed  (permission denied)")
             _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
 
@@ -333,21 +353,25 @@ class ToolExecutor:
                 self._sudo_approved = True
                 start = perf_counter()
                 try:
-                    proc = self._run_subprocess(sudo_cmd, timeout, cwd, env)
-                except subprocess.TimeoutExpired:
+                    proc = self._spawn(sudo_cmd, timeout, cwd, env)
+                except SubprocessTimeout:
                     return self._timeout_result(tool_name, timestamp, start, timeout)
-                except FileNotFoundError:
+                except SubprocessNotFound:
                     su_cmd = ["su", "-c", shlex.join(cmd)]
-                    print("    (sudo not found, retrying with su -c...)")
+                    self._reporter.report(
+                        "    (sudo not found, retrying with su -c...)"
+                    )
                     start = perf_counter()
                     try:
-                        proc = self._run_subprocess(su_cmd, timeout, cwd, env)
-                    except subprocess.TimeoutExpired:
+                        proc = self._spawn(su_cmd, timeout, cwd, env)
+                    except SubprocessTimeout:
                         return self._timeout_result(
                             tool_name, timestamp, start, timeout
                         )
-                    except (FileNotFoundError, PermissionError):
-                        print("    ✗ Failed  (elevated privileges not available)")
+                    except (SubprocessNotFound, SubprocessPermissionDenied):
+                        self._reporter.report(
+                            "    ✗ Failed  (elevated privileges not available)"
+                        )
                         _log.error(
                             "Tool %s: elevated privileges unavailable", tool_name
                         )
@@ -357,8 +381,8 @@ class ToolExecutor:
                             "Elevated privileges not available"
                             " (sudo and su both failed)",
                         )
-                except PermissionError:
-                    print("    ✗ Failed  (permission denied)")
+                except SubprocessPermissionDenied:
+                    self._reporter.report("    ✗ Failed  (permission denied)")
                     _log.error("Tool %s: permission denied running sudo", tool_name)
                     return self._failure(
                         tool_name, timestamp, "Permission denied running sudo"

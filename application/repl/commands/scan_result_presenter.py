@@ -34,9 +34,7 @@ class ScanResultPresenter:
         else:
             self._present_generic(result)
 
-    # ------------------------------------------------------------------
     # Per-tool presentation
-    # ------------------------------------------------------------------
 
     def _present_gitleaks(self, result: ToolResult) -> None:
         has_valid_data = result.parsed_data and "error" not in result.parsed_data

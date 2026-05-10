@@ -1,0 +1,6 @@
+{
+  "user_message_id": 5001,
+  "assistant_message_id": null,
+  "session_id": 101,
+  "stream_url": "/api/v1/projects/2/chat/sessions/101/stream"
+}

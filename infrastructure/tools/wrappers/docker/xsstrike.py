@@ -17,11 +17,11 @@ because the VULN-line patterns are identical after ANSI codes are stripped.
 
 Seeds
 -----
-Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds file
+Reads ``repo.merged_seeds_path``, the canonical deduplicated seeds file
 produced by the URL discovery pipeline after Katana, Noir, and/or a
-user-provided endpoint file run.  The seeds file must be accessible inside
+user-provided endpoint file run. The seeds file must be accessible inside
 the container; mount the tally project's ``tool_outputs`` directory as a
-volume (e.g. ``-v /path/to/tally_data:/tally_data``).  When no seeds file
+volume (e.g. ``-v /path/to/tally_data:/tally_data``). When no seeds file
 is available, XSStrike is skipped and a warning is logged.
 """
 
@@ -32,6 +32,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.xsstrike import parse_xsstrike_log_string
 from infrastructure.tools.wrappers.base.xsstrike import BaseXSStrikeTool
@@ -124,19 +125,32 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for XSStrike.
 
-        Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds
-        file produced by the URL discovery pipeline.  Returns an empty list
-        (skipping XSStrike) when no seeds file is available.  The seeds file
-        must be accessible inside the container; ensure the relevant directory
-        is volume-mounted.
+        Phase 9: the seeds file is JIT-rebuilt from ``url_findings`` rows
+        right before the scan runs. Returns an empty list (skipping
+        XSStrike) when no rows exist. The seeds file must be accessible
+        inside the container; ensure the relevant directory is
+        volume-mounted.
         """
+        from application.url_inventory.jit import jit_rebuild_artifacts
+        from infrastructure.store.connection import ConnectionFactory
+        from infrastructure.store.repositories.url_findings import (
+            UrlFindingRepository,
+        )
+
         assert context.repo is not None
         repo = context.repo
 
-        seeds_file = repo.merged_seeds_path
+        paths = ProjectPaths.from_canonical(context.base_path, context.project_name)
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        url_repo = UrlFindingRepository(factory)
+
+        seeds_file, _oas3_path = jit_rebuild_artifacts(
+            context.base_path, context.project_name, repo, url_finding_repo=url_repo
+        )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
-                "XSStrike: no merged seeds file for %s — skipping. "
+                "XSStrike: no URL inventory for %s; skipping. "
                 "Run Katana, Noir, or configure an endpoint file to "
                 "generate URL discovery output.",
                 repo.name,

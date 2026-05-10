@@ -10,8 +10,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -37,7 +35,7 @@ ENV/
 # Project-specific
 projects/*
 !projects/.gitkeep
-logs/*.log
+logs/**/*.log
 config/global.json
 
 # OS
@@ -51,13 +49,14 @@ config/secrets.json
 /config/commands.json
 
 #Docker
-docker/docker-compose.yaml
+docker/tool-entrypoints/docker-compose.yaml
+docker/triage-agent/docker-compose.yaml
 
 #mocks
 MagicMock
 
 #Roadmap and arch decisions
-/docs/roadmap/
+/docs/roadmap
 /docs/superpowers/
 
 #Claude MCP stuff
@@ -67,4 +66,15 @@ tmp/
 
 # Frontend
 ui/node_modules/
+ui/docs/roadmap
+ui-old/
 web/static/
+ui/.env.local
+ui/.env.*.local
+patches/
+
+#SQLite
+tally.db*
+
+#Worktrees
+.worktrees/

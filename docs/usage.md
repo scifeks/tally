@@ -36,7 +36,7 @@ Loaded 8 tools (2 available, 6 not installed)
 [no-project]>
 ```
 
-Missing optional tools are skipped automatically — you do not need to install all tools to use Tally.
+Missing optional tools are skipped automatically. You do not need to install all tools to use Tally.
 
 If a required Python package is missing, Tally prints an error and exits with code 1. Run `bash install.sh` to fix this.
 
@@ -72,7 +72,7 @@ Project name: acme-security-audit
 ```
 
 **Company Name** is required and is shown in the report's confidentiality blurb.
-**Abbreviation** (optional, max 3 chars) is used as the finding ID prefix for reports generated for this project — for example, `ACM-001`. If left blank, the global `report_finding_prefix` from `config/global.json` is used instead (default: `TAL`).
+**Abbreviation** (optional, max 3 chars) is used as the finding ID prefix for reports generated for this project (for example, `ACM-001`). If left blank, the global `report_finding_prefix` from `config/global.json` is used instead (default: `TAL`).
 
 The new project becomes the active project immediately. The prompt changes to show `[acme-security-audit]>`.
 
@@ -103,15 +103,15 @@ A repository represents a codebase to scan. Add one with:
 
 Tally first asks for the execution mode, then collects the appropriate paths.
 
-**Local mode** — the tool runs directly on the host:
+**Local mode.** The tool runs directly on the host:
 
-- **Name** — a short identifier (e.g. `api-server`)
-- **Mode** — `local` (default) or `docker`
-- **Local path** — absolute filesystem path on the host (required in all modes)
-- **Languages** — comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
-- **Dependencies file** — for Python repos, path to a dependencies file for pip-audit (optional; if omitted, pip-audit is skipped in local mode)
-- **Base URLs** — API base URLs for ZAP scanning (optional, press Enter to skip)
-- **Endpoint definition file** — an optional path to an existing API spec (OAS3,
+- **Name:** a short identifier (e.g. `api-server`)
+- **Mode:** `local` (default) or `docker`
+- **Local path:** absolute filesystem path on the host (required in all modes)
+- **Languages:** comma-separated (e.g. `python,javascript`); Tally auto-detects if blank
+- **Dependencies file:** for Python repos, path to a dependencies file for pip-audit (optional; if omitted, pip-audit is skipped in local mode)
+- **Base URLs:** API base URLs for ZAP scanning (optional, press Enter to skip)
+- **Endpoint definition file:** an optional path to an existing API spec (OAS3,
   OAS2/Swagger, Postman collection, or HAR). When provided, Tally converts the
   file to OAS3 so ZAP can use it during scans instead of running Noir. See
   [docs/endpoint-files.md](endpoint-files.md) for supported formats and a full
@@ -131,7 +131,7 @@ Repository #1:
 ✓ Repository 'api-server' added to project 'acme-security-audit'
 ```
 
-**Docker mode** — the tool runs via `docker exec` inside a running container.
+**Docker mode.** The tool runs via `docker exec` inside a running container.
 A local path is still required so Tally can detect languages and run local tools:
 
 ```
@@ -181,7 +181,7 @@ Edit or remove a repository:
 [acme-security-audit]> repo delete api-server
 ```
 
-When editing, Tally pre-fills current values — press Enter to keep them. Switching
+When editing, Tally pre-fills current values. Press Enter to keep them. Switching
 from Docker mode to local mode automatically clears the Docker fields.
 
 ---
@@ -318,7 +318,7 @@ Run the full scan but exclude one or more tools:
 [acme-security-audit]> scan --skip-tools=zap
 ```
 
-`--skip-tools` and `--tool` are mutually exclusive — use `--tool` to run only named tools, or `--skip-tools` to run everything except named tools.
+`--skip-tools` and `--tool` are mutually exclusive. Use `--tool` to run only named tools, or `--skip-tools` to run everything except named tools.
 
 **Scope to a single repository:**
 
@@ -360,7 +360,7 @@ for details.
 
 ### Docker vs Local Execution
 
-Each tool runs in whichever mode is configured in `config/commands.json` — either locally as a subprocess or via `docker exec` inside a running container. From the scan commands' perspective, the execution mode is transparent: output is captured, parsed, and ingested identically regardless of whether a tool runs locally or in Docker.
+Each tool runs in whichever mode is configured in `config/commands.json`, either locally as a subprocess or via `docker exec` inside a running container. From the scan commands' perspective, the execution mode is transparent: output is captured, parsed, and ingested identically regardless of whether a tool runs locally or in Docker.
 
 To switch a tool from local to Docker (or vice versa):
 
@@ -368,7 +368,7 @@ To switch a tool from local to Docker (or vice versa):
 [acme-security-audit]> tool edit semgrep
 ```
 
-For Docker tools, repositories must have a `docker_path` set — the container-side mount path for the repository. This is set when adding or editing a repository with `repo add` / `repo edit`.
+For Docker tools, repositories must have a `docker_path` set (the container-side mount path for the repository). This is set when adding or editing a repository with `repo add` / `repo edit`.
 
 ### Raw Tool Execution
 
@@ -412,7 +412,7 @@ Run `search --help` for the full list of filter options inline.
 | `--severity=<level,...>` | Filter by severity level. Comma-separated. | `--severity=high` |
 | `--confidence=<level>` | Filter by confidence level. | `--confidence=confirmed` |
 
-Valid values — `--domain`: `code`, `web`, `network`. `--type`: `secret`, `vulnerability`, `weakness`, `misconfiguration`, `exposure`, `dependency`, `informational`. `--severity`: `critical`, `high`, `medium`, `low`, `informational`. `--confidence`: `confirmed`, `probable`, `potential`.
+Valid values for `--domain`: `code`, `web`, `network`. `--type`: `secret`, `vulnerability`, `weakness`, `misconfiguration`, `exposure`, `dependency`, `informational`. `--severity`: `critical`, `high`, `medium`, `low`, `informational`. `--confidence`: `confirmed`, `probable`, `potential`.
 
 #### Code domain filters
 
@@ -461,8 +461,8 @@ Valid values — `--domain`: `code`, `web`, `network`. `--type`: `secret`, `vuln
 
 Two operators are available for string filters:
 
-- `--flag=<value>` — exact match. The stored value must equal `<value>` exactly.
-- `--flag~=<value>` — contains match (SQL `LIKE`). The stored value must contain `<value>` as a substring.
+- `--flag=<value>`: exact match. The stored value must equal `<value>` exactly.
+- `--flag~=<value>`: contains match (SQL `LIKE`). The stored value must contain `<value>` as a substring.
 
 Examples:
 
@@ -587,6 +587,56 @@ The Markdown report contains:
 
 ---
 
+## Triaging Findings
+
+Triage uses an AI agent to assess SAST and API findings, producing a verdict with
+confidence, severity, and remediation guidance. SCA findings are skipped because
+they already reference confirmed CVEs. Triage requires Docker and a configured
+backend.
+See [docs/triage.md](triage.md) for setup, the container security model, and
+backend accuracy tradeoffs.
+
+```
+[acme-security-audit]> triage
+
+Warning: prompt injection risk
+Triage reads source files and findings from scanned repositories
+and includes that content verbatim in prompts sent to an LLM.
+Malicious content in those files could manipulate the model into
+writing incorrect triage results or reading sensitive files.
+
+Only proceed if you trust the repositories in this project.
+
+Proceed with triage? [y/N]: y
+Starting triage containers...
+Triage containers ready.
+Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
+```
+
+To preview batching without invoking the agent:
+
+```
+[acme-security-audit]> triage --batch
+Created 3 batches
+```
+
+To render prompts to the DEBUG log without invoking the agent:
+
+```
+[acme-security-audit]> triage --dry-run
+Rendered 3 batch prompt(s); see DEBUG log
+```
+
+To rebuild the triage Docker image (no active project required):
+
+```
+[acme-security-audit]> triage --rebuild-container
+Stopping triage agent containers...
+Triage agent image rebuilt.
+```
+
+---
+
 ## Switching Between Projects
 
 ```
@@ -614,6 +664,8 @@ The Markdown report contains:
 ```
 
 Each project has completely isolated findings, chat history, and reports. Switching projects does not affect the other project's data.
+
+If triage containers are running, switching projects tears them down automatically. The next `triage` call on the new project starts fresh containers with the correct repository mounts. See [docs/triage.md](triage.md) for container lifecycle details.
 
 ---
 

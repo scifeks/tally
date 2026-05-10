@@ -1,0 +1,54 @@
+{
+  "drafts": [
+    {
+      "section": "executive-summary",
+      "status": "draft",
+      "generated_at": "2026-04-30T23:02:16.579444+00:00",
+      "reviewed_at": null,
+      "preview": "This security assessment of the DVPA program identified 568 findings across web, SAST, SCA, and secrets domains. 5 critical and 236 high-severity issues require immediate attention.",
+      "word_count": 412,
+      "uploaded_filename": null,
+      "error": null
+    },
+    {
+      "section": "risk-level",
+      "status": "reviewed",
+      "generated_at": "2026-04-30T23:02:16.579444+00:00",
+      "reviewed_at": "2026-04-30T15:45:00+00:00",
+      "preview": "Overall risk: HIGH. Driven by reflected and stored XSS in DVWA + Juice Shop, plus an AWS access key in committed PHP-Goof config.",
+      "word_count": 268,
+      "uploaded_filename": "risk-level-reviewed.md",
+      "error": null
+    },
+    {
+      "section": "general-recommendations",
+      "status": "failed",
+      "generated_at": null,
+      "reviewed_at": null,
+      "preview": null,
+      "word_count": null,
+      "uploaded_filename": null,
+      "error": "LLM call timed out after 60s"
+    },
+    {
+      "section": "findings_summary",
+      "status": "not_generated",
+      "generated_at": null,
+      "reviewed_at": null,
+      "preview": null,
+      "word_count": null,
+      "uploaded_filename": null,
+      "error": null
+    },
+    {
+      "section": "appendix",
+      "status": "generating",
+      "generated_at": null,
+      "reviewed_at": null,
+      "preview": null,
+      "word_count": null,
+      "uploaded_filename": null,
+      "error": null
+    }
+  ]
+}

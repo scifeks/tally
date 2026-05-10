@@ -7,8 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
-from domain.tools.scan_types.models import ScanTypeConfig
+from domain.tools.execution_config import ToolExecutionConfig
+
+_TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
 def _make_mock_repo(
@@ -23,17 +26,23 @@ def _make_mock_repo(
     return repo
 
 
-@pytest.fixture()
-def mock_config() -> Any:
-    cm = MagicMock()
-    cm.load_repositories.return_value = [_make_mock_repo()]
+def _make_config(repo_repo: MagicMock | None = None) -> ScanTypeConfig:
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
-        config_manager=cm,
+        tool_config=_TOOL_CONFIG,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
+        repo_repo=repo_repo,
     )
+
+
+@pytest.fixture()
+def mock_config() -> Any:
+    return _make_config()
 
 
 @pytest.fixture()
@@ -59,7 +68,10 @@ class TestToolOnRepoScan:
     ) -> None:
         from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
 
-        mock_config.config_manager.load_repositories.return_value = []
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = []
+        mock_config.repo_repo = repo_repo
+
         with pytest.raises(ValueError, match="missing-repo"):
             ToolOnRepoScan("semgrep", "missing-repo").execute(
                 mock_config, mock_resources
@@ -73,6 +85,10 @@ class TestToolOnRepoScan:
         from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
 
         mock_resources.registry.get_tool_config.return_value = None
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [_make_mock_repo()]
+        mock_config.repo_repo = repo_repo
+
         with pytest.raises(ValueError, match="not registered"):
             ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
 
@@ -85,6 +101,10 @@ class TestToolOnRepoScan:
 
         mock_resources.registry.get_tool_config.return_value = MagicMock()
         mock_resources.factory.create.side_effect = RuntimeError("bad")
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [_make_mock_repo()]
+        mock_config.repo_repo = repo_repo
+
         with pytest.raises(ValueError, match="factory error"):
             ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
 
@@ -99,6 +119,10 @@ class TestToolOnRepoScan:
         tool = MagicMock()
         tool.check_available.return_value = False
         mock_resources.factory.create.return_value = tool
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [_make_mock_repo()]
+        mock_config.repo_repo = repo_repo
+
         with pytest.raises(ValueError, match="not installed"):
             ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
 
@@ -109,13 +133,14 @@ class TestToolOnRepoScan:
     ) -> None:
         from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
 
-        mock_config.config_manager.load_repositories.return_value = [
-            _make_mock_repo(base_urls=[])
-        ]
         mock_resources.registry.get_tool_config.return_value = MagicMock()
         tool = MagicMock()
         tool.check_available.return_value = True
         tool.requires_base_urls = True
         mock_resources.factory.create.return_value = tool
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [_make_mock_repo(base_urls=[])]
+        mock_config.repo_repo = repo_repo
+
         with pytest.raises(ValueError, match="requires base_urls"):
             ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)

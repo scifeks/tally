@@ -1,14 +1,10 @@
-"""Unit tests for ordered_repo_tools — discovery-first ordering (ADR-00014)."""
+"""Unit tests for ordered_repo_tools. Discovery-first ordering (ADR-00014)."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
 from application.tools.scan_types.execution import ordered_repo_tools
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_tool(name: str, segment: str, is_discovery: bool = False) -> MagicMock:
@@ -26,9 +22,7 @@ def _make_registry(tools: list[MagicMock]) -> MagicMock:
     return registry
 
 
-# ---------------------------------------------------------------------------
 # Ordering tests
-# ---------------------------------------------------------------------------
 
 
 class TestOrderedRepoTools:
@@ -95,11 +89,6 @@ class TestOrderedRepoTools:
         katana_idx = result.index("katana")
         zap_idx = result.index("zap")
         assert sast_idx < katana_idx < zap_idx
-
-    def test_empty_tool_set_returns_empty(self) -> None:
-        registry = _make_registry([])
-        result = ordered_repo_tools(set(), registry)
-        assert result == []
 
     def test_unknown_tool_excluded(self) -> None:
         tools = [_make_tool("katana", "web", is_discovery=True)]

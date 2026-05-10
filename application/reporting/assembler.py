@@ -1,28 +1,36 @@
-"""Report assembler — builds a ReportContext and renders it to PDF."""
+"""Report assembler: builds a ReportContext and renders it to PDF."""
 
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-
-import jinja2
+from typing import TYPE_CHECKING
 
 from application.reporting.attack_surface import AttackSurfaceBuilder
 from application.reporting.charts import get_chart_renderer
-from application.reporting.draft_query import DraftQueryService, _parse_meta
-from application.reporting.findings_builder import _SEVERITY_ORDER, FindingsBuilder
-from application.reporting.pdf import get_pdf_renderer
+from application.reporting.draft_query import DraftQueryService
+from application.reporting.findings_builder import FindingsBuilder
 from application.reporting.resolver import DraftResolver
 from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
+from domain.findings.severity import Severity
 from domain.reporting.context import ReportContext
-from infrastructure.store import make_store
+
+if TYPE_CHECKING:
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.html_template_renderer import HtmlTemplateRenderer
+    from application.ports.pdf_renderer import PdfRenderer
+    from application.ports.user_prompt import UserPromptPort
 
 logger = logging.getLogger(__name__)
 
 _STATIC_DIR = Path(__file__).parent / "static"
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+_SEVERITY_RANKS = {s.label: s.rank for s in Severity.all_ordered()}
 
 # Human-readable labels for the confidentiality blurb's {{engagement_type}}.
 _TESTING_TYPE_LABELS: dict[str, str] = {
@@ -31,7 +39,7 @@ _TESTING_TYPE_LABELS: dict[str, str] = {
     "black_box": "Black Box",
 }
 
-# Ordered TOC entries — (display title, section id).
+# Ordered TOC entries: (display title, section id).
 _TOC_ENTRIES: list[tuple[str, str]] = [
     ("Executive Summary", "#exec-summary"),
     ("Scope &amp; Methodology", "#scope-methodology"),
@@ -86,17 +94,27 @@ class ReportAssembler:
         self,
         project: str,
         base_path: str | Path,
+        prompt: UserPromptPort,
+        template_renderer: HtmlTemplateRenderer,
+        pdf_renderer: PdfRenderer,
+        finding_repo: FindingRepositoryPort,
         testing_type: str = "white_box",
         engagement_date: str | None = None,
+        company_name_override: str | None = None,
+        skip_triage: bool = False,
     ) -> None:
         self._project = project
         self._base_path = Path(base_path)
+        self._prompt = prompt
+        self._template_renderer = template_renderer
+        self._pdf_renderer = pdf_renderer
+        self._finding_repo = finding_repo
         self._testing_type = testing_type
         self._engagement_date = engagement_date
+        self._company_name_override = company_name_override
+        self._skip_triage = skip_triage
 
-    # ------------------------------------------------------------------ #
     # Public API
-    # ------------------------------------------------------------------ #
 
     def build_context(self) -> ReportContext:
         """Resolve all sections, render blurbs, generate TOC.
@@ -124,12 +142,13 @@ class ReportAssembler:
         engagement_type = _TESTING_TYPE_LABELS.get(
             self._testing_type, self._testing_type
         )
-        company_name = config.company_name or "[Company Name]"
+        override = (self._company_name_override or "").strip()
+        company_name = override or config.company_name or "[Company Name]"
         prefix = resolve_prefix(
             config.abbreviation, manager.global_config.report_finding_prefix
         )
 
-        resolver = DraftResolver(self._project, self._base_path)
+        resolver = DraftResolver(self._project, self._base_path, self._prompt)
 
         # -- LLM-drafted sections ----------------------------------------
         draft_html: dict[str, str] = {}
@@ -153,28 +172,26 @@ class ReportAssembler:
         toc_html = _generate_toc()
 
         # -- Segment 4: vulnerability distribution chart ------------------
-        _, finding_repo, _, _ = make_store(self._base_path, self._project)
-        query_svc = DraftQueryService(finding_repo)
-        filtered = query_svc.get_filtered_findings()
+        query_svc = DraftQueryService(self._finding_repo)
+        filtered = query_svc.get_findings_for_report(skip_triage=self._skip_triage)
         sev_counts = query_svc.severity_distribution(filtered)
         chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
         vuln_distribution_chart_html = chart_html
 
         # -- Segment 4: attack surface overview ---------------------------
-        attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
+        attack_surface_html = AttackSurfaceBuilder(self._finding_repo).build(filtered)
 
         # -- Segment 5: Finding ID assignment ---------------------------------
-        code_findings_raw = filtered
         code_sorted = sorted(
-            code_findings_raw,
+            filtered,
             key=lambda f: (
-                _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 99),
-                (_parse_meta(f).get("title") or f.get("rule_id") or "").lower(),
+                _SEVERITY_RANKS.get((f.severity or "").lower(), 99),
+                (f.meta.get("title") or f.rule_id or "").lower(),
             ),
         )
-        code_with_ids = assign_tal_ids(code_sorted, prefix=prefix)
-        finding_repo.reset_tal_ids()
-        finding_repo.bulk_update_tal_ids(
+        code_with_ids = assign_tal_ids([asdict(f) for f in code_sorted], prefix=prefix)
+        self._finding_repo.reset_tal_ids()
+        self._finding_repo.bulk_update_tal_ids(
             [(f["tal_id"], f["id"]) for f in code_with_ids]
         )
         logger.info("Assigned %d finding IDs to code findings.", len(code_with_ids))
@@ -207,12 +224,12 @@ class ReportAssembler:
         )
 
     def render_pdf(self, context: ReportContext) -> bytes:
-        """Render *context* to PDF bytes via :class:`WeasyPrintRenderer`.
+        """Render *context* to PDF bytes via the injected renderers.
 
         Steps:
         1. Load ``static/report.css`` from disk.
-        2. Render the Jinja2 master template with *context*.
-        3. Pass the resulting HTML and CSS string to ``WeasyPrintRenderer``.
+        2. Render the master template with *context*.
+        3. Pass the HTML and CSS to the PdfRenderer.
 
         Args:
             context: Fully (or partially) populated :class:`ReportContext`.
@@ -221,13 +238,12 @@ class ReportAssembler:
             Raw PDF bytes.
 
         Raises:
-            PDFRenderError: WeasyPrint failed to produce a PDF.
+            PdfRenderError: The PDF backend failed to produce a PDF.
             FileNotFoundError: The CSS stylesheet is missing.
         """
         css = (_STATIC_DIR / "report.css").read_text(encoding="utf-8")
-        html = self._render_template(context)
-        renderer = get_pdf_renderer("weasyprint")
-        return renderer.render(html, css)
+        html = self._template_renderer.render("report.html.j2", {"ctx": context})
+        return self._pdf_renderer.render(html, css)
 
     def build_and_render(self) -> bytes:
         """Convenience: :meth:`build_context` then :meth:`render_pdf`.
@@ -237,27 +253,6 @@ class ReportAssembler:
         """
         context = self.build_context()
         return self.render_pdf(context)
-
-    # ------------------------------------------------------------------ #
-    # Private helpers
-    # ------------------------------------------------------------------ #
-
-    def _render_template(self, context: ReportContext) -> str:
-        """Render the Jinja2 master template with *context*.
-
-        Args:
-            context: The report context to render.
-
-        Returns:
-            Complete HTML document string.
-        """
-        env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
-            autoescape=True,
-            keep_trailing_newline=True,
-        )
-        template = env.get_template("report.html.j2")
-        return template.render(ctx=context)
 
 
 __all__ = ["ReportAssembler"]

@@ -6,14 +6,35 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.locking import JobBusy
+from application.project.repositories_service import ProjectRepositoriesService
+from application.repl.adapters.orchestrator_display import OrchestratorDisplay
+from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
+from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
+from application.scans.scans_service import ProjectNotFound
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
-from application.tools.factory import ToolWrapperFactory
-from application.tools.registry import tool_registry
+from application.tools.orchestrator import ScanCancelled
+from application.tools.scan_service import get_scan_service
+from application.url_inventory.url_list_service import (
+    ProjectNotFound as UrlProjectNotFound,
+)
 from core.detection.noir import noir_skip_reason
+from core.project_paths import ProjectPaths
+from factories.persistence import (
+    create_finding_repo,
+    create_overrides_repo,
+    create_repo_repo,
+    create_scan_repos,
+    create_scans_service,
+    create_url_finding_repo,
+    create_url_list_service,
+)
+from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
+    from core.config.schemas import Repository
 
 
 class ScanCommands:
@@ -22,9 +43,16 @@ class ScanCommands:
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
 
-    # ------------------------------------------------------------------
-    # Commands
-    # ------------------------------------------------------------------
+    def _active_repos(self) -> list[Repository]:
+        """Return active repos for the REPL's current project."""
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            return []
+        service = ProjectRepositoriesService(
+            self.repl.project_registry, self.repl.config
+        )
+        return service.list_active(row.id)
 
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
         """scan [--repo=<repo,...>] [--tool=<tool,...>] [--domain=<domain,...>]"""
@@ -36,14 +64,23 @@ class ScanCommands:
 
         from application.tools.registry import discover_tools
 
-        discover_tools(self.repl.base_path, project_name=self.repl.active_project)
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
+        )
+        overrides_repo = create_overrides_repo(paths.findings_db)
+        discover_tools(
+            self.repl.tool_registry,
+            self.repl.base_path,
+            project_name=self.repl.active_project,
+            overrides_repo=overrides_repo,
+        )
         try:
             self._cmd_scan_inner(args)
         finally:
-            discover_tools(self.repl.base_path)
+            discover_tools(self.repl.tool_registry, self.repl.base_path)
 
     def _cmd_scan_inner(self, args: list[str]) -> None:
-        """Inner scan logic — runs after registry is refreshed."""
+        """Inner scan logic. Runs after registry is refreshed."""
         from application.rag.ingestor import get_tool_domain
         from domain.tools.constants import DOMAINS
 
@@ -92,7 +129,7 @@ class ScanCommands:
         repo_names: list[str] | None = None
         if repo_val is not None:
             requested_repos = [r.strip() for r in repo_val.split(",") if r.strip()]
-            repos = self.repl.config.load_repositories(self.repl.active_project)
+            repos = self._active_repos()
             repo_map = {r.name.lower(): r.name for r in repos}
             invalid_repos = [r for r in requested_repos if r.lower() not in repo_map]
             if invalid_repos:
@@ -108,7 +145,7 @@ class ScanCommands:
         requested_tools: list[str] | None = None
         if tool_val is not None:
             requested_tools = [t.strip() for t in tool_val.split(",") if t.strip()]
-            known = set(tool_registry.list_tool_names())
+            known = set(self.repl.tool_registry.list_tool_names())
             invalid = [t for t in requested_tools if t not in known]
             if invalid:
                 self.repl.console.print(
@@ -133,7 +170,7 @@ class ScanCommands:
         skip_tools: set[str] = set()
         if skip_tools_val is not None:
             parsed_skips = [t.strip() for t in skip_tools_val.split(",") if t.strip()]
-            known = set(tool_registry.list_tool_names())
+            known = set(self.repl.tool_registry.list_tool_names())
             invalid_skips = [t for t in parsed_skips if t not in known]
             if invalid_skips:
                 self.repl.console.print(
@@ -146,7 +183,7 @@ class ScanCommands:
         # Compute effective tool list (--tool and/or --domain only)
         effective_tools: list[str] | None = None
         if requested_tools is not None or requested_domains is not None:
-            all_configured = list(tool_registry.list_tool_names())
+            all_configured = list(self.repl.tool_registry.list_tool_names())
             candidates = (
                 list(requested_tools) if requested_tools is not None else all_configured
             )
@@ -156,83 +193,86 @@ class ScanCommands:
                 ]
             effective_tools = candidates
 
-        _finding_repo, run_repo, run_id = self._create_sqlite_run(args)
-        orchestrator = self._make_orchestrator(
-            run_id=run_id,
-            auto_approve=auto_approve,
-            skip_enrichment=skip_enrichment,
+        project_id = self._resolve_project_id()
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
         )
-        if orchestrator is None:
-            return
 
-        accumulated_fbt: dict[str, int] = {}
+        # The DAST-without-discovery prompt asks the user a question
+        # and may rewrite effective_tools before dispatch.
+        if effective_tools is not None:
+            effective_tools = self._maybe_warn_dast_without_discovery(
+                effective_tools,
+                repo_names,
+                auto_approve,
+                project_id,
+            )
+            if effective_tools is None:
+                return
 
-        def _merge_fbt(summary) -> None:  # type: ignore[no-untyped-def]
-            for tool, count in summary.findings_by_tool.items():
-                accumulated_fbt[tool] = accumulated_fbt.get(tool, 0) + count
+        run_repo, chat_repo, profiles_repo, _ = create_scan_repos(paths.findings_db)
+
+        finding_repo = create_finding_repo(paths.findings_db)
+        repo_repo = create_repo_repo(paths.findings_db)
+        url_finding_repo = create_url_finding_repo(paths.findings_db)
 
         try:
-            if repo_names is not None:
-                if effective_tools is not None:
-                    effective_tools = self._maybe_warn_dast_without_discovery(
-                        effective_tools,
-                        repo_names,
-                        auto_approve,
-                        orchestrator,
-                    )
-                    if effective_tools is None:
-                        return
-                    for repo_name in repo_names:
-                        for _i, tool_name in enumerate(effective_tools):
-                            _merge_fbt(
-                                orchestrator.run_tool_on_repo(
-                                    tool_name,
-                                    repo_name,
-                                    remaining_peers=len(effective_tools) - _i - 1,
-                                )
-                            )
-                else:
-                    for repo_name in repo_names:
-                        _merge_fbt(
-                            orchestrator.run_repo_scan(
-                                repo_name=repo_name,
-                                exclude_tools=skip_tools or None,
-                            )
-                        )
-            else:
-                if effective_tools is not None:
-                    effective_tools = self._maybe_warn_dast_without_discovery(
-                        effective_tools,
-                        None,
-                        auto_approve,
-                        orchestrator,
-                    )
-                    if effective_tools is None:
-                        return
-                    for _i, tool_name in enumerate(effective_tools):
-                        _merge_fbt(
-                            orchestrator.run_tool_on_all_repos(
-                                tool_name,
-                                remaining_peers=len(effective_tools) - _i - 1,
-                            )
-                        )
-                else:
-                    _merge_fbt(
-                        orchestrator.run_full_scan(exclude_tools=skip_tools or None)
-                    )
+            handle = get_scan_service().start_scan(
+                project_id=project_id,
+                project_name=self.repl.active_project,
+                base_path=str(self.repl.base_path),
+                tool_registry=self.repl.tool_registry,
+                run_repo=run_repo,
+                chat_session_repo=chat_repo,
+                profiles_repo=profiles_repo,
+                finding_repo=finding_repo,
+                repo_repo=repo_repo,
+                url_finding_repo=url_finding_repo,
+                repo_ids=tuple(repo_names or ()),
+                tool_ids=tuple(effective_tools or ()),
+                skip_tool_ids=tuple(skip_tools),
+                skip_enrichment=skip_enrichment,
+                prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
+                reporter=StdoutProgressReporter(),
+                display=OrchestratorDisplay(self.repl.console),
+                run_args={"args": args},
+            )
+        except JobBusy as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
         except ValueError as exc:
             self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
 
-        if run_id is not None and run_repo is not None and accumulated_fbt:
-            run_repo.add_run_tools(  # type: ignore[union-attr]
-                run_id,
-                [{"tool": t, "findings_count": c} for t, c in accumulated_fbt.items()],
-            )
+        try:
+            summary = handle.result.result()
+        except ScanCancelled:
+            self.repl.console.print("[yellow]Scan cancelled.[/yellow]")
+            return
+        except ValueError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+        except Exception as exc:
+            self.repl.console.print(f"[red]Scan failed:[/red] {exc}")
+            return
+
+        if summary.findings_by_tool:
+            try:
+                create_scans_service(
+                    self.repl.project_registry, project_id
+                ).record_run_tool_counts(handle.run_id, summary.findings_by_tool)
+            except ProjectNotFound:
+                pass
+
+    def _resolve_project_id(self) -> int:
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            raise ValueError(f"project not found: {self.repl.active_project}")
+        return row.id
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
-        """run <tool> [--timeout <seconds>] [args...]  — execute a tool with raw
-        arguments.
-        """
+        """Execute a tool with raw arguments."""
         if not args:
             self.repl.console.print(
                 "[red]Usage:[/red] run <tool> [--timeout <seconds>] [args...]"
@@ -251,11 +291,20 @@ class ScanCommands:
 
         from application.tools.registry import discover_tools
 
-        discover_tools(self.repl.base_path, project_name=self.repl.active_project)
+        paths = ProjectPaths.from_canonical(
+            self.repl.base_path, self.repl.active_project
+        )
+        overrides_repo = create_overrides_repo(paths.findings_db)
+        discover_tools(
+            self.repl.tool_registry,
+            self.repl.base_path,
+            project_name=self.repl.active_project,
+            overrides_repo=overrides_repo,
+        )
         try:
             self._cmd_run_inner(tool_name, remaining, timeout)
         finally:
-            discover_tools(self.repl.base_path)
+            discover_tools(self.repl.tool_registry, self.repl.base_path)
 
     def _cmd_run_inner(
         self,
@@ -263,9 +312,9 @@ class ScanCommands:
         remaining: list[str],
         timeout: int,
     ) -> None:
-        """Inner run logic — runs after registry is refreshed with project overrides."""
+        """Inner run logic. Runs after registry is refreshed with project overrides."""
         assert self.repl.active_project is not None
-        tool = tool_registry.get_tool(tool_name)
+        tool = self.repl.tool_registry.get_tool(tool_name)
         if tool is None:
             self.repl.console.print(f"[red]Tool not found:[/red] {tool_name}")
             return
@@ -280,6 +329,9 @@ class ScanCommands:
         executor = ToolExecutor(
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
+            prompt=RichConsolePromptAdapter(),
+            subprocess_runner=SubprocessRunner(),
+            reporter=StdoutProgressReporter(),
         )
         result = executor.execute(
             tool,
@@ -294,10 +346,6 @@ class ScanCommands:
         if result.output_files:
             for path in result.output_files.values():
                 self.repl.console.print(f"Output saved to: {path}")
-
-    # ------------------------------------------------------------------
-    # Private — shared SCA result helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _select_repo_tools(
@@ -323,10 +371,6 @@ class ScanCommands:
         if base_urls:
             tools.append("zap")
         return tools
-
-    # ------------------------------------------------------------------
-    # Private — UI helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _parse_timeout_arg(
@@ -370,26 +414,22 @@ class ScanCommands:
                 return value, remaining
         return None, args
 
-    # ------------------------------------------------------------------
-    # Private — DAST-without-discovery warning
-    # ------------------------------------------------------------------
-
     def _maybe_warn_dast_without_discovery(
         self,
         tools: list[str],
         repo_names: list[str] | None,
         auto_approve: bool,
-        orchestrator: object,
+        project_id: int,
     ) -> list[str] | None:
         """Warn when DAST tools are requested but no discovery output exists.
 
         DAST tools (zap, xsstrike, dalfox) work best when an endpoint
         discovery tool (katana, noir) has already produced OAS3 output.
-        This method checks whether that output exists for the target repos
-        and, when it doesn't, prompts the user to prepend discovery tools.
+        Checks whether that output exists for the target repos and, when
+        it does not, prompts the user to prepend discovery tools.
 
         Returns the (possibly expanded) effective tool list to execute, or
-        ``None`` to indicate that the scan was cancelled by the user.
+        ``None`` to indicate that the scan was canceled by the user.
 
         When ``auto_approve`` is True the warning is suppressed.
         """
@@ -404,7 +444,7 @@ class ScanCommands:
             return tools
 
         assert self.repl.active_project is not None
-        repos = self.repl.config.load_repositories(self.repl.active_project)
+        repos = self._active_repos()
         target_repos = (
             [r for r in repos if r.name in repo_names]
             if repo_names is not None
@@ -414,7 +454,7 @@ class ScanCommands:
         missing = [
             r
             for r in target_repos
-            if r.crawl_enabled and not r.oas3_path and not r.merged_oas3_path
+            if r.crawl_enabled and not self._repo_has_url_findings(r, project_id)
         ]
         if not missing:
             return tools
@@ -451,66 +491,18 @@ class ScanCommands:
         # choice == "2": proceed without discovery
         return tools
 
-    # ------------------------------------------------------------------
-    # Private — orchestrator factory and export
-    # ------------------------------------------------------------------
-
-    def _create_sqlite_run(self, args: list[str]) -> tuple[object, object, int | None]:
-        """Instantiate repositories and create a run record.
-
-        Returns (finding_repo, run_repo, run_id).
-        On failure returns (None, None, None).
-        """
-        assert self.repl.active_project is not None
+    def _repo_has_url_findings(self, repo: object, project_id: int) -> bool:
+        """Return True if *repo* has any ``url_findings`` rows."""
+        repo_id = getattr(repo, "id", None)
+        if not isinstance(repo_id, int):
+            return False
         try:
-            from infrastructure.store import make_store
-
-            run_repo, finding_repo, _, _ = make_store(
-                self.repl.base_path, self.repl.active_project
-            )
-            run_id = run_repo.create_run({"args": args})
-            return finding_repo, run_repo, run_id
-        except Exception as exc:
-            self.repl.console.print(f"[yellow]SQLite unavailable:[/yellow] {exc}")
-            return None, None, None
-
-    def _make_orchestrator(
-        self,
-        run_id: int | None = None,
-        auto_approve: bool = False,
-        skip_enrichment: bool = False,
-    ):
-        """Create a ScanOrchestrator for the active project.
-
-        Each call creates a fresh EventBus wired with the appropriate
-        post-ingest strategy, so scans are isolated from one another.
-        """
-        from application.pipeline.factory import PipelineFactory
-        from application.tools.executor import ToolExecutor
-        from application.tools.orchestrator import ScanOrchestrator
-
-        assert self.repl.active_project is not None
-        executor = ToolExecutor(
-            project_name=self.repl.active_project,
-            base_path=Path(self.repl.base_path),
-        )
-        bus = PipelineFactory.create(
-            console=self.repl.console,
-            skip_enrichment=skip_enrichment,
-        )
-        return ScanOrchestrator(
-            project=self.repl.active_project,
-            tool_registry=tool_registry,
-            tool_executor=executor,
-            event_bus=bus,
-            run_id=run_id,
-            factory=ToolWrapperFactory(),
-            console=self.repl.console,
-            auto_approve=auto_approve,
-        )
+            service = create_url_list_service(self.repl.project_registry, project_id)
+        except UrlProjectNotFound:
+            return False
+        return service.repo_has_url_findings(repo_id)
 
     def _export_summary(self, summary, export_path: str) -> None:
-        """Export ScanSummary results to a JSON file."""
         try:
             data = {
                 "total_tools_run": summary.total_tools_run,

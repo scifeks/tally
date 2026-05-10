@@ -1,11 +1,13 @@
-"""GET /api/config — field configuration for the SPA."""
+"""Field configuration for the SPA."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
+from domain.findings.severity import Severity
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
+    DOMAINS,
     FINDING_TYPES,
     STATUS_LEVELS,
 )
@@ -13,18 +15,15 @@ from domain.tools.constants import (
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/field-specs")
 def get_config() -> dict:
     """Return editable field specifications for the findings SPA.
 
     The response drives AG Grid column editability and cell editor params.
-    The SPA must not hardcode allowed values for any field — it reads them
-    here at startup.
-
-    Each entry in ``editable_fields`` describes one patchable field:
-    - ``editor``: ``"select"`` | ``"text"`` | ``"boolean"`` | ``"tags"``
-    - ``options``: present only for ``"select"`` and ``"tags"`` editors;
-      lists the allowed values in display order.
+    The SPA reads allowed values from this endpoint at startup.
+    Each field entry contains an editor type (select, text, boolean, tags)
+    and optional allowed values. The enums section contains canonical
+    allowed-value sets from domain constants.
     """
     return {
         "editable_fields": {
@@ -53,5 +52,12 @@ def get_config() -> dict:
             "meta_risk_type": {"editor": "text"},
             "meta_owasp_name": {"editor": "text"},
             "meta_tags": {"editor": "tags"},
-        }
+        },
+        "enums": {
+            "severities": [s.label for s in Severity.all_ordered()],
+            "confidence_levels": sorted(CONFIDENCE_LEVELS),
+            "statuses": sorted(STATUS_LEVELS),
+            "finding_types": sorted(FINDING_TYPES),
+            "domains": sorted(DOMAINS),
+        },
     }

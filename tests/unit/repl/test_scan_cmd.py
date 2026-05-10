@@ -1,8 +1,15 @@
-"""Tests for the refactored flag-based scan command."""
+"""Tests for the refactored flag-based scan command.
 
-from unittest.mock import MagicMock, call, patch
+After the hexagonal cleanup the REPL calls ``ScanService.start_scan``
+once with the parsed scope (repos / tools / domains / skip_tools).
+These tests assert the kwargs the REPL passes to ``start_scan``, not
+the orchestrator-level fan-out (which is covered separately).
+"""
+
+from unittest.mock import MagicMock, patch
 
 from application.repl.commands.scan_commands import ScanCommands
+from domain.projects.entry import ProjectRow
 
 MOCK_TOOLS = ["gitleaks", "semgrep", "nmap", "zap", "pip-audit"]
 
@@ -10,8 +17,10 @@ MOCK_TOOLS = ["gitleaks", "semgrep", "nmap", "zap", "pip-audit"]
 def _make_repo(name: str = "myrepo") -> MagicMock:
     repo = MagicMock()
     repo.name = name
-    repo.oas3_path = "/tmp/oas3.json"
-    repo.merged_oas3_path = "/tmp/merged_oas3.json"
+    # crawl_enabled=False keeps the repo out of the DAST-without-discovery
+    # warning path, which would otherwise prompt for stdin input under
+    # pytest's captured-stdin environment.
+    repo.crawl_enabled = False
     return repo
 
 
@@ -24,39 +33,59 @@ def _run(
     repl = MagicMock()
     repl.active_project = active_project
     repl.base_path = "/tmp/test"
+    repl.tool_registry.list_tool_names.return_value = tools
+    repl.project_registry.resolve_by_name.return_value = ProjectRow(
+        id=1, name=active_project, path="/tmp/test", created_at="2026-05-02T00:00:00Z"
+    )
     repos = repos or [_make_repo()]
-    repl.config.load_repositories.return_value = repos
 
-    mock_orchestrator = MagicMock()
+    mock_summary = MagicMock(findings_by_tool={})
+    mock_handle = MagicMock(run_id=1)
+    mock_handle.result.result.return_value = mock_summary
+
+    mock_service = MagicMock()
+    mock_service.start_scan.return_value = mock_handle
 
     sc = ScanCommands(repl)
     with (
-        patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
-        patch.object(sc, "_make_orchestrator", return_value=mock_orchestrator),
+        patch(
+            "application.repl.commands.scan_commands.get_scan_service",
+            return_value=mock_service,
+        ),
+        patch.object(ScanCommands, "_active_repos", return_value=repos),
     ):
-        mock_reg.list_tool_names.return_value = tools
         sc.cmd_scan("scan", args)
 
-    return repl, mock_orchestrator
+    return repl, mock_service
 
 
-def test_scan_no_args_calls_run_full_scan() -> None:
+def _scoped_kwargs(service: MagicMock) -> dict:
+    """Return the kwargs that ScanService.start_scan was called with."""
+    assert service.start_scan.called
+    return service.start_scan.call_args.kwargs
+
+
+def test_scan_no_args_invokes_run_scoped_scan_with_no_scope() -> None:
     _repl, orchestrator = _run([])
-    assert orchestrator.run_full_scan.called
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["repo_ids"] == ()
+    assert kwargs["tool_ids"] == ()
+    assert kwargs["skip_tool_ids"] == ()
 
 
-def test_scan_repo_calls_run_repo_scan() -> None:
+def test_scan_repo_passes_repo_name() -> None:
     _repl, orchestrator = _run(["--repo=myrepo"])
-    kwargs = orchestrator.run_repo_scan.call_args.kwargs
-    assert kwargs["repo_name"] == "myrepo"
-    assert kwargs.get("exclude_tools") is None
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["repo_ids"] == ("myrepo",)
+    assert kwargs["tool_ids"] == ()
 
 
-def test_scan_multiple_repos_calls_run_repo_scan_for_each() -> None:
+def test_scan_multiple_repos_passes_all_names() -> None:
     repos = [_make_repo("repo-a"), _make_repo("repo-b")]
     _repl, orchestrator = _run(["--repo=repo-a,repo-b"], repos=repos)
-    called = [c.kwargs["repo_name"] for c in orchestrator.run_repo_scan.call_args_list]
-    assert called == ["repo-a", "repo-b"]
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["repo_ids"] == ("repo-a", "repo-b")
+    assert kwargs["tool_ids"] == ()
 
 
 def test_scan_multiple_repos_unknown_repo_prints_error() -> None:
@@ -65,169 +94,137 @@ def test_scan_multiple_repos_unknown_repo_prints_error() -> None:
     printed = repl.console.print.call_args[0][0]
     assert "Unknown repository" in printed
     assert "nope" in printed
-    assert not orchestrator.run_repo_scan.called
+    assert not orchestrator.start_scan.called
 
 
-def test_scan_multiple_repos_with_tool() -> None:
+def test_scan_multiple_repos_with_tool_passes_both_dimensions() -> None:
     repos = [_make_repo("repo-a"), _make_repo("repo-b")]
     _repl, orchestrator = _run(["--repo=repo-a,repo-b", "--tool=semgrep"], repos=repos)
-    calls = orchestrator.run_tool_on_repo.call_args_list
-    called = [(c.args[0], c.args[1]) for c in calls]
-    assert ("semgrep", "repo-a") in called
-    assert ("semgrep", "repo-b") in called
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["repo_ids"] == ("repo-a", "repo-b")
+    assert kwargs["tool_ids"] == ("semgrep",)
 
 
-def test_scan_tool_single_calls_run_tool_on_all_repos() -> None:
+def test_scan_tool_single_passes_tool_name() -> None:
     _repl, orchestrator = _run(["--tool=semgrep"])
-    assert orchestrator.run_tool_on_all_repos.call_args == call(
-        "semgrep", remaining_peers=0
-    )
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["repo_ids"] == ()
+    assert kwargs["tool_ids"] == ("semgrep",)
 
 
-def test_scan_tool_comma_list_calls_for_each_tool() -> None:
+def test_scan_tool_comma_list_passes_all_tools() -> None:
     _repl, orchestrator = _run(["--tool=semgrep,gitleaks"])
-    calls = orchestrator.run_tool_on_all_repos.call_args_list
-    called_tools = [c.args[0] for c in calls]
-    assert "semgrep" in called_tools
-    assert "gitleaks" in called_tools
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["tool_ids"] == ("semgrep", "gitleaks")
 
 
-def test_scan_domain_code_runs_only_code_tools() -> None:
-    _repl, orchestrator = _run(["--domain=code"])
-    calls = orchestrator.run_tool_on_all_repos.call_args_list
-    called_tools = [c.args[0] for c in calls]
-    assert "nmap" not in called_tools
-    assert "zap" not in called_tools
+def test_scan_domain_filters_effective_tools_via_repl() -> None:
+    # The REPL pre-resolves effective_tools by intersecting with domain.
+    # When --domain alone is given, run_scoped_scan receives
+    # tool_names=<filtered list>, domains=None.
+    with patch(
+        "application.rag.ingestor.get_tool_domain",
+        side_effect=lambda t: (
+            "code" if t in {"semgrep", "gitleaks", "pip-audit"} else "web"
+        ),
+    ):
+        _repl, orchestrator = _run(["--domain=code"])
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["tool_ids"]
+    assert "nmap" not in kwargs["tool_ids"]
+    assert "zap" not in kwargs["tool_ids"]
 
 
-def test_scan_domain_code_web_runs_both_domain_tools() -> None:
-    _repl, orchestrator = _run(["--domain=code,web"])
-    calls = orchestrator.run_tool_on_all_repos.call_args_list
-    called_tools = [c.args[0] for c in calls]
-    assert "zap" in called_tools
-    assert any(t in called_tools for t in ("semgrep", "gitleaks", "pip-audit"))
+def test_scan_domain_code_web_includes_both_domain_tools() -> None:
+    with patch(
+        "application.rag.ingestor.get_tool_domain",
+        side_effect=lambda t: (
+            "code" if t in {"semgrep", "gitleaks", "pip-audit"} else "web"
+        ),
+    ):
+        _repl, orchestrator = _run(["--domain=code,web"])
+    kwargs = _scoped_kwargs(orchestrator)
+    tools = list(kwargs["tool_ids"])
+    assert "zap" in tools
+    assert any(t in tools for t in ("semgrep", "gitleaks", "pip-audit"))
 
 
 def test_scan_invalid_tool_prints_error() -> None:
     repl, orchestrator = _run(["--tool=badtool"])
     printed = repl.console.print.call_args[0][0]
     assert "Unknown tool" in printed
-    assert not orchestrator.run_full_scan.called
-    assert not orchestrator.run_repo_scan.called
-    assert not orchestrator.run_tool_on_all_repos.called
+    assert not orchestrator.start_scan.called
 
 
 def test_scan_invalid_domain_prints_error() -> None:
     repl, orchestrator = _run(["--domain=badtype"])
     printed = repl.console.print.call_args[0][0]
     assert "Unknown domain" in printed
-    assert not orchestrator.run_full_scan.called
+    assert not orchestrator.start_scan.called
 
 
 def test_scan_old_positional_syntax_rejected() -> None:
     repl, orchestrator = _run(["repo", "myrepo"])
     printed = repl.console.print.call_args[0][0]
     assert "Unrecognized" in printed
-    assert not orchestrator.run_full_scan.called
-    assert not orchestrator.run_repo_scan.called
-    assert not orchestrator.run_tool_on_all_repos.called
-    assert not orchestrator.run_tool_on_repo.called
+    assert not orchestrator.start_scan.called
 
 
-# ------------------------------------------------------------------
 # --skip-tools tests
-# ------------------------------------------------------------------
 
 
-def test_skip_tools_uses_full_scan_path() -> None:
+def test_skip_tools_passes_skip_tools_set() -> None:
     _repl, orchestrator = _run(["--skip-tools=zap,nmap"])
-    assert orchestrator.run_full_scan.called
-    assert not orchestrator.run_tool_on_all_repos.called
-    call_kwargs = orchestrator.run_full_scan.call_args.kwargs
-    assert call_kwargs.get("exclude_tools") == {"zap", "nmap"}
+    kwargs = _scoped_kwargs(orchestrator)
+    assert set(kwargs["skip_tool_ids"]) == {"zap", "nmap"}
+    assert kwargs["tool_ids"] == ()
 
 
-def test_skip_tools_single_tool_uses_full_scan() -> None:
+def test_skip_tools_single_passes_skip_tools_set() -> None:
     _repl, orchestrator = _run(["--skip-tools=zap"])
-    assert orchestrator.run_full_scan.called
-    call_kwargs = orchestrator.run_full_scan.call_args.kwargs
-    assert call_kwargs.get("exclude_tools") == {"zap"}
+    kwargs = _scoped_kwargs(orchestrator)
+    assert set(kwargs["skip_tool_ids"]) == {"zap"}
 
 
 def test_skip_tools_invalid_tool_prints_error() -> None:
     repl, orchestrator = _run(["--skip-tools=notreal"])
     printed = repl.console.print.call_args[0][0]
     assert "Unknown tool" in printed
-    assert not orchestrator.run_full_scan.called
-    assert not orchestrator.run_tool_on_all_repos.called
+    assert not orchestrator.start_scan.called
 
 
 def test_skip_tools_and_tool_flag_are_mutually_exclusive() -> None:
     repl, orchestrator = _run(["--tool=semgrep", "--skip-tools=zap"])
     printed = repl.console.print.call_args[0][0]
     assert "mutually exclusive" in printed
-    assert not orchestrator.run_full_scan.called
-    assert not orchestrator.run_tool_on_all_repos.called
+    assert not orchestrator.start_scan.called
 
 
-def test_skip_tools_with_repo_uses_repo_scan_path() -> None:
+def test_skip_tools_with_repo_passes_both() -> None:
     repos = [_make_repo("repo-a")]
     _repl, orchestrator = _run(["--repo=repo-a", "--skip-tools=zap,nmap"], repos=repos)
-    assert orchestrator.run_repo_scan.called
-    assert not orchestrator.run_tool_on_repo.called
-    call_kwargs = orchestrator.run_repo_scan.call_args.kwargs
-    assert call_kwargs.get("exclude_tools") == {"zap", "nmap"}
+    kwargs = _scoped_kwargs(orchestrator)
+    assert kwargs["repo_ids"] == ("repo-a",)
+    assert set(kwargs["skip_tool_ids"]) == {"zap", "nmap"}
 
 
-# ------------------------------------------------------------------
 # --skip-enrichment tests
-# ------------------------------------------------------------------
 
 
-def _run_capture_orchestrator_kwargs(
-    args: list[str],
-    tools: list[str] = MOCK_TOOLS,
-    repos: list[MagicMock] | None = None,
-    active_project: str = "proj",
-) -> dict:
-    """Like _run but returns the kwargs _make_orchestrator was called with."""
-    repl = MagicMock()
-    repl.active_project = active_project
-    repl.base_path = "/tmp/test"
-    repos = repos or [_make_repo()]
-    repl.config.load_repositories.return_value = repos
-
-    mock_orchestrator = MagicMock()
-    captured: dict = {}
-
-    sc = ScanCommands(repl)
-
-    def _capture_make_orchestrator(**kwargs: object) -> MagicMock:
-        captured.update(kwargs)
-        return mock_orchestrator
-
-    with (
-        patch("application.repl.commands.scan_commands.tool_registry") as mock_reg,
-        patch.object(sc, "_make_orchestrator", side_effect=_capture_make_orchestrator),
-    ):
-        mock_reg.list_tool_names.return_value = tools
-        sc.cmd_scan("scan", args)
-
-    return captured
-
-
-def test_skip_enrichment_flag_passes_true_to_make_orchestrator() -> None:
-    kwargs = _run_capture_orchestrator_kwargs(["--skip-enrichment"])
+def test_skip_enrichment_flag_passes_true_to_start_scan() -> None:
+    _repl, service = _run(["--skip-enrichment"])
+    kwargs = _scoped_kwargs(service)
     assert kwargs.get("skip_enrichment") is True
 
 
 def test_no_skip_enrichment_flag_defaults_to_false() -> None:
-    kwargs = _run_capture_orchestrator_kwargs([])
+    _repl, service = _run([])
+    kwargs = _scoped_kwargs(service)
     assert kwargs.get("skip_enrichment") is False
 
 
 def test_skip_enrichment_flag_is_not_unrecognized() -> None:
-    repl, _orchestrator = _run(["--skip-enrichment"])
+    repl, _service = _run(["--skip-enrichment"])
     # If flag were unrecognized, console.print would contain "Unrecognized".
     for call_args in repl.console.print.call_args_list:
         text = call_args[0][0] if call_args[0] else ""
@@ -236,7 +233,6 @@ def test_skip_enrichment_flag_is_not_unrecognized() -> None:
 
 def test_skip_enrichment_combined_with_repo_flag() -> None:
     repos = [_make_repo("repo-a")]
-    kwargs = _run_capture_orchestrator_kwargs(
-        ["--repo=repo-a", "--skip-enrichment"], repos=repos
-    )
+    _repl, service = _run(["--repo=repo-a", "--skip-enrichment"], repos=repos)
+    kwargs = _scoped_kwargs(service)
     assert kwargs.get("skip_enrichment") is True

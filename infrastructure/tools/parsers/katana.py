@@ -35,12 +35,6 @@ from urllib.parse import urlparse
 
 from domain.tools.base import ToolResult
 
-from ._shared import _first_output_file, _shared_meta
-
-# ---------------------------------------------------------------------------
-# Parse functions (called by KatanaLocalTool.parse_output)
-# ---------------------------------------------------------------------------
-
 
 def parse_katana_jsonl(json_path: Path) -> dict[str, Any]:
     """Parse a Katana JSONL output file into structured endpoint data."""
@@ -82,11 +76,6 @@ def parse_katana_jsonl_string(jsonl: str) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Internal parse helpers
-# ---------------------------------------------------------------------------
-
-
 def _parse_record(record: dict[str, Any]) -> dict[str, Any] | None:
     """Extract one endpoint dict from a single Katana JSONL record."""
     request = record.get("request")
@@ -121,11 +110,6 @@ def _parse_record(record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-# ---------------------------------------------------------------------------
-# Handler
-# ---------------------------------------------------------------------------
-
-
 class KatanaHandler:
     """Normalise and render Katana endpoint-discovery output."""
 
@@ -149,41 +133,16 @@ class KatanaHandler:
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        """Convert Katana ToolResult into one SQLite row per discovered URL."""
-        parsed: dict[str, Any] = result.parsed_data or {}
-        endpoints: list[dict[str, Any]] = parsed.get("endpoints", [])
+        """Katana is URL-discovery only post-Phase-9: emits no findings rows.
 
-        timestamp = result.timestamp
-        source_file = _first_output_file(result.output_files)
-        rows: list[dict] = []
-
-        for endpoint in endpoints:
-            url: str = endpoint.get("url") or ""
-            path: str = endpoint.get("path") or ""
-            method: str = (endpoint.get("method") or "").upper()
-            status_code: int = endpoint.get("status_code") or 0
-
-            description = f"Endpoint {method} {path}"
-            if status_code:
-                description += f" (HTTP {status_code})"
-
-            row: dict[str, Any] = {
-                "tool": "katana",
-                "profile": profile,
-                "finding_type": json.dumps(["informational"]),
-                "severity": "informational",
-                "confidence": "confirmed",
-                "risk_type": "endpoint-discovery",
-                "url": url,
-                "method": method,
-                "description": description,
-                "timestamp": timestamp,
-                "source_file": source_file,
-            }
-            row.update(_shared_meta(self, "informational"))
-            rows.append(row)
-
-        return rows
+        Discovered URLs land in the ``url_findings`` table via the
+        ``UrlInventoryIngestHandler`` instead. The parser still produces
+        ``parsed_data`` (used by the OAS3 conversion in ``parse_output``)
+        and the OAS3 file (consumed by ZAP/XSStrike/DalFox via the
+        URL inventory artifact rebuild).
+        """
+        del result, profile
+        return []
 
     def render(self, row: dict) -> str:
         """Render a normalised endpoint row as ChromaDB document text."""

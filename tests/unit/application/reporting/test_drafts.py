@@ -18,6 +18,21 @@ from application.reporting.drafts import (
     ScopeMethodologyGenerator,
 )
 from application.reporting.risk_level import RiskCounts, RiskLevel
+from domain.findings.entry import Finding
+
+
+def _make_finding(**kwargs: Any) -> Finding:
+    defaults: dict[str, Any] = {
+        "id": 0,
+        "fingerprint": None,
+        "run_id": None,
+        "tool": None,
+        "domain": None,
+        "segment": None,
+    }
+    defaults.update(kwargs)
+    return Finding(**defaults)
+
 
 _ZERO_RISK_COUNTS = RiskCounts(
     confirmed_critical=0,
@@ -54,9 +69,7 @@ def _base_ctx() -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
 # Registry
-# ---------------------------------------------------------------------------
 
 
 class TestSectionRegistry:
@@ -83,9 +96,7 @@ class TestSectionRegistry:
         )
 
 
-# ---------------------------------------------------------------------------
 # draft_path property (parametrized)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -110,9 +121,7 @@ class TestDraftPath:
         assert gen.draft_path == tmp_path / f"{expected_section}.md"
 
 
-# ---------------------------------------------------------------------------
 # ExecutiveSummaryGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestExecutiveSummaryGenerator:
@@ -165,15 +174,8 @@ class TestExecutiveSummaryGenerator:
         ctx["repos"] = []
         assert "(none recorded)" in self._gen(tmp_path)._build_prompt(ctx)
 
-    def test_generate_returns_llm_output(self, tmp_path: Path) -> None:
-        gen = self._gen(tmp_path)
-        with patch.object(gen, "_call_llm", return_value="summary text"):
-            assert gen.generate(_base_ctx()) == "summary text"
 
-
-# ---------------------------------------------------------------------------
 # RiskLevelSectionGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestRiskLevelSectionGenerator:
@@ -204,9 +206,7 @@ class TestRiskLevelSectionGenerator:
             assert gen.generate(_base_ctx()) == "risk paragraph"
 
 
-# ---------------------------------------------------------------------------
 # CriticalIssuesGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestCriticalIssuesGenerator:
@@ -216,22 +216,22 @@ class TestCriticalIssuesGenerator:
     def _ctx_with_findings(self) -> dict:
         ctx = _base_ctx()
         ctx["top_findings"] = [
-            {
-                "tal_id": "ACM-001",
-                "severity": "critical",
-                "confidence": "confirmed",
-                "description": "SQL injection in login endpoint",
-                "business_impact": "Full database compromise",
-                "tool": "semgrep",
-            },
-            {
-                "tal_id": "ACM-002",
-                "severity": "high",
-                "confidence": "probable",
-                "description": "Hardcoded credentials in config",
-                "business_impact": "",
-                "tool": "",
-            },
+            _make_finding(
+                tal_id="ACM-001",
+                severity="critical",
+                confidence="confirmed",
+                description="SQL injection in login endpoint",
+                business_impact="Full database compromise",
+                tool="semgrep",
+            ),
+            _make_finding(
+                tal_id="ACM-002",
+                severity="high",
+                confidence="probable",
+                description="Hardcoded credentials in config",
+                business_impact="",
+                tool="",
+            ),
         ]
         return ctx
 
@@ -251,7 +251,7 @@ class TestCriticalIssuesGenerator:
         assert "semgrep" in self._gen(tmp_path)._build_prompt(self._ctx_with_findings())
 
     def test_prompt_tool_line_only_for_findings_with_tool(self, tmp_path: Path) -> None:
-        # ACM-001 has a tool, ACM-002 does not — "Tool:" appears exactly once
+        # ACM-001 has a tool, ACM-002 does not; "Tool:" appears exactly once
         prompt = self._gen(tmp_path)._build_prompt(self._ctx_with_findings())
         assert prompt.count("Tool:") == 1
 
@@ -268,12 +268,12 @@ class TestCriticalIssuesGenerator:
     def test_fallback_tal_id_when_missing(self, tmp_path: Path) -> None:
         ctx = _base_ctx()
         ctx["top_findings"] = [
-            {
-                "tal_id": None,
-                "severity": "high",
-                "confidence": "confirmed",
-                "description": "Some issue",
-            }
+            _make_finding(
+                tal_id=None,
+                severity="high",
+                confidence="confirmed",
+                description="Some issue",
+            )
         ]
         assert "(no finding ID)" in self._gen(tmp_path)._build_prompt(ctx)
 
@@ -293,9 +293,7 @@ class TestCriticalIssuesGenerator:
             assert gen.generate(self._ctx_with_findings()) == "critical issues text"
 
 
-# ---------------------------------------------------------------------------
 # ImprovementPointsGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestImprovementPointsGenerator:
@@ -352,9 +350,7 @@ class TestImprovementPointsGenerator:
             assert gen.generate(self._ctx_with_groups()) == "improvement themes"
 
 
-# ---------------------------------------------------------------------------
 # ScopeMethodologyGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestScopeMethodologyGenerator:
@@ -419,9 +415,7 @@ class TestScopeMethodologyGenerator:
             assert gen.generate(self._ctx_with_scope()) == "scope section"
 
 
-# ---------------------------------------------------------------------------
 # GeneralRecommendationsGenerator
-# ---------------------------------------------------------------------------
 
 
 class TestGeneralRecommendationsGenerator:

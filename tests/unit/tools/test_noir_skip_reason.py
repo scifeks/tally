@@ -7,10 +7,6 @@ from unittest.mock import MagicMock
 
 from core.detection.noir import _is_node_app, noir_skip_reason
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _repo(
     *,
@@ -29,9 +25,7 @@ def _write_deps(tmp_path: Path, content: str) -> str:
     return str(p)
 
 
-# ---------------------------------------------------------------------------
 # Node.js detection via package.json
-# ---------------------------------------------------------------------------
 
 
 class TestNodeApp:
@@ -62,9 +56,7 @@ class TestNodeApp:
         assert noir_skip_reason(_repo()) is None
 
 
-# ---------------------------------------------------------------------------
 # Unsupported framework detection via dependencies file
-# ---------------------------------------------------------------------------
 
 
 class TestUnsupportedFramework:
@@ -122,9 +114,7 @@ class TestUnsupportedFramework:
         )
 
 
-# ---------------------------------------------------------------------------
-# Supported frameworks — must NOT skip
-# ---------------------------------------------------------------------------
+# Supported frameworks: must NOT skip
 
 
 class TestSupportedFrameworks:
@@ -147,9 +137,7 @@ class TestSupportedFrameworks:
         )
 
 
-# ---------------------------------------------------------------------------
 # Edge cases
-# ---------------------------------------------------------------------------
 
 
 class TestEdgeCases:

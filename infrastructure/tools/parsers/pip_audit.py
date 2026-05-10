@@ -22,11 +22,6 @@ _SEVERITY_MAP = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Parse functions (called by BasePipAuditTool.parse_output)
-# ---------------------------------------------------------------------------
-
-
 def parse_pip_audit_json(json_path: Path) -> dict[str, Any]:
     """Parse a pip-audit JSON output file into structured data."""
     try:
@@ -44,11 +39,6 @@ def parse_pip_audit_json_string(json_string: str) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         return {"error": f"JSON parse error: {exc}", "raw_output": json_string}
     return _parse_pip_audit_data(data)
-
-
-# ---------------------------------------------------------------------------
-# Internal parse helpers
-# ---------------------------------------------------------------------------
 
 
 def _parse_pip_audit_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -100,11 +90,6 @@ def _parse_pip_vuln(
         "cvss_score": None,
         "source_file": "",
     }
-
-
-# ---------------------------------------------------------------------------
-# Handler (normalize → SQLite rows, render → ChromaDB text)
-# ---------------------------------------------------------------------------
 
 
 class PipAuditHandler:

@@ -5,16 +5,14 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from infrastructure.tools.wrappers.docker.xsstrike import XSSTrikeDockerTool
 from infrastructure.tools.wrappers.local.xsstrike import _recommended_thread_count
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+_JIT_PATCH_TARGET = "application.url_inventory.jit.jit_rebuild_artifacts"
 
 
 def _make_config(
@@ -35,15 +33,13 @@ def _make_repo(**kwargs: Any) -> MagicMock:
     repo = MagicMock()
     repo.base_urls = kwargs.get("base_urls", ["http://localhost:8080"])
     repo.name = kwargs.get("name", "myrepo")
+    repo.uuid = kwargs.get("uuid", "00000000-0000-0000-0000-000000000001")
     repo.xsstrike_crawl_level = kwargs.get("xsstrike_crawl_level", 10)
     repo.xsstrike_headers = kwargs.get("xsstrike_headers", None)
-    repo.merged_seeds_path = kwargs.get("merged_seeds_path", "")
     return repo
 
 
-# ---------------------------------------------------------------------------
-# build_command — basic flag assertions
-# ---------------------------------------------------------------------------
+# build_command: basic flag assertions
 
 
 class TestDockerBuildCommandFlags:
@@ -150,12 +146,14 @@ class TestDockerBuildCommandFlags:
         assert "/opt/xsstrike.py" in cmd
 
 
-# ---------------------------------------------------------------------------
-# build_execution_passes — config parity with local wrapper
-# ---------------------------------------------------------------------------
+# build_execution_passes: config parity with local wrapper
 
 
 class TestDockerBuildExecutionPasses:
+    """Phase 9: the seeds path comes from ``jit_rebuild_artifacts`` (which
+    rebuilds it from ``url_findings`` rows). These tests stub the helper
+    to isolate the docker wrapper's pass-construction logic."""
+
     def _make_context(self, repo: MagicMock, tmp_path: Any) -> MagicMock:
         ctx = MagicMock(spec=["repo", "base_path", "project_name"])
         ctx.repo = repo
@@ -168,58 +166,68 @@ class TestDockerBuildExecutionPasses:
         seeds.write_text("http://target/path\n")
         return str(seeds)
 
-    def test_skips_when_no_seeds_file(self, tmp_path: Any) -> None:
+    def _patched(self, seeds: str | None = None, oas3: str | None = None):
+        return patch(_JIT_PATCH_TARGET, return_value=(seeds, oas3))
+
+    def test_skips_when_jit_returns_no_seeds(self, tmp_path: Any) -> None:
         tool = _make_tool()
-        repo = _make_repo(merged_seeds_path="")
+        repo = _make_repo()
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=None):
+            passes = tool.build_execution_passes(ctx)
         assert passes == []
 
     def test_returns_one_pass_when_seeds_exist(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
-        repo = _make_repo(merged_seeds_path=seeds)
+        repo = _make_repo()
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
         assert len(passes) == 1
 
     def test_seeds_file_passed_as_kwarg(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
-        repo = _make_repo(merged_seeds_path=seeds)
+        repo = _make_repo()
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["seeds_file"] == seeds
 
     def test_crawl_level_honoured(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
-        repo = _make_repo(merged_seeds_path=seeds, xsstrike_crawl_level=7)
+        repo = _make_repo(xsstrike_crawl_level=7)
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["crawl_level"] == 7
 
     def test_headers_honoured(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
         hdrs = {"Cookie": "session=abc"}
-        repo = _make_repo(merged_seeds_path=seeds, xsstrike_headers=hdrs)
+        repo = _make_repo(xsstrike_headers=hdrs)
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["headers"] == hdrs
 
     def test_no_headers_key_when_headers_none(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
-        repo = _make_repo(merged_seeds_path=seeds, xsstrike_headers=None)
+        repo = _make_repo(xsstrike_headers=None)
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
         assert "headers" not in passes[0].kwargs
 
     def test_pass_label_suffix_is_repo_name(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
-        repo = _make_repo(name="myapp", merged_seeds_path=seeds)
+        repo = _make_repo(name="myapp")
         ctx = self._make_context(repo, tmp_path)
-        passes = tool.build_execution_passes(ctx)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
         assert passes[0].label_suffix == "myapp"

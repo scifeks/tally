@@ -1,4 +1,4 @@
-"""Katana local wrapper — runtime URL discovery via live crawling.
+"""Katana local wrapper for runtime URL discovery via live crawling.
 
 Invocation pattern
 ------------------
@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.endpoints.converters.katana import KatanaAdapter
 from infrastructure.tools.parsers.katana import parse_katana_jsonl
@@ -127,9 +128,9 @@ class KatanaLocalTool(BaseKatanaTool):
         except Exception:
             return None
 
-    # Hardcoded crawl ceilings — these prevent infinite/multi-hour hangs when
-    # headless Chrome stalls on a single page or cyclic parameterised routes
-    # produce near-unbounded link graphs.
+    # Crawl ceilings prevent infinite/multi-hour hangs when headless Chrome
+    # stalls on a single page or cyclic parameterised routes produce
+    # near-unbounded link graphs.
     _CRAWL_TIMEOUT_SECS = 15  # per-request HTTP timeout
     _CRAWL_CONCURRENCY = 10  # parallel browser/HTTP workers (-c)
     _CRAWL_PARALLELISM = 10  # parallel URL processing (-p)
@@ -182,7 +183,7 @@ class KatanaLocalTool(BaseKatanaTool):
             "-xhr",
             "-j",
             "-o", output_file,
-            # Hard ceilings — prevent infinite crawls on cyclic/parameterised apps
+            # Ceiling to prevent infinite crawls on cyclic/parameterised apps
             "-ct", str(max_duration),
             "-timeout", str(self._CRAWL_TIMEOUT_SECS),
             "-c", str(self._CRAWL_CONCURRENCY),
@@ -260,6 +261,11 @@ class KatanaLocalTool(BaseKatanaTool):
                 except Exception:
                     pass
 
+            # Expose the OAS3 path through ``output_files`` so the URL
+            # inventory ingest handler can read it from ToolResult.
+            if final_oas3 is not None and final_oas3.exists():
+                files["oas3"] = final_oas3
+
             return parsed
         finally:
             self._last_jsonl_path = None
@@ -269,7 +275,7 @@ class KatanaLocalTool(BaseKatanaTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for Katana.
 
-        Skips (returns []) when ``repo.base_urls`` is empty — the generic
+        Skips (returns []) when ``repo.base_urls`` is empty; the generic
         orchestrator skip handles this, but we guard explicitly for safety.
         """
         assert context.repo is not None
@@ -277,7 +283,7 @@ class KatanaLocalTool(BaseKatanaTool):
 
         if not repo.base_urls:
             logger.info(
-                "Katana: no base_urls configured for %s — skipping",
+                "Katana: no base_urls configured for %s; skipping",
                 repo.name,
             )
             return []
@@ -285,13 +291,9 @@ class KatanaLocalTool(BaseKatanaTool):
         base_url = repo.base_urls[0]
         self._last_base_url = base_url
 
-        output_dir = (
-            Path(context.base_path).resolve()
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "katana"
-        )
+        output_dir = ProjectPaths.from_canonical(
+            Path(context.base_path).resolve(), context.project_name
+        ).tool_output_dir("katana")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")

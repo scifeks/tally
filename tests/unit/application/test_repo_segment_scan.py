@@ -7,20 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
-from domain.tools.scan_types.models import ScanTypeConfig
+from domain.tools.execution_config import ToolExecutionConfig
 
-
-def _make_mock_repo(
-    name: str = "my-repo",
-    languages: list[str] | None = None,
-    base_urls: list[str] | None = None,
-) -> MagicMock:
-    repo = MagicMock()
-    repo.name = name
-    repo.languages = languages if languages is not None else ["python"]
-    repo.base_urls = base_urls
-    return repo
+_TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
 def _make_mock_tool_obj(
@@ -44,14 +35,15 @@ def _make_mock_tool_obj(
 
 @pytest.fixture()
 def mock_config() -> Any:
-    cm = MagicMock()
-    cm.load_repositories.return_value = [_make_mock_repo()]
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
-        config_manager=cm,
+        tool_config=_TOOL_CONFIG,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
     )
 
 
@@ -78,7 +70,6 @@ class TestRepoSegmentScan:
     ) -> None:
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
-        mock_config.config_manager.load_repositories.return_value = []
         summary = RepoSegmentScan(["semgrep"]).execute(mock_config, mock_resources)
 
         assert summary.total_tools_skipped == 1

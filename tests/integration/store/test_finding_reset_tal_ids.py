@@ -73,7 +73,7 @@ class TestResetTalIds:
         tools = {row["tool"] for row in rows}
         assert tools == {"semgrep", "gitleaks", "nmap"}
         severities = {row["severity"] for row in rows}
-        assert severities == {"low"}
+        assert severities == {3}
 
     def test_reset_tal_ids_on_empty_table_is_noop(
         self,

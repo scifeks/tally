@@ -11,21 +11,18 @@ import json
 import logging
 from typing import Any
 
+from domain.findings.severity import Severity
 from domain.tools.constants import FINDING_TYPES
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Column mappings
-# ---------------------------------------------------------------------------
-
-# Named column names that map directly (field name == SQLite column name)
+# Named column names that map directly (field name == SQLite column name).
+# "severity" is excluded because it is stored as INTEGER and requires
+# int-to-label translation via Severity.from_rank() before exposure.
 _DIRECT_COLUMNS: tuple[str, ...] = (
     "tool",
     "domain",
     "segment",
-    "repo",
-    "severity",
     "confidence",
     "rule_id",
     "url",
@@ -46,10 +43,6 @@ _COMMA_LIST_FIELDS: frozenset[str] = frozenset(
         "tags",
     }
 )
-
-# ---------------------------------------------------------------------------
-# Normalisation helpers
-# ---------------------------------------------------------------------------
 
 
 def normalise_finding_type(val: Any) -> str | None:
@@ -87,11 +80,6 @@ def normalise_cwe(val: Any) -> str | None:
     return json.dumps(parts) if parts else None
 
 
-# ---------------------------------------------------------------------------
-# Row deserialisation
-# ---------------------------------------------------------------------------
-
-
 def deserialise_row(row: Any) -> dict[str, Any]:
     """Convert a DB row from ``search()`` into a ChromaDB-compatible metadata dict."""
     metadata: dict[str, Any] = {}
@@ -109,6 +97,14 @@ def deserialise_row(row: Any) -> dict[str, Any]:
         if val is not None:
             metadata[col] = val
 
+    # severity: stored as INTEGER rank; translate back to label string.
+    sev_val = row["severity"]
+    if sev_val is not None:
+        try:
+            metadata["severity"] = Severity.from_rank(int(sev_val)).label
+        except (ValueError, TypeError):
+            metadata["severity"] = sev_val
+
     # Renamed + aliased columns: expose under BOTH the SQLite name
     # and the ChromaDB-compatible name so --fields works with either.
     file_val = row["file"]
@@ -123,6 +119,13 @@ def deserialise_row(row: Any) -> dict[str, Any]:
     rid_val = row["run_id"]
     if rid_val is not None:
         metadata["run_id"] = rid_val
+
+    try:
+        repo_id_val = row["repo_id"]
+    except (IndexError, KeyError):
+        repo_id_val = None
+    if repo_id_val is not None:
+        metadata["repo_id"] = repo_id_val
 
     # finding_type: stored as JSON array, return as list.
     ft_val = row["finding_type"]

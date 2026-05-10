@@ -51,11 +51,6 @@ _RETIREJS_CVE_RE = re.compile(r"plugins\.retireJs\s+-\s+INFO\s+-\s+CVE:\s*(.+)")
 _RETIREJS_ANY_RE = re.compile(r"plugins\.retireJs\s+-\s+")
 
 
-# ---------------------------------------------------------------------------
-# Parse functions
-# ---------------------------------------------------------------------------
-
-
 def parse_xsstrike_log(log_path: Path) -> dict[str, Any]:
     """Parse an XSStrike log file into structured finding data."""
     try:
@@ -75,11 +70,6 @@ def parse_xsstrike_log_string(text: str) -> dict[str, Any]:
         }
     lines = text.splitlines()
     return _parse_xsstrike_lines(lines)
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _strip_ansi(line: str) -> str:
@@ -111,7 +101,7 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
         # --- retireJs block parsing ---
         component_match = _RETIREJS_COMPONENT_RE.search(line)
         if component_match:
-            # New component block — flush any previous pending block first.
+            # New component block; flush any previous pending block first.
             _flush_retirejs(pending_retirejs, component_findings)
             raw_component = component_match.group(1).strip()
             # Split "jquery v3.2.1" → name="jquery", version="3.2.1"
@@ -125,7 +115,7 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
             continue
 
         if _RETIREJS_ANY_RE.search(line):
-            # We're inside a retireJs block — accumulate fields.
+            # We're inside a retireJs block; accumulate fields.
             loc_match = _RETIREJS_LOCATION_RE.search(line)
             if loc_match:
                 pending_retirejs["component_location"] = loc_match.group(1).strip()
@@ -146,11 +136,11 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
                 pending_retirejs["cve"] = cve_match.group(1).strip()
                 continue
 
-            # Other retireJs INFO lines (e.g. "Total vulnerabilities:") —
-            # ignore but stay in block.
+            # Other retireJs INFO lines (e.g. "Total vulnerabilities:").
+            # Ignore but stay in block.
             continue
 
-        # Non-retireJs line — flush any open retireJs block.
+        # Non-retireJs line; flush any open retireJs block.
         if pending_retirejs:
             _flush_retirejs(pending_retirejs, component_findings)
             pending_retirejs = {}
@@ -202,11 +192,6 @@ def _parse_xsstrike_lines(lines: list[str]) -> dict[str, Any]:
         "component_findings": component_findings,
         "summary": {"total_findings": total},
     }
-
-
-# ---------------------------------------------------------------------------
-# Handler
-# ---------------------------------------------------------------------------
 
 
 class XSSTrikeHandler:
@@ -273,11 +258,18 @@ class XSSTrikeHandler:
                 "payload": payload,
                 "timestamp": timestamp,
                 "source_file": source_file,
+                "title": (
+                    f"Cross-Site Scripting (XSS) in '{param}'"
+                    if param
+                    else "Cross-Site Scripting (XSS)"
+                ),
             }
             row.update(_shared_meta(self, "vulnerability"))
             rows.append(row)
 
         for cf in component_findings:
+            component_name = cf.get("component_name", "")
+            component_version = cf.get("component_version", "")
             row = {
                 "tool": "xsstrike",
                 "profile": profile,
@@ -285,8 +277,8 @@ class XSSTrikeHandler:
                 "severity": cf.get("severity", "low"),
                 "confidence": "confirmed",
                 "risk_type": "Vulnerable Component",
-                "package_name": cf.get("component_name", ""),
-                "package_version": cf.get("component_version", ""),
+                "package_name": component_name,
+                "package_version": component_version,
                 "vulnerability_id": cf.get("cve", ""),
                 "url": cf.get("component_location", ""),
                 "timestamp": timestamp,
@@ -294,6 +286,12 @@ class XSSTrikeHandler:
             }
             if cf.get("summary"):
                 row["description"] = cf["summary"]
+            if component_name:
+                row["title"] = (
+                    f"Vulnerable component: {component_name}@{component_version}"
+                    if component_version
+                    else f"Vulnerable component: {component_name}"
+                )
             row.update(_shared_meta(self, "dependency"))
             rows.append(row)
 

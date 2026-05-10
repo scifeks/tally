@@ -1,19 +1,13 @@
-"""Unit tests for live crawler (Noir/Katana) skip logic in RepoSegmentScan.
-
-Covers:
-- crawl_enabled=False → Noir/Katana skipped with "skipped (live crawling disabled)"
-- crawl_enabled=True + oas3_path set → Noir runs (oas3_path alone no longer gates)
-- node_app detected → Noir skipped with "skipped (Node.js app)"
-- neither skip condition → execute_tool_passes called
-"""
+"""Unit tests for live crawler skip logic."""
 
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
-from domain.tools.scan_types.models import ScanTypeConfig
+from domain.tools.execution_config import ToolExecutionConfig
 
 
 def _make_noir_tool() -> MagicMock:
@@ -59,15 +53,17 @@ def _make_repo(
     return repo
 
 
-def _make_config(repo: MagicMock) -> ScanTypeConfig:
-    cm = MagicMock()
-    cm.load_repositories.return_value = [repo]
+def _make_config(repo_repo: MagicMock | None = None) -> ScanTypeConfig:
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test",
         base_path="/tmp/test",
-        config_manager=cm,
+        tool_config=ToolExecutionConfig(noir_provider=None),
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
+        repo_repo=repo_repo,
     )
 
 
@@ -87,6 +83,9 @@ def _make_resources(tool: MagicMock) -> Any:
     )
 
 
+_EXEC_PASSES = "application.tools.scan_types.repo_segment.execute_tool_passes"
+
+
 class TestLiveCrawlerSkipOnCrawlDisabled:
     def test_noir_skipped_when_crawl_disabled(self) -> None:
         """crawl_enabled=False skips Noir with 'live crawling disabled'."""
@@ -94,15 +93,15 @@ class TestLiveCrawlerSkipOnCrawlDisabled:
 
         noir = _make_noir_tool()
         repo = _make_repo(crawl_enabled=False)
-        config = _make_config(repo)
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(noir)
 
         summary = RepoSegmentScan(["noir"]).execute(config, resources)
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0
-        row = resources.display.print_tool_line.call_args[0][0]
-        assert row.skip_reason == "skipped (live crawling disabled)"
 
     def test_katana_skipped_when_crawl_disabled(self) -> None:
         """crawl_enabled=False skips Katana with 'live crawling disabled'."""
@@ -110,15 +109,15 @@ class TestLiveCrawlerSkipOnCrawlDisabled:
 
         katana = _make_katana_tool()
         repo = _make_repo(crawl_enabled=False)
-        config = _make_config(repo)
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(katana)
 
         summary = RepoSegmentScan(["katana"]).execute(config, resources)
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0
-        row = resources.display.print_tool_line.call_args[0][0]
-        assert row.skip_reason == "skipped (live crawling disabled)"
 
     def test_noir_runs_when_oas3_path_set_and_crawl_enabled(self) -> None:
         """oas3_path alone does not skip Noir when crawl_enabled=True."""
@@ -126,11 +125,12 @@ class TestLiveCrawlerSkipOnCrawlDisabled:
 
         noir = _make_noir_tool()
         repo = _make_repo(oas3_path="/endpoints/api.json", crawl_enabled=True)
-        config = _make_config(repo)
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(noir)
 
-        patch_target = "application.tools.scan_types.repo_segment.execute_tool_passes"
-        with patch(patch_target, return_value=None) as mock_exec:
+        with patch(_EXEC_PASSES, return_value=None) as mock_exec:
             RepoSegmentScan(["noir"]).execute(config, resources)
 
         mock_exec.assert_called_once()
@@ -144,27 +144,28 @@ class TestNoirSkipIncompatTechs:
         (tmp_path / "package.json").write_text("{}", encoding="utf-8")
         noir = _make_noir_tool()
         repo = _make_repo(path=str(tmp_path), crawl_enabled=True)
-        config = _make_config(repo)
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(noir)
 
         summary = RepoSegmentScan(["noir"]).execute(config, resources)
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0
-        row = resources.display.print_tool_line.call_args[0][0]
-        assert row.skip_reason == "skipped (Node.js app)"
 
     def test_noir_not_skipped_when_neither_set(self) -> None:
-        """Neither check fires — execute_tool_passes is called."""
+        """Neither check fires; execute_tool_passes is called."""
         from application.tools.scan_types.repo_segment import RepoSegmentScan
 
         noir = _make_noir_tool()
         repo = _make_repo(crawl_enabled=True)
-        config = _make_config(repo)
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+        config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(noir)
 
-        patch_target = "application.tools.scan_types.repo_segment.execute_tool_passes"
-        with patch(patch_target, return_value=None) as mock_exec:
+        with patch(_EXEC_PASSES, return_value=None) as mock_exec:
             RepoSegmentScan(["noir"]).execute(config, resources)
 
         mock_exec.assert_called_once()

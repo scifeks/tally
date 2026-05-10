@@ -1,28 +1,24 @@
 """Help table renderer for the tally REPL."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
+if TYPE_CHECKING:
+    from application.triage.readiness import TriageReadiness
+
 # Custom box: vertical edge/divider lines with a header separator only.
 # Each line = 4 chars: left-edge, fill, column-divider, right-edge.
-HELP_BOX = box.Box(
-    "┌─┬┐\n"  # top border
-    "│ ││\n"  # head row chars
-    "├─┼┤\n"  # head/data separator
-    "│ ││\n"  # data row chars
-    "├─┼┤\n"  # row separator  ← end_section=True
-    "├─┼┤\n"  # foot separator
-    "│ ││\n"  # foot row chars
-    "└─┴┘\n"  # bottom border
-)
+HELP_BOX = box.Box("┌─┬┐\n│ ││\n├─┼┤\n│ ││\n├─┼┤\n├─┼┤\n│ ││\n└─┴┘\n")
 
-# ---------------------------------------------------------------------------
 # Help registry: (group, command, argument, description)
 # command=None  → section header row; description holds the section title.
 # command=_NOTE → dim informational row (no Command/Arguments cells).
 # group is used by HelpRenderer.render() to render filtered tables.
-# ---------------------------------------------------------------------------
 _NOTE = "_NOTE_"
 
 _HELP_REGISTRY = [
@@ -272,27 +268,21 @@ _HELP_REGISTRY = [
         "triage",
         "triage",
         "--batch",
-        "Run batching phase only — no Claude sessions",
+        "Run batching phase only; no backend sessions",
     ),
     (
         "triage",
         "triage",
         "--dry-run",
-        "Batch + render prompts to DEBUG log — no MCP server, no Claude",
+        "Batch + render prompts to DEBUG log; no MCP server, no backend session",
     ),
-    # Findings
-    ("findings", None, None, "Findings"),
+    # Web UI
+    ("ui", None, None, "Web UI"),
     (
-        "findings",
-        "findings visualize",
+        "ui",
+        "ui serve",
         None,
-        "Launch the web UI for reviewing findings in a browser",
-    ),
-    (
-        "findings",
-        "findings visualize",
-        "--stop",
-        "Stop the running web UI server",
+        "Start FastAPI + Vite dev server, open browser. Ctrl+C to stop.",
     ),
     # Utility
     ("utility", None, None, "Utility"),
@@ -305,8 +295,13 @@ _HELP_REGISTRY = [
 class HelpRenderer:
     """Renders help tables filtered by group or in full."""
 
-    def __init__(self, console: Console) -> None:
+    def __init__(
+        self,
+        console: Console,
+        triage_readiness: TriageReadiness,
+    ) -> None:
         self.console = console
+        self._triage_readiness = triage_readiness
 
     def render(self, group: str) -> None:
         """Render a help table filtered to a single group."""
@@ -317,9 +312,6 @@ class HelpRenderer:
         self.console.print(self._build_table())
 
     def _build_table(self, group: str | None = None) -> Table:
-        """Build and return a Rich Table from _HELP_REGISTRY, optionally filtered
-        by group.
-        """
         table = Table(
             show_header=True,
             header_style="bold",
@@ -332,7 +324,9 @@ class HelpRenderer:
 
         entries = [e for e in _HELP_REGISTRY if group is None or e[0] == group]
 
-        # Collect titles of section headers that need a divider above them —
+        triage_readiness = self._triage_readiness
+
+        # Collect titles of section headers that need a divider above them;
         # every header except the first one in the (filtered) list.
         divider_sections: set[str] = set()
         first_header_seen = False
@@ -344,7 +338,7 @@ class HelpRenderer:
                     first_header_seen = True
 
         prev_cmd: str | None = None
-        for i, (_, cmd, arg, desc) in enumerate(entries):
+        for i, (grp, cmd, arg, desc) in enumerate(entries):
             next_entry = entries[i + 1] if i + 1 < len(entries) else None
             needs_end_section = (
                 next_entry is not None
@@ -359,6 +353,11 @@ class HelpRenderer:
             else:
                 cmd_cell = cmd if cmd != prev_cmd else ""
                 arg_cell = arg if arg is not None else ""
+                if grp == "triage" and not triage_readiness.enabled:
+                    cmd_cell = f"[dim]{cmd_cell}[/dim]"
+                    arg_cell = f"[dim]{arg_cell}[/dim]"
+                    reason = triage_readiness.reason or "Triage unavailable"
+                    desc = f"[red]({reason})[/red] {desc}"
                 table.add_row(cmd_cell, arg_cell, desc, end_section=needs_end_section)
                 prev_cmd = cmd
 

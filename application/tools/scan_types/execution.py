@@ -2,20 +2,46 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from application.tools.executor import ToolExecutor
 from application.tools.registry import ToolRegistry
+from application.tools.scan_types.models import ScanTypeConfig
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
+from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext, ToolInterface
-from domain.tools.scan_types.models import SEGMENT_ORDER, ScanTypeConfig
+from domain.tools.scan_types.models import SEGMENT_ORDER
+from infrastructure.tools.wrappers.docker._docker_exec import (
+    build_docker_exec,
+)
 from infrastructure.tools.wrappers.utils.manifest_check import (
     has_manifests_for_language,
 )
 
+_log = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from core.config.manager import ConfigManager
+
+
+def _build_tool_execution_config(
+    config_manager: ConfigManager,
+) -> ToolExecutionConfig:
+    """Snapshot the slice of ConfigManager state that wrappers need."""
+    gc = config_manager.global_config
+    noir_snapshot: NoirProviderSnapshot | None = None
+    feature = gc.noir_inference
+    if feature is not None:
+        provider_config = getattr(gc, feature.provider, None)
+        if provider_config is not None and hasattr(provider_config, "base_url"):
+            noir_snapshot = NoirProviderSnapshot(
+                base_url=provider_config.base_url,
+                model=provider_config.model,
+                num_ctx=getattr(provider_config, "num_ctx", None),
+            )
+    return ToolExecutionConfig(noir_provider=noir_snapshot)
 
 
 def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
@@ -44,22 +70,48 @@ def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
 
 
 def make_context(
-    config_manager: ConfigManager,
+    tool_config: ToolExecutionConfig,
     project_name: str,
     base_path: str,
     registry: ToolRegistry,
     repo: Any,
-    tool_config: Any,
+    command_config: Any,
 ) -> ExecutionContext:
     return ExecutionContext(
         project_name=project_name,
         base_path=base_path,
         repo=repo,
-        config_manager=config_manager,
+        tool_config=tool_config,
         registry=registry,
-        is_docker=(tool_config.location == "docker" if tool_config else False),
+        is_docker=(command_config.location == "docker" if command_config else False),
         execution_mode="scan",
     )
+
+
+def _build_raw_command(
+    tool_name: str,
+    command_config: Any,
+    cli_args: list[str],
+) -> list[str]:
+    """Build a command from raw CLI args using the tool's command config."""
+    location = getattr(command_config, "location", None)
+    if location == "docker":
+        container = getattr(command_config, "container", None)
+        if container is None:
+            raise ValueError(
+                f"Tool {tool_name!r}: docker location requires container config"
+            )
+        name = getattr(container, "name", None)
+        tool_path = getattr(container, "tool_path", None)
+        if not name or not tool_path:
+            raise ValueError(f"Tool {tool_name!r}: container missing name or tool_path")
+        return build_docker_exec(name, tool_path, cli_args)
+    if location == "local":
+        path = getattr(command_config, "path", None)
+        if not path:
+            raise ValueError(f"Tool {tool_name!r}: local location requires path")
+        return [path, *cli_args]
+    raise ValueError(f"Tool {tool_name!r}: unknown location {location!r}")
 
 
 def execute_tool_passes(
@@ -68,30 +120,45 @@ def execute_tool_passes(
     config: ScanTypeConfig,
     executor: ToolExecutor,
     remaining_tools: int = 0,
+    command_config: Any = None,
 ) -> ToolResult | None:
     """Prompt approval once, run all ExecutionPasses, return merged result."""
-    if not config.auto_approve:
+    if not config.prompt.confirm(f"  Run {tool.name}?"):
+        return None
+    if remaining_tools > 0:
+        config.prompt.approve_all_remaining()
+
+    snapshot_json = config.arg_snapshots.get(tool.name)
+    if snapshot_json is not None and command_config is not None:
+        from domain.tool_arg_profiles.cli import snapshot_to_cli
+
         try:
-            answer = input(f"  Run {tool.name}? [y/N]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return None
-        if answer not in ("y", "yes"):
-            return None
-        if remaining_tools > 0:
+            cli_args = snapshot_to_cli(snapshot_json)
+        except ValueError:
+            _log.exception(
+                "Tool %s: invalid arg profile snapshot",
+                tool.name,
+            )
+            cli_args = None
+        if cli_args is not None:
             try:
-                all_ans = input("    Approve all remaining? [y/N]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                print()
-            else:
-                if all_ans in ("y", "yes"):
-                    config.auto_approve = True
-                    if config.on_auto_approve:
-                        config.on_auto_approve()
+                raw_cmd = _build_raw_command(tool.name, command_config, cli_args)
+            except ValueError:
+                _log.exception(
+                    "Tool %s: failed to build raw command",
+                    tool.name,
+                )
+                raw_cmd = None
+            if raw_cmd is not None:
+                _log.info(
+                    "Tool %s: using custom arg profile",
+                    tool.name,
+                )
+                return executor.run_raw(raw_cmd, tool)
 
     passes = tool.build_execution_passes(context)
     if not passes:
-        return None  # tool signaled skip via empty pass list
+        return None
     pass_results = [executor.run(p, tool) for p in passes]
     return tool.merge_pass_results(pass_results)
 
@@ -139,14 +206,11 @@ def dispatch_and_count_ingested(bus: EventBus, event: ToolCompleted) -> int:
 
 
 def ordered_repo_tools(tool_set: set[str], registry: ToolRegistry) -> list[str]:
-    """Order tool_set by SEGMENT_ORDER; within each segment, discovery tools
-    run before scanners, then alphabetically within each group.
+    """Order tool_set by SEGMENT_ORDER and discovery-first priority.
 
-    Discovery tools (``is_discovery_tool=True``, e.g. Katana, Noir) must
-    produce OAS3/JSONL output before scanners (DalFox, XSStrike, ZAP) can
-    consume it.  A plain alphabetical sort is insufficient because
-    ``dalfox < katana``, which would run DalFox before Katana on first scan.
-    See ADR-00014.
+    Discovery tools (Katana, Noir) must run before downstream scanners
+    (DalFox, XSStrike, ZAP) to produce output they can consume. Plain
+    alphabetical sorting is insufficient because ``dalfox < katana``.
     """
     result: list[str] = []
     for segment in SEGMENT_ORDER:

@@ -38,3 +38,38 @@ jobs:
         env:
           CI: "true"
         run: pytest
+
+  ui:
+    name: Lint, type-check, and test (UI)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: eslint
+        working-directory: ui
+        run: npm run lint
+
+      - name: prettier format check
+        working-directory: ui
+        run: npm run format:check
+
+      - name: type-check
+        working-directory: ui
+        run: npm run type-check
+
+      - name: vitest
+        working-directory: ui
+        run: npm run test:run

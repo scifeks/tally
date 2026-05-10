@@ -1,11 +1,15 @@
-"""Scan orchestration: coordinate multi-tool scans across segments and repositories."""
+"""Scan orchestration."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from application.tools.display import OrchestratorDisplay
+from application.locking.cancellation import CancellationToken, no_op_token
+from application.ports.scan_event_sink import NullScanEventSink, ScanEventSink
+from application.ports.user_prompt import UserPromptPort
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.registry import ToolRegistry
@@ -13,43 +17,46 @@ from application.tools.scan_types import (
     ExecutionResources,
     FullScan,
     RepoScan,
+    ScanTypeConfig,
     SegmentScan,
     ToolOnAllReposScan,
     ToolOnRepoScan,
 )
+from application.tools.scan_types.execution import _build_tool_execution_config
+from domain.pipeline import scan_events as se
 from domain.pipeline.events import EventBus
-from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary, ScanTypeConfig
+from domain.tools.display import DisplayProtocol, NullDisplay
+from domain.tools.scan_types import SEGMENT_ORDER, ScanSummary
 
 if TYPE_CHECKING:
-    from rich.console import Console
+    from application.ports.chat_session_repository import (
+        ChatSessionRepositoryPort,
+    )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
+    from application.ports.run_repository import RunRepositoryPort
 
 logger = logging.getLogger(__name__)
 
-# Re-export constants so existing imports from this module continue to work.
 __all__ = [
     "ScanSummary",
     "ScanOrchestrator",
+    "ScanCancelled",
     "SEGMENT_ORDER",
 ]
 
 
-# ---------------------------------------------------------------------------
-# ScanOrchestrator — thin shim
-# ---------------------------------------------------------------------------
+class ScanCancelled(Exception):
+    """Raised when a scan observes its CancellationToken set."""
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class ScanOrchestrator:
-    """Coordinate multi-tool scans across segments and repositories.
-
-    Args:
-        project:        Active project name.
-        tool_registry:  Registry of available tool wrappers.
-        tool_executor:  Configured executor (carries base_path and project_name).
-        event_bus:      EventBus for dispatching ToolCompleted events.
-        run_id:         Optional run ID forwarded through events.
-        factory:        Optional ToolWrapperFactory; defaults to a fresh instance.
-        console:        Optional Rich console for display output.
-    """
+    """Coordinate multi-tool scans across segments and repositories."""
 
     def __init__(
         self,
@@ -57,112 +64,342 @@ class ScanOrchestrator:
         tool_registry: ToolRegistry,
         tool_executor: ToolExecutor,
         event_bus: EventBus,
+        prompt: UserPromptPort,
         run_id: int | None = None,
         factory: ToolWrapperFactory | None = None,
-        console: Console | None = None,
-        auto_approve: bool = False,
+        event_sink: ScanEventSink | None = None,
+        cancel_token: CancellationToken | None = None,
+        run_repository: RunRepositoryPort | None = None,
+        project_id: int | None = None,
+        chat_session_repo: ChatSessionRepositoryPort | None = None,
+        display: DisplayProtocol | None = None,
+        arg_snapshots: dict[str, str] | None = None,
+        repo_repo: ProjectRepoRepositoryPort | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
         self.executor = tool_executor
         self._event_bus = event_bus
+        self._prompt = prompt
         self._run_id = run_id
-        self.display = OrchestratorDisplay(console=console)
-        self._auto_approve: bool = auto_approve
+        self.display: DisplayProtocol = display or NullDisplay()
         self._factory = factory or ToolWrapperFactory()
+        self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
+        self._cancel_token: CancellationToken = cancel_token or no_op_token()
+        self._run_repository = run_repository
+        self._project_id = project_id
+        self._chat_session_repo = chat_session_repo
+        self._arg_snapshots = arg_snapshots or {}
+        self._repo_repo = repo_repo
+
+        # Plumb cancellation into the executor so subprocess waits abort.
+        if hasattr(tool_executor, "set_cancel_token"):
+            tool_executor.set_cancel_token(self._cancel_token)
 
         from core.config.manager import ConfigManager
 
         self._config = ConfigManager(str(tool_executor.base_path))
+        self._tool_config = _build_tool_execution_config(self._config)
 
-    # ------------------------------------------------------------------
-    # Internal helper
-    # ------------------------------------------------------------------
-
-    def _on_auto_approve_set(self) -> None:
-        """Callback invoked when the user approves all remaining tools."""
-        self._auto_approve = True
-
-    def _make_config(
-        self, auto_approve: bool = False, remaining_peers: int = 0
-    ) -> ScanTypeConfig:
-        """Build a ScanTypeConfig from current orchestrator state."""
+    def _make_config(self, remaining_peers: int = 0) -> ScanTypeConfig:
         return ScanTypeConfig(
             project_name=self.project_name,
             base_path=str(self.executor.base_path),
-            config_manager=self._config,
+            tool_config=self._tool_config,
             run_id=self._run_id,
-            auto_approve=auto_approve or self._auto_approve,
-            on_auto_approve=self._on_auto_approve_set,
+            prompt=self._prompt,
             remaining_peers=remaining_peers,
+            project_id=self._project_id,
+            arg_snapshots=self._arg_snapshots,
+            repo_repo=self._repo_repo,
         )
 
     def _make_resources(self) -> ExecutionResources:
-        """Build an ExecutionResources from current orchestrator state."""
         return ExecutionResources(
             executor=self.executor,
             registry=self.registry,
             factory=self._factory,
             event_bus=self._event_bus,
             display=self.display,
+            event_sink=self._event_sink,
         )
 
-    # ------------------------------------------------------------------
-    # Public API — adapter shims
-    # ------------------------------------------------------------------
+    def _emit(self, event: Any) -> None:
+        try:
+            self._event_sink.emit(event)
+        except Exception:
+            logger.exception("scan event sink raised; suppressing")
+
+    def _check_cancel(self) -> None:
+        if self._cancel_token.is_set():
+            raise ScanCancelled
+
+    def _persist(self, fn: Callable[[RunRepositoryPort, int], None]) -> None:
+        if self._run_repository is None or self._run_id is None:
+            return
+        try:
+            fn(self._run_repository, self._run_id)
+        except Exception:
+            logger.exception("failed to persist scan_runs update; suppressing")
+
+    def _run(self, body: Callable[[], ScanSummary]) -> ScanSummary:
+        """Wrap a scan invocation with persistence and event emission.
+
+        Persistence and events are best-effort and never mask the
+        underlying scan result. Cancellation surfaces a ``ScanCancelled``.
+        """
+        run_id = self._run_id or 0
+        project_id = self._project_id
+        self._check_cancel()
+        self._persist(lambda r, rid: r.set_status(rid, "running"))
+        self._persist(lambda r, rid: r.set_started_at(rid, _utc_now_iso()))
+        self._emit(
+            se.RunStarted(
+                run_id=run_id,
+                project_id=project_id,
+                message="scan started",
+            )
+        )
+        try:
+            summary = body()
+        except ScanCancelled:
+            self._persist(lambda r, rid: r.set_status(rid, "cancelled"))
+            self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
+            self._emit(
+                se.RunCancelled(
+                    run_id=run_id,
+                    project_id=project_id,
+                    message="scan cancelled",
+                )
+            )
+            raise
+        except Exception as exc:
+            self._persist(lambda r, rid: r.set_status(rid, "failed"))
+            self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
+            self._emit(
+                se.RunFailed(
+                    run_id=run_id,
+                    project_id=project_id,
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            )
+            raise
+        self._persist(
+            lambda r, rid: r.set_findings_count(rid, _summary_findings_count(summary))
+        )
+        self._persist(lambda r, rid: r.set_status(rid, "done"))
+        self._persist(lambda r, rid: r.set_finished_at(rid, _utc_now_iso()))
+        self._emit(
+            se.RunCompleted(
+                run_id=run_id,
+                project_id=project_id,
+                message="scan complete",
+                findings_count=_summary_findings_count(summary),
+            )
+        )
+        self._seal_chat_sessions()
+        return summary
+
+    def _seal_chat_sessions(self) -> None:
+        """Seal chat sessions and run the retention sweep.
+
+        Best-effort: a chat-DB hiccup must never mask a successful scan
+        result. Skipped when no chat session repo or project_id was
+        supplied.
+        """
+        if self._project_id is None or self._chat_session_repo is None:
+            return
+        try:
+            from application.chat.sealing import seal_sessions_for_project
+
+            global_config = self._config.load_global_config()
+            seal_sessions_for_project(
+                self._project_id,
+                session_repo=self._chat_session_repo,
+                retention_count=global_config.chat_session_retention_count,
+            )
+        except Exception:
+            logger.exception("chat session sealing failed; suppressing")
 
     def run_full_scan(
         self,
-        auto_approve: bool = False,
         exclude_segments: list[str] | None = None,
         exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
-        return FullScan(exclude_segments or [], exclude_tools or set()).execute(
-            self._make_config(auto_approve), self._make_resources()
+        return self._run(
+            lambda: FullScan(exclude_segments or [], exclude_tools or set()).execute(
+                self._make_config(), self._make_resources()
+            )
         )
 
     def run_segment(
         self,
         segment_name: str,
-        auto_approve: bool = False,
         remaining_peers: int = 0,
     ) -> ScanSummary:
-        return SegmentScan(segment_name).execute(
-            self._make_config(auto_approve, remaining_peers=remaining_peers),
-            self._make_resources(),
+        return self._run(
+            lambda: SegmentScan(segment_name).execute(
+                self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )
         )
 
     def run_repo_scan(
         self,
         repo_name: str,
-        auto_approve: bool = False,
         exclude_dirs: list[str] | None = None,
         severity_filter: str | None = None,
         exclude_tools: set[str] | None = None,
     ) -> ScanSummary:
-        return RepoScan(repo_name, exclude_tools or set()).execute(
-            self._make_config(auto_approve), self._make_resources()
+        del exclude_dirs, severity_filter  # forwarded by callers, unused here
+        return self._run(
+            lambda: RepoScan(repo_name, exclude_tools or set()).execute(
+                self._make_config(), self._make_resources()
+            )
         )
 
     def run_tool_on_all_repos(
         self,
         tool_name: str,
-        auto_approve: bool = False,
         remaining_peers: int = 0,
     ) -> ScanSummary:
-        return ToolOnAllReposScan(tool_name).execute(
-            self._make_config(auto_approve, remaining_peers=remaining_peers),
-            self._make_resources(),
+        return self._run(
+            lambda: ToolOnAllReposScan(tool_name).execute(
+                self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )
         )
 
     def run_tool_on_repo(
         self,
         tool_name: str,
         repo_name: str,
-        auto_approve: bool = False,
         remaining_peers: int = 0,
     ) -> ScanSummary:
-        return ToolOnRepoScan(tool_name, repo_name).execute(
-            self._make_config(auto_approve, remaining_peers=remaining_peers),
+        return self._run(
+            lambda: ToolOnRepoScan(tool_name, repo_name).execute(
+                self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )
+        )
+
+    def run_scoped_scan(
+        self,
+        repo_names: list[str] | None = None,
+        tool_names: list[str] | None = None,
+        domains: list[str] | None = None,
+        skip_tools: set[str] | None = None,
+    ) -> ScanSummary:
+        """Run a scoped scan, dispatching to the matching scan-type.
+
+        Resolves the effective tool list by intersecting ``tool_names``
+        (default: all configured) with tools whose domain is in
+        ``domains`` when given. Routes to nested ToolOnRepoScan, RepoScan,
+        ToolOnAllReposScan, or FullScan based on which scopes are set.
+        """
+        from application.rag.ingestor import get_tool_domain
+
+        effective_tools: list[str] | None = None
+        if tool_names is not None or domains is not None:
+            all_configured = list(self.registry.list_tool_names())
+            candidates = list(tool_names) if tool_names is not None else all_configured
+            if domains is not None:
+                candidates = [t for t in candidates if get_tool_domain(t) in domains]
+            effective_tools = candidates
+
+        def _body() -> ScanSummary:
+            return self._scoped_body(repo_names, effective_tools, skip_tools)
+
+        return self._run(_body)
+
+    def _scoped_body(
+        self,
+        repo_names: list[str] | None,
+        effective_tools: list[str] | None,
+        skip_tools: set[str] | None,
+    ) -> ScanSummary:
+        if repo_names is not None and effective_tools is not None:
+            summary = _empty_summary()
+            total_pairs = len(repo_names) * len(effective_tools)
+            pair_idx = 0
+            for repo_name in repo_names:
+                for tool_name in effective_tools:
+                    remaining = total_pairs - pair_idx - 1
+                    pair_idx += 1
+                    addition = ToolOnRepoScan(tool_name, repo_name).execute(
+                        self._make_config(remaining_peers=remaining),
+                        self._make_resources(),
+                    )
+                    summary = _merge_summary(summary, addition)
+            return summary
+        if repo_names is not None:
+            summary = _empty_summary()
+            for repo_name in repo_names:
+                addition = RepoScan(repo_name, skip_tools or set()).execute(
+                    self._make_config(),
+                    self._make_resources(),
+                )
+                summary = _merge_summary(summary, addition)
+            return summary
+        if effective_tools is not None:
+            summary = _empty_summary()
+            for i, tool_name in enumerate(effective_tools):
+                remaining = len(effective_tools) - i - 1
+                addition = ToolOnAllReposScan(tool_name).execute(
+                    self._make_config(remaining_peers=remaining),
+                    self._make_resources(),
+                )
+                summary = _merge_summary(summary, addition)
+            return summary
+        return FullScan([], skip_tools or set()).execute(
+            self._make_config(),
             self._make_resources(),
         )
+
+
+def _summary_findings_count(summary: ScanSummary) -> int:
+    for attr in (
+        "findings_ingested",
+        "ingested_total",
+        "total_findings",
+        "findings_count",
+    ):
+        val = getattr(summary, attr, None)
+        if isinstance(val, int):
+            return val
+    rows = getattr(summary, "rows", None)
+    if rows is not None:
+        try:
+            return sum(int(getattr(r, "finding_count", 0) or 0) for r in rows)
+        except Exception:
+            return 0
+    return 0
+
+
+def _empty_summary() -> ScanSummary:
+    return ScanSummary(
+        total_tools_run=0,
+        total_tools_skipped=0,
+        total_tools_failed=0,
+        results=[],
+        duration_seconds=0.0,
+        findings_ingested=0,
+        findings_by_tool={},
+    )
+
+
+def _merge_summary(running: ScanSummary, addition: ScanSummary) -> ScanSummary:
+    merged_fbt = dict(running.findings_by_tool)
+    for tool, count in addition.findings_by_tool.items():
+        merged_fbt[tool] = merged_fbt.get(tool, 0) + count
+    return ScanSummary(
+        total_tools_run=running.total_tools_run + addition.total_tools_run,
+        total_tools_skipped=(
+            running.total_tools_skipped + addition.total_tools_skipped
+        ),
+        total_tools_failed=running.total_tools_failed + addition.total_tools_failed,
+        results=running.results + addition.results,
+        duration_seconds=running.duration_seconds + addition.duration_seconds,
+        findings_ingested=running.findings_ingested + addition.findings_ingested,
+        findings_by_tool=merged_fbt,
+    )

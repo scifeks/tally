@@ -7,10 +7,6 @@ from pathlib import Path
 
 from core.detection.spa import detect_spa
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _write_pkg(root: Path, deps: dict[str, str]) -> None:
     (root / "package.json").write_text(
@@ -22,9 +18,7 @@ def _write_src(root: Path, filename: str, content: str) -> None:
     (root / filename).write_text(content, encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
 # Non-SPA repos
-# ---------------------------------------------------------------------------
 
 
 class TestNonSpaRepos:
@@ -56,9 +50,7 @@ class TestNonSpaRepos:
         assert is_spa is False
 
 
-# ---------------------------------------------------------------------------
-# Manifest sniff — SPA detected via package.json
-# ---------------------------------------------------------------------------
+# Manifest sniff: SPA detected via package.json
 
 
 class TestManifestSniff:
@@ -122,9 +114,7 @@ class TestManifestSniff:
         assert "vue-router" in reason
 
 
-# ---------------------------------------------------------------------------
-# Source-pattern grep — SPA detected via source code patterns
-# ---------------------------------------------------------------------------
+# Source-pattern grep: SPA detected via source code patterns
 
 
 class TestSourcePatternGrep:

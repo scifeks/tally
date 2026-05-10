@@ -1,4 +1,4 @@
-"""AuditRunner — wraps async tool calls with timing and audit-log persistence."""
+"""Invoke an async function and persist an audit record for the call."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.audit import AuditRepository
+    from application.ports.audit_repository import AuditRepositoryPort
 
 
 class AuditRunner:
     """Calls an async fn and writes one audit row regardless of success/failure."""
 
-    def __init__(self, audit_repo: AuditRepository) -> None:
+    def __init__(self, audit_repo: AuditRepositoryPort) -> None:
         self._audit_repo = audit_repo
 
     async def run(

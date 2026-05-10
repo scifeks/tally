@@ -1,15 +1,15 @@
-"""Attack Surface Overview builder — three HTML recon tables for the report."""
+"""Build three HTML recon tables for the Attack Surface Overview section."""
 
 from __future__ import annotations
 
 import html
-import json
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from infrastructure.store.repositories.findings import FindingRepository
+    from application.ports.finding_repository import FindingRepositoryPort
+    from domain.findings.entry import Finding
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +26,8 @@ _SEGMENT_COLUMNS: list[tuple[str, str]] = [
     ("dast", "DAST"),
 ]
 
-_PRESENT = "&#x2713;"  # ✓
-_ABSENT = "&#x2014;"  # —
+_PRESENT = "&#x2713;"
+_ABSENT = "&#x2014;"
 
 # Shared scoped styles injected once at the top of the combined HTML block.
 _STYLES = (
@@ -49,35 +49,25 @@ _STYLES = (
 )
 
 
-def _parse_meta(finding: dict[str, Any]) -> dict[str, Any]:
-    """Parse the meta JSON blob; return empty dict on failure."""
-    meta = finding.get("meta")
-    if isinstance(meta, dict):
-        return meta
-    if isinstance(meta, str):
-        try:
-            return json.loads(meta)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {}
+def _repo_label(finding: Finding) -> str:
+    """Read the repo label off a finding's meta blob, defaulting to 'Unattributed'."""
+    repo = finding.meta.get("repo")
+    if isinstance(repo, str) and repo.strip():
+        return repo.strip()
+    return "Unattributed"
 
 
 class AttackSurfaceBuilder:
-    """Builds the Attack Surface Overview HTML block for the report.
+    """Build the Attack Surface Overview HTML block for the report.
 
-    Two subsections:
-    - Repository Surface — which tool categories ran against each repo
-    - Dependency Surface — which ecosystems were audited per repo
+    Two subsections: Repository Surface (which tool categories ran per
+    repo) and Dependency Surface (which ecosystems were audited per repo).
     """
 
-    def __init__(self, finding_repo: FindingRepository) -> None:
+    def __init__(self, finding_repo: FindingRepositoryPort) -> None:
         self._repo = finding_repo
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
-
-    def build(self, filtered_findings: list[dict[str, Any]]) -> str:
+    def build(self, filtered_findings: list[Finding]) -> str:
         """Return the full Attack Surface Overview HTML fragment.
 
         Args:
@@ -100,11 +90,7 @@ class AttackSurfaceBuilder:
             + "</div>"
         )
 
-    # ------------------------------------------------------------------ #
-    # Private helpers
-    # ------------------------------------------------------------------ #
-
-    def _build_repository_surface(self, findings: list[dict[str, Any]]) -> str:
+    def _build_repository_surface(self, findings: list[Finding]) -> str:
         """Render a repo × tool-category coverage matrix.
 
         Rows are repositories; columns are SAST, Secrets, SCA, DAST.
@@ -118,11 +104,10 @@ class AttackSurfaceBuilder:
                 "</p>"
             )
 
-        # Build set of segments present per repo.
         repo_segments: dict[str, set[str]] = defaultdict(set)
         for f in findings:
-            repo = (f.get("repo") or "").strip() or "Unattributed"
-            seg = (f.get("segment") or "").lower().strip()
+            repo = _repo_label(f)
+            seg = (f.segment or "").lower().strip()
             if seg:
                 repo_segments[repo].add(seg)
 
@@ -154,12 +139,12 @@ class AttackSurfaceBuilder:
             "<tbody>" + "".join(rows_html) + "</tbody></table>"
         )
 
-    def _build_dependency_surface(self, findings: list[dict[str, Any]]) -> str:
+    def _build_dependency_surface(self, findings: list[Finding]) -> str:
         """Render a table of audited dependency ecosystems per repository.
 
         One row per distinct (repo, ecosystem) pair from SCA findings.
         """
-        sca = [f for f in findings if (f.get("tool") or "").lower() in _SCA_TOOLS]
+        sca = [f for f in findings if (f.tool or "").lower() in _SCA_TOOLS]
 
         if not sca:
             return (
@@ -171,8 +156,8 @@ class AttackSurfaceBuilder:
         seen: set[tuple[str, str]] = set()
         pairs: list[tuple[str, str]] = []
         for f in sca:
-            repo = (f.get("repo") or "").strip() or "Unattributed"
-            ecosystem = (f.get("ecosystem") or "").strip()
+            repo = _repo_label(f)
+            ecosystem = (f.ecosystem or "").strip()
             if not ecosystem:
                 continue
             key = (repo, ecosystem)

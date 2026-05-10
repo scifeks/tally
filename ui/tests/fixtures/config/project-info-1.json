@@ -1,0 +1,12 @@
+{
+  "id": 2,
+  "name": "DVPA",
+  "code": "DVP",
+  "company_name": "DVPA",
+  "department_name": "foosville",
+  "abbreviation": "DVP",
+  "created_at": "2026-04-25T03:06:56Z",
+  "path": "/llm/code/tally/projects/DVPA",
+  "repo_count": 4,
+  "finding_count": 572
+}

@@ -1,7 +1,7 @@
 """XSStrike local wrapper for XSS-focused dynamic web application scanning.
 
-XSStrike has no built-in URL crawler — all URLs must be supplied via a seeds
-file.  This wrapper reads ``repo.merged_seeds_path``, the canonical
+XSStrike has no built-in URL crawler; all URLs must be supplied via a seeds
+file. This wrapper reads ``repo.merged_seeds_path``, the canonical
 deduplicated seeds file produced by the URL discovery pipeline after Katana,
 Noir, and/or a user-provided endpoint file run.
 
@@ -48,6 +48,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.xsstrike import (
     parse_xsstrike_log,
@@ -161,29 +162,38 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for XSStrike.
 
-        Reads ``repo.merged_seeds_path`` — the canonical deduplicated seeds
-        file produced by the URL discovery pipeline.  Returns an empty list
-        (skipping XSStrike) when no seeds file is available.
+        Phase 9: the seeds file is JIT-rebuilt from ``url_findings`` rows
+        right before the scan runs. Returns an empty list (skipping
+        XSStrike) when no rows exist for the repo.
         """
+        from application.url_inventory.jit import jit_rebuild_artifacts
+        from infrastructure.store.connection import ConnectionFactory
+        from infrastructure.store.repositories.url_findings import (
+            UrlFindingRepository,
+        )
+
         assert context.repo is not None
         repo = context.repo
 
-        output_dir = (
-            Path(context.base_path).resolve()
-            / "projects"
-            / context.project_name
-            / "tool_outputs"
-            / "xsstrike"
+        paths = ProjectPaths.from_canonical(
+            Path(context.base_path).resolve(), context.project_name
         )
+        output_dir = paths.tool_output_dir("xsstrike")
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        url_repo = UrlFindingRepository(factory)
 
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         log_file = str(output_dir / f"{repo.name}_{ts}.log")
 
-        seeds_file = repo.merged_seeds_path
+        seeds_file, _oas3_path = jit_rebuild_artifacts(
+            context.base_path, context.project_name, repo, url_finding_repo=url_repo
+        )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
-                "XSStrike: no merged seeds file for %s — skipping. "
+                "XSStrike: no URL inventory for %s; skipping. "
                 "Run Katana, Noir, or configure an endpoint file to "
                 "generate URL discovery output.",
                 repo.name,

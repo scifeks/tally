@@ -106,7 +106,7 @@ class TestToolWrapperFactory:
         config.location = "local"
         module_name = "infrastructure.tools.wrappers.local.abstract_tool"
 
-        # An abstract subclass — deliberately leaves build_execution_passes
+        # An abstract subclass; deliberately leaves build_execution_passes
         # unimplemented so inspect.isabstract returns True.
         class _AbstractSubTool(ToolInterface):
             __module__ = module_name
@@ -144,7 +144,7 @@ class TestToolWrapperFactory:
                 return False
 
             # build_execution_passes, merge_pass_results, count_findings
-            # intentionally not implemented — keeps class abstract.
+            # intentionally not implemented; keeps class abstract.
 
         fake_module = types.ModuleType(module_name)
         fake_module._AbstractSubTool = _AbstractSubTool  # type: ignore[attr-defined]

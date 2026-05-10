@@ -57,7 +57,7 @@ class ComposerAuditLocalTool(BaseComposerAuditTool):
 
         if not (Path(repo_path) / "composer.json").exists():
             logger.info(
-                "composer-audit: composer.json not found in %r — skipping",
+                "composer-audit: composer.json not found in %r; skipping",
                 repo_path,
             )
             return []

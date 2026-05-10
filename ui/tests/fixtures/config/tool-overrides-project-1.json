@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "toolName": "semgrep",
+      "argsMode": "stock",
+      "type": "repo",
+      "location": "docker",
+      "path": null,
+      "container": {
+        "name": "semgrep-runner",
+        "toolPath": "/usr/local/bin/semgrep"
+      }
+    },
+    {
+      "id": 2,
+      "toolName": "gitleaks",
+      "argsMode": "stock",
+      "type": "repo",
+      "location": "local",
+      "path": "/opt/tools/gitleaks-custom",
+      "container": null
+    }
+  ],
+  "total": 2,
+  "offset": 0,
+  "limit": 50
+}

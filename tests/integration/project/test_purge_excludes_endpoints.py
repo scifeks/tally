@@ -1,4 +1,9 @@
-"""Integration tests: purge behaviour for endpoint artifacts."""
+"""Integration tests: purge behavior for endpoint artifacts.
+
+``_delete_merged_endpoints`` removes JIT-rebuilt merged files under
+``endpoints/<repo>/`` while leaving ``config/endpoints/`` untouched.
+The merged artifacts are rebuilt from ``url_findings`` rows.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from core.config.manager import ConfigManager  # noqa: E402
-from core.config.schemas import ProjectConfig, Repository  # noqa: E402
+from core.config.schemas import ProjectConfig  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -29,26 +34,12 @@ def _write_global_config(base_path: Path) -> None:
     shutil.copy(real_config, config_dir / "global.json")
 
 
-def _make_repo(name: str, **kwargs: object) -> Repository:
-    defaults: dict[str, object] = {
-        "name": name,
-        "type": ["api"],
-        "path": str(_TALLY_ROOT),
-        "languages": ["python"],
-        "merged_oas3_path": "",
-        "merged_seeds_path": "",
-    }
-    defaults.update(kwargs)
-    return Repository(**defaults)  # type: ignore[arg-type]
-
-
-def _save_project(base_path: Path, project_name: str, repos: list[Repository]) -> None:
+def _save_project(base_path: Path, project_name: str) -> None:
     _write_global_config(base_path)
     manager = ConfigManager(str(base_path))
     pc = ProjectConfig(
         project_name=project_name,
         created=datetime.datetime.now().isoformat(),
-        repositories=repos,
     )
     manager.save_project_config(project_name, pc)
 
@@ -64,7 +55,7 @@ class TestPurgePreservesConfigEndpoints:
     def test_tool_output_purge_does_not_touch_config_endpoints(
         self, tmp_path: Path
     ) -> None:
-        """config/endpoints/<repo>/ survives a full tool-output purge."""
+        """``config/endpoints/<repo>/`` survives a full tool-output purge."""
         from application.repl.commands.purge import PurgeCommand
 
         project_name = "test-proj"
@@ -98,15 +89,8 @@ class TestDeleteMergedEndpoints:
         tmp_path: Path,
         project_name: str,
         repo_name: str,
-        merged_oas3: str = "/some/merged_oas3.json",
-        merged_seeds: str = "/some/merged_urls.txt",
     ) -> tuple[Path, Path]:
-        repo = _make_repo(
-            repo_name,
-            merged_oas3_path=merged_oas3,
-            merged_seeds_path=merged_seeds,
-        )
-        _save_project(tmp_path, project_name, [repo])
+        _save_project(tmp_path, project_name)
 
         merged_dir = tmp_path / "projects" / project_name / "endpoints" / repo_name
         merged_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +101,7 @@ class TestDeleteMergedEndpoints:
         return oas3, urls
 
     def test_delete_merged_removes_files(self, tmp_path: Path) -> None:
-        """_delete_merged_endpoints wipes merged artifact files."""
+        """``_delete_merged_endpoints`` wipes merged artifact files."""
         from application.repl.commands.purge import PurgeCommand
 
         project_name = "test-proj"
@@ -130,24 +114,8 @@ class TestDeleteMergedEndpoints:
         assert not oas3.exists(), "merged_oas3.json must be deleted"
         assert not urls.exists(), "merged_urls.txt must be deleted"
 
-    def test_delete_merged_clears_config_keys(self, tmp_path: Path) -> None:
-        """_delete_merged_endpoints sets merged_*_path to '' in project.json."""
-        from application.repl.commands.purge import PurgeCommand
-
-        project_name = "test-proj"
-        repo_name = "my-repo"
-        self._setup(tmp_path, project_name, repo_name)
-
-        pc = PurgeCommand(_make_repl(tmp_path, project_name))
-        pc._delete_merged_endpoints()
-
-        manager = ConfigManager(str(tmp_path))
-        repos = manager.load_repositories(project_name)
-        assert repos[0].merged_oas3_path == ""
-        assert repos[0].merged_seeds_path == ""
-
     def test_delete_merged_leaves_config_endpoints_intact(self, tmp_path: Path) -> None:
-        """config/endpoints/ is never touched by _delete_merged_endpoints."""
+        """``config/endpoints/`` is never touched by ``_delete_merged_endpoints``."""
         from application.repl.commands.purge import PurgeCommand
 
         project_name = "test-proj"
@@ -168,17 +136,12 @@ class TestDeleteMergedEndpoints:
 
 
 class TestCmdPurgeMergedPrompt:
-    """cmd_purge: second y/N prompt for merged endpoint cleanup."""
+    """``cmd_purge``: second y/N prompt for merged endpoint cleanup."""
 
     def _setup(
         self, tmp_path: Path, project_name: str, repo_name: str
     ) -> tuple[Path, Path]:
-        repo = _make_repo(
-            repo_name,
-            merged_oas3_path="/some/merged_oas3.json",
-            merged_seeds_path="/some/merged_urls.txt",
-        )
-        _save_project(tmp_path, project_name, [repo])
+        _save_project(tmp_path, project_name)
 
         project_dir = tmp_path / "projects" / project_name
         sqlite_dir = project_dir / "sqlite"
@@ -192,8 +155,8 @@ class TestCmdPurgeMergedPrompt:
         urls.write_text("http://localhost/\n")
         return oas3, urls
 
-    def test_answering_n_leaves_merged_and_config_intact(self, tmp_path: Path) -> None:
-        """Answering 'n' to the merged-URL prompt keeps merged files and config."""
+    def test_answering_n_leaves_merged_intact(self, tmp_path: Path) -> None:
+        """Answering 'n' to the merged-URL prompt keeps merged files."""
         from application.repl.commands.purge import PurgeCommand
 
         project_name = "purge-n-test"
@@ -202,12 +165,12 @@ class TestCmdPurgeMergedPrompt:
 
         repl = _make_repl(tmp_path, project_name)
         mock_rag = MagicMock()
-        mock_rag.count_documents.return_value = 1
+        mock_rag.count.return_value = 1
         mock_rag.delete_findings.return_value = 1
 
         pc = PurgeCommand(repl)
         with (
-            patch.object(pc, "_get_rag_engine", return_value=mock_rag),
+            patch.object(pc, "_get_knowledge_base", return_value=mock_rag),
             patch("builtins.input", side_effect=["y", "n"]),
             patch.object(pc, "_count_sqlite_findings", return_value=0),
             patch.object(pc, "_purge_sqlite"),
@@ -216,12 +179,9 @@ class TestCmdPurgeMergedPrompt:
 
         assert oas3.exists(), "merged_oas3.json must survive when user answers 'n'"
         assert urls.exists(), "merged_urls.txt must survive when user answers 'n'"
-        manager = ConfigManager(str(tmp_path))
-        repos = manager.load_repositories(project_name)
-        assert repos[0].merged_oas3_path == "/some/merged_oas3.json"
 
-    def test_answering_y_deletes_merged_and_clears_config(self, tmp_path: Path) -> None:
-        """Answering 'y' to the merged-URL prompt deletes files and clears keys."""
+    def test_answering_y_deletes_merged_files(self, tmp_path: Path) -> None:
+        """Answering 'y' to the merged-URL prompt deletes merged files."""
         from application.repl.commands.purge import PurgeCommand
 
         project_name = "purge-y-test"
@@ -237,12 +197,12 @@ class TestCmdPurgeMergedPrompt:
 
         repl = _make_repl(tmp_path, project_name)
         mock_rag = MagicMock()
-        mock_rag.count_documents.return_value = 1
+        mock_rag.count.return_value = 1
         mock_rag.delete_findings.return_value = 1
 
         pc = PurgeCommand(repl)
         with (
-            patch.object(pc, "_get_rag_engine", return_value=mock_rag),
+            patch.object(pc, "_get_knowledge_base", return_value=mock_rag),
             patch("builtins.input", side_effect=["y", "y"]),
             patch.object(pc, "_count_sqlite_findings", return_value=0),
             patch.object(pc, "_purge_sqlite"),
@@ -255,8 +215,4 @@ class TestCmdPurgeMergedPrompt:
         assert not urls.exists(), (
             "merged_urls.txt must be deleted when user answers 'y'"
         )
-        manager = ConfigManager(str(tmp_path))
-        repos = manager.load_repositories(project_name)
-        assert repos[0].merged_oas3_path == ""
-        assert repos[0].merged_seeds_path == ""
         assert seed_file.exists(), "seed.json must survive purge"

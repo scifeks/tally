@@ -1,0 +1,43 @@
+{
+  "items": [
+    {
+      "id": 1001,
+      "session_id": 101,
+      "role": "user",
+      "content": "What's the most severe XSS finding from this scan?",
+      "model": null,
+      "timestamp": "2026-04-30T14:00:30+00:00",
+      "citations": null
+    },
+    {
+      "id": 1002,
+      "session_id": 101,
+      "role": "assistant",
+      "content": "The highest-severity XSS findings are the dalfox-detected reflected XSS on http://localhost:4280/vulnerabilities/xss_r/?name=... and the xsstrike confirmation of the same sink with a polyglot payload (severity: high). Both target the DVWA reflected-XSS lab; remediation requires HTML body context output encoding.",
+      "model": "claude-sonnet-4-6",
+      "timestamp": "2026-04-30T14:00:35+00:00",
+      "citations": null
+    },
+    {
+      "id": 1003,
+      "session_id": 101,
+      "role": "user",
+      "content": "Are there any in php-goof?",
+      "model": null,
+      "timestamp": "2026-04-30T14:01:14+00:00",
+      "citations": null
+    },
+    {
+      "id": 1004,
+      "session_id": 101,
+      "role": "assistant",
+      "content": "Yes. xsstrike found a stored XSS in php-goof's post.php comment field (param=comment, payload=<details/open/ontoggle=alert(1)>) at severity medium. The sink reflects untrusted comment data into the post detail HTML body without escaping. Recommend applying htmlspecialchars($comment, ENT_QUOTES | ENT_HTML5, 'UTF-8') before output.",
+      "model": "claude-sonnet-4-6",
+      "timestamp": "2026-04-30T14:01:22+00:00",
+      "citations": null
+    }
+  ],
+  "total": 4,
+  "offset": 0,
+  "limit": 50
+}

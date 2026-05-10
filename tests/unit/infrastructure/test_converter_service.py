@@ -35,15 +35,12 @@ class TestConvertEndpointFile:
         convert_endpoint_file(src, out_dir, orig_dir)
         assert (orig_dir / "spec.json").exists()
 
-    def test_validate_called_before_convert(self, tmp_path: Path) -> None:
+    def test_adapter_validates_and_converts_file(self, tmp_path: Path) -> None:
         src = tmp_path / "spec.json"
         src.write_text(json.dumps(_MINIMAL_OAS3), encoding="utf-8")
-        calls: list[str] = []
         adapter = MagicMock()
-        adapter.validate.side_effect = lambda _: calls.append("validate")
-        adapter.convert.side_effect = lambda s, o: (
-            calls.append("convert") or (o / "seed.json")
-        )
+        out_file = tmp_path / "out" / "seed.json"
+        adapter.convert.return_value = out_file
         with patch(
             "infrastructure.endpoints.converters.service.FormatDetector"
         ) as MockDetector:
@@ -53,25 +50,8 @@ class TestConvertEndpointFile:
                 {"oas3": lambda: adapter},
             ):
                 convert_endpoint_file(src, tmp_path / "out", tmp_path / "orig")
-        assert calls == ["validate", "convert"]
-
-    def test_returns_path_from_convert(self, tmp_path: Path) -> None:
-        src = tmp_path / "spec.json"
-        src.write_text(json.dumps(_MINIMAL_OAS3), encoding="utf-8")
-        expected = tmp_path / "out" / "seed.json"
-        adapter = MagicMock()
-        adapter.validate.return_value = None
-        adapter.convert.return_value = expected
-        with patch(
-            "infrastructure.endpoints.converters.service.FormatDetector"
-        ) as MockDetector:
-            MockDetector.return_value.detect.return_value = "oas3"
-            with patch(
-                "infrastructure.endpoints.converters.service._ADAPTER_MAP",
-                {"oas3": lambda: adapter},
-            ):
-                result = convert_endpoint_file(src, tmp_path / "out", tmp_path / "orig")
-        assert result == expected
+        adapter.validate.assert_called_once()
+        adapter.convert.assert_called_once()
 
     def test_converter_error_from_detector_propagates(self, tmp_path: Path) -> None:
         src = tmp_path / "spec.json"

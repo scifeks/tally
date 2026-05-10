@@ -9,7 +9,7 @@ import pytest
 
 from tests.e2e.harness import TallyHarness
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 def test_clear_produces_no_error(tally_harness: TallyHarness) -> None:

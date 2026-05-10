@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,15 +17,45 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.reporting.assembler import (  # noqa: E402
     _TOC_ENTRIES,
+    TEMPLATES_DIR,
     ReportAssembler,
     _generate_toc,
 )
 from application.reporting.resolver import SectionMissingError  # noqa: E402
 from domain.reporting.context import ReportContext  # noqa: E402
+from infrastructure.reporting.jinja2_template_renderer import (  # noqa: E402
+    Jinja2TemplateRenderer,
+)
 
-# ---------------------------------------------------------------------------
+# Stubs
+
+
+class _AlwaysConfirm:
+    def confirm(self, question: str, *, default: bool = False) -> bool:
+        del question, default
+        return True
+
+    def approve_all_remaining(self) -> None:
+        pass
+
+
+class _NoopTemplateRenderer:
+    """Stub that returns empty string."""
+
+    def render(self, template_name: str, context: Mapping[str, object]) -> str:
+        del template_name, context
+        return ""
+
+
+class _NoopPdfRenderer:
+    """Stub that returns empty PDF bytes."""
+
+    def render(self, html: str, css: str) -> bytes:
+        del html, css
+        return b""
+
+
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 def _fake_project_config(name: str = "acme") -> Any:
@@ -40,26 +71,28 @@ def _fake_project_config(name: str = "acme") -> Any:
     return FakeConfig()
 
 
-def _make_assembler(tmp_path: Path) -> ReportAssembler:
+def _make_assembler(
+    tmp_path: Path,
+    *,
+    template_renderer: Any = None,
+    pdf_renderer: Any = None,
+) -> ReportAssembler:
     return ReportAssembler(
         project="acme",
         base_path=tmp_path,
+        prompt=_AlwaysConfirm(),
+        template_renderer=template_renderer or _NoopTemplateRenderer(),
+        pdf_renderer=pdf_renderer or _NoopPdfRenderer(),
+        finding_repo=MagicMock(),
         testing_type="white_box",
         engagement_date="2026-03-22",
     )
 
 
-# ---------------------------------------------------------------------------
 # TOC generation
-# ---------------------------------------------------------------------------
 
 
 class TestGenerateToc:
-    def test_returns_string(self) -> None:
-        html = _generate_toc()
-        assert isinstance(html, str)
-        assert len(html) > 0
-
     def test_contains_all_section_anchors(self) -> None:
         html = _generate_toc()
         for _, anchor in _TOC_ENTRIES:
@@ -74,9 +107,7 @@ class TestGenerateToc:
         assert "toc-pagenum" in html
 
 
-# ---------------------------------------------------------------------------
 # ReportAssembler.build_context()
-# ---------------------------------------------------------------------------
 
 
 class TestBuildContext:
@@ -87,7 +118,7 @@ class TestBuildContext:
             lambda section: f"<p>HTML for {section}</p>"
         )
         mock_resolver.resolve_blurb.side_effect = side_effect_blurb or (
-            lambda name, variables=None: f"<p>Blurb: {name}</p>"
+            lambda name, _variables=None: f"<p>Blurb: {name}</p>"
         )
         return mock_resolver
 
@@ -164,10 +195,10 @@ class TestBuildContext:
             assembler = _make_assembler(tmp_path)
             ctx = assembler.build_context()
 
-        # Segment 4 — populated with HTML (graceful degradation if no data).
+        # Segment 4: populated with HTML (graceful degradation if no data).
         assert ctx.attack_surface_html != ""
         assert ctx.vuln_distribution_chart_html != ""
-        # Segment 5 — populated (empty DB yields placeholder text, still non-empty).
+        # Segment 5: populated (empty DB yields placeholder text, still non-empty).
         assert ctx.findings_table_html != ""
         assert ctx.detailed_findings_html != ""
         assert ctx.raw_sast_html != ""
@@ -217,6 +248,10 @@ class TestBuildContext:
             assembler = ReportAssembler(
                 project="acme",
                 base_path=tmp_path,
+                prompt=_AlwaysConfirm(),
+                template_renderer=_NoopTemplateRenderer(),
+                pdf_renderer=_NoopPdfRenderer(),
+                finding_repo=MagicMock(),
                 # engagement_date deliberately omitted
             )
             ctx = assembler.build_context()
@@ -224,9 +259,7 @@ class TestBuildContext:
         assert ctx.engagement_date == "2026-03-22"
 
 
-# ---------------------------------------------------------------------------
 # ReportAssembler.render_pdf()
-# ---------------------------------------------------------------------------
 
 
 class TestRenderPdf:
@@ -249,6 +282,9 @@ class TestRenderPdf:
             general_recommendations_html="<p>Recommendations</p>",
         )
 
+    def _make_real_template_renderer(self) -> Jinja2TemplateRenderer:
+        return Jinja2TemplateRenderer(TEMPLATES_DIR)
+
     def test_render_passes_non_empty_html_to_renderer(self, tmp_path: Path) -> None:
         captured: dict[str, str] = {}
 
@@ -257,17 +293,17 @@ class TestRenderPdf:
             captured["css"] = css
             return b"%PDF-fake"
 
-        fake_renderer = MagicMock()
-        fake_renderer.render.side_effect = fake_render
+        fake_pdf_renderer = MagicMock()
+        fake_pdf_renderer.render.side_effect = fake_render
 
-        assembler = _make_assembler(tmp_path)
+        assembler = _make_assembler(
+            tmp_path,
+            template_renderer=self._make_real_template_renderer(),
+            pdf_renderer=fake_pdf_renderer,
+        )
         ctx = self._make_context()
 
-        with patch(
-            "application.reporting.assembler.get_pdf_renderer",
-            return_value=fake_renderer,
-        ):
-            result = assembler.render_pdf(ctx)
+        result = assembler.render_pdf(ctx)
 
         assert result == b"%PDF-fake"
         assert len(captured["html"]) > 100
@@ -281,17 +317,17 @@ class TestRenderPdf:
             captured["css"] = css
             return b"%PDF"
 
-        fake_renderer = MagicMock()
-        fake_renderer.render.side_effect = fake_render
+        fake_pdf_renderer = MagicMock()
+        fake_pdf_renderer.render.side_effect = fake_render
 
-        assembler = _make_assembler(tmp_path)
+        assembler = _make_assembler(
+            tmp_path,
+            template_renderer=self._make_real_template_renderer(),
+            pdf_renderer=fake_pdf_renderer,
+        )
         ctx = self._make_context()
 
-        with patch(
-            "application.reporting.assembler.get_pdf_renderer",
-            return_value=fake_renderer,
-        ):
-            assembler.render_pdf(ctx)
+        assembler.render_pdf(ctx)
 
         assert "--color-critical" in captured["css"]
         assert "--color-background" in captured["css"]
@@ -304,17 +340,17 @@ class TestRenderPdf:
             captured["html"] = html
             return b"%PDF"
 
-        fake_renderer = MagicMock()
-        fake_renderer.render.side_effect = fake_render
+        fake_pdf_renderer = MagicMock()
+        fake_pdf_renderer.render.side_effect = fake_render
 
-        assembler = _make_assembler(tmp_path)
+        assembler = _make_assembler(
+            tmp_path,
+            template_renderer=self._make_real_template_renderer(),
+            pdf_renderer=fake_pdf_renderer,
+        )
         ctx = self._make_context()
 
-        with patch(
-            "application.reporting.assembler.get_pdf_renderer",
-            return_value=fake_renderer,
-        ):
-            assembler.render_pdf(ctx)
+        assembler.render_pdf(ctx)
 
         html = captured["html"]
         for section_id in (
@@ -335,17 +371,17 @@ class TestRenderPdf:
             captured["html"] = html
             return b"%PDF"
 
-        fake_renderer = MagicMock()
-        fake_renderer.render.side_effect = fake_render
+        fake_pdf_renderer = MagicMock()
+        fake_pdf_renderer.render.side_effect = fake_render
 
-        assembler = _make_assembler(tmp_path)
+        assembler = _make_assembler(
+            tmp_path,
+            template_renderer=self._make_real_template_renderer(),
+            pdf_renderer=fake_pdf_renderer,
+        )
         ctx = self._make_context()  # attack_surface_html defaults to ""
 
-        with patch(
-            "application.reporting.assembler.get_pdf_renderer",
-            return_value=fake_renderer,
-        ):
-            assembler.render_pdf(ctx)
+        assembler.render_pdf(ctx)
 
         assert "placeholder" in captured["html"]
         assert "Segment 4" in captured["html"]
@@ -360,17 +396,17 @@ class TestRenderPdf:
             captured["html"] = html
             return b"%PDF"
 
-        fake_renderer = MagicMock()
-        fake_renderer.render.side_effect = fake_render
+        fake_pdf_renderer = MagicMock()
+        fake_pdf_renderer.render.side_effect = fake_render
 
-        assembler = _make_assembler(tmp_path)
+        assembler = _make_assembler(
+            tmp_path,
+            template_renderer=self._make_real_template_renderer(),
+            pdf_renderer=fake_pdf_renderer,
+        )
         ctx = self._make_context()
         ctx.attack_surface_html = "<p>Real attack surface data</p>"
 
-        with patch(
-            "application.reporting.assembler.get_pdf_renderer",
-            return_value=fake_renderer,
-        ):
-            assembler.render_pdf(ctx)
+        assembler.render_pdf(ctx)
 
         assert "Real attack surface data" in captured["html"]

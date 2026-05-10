@@ -48,7 +48,7 @@ class TestUpsertShouldReportDefault:
 
         Scans are INSERT-only.  The new row for run 2 starts with
         should_report = 0 (the default).  The row approved in run 1 retains
-        should_report = 1 — INSERT never touches other runs' rows.
+        should_report = 1; INSERT never touches other runs' rows.
         """
         factory = ConnectionFactory(tmp_path / "findings.db")
         factory.init_schema()

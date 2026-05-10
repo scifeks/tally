@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from application.ports.filters import And, Contains, Eq, Filter
 from application.rag.ingestor import get_tool_domain
 from core.exceptions import SearchValidationError
 from domain.tools.constants import (
@@ -17,13 +18,13 @@ _DEFAULT_SEMANTIC_PAGE_SIZE = 20
 _DEFAULT_METADATA_PAGE_SIZE = 200
 
 # Maps user-facing filter key → (metadata_field, always_contains).
-# always_contains=True: use $contains regardless of = vs ~=.
+# always_contains=True: emit Contains regardless of = vs ~=.
 # always_contains=False: respect user's operator.
 _KEY_MAP: dict[str, tuple[str, bool]] = {
     # Global
     "tool": ("tool", False),
     "domain": ("domain", False),
-    # "type" is handled specially — not in this dict
+    # "type" is handled specially; not in this dict
     "severity": ("severity", False),
     "confidence": ("confidence", False),
     "risk_type": ("risk_type", False),
@@ -54,13 +55,13 @@ _DOMAIN_KEYS: dict[str, list[str]] = {
 @dataclass
 class SearchQuery:
     semantic_text: str | None  # free text for embedding search
-    where_filter: dict | None  # ChromaDB where clause (None = no filter)
+    where_filter: Filter | None  # storage-agnostic filter (None = no filter)
     is_semantic: bool  # True iff semantic_text is non-empty
     page_size: int  # results per page
     page: int  # 1-indexed page number (default 1)
 
 
-def _resolve_type_filter(value: str) -> dict:
+def _resolve_type_filter(value: str) -> Filter:
     types = [t.strip() for t in value.split(",")]
     for t in types:
         if t not in FINDING_TYPES:
@@ -68,15 +69,15 @@ def _resolve_type_filter(value: str) -> dict:
                 f"Unknown type {t!r}. Valid types: {', '.join(sorted(FINDING_TYPES))}"
             )
     if len(types) == 1:
-        return {f"type_{types[0]}": {"$eq": True}}
-    return {"$and": [{f"type_{t}": {"$eq": True}} for t in types]}
+        return Eq(f"type_{types[0]}", True)
+    return And(clauses=tuple(Eq(f"type_{t}", True) for t in types))
 
 
 def _add_filter(
     key: str,
     value: str,
     contains: bool,
-    filter_clauses: list[dict],
+    filter_clauses: list[Filter],
     known_tools: frozenset[str],
     active_tool: str | None = None,
 ) -> None:
@@ -129,18 +130,20 @@ def _add_filter(
             int_val: int = int(value)
         except ValueError:
             raise SearchValidationError("Port must be a number.")
-        filter_clauses.append({field: {"$eq": int_val}})
+        filter_clauses.append(Eq(field, int_val))
         return
 
-    op = "$contains" if use_contains else "$eq"
-    filter_clauses.append({field: {op: value}})
+    if use_contains:
+        filter_clauses.append(Contains(field, value))
+    else:
+        filter_clauses.append(Eq(field, value))
 
 
 def handle_search_flag(
     key: str,
     value: str,
     contains: bool,
-    filter_clauses: list[dict],
+    filter_clauses: list[Filter],
     known_tools: frozenset[str],
 ) -> None:
     """Handle a single --flag=value token from parse_search_command."""
@@ -154,9 +157,9 @@ def handle_search_flag(
                     f"Tool {t!r} not found. Run 'tools' to see configured tools."
                 )
         if len(tools) == 1:
-            filter_clauses.append({"tool": {"$eq": tools[0]}})
+            filter_clauses.append(Eq("tool", tools[0]))
         else:
-            filter_clauses.append({"$and": [{"tool": {"$eq": t}} for t in tools]})
+            filter_clauses.append(And(clauses=tuple(Eq("tool", t) for t in tools)))
     elif key == "severity":
         severities = [s.strip() for s in value.split(",")]
         for s in severities:
@@ -166,24 +169,26 @@ def handle_search_flag(
                     f"Valid severities: {', '.join(sorted(SEVERITY_LEVELS))}"
                 )
         if len(severities) == 1:
-            filter_clauses.append({"severity": {"$eq": severities[0]}})
+            filter_clauses.append(Eq("severity", severities[0]))
         else:
             filter_clauses.append(
-                {"$and": [{"severity": {"$eq": s}} for s in severities]}
+                And(clauses=tuple(Eq("severity", s) for s in severities))
             )
     elif key in _KEY_MAP:
         _add_filter(key, value, contains, filter_clauses, known_tools)
     else:
-        op = "$contains" if contains else "$eq"
-        filter_clauses.append({key: {op: value}})
+        if contains:
+            filter_clauses.append(Contains(key, value))
+        else:
+            filter_clauses.append(Eq(key, value))
 
 
-def combine_clauses(clauses: list[dict]) -> dict | None:
+def combine_clauses(clauses: list[Filter]) -> Filter | None:
     if not clauses:
         return None
     if len(clauses) == 1:
         return clauses[0]
-    return {"$and": clauses}
+    return And(clauses=tuple(clauses))
 
 
 def parse_search_query(
@@ -199,7 +204,7 @@ def parse_search_query(
     - Bare token: implicit tool match or semantic text
     """
     semantic_parts: list[str] = []
-    filter_clauses: list[dict] = []
+    filter_clauses: list[Filter] = []
     page_size: int | None = None
     page: int = 1
 
@@ -262,7 +267,7 @@ def parse_search_query(
         else:
             clean = token.lower().rstrip("?.,!:;")
             if clean in known_tools:
-                filter_clauses.append({"tool": {"$eq": clean}})
+                filter_clauses.append(Eq("tool", clean))
             else:
                 semantic_parts.append(token)
 

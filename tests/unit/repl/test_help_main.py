@@ -18,6 +18,14 @@ from application.repl.help_renderer import (  # noqa: E402
     _NOTE,
     HelpRenderer,
 )
+from application.triage.readiness import TriageReadiness  # noqa: E402
+
+_ENABLED_READINESS = TriageReadiness(
+    provider="claude_code",
+    backend_label="Claude Code",
+    enabled=True,
+    reason=None,
+)
 
 
 def _render(table: Table) -> str:
@@ -30,13 +38,14 @@ def _render(table: Table) -> str:
 def _build_help_table(group: str | None = None) -> Table:
     """Call HelpRenderer._build_table without a live REPL instance."""
     buf = StringIO()
-    renderer = HelpRenderer(Console(file=buf, width=200))
+    renderer = HelpRenderer(
+        Console(file=buf, width=200),
+        triage_readiness=_ENABLED_READINESS,
+    )
     return renderer._build_table(group=group)
 
 
-# ---------------------------------------------------------------------------
 # test_help_table_has_three_columns
-# ---------------------------------------------------------------------------
 
 
 def test_help_table_has_three_columns():
@@ -44,9 +53,7 @@ def test_help_table_has_three_columns():
     assert len(table.columns) == 3
 
 
-# ---------------------------------------------------------------------------
 # test_each_command_appears_once_in_command_column
-# ---------------------------------------------------------------------------
 
 
 def test_each_command_appears_once_in_command_column():
@@ -66,9 +73,7 @@ def test_each_command_appears_once_in_command_column():
         seen.add(c)
 
 
-# ---------------------------------------------------------------------------
 # test_separators_only_for_multi_row_commands
-# ---------------------------------------------------------------------------
 
 
 def test_separators_at_section_boundaries():
@@ -105,9 +110,7 @@ def test_separators_at_section_boundaries():
         row_idx += 1
 
 
-# ---------------------------------------------------------------------------
 # test_no_filter_keys_text
-# ---------------------------------------------------------------------------
 
 
 def test_no_filter_keys_text():
@@ -116,9 +119,7 @@ def test_no_filter_keys_text():
     assert "Filter Keys" not in rendered
 
 
-# ---------------------------------------------------------------------------
 # test_no_arg_syntax_in_command_column
-# ---------------------------------------------------------------------------
 
 
 def test_no_arg_syntax_in_command_column():
@@ -133,9 +134,7 @@ def test_no_arg_syntax_in_command_column():
         )
 
 
-# ---------------------------------------------------------------------------
 # test_scan_command_rows_exact
-# ---------------------------------------------------------------------------
 
 
 def test_scan_command_rows_exact():
@@ -151,9 +150,7 @@ def test_scan_command_rows_exact():
     ]
 
 
-# ---------------------------------------------------------------------------
 # test_purge_command_rows_exact
-# ---------------------------------------------------------------------------
 
 
 def test_purge_command_rows_exact():
@@ -162,9 +159,7 @@ def test_purge_command_rows_exact():
     assert purge_args == [None, "--tool=<tool,...>", "--keep-reports"]
 
 
-# ---------------------------------------------------------------------------
 # test_search_command_rows_exact
-# ---------------------------------------------------------------------------
 
 
 def test_search_command_rows_exact():

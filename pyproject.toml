@@ -14,7 +14,7 @@ dependencies = [
     "chromadb>=0.4.0",
     "ollama>=0.1.0",
     "anthropic>=0.50.0",
-    "mcp>=1.0",
+    "openai>=1.0.0",
     "weasyprint",
     "jinja2>=3.0",
     "fastapi>=0.100",
@@ -22,6 +22,8 @@ dependencies = [
     "openapi-spec-validator>=0.7",
     "fuzzywuzzy>=0.18",
     "python-Levenshtein>=0.12",
+    "pyyaml>=6.0",
+    "python-multipart>=0.0.20",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +47,16 @@ target-version = "py313"
 select = ["E", "F", "I", "UP"]
 fixable = ["ALL"]
 
+[tool.ruff.lint.isort]
+known-first-party = [
+    "application",
+    "core",
+    "domain",
+    "factories",
+    "infrastructure",
+    "web",
+]
+
 [tool.ruff.format]
 quote-style = "double"
 
@@ -53,11 +65,11 @@ typeCheckingMode = "basic"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-extraPaths = []
+extraPaths = ["."]
 
 [tool.coverage.run]
 branch = true
-source = ["application", "domain", "infrastructure", "tally_mcp", "core", "web"]
+source = ["application", "domain", "infrastructure", "core", "web"]
 omit = ["*/__pycache__/*", "*/site-packages/*"]
 
 [tool.coverage.report]
@@ -74,6 +86,7 @@ fail_under = 70
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = ["--ignore=tests/e2e", "-p", "no:inline_snapshot"]
 filterwarnings = [
   "ignore::DeprecationWarning:chromadb",
   "ignore:This process.*is multi-threaded.*forkpty:DeprecationWarning",
@@ -82,7 +95,7 @@ markers = [
   "slow: marks tests as slow-running",
   "requires_ollama: marks tests that need Ollama running",
   "requires_gitleaks: marks tests that need gitleaks installed",
+  "requires_docker: marks tests that need Docker daemon running",
   "integration: marks tests that require real SQLite / filesystem / ChromaDB",
   "e2e: marks tests that require external services such as Ollama or real binaries",
-  "local_only: marks tests that must only run locally (never in CI)",
 ]

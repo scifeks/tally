@@ -1,0 +1,56 @@
+{
+  "_comment": "Wire-shape tool override fixtures with {{placeholder}} tokens. Type and location are simple enums; container is null when location='local'.",
+  "project_1": {
+    "items": [
+      {
+        "id": 1,
+        "toolName": "semgrep",
+        "argsMode": "stock",
+        "type": "repo",
+        "location": "docker",
+        "path": null,
+        "container": {
+          "name": "semgrep-runner",
+          "toolPath": "/usr/local/bin/semgrep"
+        }
+      },
+      {
+        "id": 2,
+        "toolName": "gitleaks",
+        "argsMode": "stock",
+        "type": "repo",
+        "location": "local",
+        "path": "/opt/tools/gitleaks-custom",
+        "container": null
+      }
+    ],
+    "total": 2,
+    "offset": 0,
+    "limit": 50
+  },
+  "project_2": {
+    "items": [
+      {
+        "id": 1,
+        "toolName": "zap",
+        "argsMode": "stock",
+        "type": "api",
+        "location": "docker",
+        "path": null,
+        "container": {
+          "name": "zap-container",
+          "toolPath": "/zap/zap.sh"
+        }
+      }
+    ],
+    "total": 1,
+    "offset": 0,
+    "limit": 50
+  },
+  "empty": {
+    "items": [],
+    "total": 0,
+    "offset": 0,
+    "limit": 50
+  }
+}

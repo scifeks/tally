@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "toolName": "zap",
+      "argsMode": "stock",
+      "type": "api",
+      "location": "docker",
+      "path": null,
+      "container": {
+        "name": "zap-container",
+        "toolPath": "/zap/zap.sh"
+      }
+    }
+  ],
+  "total": 1,
+  "offset": 0,
+  "limit": 50
+}

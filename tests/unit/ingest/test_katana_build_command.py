@@ -8,9 +8,7 @@ import pytest
 
 from infrastructure.tools.wrappers.local.katana import KatanaLocalTool
 
-# ---------------------------------------------------------------------------
 # Base properties
-# ---------------------------------------------------------------------------
 
 
 class TestBaseProperties:
@@ -33,7 +31,7 @@ class TestBaseProperties:
         assert KatanaLocalTool().always_run is True
 
     def test_skip_is_true(self) -> None:
-        # Katana is a discovery tool — no triage-able findings.
+        # Katana is a discovery tool; no triage-able findings.
         assert KatanaLocalTool().skip is True
 
     def test_should_visualize_is_false(self) -> None:
@@ -56,9 +54,7 @@ class TestBaseProperties:
         assert KatanaLocalTool().count_findings({}) == 0
 
 
-# ---------------------------------------------------------------------------
-# build_command — basic flags
-# ---------------------------------------------------------------------------
+# build_command: basic flags
 
 
 class TestBuildCommandBasic:
@@ -161,9 +157,7 @@ class TestBuildCommandBasic:
         assert tool._last_oas3_path is None
 
 
-# ---------------------------------------------------------------------------
-# build_command — headless flag
-# ---------------------------------------------------------------------------
+# build_command: headless flag
 
 
 class TestBuildCommandHeadless:
@@ -186,9 +180,7 @@ class TestBuildCommandHeadless:
         assert "-hl" not in cmd
 
 
-# ---------------------------------------------------------------------------
-# build_command — depth override
-# ---------------------------------------------------------------------------
+# build_command: depth override
 
 
 class TestBuildCommandDepth:
@@ -213,9 +205,7 @@ class TestBuildCommandDepth:
         assert cmd[idx + 1] == "1"
 
 
-# ---------------------------------------------------------------------------
-# build_command — headers
-# ---------------------------------------------------------------------------
+# build_command: headers
 
 
 class TestBuildCommandHeaders:
@@ -256,9 +246,7 @@ class TestBuildCommandHeaders:
         assert cmd.count("-H") == 2
 
 
-# ---------------------------------------------------------------------------
-# build_command — error cases
-# ---------------------------------------------------------------------------
+# build_command: error cases
 
 
 class TestBuildCommandErrors:

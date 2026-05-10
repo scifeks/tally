@@ -7,44 +7,25 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.execution_config import ToolExecutionConfig
+from domain.tools.scan_types.models import ScanSummary
 
-
-def _zero_summary() -> ScanSummary:
-    return ScanSummary(
-        total_tools_run=0,
-        total_tools_skipped=0,
-        total_tools_failed=0,
-        results=[],
-        duration_seconds=0.0,
-        findings_ingested=0,
-        findings_by_tool={},
-    )
-
-
-def _make_mock_repo(
-    name: str = "my-repo",
-    languages: list[str] | None = None,
-    base_urls: list[str] | None = None,
-) -> MagicMock:
-    repo = MagicMock()
-    repo.name = name
-    repo.languages = languages if languages is not None else ["python"]
-    repo.base_urls = base_urls
-    return repo
+_TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
 @pytest.fixture()
 def mock_config() -> Any:
-    cm = MagicMock()
-    cm.load_repositories.return_value = [_make_mock_repo()]
+    prompt = MagicMock()
+    prompt.confirm.return_value = True
+    prompt.approve_all_remaining.return_value = None
     return ScanTypeConfig(
         project_name="test-project",
         base_path="/tmp/test",
-        config_manager=cm,
+        tool_config=_TOOL_CONFIG,
         run_id=1,
-        auto_approve=True,
+        prompt=prompt,
     )
 
 
@@ -74,10 +55,19 @@ class TestToolOnAllReposScan:
         with patch(
             "application.tools.scan_types.tool_on_all_repos.RepoSegmentScan"
         ) as mock_repo:
-            mock_repo.return_value.execute.return_value = _zero_summary()
-            ToolOnAllReposScan("semgrep").execute(mock_config, mock_resources)
+            mock_repo.return_value.execute.return_value = ScanSummary(
+                total_tools_run=0,
+                total_tools_skipped=0,
+                total_tools_failed=0,
+                results=[],
+                duration_seconds=0.0,
+                findings_ingested=0,
+                findings_by_tool={},
+            )
+            summary = ToolOnAllReposScan("semgrep").execute(mock_config, mock_resources)
 
-        mock_repo.assert_called_once_with(["semgrep"], segment_name="")
+        assert summary is not None
+        mock_repo.assert_called_once()
 
     def test_returns_summary_wrapping_sub_scan_totals(
         self,

@@ -1,14 +1,18 @@
 """Dependency checker for tally startup validation."""
 
+from __future__ import annotations
+
 import importlib
 import importlib.metadata
+import importlib.util
 import inspect
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from rich.console import Console
-from rich.table import Table
+if TYPE_CHECKING:
+    from application.runtime import RuntimeDependencyService
 
 _INSTALL_HINTS = {
     "semgrep": "pip install semgrep",
@@ -39,10 +43,23 @@ def _parse_version(version_str: str) -> tuple[int, ...] | None:
         return None
 
 
+# Map package names in requirements.txt to importable module names
+_PACKAGE_IMPORT_MAP = {
+    "pydantic": "pydantic",
+    "rich": "rich",
+    "prompt_toolkit": "prompt_toolkit",
+    "chromadb": "chromadb",
+    "ollama": "ollama",
+    "openai": "openai",
+    "pytest": "pytest",
+    "pytest-timeout": "pytest_timeout",
+}
+
+
 @dataclass
 class DepCheck:
     name: str
-    type: str  # 'python', 'package', 'system_tool'
+    type: str  # 'python', 'package', 'system_tool', 'runtime_dep'
     required: bool
     installed: bool
     version: str | None = None
@@ -59,30 +76,38 @@ class CheckResult:
 
 
 class DependencyChecker:
-    def __init__(self) -> None:
-        self._console = Console()
+    def __init__(self, runtime_service: RuntimeDependencyService | None = None) -> None:
+        self._runtime_service = runtime_service
 
-    def run(self, auto_fix: bool = False, silent: bool = False) -> CheckResult:
+    def run(self, auto_fix: bool = False) -> CheckResult:
         checks: list[DepCheck] = []
 
         checks.append(self.check_python_version())
         checks.extend(self.check_python_packages())
         checks.extend(self.check_system_tools())
+        if self._runtime_service is not None:
+            for status in self._runtime_service.statuses():
+                checks.append(
+                    DepCheck(
+                        name=status.name,
+                        type="runtime_dep",
+                        required=True,
+                        installed=status.installed,
+                        version=status.version,
+                        install_hint=status.install_hint,
+                    )
+                )
 
         missing_required = [c for c in checks if c.required and not c.installed]
         missing_optional = [c for c in checks if not c.required and not c.installed]
         all_required_present = len(missing_required) == 0
 
-        result = CheckResult(
+        return CheckResult(
             checks=checks,
             all_required_present=all_required_present,
             missing_required=missing_required,
             missing_optional=missing_optional,
         )
-
-        if not silent:
-            self.print_summary(result)
-        return result
 
     def check_python_version(self) -> DepCheck:
         major = sys.version_info.major
@@ -107,7 +132,9 @@ class DependencyChecker:
             return results
 
         with open(req_path) as f:
-            lines = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
+            lines = [
+                ln.strip() for ln in f if ln.strip() and not ln.strip().startswith("#")
+            ]
 
         for line in lines:
             # Strip version specifiers (>=, ==, etc.)
@@ -117,12 +144,16 @@ class DependencyChecker:
             if not pkg_name:
                 continue
 
-            try:
-                version = importlib.metadata.version(pkg_name)
-                installed = True
-            except importlib.metadata.PackageNotFoundError:
-                version = None
-                installed = False
+            module_name = _PACKAGE_IMPORT_MAP.get(pkg_name, pkg_name.replace("-", "_"))
+
+            spec = importlib.util.find_spec(module_name)
+            installed = spec is not None
+            version = None
+            if installed:
+                try:
+                    version = importlib.metadata.version(pkg_name)
+                except importlib.metadata.PackageNotFoundError:
+                    pass
 
             results.append(
                 DepCheck(
@@ -192,82 +223,3 @@ class DependencyChecker:
                     break
 
         return results
-
-    def print_summary(self, result: CheckResult) -> None:
-        self._console.print("\n[bold]Installed System Tools[/bold]")
-        self._console.print("=" * 22)
-
-        table = Table(
-            show_header=True, header_style="bold", padding=(0, 1), show_lines=True
-        )
-        table.add_column("Dependency", style="cyan", min_width=18)
-        table.add_column("Type", min_width=12)
-        table.add_column("Status", min_width=14)
-        table.add_column("Install Hint")
-
-        from rich.markup import escape as _esc
-
-        for check in result.checks:
-            if check.installed:
-                if check.warning:
-                    safe = _esc(check.version or "")
-                    status = f"[yellow]v {safe} (incompatible)[/yellow]"
-                else:
-                    safe = _esc(check.version) if check.version else "installed"
-                    status = f"[green]v {safe}[/green]"
-            else:
-                status = "[yellow]! NOT FOUND[/yellow]"
-
-            hint = check.install_hint or ""
-            table.add_row(check.name, check.type, status, hint)
-
-        self._console.print(table)
-
-        if result.missing_optional:
-            count = len(result.missing_optional)
-            self._console.print(
-                f"[yellow]Warning: {count} optional "
-                f"tool{'s' if count != 1 else ''} not found. "
-                f"Some scan features will be unavailable.[/yellow]"
-            )
-
-        if result.missing_required:
-            count = len(result.missing_required)
-            names = ", ".join(c.name for c in result.missing_required)
-            self._console.print(
-                f"[red]Error: {count} required dependency missing: {names}[/red]"
-            )
-
-
-def print_installed_system_tools(console: Console) -> None:
-    """Print just the system tools table with 'Installed System Tools' header."""
-    checker = DependencyChecker()
-    tool_checks = checker.check_system_tools()
-
-    console.print("\n[bold]Installed System Tools[/bold]")
-    console.print("=" * 22)
-
-    table = Table(
-        show_header=True, header_style="bold", padding=(0, 1), show_lines=True
-    )
-    table.add_column("Dependency", style="cyan", min_width=18)
-    table.add_column("Type", min_width=12)
-    table.add_column("Status", min_width=14)
-    table.add_column("Install Hint")
-
-    from rich.markup import escape as _esc
-
-    for check in tool_checks:
-        if check.installed:
-            if check.warning:
-                safe = _esc(check.version or "")
-                status = f"[yellow]v {safe} (incompatible)[/yellow]"
-            else:
-                safe = _esc(check.version) if check.version else "installed"
-                status = f"[green]v {safe}[/green]"
-        else:
-            status = "[yellow]! NOT FOUND[/yellow]"
-        hint = check.install_hint or ""
-        table.add_row(check.name, check.type, status, hint)
-
-    console.print(table)

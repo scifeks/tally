@@ -1,0 +1,3426 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/docker-compose.yml",
+      "rule_id": "yaml.docker-compose.security.no-new-privileges.no-new-privileges",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Service 'redis' allows for privilege escalation via setuid or setgid binaries. Add 'no-new-privileges:true' in 'security_opt' to prevent this.",
+      "package_version": null,
+      "cwe": [
+        "CWE-732: Incorrect Permission Assignment for Critical Resource"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 3,
+        "col_end": 8,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "docker-compose"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://raesene.github.io/blog/2019/06/01/docker-capabilities-and-no-new-privs/",
+          "https://www.kernel.org/doc/Documentation/prctl/no_new_privs.txt",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-4-add-no-new-privileges-flag"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "false_positive",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "ff3fe55e850ca3205da4a9ebcf6c99e88b69329f2bd29641cba56740f76e9994",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 2,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/docker-compose.yml",
+      "rule_id": "yaml.docker-compose.security.writable-filesystem-service.writable-filesystem-service",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Service 'redis' is running with a writable root filesystem. This may allow malicious applications to download and run additional payloads, or modify container files. If an application inside a container has to save something temporarily consider using a tmpfs. Add 'read_only: true' to this service to prevent this.",
+      "package_version": null,
+      "cwe": [
+        "CWE-732: Incorrect Permission Assignment for Critical Resource"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 3,
+        "col_end": 8,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "docker-compose"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://docs.docker.com/compose/compose-file/compose-file-v3/#domainname-hostname-ipc-mac_address-privileged-read_only-shm_size-stdin_open-tty-user-working_dir",
+          "https://blog.atomist.com/security-of-docker-kubernetes/",
+          "https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html#rule-8-set-filesystem-and-volumes-to-read-only"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "fixed",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "1ce517d218859ebab2ab53f8e098d7c4e59b46c6b36d58eb397a656740488dec",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 3,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/sqli/dao/student.py",
+      "rule_id": "python.lang.security.audit.formatted-sql-query.formatted-sql-query",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected possible formatted SQL query. Use parameterized queries instead.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 45,
+        "line_end": 45,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 19,
+        "col_end": 33,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "python"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://stackoverflow.com/questions/775296/mysql-parameterized-queries"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "wont_fix",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "835626557b4fd45a8dc3235c9cd5178a916f73a789c9a593e71ff38f8876eeaf",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 4,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/sqli/dao/student.py",
+      "rule_id": "python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw query safely, prepared statement should be used. SQLAlchemy provides TextualSQL to easily used prepared statement with named parameters. For complex SQL composition, use SQL Expression Language or Schema Definition Language. In most cases, SQLAlchemy ORM will be a better option.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 45,
+        "line_end": 45,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 19,
+        "col_end": 33,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "sqlalchemy"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql",
+          "https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_quick_guide.htm",
+          "https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-more-specific-text-with-table-expression-literal-column-and-expression-column"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "2e6daa3524e54f5aa6cce5bf1a6a8dff01182a570a3205599a254258e7c0d91d",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 5,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "critical",
+      "confidence": "probable",
+      "file": "/sqli/dao/user.py",
+      "rule_id": "python.lang.security.audit.md5-used-as-password.md5-used-as-password",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "It looks like MD5 is used as a password hash. MD5 is not considered a secure password hash because it can be cracked by an attacker in a short amount of time. Use a suitable password hashing function such as scrypt. You can use `hashlib.scrypt`.",
+      "package_version": null,
+      "cwe": [
+        "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 41,
+        "line_end": 41,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 33,
+        "col_end": 74,
+        "owasp": [
+          "A03:2017 - Sensitive Data Exposure",
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "owasp_name": "[\"Cryptographic Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "pycryptodome",
+          "hashlib",
+          "md5"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "LOW",
+        "references": [
+          "https://tools.ietf.org/html/rfc6151",
+          "https://crypto.stackexchange.com/questions/44151/how-does-the-flame-malware-take-advantage-of-md5-collision",
+          "https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html",
+          "https://security.stackexchange.com/questions/211/how-to-securely-hash-passwords",
+          "https://github.com/returntocorp/semgrep-rules/issues/1609",
+          "https://docs.python.org/3/library/hashlib.html#hashlib.scrypt"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "bbf211a9a32906d3e181d67fb830007128942c34fb7c33e01276f7bb695424e3",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 6,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "RegExp() called with a `t` function argument, this might allow an attacker to cause a Regular Expression Denial-of-Service (ReDoS) within your application as RegExP blocks the main thread. For this reason, it is recommended to use hardcoded regexes instead. If your regex is run on user-controlled input, consider performing input validation or use a regex checking/sanitization library such as https://www.npmjs.com/package/recheck to verify that the regex does not appear vulnerable to ReDoS.",
+      "package_version": null,
+      "cwe": [
+        "CWE-1333: Inefficient Regular Expression Complexity"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 565,
+        "line_end": 565,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 94,
+        "col_end": 158,
+        "owasp": [
+          "A05:2021 - Security Misconfiguration",
+          "A06:2017 - Security Misconfiguration",
+          "A02:2025 - Security Misconfiguration"
+        ],
+        "owasp_name": "[\"Security Misconfiguration\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "73f86819e5c480cc8efe4c0dbba4677e874da7a49b6e0db630d0f1eff06eb1c4",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 7,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected string concatenation with a non-literal variable in a util.format / console.log function. If an attacker injects a format specifier in the string, it will forge the log message. Try to use constant values for the format string.",
+      "package_version": null,
+      "cwe": [
+        "CWE-134: Use of Externally-Controlled Format String"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 645,
+        "line_end": 645,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 318,
+        "col_end": 353,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/134.html"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "80cd5d71b1decae35859a2216dbb488e10738df841f8a50c0cea39178c40c955",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 8,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected string concatenation with a non-literal variable in a util.format / console.log function. If an attacker injects a format specifier in the string, it will forge the log message. Try to use constant values for the format string.",
+      "package_version": null,
+      "cwe": [
+        "CWE-134: Use of Externally-Controlled Format String"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 661,
+        "line_end": 661,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 184,
+        "col_end": 246,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/134.html"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "9a4e768505c3fec397d8634caacb79d673c3a01307863eeaa7ff441f207ba8ec",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 9,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "low",
+      "confidence": "potential",
+      "file": "/sqli/static/js/materialize.js",
+      "rule_id": "javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Detected string concatenation with a non-literal variable in a util.format / console.log function. If an attacker injects a format specifier in the string, it will forge the log message. Try to use constant values for the format string.",
+      "package_version": null,
+      "cwe": [
+        "CWE-134: Use of Externally-Controlled Format String"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvpwa",
+        "line_start": 699,
+        "line_end": 699,
+        "timestamp": "2026-04-30T22:50:38.327720+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvpwa_2026-04-30_225038.stdout",
+        "col_start": 157,
+        "col_end": 211,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "javascript"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "LOW",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/134.html"
+        ],
+        "enriched": false,
+        "repo_id": 2,
+        "repo": "dvpwa"
+      },
+      "first_seen": "2026-04-30T22:50:55.313870+00:00",
+      "last_seen": "2026-04-30T22:50:55.313870+00:00",
+      "seen_count": 1,
+      "status": "false_positive",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 2,
+      "id_fingerprint": "7547298133f0575f4f3e4d0e130a8e1270fb4f19156e3db753d0e3bdd452a901",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvpwa"
+    },
+    {
+      "id": 10,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "confirmed",
+      "file": "/.github/workflows/docker-image.yml",
+      "rule_id": "yaml.github-actions.security.run-shell-injection.run-shell-injection",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Using variable interpolation `${{...}}` with `github` context data in a `run:` step could allow an attacker to inject their own code into the runner. This would allow them to steal secrets and code. `github` context data can have arbitrary user input and should be treated as untrusted. Instead, use an intermediate environment variable with `env:` to store the data and use the environment variable in the `run:` script. Be sure to use double-quotes the environment variable, like this: \"$ENVVAR\".",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 28,
+        "line_end": 44,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 7,
+        "col_end": 2,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "github-actions"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://docs.github.com/en/actions/learn-github-actions/security-hardening-for-github-actions#understanding-the-risk-of-script-injections",
+          "https://securitylab.github.com/research/github-actions-untrusted-input/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "fixed",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "fb2ee284cd2ac1ac6db3b76cddea8b8617e4fafa7949f7b40422dc37b37d10e8",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 11,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/instructions.php",
+      "rule_id": "php.lang.security.injection.tainted-filename.tainted-filename",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "File name based on user input risks server-side request forgery.",
+      "package_version": null,
+      "cwe": [
+        "CWE-918: Server-Side Request Forgery (SSRF)"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 36,
+        "col_end": 67,
+        "owasp": [
+          "A10:2021 - Server-Side Request Forgery (SSRF)",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Server-Side Request Forgery (SSRF)\", \"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "43eba7f764b5c3034c4a1db42b17c87b03ca81f5b1daf9c489d71beacec616f7",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 12,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/phpinfo.php",
+      "rule_id": "php.lang.security.phpinfo-use.phpinfo-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The 'phpinfo' function may reveal sensitive information about your environment.",
+      "package_version": null,
+      "cwe": [
+        "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 8,
+        "line_end": 8,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 1,
+        "col_end": 11,
+        "owasp": [
+          "A01:2021 - Broken Access Control",
+          "A01:2025 - Broken Access Control"
+        ],
+        "owasp_name": "[\"Broken Access Control\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "MEDIUM",
+        "references": [
+          "https://www.php.net/manual/en/function.phpinfo",
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/PhpinfosSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "c49d1e87aae6472558c7c7dc34da34db27a5484eee0b514a2fea92bea2baa0ec",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 13,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/vulnerabilities/api/gen_openapi.php",
+      "rule_id": "php.lang.security.php-permissive-cors.php-permissive-cors",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Access-Control-Allow-Origin response header is set to \"*\". This will disable CORS Same Origin Policy restrictions.",
+      "package_version": null,
+      "cwe": [
+        "CWE-346: Origin Validation Error"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 6,
+        "line_end": 6,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 1,
+        "col_end": 41,
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "owasp_name": "[\"Identification and Authentication Failures\", \"Authentication Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://developer.mozilla.org/ru/docs/Web/HTTP/Headers/Access-Control-Allow-Origin"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "aaf9ab2db5dfccefccbaf9ae195fe2d9127f0da9b32b53461d1f05f35f0c759c",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 14,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/vulnerabilities/api/public/index.php",
+      "rule_id": "php.lang.security.php-permissive-cors.php-permissive-cors",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Access-Control-Allow-Origin response header is set to \"*\". This will disable CORS Same Origin Policy restrictions.",
+      "package_version": null,
+      "cwe": [
+        "CWE-346: Origin Validation Error"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 11,
+        "line_end": 11,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 1,
+        "col_end": 41,
+        "owasp": [
+          "A07:2021 - Identification and Authentication Failures",
+          "A07:2025 - Authentication Failures"
+        ],
+        "owasp_name": "[\"Identification and Authentication Failures\", \"Authentication Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://developer.mozilla.org/ru/docs/Web/HTTP/Headers/Access-Control-Allow-Origin"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "138406e6f9fe8e0c59736cf6c809db42a6ee05b3be0721a9cc0bd77a522be736",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 15,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/api/src/HealthController.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 88,
+        "line_end": 88,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 4,
+        "col_end": 52,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "false_positive",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "3b8330d1886f6e07464d2f5cd0caa6d953d3ecbc3b7aaa89b3ec6984743f77b8",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 16,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/api/src/HealthController.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 88,
+        "line_end": 88,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 4,
+        "col_end": 53,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "3cd23be3b91ff539578417e1af62b4025a54d3f608907daa4da9834afa73b9b9",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 17,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "potential",
+      "file": "/vulnerabilities/api/src/Token.php",
+      "rule_id": "php.lang.security.audit.openssl-decrypt-validate.openssl-decrypt-validate",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "The function `openssl_decrypt` returns either a string of the decrypted data on success or `false` on failure. If the failure case is not handled, this could lead to undefined behavior in your application. Please handle the case where `openssl_decrypt` returns `false`.",
+      "package_version": null,
+      "cwe": [
+        "CWE-252: Unchecked Return Value"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 39,
+        "line_end": 39,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 3,
+        "col_end": 110,
+        "owasp": [
+          "A02:2021 - Cryptographic Failures",
+          "A04:2025 - Cryptographic Failures"
+        ],
+        "owasp_name": "[\"Cryptographic Failures\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php",
+          "openssl"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "MEDIUM",
+        "references": [
+          "https://www.php.net/manual/en/function.openssl-decrypt.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "b5a1babcd632b6c03b4386455852d87841be88803b558913d4d837527b71574f",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 18,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/bac/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 24,
+        "col_end": 71,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "9ce78fc9f4964ca77b6f39d2db87a755eac55b0ec9616208c79b42f49455827e",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 19,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/bac/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 35,
+        "line_end": 35,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 30,
+        "col_end": 109,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "fixed",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "7c96424a3e3b0a35f69de0eec8547f84855b4f2064a8a1f79528681b0f961386",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 20,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/bac/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 79,
+        "line_end": 80,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 26,
+        "col_end": 69,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "c76ff50ce74eb35d728c0342bc8de0776b5ca1238b144c4e25f2c10554af0686",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 21,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/bac/source/medium.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 21,
+        "line_end": 21,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 24,
+        "col_end": 73,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "1b595569cd9eb014b7d55b8efd88ac3c7fe50af425e362fd55263bd254caa63b",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 22,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/bac/source/medium.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 28,
+        "line_end": 28,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 26,
+        "col_end": 107,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "f5dc89b2c33b199533f9eadf575103b9870944bcf68526f7baa5cfff2bc40471",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 23,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/bac/source/medium.php",
+      "rule_id": "php.lang.security.injection.tainted-sql-string.tainted-sql-string",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User data flows into this manually-constructed SQL string. User data can be safely inserted into SQL strings using prepared statements or an object-relational mapper (ORM). Manually-constructed SQL strings is a possible indicator of SQL injection, which could let an attacker steal or manipulate data from the database. Instead, use prepared statements (`$mysqli->prepare(\"INSERT INTO test(id, label) VALUES (?, ?)\");`) or a safe library.",
+      "package_version": null,
+      "cwe": [
+        "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 71,
+        "line_end": 72,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 26,
+        "col_end": 69,
+        "owasp": [
+          "A01:2017 - Injection",
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "MEDIUM",
+        "references": [
+          "https://owasp.org/www-community/attacks/SQL_Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "wont_fix",
+      "triaged_at": "2026-04-30T15:30:00+00:00",
+      "triaged_by": "analyst_web",
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "d86ccde5e61fe1ae4ee0f60d12c3aa609e204089af2a5ef9ecba7ca3bb918bb9",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 24,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/brute/source/high.php",
+      "rule_id": "php.lang.security.md5-loose-equality.md5-loose-equality",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Make sure comparisons involving md5 values are strict (use `===` not `==`) to avoid type juggling issues",
+      "package_version": null,
+      "cwe": [
+        "CWE-697: Incorrect Comparison"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 17,
+        "col_end": 48,
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.php.net/manual/en/types.comparisons.php",
+          "https://web.archive.org/web/20210430183236/https://www.whitehatsec.com/blog/magic-hashes/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "d510d5f6a40643e7e74dea65c7167cb9fa64abef446b97cdc202e6fe251c8a9c",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 25,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/brute/source/medium.php",
+      "rule_id": "php.lang.security.md5-loose-equality.md5-loose-equality",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Make sure comparisons involving md5 values are strict (use `===` not `==`) to avoid type juggling issues",
+      "package_version": null,
+      "cwe": [
+        "CWE-697: Incorrect Comparison"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 17,
+        "line_end": 17,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 17,
+        "col_end": 48,
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.php.net/manual/en/types.comparisons.php",
+          "https://web.archive.org/web/20210430183236/https://www.whitehatsec.com/blog/magic-hashes/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "e8c5d508668270e568dfc05685da0d6073851221cbf1152c7b94acc987f82f66",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 26,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/captcha/source/impossible.php",
+      "rule_id": "php.lang.security.md5-loose-equality.md5-loose-equality",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Make sure comparisons involving md5 values are strict (use `===` not `==`) to avoid type juggling issues",
+      "package_version": null,
+      "cwe": [
+        "CWE-697: Incorrect Comparison"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 46,
+        "line_end": 46,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 9,
+        "col_end": 32,
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.php.net/manual/en/types.comparisons.php",
+          "https://web.archive.org/web/20210430183236/https://www.whitehatsec.com/blog/magic-hashes/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "f0bd553b8e1e64cd4520d97de82d43c6460646ecf9a7937b4f97ad532ea5ad77",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 27,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/cryptography/source/ecb_attack.php",
+      "rule_id": "php.lang.security.md5-loose-equality.md5-loose-equality",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Make sure comparisons involving md5 values are strict (use `===` not `==`) to avoid type juggling issues",
+      "package_version": null,
+      "cwe": [
+        "CWE-697: Incorrect Comparison"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 92,
+        "line_end": 92,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 5,
+        "col_end": 27,
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.php.net/manual/en/types.comparisons.php",
+          "https://web.archive.org/web/20210430183236/https://www.whitehatsec.com/blog/magic-hashes/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "ecce352111fbc29c1f9f50de0c73d001df2507f13b20014f6bdb0db206b41d05",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 28,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/cryptography/source/ecb_attack.php",
+      "rule_id": "php.lang.security.md5-loose-equality.md5-loose-equality",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Make sure comparisons involving md5 values are strict (use `===` not `==`) to avoid type juggling issues",
+      "package_version": null,
+      "cwe": [
+        "CWE-697: Incorrect Comparison"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 92,
+        "line_end": 92,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 53,
+        "col_end": 76,
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.php.net/manual/en/types.comparisons.php",
+          "https://web.archive.org/web/20210430183236/https://www.whitehatsec.com/blog/magic-hashes/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "ecce352111fbc29c1f9f50de0c73d001df2507f13b20014f6bdb0db206b41d05",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 29,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/csrf/test_credentials.php",
+      "rule_id": "php.lang.security.md5-loose-equality.md5-loose-equality",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Make sure comparisons involving md5 values are strict (use `===` not `==`) to avoid type juggling issues",
+      "package_version": null,
+      "cwe": [
+        "CWE-697: Incorrect Comparison"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 23,
+        "line_end": 23,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 17,
+        "col_end": 48,
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "references": [
+          "https://www.php.net/manual/en/types.comparisons.php",
+          "https://web.archive.org/web/20210430183236/https://www.whitehatsec.com/blog/magic-hashes/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "6ebf119b75c8ea457de49803e1eb19432662af1b9c96dd6462ff8b0f09caf839",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 30,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/high.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 3,
+        "col_end": 43,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "bb3123d961ba625a54827a23b67ba61ac64b3470034eda17ffb7d17d96f89afe",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 31,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/high.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 42,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "732cae1b4d67f862d7aa9d0e5fac70c0998b4f551e1da2241fd6d772a767ecd7",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 32,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/high.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 42,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "ec6d8bc0dd5dd878eb41797ee317abd47e4064ada984dd622d2a7b1ca8afd0cd",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 33,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/high.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 30,
+        "line_end": 30,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 3,
+        "col_end": 48,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "cd05df6a4afeed90bf4e475c1cdc68c2aa461fe34badcaef98e24b4ff3e47625",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 34,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/high.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 30,
+        "line_end": 30,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 47,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "84305944b6686f2887c126e3ce26df7214e335f00e3991f0a3de73b935e6b87d",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 35,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/high.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 30,
+        "line_end": 30,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 47,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "a5c25793354a6373e592ebfbba466ba5c2ec34543115ef28ea49d95b4e44c148",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 36,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/impossible.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 4,
+        "col_end": 44,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "b9fbbe53e8e185c9400e696711667212a00fdf38b4357e0bf04fb3674210243a",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 37,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/impossible.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 11,
+        "col_end": 43,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "40cfd6c7684e8b2c46b56977be6735e304b29670e0885f426810490b1748a6a2",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 38,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/impossible.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 22,
+        "line_end": 22,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 11,
+        "col_end": 43,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "8074a701b527199c135dcafb8b4fc26cd1568ad33fa313a10533e6164461a009",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 39,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/impossible.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 4,
+        "col_end": 49,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "b20821ec5d496c8827492eeef0ad55eab106ccd0b4a86c9c7a852339a73700c5",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 40,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/impossible.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 11,
+        "col_end": 48,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "25c5d5dbf1ab2a34af562c5b2b27d8d64cc1930635294816f4491360e01b1df8",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 41,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/impossible.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 26,
+        "line_end": 26,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 11,
+        "col_end": 48,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "1c59ae84130ccf988b77294e75f50442fa476a2b994489e5d5a1e37773be5a2e",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 42,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/low.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 10,
+        "line_end": 10,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 3,
+        "col_end": 43,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "544f83c98aad1a6f92d793f634f960e2b29aca4af23eeda38ebfc93352f0f577",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 43,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 10,
+        "line_end": 10,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 42,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "f3d3b4f100fe48186f8b904dff650e1ff949b2f731e4e3281ce8be9adf48e4f1",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 44,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/low.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 10,
+        "line_end": 10,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 42,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "eea60b0f8ee7b4fd3dc431bef85fbedc33e3b215792c115ed367e8eeb69c2a95",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 45,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/low.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 14,
+        "line_end": 14,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 3,
+        "col_end": 48,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "f5c59f77ec16222034b3f3074378c6fffad7af8a30b8ea982c766e7903a2a871",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 46,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/low.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 14,
+        "line_end": 14,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 47,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "a6c02f7f817daf6037c09dc2cd3d2293d1fab925f331b5205e719da5e05904d8",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 47,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/low.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 14,
+        "line_end": 14,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 47,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "f282764fe6542f2910f1d0a5403f7c8f33d1299aacdfb46de4c8c385cea73c9d",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 48,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "potential",
+      "file": "/vulnerabilities/exec/source/medium.php",
+      "rule_id": "php.lang.security.exec-use.exec-use",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 19,
+        "line_end": 19,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 3,
+        "col_end": 43,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "audit"
+        ],
+        "likelihood": "LOW",
+        "impact": "HIGH",
+        "references": [
+          "https://github.com/FloeDesignTechnologies/phpcs-security-audit/blob/master/Security/Sniffs/BadFunctions/SystemExecFunctionsSniff.php"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "3e18c05ec6995146fe6758afe0a5a07d696b27ebfd1e5e800c7849119e877619",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 49,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "medium",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/medium.php",
+      "rule_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "User input is passed to a function that executes a shell command. This can lead to remote code execution.",
+      "package_version": null,
+      "cwe": [
+        "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 19,
+        "line_end": 19,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 42,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "references": [
+          "https://owasp.org/Top10/A03_2021-Injection"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "701b98ab85fa2b37ef16bb3870150bc81482a9d6d8146af213ceebb41800a2c6",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    },
+    {
+      "id": 50,
+      "run_id": 1,
+      "tool": "semgrep",
+      "domain": "code",
+      "segment": "sast",
+      "finding_type": [
+        "vulnerability"
+      ],
+      "severity": "high",
+      "confidence": "probable",
+      "file": "/vulnerabilities/exec/source/medium.php",
+      "rule_id": "php.lang.security.tainted-exec.tainted-exec",
+      "url": null,
+      "vulnerability_id": null,
+      "package_name": null,
+      "ecosystem": null,
+      "description": "Executing non-constant commands. This can lead to command injection. You should use `escapeshellarg()` when using command.",
+      "package_version": null,
+      "cwe": [
+        "CWE-94: Improper Control of Generation of Code ('Code Injection')"
+      ],
+      "enriched": 0,
+      "meta": {
+        "profile": "dvwa",
+        "line_start": 19,
+        "line_end": 19,
+        "timestamp": "2026-04-30T22:50:55.992465+00:00",
+        "source_file": "projects/DVPA/tool_outputs/semgrep/dvwa_2026-04-30_225055.stdout",
+        "col_start": 10,
+        "col_end": 42,
+        "owasp": [
+          "A03:2021 - Injection",
+          "A05:2025 - Injection"
+        ],
+        "owasp_name": "[\"Injection\"]",
+        "fingerprint": "requires login",
+        "category": "security",
+        "technology": [
+          "php"
+        ],
+        "subcategory": [
+          "vuln"
+        ],
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "references": [
+          "https://www.stackhawk.com/blog/php-command-injection/",
+          "https://brightsec.com/blog/code-injection-php/",
+          "https://www.acunetix.com/websitesecurity/php-security-2/"
+        ],
+        "enriched": false,
+        "repo_id": 1,
+        "repo": "dvwa"
+      },
+      "first_seen": "2026-04-30T22:50:59.449763+00:00",
+      "last_seen": "2026-04-30T22:50:59.449763+00:00",
+      "seen_count": 1,
+      "status": "active",
+      "triaged_at": null,
+      "triaged_by": null,
+      "should_report": 0,
+      "business_impact": null,
+      "tal_id": null,
+      "repo_id": 1,
+      "id_fingerprint": "cb5809464707079606c2de5f538dcc0f189b8625bf505d684ee22cd7112e4c60",
+      "is_locked": false,
+      "lock_holder": null,
+      "repo_name": "dvwa"
+    }
+  ],
+  "total": 572,
+  "offset": 0,
+  "limit": 50
+}

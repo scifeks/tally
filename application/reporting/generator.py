@@ -1,24 +1,28 @@
 """Report generation from aggregated RAG findings."""
 
+from __future__ import annotations
+
 import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from infrastructure.store import FindingRepository
+from domain.findings.severity import Severity
+
+if TYPE_CHECKING:
+    from application.ports.finding_repository import FindingRepositoryPort
 
 logger = logging.getLogger(__name__)
 
 _SCA_TOOLS = ("osv-scanner", "pip-audit", "npm-audit", "composer-audit")
-_SEVERITY_LEVELS = ["critical", "high", "medium", "low"]
 
 
 class ReportGenerator:
     """Generates security reports from findings stored in the RAG engine."""
 
     def __init__(
-        self, rag_engine: object, project: str, finding_repo: FindingRepository
+        self, rag_engine: object, project: str, finding_repo: FindingRepositoryPort
     ) -> None:
         self._engine = rag_engine
         self.project = project
@@ -66,7 +70,7 @@ class ReportGenerator:
         """
         generated_at = datetime.now(UTC).isoformat()
         findings_by_tool: dict[str, list[dict[str, Any]]] = {}
-        by_severity = {level: 0 for level in _SEVERITY_LEVELS}
+        by_severity = {s.label: 0 for s in Severity.all_ordered()}
 
         try:
             findings_list = self._finding_repo.get_all_findings_deserialized()
@@ -204,7 +208,7 @@ class ReportGenerator:
                     f"| {source} | {params} |"
                 )
             lines.append(
-                "_Note: Discovered Attack Surface entries are informational — "
+                "_Note: Discovered Attack Surface entries are informational, "
                 "not vulnerability findings._"
             )
 
@@ -373,7 +377,7 @@ class ReportGenerator:
                 f"<table>{th('Method', 'URI', 'Source File', 'Parameters')}"
                 f"<tbody>{rows}</tbody></table>"
                 '<p class="note">Note: Discovered Attack Surface entries are'
-                " informational — not vulnerability findings.</p></div>"
+                " informational, not vulnerability findings.</p></div>"
             )
 
         if not sections:

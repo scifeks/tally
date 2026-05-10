@@ -1,22 +1,4 @@
-"""E2e-test configuration.
-
-Autouse fixture:
-
-_cleanup_chromadb_systems — stops all ChromaDB Systems after each test to
-prevent file-handle accumulation (EMFILE) across the full suite.
-
-Note: _restore_tool_registry is defined in tests/conftest.py and covers all
-test scopes including e2e.
-
-Harness fixtures:
-
-tally_harness — isolated TallyHarness backed by tmp_path; calls setup(),
-    spawn(), and teardown() automatically.
-
-tally_harness_live — TallyHarness pointed at the real repo root; useful for
-    interactive debugging sessions where you want to inspect real project data.
-    Does NOT call setup() or teardown() automatically.
-"""
+"""E2e test configuration and harness fixtures."""
 
 from __future__ import annotations
 
@@ -48,7 +30,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
     Three tiers:
     - tally_harness tests: fully isolated (tmp_path REPL per test),
-      run in parallel across all workers — no group assigned.
+      run in parallel across all workers with no group assigned.
     - tally_harness_live tests: share the real repo root (findings.db,
       ChromaDB), pinned to group "live" so they serialize on one worker.
     - e2e-marked tests: hit a shared Ollama server; concurrent embedding
@@ -98,8 +80,8 @@ def tally_harness(tmp_path: Path) -> Generator[TallyHarness]:
 def tally_harness_live() -> Generator[TallyHarness]:
     """Live TallyHarness pointed at the real repo root.
 
-    Spawns against your actual config and projects — useful for debugging
-    a specific implementation.  You are responsible for any data created
+    Spawns against your actual config and projects for debugging a
+    specific implementation. You are responsible for any data created
     during the test.
     """
     harness = TallyHarness()

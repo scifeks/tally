@@ -18,13 +18,13 @@ _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ingest"
 
 @pytest.fixture()
 def raw_dir_findings() -> list:
-    """Raw JSON array from gitleaks_dir.json — no parse_gitleaks_json() involved."""
+    """Raw JSON array from gitleaks_dir.json; no parse_gitleaks_json() involved."""
     return json.loads((_FIXTURES / "gitleaks_dir.json").read_text())
 
 
 @pytest.fixture()
 def raw_git_findings() -> list:
-    """Raw JSON array from gitleaks_git.json — no parse_gitleaks_json() involved."""
+    """Raw JSON array from gitleaks_git.json; no parse_gitleaks_json() involved."""
     return json.loads((_FIXTURES / "gitleaks_git.json").read_text())
 
 

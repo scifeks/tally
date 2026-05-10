@@ -14,9 +14,9 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from application.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
-from domain.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 
 pytestmark = pytest.mark.integration
@@ -71,7 +71,7 @@ def project_env(tmp_path: Path) -> dict:
     _write_commands_config(tmp_path)
     pm = ProjectManager(base_path=str(tmp_path))
     pm.create_project_dirs(name)
-    pm.save_project(name, [])
+    pm.save_project(name)
     run_repo, finding_repo, _, _ = make_store(str(tmp_path), name)
     run_id = run_repo.create_run({})
     return {
@@ -97,7 +97,8 @@ class TestGitleaksEnrichmentBypass:
         }
         fid = _seed(finding_repo, run_id, row)
         p = EnrichmentPipeline(
-            finding_repo=finding_repo, base_path=str(project_env["base_path"])
+            finding_repo=finding_repo,
+            base_path=str(project_env["base_path"]),
         )
         with patch.object(p, "_call_llm") as mock_llm:
             p.enrich([fid])

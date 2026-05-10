@@ -1,13 +1,14 @@
-"""ToolOnAllReposScan — runs a single tool against all configured repositories."""
+"""ToolOnAllReposScan: runs a single tool against all configured repositories."""
 
 from __future__ import annotations
 
 from time import perf_counter
 
+from application.tools.scan_types.base import ScanType
+from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.repo_segment import RepoSegmentScan
 from domain.tools.display import ToolDisplayRow
-from domain.tools.scan_types.base import ScanType
-from domain.tools.scan_types.models import ScanSummary, ScanTypeConfig
+from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
 
 
@@ -23,7 +24,7 @@ class ToolOnAllReposScan(ScanType):
         start = perf_counter()
 
         resources.display.print_scan_header(
-            f"Repo Tool Scan: {config.project_name} — {self.tool_name}"
+            f"Repo Tool Scan: {config.project_name} | {self.tool_name}"
         )
 
         tool_inst = resources.registry.get_tool(self.tool_name)

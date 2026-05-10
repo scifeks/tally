@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-_SEVERITY_ORDER: tuple[str, ...] = (
-    "critical",
-    "high",
-    "medium",
-    "low",
-    "informational",
-)
+from dataclasses import replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from domain.findings.entry import Finding
 
 
 def resolve_prefix(abbreviation: str, global_prefix: str) -> str:
@@ -17,48 +15,43 @@ def resolve_prefix(abbreviation: str, global_prefix: str) -> str:
     Priority:
     1. Project-level abbreviation (if set and non-empty).
     2. Global ``report_finding_prefix`` (if set and non-empty).
-    3. Empty string — callers fall back to numeric-only IDs (e.g. ``001``).
-
-    Args:
-        abbreviation:   Project-level abbreviation from ``ProjectConfig``.
-        global_prefix:  ``report_finding_prefix`` from ``GlobalConfig``.
-
-    Returns:
-        The resolved prefix string, or ``""`` if both inputs are empty.
+    3. Empty string: callers fall back to numeric-only IDs (e.g. ``001``).
     """
     return (abbreviation or "").strip() or (global_prefix or "").strip()
+
+
+def _format_id(index: int, width: int, prefix: str) -> str:
+    return f"{prefix}-{index:0{width}d}" if prefix else f"{index:0{width}d}"
 
 
 def assign_tal_ids(
     findings: list[dict],  # type: ignore[type-arg]
     prefix: str = "",
 ) -> list[dict]:  # type: ignore[type-arg]
-    """Assign finding IDs to a pre-filtered, pre-sorted list of findings.
+    """Return new dicts with ``tal_id`` populated.
 
-    The caller is responsible for filtering to ``should_report=1`` and sorting
-    by severity (critical → informational) then ``first_seen`` ascending before
-    calling this function.
-
-    IDs are zero-padded to a minimum of 3 digits.  When the finding count
-    exceeds 999 the padding width auto-expands so all IDs share the same
-    width (e.g. 1 000 findings → 4 digits).
-
-    When *prefix* is provided the format is ``PREFIX-001``, ``PREFIX-002``, …
-    When *prefix* is empty the format is ``001``, ``002``, … (numeric only).
-
-    Args:
-        findings: List of finding dicts (not mutated).
-        prefix:   Finding ID prefix resolved via :func:`resolve_prefix`.
-
-    Returns:
-        New list of dicts with ``tal_id`` populated.
+    The caller filters to ``should_report=1`` and sorts before calling.
+    IDs zero-pad to a minimum of 3 digits, expanding when the count exceeds
+    999 so all IDs share the same width.
     """
     if not findings:
         return []
-
     width = max(3, len(str(len(findings))))
-    result: list[dict] = []  # type: ignore[type-arg]
-    for i, finding in enumerate(findings, start=1):
-        fid = f"{prefix}-{i:0{width}d}" if prefix else f"{i:0{width}d}"
-        result.append({**finding, "tal_id": fid})
-    return result
+    return [
+        {**finding, "tal_id": _format_id(i, width, prefix)}
+        for i, finding in enumerate(findings, start=1)
+    ]
+
+
+def assign_tal_ids_to_findings(
+    findings: list[Finding],
+    prefix: str = "",
+) -> list[Finding]:
+    """Return new ``Finding`` instances with ``tal_id`` populated."""
+    if not findings:
+        return []
+    width = max(3, len(str(len(findings))))
+    return [
+        replace(finding, tal_id=_format_id(i, width, prefix))
+        for i, finding in enumerate(findings, start=1)
+    ]

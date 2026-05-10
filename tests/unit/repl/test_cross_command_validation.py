@@ -13,89 +13,83 @@ if str(_TALLY_ROOT) not in sys.path:
 from application.repl.commands.knowledge_commands import KnowledgeCommands  # noqa: E402
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from application.repl.commands.scan_commands import ScanCommands  # noqa: E402
+from domain.projects.entry import ProjectRow  # noqa: E402
 
 _VALID_TOOLS = ["semgrep", "gitleaks"]
 _INVALID_TOOL = "nonexistent-tool"
 _VALID_TOOL = "semgrep"
 
 
-# ---------------------------------------------------------------------------
-# Invalid tool — all three commands reject it
-# ---------------------------------------------------------------------------
-
-
-@patch("application.repl.commands.scan_commands.tool_registry")
-def test_invalid_tool_rejected_by_scan(mock_reg):
-    mock_reg.list_tool_names.return_value = _VALID_TOOLS
+def _mock_repl(active_project: str = "proj") -> MagicMock:
     repl = MagicMock()
-    repl.active_project = "proj"
+    repl.active_project = active_project
+    repl.tool_registry.list_tool_names.return_value = _VALID_TOOLS
+    return repl
+
+
+# Invalid tool: all three commands reject it
+
+
+def test_invalid_tool_rejected_by_scan():
+    repl = _mock_repl()
     ScanCommands(repl).cmd_scan("scan", [f"--tool={_INVALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Unknown tool" in p for p in printed)
 
 
-@patch("application.repl.commands.purge.tool_registry")
-def test_invalid_tool_rejected_by_purge(mock_reg):
-    mock_reg.list_tool_names.return_value = _VALID_TOOLS
-    repl = MagicMock()
-    repl.active_project = "proj"
+def test_invalid_tool_rejected_by_purge():
+    repl = _mock_repl()
     PurgeCommand(repl).cmd_purge("purge", [f"--tool={_INVALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Unknown tool" in p for p in printed)
 
 
 def test_invalid_tool_rejected_by_search():
-    repl = MagicMock()
-    repl.active_project = "proj"
+    repl = _mock_repl()
     kc = KnowledgeCommands(repl)
-    mock_qe = MagicMock()
-    mock_qe._known_tools = frozenset(_VALID_TOOLS)
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    kc._get_finding_repo = MagicMock(return_value=MagicMock())
     kc.cmd_search("search", [f"--tool={_INVALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert any("Search error" in p for p in printed)
 
 
-# ---------------------------------------------------------------------------
-# Valid tool — none print "Unknown tool" / "Search error"
-# ---------------------------------------------------------------------------
+# Valid tool: none print "Unknown tool" / "Search error"
 
 
-@patch("application.repl.commands.scan_commands.tool_registry")
-def test_valid_tool_accepted_by_scan(mock_reg):
-    mock_reg.list_tool_names.return_value = _VALID_TOOLS
-    repl = MagicMock()
-    repl.active_project = "proj"
+@patch("application.repl.commands.scan_commands.get_scan_service")
+def test_valid_tool_accepted_by_scan(mock_get_service):
+    repl = _mock_repl()
     repl.config.load_repositories.return_value = []
-    sc = ScanCommands(repl)
-    sc._make_orchestrator = MagicMock(return_value=None)  # skip FS/RAG setup
-    sc.cmd_scan("scan", [f"--tool={_VALID_TOOL}"])
+    repl.project_registry.resolve_by_name.return_value = ProjectRow(
+        id=1, name="proj", path="/tmp/test", created_at="2026-05-02T00:00:00Z"
+    )
+
+    mock_handle = MagicMock(run_id=1)
+    mock_handle.result.result.return_value = MagicMock(findings_by_tool={})
+    mock_get_service.return_value.start_scan.return_value = mock_handle
+
+    ScanCommands(repl).cmd_scan("scan", [f"--tool={_VALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Unknown tool" in p for p in printed)
 
 
-@patch("application.repl.commands.purge.tool_registry")
-def test_valid_tool_accepted_by_purge(mock_reg):
-    mock_reg.list_tool_names.return_value = _VALID_TOOLS
-    repl = MagicMock()
-    repl.active_project = "proj"
+def test_valid_tool_accepted_by_purge():
+    repl = _mock_repl()
     pc = PurgeCommand(repl)
-    mock_rag = MagicMock()
-    mock_rag._collection = None  # _count_matching returns 0 → exits early
-    pc._get_rag_engine = MagicMock(return_value=mock_rag)
+    mock_kb = MagicMock()
+    mock_kb.count.return_value = 0  # exits early after no-match check
+    pc._get_knowledge_base = MagicMock(return_value=mock_kb)
     pc.cmd_purge("purge", [f"--tool={_VALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Unknown tool" in p for p in printed)
 
 
 def test_valid_tool_accepted_by_search():
-    repl = MagicMock()
-    repl.active_project = "proj"
+    repl = _mock_repl()
     kc = KnowledgeCommands(repl)
-    mock_qe = MagicMock()
-    mock_qe._known_tools = frozenset(_VALID_TOOLS)
-    mock_qe.search.return_value = []
-    kc._get_query_engine = MagicMock(return_value=mock_qe)
+    mock_store = MagicMock()
+    mock_store.search.return_value = []
+    kc._get_finding_repo = MagicMock(return_value=mock_store)
     kc.cmd_search("search", [f"--tool={_VALID_TOOL}"])
     printed = [str(c) for c in repl.console.print.call_args_list]
     assert not any("Search error" in p for p in printed)

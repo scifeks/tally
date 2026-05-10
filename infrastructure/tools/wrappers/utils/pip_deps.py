@@ -12,7 +12,7 @@ _attempted: set[str] = set()
 
 
 def reset_attempted() -> None:
-    """Clear the dedup set — intended for use in tests only."""
+    """Clear the dedup set for use in tests only."""
     _attempted.clear()
 
 
@@ -98,13 +98,13 @@ def find_or_generate_requirements(
 
         if result.returncode != 0:
             logger.warning(
-                "pip_deps: export command exited rc=%d — skipping",
+                "pip_deps: export command exited rc=%d; skipping",
                 result.returncode,
             )
             return None
 
         if not result.stdout.strip():
-            logger.warning("pip_deps: export command produced no output — skipping")
+            logger.warning("pip_deps: export command produced no output; skipping")
             return None
 
         dest = root / out_file
@@ -112,18 +112,18 @@ def find_or_generate_requirements(
         logger.info("pip_deps: wrote %r", str(dest))
         return str(dest)
 
-    # 1 — requirements.txt already present
+    # 1. requirements.txt already present
     if _exists("requirements.txt"):
         logger.debug("pip_deps: using existing requirements.txt in %r", repo_path)
         return str(root / "requirements.txt")
 
     if repo_path in _attempted:
-        logger.debug("pip_deps: export already attempted for %r — skipping", repo_path)
+        logger.debug("pip_deps: export already attempted for %r; skipping", repo_path)
         return None
 
     _attempted.add(repo_path)
 
-    # 2 — poetry.lock → poetry export
+    # 2. poetry.lock to poetry export
     if _exists("poetry.lock"):
         return _run(
             [
@@ -136,11 +136,11 @@ def find_or_generate_requirements(
             ".tally_requirements.txt",
         )
 
-    # 3 — Pipfile.lock → pipenv requirements
+    # 3. Pipfile.lock to pipenv requirements
     if _exists("Pipfile.lock"):
         return _run(["pipenv", "requirements"], ".tally_requirements.txt")
 
-    # 4 — pyproject.toml / setup.py / setup.cfg → pip freeze
+    # 4. pyproject.toml, setup.py, or setup.cfg to pip freeze
     for marker in ("pyproject.toml", "setup.py", "setup.cfg"):
         if _exists(marker):
             return _run(

@@ -48,6 +48,6 @@ class TestCreateRun:
         run_id = repo.create_run({"tool": "semgrep", "version": "1.0"})
         with factory.connect() as conn:
             row = conn.execute(
-                "SELECT args FROM runs WHERE id = ?", (run_id,)
+                "SELECT args FROM scan_runs WHERE id = ?", (run_id,)
             ).fetchone()
         assert json.loads(row["args"]) == {"tool": "semgrep", "version": "1.0"}

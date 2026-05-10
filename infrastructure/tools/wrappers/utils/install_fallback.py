@@ -6,12 +6,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Keys: (tool_name, repo_path) — prevents retry within a single session.
 _attempted: set[tuple[str, str]] = set()
 
 
 def reset_attempted() -> None:
-    """Clear the dedup set — intended for use in tests only."""
+    """Clear the dedup set for use in tests only."""
     _attempted.clear()
 
 
@@ -23,22 +22,7 @@ def ensure_lockfile(
     container_name: str = "",
     timeout: int = 120,
 ) -> bool:
-    """Ensure a lockfile exists, attempting to generate it if absent.
-
-    Returns True if the lockfile is present (before or after generation).
-    Returns False if the file is missing and generation failed or was
-    already attempted this session.
-
-    Args:
-        tool_name: Short name used in log messages and dedup key.
-        repo_path: Absolute path to the repository root (local or
-            in-container path for docker mode).
-        lockfile_name: Filename to check for (e.g. ``package-lock.json``).
-        install_cmd: Command list to run in order to generate the file.
-        container_name: If non-empty, run the command via
-            ``docker exec -w <repo_path> <container> <cmd>``.
-        timeout: Seconds before the install command is killed.
-    """
+    """Generate *lockfile_name* if absent; return whether it exists."""
 
     def _file_exists() -> bool:
         if container_name:
@@ -60,7 +44,7 @@ def ensure_lockfile(
     key = (tool_name, repo_path)
     if key in _attempted:
         logger.debug(
-            "%s: install already attempted for %r — skipping",
+            "%s: install already attempted for %r; skipping",
             tool_name,
             repo_path,
         )
@@ -68,7 +52,7 @@ def ensure_lockfile(
 
     _attempted.add(key)
     logger.info(
-        "%s: %r not found in %r — attempting: %s",
+        "%s: %r not found in %r; attempting: %s",
         tool_name,
         lockfile_name,
         repo_path,
@@ -101,7 +85,7 @@ def ensure_lockfile(
             )
     except Exception as exc:
         logger.warning(
-            "%s: install command raised an exception: %s — scan will be skipped",
+            "%s: install command raised an exception: %s; scan will be skipped",
             tool_name,
             exc,
         )
@@ -114,7 +98,7 @@ def ensure_lockfile(
 
     if result.returncode != 0:
         logger.warning(
-            "%s: install command exited with rc=%d — scan will be skipped",
+            "%s: install command exited with rc=%d; scan will be skipped",
             tool_name,
             result.returncode,
         )
@@ -123,8 +107,8 @@ def ensure_lockfile(
     # Verify the file was actually created.
     if not _file_exists():
         logger.warning(
-            "%s: install succeeded (rc=0) but %r still not found in %r "
-            "— scan will be skipped",
+            "%s: install succeeded (rc=0) but %r still not found in %r; "
+            "scan will be skipped",
             tool_name,
             lockfile_name,
             repo_path,

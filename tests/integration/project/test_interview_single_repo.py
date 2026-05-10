@@ -30,8 +30,14 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _make_pm(base_path: Path) -> ProjectManager:
+    from infrastructure.store.connection import ConnectionFactory
+
     _write_global_config(base_path)
-    return ProjectManager(base_path=str(base_path))
+
+    def schema_init(db_path):
+        ConnectionFactory(db_path).init_schema()
+
+    return ProjectManager(base_path=str(base_path), schema_initializer=schema_init)
 
 
 class TestInterviewSingleRepo:
@@ -40,8 +46,8 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        # inputs: name, type, mode, path, languages, dependencies_file, base_urls,
-        #         test_dirs, ignore_dirs
+        # Inputs: name, type, mode, path, languages, dependencies_file,
+        # base_urls, test_dirs, ignore_dirs, endpoint_file, auth
         inputs = [
             "my-repo",
             "api",
@@ -53,9 +59,12 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",
+            "",
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.path == str(repo_dir)
         assert repo.docker_path == ""
@@ -79,9 +88,12 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.docker_path == "/mnt/repo"
         assert repo.container_name == "my-container"
@@ -104,9 +116,12 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.docker_path == ""
 
@@ -127,9 +142,12 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.path == str(repo_dir)
 
@@ -151,9 +169,12 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.test_dirs == ["tests"]
         assert repo.ignore_dirs == []
@@ -176,9 +197,12 @@ class TestInterviewSingleRepo:
             "spec, e2e",
             "",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.test_dirs == ["spec", "e2e"]
         assert repo.ignore_dirs == []
@@ -199,9 +223,12 @@ class TestInterviewSingleRepo:
             "",
             "",
             "",
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.test_dirs == []
 
@@ -222,9 +249,12 @@ class TestInterviewSingleRepo:
             "",
             "vendor, node_modules",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.ignore_dirs == ["vendor", "node_modules"]
 
@@ -245,9 +275,12 @@ class TestInterviewSingleRepo:
             "tests",
             "vendor, mocks",
             "",  # endpoint file
+            "",  # auth
         ]
         with patch("builtins.input", side_effect=inputs):
-            repo = wizard._interview_single_repo(1)
+            result = wizard._interview_single_repo(1)
+            assert result is not None
+            repo, _pending = result
         assert repo is not None
         assert repo.test_dirs == ["tests"]
         assert repo.ignore_dirs == ["vendor", "mocks"]
