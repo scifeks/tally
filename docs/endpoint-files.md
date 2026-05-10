@@ -2,23 +2,23 @@
 
 When adding or editing a repository, you can supply an existing API endpoint
 definition file. When configured, Tally uses that file to guide the ZAP DAST
-scanner instead of running Noir to discover endpoints automatically.
+scanner rather than running Noir to discover endpoints automatically.
 
 ## Why it exists
 
 Noir works best for source code analysis. When an endpoint file already exists
-— for example, an OAS3 spec maintained alongside the API — using it directly
+(for example, an OAS3 spec maintained alongside the API), using it directly
 gives more accurate and complete ZAP coverage than static analysis.
 
 ## Supported formats
 
 | Format | Extensions | Conversion required |
 |---|---|---|
-| OAS3 (OpenAPI 3.x) | `.json`, `.yaml` | No — used directly |
-| OAS2 / Swagger 2.0 | `.json`, `.yaml` | Yes — via `swagger2openapi` (npm) |
-| Postman Collection v2.0 / v2.1 | `.json` | Yes — via `postman-to-openapi` (npm) |
-| HAR (HTTP Archive) | `.har` | Yes — built-in Python converter |
-| Katana JSONL | `.jsonl` | Yes — built-in Python converter |
+| OAS3 (OpenAPI 3.x) | `.json`, `.yaml` | No, used directly |
+| OAS2 / Swagger 2.0 | `.json`, `.yaml` | Yes, via `swagger2openapi` (npm) |
+| Postman Collection v2.0 / v2.1 | `.json` | Yes, via `postman-to-openapi` (npm) |
+| HAR (HTTP Archive) | `.har` | Yes, built-in Python converter |
+| Katana JSONL | `.jsonl` | Yes, built-in Python converter |
 
 ---
 
@@ -63,7 +63,7 @@ When editing a repository that already has an endpoint file configured:
 ```
 
 Answering `y` deletes the existing converted file and its stored original,
-then shows:
+and shows:
 
 ```
   Warning: when an endpoint file is configured, Noir is skipped and ZAP relies entirely on that file. ZAP results will be less accurate if the file is incomplete.
@@ -106,7 +106,7 @@ skipped (endpoint file configured)
 
 **ZAP uses the configured endpoint file** instead of looking for Noir output.
 When `oas3_path` is set, ZAP imports the spec via `-openapifile` and
-`-openapitargeturl` automatically — no separate Noir run is needed.
+`-openapitargeturl` automatically. No separate Noir run is needed.
 
 **The "run Noir first" prompt is not shown** when you run `scan --tool=zap`
 for a repository that has an endpoint file configured.

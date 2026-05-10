@@ -12,7 +12,7 @@ The endpoint file feature converts API specification files from various formats
 into OAS3 (OpenAPI 3.x) so that ZAP can import them via `-openapifile`. The
 adapter pattern was chosen because each format has independent detection logic,
 validation requirements, and conversion tooling. Adding a new format requires
-no changes to any existing adapter — only new files and small additions to
+no changes to any existing adapter, only new files and small additions to
 the detector and service.
 
 ### Code location
@@ -74,22 +74,22 @@ class ConverterAdapter(ABC):
         """
 ```
 
-**`supported_extensions`** — the set of file extensions this adapter handles
+**`supported_extensions`** is the set of file extensions this adapter handles
 (e.g. `frozenset({".json", ".yaml", ".yml"})`). Used for documentation
 purposes; actual format detection is done by `FormatDetector`, not by
 extension matching.
 
-**`validate(path)`** — must raise `ConverterError` with a human-readable
+**`validate(path)`** must raise `ConverterError` with a human-readable
 message if the file is structurally invalid for this format. Must not
 perform conversion. Called before `convert()`.
 
-**`convert(source, output_dir)`** — must write one file inside `output_dir`
+**`convert(source, output_dir)`** must write one file inside `output_dir`
 and return its `Path`. Must raise `ConverterError` on any failure. The caller
 creates `output_dir` before calling `convert()`.
 
 ---
 
-## Adding a new format — step by step
+## Adding a new format
 
 ### 1. Create the adapter module
 
@@ -99,7 +99,7 @@ only lowercase letters and underscores (no hyphens).
 Subclass `ConverterAdapter` and implement the three members:
 
 ```python
-"""<Format> adapter — converts <format> files to OAS3."""
+"""<Format> adapter: converts <format> files to OAS3."""
 
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ class <Format>Adapter(ConverterAdapter):
 ### 2. Register the format in FormatDetector
 
 Open `infrastructure/endpoints/converters/detector.py` and add a detection
-branch in `FormatDetector.detect()`. Detection order matters — add the new
+branch in `FormatDetector.detect()`. Detection order matters, so add the new
 branch before the final `raise ConverterError(...)` block:
 
 ```python
@@ -186,8 +186,8 @@ Add the new format to the Supported formats table in
 pattern they follow:
 
 1. Check that `node` and `npx` are on `PATH` using `shutil.which()`. If
-   either is missing, raise `ConverterError` with an install hint immediately
-   — do not attempt to run the subprocess.
+   either is missing, raise `ConverterError` with an install hint immediately.
+   Do not attempt to run the subprocess.
 
 2. Run the tool via `subprocess.run()` with `capture_output=True` and
    `check=False` so that a non-zero exit code does not raise an exception:

@@ -13,24 +13,19 @@ This file must exist before Tally starts. If it is missing or invalid, Tally exi
 
 ### LLM Provider System
 
-Tally uses a two-layer provider configuration system. **Provider configs** define
-connection profiles (Ollama, Llama.cpp, or Claude), and **feature configs** reference
-a provider and optionally override settings per feature.
+Tally uses a two-layer provider configuration system. Provider configs define connection profiles for Ollama, Llama.cpp, or Claude. Feature configs reference a provider and optionally override settings per feature.
 
 Each of five inference features can use a different provider independently:
 
 | Feature config | Used by |
 |---|---|
-| `chat_inference` | The `chat` REPL command |
+| `chat_inference` | Chat over findings in the REPL and web UI |
 | `enrichment_inference` | Finding enrichment during ingest |
 | `report_inference` | The `report` command |
 | `embedding_inference` | ChromaDB vector embeddings |
 | `noir_inference` | NOIR security API |
 
-Triage uses the same feature-inference pattern through `triage_inference`.
-The `provider` field selects which provider block supplies the base URL and
-default model; optional overrides (e.g. `model`) work the same way as for
-other features.
+Triage uses the same feature-inference pattern through `triage_inference`. The `provider` field selects which provider block supplies the base URL and default model. Optional overrides like `model` work the same way as for other features.
 
 ### Top-level Fields
 
@@ -39,7 +34,7 @@ other features.
 | `ollama` | object | Ollama provider config. Connection profile for local or remote Ollama instances. See [Provider Config Fields](#provider-config-fields). |
 | `llama_cpp` | object | Llama.cpp provider config. Connection profile for Llama.cpp servers. See [Provider Config Fields](#provider-config-fields). |
 | `claude` | object | Claude provider config. Anthropic API settings. Required when any feature references `"claude"`. See [Claude Provider Fields](#claude-provider-fields). |
-| `chat_inference` | object | Feature config for the `chat` REPL command. See [Feature Config Fields](#feature-config-fields). |
+| `chat_inference` | object | Chat over findings in the REPL and web UI. See [Feature Config Fields](#feature-config-fields). |
 | `enrichment_inference` | object | Feature config for finding enrichment during ingest. See [Feature Config Fields](#feature-config-fields). |
 | `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
@@ -49,7 +44,7 @@ other features.
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
 | `enrichment_max_concurrency` | int | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). Default: `4`. |
-| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected — use an explicit loopback or LAN IP. |
+| `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected. Use an explicit loopback or LAN IP. |
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
 | `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
@@ -63,7 +58,7 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `base_url` | string | `"http://localhost:11434"` (ollama only) | Server endpoint. Must start with `http://` or `https://`. |
-| `model` | string | — | Model name (e.g. `qwen3:14b`). Required. Must be available on the server before use. |
+| `model` | string | (required) | Model name (e.g. `qwen3:14b`). Required. Must be available on the server before use. |
 | `timeout_seconds` | int | `60` | Request timeout in seconds for LLM calls. |
 | `num_ctx` | int or null | `null` | Context window size. Pass `null` to use the model's default. |
 
@@ -88,7 +83,7 @@ feature config schema:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `provider` | string | — | Name of a provider config block: `"ollama"`, `"llama_cpp"`, or `"claude"`. Required. |
+| `provider` | string | (required) | Name of a provider config block: `"ollama"`, `"llama_cpp"`, or `"claude"`. Required. |
 | `model` | string or null | `null` | Overrides the provider's model for this feature only. If `null`, uses the provider's model. |
 | `timeout_seconds` | int or null | `null` | Overrides the provider's timeout in seconds. Must be positive if set. If `null`, uses the provider's timeout. |
 | `num_ctx` | int or null | `null` | Overrides the provider's context window (local providers only). Must be positive if set. If `null`, uses the provider's value. |
@@ -133,8 +128,6 @@ feature config schema:
 
 ### Example: Claude for Chat and Reporting, Ollama for Enrichment and Embeddings
 
-Each feature can use a different provider independently:
-
 ```json
 {
   "ollama": {
@@ -167,8 +160,7 @@ Each feature can use a different provider independently:
 }
 ```
 
-With `api_key` left empty, Tally reads the key from the `ANTHROPIC_API_KEY`
-environment variable at startup.
+Leave `api_key` empty to have Tally read the key from the `ANTHROPIC_API_KEY` environment variable at startup.
 
 ### Example: Enable Claude Code Triage
 
@@ -190,9 +182,7 @@ See [docs/triage.md](triage.md) for setup details and the full security model.
 }
 ```
 
-With `api_key` left empty, Tally uses the `ANTHROPIC_API_KEY` environment
-variable for LLM API calls and falls back to OAuth file mounts for triage
-container authentication.
+Leave `api_key` empty for Tally to use the `ANTHROPIC_API_KEY` environment variable for LLM API calls and fall back to OAuth file mounts for triage container authentication.
 
 ### Example: Enable Local Model Triage
 
@@ -215,16 +205,9 @@ override the model. See [docs/triage.md](triage.md) for setup details.
 
 ### Enrichment Concurrency
 
-After a scan completes, Tally enriches each finding by calling the configured LLM
-to produce fields such as `severity`, `risk_type`, `remediation`, and `description`.
-By default these calls are dispatched concurrently using a thread pool with up to
-`enrichment_max_concurrency` (default: `4`) workers.
+After a scan completes, Tally enriches each finding by calling the configured LLM to produce fields like `severity`, `risk_type`, `remediation`, and `description`. By default, these calls are dispatched concurrently using a thread pool with up to `enrichment_max_concurrency` (default: `4`) workers.
 
-**Important:** when using the `ollama` provider for enrichment, sending concurrent
-requests only reduces wall-clock time if your Ollama instance is configured to
-process them in parallel. Ollama's default is one request at a time. Set the
-`OLLAMA_NUM_PARALLEL` environment variable before starting Ollama to enable
-parallel slots:
+When using the `ollama` provider for enrichment, sending concurrent requests only reduces wall-clock time if your Ollama instance is configured to process them in parallel. Ollama's default is one request at a time. Set the `OLLAMA_NUM_PARALLEL` environment variable before starting Ollama to enable parallel slots:
 
 ```bash
 OLLAMA_NUM_PARALLEL=2 ollama serve
@@ -234,10 +217,7 @@ OLLAMA_NUM_PARALLEL=2 ollama serve
 `OLLAMA_NUM_PARALLEL` so that workers are never idle waiting for a free slot.
 Setting it higher than `OLLAMA_NUM_PARALLEL` has no additional benefit.
 
-Keep VRAM headroom in mind when choosing a parallel slot count. Each active slot
-holds an independent KV cache for the model. As a rough guide, if your model
-occupies X GB at rest, each additional parallel slot adds roughly 10–20% of that
-in KV cache overhead at typical enrichment prompt lengths.
+Keep VRAM headroom in mind when choosing a parallel slot count. Each active slot holds an independent KV cache for the model. As a rough guide, if your model occupies X GB at rest, each additional parallel slot adds roughly 10-20% of that in KV cache overhead at typical enrichment prompt lengths.
 
 ### Example: Ollama on a Remote Host
 
@@ -274,14 +254,14 @@ on a different host or port:
 
 ## Project Configuration
 
-Each project lives under `projects/<project-name>/`. All project config files are created and managed by Tally. You can edit them manually but Tally will overwrite them on the next write operation.
+Each project lives under `projects/<project-name>/`. All project config files are created and managed by Tally. You can edit them manually, but Tally will overwrite them on the next write operation.
 
 ### project.json
 
 **File:** `projects/<name>/config/project.json`
-**Created:** When `new-project` is run.
+**Created:** When `project add` is run.
 
-Stores project metadata. The `repositories` list is kept in sync with `repositories.json`. Do not edit it here directly.
+Stores project metadata. The `repositories` list is kept in sync with `repositories.json`. Do not edit the list directly in this file.
 
 #### Fields
 
@@ -374,7 +354,7 @@ Configures API endpoint details for ZAP scanning of a specific repository. If th
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `format_version` | string | no | `"1.0"` | Config format version. |
-| `repo_name` | string | yes | — | Must match the repository name in `repositories.json`. |
+| `repo_name` | string | yes | (required) | Must match the repository name in `repositories.json`. |
 | `api_type` | string | no | `"rest"` | API type: `rest` or `graphql`. |
 | `endpoints` | object | no | `{}` | HTTP methods mapped to lists of endpoint paths. |
 

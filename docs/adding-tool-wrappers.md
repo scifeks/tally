@@ -1,15 +1,15 @@
 # Adding a New Tool Wrapper
 
-This guide walks through integrating a new security scanner into tally. After following it
-you will have a tool that:
+This guide walks you through integrating a new security scanner into tally. After
+following it, you will have a tool that:
 
 - Runs automatically in the appropriate scan segment (`scan`, `scan --domain=sast`, etc.)
 - Has its findings ingested into ChromaDB and SQLite for `search` and `chat`
 - Appears in `tool list` and `tool add` setup
 
 > **Required:** After writing the wrapper files you must register the tool in
-> `config/commands.json` (Step 5). The wrapper files alone are not enough —
-> tally only loads tools that appear in that file.
+> `config/commands.json` (Step 5). The wrapper files alone are not enough.
+> Tally only loads tools that appear in that file.
 
 ---
 
@@ -19,7 +19,7 @@ Each tool integration consists of up to four files:
 
 ```
 infrastructure/tools/wrappers/
-  base/<tool_name>.py          # Abstract base: behaviour shared by local + docker
+  base/<tool_name>.py          # Abstract base: behavior shared by local + docker
   local/<tool_name>.py         # Concrete local wrapper (runs binary on host)
   docker/<tool_name>.py        # Concrete docker wrapper (runs inside container)
 
@@ -35,7 +35,7 @@ The auto-discovery system converts underscores back to hyphens for the tool name
 
 On startup `discover_tools()` reads `config/commands.json`. For each configured tool it
 imports `infrastructure.tools.wrappers.<location>.<stem>` and instantiates the wrapper
-class, then registers it in `tool_registry`. No manual registration needed.
+class, then registers it in `tool_registry`. Manual registration is not needed.
 
 `ToolHandlerFactory.load(tool_name)` imports `infrastructure.tools.parsers.<stem>` and
 finds the class whose `tool_name` attribute matches. This single file handles SQLite
@@ -44,9 +44,9 @@ ingestion (`normalize`), ChromaDB rendering (`render`), and deduplication
 
 ---
 
-## Step 1 — Base class
+## Step 1: Base class
 
-`infrastructure/tools/wrappers/base/<tool_name>.py` defines all tool-level behaviour
+`infrastructure/tools/wrappers/base/<tool_name>.py` defines all tool-level behavior
 shared by local and Docker wrappers.
 
 ```python
@@ -137,7 +137,7 @@ class Base<ToolName>Tool(ToolInterface):
 
 ---
 
-## Step 2 — Local wrapper
+## Step 2: Local wrapper
 
 ```python
 """<tool-name> local wrapper."""
@@ -174,7 +174,7 @@ class <ToolName>LocalTool(Base<ToolName>Tool):
 
 ---
 
-## Step 3 — Docker wrapper
+## Step 3: Docker wrapper
 
 ```python
 """<tool-name> docker wrapper."""
@@ -215,7 +215,7 @@ class <ToolName>DockerTool(Base<ToolName>Tool):
 
 ---
 
-## Step 4 — Parser + Handler
+## Step 4: Parser + Handler
 
 `infrastructure/tools/parsers/<tool_name>.py` is a **single file** containing both the
 output parser functions and the `ToolHandler` class. The handler is the only file the
@@ -361,9 +361,9 @@ class <ToolName>Handler:
 **`fingerprint_key(finding)`** must return a stable string that uniquely identifies a
 finding. Findings with the same key are treated as duplicates on re-scan.
 
-### Severity normalisation
+### Severity normalization
 
-Normalise early in the parser so downstream code never sees `"HIGH"` or `"CRITICAL"`:
+Normalize early in the parser so downstream code never sees `"HIGH"` or `"CRITICAL"`:
 
 ```python
 _SEVERITY_MAP = {
@@ -387,7 +387,7 @@ The `count_findings` method in the base class must read whichever key you use.
 ### SCA shortcut
 
 If your tool outputs `parsed_data["vulnerabilities"]` with the standard SCA fields,
-delegate to the shared helpers in `_sca_shared.py`:
+use the shared helpers in `_sca_shared.py`:
 
 ```python
 from domain.tools.base import ToolResult
@@ -429,7 +429,7 @@ class GrypeHandler:
 
 ---
 
-## Step 5 — Register in `commands.json`
+## Step 5: Register in `commands.json`
 
 Either run `tool add` in the REPL or write the entry manually:
 
@@ -456,7 +456,7 @@ Either run `tool add` in the REPL or write the entry manually:
 
 ---
 
-## Step 6 — Verify
+## Step 6: Verify
 
 ### Handler is discovered
 
