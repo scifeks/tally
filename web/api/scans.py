@@ -1,20 +1,5 @@
-"""Scan endpoints (config, start, history, detail, cancel, SSE,
-progress).
-
-Endpoint surface (all project-scoped):
-
-- ``GET    /api/v1/projects/{project_id}/scans/config``
-- ``GET    /api/v1/projects/{project_id}/scans``               (history list)
-- ``POST   /api/v1/projects/{project_id}/scans``               (start scan)
-- ``GET    /api/v1/projects/{project_id}/scans/events``        (SSE)
-- ``POST   /api/v1/projects/{project_id}/scans/cancel-all``
-- ``GET    /api/v1/projects/{project_id}/scans/{run_id}``      (detail)
-- ``GET    /api/v1/projects/{project_id}/scans/{run_id}/progress``
-- ``POST   /api/v1/projects/{project_id}/scans/{run_id}/cancel``
-
-Literal-segment routes are decorated before parameterized routes so
-Starlette doesn't shadow them.
-"""
+"""Scan lifecycle endpoints: config, start, history, detail,
+cancel, and SSE event stream."""
 
 from __future__ import annotations
 
@@ -27,6 +12,8 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
+from application.events.ids import new_event_id
+from application.events.types import EOS, BusEvent
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.scans.scans_service import (
@@ -42,22 +29,13 @@ from domain.scans.entry import ScanRunRow, ToolRunRow
 from domain.tools.scan_types import SEGMENT_ORDER
 from factories.persistence import (
     ProjectNotFound,
+    create_arg_profiles_repo,
     create_finding_repo,
+    create_overrides_repo,
     create_repo_repo,
+    create_scan_repos,
     create_scans_service,
     create_url_finding_repo,
-)
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.sse import format_sse_frame
-from infrastructure.events.types import EOS, BusEvent
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
-from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.tool_arg_profiles import (
-    ToolArgProfilesRepository,
-)
-from infrastructure.store.repositories.tool_overrides import (
-    ToolOverridesRepository,
 )
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
@@ -85,6 +63,7 @@ from web.api.schemas import (
     ToolRunItem,
     ToolRunsSummary,
 )
+from web.sse import format_sse_frame
 
 logger = logging.getLogger("tally.web.scans")
 
@@ -174,7 +153,8 @@ async def get_scans_config(
     project_id: int,
     request: Request,
 ) -> ScanConfigResponse:
-    """Return the inputs the SPA needs to compose a scan-start request."""
+    """Return the inputs the SPA needs to compose a scan start
+    request."""
     row = _resolve_project(request, project_id)
 
     base_path: str = request.app.state.base_path
@@ -182,8 +162,7 @@ async def get_scans_config(
     tool_registry = request.app.state.tool_registry
 
     paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    overrides_repo = ToolOverridesRepository(factory)
+    overrides_repo = create_overrides_repo(paths.findings_db)
     discover_tools(
         tool_registry,
         base_path,
@@ -233,13 +212,8 @@ async def scans_events(
     request: Request,
     run_id: int | None = Query(default=None),
 ) -> StreamingResponse:
-    """SSE stream emitting scan lifecycle events for this project.
-
-    Filters live events by ``project_id`` (always, from the path) and
-    optionally ``run_id``. On connect emits a ``snapshot`` event built
-    from the current ``scan_runs`` row(s) so the SPA can sync without
-    waiting for the next live tick.
-    """
+    """SSE stream for scan lifecycle events, with snapshot on connect
+    to sync client state immediately."""
     service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("scan")
@@ -345,8 +319,7 @@ async def start_scan(
     tool_registry = request.app.state.tool_registry
 
     paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    overrides_repo = ToolOverridesRepository(factory)
+    overrides_repo = create_overrides_repo(paths.findings_db)
     discover_tools(
         tool_registry,
         base_path,
@@ -358,7 +331,7 @@ async def start_scan(
         request.app.state.project_registry,
         request.app.state.base_path,
     )
-    profiles_repo = ToolArgProfilesRepository(factory)
+    profiles_repo = create_arg_profiles_repo(paths.findings_db)
     service = _service(request, project_id)
 
     try:
@@ -380,8 +353,7 @@ async def start_scan(
         ) from exc
 
     sink = EventBusScanSink(request.app.state.event_bus)
-    run_repo = RunRepository(factory)
-    chat_session_repo = ChatSessionRepository(factory)
+    run_repo, chat_session_repo, _, _ = create_scan_repos(paths.findings_db)
     finding_repo = create_finding_repo(paths.findings_db)
     repo_repo = create_repo_repo(paths.findings_db)
     url_finding_repo = create_url_finding_repo(paths.findings_db)
@@ -526,9 +498,8 @@ async def _build_snapshot(
     else:
         active_handles = service.list_active_runs()
         payload["active_run_ids"] = [h.run_id for h in active_handles]
-        # Sibling field carrying the most recent (repo, tool) per active
-        # run so a mid-scan SSE subscriber can render the live label
-        # immediately instead of waiting for the next tool_started event.
+        # Payload includes current (repo, tool) for each active run so
+        # late subscribers can render the live label immediately.
         payload["active_runs"] = [
             {
                 "run_id": h.run_id,

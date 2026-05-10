@@ -1,8 +1,7 @@
 """Persistence factory functions for application service construction.
 
-Centralizes all SQLite/repository construction so the application layer
-never imports from ``infrastructure.store``. Driving adapters (REPL
-commands, web routes, composition roots) call these factories.
+Centralizes SQLite/repository construction to decouple the application
+layer from infrastructure store details.
 """
 
 from __future__ import annotations
@@ -32,6 +31,9 @@ from infrastructure.store.repositories.repositories import (
     RepositoryRepository,
 )
 from infrastructure.store.repositories.runs import RunRepository
+from infrastructure.store.repositories.saved_scans import (
+    SavedScansRepository,
+)
 from infrastructure.store.repositories.tool_arg_profiles import (
     ToolArgProfilesRepository,
 )
@@ -62,6 +64,9 @@ if TYPE_CHECKING:
         ProjectRepoRepositoryPort,
     )
     from application.ports.run_repository import RunRepositoryPort
+    from application.ports.saved_scans import (
+        SavedScansRepositoryPort,
+    )
     from application.ports.tool_arg_profiles import (
         ToolArgProfilesRepositoryPort,
     )
@@ -202,6 +207,13 @@ def create_arg_profiles_repo(
     return ToolArgProfilesRepository(_init_factory(db_path))
 
 
+def create_saved_scans_repo(
+    db_path: Path,
+) -> SavedScansRepositoryPort:
+    """Create a SavedScansRepository for the given DB."""
+    return SavedScansRepository(_init_factory(db_path))
+
+
 def create_scan_repos(
     db_path: Path,
 ) -> tuple[
@@ -224,7 +236,7 @@ def build_repo_factory(
     registry: ProjectRegistryService,
 ) -> Callable[[int], ProjectRepoRepositoryPort]:
     """Return a callable that creates a RepositoryRepository
-    for a given project_id. For ProjectRepositoriesService.
+    for a given project_id.
     """
 
     def _factory(project_id: int) -> ProjectRepoRepositoryPort:

@@ -24,15 +24,14 @@ from application.reporting.orchestrator import (
     run_report,
 )
 from factories.persistence import make_store
-from infrastructure.events.bus import EventBus
-from infrastructure.reporting.jinja2_template_renderer import Jinja2TemplateRenderer
-from infrastructure.reporting.weasyprint_pdf_renderer import WeasyPrintPdfRenderer
+from factories.reporting import create_pdf_renderer, create_template_renderer
 from web.adapters.event_bus_report_sink import EventBusReportSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.adapters.report_run_registry import ReportRunRegistry
 
 if TYPE_CHECKING:
     from application.ports.report_repository import ReportRepositoryPort
+    from infrastructure.events.bus import EventBus
 
 logger = logging.getLogger("tally.web.reports")
 
@@ -64,12 +63,7 @@ def start_report_thread(
     retention_count: int,
     lock_registry: LockRegistry | None = None,
 ) -> threading.Thread:
-    """Spawn a daemon worker thread to execute the report.
-
-    The caller has ALREADY acquired the LockRegistry "report" slot under
-    *holder_token*. The worker takes ownership and releases it in its
-    ``finally`` block.
-    """
+    """Spawn a daemon worker thread to execute the report."""
     cancel_token = CancellationToken()
     report_run_registry.register(
         report_id=report_id,
@@ -140,8 +134,8 @@ def _run_report(
             output = run_report(
                 orchestrator_request,
                 prompt=NoApprovalPromptAdapter(),
-                template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
-                pdf_renderer=WeasyPrintPdfRenderer(),
+                template_renderer=create_template_renderer(TEMPLATES_DIR),
+                pdf_renderer=create_pdf_renderer(),
                 event_sink=sink,
                 cancel_token=cancel_token,
                 finding_repo=finding_repo,

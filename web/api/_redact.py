@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import FastAPI
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from infrastructure.security.redaction import (
+from core.security.redaction import (
     REDACTED,
     SENSITIVE_HEADER_RE,
     SENSITIVE_KEYS,
@@ -35,13 +35,12 @@ __all__ = [
 
 
 def redact_exempt[F: Callable[..., Any]](func: F) -> F:
-    """Mark a GET/HEAD route handler as exempt from automatic redaction.
+    """Exempt a route from automatic redaction.
 
-    Apply only to routes whose response has been reviewed and is known
-    safe, OR whose response must echo a value that superficially matches
-    a sensitive-field pattern for legitimate reasons (e.g. a field-spec
-    catalog that lists "password" as a form-field name).
-    Every use must carry a one-line comment explaining why.
+    Use only for routes whose response has been reviewed for secrets,
+    or whose response must legitimately echo sensitive-pattern values
+    (e.g., a field-spec catalog listing "password" as a form-field name).
+    Document the exemption inline with a one-line comment.
     """
     setattr(func, "__redact_exempt__", True)
     return func

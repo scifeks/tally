@@ -1,16 +1,4 @@
-"""Triage endpoints (history, detail, dispatch, cancel, SSE).
-
-Endpoints:
-- GET  /api/v1/projects/{project_id}/triage (history)
-- GET  /api/v1/projects/{project_id}/triage/events (SSE)
-- POST /api/v1/projects/{project_id}/triage (start)
-- POST /api/v1/projects/{project_id}/triage/{scan_run_id}/cancel
-- GET  /api/v1/projects/{project_id}/triage/{scan_run_id} (detail)
-
-A triage run is identified by scan_run_id. The runner picks the latest
-scan_runs row for the project and writes triage_batches keyed by that id.
-Route ordering: literal-segment routes registered before parameterized.
-"""
+"""Triage endpoints: history, SSE stream, dispatch, cancel, and detail."""
 
 from __future__ import annotations
 
@@ -23,6 +11,8 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
+from application.events.ids import new_event_id
+from application.events.types import EOS, BusEvent
 from application.locking import JobBusy
 from application.triage.run_registry import get_triage_run_registry
 from application.triage.runner import NoScanRunError
@@ -33,9 +23,6 @@ from application.triage.triage_service import (
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 from factories.persistence import ProjectNotFound, create_triage_service
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.sse import format_sse_frame
-from infrastructure.events.types import EOS, BusEvent
 from web.adapters.event_bus_triage_sink import EventBusTriageSink
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
@@ -47,6 +34,7 @@ from web.api.schemas import (
     TriagesListResponse,
     TriageStartRequest,
 )
+from web.sse import format_sse_frame
 
 logger = logging.getLogger("tally.web.triage")
 

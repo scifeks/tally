@@ -1,7 +1,3 @@
-from __future__ import annotations
+from application.events.ids import new_event_id
 
-import uuid
-
-
-def new_event_id() -> str:
-    return uuid.uuid4().hex
+__all__ = ["new_event_id"]

@@ -1,20 +1,4 @@
-"""Chat session endpoints.
-
-Endpoint surface:
-
-- ``POST   /api/v1/projects/{project_id}/chat/sessions``
-- ``GET    /api/v1/projects/{project_id}/chat/sessions``
-- ``DELETE /api/v1/projects/{project_id}/chat/sessions/{session_id}``
-- ``GET    /api/v1/projects/{project_id}/chat/sessions/{session_id}/messages``
-- ``POST   /api/v1/projects/{project_id}/chat/sessions/{session_id}/messages``
-- ``GET    /api/v1/projects/{project_id}/chat/stream`` (SSE)
-- ``POST   /api/v1/projects/{project_id}/chat/sessions/{session_id}/cancel``
-
-Routes resolve a ``ChatSessionService`` per request and call the service
-for all persistence and orchestration work. The send route hands the
-service the inputs it needs to build the per-turn composer and spawn the
-streaming task; the cancel route asks the service to cancel.
-"""
+"""Chat session endpoints."""
 
 from __future__ import annotations
 
@@ -35,14 +19,13 @@ from application.chat.service import (
 )
 from application.chat.session_service import ChatSessionService
 from application.chat.stream_composer import RagUnavailable
+from application.events.ids import new_event_id
+from application.events.types import EOS, BusEvent
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
 from factories.persistence import (
     ProjectNotFound,
     create_chat_session_service,
 )
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.sse import format_sse_frame
-from infrastructure.events.types import EOS, BusEvent
 from web.adapters.event_bus_chat_sink import EventBusChatSink
 from web.api._errors import Conflict, NotFound, ValidationError
 from web.api.schemas import (
@@ -55,6 +38,7 @@ from web.api.schemas import (
     ChatSessionsListResponse,
     ChatSessionSummary,
 )
+from web.sse import format_sse_frame
 
 logger = logging.getLogger("tally.web.chat")
 
@@ -62,7 +46,7 @@ v1_router = APIRouter()
 
 
 def _service(request: Request, project_id: int) -> ChatSessionService:
-    """Build a ChatSessionService for *project_id* or raise 404."""
+    """Resolve the service for project_id, raising 404 if not found."""
     try:
         return create_chat_session_service(
             request.app.state.project_registry, project_id
@@ -88,7 +72,7 @@ def _row_to_summary(
 
 
 def _format_title(now: datetime) -> str:
-    """Render the session auto-title as ``YYYY-MM-DD HH:MM``."""
+    """Format timestamp as session title."""
     return now.strftime("%Y-%m-%d %H:%M")
 
 
@@ -109,11 +93,7 @@ def _build_chat_snapshot(
     project_id: int,
     session_id: int,
 ) -> BusEvent:
-    """On-connect SSE snapshot exposing in-flight stream identifiers.
-
-    Includes ``active`` so the SPA can decide whether to wait for tokens
-    or render the empty state.
-    """
+    """Build SSE snapshot with stream state for client reconnect."""
     handle = service.peek_active_stream(session_id)
     payload: dict[str, Any] = {
         "project_id": project_id,
@@ -142,11 +122,7 @@ async def create_chat_session(
     request: Request,
     body: ChatSessionCreateRequest | None = None,
 ) -> ChatSessionSummary:
-    """Create a chat session for *project_id*.
-
-    Empty request body in v1; the title is auto-set to the current
-    UTC ``YYYY-MM-DD HH:MM`` timestamp.
-    """
+    """Create a chat session with auto-generated title."""
     del body  # accepted for API symmetry; no fields consumed in v1
     service = _service(request, project_id)
     title = _format_title(datetime.now(UTC))
@@ -171,12 +147,7 @@ async def list_chat_sessions(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> ChatSessionsListResponse:
-    """Paginated chat sessions for a project, newest-first.
-
-    Returns one combined list (``items``) covering both active and
-    expired sessions; ``expired_at`` distinguishes them so the UI can
-    group. Defaults match the findings list (50 / 500).
-    """
+    """List active and expired sessions, newest first."""
     service = _service(request, project_id)
     page, total = await asyncio.to_thread(
         service.list_sessions,
@@ -205,11 +176,7 @@ async def list_chat_messages(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> ChatMessagesListResponse:
-    """Paginated messages for a chat session, oldest-first.
-
-    Works for both active and expired (sealed) sessions. ``citations``
-    is always ``None`` in v1.
-    """
+    """List messages for a session, oldest first."""
     service = _service(request, project_id)
     try:
         await asyncio.to_thread(service.get_session_or_raise, session_id, project_id)
@@ -239,7 +206,7 @@ async def delete_chat_session(
     session_id: int,
     request: Request,
 ) -> None:
-    """Hard-delete a chat session (cascades to all messages via FK)."""
+    """Delete a chat session and cascade delete all messages."""
     service = _service(request, project_id)
     try:
         await asyncio.to_thread(service.delete_session, session_id, project_id)
@@ -258,20 +225,7 @@ async def send_chat_message(
     request: Request,
     body: ChatMessageSendRequest,
 ) -> ChatMessageSendResponse:
-    """Persist the user turn and start the streamed assistant response.
-
-    Returns 202 immediately with the SSE URL the SPA must subscribe to.
-    The assistant row is written write-once on clean stream end, so
-    ``assistant_message_id`` is ``None`` here; the final id arrives on
-    the ``stream_end`` SSE event's ``message_id`` field. Errors:
-
-    - 404: session not found or wrong project.
-    - 409 ``CHAT_SESSION_EXPIRED``: session has been sealed.
-    - 409 ``CHAT_STREAM_ALREADY_RUNNING``: another stream for this
-      session is in flight.
-    - 422 ``RAG_UNAVAILABLE``: per-project knowledge base cannot be
-      built (ChromaDB or embedding provider unreachable).
-    """
+    """Queue user message and start streamed assistant response."""
     service = _service(request, project_id)
     sink = EventBusChatSink(request.app.state.event_bus)
     try:
@@ -323,21 +277,7 @@ async def cancel_chat_stream(
     session_id: int,
     request: Request,
 ) -> ChatMessageCancelResponse:
-    """Cancel the in-flight assistant stream for *session_id*.
-
-    The chat-service generator's cancellation path emits
-    ``ChatStreamCancelled`` (projected to SSE as ``stream_cancelled``)
-    and does not persist the assistant turn. The driver's ``finally``
-    unregisters the handle so a follow-up POST is not blocked. Errors:
-
-    - 404: session not found or wrong project.
-    - 409 ``CHAT_NO_ACTIVE_STREAM``: no stream is currently in flight
-      for *session_id*.
-
-    ``cancelled_message_id`` is ``None`` in v1: the assistant id is
-    only assigned at ``stream_end``, after which there is nothing left
-    to cancel.
-    """
+    """Cancel in-flight assistant stream for a session."""
     service = _service(request, project_id)
     try:
         service.cancel_stream(session_id, project_id)
@@ -361,14 +301,7 @@ async def chat_stream(
     request: Request,
     session_id: int = Query(...),
 ) -> StreamingResponse:
-    """SSE stream emitting chat token / lifecycle events for *session_id*.
-
-    Filters delivered events by ``project_id`` + ``session_id`` so a
-    single connection only sees its own stream. Heartbeats every 15s
-    keep proxies from closing the connection while the model is
-    thinking. Client disconnect closes the SSE; it does not cancel the
-    underlying asyncio task. Explicit cancellation is the cancel route.
-    """
+    """Stream chat tokens and lifecycle events for a session."""
     service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("chat")

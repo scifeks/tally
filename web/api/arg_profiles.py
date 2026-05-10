@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query, Request, Response
 from starlette.datastructures import FormData, UploadFile
 
 from application.ports.arg_files_storage import ArgFileNameError
+from application.ports.saved_scans import SavedScansRepositoryPort
 from application.ports.tool_arg_profiles import ToolArgProfileNameConflict
 from application.tool_arg_profiles.service import (
     FileArgInput,
@@ -27,12 +28,11 @@ from domain.tool_arg_profiles.entry import (
     ToolArgProfileFlagArg,
     ToolArgProfileStringArg,
 )
-from infrastructure.storage.arg_files import ArgFilesStorageAdapter
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.saved_scans import SavedScansRepository
-from infrastructure.store.repositories.tool_arg_profiles import (
-    ToolArgProfilesRepository,
+from factories.persistence import (
+    create_arg_profiles_repo,
+    create_saved_scans_repo,
 )
+from factories.storage import create_arg_files_storage
 from web.api._errors import Conflict, NotFound, PathTraversal
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -55,14 +55,13 @@ arg_profiles_v1_router = APIRouter()
 
 def _build_service(
     request: Request, project_id: int
-) -> tuple[ToolArgProfilesService, SavedScansRepository, ProjectPaths]:
-    """Build service layer and return with saved scans repo and paths."""
+) -> tuple[ToolArgProfilesService, SavedScansRepositoryPort, ProjectPaths]:
+    """Construct service dependencies from the request context."""
     row = _resolve_project(request, project_id)
     paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    profiles_repo = ToolArgProfilesRepository(factory)
-    storage = ArgFilesStorageAdapter(paths.arg_files_dir)
-    saved_scans_repo = SavedScansRepository(factory)
+    profiles_repo = create_arg_profiles_repo(paths.findings_db)
+    storage = create_arg_files_storage(paths.arg_files_dir)
+    saved_scans_repo = create_saved_scans_repo(paths.findings_db)
     return (
         ToolArgProfilesService(profiles_repo, storage),
         saved_scans_repo,
@@ -71,7 +70,7 @@ def _build_service(
 
 
 def _build_download_url(project_id: int, profile_id: int, arg_name: str) -> str:
-    """Build the download URL for a file arg."""
+    """Construct the download URL for a file arg."""
     return (
         f"/api/v1/projects/{project_id}/arg-profiles/{profile_id}"
         f"/files/{quote(arg_name, safe='')}"
@@ -85,7 +84,7 @@ def _arg_to_response(
     *,
     with_download_url: bool,
 ) -> ArgProfileArgResponse:
-    """Convert a domain arg to its response model."""
+    """Translate domain arg to response model, including URLs for file args."""
     if isinstance(arg, ToolArgProfileFlagArg):
         return ArgProfileFlagArgResponse(name=arg.name)
     if isinstance(arg, ToolArgProfileStringArg):
@@ -112,7 +111,7 @@ def _arg_to_response(
 def _to_response(
     profile: ToolArgProfile, project_id: int, *, with_download_url: bool
 ) -> ArgProfileResponse:
-    """Convert a domain profile to its response model."""
+    """Translate domain profile to response model."""
     return ArgProfileResponse(
         id=profile.id,
         tool_name=profile.tool_name,
@@ -134,10 +133,9 @@ async def _build_inputs(
     *,
     allow_keep_existing: bool,
 ) -> list[ProfileArgInput]:
-    """Pair payload file-args with multipart uploads to build service inputs.
+    """Match payload file-args to multipart uploads, with different error handling.
 
-    PUT treats a missing upload as keep-existing; POST collects every
-    missing arg name into a single 422 envelope.
+    PUT treats missing uploads as keep-existing; POST requires all file args.
     """
     inputs: list[ProfileArgInput] = []
     missing_files: list[dict[str, str]] = []
@@ -185,7 +183,7 @@ async def _build_inputs(
 
 
 def _validation_error_to_envelope(exc: ToolArgProfileValidationError) -> dict:
-    """Translate a service ToolArgProfileValidationError into envelope details."""
+    """Format validation errors for API response."""
     return {
         "fields": [{"field": fe.field, "issue": fe.issue} for fe in exc.fields],
     }
@@ -203,7 +201,7 @@ async def list_arg_profiles(
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=500),
 ) -> ArgProfileListResponse:
-    """List arg profiles for a project, optionally filtered by tool name."""
+    """List arg profiles, optionally filtered by tool."""
     service, _saved_scans_repo, _paths = await asyncio.to_thread(
         _build_service, request, project_id
     )
@@ -227,7 +225,7 @@ async def get_arg_profile(
     profile_id: int,
     request: Request,
 ) -> ArgProfileResponse:
-    """Return a single arg profile with downloadUrl for file args."""
+    """Fetch an arg profile with download URLs for file args."""
     service, _saved_scans_repo, _paths = await asyncio.to_thread(
         _build_service, request, project_id
     )
@@ -246,7 +244,7 @@ async def create_arg_profile(
     project_id: int,
     request: Request,
 ) -> ArgProfileResponse:
-    """Create a new arg profile via multipart upload."""
+    """Create an arg profile from multipart form data."""
     form = await request.form()
     payload_field = form.get("payload")
     if not isinstance(payload_field, str):
@@ -286,7 +284,7 @@ async def replace_arg_profile(
     profile_id: int,
     request: Request,
 ) -> ArgProfileResponse:
-    """Replace an arg profile via multipart upload."""
+    """Replace an arg profile from multipart form data."""
     form = await request.form()
     payload_field = form.get("payload")
     if not isinstance(payload_field, str):
@@ -329,7 +327,7 @@ async def download_arg_file(
     arg_name: str,
     request: Request,
 ) -> Response:
-    """Stream the bytes of a file-type arg."""
+    """Retrieve and stream a file arg's persisted data."""
     service, _saved_scans_repo, _paths = await asyncio.to_thread(
         _build_service, request, project_id
     )
@@ -364,7 +362,7 @@ async def delete_arg_profile(
     profile_id: int,
     request: Request,
 ) -> Response:
-    """Delete an arg profile and its file-arg directory."""
+    """Delete an arg profile after checking for saved scan references."""
     service, saved_scans_repo, _paths = await asyncio.to_thread(
         _build_service, request, project_id
     )

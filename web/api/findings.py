@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
+from application.events.types import EOS
 from application.findings.findings_service import FindingsService
 from application.locking import FindingsBusy
 from domain.findings.severity import Severity
@@ -19,7 +20,6 @@ from factories.persistence import (
     ProjectNotFound,
     create_findings_service,
 )
-from infrastructure.events.sse import format_sse_frame
 from web.adapters.event_bus_finding_sink import EventBusFindingSink
 from web.api._errors import FindingsLocked, NotFound
 from web.api._finding_serialiser import serialise_finding as _serialise_finding
@@ -36,12 +36,13 @@ from web.api.schemas import (
     FindingsFilterOptionsResponse,
     FindingsListResponse,
 )
+from web.sse import format_sse_frame
 
 __all__ = ["router", "v1_router", "_serialise_finding"]
 
 logger = logging.getLogger("tally.web.findings")
 
-# Kept empty for backward-compat imports; routes are on v1_router.
+# Routes moved to v1_router; kept for backward-compat imports.
 router = APIRouter()
 
 
@@ -60,13 +61,7 @@ def _service(request: Request, project_id: int) -> FindingsService:
 
 
 def _translate_patch_fields(raw: dict[str, Any]) -> dict[str, Any]:
-    """Reshape a Pydantic patch body into the repo field schema.
-
-    ``meta_*`` keys flatten into the named meta keys recognised by
-    ``FindingRepository.update_analyst_fields``. List columns
-    (``finding_type``, ``cwe``) serialise to JSON. ``should_report``
-    coerces to 0/1 to match the column's stored representation.
-    """
+    """Reshape a Pydantic patch body into repository column schema."""
     fields: dict[str, Any] = {}
     for k, v in raw.items():
         if k.startswith("meta_"):
@@ -128,12 +123,10 @@ async def get_findings_filter_options(
     finding_type: list[str] | None = Query(default=None),
     search: str | None = Query(default=None),
 ) -> FindingsFilterOptionsResponse:
-    """Return per-dimension filter options under the active filter set.
+    """Return filter option counts for each dimension under active filters.
 
-    Mirrors the filter query params of ``GET /findings``. Each
-    dimension's counts apply every active filter (strict semantics) and
-    zero-count options are omitted. Powers the Findings page filter
-    dropdowns.
+    Counts reflect strict filter semantics (all active filters apply).
+    Options with zero count are omitted to avoid clutter in the UI.
     """
     service = _service(request, project_id)
 
@@ -194,8 +187,8 @@ async def list_findings(
     """
     service = _service(request, project_id)
 
-    # Validate severity labels: ValueError surfaces as 422 via the
-    # global handler.
+    # ValueError from invalid severity labels surfaces as 422 via the
+    # global error handler.
     if severity:
         for s in severity:
             Severity.from_label(s)
@@ -257,11 +250,10 @@ async def findings_events(
     project_id: int,
     request: Request,
 ) -> StreamingResponse:
-    """SSE stream emitting finding_updated events for this project.
+    """Stream finding_updated events for this project via SSE.
 
-    Tail-only; no snapshot on connect. Clients filter by event_type.
-    Each event carries the full serialised finding record plus
-    project_id.
+    Sends only new events (no snapshot on connect). Each event carries
+    the full serialized finding record and project_id for routing.
     """
     _resolve_project(request, project_id)
     bus = request.app.state.event_bus
@@ -277,8 +269,6 @@ async def findings_events(
                 except TimeoutError:
                     yield ": heartbeat\n\n"
                     continue
-                from infrastructure.events.types import EOS
-
                 if item is EOS:
                     break
                 if item.payload.get("project_id") != project_id:
@@ -388,12 +378,10 @@ async def patch_finding(
     request: Request,
     body: FindingPatchRequest,
 ) -> dict:
-    """Apply analyst corrections to a finding's editable fields.
+    """Update analyst-editable fields on a finding.
 
-    Only fields explicitly included in the request body are written.
-    Returns 409 FINDING_LOCKED if the finding is held by another job.
-    Returns 404 if the finding does not exist. After the SQLite write,
-    performs a best-effort ChromaDB metadata sync.
+    Returns 409 if locked; 404 if not found. Syncs metadata to ChromaDB
+    after the write.
     """
     service = _service(request, project_id)
     raw = body.model_dump(exclude_none=True)

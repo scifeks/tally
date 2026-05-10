@@ -32,11 +32,8 @@ from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
 from factories.persistence import (
     create_findings_service,
+    create_overrides_repo,
     create_url_list_service,
-)
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.tool_overrides import (
-    ToolOverridesRepository,
 )
 from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
@@ -80,8 +77,7 @@ def _url_list_service(request: Request, project_id: int) -> UrlListService:
 
 def _load_project_tool_ids(paths: ProjectPaths) -> list[str]:
     """Return sorted tool names from tool_overrides table in DB."""
-    factory = ConnectionFactory(paths.findings_db)
-    repo = ToolOverridesRepository(factory)
+    repo = create_overrides_repo(paths.findings_db)
     rows, _total = repo.list_paginated(offset=0, limit=10_000)
     return sorted(o.tool_name for o in rows)
 
@@ -239,18 +235,14 @@ async def patch_project_info(
 
 def _existing_endpoint_file(repo: Repository) -> str | None:
     """Return the basename of the repo's most-recent seed-file upload, or
-    ``None`` if no seed file is configured.
-
-    The path is persisted in ``repositories.url_seed_file`` and points
-    at ``endpoints/<repo-name>-<epoch>/<basename>``.
-    """
+    ``None`` if no seed file is configured."""
     if not repo.url_seed_file:
         return None
     return Path(repo.url_seed_file).name
 
 
 def _serialize_repo(repo: Repository, repo_id: int | None) -> dict:
-    """Dump a Repository to a JSON dict; strip auth; carry id and seed file."""
+    """Convert Repository to JSON, excluding auth credentials."""
     data = repo.model_dump()
     data.pop("auth", None)
     data["id"] = repo_id

@@ -30,19 +30,13 @@ from domain.saved_scans.entry import (
     StaleSavedScanToolItem,
 )
 from factories.persistence import (
+    create_arg_profiles_repo,
     create_finding_repo,
+    create_overrides_repo,
     create_repo_repo,
+    create_saved_scans_repo,
+    create_scan_repos,
     create_url_finding_repo,
-)
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
-from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.saved_scans import SavedScansRepository
-from infrastructure.store.repositories.tool_arg_profiles import (
-    ToolArgProfilesRepository,
-)
-from infrastructure.store.repositories.tool_overrides import (
-    ToolOverridesRepository,
 )
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
@@ -73,9 +67,8 @@ def _build_service(request: Request, project_id: int) -> SavedScansService:
     """Resolve the project and assemble the saved-scans service."""
     row = _resolve_project(request, project_id)
     paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    saved_scans_repo = SavedScansRepository(factory)
-    profiles_repo = ToolArgProfilesRepository(factory)
+    saved_scans_repo = create_saved_scans_repo(paths.findings_db)
+    profiles_repo = create_arg_profiles_repo(paths.findings_db)
     return SavedScansService(
         saved_scans_repo,
         profiles_repo,
@@ -299,9 +292,8 @@ async def run_saved_scan(
     tool_registry = request.app.state.tool_registry
 
     paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
 
-    overrides_repo = ToolOverridesRepository(factory)
+    overrides_repo = create_overrides_repo(paths.findings_db)
     discover_tools(
         tool_registry,
         base_path,
@@ -309,8 +301,8 @@ async def run_saved_scan(
         overrides_repo=overrides_repo,
     )
 
-    saved_scans_repo = SavedScansRepository(factory)
-    profiles_repo = ToolArgProfilesRepository(factory)
+    saved_scans_repo = create_saved_scans_repo(paths.findings_db)
+    profiles_repo = create_arg_profiles_repo(paths.findings_db)
     saved_scans_service = SavedScansService(
         saved_scans_repo, profiles_repo, tool_registry
     )
@@ -324,8 +316,7 @@ async def run_saved_scan(
     except StaleSavedScanError as exc:
         raise StaleSavedScan(_stale_items_to_envelope(exc.stale_items)) from exc
 
-    run_repo = RunRepository(factory)
-    chat_session_repo = ChatSessionRepository(factory)
+    run_repo, chat_session_repo, _, _ = create_scan_repos(paths.findings_db)
     sink = EventBusScanSink(request.app.state.event_bus)
 
     repo_names = tuple(r.name for r in hydrated.repos)

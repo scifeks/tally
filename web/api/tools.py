@@ -8,7 +8,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, Query, Request, Response
 
-from application.ports.tool_overrides import ToolOverrideNameConflict
+from application.ports.tool_overrides import (
+    ToolOverrideNameConflict,
+    ToolOverridesRepositoryPort,
+)
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tool_overrides.service import (
     ToolOverrideNotFound,
@@ -16,8 +19,7 @@ from application.tool_overrides.service import (
     ToolOverrideValidationError,
 )
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.tool_overrides import ToolOverridesRepository
+from factories.persistence import create_overrides_repo
 from web.api._errors import Conflict, NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -79,11 +81,10 @@ def _supports_docker(tool_name: str) -> bool:
 
 def _build_service(
     request: Request, project_id: int
-) -> tuple[ToolOverridesService, ToolOverridesRepository, ProjectPaths, str]:
+) -> tuple[ToolOverridesService, ToolOverridesRepositoryPort, ProjectPaths, str]:
     row = _resolve_project(request, project_id)
     paths = ProjectPaths.from_registry_row(row)
-    factory = ConnectionFactory(paths.findings_db)
-    repo = ToolOverridesRepository(factory)
+    repo = create_overrides_repo(paths.findings_db)
     return ToolOverridesService(repo), repo, paths, row.name
 
 
