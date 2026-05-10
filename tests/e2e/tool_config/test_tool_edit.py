@@ -13,7 +13,7 @@ from tests.e2e.tool_config.conftest import (
     seed_project_commands_json,
 )
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 _NOIR_LOCAL = {
     "type": "repo",

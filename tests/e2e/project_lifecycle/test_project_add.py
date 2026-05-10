@@ -9,7 +9,7 @@ import pytest
 from tests.e2e.harness import TallyHarness
 from tests.e2e.project_lifecycle.conftest import create_project
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 def test_project_add_minimal(tally_harness: TallyHarness) -> None:

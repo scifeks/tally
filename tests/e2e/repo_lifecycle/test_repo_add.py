@@ -9,7 +9,7 @@ import pytest
 from tests.e2e.harness import TallyHarness
 from tests.e2e.repo_lifecycle.conftest import create_setup
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 def test_repo_add_no_active_project(tally_harness: TallyHarness) -> None:

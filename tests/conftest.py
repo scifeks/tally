@@ -22,7 +22,7 @@ from infrastructure.llm.ollama_utils import verify_ollama_available
 
 def pytest_configure(config: pytest.Config) -> None:
     if os.getenv("CI"):
-        config.option.markexpr = "not integration and not e2e and not local_only"
+        config.option.markexpr = "not integration and not e2e"
 
 
 def _ollama_url() -> str | None:

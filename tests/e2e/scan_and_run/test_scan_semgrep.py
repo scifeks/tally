@@ -8,7 +8,7 @@ import pytest
 
 from tests.e2e.harness import TallyHarness
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 requires_semgrep = pytest.mark.skipif(
     shutil.which("semgrep") is None,

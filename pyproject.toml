@@ -98,5 +98,4 @@ markers = [
   "requires_docker: marks tests that need Docker daemon running",
   "integration: marks tests that require real SQLite / filesystem / ChromaDB",
   "e2e: marks tests that require external services such as Ollama or real binaries",
-  "local_only: marks tests that must only run locally (never in CI)",
 ]

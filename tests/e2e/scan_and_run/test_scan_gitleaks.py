@@ -7,7 +7,7 @@ import pytest
 from tests.conftest import requires_gitleaks
 from tests.e2e.harness import TallyHarness
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 @requires_gitleaks

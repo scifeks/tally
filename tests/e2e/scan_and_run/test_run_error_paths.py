@@ -6,7 +6,7 @@ import pytest
 
 from tests.e2e.harness import TallyHarness
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 def test_run_no_args(tally_harness: TallyHarness) -> None:

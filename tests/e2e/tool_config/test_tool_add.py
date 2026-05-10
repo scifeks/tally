@@ -14,7 +14,7 @@ from tests.e2e.tool_config.conftest import (
     seed_commands_json,
 )
 
-pytestmark = pytest.mark.local_only
+pytestmark = pytest.mark.e2e
 
 
 def test_tool_add_local(tally_harness: TallyHarness) -> None:
