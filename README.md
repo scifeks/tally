@@ -2,24 +2,26 @@
 
 [![CI](https://github.com/scifeks/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/scifeks/tally/actions/workflows/ci.yml)
 
-Tally is a CLI REPL for orchestrating web application security auditing. It wraps common security tools, stores findings in a RAG knowledge base (ChromaDB + Ollama), and lets you search, chat over, and report on findings, all within a single terminal session.
+Tally is a security auditing platform with a web UI and CLI for orchestrating scanners, triaging findings, and generating reports. It wraps common security tools, stores findings in a knowledge base (ChromaDB + configurable LLM), and lets you scan, triage, search, chat, and report from a browser or terminal.
 
 ## Features
 
+- Browser-based UI with dashboard, scan launcher, findings editor, AI triage, report builder, and RAG chat
 - Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
+- AI triage: an LLM agent reads each finding and its source code, then produces a verdict with severity, confidence, remediation, and attack vector
+- Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
+- RAG-powered search and chat over ingested findings using any configured provider ([docs/chat.md](docs/chat.md))
 - Project-based isolation: each project has its own config, vector store, and outputs
 - Automatic tool discovery on startup: skips tools that are not installed
-- RAG-powered search and chat over ingested findings. Any configured provider can be used for each role ([docs/chat.md](docs/chat.md))
-- Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
-- Browser-based findings reviewer with inline editing, launched on demand from the REPL via `ui serve`
+- CLI REPL for terminal-based workflows and scripting
 - Human-in-the-loop approval before each tool execution
-- Dependency checker validates required packages on every startup
 - Docker execution support for all tools
 
 ## Requirements
 
 - **Python 3.10+**
-- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled. Required for ChromaDB embeddings and for any role configured to use the `"ollama"` provider. Can be skipped if all three roles are set to `"claude"` and you manage embeddings separately, but the default configuration uses Ollama.
+- **Node.js and npm** for the web UI frontend
+- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled. Required for ChromaDB embeddings and for any role configured to use the `"ollama"` provider. Can be skipped if all roles are set to `"claude"` and you manage embeddings separately, but the default configuration uses Ollama.
 - **Anthropic API key**: required only when any role is set to `"claude"` in `config/global.json`. Set via `ANTHROPIC_API_KEY` environment variable or the `claude.api_key` config field.
 - Linux or macOS
 - System tools are optional. Tally skips tools that are not installed
@@ -27,7 +29,7 @@ Tally is a CLI REPL for orchestrating web application security auditing. It wrap
 ## Quick Start
 
 ```bash
-# 1. Install Python dependencies
+# 1. Install Python and Node.js dependencies
 bash install.sh
 
 # 2. Start Ollama (separate terminal)
@@ -37,21 +39,40 @@ ollama serve
 
 # 3. Edit global config (configure providers and feature inference blocks)
 cp config/global-example.json config/global.json
-# edit config/global.json — configure provider blocks (ollama, llama_cpp,
+# edit config/global.json: configure provider blocks (ollama, llama_cpp,
 # or claude) and feature inference blocks (search_inference, chat_inference,
 # report_inference, and embeddings_inference)
 
-# 4. Start Tally — first run launches an interactive tool setup wizard
+# 4. Start Tally (first run launches an interactive tool setup wizard)
 .venv/bin/python3 tally.py
 
-# 5. Create a project and start scanning
+# 5. Create a project, add a repo, and run your first scan
 project add
 repo add
 scan --tool=semgrep
-report
+
+# 6. Launch the web UI
+ui serve
 ```
 
+## Web UI
+
+Run `ui serve` from the REPL to start the web UI. Tally opens your browser to a React SPA backed by a FastAPI server. The UI provides the full Tally workflow in a graphical interface:
+
+- **Dashboard** with project stats, recent scans, and quick-action tiles
+- **Findings** table with filtering, sorting, and inline editing of severity, status, remediation, and other fields
+- **Scans** launcher with tool selection, real-time progress tracking, and saved scan configurations
+- **Triage** runner with batch visualization and progress tracking
+- **Reports** builder with draft generation, format selection, and download
+- **Chat** with session history over your project's findings
+- **Configuration** for projects, repositories, tool overrides, and argument templates
+- **URL Lists** management for DAST scanning targets
+
+See [docs/ui.md](docs/ui.md) for the full walkthrough.
+
 ## REPL Command Reference
+
+The REPL provides the same capabilities as the web UI in a terminal interface. All commands below are also available through the browser.
 
 ### Project Management
 
@@ -97,11 +118,11 @@ report
 
 ### Knowledge Base
 
-| Command | Description                                                            |
-|---|------------------------------------------------------------------------|
+| Command | Description |
+|---|---|
 | `search [--flags...]` | Structured search over ingested findings (`search --help` for options) |
-| `chat <message>` | RAG-augmented chat with the LLM                                        |
-| `stats` | Show knowledge base statistics                                         |
+| `chat <message>` | RAG-augmented chat with the LLM |
+| `stats` | Show knowledge base statistics |
 | `purge` | Delete ALL findings, tool outputs, and reports |
 | `purge --tool=<tool,...>` | Delete findings for specific tool(s) only; reports unaffected |
 | `purge --keep-reports` | Delete all findings and tool outputs but keep generated reports |
@@ -110,7 +131,7 @@ report
 
 | Command | Description |
 |---|---|
-| `ui serve` | Start the FastAPI + Vite dev server and open the findings browser |
+| `ui serve` | Start the FastAPI + Vite dev server and open the web UI |
 | `ui serve --stop` | Stop the running web servers |
 
 ### Triage
@@ -190,18 +211,19 @@ Tools can run locally or inside a Docker container. The execution mode is config
 
 ## Documentation
 
-- [docs/usage.md](docs/usage.md) — Full usage guide with examples
-- [docs/report.md](docs/report.md) — Report generation guide: quick reports, PDF assembly, and shell preview
-- [docs/ui.md](docs/ui.md) — Web UI: browser-based findings browser with inline editing, configuration, and security model
-- [docs/chat.md](docs/chat.md) — RAG chat configuration and usage (Ollama-only)
-- [docs/triage.md](docs/triage.md) — AI triage: setup, container lifecycle, and security model
-- [docs/configuration.md](docs/configuration.md) — Config file reference
-- [docs/tools.md](docs/tools.md) — Supported tools and how each is detected at startup
-- [docs/url-discovery.md](docs/url-discovery.md) — URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers
-- [docs/endpoint-files.md](docs/endpoint-files.md) — Supplying your own OAS3/Swagger/Postman/HAR endpoint file
-- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) — Developer guide for adding tool wrappers (requires `config/commands.json` registration to take effect)
-- [docs/docker.md](docs/docker.md) — Security Audit Containers
-- [docs/restrictions.md](docs/restrictions.md) — Legal restrictions
+- [docs/usage.md](docs/usage.md) - Full REPL usage guide with examples
+- [docs/ui.md](docs/ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
+- [docs/report.md](docs/report.md) - Report generation guide: quick reports, PDF assembly, and shell preview
+- [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
+- [docs/triage.md](docs/triage.md) - AI triage: setup, container lifecycle, and security model
+- [docs/configuration.md](docs/configuration.md) - Config file reference
+- [docs/tools.md](docs/tools.md) - Supported tools and how each is detected at startup
+- [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers
+- [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying your own OAS3/Swagger/Postman/HAR endpoint file
+- [docs/endpoint-file-adapter-internals.md](docs/endpoint-file-adapter-internals.md) - Developer guide for adding endpoint file format adapters
+- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) - Developer guide for adding tool wrappers (requires `config/commands.json` registration to take effect)
+- [docs/docker.md](docs/docker.md) - Optional Docker containers for npm-audit and composer-audit
+- [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
 
 ## Known Limitations
 
@@ -214,7 +236,7 @@ Noir does not support every web framework. It is skipped automatically for:
   automatically by the presence of `package.json` at the repo root and skips
   Noir for them.
 - **Unsupported Python frameworks.** aiohttp, bottle, cherrypy, falcon, and
-  pyramid are not recognised by Noir v0.25.1. Tally detects them via the
+  pyramid are not recognized by Noir v0.25.1. Tally detects them via the
   repository's `dependencies_file` and skips Noir automatically.
 
 When Noir is skipped, ZAP falls back to spider-only discovery mode. You can

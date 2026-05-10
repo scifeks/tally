@@ -1,5 +1,7 @@
 # Tally Usage Guide
 
+This guide covers the REPL (terminal) interface. Most of these workflows are also available in the web UI. See [docs/ui.md](ui.md) for the browser-based walkthrough.
+
 ## Starting Tally
 
 ```bash
@@ -27,11 +29,11 @@ Warning: 1 optional tool not found. Some scan features will be unavailable.
   ...
 Loaded 8 tools (2 available, 6 not installed)
 
-╭─ Welcome ───────────────────────────────────╮
-│ Tally Web App Security Auditing REPL v1.0          │
-│ LlamaIndex + Chroma + Ollama                │
-│ Active Project: No active project           │
-╰─────────────────────────────────────────────╯
+╭─ Welcome ───────────────────────────────────────────────────╮
+│ Tally Web App Security Auditing REPL v1.0                   │
+│ LlamaIndex + Chroma + Local Inference                       │
+│ Active Project: No active project                           │
+╰─────────────────────────────────────────────────────────────╯
 
 [no-project]>
 ```
@@ -171,7 +173,7 @@ View configured repositories:
 ```
 [acme-security-audit]> repo list
  Name        | Path                         | Languages | Base URLs
- api-server  | /home/user/projects/acme/api | python    | —
+ api-server  | /home/user/projects/acme/api | python    | (none)
 ```
 
 Edit or remove a repository:
@@ -492,7 +494,7 @@ Ask a question about the findings using RAG-augmented LLM chat:
 [acme-security-audit]> chat Summarize the most critical vulnerabilities found
 ```
 
-Tally retrieves relevant findings from the knowledge base and passes them to the Ollama LLM as context. The response appears in a panel:
+Tally retrieves relevant findings from the knowledge base and passes them to the configured LLM as context. The response appears in a panel:
 
 ```
 ╭─ Assistant ─────────────────────────────────────────────╮
@@ -559,13 +561,13 @@ regenerated at any time with `report draft` and `report`.
 Reports aggregate all findings currently in the knowledge base.
 
 ```
-# Markdown report (default) — saved to projects/[name]/reports/report_<timestamp>.md
+# Markdown report (default, saved to projects/[name]/reports/report_<timestamp>.md)
 [acme-security-audit]> report
 
-# HTML report — self-contained, suitable for sharing
+# HTML report (self-contained, suitable for sharing)
 [acme-security-audit]> report --format html
 
-# JSON report — machine-readable, full data
+# JSON report (machine-readable, full data)
 [acme-security-audit]> report --format json
 
 # Write to a specific path

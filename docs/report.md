@@ -2,7 +2,9 @@
 
 Tally's report pipeline generates professional security audit reports in two modes: **quick text reports** (Markdown, HTML, or JSON) built directly from the findings database, and a **full PDF report** assembled from LLM-drafted narrative sections and structured findings data.
 
-The `report` command defaults to PDF assembly — the full client-deliverable report.
+The `report` command defaults to PDF assembly, the full client-deliverable report.
+
+Reports can also be generated from the web UI. The Reports page lets you generate drafts, select output format, and download completed reports without leaving the browser. See [docs/ui.md](ui.md) for the UI walkthrough.
 
 ---
 
@@ -33,7 +35,7 @@ The PDF report is a formatted document suitable for client delivery. It includes
 
 Assembly is a four-step process.
 
-### Step 1 — Triage your findings
+### Step 1: Triage your findings
 
 LLM draft generation reads only findings that have been triaged and marked for inclusion in the report. Run triage before generating any drafts:
 
@@ -42,9 +44,9 @@ LLM draft generation reads only findings that have been triaged and marked for i
 ```
 
 If you want to generate drafts before triage is complete (e.g. for development or preview),
-pass `--skip-triage` to `report draft` — see [Step 2](#step-2--generate-llm-drafts) below.
+pass `--skip-triage` to `report draft`. See [Step 2](#step-2-generate-llm-drafts) below.
 
-### Step 2 — Generate LLM drafts
+### Step 2: Generate LLM drafts
 
 Run `report draft` with no arguments to generate all six report sections in sequence:
 
@@ -83,9 +85,9 @@ The six sections, in generation order:
 
 | Section | Description |
 |---|---|
-| `executive-summary` | 2–3 paragraph non-technical summary for a management audience |
+| `executive-summary` | 2-3 paragraph non-technical summary for a management audience |
 | `risk-level` | Single paragraph stating the overall risk rating and rationale |
-| `critical-issues` | Top 3–5 critical findings described in plain English |
+| `critical-issues` | Top 3-5 critical findings described in plain English |
 | `improvement-points` | Recurring vulnerability themes and patterns across the codebase |
 | `scope-and-methodology` | What was tested, which tools were used, and how |
 | `general-recommendations` | Actionable recommendations grouped by theme |
@@ -94,7 +96,7 @@ The six sections, in generation order:
 
 Draft files are saved to `projects/<project>/reports/draft/<section>.md`.
 
-### Step 3 — Review drafts
+### Step 3: Review drafts
 
 Open the draft files in any editor and make corrections. When a section is ready for assembly, copy or move it to the `reviewed/` directory:
 
@@ -105,7 +107,7 @@ cp projects/acme-audit/reports/draft/executive-summary.md \
 
 During assembly, Tally checks `reviewed/` first. If a reviewed file exists it is used silently. If only a draft file exists, Tally asks whether to proceed with the unreviewed version. If neither file exists, assembly stops with an error.
 
-### Step 4 — Assemble the PDF
+### Step 4: Assemble the PDF
 
 Run `report` to produce the final PDF:
 
@@ -151,7 +153,7 @@ You can also pass `--format=pdf` explicitly, which is equivalent to the default:
 
 `report shell` renders a PDF with the same layout and narrative sections as `report` but without any findings content. The attack surface overview, findings tables, and severity charts are replaced with placeholder blocks.
 
-This command is intended for developers customizing the report's visual appearance. Use it when adjusting CSS styles, page layout, typography, or template markup. Because the shell skips database queries for findings content, it renders faster than a full assembly — making it practical to iterate quickly on the visual design.
+This command is intended for developers customizing the report's visual appearance. Use it when adjusting CSS styles, page layout, typography, or template markup. Because the shell skips database queries for findings content, it renders faster than a full assembly, making it practical to iterate quickly on the visual design.
 
 ### Arguments
 

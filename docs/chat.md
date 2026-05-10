@@ -6,9 +6,9 @@ project's knowledge base (ChromaDB retrieval + LLM generation).
 
 Chat is available in two places:
 
-- **REPL** — `chat <message>` runs a single-shot query against the
+- **REPL:** `chat <message>` runs a single-shot query against the
   active project's findings.
-- **Web UI** — the SPA exposes a Chat tab when chat is enabled in
+- **Web UI:** the SPA exposes a Chat tab when chat is enabled in
   `config/global.json`.
 
 ## Provider support
@@ -76,10 +76,13 @@ prints the response.
 
 Run `ui serve` from the REPL to start the Web UI, then open the Chat
 tab. The SPA queries the same project knowledge base used by the REPL.
+The web UI supports creating, switching between, and deleting chat
+sessions, and messages stream in real time.
 
 ## Limitations
 
-- **Stateless.** Each chat message is independent; there is no
-  conversation history yet.
+- **REPL is single-shot.** Each `chat` command is independent with no
+  conversation history. The web UI supports persistent chat sessions
+  with message history.
 - **Per-project.** Chat answers are scoped to the active project's
   findings.

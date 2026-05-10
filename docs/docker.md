@@ -1,7 +1,6 @@
-# Security Audit Containers
+# Docker Containers for npm-audit and composer-audit
 
-Two persistent containers exposing `composer audit` and `npm audit` to a host application via `docker exec` are provided for convenience. 
-You don't have to use them. If you use them, make sure to configure them during tool config in the `./tally` app.
+Two optional Docker containers provide `npm audit` and `composer audit` to Tally via `docker exec`. They are not required, but if you use them, configure them during tool setup in the Tally REPL.
 
 ## Structure
 
@@ -15,6 +14,7 @@ You don't have to use them. If you use them, make sure to configure them during 
 ---
 
 ## Setup
+
 ### 1. Copy example docker-compose.yaml
 `cp docker-compose.yaml.example docker-compose.yaml`
 
@@ -67,7 +67,7 @@ docker exec -w /repos/my-php-app php-auditor /usr/bin/composer audit --format=js
 
 ---
 
-## Customisation
+## Customization
 
 ### Change Node.js version at build time
 

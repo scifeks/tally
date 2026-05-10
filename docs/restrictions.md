@@ -10,7 +10,7 @@ This restriction is unconditional. There are **no exceptions**.
 
 ## Legal Background
 
-### California — Assembly Bill 1043 (“Digital Age Assurance Act”)
+### California: Assembly Bill 1043 (“Digital Age Assurance Act”)
 
 California has enacted **AB 1043**, effective January 1, 2027, which requires:
 
@@ -20,7 +20,7 @@ California has enacted **AB 1043**, effective January 1, 2027, which requires:
 
 This software **does not implement any mechanism to request or process such age signals** and therefore **cannot be used by residents of California** without violating the law. ([calmatters.digitaldemocracy.org](https://calmatters.digitaldemocracy.org/bills/ca_202520260ab1043?utm_source=chatgpt.com))
 
-### Colorado — Senate Bill 26‑051 (“Age Attestation on Computing Devices”)
+### Colorado: Senate Bill 26-051 (“Age Attestation on Computing Devices”)
 
 Colorado SB26‑051 requires a similar framework:
 
