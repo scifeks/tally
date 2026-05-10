@@ -240,28 +240,32 @@ def test_build_triage_runner_uses_factory_agent(
 
     agent = MagicMock()
     tool_registry = MagicMock()
+    run_repo, finding_repo, triage_repo, audit_repo = (
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+    )
 
     with (
-        patch("application.triage.factory.make_store") as mock_make_store,
         patch("application.triage.factory.TriageAgentFactory") as mock_factory_cls,
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
         patch(
             "application.triage.factory.resolve_triage_config",
             return_value=_resolved(provider="ollama"),
         ),
     ):
-        mock_make_store.return_value = (
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-            MagicMock(),
-        )
         mock_factory_cls.return_value.create.return_value = agent
 
-        runner = build_triage_runner("proj", tool_registry, app_root=tmp_path)
+        runner = build_triage_runner(
+            "proj",
+            tool_registry,
+            app_root=tmp_path,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
+        )
 
     assert runner._triage_backend is agent
     assert runner._session_timeout_seconds == 300
@@ -277,27 +281,30 @@ def test_build_triage_runner_claude_triaged_by(
     findings_db.parent.mkdir(parents=True)
     findings_db.touch()
 
+    run_repo, finding_repo, triage_repo, audit_repo = (
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+        MagicMock(),
+    )
+
     with (
-        patch(
-            "application.triage.factory.make_store",
-            return_value=(
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            ),
-        ),
         patch("application.triage.factory.TriageAgentFactory"),
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
         patch(
             "application.triage.factory.resolve_triage_config",
             return_value=_resolved(provider="claude"),
         ),
     ):
-        runner = build_triage_runner("proj", MagicMock(), app_root=tmp_path)
+        runner = build_triage_runner(
+            "proj",
+            MagicMock(),
+            app_root=tmp_path,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
+        )
 
     assert runner._triaged_by == "claudecode"
 
@@ -309,28 +316,28 @@ def test_build_triage_runner_wires_finding_repo(
     findings_db.parent.mkdir(parents=True)
     findings_db.touch()
 
+    run_repo = MagicMock()
     finding_repo = MagicMock()
+    triage_repo = MagicMock()
+    audit_repo = MagicMock()
 
     with (
-        patch("application.triage.factory.make_store") as mock_make_store,
         patch("application.triage.factory.TriageAgentFactory"),
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
         patch(
             "application.triage.factory.resolve_triage_config",
             return_value=_resolved(),
         ),
     ):
-        mock_make_store.return_value = (
+        runner = build_triage_runner(
+            "proj",
             MagicMock(),
-            finding_repo,
-            MagicMock(),
-            MagicMock(),
+            app_root=tmp_path,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
         )
-
-        runner = build_triage_runner("proj", MagicMock(), app_root=tmp_path)
 
     assert runner._finding_repo is finding_repo
 
@@ -342,31 +349,27 @@ def test_build_triage_runner_resets_for_resume(
     findings_db.parent.mkdir(parents=True)
     findings_db.touch()
 
+    run_repo = MagicMock()
+    finding_repo = MagicMock()
     triage_repo = MagicMock()
+    audit_repo = MagicMock()
 
     with (
-        patch("application.triage.factory.make_store") as mock_make_store,
         patch("application.triage.factory.TriageAgentFactory"),
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
         patch(
             "application.triage.factory.resolve_triage_config",
             return_value=_resolved(),
         ),
     ):
-        mock_make_store.return_value = (
-            MagicMock(),
-            MagicMock(),
-            triage_repo,
-            MagicMock(),
-        )
-
         build_triage_runner(
             "proj",
             MagicMock(),
             app_root=tmp_path,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
             reset_for_resume_scan_run_id=17,
         )
 
@@ -377,4 +380,13 @@ def test_build_triage_runner_raises_when_project_db_missing(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(FileNotFoundError, match="Project database not found"):
-        build_triage_runner("proj", MagicMock(), app_root=tmp_path)
+        build_triage_runner(
+            "proj",
+            MagicMock(),
+            app_root=tmp_path,
+            run_repo=MagicMock(),
+            finding_repo=MagicMock(),
+            triage_repo=MagicMock(),
+            audit_repo=MagicMock(),
+            repo_paths={},
+        )

@@ -136,9 +136,20 @@ def _run_pipeline(
 ) -> list[int]:
     """Drive the full ingest pipeline; returns SQLite finding IDs."""
     from application.pipeline.factory import PipelineFactory
+    from core.project_paths import ProjectPaths
     from domain.pipeline.events import IngestCompleted, ToolCompleted
+    from factories.persistence import (
+        create_finding_repo,
+        create_repo_repo,
+        create_url_finding_repo,
+    )
 
-    bus = PipelineFactory.create()
+    paths = ProjectPaths.from_canonical(str(base_path), project_name)
+    bus = PipelineFactory.create(
+        finding_repo=create_finding_repo(paths.findings_db),
+        repo_repo=create_repo_repo(paths.findings_db),
+        url_finding_repo=create_url_finding_repo(paths.findings_db),
+    )
 
     ids: list[int] = []
 

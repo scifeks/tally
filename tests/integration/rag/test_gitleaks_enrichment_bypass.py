@@ -97,7 +97,8 @@ class TestGitleaksEnrichmentBypass:
         }
         fid = _seed(finding_repo, run_id, row)
         p = EnrichmentPipeline(
-            finding_repo=finding_repo, base_path=str(project_env["base_path"])
+            finding_repo=finding_repo,
+            base_path=str(project_env["base_path"]),
         )
         with patch.object(p, "_call_llm") as mock_llm:
             p.enrich([fid])

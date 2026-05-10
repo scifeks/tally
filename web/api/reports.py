@@ -22,7 +22,6 @@ from application.locking import JobBusy, get_registry
 from application.reporting.draft_run_registry import get_draft_run_registry
 from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.reports_service import (
-    ProjectNotFound,
     ReportsService,
     UnknownSectionError,
 )
@@ -30,6 +29,7 @@ from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
 from domain.reports.entry import REPORT_STATUSES, DraftRow, ReportRow
+from factories.persistence import ProjectNotFound, create_reports_service
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
@@ -64,9 +64,7 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> ReportsService:
     """Build a ReportsService for *project_id* or raise 404."""
     try:
-        return ReportsService.for_project(
-            request.app.state.project_registry, project_id
-        )
+        return create_reports_service(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 

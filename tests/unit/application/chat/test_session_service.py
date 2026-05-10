@@ -19,11 +19,11 @@ from application.chat.service import (
 )
 from application.chat.session_service import (
     ChatSessionService,
-    ProjectNotFound,
     SendMessageHandle,
 )
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
 from domain.projects.entry import ProjectRow
+from factories.persistence import ProjectNotFound
 
 
 class _StubSessionRepo:
@@ -261,12 +261,16 @@ class TestChatSessionService:
         assert last_at == "2026-05-02T01:00:00Z"
         assert count == 4
 
-    def test_for_project_raises_when_project_missing(self) -> None:
+    def test_factory_raises_when_project_missing(self) -> None:
+        from factories.persistence import create_chat_session_service
+
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
         with pytest.raises(ProjectNotFound):
-            ChatSessionService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_chat_session_service(registry, 7)  # type: ignore[arg-type]
 
-    def test_for_project_raises_when_project_archived(self) -> None:
+    def test_factory_raises_when_project_archived(self) -> None:
+        from factories.persistence import create_chat_session_service
+
         archived = ProjectRow(
             id=7,
             name="p",
@@ -276,7 +280,7 @@ class TestChatSessionService:
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         with pytest.raises(ProjectNotFound):
-            ChatSessionService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_chat_session_service(registry, 7)  # type: ignore[arg-type]
 
     def test_session_repo_and_message_repo_properties_expose_handles(self) -> None:
         session_repo = _StubSessionRepo()

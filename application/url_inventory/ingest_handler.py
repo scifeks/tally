@@ -2,9 +2,8 @@
 
 Subscribes to ``ToolCompleted``. For Katana/Noir, locates the OAS3 file
 produced by the wrapper, parses it through the matching ``UrlListProvider``,
-persists the rows into ``url_findings`` via ``UrlInventoryService.ingest_scan_source``,
-and rebuilds ``merged_urls.txt`` and ``merged_oas3.json`` just-in-time so
-downstream DAST tools see the new URLs.
+persists the rows into ``url_findings`` via ``UrlInventoryService``,
+and rebuilds merged artifacts so downstream DAST tools see the new URLs.
 """
 
 from __future__ import annotations
@@ -17,11 +16,14 @@ from application.url_inventory.providers import KatanaProvider, NoirProvider
 from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
 from domain.url_inventory.entry import UrlTool
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
-from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
 if TYPE_CHECKING:
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
+    )
     from domain.pipeline.events import ToolCompleted
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,15 @@ _TOOL_PROVIDER_MAP: dict[str, tuple[type, UrlTool]] = {
 
 
 class UrlInventoryIngestHandler:
-    """Bus handler that routes Katana / Noir output into ``url_findings``."""
+    """Bus handler: routes Katana/Noir output into url_findings."""
+
+    def __init__(
+        self,
+        repo_repo: ProjectRepoRepositoryPort,
+        url_finding_repo: UrlFindingRepositoryPort,
+    ) -> None:
+        self._repo_repo = repo_repo
+        self._url_finding_repo = url_finding_repo
 
     def handle(self, event: ToolCompleted) -> None:
         tool_name = (event.result.tool_name or "").lower()
@@ -57,15 +67,12 @@ class UrlInventoryIngestHandler:
 
         try:
             paths = ProjectPaths.from_canonical(event.base_path, event.project_name)
-            paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-            factory = ConnectionFactory(paths.findings_db)
-            factory.init_schema()
-            repo_repo = RepositoryRepository(factory)
-            repo = repo_repo.get_by_name(event.repo)
+            repo = self._repo_repo.get_by_name(event.repo)
             if repo is None or repo.id is None:
                 logger.warning(
-                    "UrlInventoryIngestHandler: no active repositories row "
-                    "for %r in project %r; skipping ingest",
+                    "UrlInventoryIngestHandler: no active"
+                    " repositories row for %r in project"
+                    " %r; skipping ingest",
                     event.repo,
                     event.project_name,
                 )
@@ -83,8 +90,7 @@ class UrlInventoryIngestHandler:
             provider = provider_cls()
             entries = list(provider.provide(ctx, file_path=str(oas3_path)))
 
-            url_repo = UrlFindingRepository(factory)
-            service = UrlInventoryService(url_repo)
+            service = UrlInventoryService(self._url_finding_repo)
             service.ingest_scan_source(
                 repo_id=repo_id,
                 run_id=event.run_id,

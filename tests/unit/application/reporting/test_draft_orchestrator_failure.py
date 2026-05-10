@@ -1,9 +1,4 @@
-"""Unit coverage for the failure path of ``run_draft``.
-
-Pins the user-facing error messages emitted on the ``DraftFailed`` event
-and the ``mark_failed`` call against accidental drift back to internal
-column names or stack-trace bleed-through.
-"""
+"""Unit tests for draft generation failure handling."""
 
 from __future__ import annotations
 
@@ -59,7 +54,7 @@ def _patch_generate(monkeypatch: pytest.MonkeyPatch, raiser) -> None:
 def test_mark_failed_called_with_user_facing_string(
     monkeypatch, request_obj, repo, sink, captured_events
 ):
-    """A DraftGenerationError's message is forwarded to mark_failed verbatim."""
+    """DraftGenerationError forwarded to mark_failed."""
 
     def raiser(*_a, **_kw):
         raise DraftGenerationError("anything user-facing")
@@ -67,7 +62,14 @@ def test_mark_failed_called_with_user_facing_string(
     _patch_generate(monkeypatch, raiser)
 
     with pytest.raises(DraftGenerationError):
-        run_draft(request_obj, prompt=MagicMock(), repo=repo, event_sink=sink)
+        run_draft(
+            request_obj,
+            prompt=MagicMock(),
+            repo=repo,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+            event_sink=sink,
+        )
 
     repo.mark_failed.assert_called_once_with(
         "executive-summary", "anything user-facing"
@@ -80,7 +82,7 @@ def test_mark_failed_called_with_user_facing_string(
 def test_no_findings_message_does_not_leak_should_report(
     monkeypatch, request_obj, repo, sink, captured_events
 ):
-    """Regression: the message shipped to the UI must not say should_report=1."""
+    """Error message does not expose internal column names."""
 
     def raiser(*_a, **_kw):
         raise DraftGenerationError(
@@ -91,7 +93,14 @@ def test_no_findings_message_does_not_leak_should_report(
 
     _patch_generate(monkeypatch, raiser)
     with pytest.raises(DraftGenerationError):
-        run_draft(request_obj, prompt=MagicMock(), repo=repo, event_sink=sink)
+        run_draft(
+            request_obj,
+            prompt=MagicMock(),
+            repo=repo,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+            event_sink=sink,
+        )
     failed = next(e for e in captured_events if isinstance(e, DraftFailed))
     assert "should_report" not in failed.message
     assert "triaged_by" not in failed.message
@@ -108,7 +117,14 @@ def test_unknown_exception_uses_generic_user_message(
 
     _patch_generate(monkeypatch, raiser)
     with pytest.raises(RuntimeError):
-        run_draft(request_obj, prompt=MagicMock(), repo=repo, event_sink=sink)
+        run_draft(
+            request_obj,
+            prompt=MagicMock(),
+            repo=repo,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+            event_sink=sink,
+        )
 
     repo.mark_failed.assert_called_once()
     section, msg = repo.mark_failed.call_args.args
@@ -127,7 +143,14 @@ def test_cancelled_branch_persists_user_friendly_message(
 
     _patch_generate(monkeypatch, raiser)
     with pytest.raises(DraftCancelled):
-        run_draft(request_obj, prompt=MagicMock(), repo=repo, event_sink=sink)
+        run_draft(
+            request_obj,
+            prompt=MagicMock(),
+            repo=repo,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+            event_sink=sink,
+        )
 
     repo.mark_failed.assert_called_once_with(
         "executive-summary", "Cancelled before generation completed."
@@ -167,7 +190,14 @@ def test_overwrite_denied_emits_failed_event(tmp_path, repo, sink, captured_even
     )
 
     with pytest.raises(DraftOverwriteDenied):
-        run_draft(request_obj, prompt=MagicMock(), repo=repo, event_sink=sink)
+        run_draft(
+            request_obj,
+            prompt=MagicMock(),
+            repo=repo,
+            finding_repo=MagicMock(),
+            repo_repo=MagicMock(),
+            event_sink=sink,
+        )
 
     failed = next(e for e in captured_events if isinstance(e, DraftFailed))
     assert failed.error == "DraftOverwriteDenied"

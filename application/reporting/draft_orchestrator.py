@@ -31,26 +31,18 @@ from core.project_paths import ProjectPaths
 from domain.pipeline.report_events import DraftCompleted, DraftFailed, DraftStarted
 from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.llm.factory import get_llm_provider
-from infrastructure.store import make_store
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
     from application.ports.draft_repository import DraftRepositoryPort
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
     from application.ports.user_prompt import UserPromptPort
-    from core.config.schemas import Repository
     from domain.findings.entry import Finding
-
-
-def _active_repos(base_path: str, project_name: str) -> list[Repository]:
-    """Return active repos for the project, or ``[]`` if none."""
-    paths = ProjectPaths.from_canonical(base_path, project_name)
-    if not paths.findings_db.exists():
-        return []
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    return RepositoryRepository(factory).list_active()
 
 
 logger = logging.getLogger(__name__)
@@ -91,6 +83,8 @@ def run_draft(
     *,
     prompt: UserPromptPort,
     repo: DraftRepositoryPort,
+    finding_repo: FindingRepositoryPort,
+    repo_repo: ProjectRepoRepositoryPort,
     event_sink: DraftEventSink | None = None,
     cancel_token: CancellationToken | None = None,
 ) -> Path:
@@ -142,7 +136,16 @@ def run_draft(
     )
 
     try:
-        output = _generate(request, section, draft_path, draft_dir, token, prompt)
+        output = _generate(
+            request,
+            section,
+            draft_path,
+            draft_dir,
+            token,
+            prompt,
+            finding_repo,
+            repo_repo,
+        )
     except DraftCancelled as exc:
         user_msg = "Cancelled before generation completed."
         repo.mark_failed(section, user_msg)
@@ -215,6 +218,8 @@ def _generate(
     draft_dir: Path,
     token: CancellationToken,
     prompt: UserPromptPort,
+    finding_repo: FindingRepositoryPort,
+    repo_repo: ProjectRepoRepositoryPort,
 ) -> Path:
     """Execute LLM generation steps and write the file. Returns the path."""
     del prompt  # accepted for interface parity with run_report; no interactive steps
@@ -231,7 +236,6 @@ def _generate(
     generator = generator_cls(llm, draft_dir)
 
     _check_cancel(token, section)
-    _, finding_repo, _, _ = make_store(request.base_path, request.project)
     query = DraftQueryService(finding_repo)
     findings = query.get_filtered_findings(skip_triage=request.skip_triage)
 
@@ -256,7 +260,7 @@ def _generate(
     project_cfg = config.load_project_config(request.project)
     project_name = project_cfg.project_name if project_cfg else request.project
     engagement_date = project_cfg.created[:10] if project_cfg else ""
-    repos = [r.name for r in _active_repos(str(request.base_path), request.project)]
+    repos = [r.name for r in repo_repo.list_active()]
     prefix = resolve_prefix(
         project_cfg.abbreviation if project_cfg else "",
         config.global_config.report_finding_prefix,

@@ -97,7 +97,7 @@ def env(tmp_path: Path) -> dict:
     run_repo, finding_repo, _, _ = make_store(base_path, _PROJECT_NAME)
     run_id = run_repo.create_run({})
 
-    handler = PersistOnlyStrategy()
+    handler = PersistOnlyStrategy(finding_repo=finding_repo)
 
     return {
         "base_path": base_path,

@@ -1,12 +1,4 @@
-"""Application service for triage: persistence facade plus the
-``start_triage`` / ``resume_triage`` entry points.
-
-Owns the Tier-1 ``triage`` job lock end-to-end. Driving adapters
-(REPL, HTTP) call ``start_triage`` / ``resume_triage`` and translate
-``JobBusy`` / ``NoScanRunError`` / ``TriageNotResumableError`` to
-their wire formats. The worker thread releases the lock in its
-``finally``.
-"""
+"""Application service for triage: persistence facade and job orchestration."""
 
 from __future__ import annotations
 
@@ -16,7 +8,7 @@ import uuid
 from concurrent.futures import Future
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
@@ -30,16 +22,13 @@ from application.triage.run_registry import (
     get_triage_run_registry,
 )
 from application.triage.runner import NoScanRunError, TriageCancelled
-from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.triage import TriageBatchRepository
 
 if TYPE_CHECKING:
+    from application.ports.audit_repository import AuditRepositoryPort
+    from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
     from application.ports.triage_event_sink import TriageEventSink
-    from application.project.registry_service import ProjectRegistryService
     from application.tools.registry import ToolRegistry
 
 
@@ -92,32 +81,20 @@ class TriageService:
         self,
         run_repo: RunRepositoryPort,
         triage_repo: TriageBatchRepositoryPort,
+        finding_repo: FindingRepositoryPort,
+        audit_repo: AuditRepositoryPort,
         *,
+        repo_paths: dict[str, Path] | None = None,
         lock_registry: LockRegistry | None = None,
         triage_run_registry: TriageRunRegistry | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._triage_repo = triage_repo
+        self._finding_repo = finding_repo
+        self._audit_repo = audit_repo
+        self._repo_paths = repo_paths or {}
         self._lock_registry = lock_registry or get_registry()
         self._triage_run_registry = triage_run_registry or get_triage_run_registry()
-
-    @classmethod
-    def for_project(
-        cls,
-        registry: ProjectRegistryService,
-        project_id: int,
-    ) -> Self:
-        row = registry.resolve_by_id(project_id)
-        if row is None or row.archived_at:
-            raise ProjectNotFound(f"project {project_id} not found")
-        paths = ProjectPaths.from_registry_row(row)
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        return cls(
-            run_repo=RunRepository(factory),
-            triage_repo=TriageBatchRepository(factory),
-        )
 
     @property
     def run_repo(self) -> RunRepositoryPort:
@@ -270,6 +247,11 @@ class TriageService:
                         project_id=project_id,
                         scan_run_id=scan_run_id,
                         tool_registry=tool_registry,
+                        run_repo=self._run_repo,
+                        finding_repo=self._finding_repo,
+                        triage_repo=self._triage_repo,
+                        audit_repo=self._audit_repo,
+                        repo_paths=self._repo_paths,
                         event_sink=sink,
                         cancel_token=cancel_token,
                         app_root=Path(base_path),
@@ -280,6 +262,11 @@ class TriageService:
                         project_name,
                         project_id=project_id,
                         tool_registry=tool_registry,
+                        run_repo=self._run_repo,
+                        finding_repo=self._finding_repo,
+                        triage_repo=self._triage_repo,
+                        audit_repo=self._audit_repo,
+                        repo_paths=self._repo_paths,
                         event_sink=sink,
                         cancel_token=cancel_token,
                         app_root=Path(base_path),

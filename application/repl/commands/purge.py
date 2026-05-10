@@ -8,13 +8,15 @@ from typing import TYPE_CHECKING
 from rich.markup import escape
 
 from application.chat.sealing import purge_chat_for_project
-from application.chat.session_service import ChatSessionService
 from application.chat.stream_composer import RagUnavailable
-from application.findings.findings_service import FindingsService
 from application.ports.filters import Eq
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
-from application.url_inventory.url_list_service import UrlListService
 from core.project_paths import ProjectPaths
+from factories.persistence import (
+    create_chat_session_service,
+    create_findings_service,
+    create_url_list_service,
+)
 
 if TYPE_CHECKING:
     from application.rag.knowledge_base import FindingKnowledgeBase
@@ -227,13 +229,7 @@ class PurgeCommand:
                 shutil.rmtree(item)
 
     def _delete_merged_endpoints(self) -> None:
-        """Empty each repo's endpoints directory.
-
-        Phase 9 dropped the JSON-side ``merged_seeds_path`` /
-        ``merged_oas3_path`` fields; the merged artifacts are now
-        JIT-rebuilt from ``url_findings`` rows, so the only cleanup
-        needed here is removing any stale on-disk files.
-        """
+        """Empty each repo's endpoints directory of stale merged artifacts."""
         assert self.repl.active_project is not None
         endpoints_dir = _project_paths(self.repl).endpoints_dir
         if not endpoints_dir.exists():
@@ -271,7 +267,7 @@ class PurgeCommand:
         if project_id is None:
             return 0
         try:
-            svc = FindingsService.for_project(self.repl.project_registry, project_id)
+            svc = create_findings_service(self.repl.project_registry, project_id)
             return svc.count_findings(tools=tools)
         except Exception:
             return 0
@@ -282,7 +278,7 @@ class PurgeCommand:
         if project_id is None:
             return 0
         try:
-            svc = UrlListService.for_project(self.repl.project_registry, project_id)
+            svc = create_url_list_service(self.repl.project_registry, project_id)
             return svc.count_all_url_findings()
         except Exception:
             return 0
@@ -321,7 +317,7 @@ class PurgeCommand:
         if project_id is None:
             return 0
         try:
-            svc = ChatSessionService.for_project(self.repl.project_registry, project_id)
+            svc = create_chat_session_service(self.repl.project_registry, project_id)
             return len(
                 svc.session_repo.list_for_project(project_id, include_expired=True)
             )
@@ -338,7 +334,7 @@ class PurgeCommand:
         if project_id is None:
             return 0
         try:
-            svc = ChatSessionService.for_project(self.repl.project_registry, project_id)
+            svc = create_chat_session_service(self.repl.project_registry, project_id)
             return purge_chat_for_project(project_id, session_repo=svc.session_repo)
         except Exception as exc:
             self.repl.console.print(f"[yellow]Chat purge warning:[/yellow] {exc}")
@@ -350,10 +346,8 @@ class PurgeCommand:
         if project_id is None:
             return
         try:
-            findings = FindingsService.for_project(
-                self.repl.project_registry, project_id
-            )
-            urls = UrlListService.for_project(self.repl.project_registry, project_id)
+            findings = create_findings_service(self.repl.project_registry, project_id)
+            urls = create_url_list_service(self.repl.project_registry, project_id)
             if tools is None:
                 urls.purge_all_url_findings()
                 findings.purge_all_findings_data()

@@ -102,7 +102,7 @@ def phase4_env(tmp_path: Path) -> dict:
     }
     gitleaks_id = _seed_finding(finding_repo, run_id, gitleaks_row)
 
-    handler = PersistOnlyStrategy()
+    handler = PersistOnlyStrategy(finding_repo=finding_repo)
 
     return {
         "base_path": base_path,

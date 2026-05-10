@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from application.chat.run_registry import (
     ChatRunHandle,
@@ -25,14 +25,12 @@ from application.chat.service import (
     ChatSessionNotFound,
     ChatStreamAlreadyRunning,
     ChatStreamNotRunning,
-    ProjectNotFound,
     stream_chat,
 )
+from application.chat.service import (
+    ProjectNotFound as ProjectNotFound,
+)
 from application.chat.stream_composer import ChatStreamComposer
-from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.chat_messages import ChatMessageRepository
-from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 
 if TYPE_CHECKING:
     from application.ports.chat_event_sink import ChatStreamSink
@@ -70,24 +68,6 @@ class ChatSessionService:
     ) -> None:
         self._session_repo = session_repo
         self._message_repo = message_repo
-
-    @classmethod
-    def for_project(
-        cls,
-        registry: ProjectRegistryService,
-        project_id: int,
-    ) -> Self:
-        row = registry.resolve_by_id(project_id)
-        if row is None or row.archived_at:
-            raise ProjectNotFound(f"project {project_id} not found")
-        paths = ProjectPaths.from_registry_row(row)
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        return cls(
-            session_repo=ChatSessionRepository(factory),
-            message_repo=ChatMessageRepository(factory),
-        )
 
     @property
     def session_repo(self) -> ChatSessionRepositoryPort:

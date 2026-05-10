@@ -10,7 +10,6 @@ import pytest
 
 from application.locking.cancellation import CancellationToken
 from application.scans.scans_service import (
-    ProjectNotFound,
     ScanNotCancellable,
     ScanNotFound,
     ScansService,
@@ -19,6 +18,7 @@ from application.scans.scans_service import (
 from application.tools.scan_run_registry import ScanRunRegistry
 from domain.projects.entry import ProjectRow
 from domain.scans.entry import ScanRunRow
+from factories.persistence import ProjectNotFound
 
 
 class _StubRunRepo:
@@ -44,12 +44,16 @@ class TestScansService:
         service = ScansService(run_repo=repo, project_id=1)  # type: ignore[arg-type]
         assert service.run_repo is repo
 
-    def test_for_project_raises_when_project_missing(self) -> None:
+    def test_factory_raises_when_project_missing(self) -> None:
+        from factories.persistence import create_scans_service
+
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
         with pytest.raises(ProjectNotFound):
-            ScansService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_scans_service(registry, 7)  # type: ignore[arg-type]
 
-    def test_for_project_raises_when_project_archived(self) -> None:
+    def test_factory_raises_when_project_archived(self) -> None:
+        from factories.persistence import create_scans_service
+
         archived = ProjectRow(
             id=7,
             name="p",
@@ -59,11 +63,15 @@ class TestScansService:
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         with pytest.raises(ProjectNotFound):
-            ScansService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_scans_service(registry, 7)  # type: ignore[arg-type]
 
     def test_mark_stale_failed_for_all_projects_handles_empty_registry(self) -> None:
         registry = _StubProjectRegistry(projects=[])
-        ScansService.mark_stale_failed_for_all_projects(registry)  # type: ignore[arg-type]
+
+        def stub_factory(_db_path: str) -> Any:
+            return MagicMock()
+
+        ScansService.mark_stale_failed_for_all_projects(registry, stub_factory)  # type: ignore[arg-type]
 
 
 def _row(*, project_id: int | None = 1, status: str | None = "running") -> ScanRunRow:

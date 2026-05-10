@@ -12,26 +12,23 @@ from application.repl.adapters.orchestrator_display import OrchestratorDisplay
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
-from application.scans.scans_service import ProjectNotFound, ScansService
+from application.scans.scans_service import ProjectNotFound
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
 from application.tools.scan_service import get_scan_service
 from application.url_inventory.url_list_service import (
     ProjectNotFound as UrlProjectNotFound,
 )
-from application.url_inventory.url_list_service import UrlListService
 from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.chat_sessions import (
-    ChatSessionRepository,
-)
-from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.tool_arg_profiles import (
-    ToolArgProfilesRepository,
-)
-from infrastructure.store.repositories.tool_overrides import (
-    ToolOverridesRepository,
+from factories.persistence import (
+    create_finding_repo,
+    create_overrides_repo,
+    create_repo_repo,
+    create_scan_repos,
+    create_scans_service,
+    create_url_finding_repo,
+    create_url_list_service,
 )
 from infrastructure.tools.runner import SubprocessRunner
 
@@ -70,8 +67,7 @@ class ScanCommands:
         paths = ProjectPaths.from_canonical(
             self.repl.base_path, self.repl.active_project
         )
-        factory = ConnectionFactory(paths.findings_db)
-        overrides_repo = ToolOverridesRepository(factory)
+        overrides_repo = create_overrides_repo(paths.findings_db)
         discover_tools(
             self.repl.tool_registry,
             self.repl.base_path,
@@ -214,10 +210,11 @@ class ScanCommands:
             if effective_tools is None:
                 return
 
-        factory = ConnectionFactory(paths.findings_db)
-        run_repo = RunRepository(factory)
-        chat_session_repo = ChatSessionRepository(factory)
-        profiles_repo = ToolArgProfilesRepository(factory)
+        run_repo, chat_repo, profiles_repo, _ = create_scan_repos(paths.findings_db)
+
+        finding_repo = create_finding_repo(paths.findings_db)
+        repo_repo = create_repo_repo(paths.findings_db)
+        url_finding_repo = create_url_finding_repo(paths.findings_db)
 
         try:
             handle = get_scan_service().start_scan(
@@ -226,8 +223,11 @@ class ScanCommands:
                 base_path=str(self.repl.base_path),
                 tool_registry=self.repl.tool_registry,
                 run_repo=run_repo,
-                chat_session_repo=chat_session_repo,
+                chat_session_repo=chat_repo,
                 profiles_repo=profiles_repo,
+                finding_repo=finding_repo,
+                repo_repo=repo_repo,
+                url_finding_repo=url_finding_repo,
                 repo_ids=tuple(repo_names or ()),
                 tool_ids=tuple(effective_tools or ()),
                 skip_tool_ids=tuple(skip_tools),
@@ -258,7 +258,7 @@ class ScanCommands:
 
         if summary.findings_by_tool:
             try:
-                ScansService.for_project(
+                create_scans_service(
                     self.repl.project_registry, project_id
                 ).record_run_tool_counts(handle.run_id, summary.findings_by_tool)
             except ProjectNotFound:
@@ -272,10 +272,7 @@ class ScanCommands:
         return row.id
 
     def cmd_run(self, _cmd: str, args: list[str]) -> None:
-        """``run <tool> [--timeout <seconds>] [args...]``.
-
-        Execute a tool with raw arguments.
-        """
+        """Execute a tool with raw arguments."""
         if not args:
             self.repl.console.print(
                 "[red]Usage:[/red] run <tool> [--timeout <seconds>] [args...]"
@@ -297,8 +294,7 @@ class ScanCommands:
         paths = ProjectPaths.from_canonical(
             self.repl.base_path, self.repl.active_project
         )
-        factory = ConnectionFactory(paths.findings_db)
-        overrides_repo = ToolOverridesRepository(factory)
+        overrides_repo = create_overrides_repo(paths.findings_db)
         discover_tools(
             self.repl.tool_registry,
             self.repl.base_path,
@@ -496,18 +492,12 @@ class ScanCommands:
         return tools
 
     def _repo_has_url_findings(self, repo: object, project_id: int) -> bool:
-        """Return True if *repo* already has any ``url_findings`` rows.
-
-        The DAST-without-discovery warning calls this per repo: when a
-        repo has previously-ingested URL data (Katana/Noir scan, or a
-        user-uploaded endpoint file), the DAST tools have something to
-        consume and the warning is suppressed.
-        """
+        """Return True if *repo* has any ``url_findings`` rows."""
         repo_id = getattr(repo, "id", None)
         if not isinstance(repo_id, int):
             return False
         try:
-            service = UrlListService.for_project(self.repl.project_registry, project_id)
+            service = create_url_list_service(self.repl.project_registry, project_id)
         except UrlProjectNotFound:
             return False
         return service.repo_has_url_findings(repo_id)

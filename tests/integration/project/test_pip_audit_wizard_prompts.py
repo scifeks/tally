@@ -38,8 +38,14 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _make_pm(base_path: Path) -> ProjectManager:
+    from infrastructure.store.connection import ConnectionFactory
+
     _write_global_config(base_path)
-    return ProjectManager(base_path=str(base_path))
+
+    def schema_init(db_path):
+        ConnectionFactory(db_path).init_schema()
+
+    return ProjectManager(base_path=str(base_path), schema_initializer=schema_init)
 
 
 def _make_repo(**kwargs: object) -> Repository:

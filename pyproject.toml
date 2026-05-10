@@ -47,6 +47,16 @@ target-version = "py313"
 select = ["E", "F", "I", "UP"]
 fixable = ["ALL"]
 
+[tool.ruff.lint.isort]
+known-first-party = [
+    "application",
+    "core",
+    "domain",
+    "factories",
+    "infrastructure",
+    "web",
+]
+
 [tool.ruff.format]
 quote-style = "double"
 
@@ -55,7 +65,7 @@ typeCheckingMode = "basic"
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
-extraPaths = []
+extraPaths = ["."]
 
 [tool.coverage.run]
 branch = true

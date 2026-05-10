@@ -8,13 +8,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.chat.stream_composer import RagUnavailable
-from application.findings.findings_service import FindingsService, ProjectNotFound
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
-from application.reporting.reports_service import (
-    ProjectNotFound as ReportProjectNotFound,
-)
-from application.reporting.reports_service import ReportsService
 from core.project_paths import ProjectPaths
+from factories.persistence import (
+    ProjectNotFound,
+    create_findings_service,
+    create_reports_service,
+    make_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +59,7 @@ class ReportCommand:
         """report assemble [--testing-type <type>]
                            [--engagement-date <YYYY-MM-DD>] [--output <path>]
 
-        Assembles the full PDF report with all findings content populated.
-        Finding IDs are reset and reassigned at the start of every run.
-        Draft/reviewed sections are resolved as in 'report shell'.
-
-        Company name is read from the active project's configuration.
-        Testing types: white_box, grey_box, black_box (default: white_box).
-        Default output: projects/<project>/report/<project>-report.pdf.
+        Generate the full PDF report.
         """
         from application.ports.pdf_renderer import PdfRenderError
         from application.repl.adapters.rich_console_prompt import (
@@ -123,9 +118,14 @@ class ReportCommand:
         )
         try:
             with self.repl.console.status("Rendering PDF..."):
+                _, fr, _, _ = make_store(
+                    self.repl.base_path,
+                    self.repl.active_project,
+                )
                 run_report(
                     request,
                     prompt=RichConsolePromptAdapter(),
+                    finding_repo=fr,
                     template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
                     pdf_renderer=WeasyPrintPdfRenderer(),
                 )
@@ -191,7 +191,7 @@ class ReportCommand:
             return
 
         try:
-            finding_repo = FindingsService.for_project(
+            finding_repo = create_findings_service(
                 self.repl.project_registry, self._resolve_project_id()
             ).finding_repo
         except (ProjectNotFound, ValueError) as exc:
@@ -258,10 +258,10 @@ class ReportCommand:
         sections = [args[0]] if args else list(SECTION_REGISTRY.keys())
 
         try:
-            draft_repo = ReportsService.for_project(
+            draft_repo = create_reports_service(
                 self.repl.project_registry, self._resolve_project_id()
             ).draft_repo
-        except (ReportProjectNotFound, ValueError) as exc:
+        except (ProjectNotFound, ValueError) as exc:
             self.repl.console.print(f"[red]Project error:[/red] {exc}")
             return
 
@@ -277,10 +277,22 @@ class ReportCommand:
                 skip_triage=skip_triage,
             )
             try:
+                paths = _project_paths(self.repl)
+                _, fr, _, _ = make_store(
+                    self.repl.base_path,
+                    self.repl.active_project,
+                )
+                from factories.persistence import (
+                    create_repo_repo,
+                )
+
+                rr = create_repo_repo(paths.findings_db)
                 run_draft(
                     request,
                     prompt=prompt,
                     repo=draft_repo,
+                    finding_repo=fr,
+                    repo_repo=rr,
                     event_sink=sink,
                 )
             except DraftOverwriteDenied as exc:
@@ -338,12 +350,17 @@ class ReportCommand:
             RichConsolePromptAdapter,
         )
 
+        _, fr, _, _ = make_store(
+            self.repl.base_path,
+            self.repl.active_project,
+        )
         assembler = ReportAssembler(
             project=self.repl.active_project,
             base_path=self.repl.base_path,
             prompt=RichConsolePromptAdapter(),
             template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
             pdf_renderer=WeasyPrintPdfRenderer(),
+            finding_repo=fr,
             testing_type=testing_type,
             engagement_date=engagement_date,
         )

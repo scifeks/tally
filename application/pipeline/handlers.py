@@ -13,7 +13,6 @@ from application.rag.ingestor import (
     filter_code_rows,
 )
 from application.rag.knowledge_base import FindingKnowledgeBase
-from core.project_paths import ProjectPaths
 from domain.pipeline.events import (
     EventBus,
     IngestCompleted,
@@ -21,27 +20,20 @@ from domain.pipeline.events import (
 )
 from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.llm.factory import get_llm_provider
-from infrastructure.store import make_store
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from core.config.schemas import Repository
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
+
 
 logger = logging.getLogger(__name__)
-
-
-def _load_active_repos(base_path: str, project_name: str) -> list[Repository]:
-    """Return active repos from the per-project DB; ``[]`` if absent."""
-    paths = ProjectPaths.from_canonical(base_path, project_name)
-    if not paths.findings_db.exists():
-        return []
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    return RepositoryRepository(factory).list_active()
 
 
 def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledgeBase:
@@ -63,7 +55,8 @@ def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledg
 class BaseHandler:
     """Shared FindingKnowledgeBase cache for ChromaDB persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, finding_repo: FindingRepositoryPort) -> None:
+        self._finding_repo = finding_repo
         self._knowledge_bases: dict[str, FindingKnowledgeBase] = {}
 
     def _get_knowledge_base(
@@ -86,13 +79,14 @@ class BaseHandler:
             kb = self._get_knowledge_base(project_name, base_path)
         except Exception as exc:
             logger.warning(
-                "%s: knowledge base init failed: %s", type(self).__name__, exc
+                "%s: knowledge base init failed: %s",
+                type(self).__name__,
+                exc,
             )
             return
 
         try:
-            _, finding_repo, _, _ = make_store(base_path, project_name)
-            rows = finding_repo.get_by_ids(ids)
+            rows = self._finding_repo.get_by_ids(ids)
             grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
             for row in rows:
                 grouped[(row["tool"], row["profile"])].append(row)
@@ -109,17 +103,31 @@ class BaseHandler:
                     {"tool": tool, "profile": profile} for _ in group_rows
                 ]
                 doc_ids = [str(row["id"]) for row in group_rows]
-                kb.add_findings(documents=texts, metadatas=metadatas, ids=doc_ids)
+                kb.add_findings(
+                    documents=texts,
+                    metadatas=metadatas,
+                    ids=doc_ids,
+                )
         except Exception as exc:
-            logger.error("%s: ChromaDB write error: %s", type(self).__name__, exc)
+            logger.error(
+                "%s: ChromaDB write error: %s",
+                type(self).__name__,
+                exc,
+            )
 
 
 class IngestHandler(BaseHandler):
     """Handles ToolCompleted: normalizes findings to SQLite, emits IngestCompleted."""
 
-    def __init__(self, bus: EventBus) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        bus: EventBus,
+        finding_repo: FindingRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
+    ) -> None:
+        super().__init__(finding_repo=finding_repo)
         self._bus = bus
+        self._repo_repo = repo_repo
 
     def handle(self, event: ToolCompleted) -> None:
         result = event.result
@@ -159,27 +167,28 @@ class IngestHandler(BaseHandler):
 
             if handler.domain == "code":
                 if handler.segment in ("sca", "web"):
-                    # SCA and web-segment code tools (e.g. Noir) have no file
-                    # path to normalise; set repo directly from execution context.
                     if event.repo:
                         for row in rows:
                             row.setdefault("repo", event.repo)
                 else:
                     try:
-                        repos = _load_active_repos(event.base_path, event.project_name)
+                        active = self._repo_repo.list_active()
                     except Exception:
-                        repos = None
-                    rows = filter_code_rows(rows, repos, event.repo, result.tool_name)
+                        active = None
+                    rows = filter_code_rows(
+                        rows,
+                        active,
+                        event.repo,
+                        result.tool_name,
+                    )
             else:
-                # web/network tools: set repo from execution context
                 if event.repo:
                     for row in rows:
                         row.setdefault("repo", event.repo)
 
-            _, finding_repo, _, _ = make_store(event.base_path, event.project_name)
-            finding_repo.insert_findings(event.run_id or 0, rows)
+            self._finding_repo.insert_findings(event.run_id or 0, rows)
             fingerprints = [compute_fingerprint(row) for row in rows]
-            sqlite_ids = finding_repo.get_ids_by_fingerprints(
+            sqlite_ids = self._finding_repo.get_ids_by_fingerprints(
                 fingerprints, run_id=event.run_id or 0
             )
         except Exception as exc:

@@ -414,8 +414,6 @@ class TestEnrichmentPipeline:
         fields = pipeline._get_fields_to_enrich(metadata)
         assert "confidence" in fields
 
-    # INT-4: gitleaks (should_enrich=False) still written to ChromaDB
-
     def test_enrichment_failure_still_writes_to_chroma(self, project_env: dict) -> None:
         """Gitleaks rows skipped by enrichment are still written to ChromaDB.
 
@@ -435,7 +433,7 @@ class TestEnrichmentPipeline:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        handler = PersistOnlyStrategy()
+        handler = PersistOnlyStrategy(finding_repo=finding_repo)
         with patch(
             "application.pipeline.handlers._build_knowledge_base",
             side_effect=_build_test_kb,
@@ -450,8 +448,6 @@ class TestEnrichmentPipeline:
             assert results[0]["metadata"]["tool"] == "gitleaks"
         finally:
             kb.close()
-
-    # PIPE-3: single per-field failure leaves other fields intact
 
     def test_single_field_failure_allows_other_fields_to_complete(
         self, project_env: dict
@@ -500,8 +496,6 @@ class TestEnrichmentPipeline:
         # resolves successfully so had_errors stays False and enriched=True.
         assert row.enriched is True
         assert p.had_errors is False
-
-    # PIPE-4: non-JSON LLM response does not crash the pipeline
 
     def test_generic_field_json_parse_failure_does_not_crash(
         self, project_env: dict

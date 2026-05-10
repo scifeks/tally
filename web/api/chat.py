@@ -33,9 +33,13 @@ from application.chat.service import (
     ChatStreamAlreadyRunning,
     ChatStreamNotRunning,
 )
-from application.chat.session_service import ChatSessionService, ProjectNotFound
+from application.chat.session_service import ChatSessionService
 from application.chat.stream_composer import RagUnavailable
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
+from factories.persistence import (
+    ProjectNotFound,
+    create_chat_session_service,
+)
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
@@ -60,7 +64,7 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> ChatSessionService:
     """Build a ChatSessionService for *project_id* or raise 404."""
     try:
-        return ChatSessionService.for_project(
+        return create_chat_session_service(
             request.app.state.project_registry, project_id
         )
     except ProjectNotFound as exc:

@@ -50,13 +50,13 @@ class TestTriageCommands:
     ) -> None:
         mock_repl.active_project = None
         with patch(
-            "application.repl.commands.triage_commands.TriageService"
+            "application.repl.commands.triage_commands.create_triage_service"
         ) as mock_service:
             commands.cmd_triage("triage", [])
 
         printed = " ".join(str(call) for call in mock_repl.console.print.call_args_list)
         assert "No active" in printed
-        mock_service.for_project.assert_not_called()
+        mock_service.assert_not_called()
 
     def test_batch_flag_calls_run_triage_batch_only(
         self, commands: TriageCommands, mock_repl: MagicMock
@@ -67,28 +67,45 @@ class TestTriageCommands:
         ) as mock_batch:
             commands.cmd_triage("triage", ["--batch"])
 
-        mock_batch.assert_called_once_with(
-            "test-project",
-            mock_repl.tool_registry,
-            app_root=Path(mock_repl.base_path),
-        )
+        mock_batch.assert_called_once()
+        call_args = mock_batch.call_args
+        assert call_args.args[0] == "test-project"
+        assert call_args.args[1] is mock_repl.tool_registry
+        assert call_args.kwargs["app_root"] == Path(mock_repl.base_path)
         printed = " ".join(str(call) for call in mock_repl.console.print.call_args_list)
         assert "3" in printed
 
     def test_dry_run_flag_calls_run_triage_dry_run(
         self, commands: TriageCommands, mock_repl: MagicMock
     ) -> None:
-        with patch(
-            "application.repl.commands.triage_commands.run_triage_dry_run",
-            return_value=2,
-        ) as mock_dry:
+        with (
+            patch(
+                "application.repl.commands.triage_commands.run_triage_dry_run",
+                return_value=2,
+            ) as mock_dry,
+            patch("application.repl.commands.triage_commands.make_store") as mock_store,
+            patch(
+                "application.repl.commands.triage_commands.load_active_repos",
+                return_value=[],
+            ),
+        ):
+            mock_run_repo = MagicMock()
+            mock_finding_repo = MagicMock()
+            mock_triage_repo = MagicMock()
+            mock_audit_repo = MagicMock()
+            mock_store.return_value = (
+                mock_run_repo,
+                mock_finding_repo,
+                mock_triage_repo,
+                mock_audit_repo,
+            )
             commands.cmd_triage("triage", ["--dry-run"])
 
-        mock_dry.assert_called_once_with(
-            "test-project",
-            mock_repl.tool_registry,
-            app_root=Path(mock_repl.base_path),
-        )
+        mock_dry.assert_called_once()
+        call_args = mock_dry.call_args
+        assert call_args.args[0] == "test-project"
+        assert call_args.args[1] is mock_repl.tool_registry
+        assert call_args.kwargs["app_root"] == Path(mock_repl.base_path)
 
     def test_default_path_cancelled_when_user_enters_n(
         self, commands: TriageCommands, mock_repl: MagicMock
@@ -96,12 +113,12 @@ class TestTriageCommands:
         with (
             patch("builtins.input", return_value="n"),
             patch(
-                "application.repl.commands.triage_commands.TriageService"
+                "application.repl.commands.triage_commands.create_triage_service"
             ) as mock_service,
         ):
             commands.cmd_triage("triage", [])
 
-        mock_service.for_project.assert_not_called()
+        mock_service.assert_not_called()
         printed = " ".join(str(call) for call in mock_repl.console.print.call_args_list)
         assert "cancelled" in printed.lower()
 
@@ -144,15 +161,13 @@ class TestTriageCommands:
                 return_value=False,
             ),
             patch(
-                "application.repl.commands.triage_commands.TriageService"
-            ) as mock_service_cls,
+                "application.repl.commands.triage_commands.create_triage_service",
+                return_value=service,
+            ) as mock_service_fn,
         ):
-            mock_service_cls.for_project.return_value = service
             commands.cmd_triage("triage", [])
 
-        mock_service_cls.for_project.assert_called_once_with(
-            mock_repl.project_registry, 42
-        )
+        mock_service_fn.assert_called_once_with(mock_repl.project_registry, 42)
         service.start_triage.assert_called_once()
         kwargs = service.start_triage.call_args.kwargs
         assert kwargs["project_id"] == 42

@@ -155,29 +155,25 @@ def _make_tool_registry_mock(
     return reg
 
 
-def _mock_repo_repository() -> MagicMock:
-    mock = MagicMock()
-    mock.list_active.return_value = []
-    return mock
-
-
 def _run_with_adapter(
     project: str,
     tmp_root: Path,
     adapter: _StubAdapter | None = None,
 ) -> dict:
-    with (
-        patch("application.triage.factory.TriageAgentFactory") as mock_factory,
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
-    ):
+    from infrastructure.store import make_store
+
+    run_repo, finding_repo, triage_repo, audit_repo = make_store(str(tmp_root), project)
+    with patch("application.triage.factory.TriageAgentFactory") as mock_factory:
         mock_factory.return_value.create.return_value = adapter or _StubAdapter()
         return run_triage(
             project,
             _make_tool_registry_mock(),
             app_root=tmp_root,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
         )
 
 
@@ -235,11 +231,17 @@ def test_failed_outcome_on_exception(project_db) -> None:
 
 
 def test_missing_db_raises(tmp_path: Path) -> None:
+    mock = MagicMock()
     with pytest.raises(FileNotFoundError):
         run_triage(
             "nonexistent-project",
             _make_tool_registry_mock(),
             app_root=tmp_path,
+            run_repo=mock,
+            finding_repo=mock,
+            triage_repo=mock,
+            audit_repo=mock,
+            repo_paths={},
         )
 
 
@@ -340,6 +342,9 @@ def test_create_triage_batches_called_per_combo(
         ],
     )
 
+    from infrastructure.store import make_store
+
+    run_repo, finding_repo, triage_repo, audit_repo = make_store(tmp_root, project)
     with (
         patch(
             "infrastructure.store.repositories.triage"
@@ -358,16 +363,17 @@ def test_create_triage_batches_called_per_combo(
             return_value=0,
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
     ):
         mock_factory.return_value.create.return_value = _StubAdapter()
         run_triage(
             project,
             _make_tool_registry_mock(),
             app_root=tmp_root,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
         )
 
     assert mock_fetch.call_count == 2
@@ -382,6 +388,9 @@ def test_batching_error_aborts_before_session_prep(
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
+    from infrastructure.store import make_store
+
+    run_repo, finding_repo, triage_repo, audit_repo = make_store(tmp_root, project)
     with (
         patch(
             "infrastructure.store.repositories.triage"
@@ -396,10 +405,6 @@ def test_batching_error_aborts_before_session_prep(
         ),
         patch.object(TriageRunner, "_prepare_session") as mock_prepare,
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
     ):
         mock_factory.return_value.create.return_value = _StubAdapter()
         with pytest.raises(RuntimeError, match="Batching failed"):
@@ -407,15 +412,23 @@ def test_batching_error_aborts_before_session_prep(
                 project,
                 _make_tool_registry_mock(),
                 app_root=tmp_root,
+                run_repo=run_repo,
+                finding_repo=finding_repo,
+                triage_repo=triage_repo,
+                audit_repo=audit_repo,
+                repo_paths={},
             )
 
     mock_prepare.assert_not_called()
 
 
 def test_batch_count_reported(project_db, capsys) -> None:
+    from infrastructure.store import make_store
+
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
 
+    run_repo, finding_repo, triage_repo, audit_repo = make_store(tmp_root, project)
     with (
         patch(
             "infrastructure.store.repositories.triage"
@@ -434,16 +447,17 @@ def test_batch_count_reported(project_db, capsys) -> None:
             return_value=0,
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
-        patch(
-            "application.triage.factory.RepositoryRepository",
-            return_value=_mock_repo_repository(),
-        ),
     ):
         mock_factory.return_value.create.return_value = _StubAdapter()
         run_triage(
             project,
             _make_tool_registry_mock(),
             app_root=tmp_root,
+            run_repo=run_repo,
+            finding_repo=finding_repo,
+            triage_repo=triage_repo,
+            audit_repo=audit_repo,
+            repo_paths={},
         )
 
     out = capsys.readouterr().out

@@ -1,28 +1,14 @@
-"""Application service for the URL list web surface.
-
-Owns per-request construction of the URL finding repo, the project
-repo lookup, and the wrapping ``UrlInventoryService`` so route modules
-do not import infrastructure persistence directly. Owns the
-``ingest_uploaded_endpoint_file`` orchestration: disk persistence into
-``endpoints/<repo_name>-<epoch>/``, ``url_seed_file`` pointer update,
-``UserFileProvider`` invocation, and ``UrlInventoryService`` ingest.
-"""
+"""Application service for the URL list web surface."""
 
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers.user_file import UserFileProvider
 from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
-from infrastructure.endpoints.converters.endpoint_file_converter import (
-    EndpointFileConverter,
-)
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
-from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
 if TYPE_CHECKING:
     from application.ports.project_repo_repository import (
@@ -32,7 +18,6 @@ if TYPE_CHECKING:
         UrlFindingRepositoryPort,
     )
     from application.ports.url_source_converter import UrlSourceConverterPort
-    from application.project.registry_service import ProjectRegistryService
     from core.config.schemas import Repository
 
 
@@ -61,37 +46,6 @@ class UrlListService:
         self._findings_db_exists = findings_db_exists
         self._paths = paths
         self._project_name = project_name
-
-    @classmethod
-    def for_project(
-        cls,
-        registry: ProjectRegistryService,
-        project_id: int,
-    ) -> Self:
-        row = registry.resolve_by_id(project_id)
-        if row is None or row.archived_at:
-            raise ProjectNotFound(f"project {project_id} not found")
-        paths = ProjectPaths.from_registry_row(row)
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        # Capture before init_schema(): init creates the file, and the
-        # defensive count helpers need to know whether the project has
-        # any persisted url_findings yet.
-        findings_db_exists = paths.findings_db.exists()
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        url_repo = UrlFindingRepository(factory)
-        project_repo = RepositoryRepository(factory)
-        inventory = UrlInventoryService(url_repo)
-        converter = EndpointFileConverter()
-        return cls(
-            url_repo=url_repo,
-            project_repo=project_repo,
-            inventory=inventory,
-            converter=converter,
-            findings_db_exists=findings_db_exists,
-            paths=paths,
-            project_name=row.name,
-        )
 
     @property
     def url_repo(self) -> UrlFindingRepositoryPort:

@@ -15,8 +15,6 @@ from application.url_inventory.service import UrlInventoryService
 from core.config import Repository
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.url_findings import UrlFindingRepository
 from infrastructure.tools.wrappers.utils.manifest_check import (
     LANGUAGE_MANIFESTS,
     has_dependency_manifests,
@@ -24,6 +22,12 @@ from infrastructure.tools.wrappers.utils.manifest_check import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
+    )
     from application.project.manager import ProjectManager
 
 _NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\s\-]*$")
@@ -236,8 +240,13 @@ def _interview_katana(
 class InteractiveProjectWizard:
     """Interactive terminal wizard for project and repository management."""
 
-    def __init__(self, manager: ProjectManager) -> None:
+    def __init__(
+        self,
+        manager: ProjectManager,
+        url_repo_factory: Callable[[Path], UrlFindingRepositoryPort] | None = None,
+    ) -> None:
         self._manager = manager
+        self._url_repo_factory = url_repo_factory
         self._service = ProjectRepositoriesService(manager.registry, manager.config)
 
     def _project_id(self, project_name: str) -> int:
@@ -611,12 +620,7 @@ class InteractiveProjectWizard:
     def _has_existing_endpoint_file(
         self, paths: ProjectPaths, repo: Repository
     ) -> bool:
-        """Return True if the repo has a user-uploaded endpoint file recorded.
-
-        The DB column ``url_seed_file`` is the source of truth. ``paths``
-        is unused but preserved for callsite symmetry with the rest of
-        the wizard.
-        """
+        """Return True if the repo has a user-uploaded endpoint file recorded."""
         del paths
         return repo.url_seed_file is not None
 
@@ -709,9 +713,12 @@ class InteractiveProjectWizard:
             )
             return
 
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        url_repo = UrlFindingRepository(factory)
+        if self._url_repo_factory is None:
+            from factories.persistence import create_url_finding_repo
+
+            url_repo = create_url_finding_repo(paths.findings_db)
+        else:
+            url_repo = self._url_repo_factory(paths.findings_db)
         service = UrlInventoryService(url_repo)
         service.ingest_user_file(
             repo_id=repo_id,

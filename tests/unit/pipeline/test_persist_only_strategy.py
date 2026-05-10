@@ -20,13 +20,13 @@ def _event(ids: list[int] | None = None) -> IngestCompleted:
 
 class TestPersistOnlyStrategy:
     def test_noop_when_ids_empty(self) -> None:
-        strategy = PersistOnlyStrategy()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock())
         with patch.object(strategy, "_persist_to_chromadb") as mock_persist:
             strategy.handle(_event(ids=[]))
         mock_persist.assert_not_called()
 
     def test_never_calls_enrichment_pipeline(self) -> None:
-        strategy = PersistOnlyStrategy()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock())
         with (
             patch(
                 "application.pipeline.strategies.EnrichmentPipeline"
@@ -37,29 +37,25 @@ class TestPersistOnlyStrategy:
         mock_enrich_cls.assert_not_called()
 
     def test_calls_persist_to_chromadb_with_correct_args(self) -> None:
-        strategy = PersistOnlyStrategy()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock())
         with patch.object(strategy, "_persist_to_chromadb") as mock_persist:
             strategy.handle(_event(ids=[3, 4]))
         mock_persist.assert_called_once_with([3, 4], "test-proj", "/tmp")
 
     def test_chromadb_write_uses_kb_and_tool_handler(self) -> None:
         """Full _persist_to_chromadb path: groups by tool/profile."""
-        strategy = PersistOnlyStrategy()
-        mock_kb = MagicMock()
         mock_finding_repo = MagicMock()
         mock_finding_repo.get_by_ids.return_value = [
             {"id": 1, "tool": "gitleaks", "profile": "main"},
             {"id": 2, "tool": "gitleaks", "profile": "main"},
         ]
+        strategy = PersistOnlyStrategy(finding_repo=mock_finding_repo)
+        mock_kb = MagicMock()
         mock_tool_handler = MagicMock()
         mock_tool_handler.render.side_effect = lambda row: f"secret {row['id']}"
 
         with (
             patch.object(strategy, "_get_knowledge_base", return_value=mock_kb),
-            patch(
-                "application.pipeline.handlers.make_store",
-                return_value=(MagicMock(), mock_finding_repo, MagicMock(), MagicMock()),
-            ),
             patch(
                 "application.pipeline.handlers.ToolHandlerFactory.load",
                 return_value=mock_tool_handler,

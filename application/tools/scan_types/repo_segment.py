@@ -13,7 +13,6 @@ from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import (
     dispatch_and_count_ingested,
     execute_tool_passes,
-    load_active_repos,
     make_context,
     normalize_success,
     should_skip_sca_tool,
@@ -66,7 +65,7 @@ class RepoSegmentScan(ScanType):
         executor = cast(ToolExecutor, resources.executor)
 
         start = perf_counter()
-        repos = load_active_repos(config.base_path, config.project_name)
+        repos = config.repo_repo.list_active() if config.repo_repo is not None else []
         if not repos:
             resources.display.print_status(
                 "[yellow]No repositories configured; skipping[/yellow]"

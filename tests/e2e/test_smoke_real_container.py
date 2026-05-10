@@ -43,7 +43,7 @@ from infrastructure.store.connection import (  # noqa: E402
 )
 from tests.conftest import requires_docker  # noqa: E402
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.e2e
 
 
 # -- skip helpers --------------------------------------------------------

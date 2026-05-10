@@ -19,12 +19,13 @@ import json
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
 
-from application.url_inventory.url_list_service import (
-    ProjectNotFound,
-    UrlListService,
-)
+from application.url_inventory.url_list_service import UrlListService
 from core.project_paths import ProjectPaths
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
+from factories.persistence import (
+    ProjectNotFound,
+    create_url_list_service,
+)
 from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -37,9 +38,7 @@ url_list_v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> UrlListService:
     """Build a UrlListService for *project_id* or raise 404."""
     try:
-        return UrlListService.for_project(
-            request.app.state.project_registry, project_id
-        )
+        return create_url_list_service(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 

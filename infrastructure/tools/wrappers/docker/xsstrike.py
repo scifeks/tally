@@ -32,6 +32,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.xsstrike import parse_xsstrike_log_string
 from infrastructure.tools.wrappers.base.xsstrike import BaseXSStrikeTool
@@ -131,12 +132,21 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
         volume-mounted.
         """
         from application.url_inventory.jit import jit_rebuild_artifacts
+        from infrastructure.store.connection import ConnectionFactory
+        from infrastructure.store.repositories.url_findings import (
+            UrlFindingRepository,
+        )
 
         assert context.repo is not None
         repo = context.repo
 
+        paths = ProjectPaths.from_canonical(context.base_path, context.project_name)
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        url_repo = UrlFindingRepository(factory)
+
         seeds_file, _oas3_path = jit_rebuild_artifacts(
-            context.base_path, context.project_name, repo
+            context.base_path, context.project_name, repo, url_finding_repo=url_repo
         )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(

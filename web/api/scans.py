@@ -30,7 +30,6 @@ from fastapi.responses import StreamingResponse
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.scans.scans_service import (
-    ProjectNotFound,
     ScanNotCancellable,
     ScanNotFound,
     ScansService,
@@ -41,6 +40,13 @@ from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
 from domain.scans.entry import ScanRunRow, ToolRunRow
 from domain.tools.scan_types import SEGMENT_ORDER
+from factories.persistence import (
+    ProjectNotFound,
+    create_finding_repo,
+    create_repo_repo,
+    create_scans_service,
+    create_url_finding_repo,
+)
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
@@ -93,7 +99,7 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> ScansService:
     """Build a ScansService for *project_id* or raise 404."""
     try:
-        return ScansService.for_project(request.app.state.project_registry, project_id)
+        return create_scans_service(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
@@ -376,6 +382,9 @@ async def start_scan(
     sink = EventBusScanSink(request.app.state.event_bus)
     run_repo = RunRepository(factory)
     chat_session_repo = ChatSessionRepository(factory)
+    finding_repo = create_finding_repo(paths.findings_db)
+    repo_repo = create_repo_repo(paths.findings_db)
+    url_finding_repo = create_url_finding_repo(paths.findings_db)
 
     try:
         handle = await asyncio.to_thread(
@@ -386,6 +395,9 @@ async def start_scan(
             tool_registry=tool_registry,
             run_repo=run_repo,
             chat_session_repo=chat_session_repo,
+            finding_repo=finding_repo,
+            repo_repo=repo_repo,
+            url_finding_repo=url_finding_repo,
             profiles_repo=profiles_repo,
             repo_ids=tuple(resolved.repo_names),
             tool_ids=tuple(body.toolIds),

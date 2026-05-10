@@ -99,7 +99,6 @@ class TestPhase6RagDraft:
             patch(
                 "application.reporting.draft_orchestrator.get_llm_provider"
             ) as mock_llm,
-            patch("application.reporting.draft_orchestrator.make_store") as mock_store,
             patch(
                 "application.reporting.draft_orchestrator.DraftQueryService"
             ) as mock_qs,
@@ -122,12 +121,6 @@ class TestPhase6RagDraft:
             ]
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
-            mock_store.return_value = (
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            )
             mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
@@ -144,6 +137,8 @@ class TestPhase6RagDraft:
                 request,
                 prompt=_AlwaysConfirm(),
                 repo=_make_mock_repo(),
+                finding_repo=_make_mock_repo(),
+                repo_repo=_make_mock_repo(),
                 event_sink=None,
             )
 
@@ -175,7 +170,6 @@ class TestPhase6RagDraft:
             patch(
                 "application.reporting.draft_orchestrator.get_llm_provider"
             ) as mock_llm,
-            patch("application.reporting.draft_orchestrator.make_store") as mock_store,
             patch(
                 "application.reporting.draft_orchestrator.DraftQueryService"
             ) as mock_qs,
@@ -188,12 +182,6 @@ class TestPhase6RagDraft:
             mock_qe.return_value.search.return_value = []
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
-            mock_store.return_value = (
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            )
             mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
@@ -210,6 +198,8 @@ class TestPhase6RagDraft:
                 request,
                 prompt=_AlwaysConfirm(),
                 repo=_make_mock_repo(),
+                finding_repo=_make_mock_repo(),
+                repo_repo=_make_mock_repo(),
                 event_sink=None,
             )
 
@@ -244,7 +234,6 @@ class TestPhase6RagDraft:
             patch(
                 "application.reporting.draft_orchestrator.get_llm_provider"
             ) as mock_llm,
-            patch("application.reporting.draft_orchestrator.make_store") as mock_store,
             patch(
                 "application.reporting.draft_orchestrator.DraftQueryService"
             ) as mock_qs,
@@ -257,12 +246,6 @@ class TestPhase6RagDraft:
             mock_qe.return_value.search.side_effect = RuntimeError("chroma down")
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
-            mock_store.return_value = (
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-                MagicMock(),
-            )
             mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
@@ -279,6 +262,8 @@ class TestPhase6RagDraft:
                 request,
                 prompt=_AlwaysConfirm(),
                 repo=_make_mock_repo(),
+                finding_repo=_make_mock_repo(),
+                repo_repo=_make_mock_repo(),
                 event_sink=None,
             )
 

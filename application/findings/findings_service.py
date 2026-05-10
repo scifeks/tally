@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
 from application.findings.analyst_service import (
     BulkUpdateResult,
@@ -25,16 +25,11 @@ from application.ports.finding_event_sink import (
 )
 from application.rag.ingestor import ToolHandlerFactory
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
-from core.project_paths import ProjectPaths
 from domain.findings.events import FindingUpdated
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.finding_history import (
-    FindingHistoryRepository,
-)
-from infrastructure.store.repositories.findings import FindingRepository
-from infrastructure.store.repositories.repositories import RepositoryRepository
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from application.ports.finding_history_repository import (
         FindingHistoryRepositoryPort,
     )
@@ -42,7 +37,6 @@ if TYPE_CHECKING:
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
-    from application.project.registry_service import ProjectRegistryService
     from application.rag.knowledge_base import FindingKnowledgeBase
     from domain.findings.entry import Finding
 
@@ -55,7 +49,7 @@ class ProjectNotFound(LookupError):
 
 
 class FindingsService:
-    """Findings-feature facade bound to a single project."""
+    """Findings feature facade bound to a single project."""
 
     def __init__(
         self,
@@ -68,7 +62,7 @@ class FindingsService:
         project_id: int,
         project_name: str,
         findings_db_exists: bool,
-        factory: ConnectionFactory | None = None,
+        purge_tables: Callable[[], None] | None = None,
         knowledge_base_cache: dict[str, FindingKnowledgeBase | None] | None = None,
         base_path: str = "",
         event_sink: FindingEventSink | None = None,
@@ -81,56 +75,12 @@ class FindingsService:
         self._project_id = project_id
         self._project_name = project_name
         self._findings_db_exists = findings_db_exists
-        # Stored so :meth:`purge_all_findings_data` can call
-        # ``factory.purge_non_preserved_tables()`` without re-resolving
-        # the project. Optional in the constructor so existing test
-        # fixtures that build the service from stubs remain valid.
-        self._factory = factory
+        self._purge_tables = purge_tables
         self._kb_cache: dict[str, FindingKnowledgeBase | None] = (
             knowledge_base_cache if knowledge_base_cache is not None else {}
         )
         self._base_path = base_path
         self._event_sink: FindingEventSink = event_sink or NullFindingEventSink()
-
-    @classmethod
-    def for_project(
-        cls,
-        registry: ProjectRegistryService,
-        project_id: int,
-        *,
-        knowledge_base_cache: dict[str, FindingKnowledgeBase | None] | None = None,
-        base_path: str | None = None,
-        event_sink: FindingEventSink | None = None,
-    ) -> Self:
-        row = registry.resolve_by_id(project_id)
-        if row is None or row.archived_at:
-            raise ProjectNotFound(f"project {project_id} not found")
-        paths = ProjectPaths.from_registry_row(row)
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        # Capture before init_schema(): init creates the file, and
-        # repo_name_lookup needs to know whether the project has any
-        # persisted findings yet.
-        findings_db_exists = paths.findings_db.exists()
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        finding_repo = FindingRepository(factory)
-        history_repo = FindingHistoryRepository(factory)
-        project_repo = RepositoryRepository(factory)
-        analyst = FindingAnalystService(finding_repo)
-        return cls(
-            finding_repo=finding_repo,
-            history_repo=history_repo,
-            project_repo=project_repo,
-            analyst=analyst,
-            lock_query=LockQueryService(),
-            project_id=project_id,
-            project_name=row.name,
-            findings_db_exists=findings_db_exists,
-            factory=factory,
-            knowledge_base_cache=knowledge_base_cache,
-            base_path=base_path or "",
-            event_sink=event_sink,
-        )
 
     @property
     def analyst(self) -> FindingAnalystService:
@@ -214,10 +164,10 @@ class FindingsService:
         swallowed so the REPL flow can proceed with the rest of the
         purge cascade; the caller prints a warning if it cares.
         """
-        if self._factory is None:
+        if self._purge_tables is None:
             return
         try:
-            self._factory.purge_non_preserved_tables()
+            self._purge_tables()
         except Exception:
             return
 

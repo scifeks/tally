@@ -15,7 +15,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
@@ -30,17 +30,16 @@ from application.reporting.draft_run_registry import (
     get_draft_run_registry,
 )
 from application.reporting.drafts import SECTION_REGISTRY
-from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.drafts import DraftRepository
-from infrastructure.store.repositories.reports import ReportRepository
 
 if TYPE_CHECKING:
     from application.ports.draft_event_sink import DraftEventSink
     from application.ports.draft_repository import DraftRepositoryPort
+    from application.ports.finding_repository import FindingRepositoryPort
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
     from application.ports.report_repository import ReportRepositoryPort
     from application.ports.user_prompt import UserPromptPort
-    from application.project.registry_service import ProjectRegistryService
 
 
 logger = logging.getLogger("application.reports_service")
@@ -77,32 +76,18 @@ class ReportsService:
         self,
         report_repo: ReportRepositoryPort,
         draft_repo: DraftRepositoryPort,
+        finding_repo: FindingRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
         *,
         lock_registry: LockRegistry | None = None,
         draft_run_registry: DraftRunRegistry | None = None,
     ) -> None:
         self._report_repo = report_repo
         self._draft_repo = draft_repo
+        self._finding_repo = finding_repo
+        self._repo_repo = repo_repo
         self._lock_registry = lock_registry or get_registry()
         self._draft_run_registry = draft_run_registry or get_draft_run_registry()
-
-    @classmethod
-    def for_project(
-        cls,
-        registry: ProjectRegistryService,
-        project_id: int,
-    ) -> Self:
-        row = registry.resolve_by_id(project_id)
-        if row is None or row.archived_at:
-            raise ProjectNotFound(f"project {project_id} not found")
-        paths = ProjectPaths.from_registry_row(row)
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        return cls(
-            report_repo=ReportRepository(factory),
-            draft_repo=DraftRepository(factory),
-        )
 
     @property
     def report_repo(self) -> ReportRepositoryPort:
@@ -189,6 +174,8 @@ class ReportsService:
                         request,
                         prompt=prompt,
                         repo=self._draft_repo,
+                        finding_repo=self._finding_repo,
+                        repo_repo=self._repo_repo,
                         event_sink=event_sink,
                         cancel_token=cancel_token,
                     )

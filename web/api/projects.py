@@ -16,20 +16,12 @@ from fastapi import APIRouter, File, Form, Query, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from application.findings.findings_service import (
-    FindingsService,
-)
-from application.findings.findings_service import (
-    ProjectNotFound as FindingsProjectNotFound,
-)
+from application.findings.findings_service import FindingsService
 from application.project.manager import ProjectManager
 from application.project.repositories_service import (
     DuplicateRepositoryName,
     ProjectRepositoriesService,
     RepositoryNotFound,
-)
-from application.url_inventory.url_list_service import (
-    ProjectNotFound as UrlListProjectNotFound,
 )
 from application.url_inventory.url_list_service import (
     UrlListService,
@@ -38,6 +30,10 @@ from core.config.manager import ConfigManager
 from core.config.schemas import Repository
 from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
+from factories.persistence import (
+    create_findings_service,
+    create_url_list_service,
+)
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.tool_overrides import (
     ToolOverridesRepository,
@@ -63,20 +59,22 @@ v1_router = APIRouter()
 def _findings_service(request: Request, project_id: int) -> FindingsService:
     """Build a FindingsService for *project_id* or raise 404."""
     try:
-        return FindingsService.for_project(
-            request.app.state.project_registry, project_id
+        return create_findings_service(
+            request.app.state.project_registry,
+            project_id,
+            knowledge_base_cache=request.app.state.knowledge_base_cache,
+            base_path=request.app.state.base_path,
+            event_sink=None,
         )
-    except FindingsProjectNotFound as exc:
+    except Exception as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
 
 def _url_list_service(request: Request, project_id: int) -> UrlListService:
     """Build a UrlListService for *project_id* or raise 404."""
     try:
-        return UrlListService.for_project(
-            request.app.state.project_registry, project_id
-        )
-    except UrlListProjectNotFound as exc:
+        return create_url_list_service(request.app.state.project_registry, project_id)
+    except Exception as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
 

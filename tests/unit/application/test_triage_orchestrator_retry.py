@@ -25,7 +25,16 @@ class TestRetryOnce:
         runner.run.side_effect = [_BUSY, _SUCCESS]
         mock_build_runner.return_value = runner
 
-        result = run_triage("test-project", MagicMock(), app_root=Path("/unused"))
+        result = run_triage(
+            "test-project",
+            MagicMock(),
+            app_root=Path("/unused"),
+            run_repo=MagicMock(),
+            finding_repo=MagicMock(),
+            triage_repo=MagicMock(),
+            audit_repo=MagicMock(),
+            repo_paths={},
+        )
 
         assert result == {
             "sessions_run": 1,
@@ -50,6 +59,11 @@ class TestRetryOnce:
                 "test-project",
                 MagicMock(),
                 app_root=Path("/unused"),
+                run_repo=MagicMock(),
+                finding_repo=MagicMock(),
+                triage_repo=MagicMock(),
+                audit_repo=MagicMock(),
+                repo_paths={},
             )
 
         mock_sleep.assert_called_once_with(5)
@@ -68,6 +82,11 @@ class TestRetryOnce:
                 "test-project",
                 MagicMock(),
                 app_root=Path("/unused"),
+                run_repo=MagicMock(),
+                finding_repo=MagicMock(),
+                triage_repo=MagicMock(),
+                audit_repo=MagicMock(),
+                repo_paths={},
             )
 
         mock_sleep.assert_not_called()

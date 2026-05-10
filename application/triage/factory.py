@@ -4,16 +4,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from application.ports.triage_agent import OneshotTriageBackendPort
+
+if TYPE_CHECKING:
+    from application.ports.audit_repository import (
+        AuditRepositoryPort,
+    )
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.run_repository import RunRepositoryPort
+    from application.ports.triage_batch_repository import (
+        TriageBatchRepositoryPort,
+    )
 from application.tools.registry import ToolRegistry
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
-from infrastructure.store import make_store
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import (
-    RepositoryRepository,
-)
 
 from .runner import TriageRunner
 
@@ -33,9 +41,7 @@ class ResolvedTriageConfig:
 
 
 def resolve_triage_config(*, app_root: Path) -> ResolvedTriageConfig:
-    """Resolves triage provider using the feature-inference
-    merge pattern (provider defaults + feature overrides).
-    """
+    """Merge provider config with triage_inference feature overrides."""
     cfg = ConfigManager(str(app_root)).global_config
 
     feature = cfg.triage_inference
@@ -142,27 +148,26 @@ def build_triage_runner(
     tool_registry: ToolRegistry,
     *,
     app_root: Path,
+    run_repo: RunRepositoryPort,
+    finding_repo: FindingRepositoryPort,
+    triage_repo: TriageBatchRepositoryPort,
+    audit_repo: AuditRepositoryPort,
+    repo_paths: dict[str, Path],
     event_sink=None,
     cancel_token=None,
     project_id: int | None = None,
     scan_run_id: int | None = None,
     reset_for_resume_scan_run_id: int | None = None,
 ) -> TriageRunner:
-    """Builds a runner with the configured backend."""
+    """Build a runner with the configured backend."""
     paths = ProjectPaths.from_canonical(app_root, project)
     if not paths.findings_db.exists():
         raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
 
-    run_repo, finding_repo, triage_repo, audit_repo = make_store(app_root, project)
     if reset_for_resume_scan_run_id is not None:
         triage_repo.reset_for_resume(reset_for_resume_scan_run_id)
 
     resolved = resolve_triage_config(app_root=app_root)
-
-    factory = ConnectionFactory(paths.findings_db)
-    repos = RepositoryRepository(factory).list_active()
-    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
-
     triaged_by = "claudecode" if resolved.provider_name == "claude" else "opencode"
 
     agent_factory = TriageAgentFactory(app_root=app_root)

@@ -43,6 +43,9 @@ def _start_kwargs(
     run_repo: MagicMock | None = None,
     chat_session_repo: MagicMock | None = None,
     profiles_repo: MagicMock | None = None,
+    finding_repo: MagicMock | None = None,
+    repo_repo: MagicMock | None = None,
+    url_finding_repo: MagicMock | None = None,
 ) -> dict:
     return dict(
         project_id=1,
@@ -52,6 +55,9 @@ def _start_kwargs(
         run_repo=run_repo or MagicMock(),
         chat_session_repo=chat_session_repo or MagicMock(),
         profiles_repo=profiles_repo or MagicMock(),
+        finding_repo=finding_repo or MagicMock(),
+        repo_repo=repo_repo or MagicMock(),
+        url_finding_repo=url_finding_repo or MagicMock(),
         prompt=MagicMock(),
     )
 

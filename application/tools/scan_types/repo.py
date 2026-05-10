@@ -13,7 +13,6 @@ from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.execution import (
     dispatch_and_count_ingested,
     execute_tool_passes,
-    load_active_repos,
     make_context,
     normalize_success,
     ordered_repo_tools,
@@ -66,7 +65,7 @@ class RepoScan(ScanType):
         factory = cast(ToolWrapperFactory, resources.factory)
         executor = cast(ToolExecutor, resources.executor)
 
-        repos = load_active_repos(config.base_path, config.project_name)
+        repos = config.repo_repo.list_active() if config.repo_repo is not None else []
         repo = next((r for r in repos if r.name == self.repo_name), None)
         if repo is None:
             raise ValueError(

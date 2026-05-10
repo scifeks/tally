@@ -29,9 +29,18 @@ if TYPE_CHECKING:
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
     )
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
     from application.ports.run_repository import RunRepositoryPort
     from application.ports.tool_arg_profiles import (
         ToolArgProfilesRepositoryPort,
+    )
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
     )
     from application.tools.registry import ToolRegistry
     from domain.tools.display import DisplayProtocol
@@ -76,6 +85,9 @@ class ScanService:
         run_repo: RunRepositoryPort,
         chat_session_repo: ChatSessionRepositoryPort,
         profiles_repo: ToolArgProfilesRepositoryPort,
+        finding_repo: FindingRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
+        url_finding_repo: UrlFindingRepositoryPort,
         repo_ids: tuple[str, ...] = (),
         tool_ids: tuple[str, ...] = (),
         domains: tuple[str, ...] = (),
@@ -147,6 +159,9 @@ class ScanService:
                 "cancel_token": cancel_token,
                 "run_repo": run_repo,
                 "chat_session_repo": chat_session_repo,
+                "finding_repo": finding_repo,
+                "repo_repo": repo_repo,
+                "url_finding_repo": url_finding_repo,
                 "snapshots": snapshots,
             },
             name=f"scan-run-{run_id}",
@@ -177,10 +192,11 @@ class ScanService:
         cancel_token: CancellationToken,
         run_repo: RunRepositoryPort,
         chat_session_repo: ChatSessionRepositoryPort,
+        finding_repo: FindingRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
+        url_finding_repo: UrlFindingRepositoryPort,
         snapshots: dict[str, str] | None = None,
     ) -> None:
-        # Imports deferred to thread entry to avoid circular-import risk
-        # and to keep module import side-effects minimal.
         from application.pipeline.factory import PipelineFactory
 
         setup_ok = False
@@ -193,6 +209,9 @@ class ScanService:
                 reporter=reporter,
             )
             pipeline_bus = PipelineFactory.create(
+                finding_repo=finding_repo,
+                repo_repo=repo_repo,
+                url_finding_repo=url_finding_repo,
                 reporter=reporter,
                 skip_enrichment=skip_enrichment,
                 project_id=project_id,
@@ -214,6 +233,7 @@ class ScanService:
                 chat_session_repo=chat_session_repo,
                 display=display,
                 arg_snapshots=snapshots,
+                repo_repo=repo_repo,
             )
             setup_ok = True
 
@@ -256,8 +276,8 @@ def _resolve_arg_profile_snapshots(
 ) -> dict[str, str]:
     """Validate ids and return ``{tool_name: snapshot_json}``.
 
-    Later ids win on duplicate ``tool_name`` per D-PLAN-2. Raises
-    :class:`ValueError` listing missing ids when validation fails.
+    Later ids win on duplicate ``tool_name``. Raises :class:`ValueError`
+    listing missing ids when validation fails.
     """
     if not arg_profile_ids:
         return {}

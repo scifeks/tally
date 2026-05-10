@@ -1,8 +1,7 @@
-"""Tests for the construction-helper paths in :class:`PurgeCommand`.
+"""Tests for the construction-helper paths in PurgeCommand.
 
-Covers the per-helper service routing introduced in B6d. Each test
-patches the application service classmethod so no real SQLite or
-ChromaDB is touched.
+Each test patches the application service classmethod so no real SQLite
+or ChromaDB is touched.
 """
 
 from __future__ import annotations
@@ -86,12 +85,12 @@ class TestPurgeCountChatSessions:
         sentinel_repo.list_for_project.return_value = fake_sessions
         sentinel_service = MagicMock(session_repo=sentinel_repo)
         with patch(
-            "application.repl.commands.purge.ChatSessionService.for_project",
+            "application.repl.commands.purge.create_chat_session_service",
             return_value=sentinel_service,
-        ) as mock_for_project:
+        ) as mock_fn:
             result = cmd._count_chat_sessions()
         assert result == 3
-        mock_for_project.assert_called_once_with(repl.project_registry, _PROJECT_ID)
+        mock_fn.assert_called_once_with(repl.project_registry, _PROJECT_ID)
         sentinel_repo.list_for_project.assert_called_once_with(
             _PROJECT_ID, include_expired=True
         )
@@ -111,7 +110,7 @@ class TestPurgePurgeChat:
         sentinel_service = MagicMock(session_repo=sentinel_repo)
         with (
             patch(
-                "application.repl.commands.purge.ChatSessionService.for_project",
+                "application.repl.commands.purge.create_chat_session_service",
                 return_value=sentinel_service,
             ),
             patch(
@@ -127,7 +126,7 @@ class TestPurgePurgeChat:
         repl = _mock_repl()
         cmd = PurgeCommand(repl)
         with patch(
-            "application.repl.commands.purge.ChatSessionService.for_project",
+            "application.repl.commands.purge.create_chat_session_service",
             side_effect=RuntimeError("boom"),
         ):
             result = cmd._purge_chat()
@@ -149,7 +148,7 @@ class TestPurgeCountSqliteFindings:
         sentinel_service = MagicMock()
         sentinel_service.count_findings.return_value = 17
         with patch(
-            "application.repl.commands.purge.FindingsService.for_project",
+            "application.repl.commands.purge.create_findings_service",
             return_value=sentinel_service,
         ):
             result = cmd._count_sqlite_findings(tools=["semgrep"])
@@ -170,7 +169,7 @@ class TestPurgeCountUrlFindings:
         sentinel_service = MagicMock()
         sentinel_service.count_all_url_findings.return_value = 9
         with patch(
-            "application.repl.commands.purge.UrlListService.for_project",
+            "application.repl.commands.purge.create_url_list_service",
             return_value=sentinel_service,
         ):
             result = cmd._count_url_findings()
@@ -192,11 +191,11 @@ class TestPurgeSqliteFullWipe:
         url_svc = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.FindingsService.for_project",
+                "application.repl.commands.purge.create_findings_service",
                 return_value=findings_svc,
             ),
             patch(
-                "application.repl.commands.purge.UrlListService.for_project",
+                "application.repl.commands.purge.create_url_list_service",
                 return_value=url_svc,
             ),
         ):
@@ -217,11 +216,11 @@ class TestPurgeSqlitePerTool:
         url_svc = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.FindingsService.for_project",
+                "application.repl.commands.purge.create_findings_service",
                 return_value=findings_svc,
             ),
             patch(
-                "application.repl.commands.purge.UrlListService.for_project",
+                "application.repl.commands.purge.create_url_list_service",
                 return_value=url_svc,
             ),
         ):
@@ -240,11 +239,11 @@ class TestPurgeSqlitePerTool:
         url_svc = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.FindingsService.for_project",
+                "application.repl.commands.purge.create_findings_service",
                 return_value=findings_svc,
             ),
             patch(
-                "application.repl.commands.purge.UrlListService.for_project",
+                "application.repl.commands.purge.create_url_list_service",
                 return_value=url_svc,
             ),
         ):

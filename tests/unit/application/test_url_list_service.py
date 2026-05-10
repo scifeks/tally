@@ -11,12 +11,10 @@ from typing import Any
 import pytest
 
 from application.url_inventory.service import UrlInventoryService
-from application.url_inventory.url_list_service import (
-    ProjectNotFound,
-    UrlListService,
-)
+from application.url_inventory.url_list_service import UrlListService
 from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
+from factories.persistence import ProjectNotFound
 
 
 class _StubConverter:
@@ -167,12 +165,16 @@ class TestUrlListService:
         service = _build()
         assert isinstance(service.inventory, UrlInventoryService)
 
-    def test_for_project_raises_when_project_missing(self) -> None:
+    def test_factory_raises_when_project_missing(self) -> None:
+        from factories.persistence import create_url_list_service
+
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
         with pytest.raises(ProjectNotFound):
-            UrlListService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_url_list_service(registry, 7)  # type: ignore[arg-type]
 
-    def test_for_project_raises_when_project_archived(self) -> None:
+    def test_factory_raises_when_project_archived(self) -> None:
+        from factories.persistence import create_url_list_service
+
         archived = ProjectRow(
             id=7,
             name="p",
@@ -182,7 +184,7 @@ class TestUrlListService:
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         with pytest.raises(ProjectNotFound):
-            UrlListService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_url_list_service(registry, 7)  # type: ignore[arg-type]
 
     def test_repo_name_lookup_returns_empty_when_findings_db_missing(self) -> None:
         project_repo = _StubProjectRepo(rows=[_Repo(id=1, name="r1")])

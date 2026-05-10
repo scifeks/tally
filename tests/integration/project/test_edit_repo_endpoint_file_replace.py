@@ -42,9 +42,14 @@ def _make_pm(base_path: Path):  # type: ignore[no-untyped-def]
     if str(_TALLY_ROOT) not in sys.path:
         sys.path.insert(0, str(_TALLY_ROOT))
     from application.project import ProjectManager
+    from infrastructure.store.connection import ConnectionFactory
 
     _write_global_config(base_path)
-    return ProjectManager(base_path=str(base_path))
+
+    def schema_init(db_path):
+        ConnectionFactory(db_path).init_schema()
+
+    return ProjectManager(base_path=str(base_path), schema_initializer=schema_init)
 
 
 def _setup_project(base_path: Path):  # type: ignore[no-untyped-def]

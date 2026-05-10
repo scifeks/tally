@@ -11,13 +11,14 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.findings.findings_service import (
-    FindingsService,
-    ProjectNotFound,
-)
+from application.findings.findings_service import FindingsService
 from application.locking import FindingsBusy
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
+from factories.persistence import (
+    ProjectNotFound,
+    create_findings_service,
+)
 from infrastructure.events.sse import format_sse_frame
 from web.adapters.event_bus_finding_sink import EventBusFindingSink
 from web.api._errors import FindingsLocked, NotFound
@@ -47,7 +48,7 @@ router = APIRouter()
 def _service(request: Request, project_id: int) -> FindingsService:
     """Build a FindingsService for *project_id* or raise 404."""
     try:
-        return FindingsService.for_project(
+        return create_findings_service(
             request.app.state.project_registry,
             project_id,
             knowledge_base_cache=request.app.state.knowledge_base_cache,

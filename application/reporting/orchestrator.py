@@ -17,8 +17,17 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
 
 from application.locking.cancellation import CancellationToken
+
+if TYPE_CHECKING:
+    pass
 from application.ports.html_template_renderer import HtmlTemplateRenderer
 from application.ports.pdf_renderer import PdfRenderer, PdfRenderError
 from application.ports.report_event_sink import (
@@ -36,7 +45,6 @@ from domain.pipeline.report_events import (
     StepCompleted,
     StepStarted,
 )
-from infrastructure.store import make_store
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +79,7 @@ def run_report(
     request: ReportRequest,
     *,
     prompt: UserPromptPort,
+    finding_repo: FindingRepositoryPort,
     template_renderer: HtmlTemplateRenderer | None = None,
     pdf_renderer: PdfRenderer | None = None,
     event_sink: ReportEventSink | None = None,
@@ -111,10 +120,16 @@ def run_report(
                     "template_renderer and pdf_renderer are required for pdf format"
                 )
             output = _run_pdf(
-                request, prompt, template_renderer, pdf_renderer, sink, token
+                request,
+                prompt,
+                template_renderer,
+                pdf_renderer,
+                finding_repo,
+                sink,
+                token,
             )
         else:
-            output = _run_text(request, sink, token)
+            output = _run_text(request, finding_repo, sink, token)
     except ReportCancelled:
         sink.emit(
             GenerationCancelled(
@@ -200,11 +215,11 @@ def _emit_step(
 
 def _run_text(
     request: ReportRequest,
+    finding_repo: FindingRepositoryPort,
     sink: ReportEventSink,
     token: CancellationToken,
 ) -> Path:
     _check_cancel(token, request)
-    _, finding_repo, _, _ = make_store(str(request.base_path), request.project)
 
     _emit_step(sink, request, "aggregate", 0, started=True)
     generator = ReportGenerator(None, request.project, finding_repo)
@@ -235,11 +250,10 @@ def _run_pdf(
     prompt: UserPromptPort,
     template_renderer: HtmlTemplateRenderer,
     pdf_renderer: PdfRenderer,
+    finding_repo: FindingRepositoryPort,
     sink: ReportEventSink,
     token: CancellationToken,
 ) -> Path:
-    # Lazy import; tests patch application.reporting.assembler.ReportAssembler
-    # at the source module, so the orchestrator must resolve it at call time.
     from application.reporting import assembler as assembler_mod
 
     _check_cancel(token, request)
@@ -249,6 +263,7 @@ def _run_pdf(
         prompt=prompt,
         template_renderer=template_renderer,
         pdf_renderer=pdf_renderer,
+        finding_repo=finding_repo,
         testing_type=request.testing_type,
         engagement_date=request.engagement_date,
         company_name_override=request.company_name_override,

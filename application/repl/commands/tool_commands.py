@@ -8,10 +8,7 @@ from typing import TYPE_CHECKING
 
 from application.tool_overrides.service import ToolOverridesService
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.tool_overrides import (
-    ToolOverridesRepository,
-)
+from factories.persistence import create_overrides_repo
 
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
@@ -274,11 +271,9 @@ class ToolCommands:
 
     def _project_overrides_service(
         self, project_name: str
-    ) -> tuple[ToolOverridesService, ToolOverridesRepository]:
+    ) -> tuple[ToolOverridesService, object]:
         paths = _project_paths(self.repl, project_name)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        repo = ToolOverridesRepository(factory)
+        repo = create_overrides_repo(paths.findings_db)
         return ToolOverridesService(repo), repo
 
     def _load_project_commands_json(self, project_name: str) -> dict:

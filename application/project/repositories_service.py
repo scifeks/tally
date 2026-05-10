@@ -7,15 +7,13 @@ source of truth; this service is the single write surface.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from core.config import ConfigManager, Repository
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.repositories import RepositoryRepository
 
 if TYPE_CHECKING:
     from application.ports.project_repo_repository import ProjectRepoRepositoryPort
@@ -50,9 +48,11 @@ class ProjectRepositoriesService:
         self,
         registry: ProjectRegistryService,
         config_manager: ConfigManager,
+        repo_factory: Callable[[int], ProjectRepoRepositoryPort] | None = None,
     ) -> None:
         self._registry = registry
         self._config_manager = config_manager
+        self._repo_factory = repo_factory
 
     @classmethod
     def build(
@@ -184,8 +184,10 @@ class ProjectRepositoriesService:
         return ProjectPaths.from_registry_row(row)
 
     def _repo_repo(self, project_id: int) -> ProjectRepoRepositoryPort:
+        if self._repo_factory is not None:
+            return self._repo_factory(project_id)
+        from factories.persistence import create_repo_repo
+
         paths = self._project_paths(project_id)
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        return RepositoryRepository(factory)
+        return create_repo_repo(paths.findings_db)

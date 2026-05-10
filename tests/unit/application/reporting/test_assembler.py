@@ -39,7 +39,7 @@ class _AlwaysConfirm:
 
 
 class _NoopTemplateRenderer:
-    """Template renderer stub for tests that do not exercise the template."""
+    """Stub that returns empty string."""
 
     def render(self, template_name: str, context: Mapping[str, object]) -> str:
         del template_name, context
@@ -47,7 +47,7 @@ class _NoopTemplateRenderer:
 
 
 class _NoopPdfRenderer:
-    """PdfRenderer stub for tests that do not call render_pdf."""
+    """Stub that returns empty PDF bytes."""
 
     def render(self, html: str, css: str) -> bytes:
         del html, css
@@ -82,6 +82,7 @@ def _make_assembler(
         prompt=_AlwaysConfirm(),
         template_renderer=template_renderer or _NoopTemplateRenderer(),
         pdf_renderer=pdf_renderer or _NoopPdfRenderer(),
+        finding_repo=MagicMock(),
         testing_type="white_box",
         engagement_date="2026-03-22",
     )
@@ -254,6 +255,7 @@ class TestBuildContext:
                 prompt=_AlwaysConfirm(),
                 template_renderer=_NoopTemplateRenderer(),
                 pdf_renderer=_NoopPdfRenderer(),
+                finding_repo=MagicMock(),
                 # engagement_date deliberately omitted
             )
             ctx = assembler.build_context()

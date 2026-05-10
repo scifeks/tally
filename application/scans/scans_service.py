@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from application.tools.scan_run_registry import (
     ScanRunHandle,
@@ -26,10 +26,11 @@ from application.tools.scan_run_registry import (
 from core.project_paths import ProjectPaths
 from domain.scans.entry import SCAN_RUN_STATUSES
 from domain.tools.scan_types import SEGMENT_ORDER
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.runs import RunRepository
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from application.ports.run_repository import RunRepositoryPort
     from application.ports.tool_arg_profiles import ToolArgProfilesRepositoryPort
     from application.project.registry_service import ProjectRegistryService
@@ -98,21 +99,6 @@ class ScansService:
         self._run_repo = run_repo
         self._project_id = project_id
         self._registry = scan_run_registry or get_scan_run_registry()
-
-    @classmethod
-    def for_project(
-        cls,
-        registry: ProjectRegistryService,
-        project_id: int,
-    ) -> Self:
-        row = registry.resolve_by_id(project_id)
-        if row is None or row.archived_at:
-            raise ProjectNotFound(f"project {project_id} not found")
-        paths = ProjectPaths.from_registry_row(row)
-        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        factory = ConnectionFactory(paths.findings_db)
-        factory.init_schema()
-        return cls(run_repo=RunRepository(factory), project_id=project_id)
 
     @property
     def run_repo(self) -> RunRepositoryPort:
@@ -273,9 +259,11 @@ class ScansService:
 
     @classmethod
     def mark_stale_failed_for_all_projects(
-        cls, project_registry: ProjectRegistryService
+        cls,
+        project_registry: ProjectRegistryService,
+        run_repo_factory: Callable[[Path], RunRepositoryPort],
     ) -> None:
-        """Mark every ``running``/``cancelling`` scan_runs row as ``failed``.
+        """Mark every running/cancelling scan_runs row as failed.
 
         Tier-1 lock guarantees only one scan is live per process at a
         time, so any persisted-as-running row at boot belongs to a prior
@@ -288,7 +276,7 @@ class ScansService:
                 paths = ProjectPaths.from_registry_row(project)
                 if not paths.findings_db.exists():
                     continue
-                repo = RunRepository(ConnectionFactory(paths.findings_db))
+                repo = run_repo_factory(paths.findings_db)
                 count = repo.mark_stale_runs_failed()
                 if count:
                     logger.info(
@@ -298,5 +286,6 @@ class ScansService:
                     )
             except Exception:
                 logger.exception(
-                    "stale-scan cleanup failed for project %s", project.name
+                    "stale-scan cleanup failed for project %s",
+                    project.name,
                 )

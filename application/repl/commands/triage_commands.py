@@ -26,7 +26,12 @@ from application.triage.orchestrator import (
     run_triage_dry_run,
 )
 from application.triage.runner import NoScanRunError
-from application.triage.triage_service import ProjectNotFound, TriageService
+from factories.persistence import (
+    ProjectNotFound,
+    create_triage_service,
+    load_active_repos,
+    make_store,
+)
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -52,18 +57,38 @@ class TriageCommands:
             self._repl.console.print(f"[red]Error:[/red] {readiness.reason}")
             return
         if "--batch" in args:
+            run_repo, finding_repo, triage_repo, audit_repo = make_store(
+                self._repl.base_path, self._repl.active_project
+            )
+            repos = load_active_repos(self._repl.base_path, self._repl.active_project)
+            repo_paths = {r.name: Path(r.path) for r in repos if r.path}
             count = run_triage_batch_only(
                 self._repl.active_project,
                 self._repl.tool_registry,
                 app_root=Path(self._repl.base_path),
+                run_repo=run_repo,
+                finding_repo=finding_repo,
+                triage_repo=triage_repo,
+                audit_repo=audit_repo,
+                repo_paths=repo_paths,
             )
             self._repl.console.print(f"Created {count} batches")
             return
         elif "--dry-run" in args:
+            run_repo, finding_repo, triage_repo, audit_repo = make_store(
+                self._repl.base_path, self._repl.active_project
+            )
+            repos = load_active_repos(self._repl.base_path, self._repl.active_project)
+            repo_paths = {r.name: Path(r.path) for r in repos if r.path}
             count = run_triage_dry_run(
                 self._repl.active_project,
                 self._repl.tool_registry,
                 app_root=Path(self._repl.base_path),
+                run_repo=run_repo,
+                finding_repo=finding_repo,
+                triage_repo=triage_repo,
+                audit_repo=audit_repo,
+                repo_paths=repo_paths,
             )
             self._repl.console.print(f"Rendered {count} batch prompt(s); see DEBUG log")
             return
@@ -98,7 +123,7 @@ class TriageCommands:
             )
             return
         try:
-            service = TriageService.for_project(self._repl.project_registry, row.id)
+            service = create_triage_service(self._repl.project_registry, row.id)
         except ProjectNotFound:
             self._repl.console.print(
                 f"[red]Error:[/red] project {self._repl.active_project!r} not found"

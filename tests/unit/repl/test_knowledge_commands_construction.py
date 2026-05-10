@@ -16,13 +16,11 @@ import pytest  # noqa: E402
 from application.chat.stream_composer import (  # noqa: E402
     RagUnavailable,
 )
-from application.findings.findings_service import (  # noqa: E402
-    ProjectNotFound,
-)
 from application.repl.commands.knowledge_commands import (  # noqa: E402
     KnowledgeCommands,
 )
 from domain.projects.entry import ProjectRow  # noqa: E402
+from factories.persistence import ProjectNotFound  # noqa: E402
 
 _PROJECT = "testproj"
 
@@ -86,12 +84,12 @@ class TestKnowledgeCommandsGetFindingRepo:
         sentinel_repo = MagicMock(name="finding_repo_port")
         sentinel_service = MagicMock(finding_repo=sentinel_repo)
         with patch(
-            "application.repl.commands.knowledge_commands.FindingsService.for_project",
+            "application.repl.commands.knowledge_commands.create_findings_service",
             return_value=sentinel_service,
-        ) as mock_for_project:
+        ) as mock_create_svc:
             result = kc._get_finding_repo()
         assert result is sentinel_repo
-        mock_for_project.assert_called_once_with(repl.project_registry, 7)
+        mock_create_svc.assert_called_once_with(repl.project_registry, 7)
 
     def test_returns_none_and_prints_on_project_not_found(self) -> None:
         repl = _mock_repl()
@@ -103,7 +101,7 @@ class TestKnowledgeCommandsGetFindingRepo:
         )
         kc = KnowledgeCommands(repl)
         with patch(
-            "application.repl.commands.knowledge_commands.FindingsService.for_project",
+            "application.repl.commands.knowledge_commands.create_findings_service",
             side_effect=ProjectNotFound("project 7 not found"),
         ):
             result = kc._get_finding_repo()

@@ -155,20 +155,29 @@ class DalFoxLocalTool(BaseDalFoxTool):
         DalFox) when no rows exist for the repo.
         """
         from application.url_inventory.jit import jit_rebuild_artifacts
+        from infrastructure.store.connection import ConnectionFactory
+        from infrastructure.store.repositories.url_findings import (
+            UrlFindingRepository,
+        )
 
         assert context.repo is not None
         repo = context.repo
 
-        output_dir = ProjectPaths.from_canonical(
+        paths = ProjectPaths.from_canonical(
             Path(context.base_path).resolve(), context.project_name
-        ).tool_output_dir("dalfox")
+        )
+        output_dir = paths.tool_output_dir("dalfox")
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        url_repo = UrlFindingRepository(factory)
 
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{repo.name}_{ts}.json")
 
         seeds_file, _oas3_path = jit_rebuild_artifacts(
-            context.base_path, context.project_name, repo
+            context.base_path, context.project_name, repo, url_finding_repo=url_repo
         )
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(

@@ -14,15 +14,13 @@ from application.findings.analyst_service import (
     BulkUpdateResult,
     FindingAnalystService,
 )
-from application.findings.findings_service import (
-    FindingsService,
-    ProjectNotFound,
-)
+from application.findings.findings_service import FindingsService
 from application.locking import FindingsBusy, LockQueryService
 from application.ports.finding_event_sink import NullFindingEventSink
 from domain.findings.entry import Finding
 from domain.findings.events import FindingUpdated
 from domain.projects.entry import ProjectRow
+from factories.persistence import ProjectNotFound
 
 
 @dataclass
@@ -32,7 +30,7 @@ class _Repo:
 
 
 class _StubFindingRepo:
-    """Minimal Protocol satisfaction; no method is exercised in these tests."""
+    """Stub that raises on any method call."""
 
     def __getattr__(self, _name: str) -> Any:
         raise AssertionError(
@@ -162,12 +160,16 @@ def _make_finding(finding_id: int = 42) -> Finding:
 
 
 class TestFindingsService:
-    def test_for_project_raises_when_project_missing(self) -> None:
+    def test_factory_raises_when_project_missing(self) -> None:
+        from factories.persistence import create_findings_service
+
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: None)
         with pytest.raises(ProjectNotFound):
-            FindingsService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_findings_service(registry, 7)  # type: ignore[arg-type]
 
-    def test_for_project_raises_when_project_archived(self) -> None:
+    def test_factory_raises_when_project_archived(self) -> None:
+        from factories.persistence import create_findings_service
+
         archived = ProjectRow(
             id=7,
             name="p",
@@ -177,7 +179,7 @@ class TestFindingsService:
         )
         registry = SimpleNamespace(resolve_by_id=lambda _project_id=None: archived)
         with pytest.raises(ProjectNotFound):
-            FindingsService.for_project(registry, 7)  # type: ignore[arg-type]
+            create_findings_service(registry, 7)  # type: ignore[arg-type]
 
     def test_repo_name_lookup_returns_empty_when_findings_db_missing(self) -> None:
         project_repo = _StubProjectRepo(rows=[_Repo(id=1, name="r1")])
@@ -347,12 +349,12 @@ class TestFindingsServiceDeleteFindingsForTools:
 
 
 class TestFindingsServicePurgeAllFindingsData:
-    def test_forwards_to_factory_purge(self) -> None:
+    def test_forwards_to_purge_tables_callable(self) -> None:
         finding_repo = _StubFindingRepo()
         history_repo = _StubHistoryRepo()
         project_repo = _StubProjectRepo()
         analyst = FindingAnalystService(finding_repo)  # type: ignore[arg-type]
-        factory = MagicMock()
+        purge_func = MagicMock()
         service = FindingsService(
             finding_repo=finding_repo,  # type: ignore[arg-type]
             history_repo=history_repo,  # type: ignore[arg-type]
@@ -362,12 +364,12 @@ class TestFindingsServicePurgeAllFindingsData:
             project_id=1,
             project_name="p",
             findings_db_exists=True,
-            factory=factory,
+            purge_tables=purge_func,
         )
         service.purge_all_findings_data()
-        factory.purge_non_preserved_tables.assert_called_once_with()
+        purge_func.assert_called_once_with()
 
-    def test_no_op_when_factory_not_stored(self) -> None:
+    def test_no_op_when_purge_tables_not_provided(self) -> None:
         finding_repo = _StubFindingRepo()
         history_repo = _StubHistoryRepo()
         project_repo = _StubProjectRepo()

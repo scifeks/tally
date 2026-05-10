@@ -1,12 +1,4 @@
-"""Unit tests for ReportsService.start_drafts and the batch worker.
-
-Covers the synchronous portion of ``start_drafts`` (validation, lock
-acquisition, handle shape) by stubbing the worker so the lock stays
-held and we can assert behaviour cleanly. Worker semantics
-(per-section register/unregister, per-section failure isolation, lock
-release on completion) are exercised by calling ``_run_worker``
-directly with a mocked ``run_draft``.
-"""
+"""Unit tests for ReportsService.start_drafts and draft batch processing."""
 
 from __future__ import annotations
 
@@ -42,6 +34,8 @@ def service(
     svc = ReportsService(
         report_repo=MagicMock(),
         draft_repo=MagicMock(),
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
         lock_registry=registry,
         draft_run_registry=draft_run_registry,
     )
@@ -142,6 +136,8 @@ def test_worker_releases_lock_after_loop(
     svc = ReportsService(
         report_repo=MagicMock(),
         draft_repo=MagicMock(),
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
         lock_registry=registry,
         draft_run_registry=draft_run_registry,
     )
@@ -161,6 +157,8 @@ def test_worker_continues_after_per_section_failure(
     svc = ReportsService(
         report_repo=MagicMock(),
         draft_repo=MagicMock(),
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
         lock_registry=registry,
         draft_run_registry=draft_run_registry,
     )
@@ -189,6 +187,8 @@ def test_worker_treats_overwrite_denied_as_skip(
     svc = ReportsService(
         report_repo=MagicMock(),
         draft_repo=MagicMock(),
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
         lock_registry=registry,
         draft_run_registry=draft_run_registry,
     )
@@ -213,6 +213,8 @@ def test_worker_unregisters_each_section_after_run(
     svc = ReportsService(
         report_repo=MagicMock(),
         draft_repo=MagicMock(),
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
         lock_registry=registry,
         draft_run_registry=draft_run_registry,
     )
@@ -232,6 +234,8 @@ def test_worker_threads_skip_triage_into_draft_request(
     svc = ReportsService(
         report_repo=MagicMock(),
         draft_repo=MagicMock(),
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
         lock_registry=registry,
         draft_run_registry=draft_run_registry,
     )

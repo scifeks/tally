@@ -87,10 +87,16 @@ def triage_containers_running(app_root: Path) -> bool:
     return _resolve_container_port().is_running(_compose_path(app_root))
 
 
-def ensure_triage_containers(app_root: Path, project: str) -> bool:
-    """Generates compose and starts services if not running.
+def ensure_triage_containers(
+    app_root: Path,
+    project: str,
+    repo_paths: dict[str, Path] | None = None,
+) -> bool:
+    """Generate compose and start services if not running.
 
     Returns True if services were started, False if already running.
+    ``repo_paths`` maps repo name to its on-disk path. When omitted
+    the caller is responsible for pre-starting containers.
     """
     path = _compose_path(app_root)
     port = _resolve_container_port()
@@ -100,21 +106,12 @@ def ensure_triage_containers(app_root: Path, project: str) -> bool:
 
     from application.triage.compose import generate_triage_compose
     from application.triage.factory import resolve_triage_config
-    from core.project_paths import ProjectPaths
-    from infrastructure.store.connection import ConnectionFactory
-    from infrastructure.store.repositories.repositories import (
-        RepositoryRepository,
-    )
 
     resolved = resolve_triage_config(app_root=app_root)
-    paths = ProjectPaths.from_canonical(app_root, project)
-    factory = ConnectionFactory(paths.findings_db)
-    repos = RepositoryRepository(factory).list_active()
-    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
 
     generate_triage_compose(
         app_root,
-        repo_paths,
+        repo_paths or {},
         provider=resolved.provider_name,
         base_url=resolved.base_url,
         model=resolved.model,

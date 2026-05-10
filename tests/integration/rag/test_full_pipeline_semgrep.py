@@ -29,6 +29,10 @@ from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import ToolCompleted  # noqa: E402
 from domain.tools.base import ToolResult  # noqa: E402
+from factories.persistence import (  # noqa: E402
+    create_repo_repo,
+    create_url_finding_repo,
+)
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
 
@@ -116,9 +120,16 @@ class TestSemgrepFullPipeline:
         pm.save_project(project_name)
 
         run_repo, finding_repo, _, _ = make_store(str(tmp_path), project_name)
+        paths = ProjectPaths.from_canonical(str(tmp_path), project_name)
+        repo_repo = create_repo_repo(paths.findings_db)
+        url_finding_repo = create_url_finding_repo(paths.findings_db)
         run_id = run_repo.create_run({})
 
-        bus = PipelineFactory.create()
+        bus = PipelineFactory.create(
+            finding_repo=finding_repo,
+            repo_repo=repo_repo,
+            url_finding_repo=url_finding_repo,
+        )
 
         result = _make_semgrep_result()
         event = ToolCompleted(

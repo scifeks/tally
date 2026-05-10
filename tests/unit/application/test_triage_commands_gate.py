@@ -52,7 +52,7 @@ class TestTriageCommandsReadinessGate:
         cmds = TriageCommands(repl)
         with (
             patch(
-                "application.repl.commands.triage_commands.TriageService"
+                "application.repl.commands.triage_commands.create_triage_service"
             ) as mock_service,
             patch(
                 "application.repl.commands.triage_commands.run_triage_batch_only"
@@ -60,7 +60,7 @@ class TestTriageCommandsReadinessGate:
             patch("application.repl.commands.triage_commands.run_triage_dry_run") as rd,
         ):
             cmds.cmd_triage("triage", args)
-        mock_service.for_project.assert_not_called()
+        mock_service.assert_not_called()
         rb.assert_not_called()
         rd.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
@@ -86,10 +86,10 @@ class TestTriageCommandsReadinessGate:
         repl.triage_readiness = _readiness_enabled()
         cmds = TriageCommands(repl)
         with patch(
-            "application.repl.commands.triage_commands.TriageService"
+            "application.repl.commands.triage_commands.create_triage_service"
         ) as mock_service:
             cmds.cmd_triage("triage", [])
-        mock_service.for_project.assert_not_called()
+        mock_service.assert_not_called()
         printed = " ".join(str(c) for c in repl.console.print.call_args_list)
         assert "No active" in printed
 

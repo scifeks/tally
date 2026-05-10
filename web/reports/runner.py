@@ -23,6 +23,7 @@ from application.reporting.orchestrator import (
     ReportRequest,
     run_report,
 )
+from factories.persistence import make_store
 from infrastructure.events.bus import EventBus
 from infrastructure.reporting.jinja2_template_renderer import Jinja2TemplateRenderer
 from infrastructure.reporting.weasyprint_pdf_renderer import WeasyPrintPdfRenderer
@@ -132,6 +133,8 @@ def _run_report(
         project_id=project_id,
     )
 
+    _, finding_repo, _, _ = make_store(base_path, project_name)
+
     try:
         try:
             output = run_report(
@@ -141,6 +144,7 @@ def _run_report(
                 pdf_renderer=WeasyPrintPdfRenderer(),
                 event_sink=sink,
                 cancel_token=cancel_token,
+                finding_repo=finding_repo,
             )
         except ReportCancelled:
             report_repo.set_status(report_id, "cancelled")

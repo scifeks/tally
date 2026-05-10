@@ -17,9 +17,11 @@ from application.reporting.tal_id import assign_tal_ids, resolve_prefix
 from core.config.manager import ConfigManager
 from domain.findings.severity import Severity
 from domain.reporting.context import ReportContext
-from infrastructure.store import make_store
 
 if TYPE_CHECKING:
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
     from application.ports.html_template_renderer import HtmlTemplateRenderer
     from application.ports.pdf_renderer import PdfRenderer
     from application.ports.user_prompt import UserPromptPort
@@ -95,6 +97,7 @@ class ReportAssembler:
         prompt: UserPromptPort,
         template_renderer: HtmlTemplateRenderer,
         pdf_renderer: PdfRenderer,
+        finding_repo: FindingRepositoryPort,
         testing_type: str = "white_box",
         engagement_date: str | None = None,
         company_name_override: str | None = None,
@@ -105,6 +108,7 @@ class ReportAssembler:
         self._prompt = prompt
         self._template_renderer = template_renderer
         self._pdf_renderer = pdf_renderer
+        self._finding_repo = finding_repo
         self._testing_type = testing_type
         self._engagement_date = engagement_date
         self._company_name_override = company_name_override
@@ -168,15 +172,14 @@ class ReportAssembler:
         toc_html = _generate_toc()
 
         # -- Segment 4: vulnerability distribution chart ------------------
-        _, finding_repo, _, _ = make_store(self._base_path, self._project)
-        query_svc = DraftQueryService(finding_repo)
+        query_svc = DraftQueryService(self._finding_repo)
         filtered = query_svc.get_findings_for_report(skip_triage=self._skip_triage)
         sev_counts = query_svc.severity_distribution(filtered)
         chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
         vuln_distribution_chart_html = chart_html
 
         # -- Segment 4: attack surface overview ---------------------------
-        attack_surface_html = AttackSurfaceBuilder(finding_repo).build(filtered)
+        attack_surface_html = AttackSurfaceBuilder(self._finding_repo).build(filtered)
 
         # -- Segment 5: Finding ID assignment ---------------------------------
         code_sorted = sorted(
@@ -187,8 +190,8 @@ class ReportAssembler:
             ),
         )
         code_with_ids = assign_tal_ids([asdict(f) for f in code_sorted], prefix=prefix)
-        finding_repo.reset_tal_ids()
-        finding_repo.bulk_update_tal_ids(
+        self._finding_repo.reset_tal_ids()
+        self._finding_repo.bulk_update_tal_ids(
             [(f["tal_id"], f["id"]) for f in code_with_ids]
         )
         logger.info("Assigned %d finding IDs to code findings.", len(code_with_ids))

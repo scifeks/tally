@@ -1,13 +1,18 @@
 """Project management for tally Security Auditing REPL."""
 
+from __future__ import annotations
+
 import datetime
 import shutil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from application.project.registry_service import ProjectRegistryService
 from core.config import ConfigManager, ProjectConfig
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ProjectManager:
@@ -17,6 +22,7 @@ class ProjectManager:
         self,
         base_path: str = ".",
         registry: ProjectRegistryService | None = None,
+        schema_initializer: Callable[[Path], None] | None = None,
     ):
         self.base_path = Path(base_path)
         self.projects_dir = ProjectPaths.projects_dir(self.base_path)
@@ -24,6 +30,7 @@ class ProjectManager:
             registry = _build_default_registry(base_path)
         self.registry = registry
         self.config = ConfigManager(base_path, registry=registry)
+        self._schema_initializer = schema_initializer
 
     # Public API
 
@@ -45,7 +52,12 @@ class ProjectManager:
         self.projects_dir.mkdir(parents=True, exist_ok=True)
         paths = ProjectPaths.from_registry_row(row)
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
-        ConnectionFactory(paths.findings_db).init_schema()
+        if self._schema_initializer is None:
+            from factories.persistence import init_project_schema
+
+            init_project_schema(paths.findings_db)
+        else:
+            self._schema_initializer(paths.findings_db)
 
     def get_project_info(self, project_name: str) -> ProjectConfig | None:
         """Load and return ProjectConfig for project_name."""
@@ -125,12 +137,13 @@ class ProjectManager:
         self.registry.register(name, str(self.base_path))
 
 
-def _build_default_registry(base_path: str) -> ProjectRegistryService:
-    """Lazy-build a registry rooted at base_path/tally.db (sync from disk)."""
-    from infrastructure.store.project_registry import ProjectRegistryRepository
+def _build_default_registry(
+    base_path: str,
+) -> ProjectRegistryService:
+    """Load the default registry from factories when none is provided.
+    Composition roots should provide an explicit registry, but tests
+    and other callers can rely on this fallback.
+    """
+    from factories.persistence import build_default_registry
 
-    repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
-    repo.init_schema()
-    svc = ProjectRegistryService(repo)
-    svc.sync(base_path)
-    return svc
+    return build_default_registry(base_path)

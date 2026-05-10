@@ -2,7 +2,7 @@
 
 Pins the contract that selecting a project rebuilds the per-project schema
 when the database has been dropped or only partially exists, so users can
-recover from a hand-deleted ``findings.db`` simply by re-loading the project.
+recover from a hand-deleted ``findings.db`` by re-loading the project.
 """
 
 from __future__ import annotations
@@ -66,9 +66,13 @@ def test_switch_project_creates_schema_when_db_missing(tmp_path: Path) -> None:
     db_path = proj_dir / "sqlite" / "findings.db"
     assert not db_path.exists()
 
+    def schema_init(db):
+        ConnectionFactory(db).init_schema()
+
     manager = ProjectManager(
         base_path=str(tmp_path),
         registry=_registry_for(proj_dir, "testproject"),
+        schema_initializer=schema_init,
     )
     manager.switch_project("testproject")
 

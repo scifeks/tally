@@ -48,10 +48,9 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 
-# When TALLY_HARNESS=1 the REPL skips prompt_toolkit and uses a plain
-# stdin loop.  After each command the sentinel below is printed to stdout
-# so the test harness can reliably detect when the REPL is ready for
-# the next command.
+# When TALLY_HARNESS=1 the REPL uses plain stdin instead of prompt_toolkit.
+# The sentinel is printed to stdout before each prompt so the consumer
+# can reliably detect when the REPL is ready for input.
 _HARNESS_SENTINEL = "__TALLY_PROMPT__"
 
 _VERSION = "1.0"
@@ -235,17 +234,14 @@ class REPL:
         self.base_path = base_path
         self.console = Console()
         if project_registry is None:
-            from infrastructure.store.project_registry import (
-                ProjectRegistryRepository,
+            from factories.persistence import (
+                build_default_registry,
             )
 
-            repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
-            repo.init_schema()
-            project_registry = ProjectRegistryService(repo)
-            project_registry.sync(base_path)
+            project_registry = build_default_registry(base_path)
         self.project_registry = project_registry
         self.config = ConfigManager(base_path)
-        self.projects = ProjectManager(base_path)
+        self.projects = ProjectManager(base_path, registry=project_registry)
         self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
         self.knowledge_base_cache: dict[str, FindingKnowledgeBase | None] = {}
@@ -328,14 +324,7 @@ class REPL:
         self.console.print("Goodbye!")
 
     def _run_harness(self) -> None:
-        """Plain-stdin REPL loop used by the test harness.
-
-        Prints _HARNESS_SENTINEL to stdout before waiting for each
-        command so pexpect can reliably detect when the REPL is ready.
-        Interactive wizard commands (which call input() directly) work
-        normally; the sentinel only appears at the top-level REPL
-        prompt boundary.
-        """
+        """Plain-stdin REPL loop (prints sentinel before each prompt)."""
         self._print_banner()
         print_installed_system_tools(
             self.console, runtime_deps=self._runtime_service.statuses()

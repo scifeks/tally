@@ -32,6 +32,9 @@ if TYPE_CHECKING:
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
     )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
     from application.ports.run_repository import RunRepositoryPort
 
 logger = logging.getLogger(__name__)
@@ -71,6 +74,7 @@ class ScanOrchestrator:
         chat_session_repo: ChatSessionRepositoryPort | None = None,
         display: DisplayProtocol | None = None,
         arg_snapshots: dict[str, str] | None = None,
+        repo_repo: ProjectRepoRepositoryPort | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -86,6 +90,7 @@ class ScanOrchestrator:
         self._project_id = project_id
         self._chat_session_repo = chat_session_repo
         self._arg_snapshots = arg_snapshots or {}
+        self._repo_repo = repo_repo
 
         # Plumb cancellation into the executor so subprocess waits abort.
         if hasattr(tool_executor, "set_cancel_token"):
@@ -106,6 +111,7 @@ class ScanOrchestrator:
             remaining_peers=remaining_peers,
             project_id=self._project_id,
             arg_snapshots=self._arg_snapshots,
+            repo_repo=self._repo_repo,
         )
 
     def _make_resources(self) -> ExecutionResources:

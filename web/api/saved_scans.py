@@ -29,6 +29,11 @@ from domain.saved_scans.entry import (
     StaleSavedScanRepoItem,
     StaleSavedScanToolItem,
 )
+from factories.persistence import (
+    create_finding_repo,
+    create_repo_repo,
+    create_url_finding_repo,
+)
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.chat_sessions import ChatSessionRepository
 from infrastructure.store.repositories.runs import RunRepository
@@ -340,6 +345,10 @@ async def run_saved_scan(
         }
         tool_names = tuple(set(tool_names) | profile_tools)
 
+    finding_repo = create_finding_repo(paths.findings_db)
+    repo_repo = create_repo_repo(paths.findings_db)
+    url_finding_repo = create_url_finding_repo(paths.findings_db)
+
     try:
         handle = await asyncio.to_thread(
             get_scan_service().start_scan,
@@ -359,6 +368,9 @@ async def run_saved_scan(
             event_sink=sink,
             arg_profile_ids=arg_profile_ids,
             saved_scan_id=saved_scan_id,
+            finding_repo=finding_repo,
+            repo_repo=repo_repo,
+            url_finding_repo=url_finding_repo,
         )
     except JobBusy as exc:
         raise JobBusyError("scan", exc.current_holder) from exc

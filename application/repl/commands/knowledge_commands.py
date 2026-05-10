@@ -8,11 +8,11 @@ from rich.panel import Panel
 from rich.table import Table
 
 from application.chat.stream_composer import RagUnavailable
-from application.findings.findings_service import (
-    FindingsService,
-    ProjectNotFound,
-)
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+from factories.persistence import (
+    ProjectNotFound,
+    create_findings_service,
+)
 
 if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
@@ -276,9 +276,10 @@ class KnowledgeCommands:
         """Return a FindingRepositoryPort for the active project, or None."""
         assert self.repl.active_project is not None
         try:
-            return FindingsService.for_project(
+            service = create_findings_service(
                 self.repl.project_registry, self._resolve_project_id()
-            ).finding_repo
+            )
+            return service.finding_repo
         except (ProjectNotFound, ValueError) as exc:
             self.repl.console.print(f"[red]Project error:[/red] {exc}")
             return None

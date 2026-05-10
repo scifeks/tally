@@ -30,8 +30,14 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _make_pm(base_path: Path) -> ProjectManager:
+    from infrastructure.store.connection import ConnectionFactory
+
     _write_global_config(base_path)
-    return ProjectManager(base_path=str(base_path))
+
+    def schema_init(db_path):
+        ConnectionFactory(db_path).init_schema()
+
+    return ProjectManager(base_path=str(base_path), schema_initializer=schema_init)
 
 
 class TestInterviewSingleRepo:
@@ -40,8 +46,8 @@ class TestInterviewSingleRepo:
         repo_dir.mkdir()
         pm = _make_pm(tmp_path / "pm")
         wizard = InteractiveProjectWizard(pm)
-        # inputs: name, type, mode, path, languages, dependencies_file, base_urls,
-        #         test_dirs, ignore_dirs, endpoint_file, auth
+        # Inputs: name, type, mode, path, languages, dependencies_file,
+        # base_urls, test_dirs, ignore_dirs, endpoint_file, auth
         inputs = [
             "my-repo",
             "api",

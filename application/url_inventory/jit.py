@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING
 
 from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
-from infrastructure.store.connection import ConnectionFactory
-from infrastructure.store.repositories.url_findings import UrlFindingRepository
 
 if TYPE_CHECKING:
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
+    )
     from core.config.schemas import Repository
 
 
@@ -22,6 +23,7 @@ def jit_rebuild_artifacts(
     base_path: str,
     project_name: str,
     repo: Repository,
+    url_finding_repo: UrlFindingRepositoryPort,
 ) -> tuple[str | None, str | None]:
     """Rebuild merged_urls.txt and merged_oas3.json for the repo.
 
@@ -36,14 +38,11 @@ def jit_rebuild_artifacts(
     if not paths.findings_db.exists():
         return None, None
 
-    factory = ConnectionFactory(paths.findings_db)
-    factory.init_schema()
-    url_repo = UrlFindingRepository(factory)
-    rows = url_repo.list_for_repo(repo.id)
+    rows = url_finding_repo.list_for_repo(repo.id)
     if not rows:
         return None, None
 
-    service = UrlInventoryService(url_repo)
+    service = UrlInventoryService(url_finding_repo)
     seeds_path, oas3_path = service.regenerate_artifacts(
         repo_id=repo.id,
         project_paths=paths,

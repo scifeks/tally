@@ -26,6 +26,7 @@ from domain.pipeline.events import (  # noqa: E402
     ToolCompleted,
 )
 from domain.tools.base import ToolResult  # noqa: E402
+from factories.persistence import create_repo_repo  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.tools.parsers.gitleaks import (  # noqa: E402
     parse_gitleaks_json,
@@ -107,7 +108,15 @@ class TestIngestHandlerPhase2:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -133,7 +142,15 @@ class TestIngestHandlerPhase2:
         self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
         bus = EventBus()
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -173,7 +190,15 @@ class TestIngestHandlerPhase2:
         bound to its run_id.  No deduplication via fingerprint occurs.
         """
         bus = EventBus()
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -182,9 +207,6 @@ class TestIngestHandlerPhase2:
             base_path=str(project_env["base_path"]),
         )
         handler.handle(event)
-        _, finding_repo, _, _ = make_store(
-            str(project_env["base_path"]), project_env["project_name"]
-        )
         count_after_first = len(finding_repo.get_all_findings())
         assert count_after_first >= 1
 
@@ -199,7 +221,15 @@ class TestIngestHandlerPhase2:
         received: list[IngestCompleted] = []
         bus.subscribe(IngestCompleted, received.append)
 
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=gitleaks_result,
             profile="test-profile",
@@ -227,7 +257,15 @@ class TestIngestHandlerPhase2:
     ) -> None:
         """ZAP findings must have the repo column populated from event.repo."""
         bus = EventBus()
-        handler = IngestHandler(bus)
+        _, finding_repo, _, _ = make_store(
+            str(project_env["base_path"]), project_env["project_name"]
+        )
+        paths = ProjectPaths.from_canonical(
+            str(project_env["base_path"]),
+            project_env["project_name"],
+        )
+        repo_repo = create_repo_repo(paths.findings_db)
+        handler = IngestHandler(bus, finding_repo=finding_repo, repo_repo=repo_repo)
         event = ToolCompleted(
             result=zap_result,
             profile="target-site",

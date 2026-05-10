@@ -27,12 +27,12 @@ from application.locking import JobBusy
 from application.triage.run_registry import get_triage_run_registry
 from application.triage.runner import NoScanRunError
 from application.triage.triage_service import (
-    ProjectNotFound,
     TriageNotResumableError,
     TriageService,
 )
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
+from factories.persistence import ProjectNotFound, create_triage_service
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.sse import format_sse_frame
 from infrastructure.events.types import EOS, BusEvent
@@ -61,7 +61,7 @@ v1_router = APIRouter()
 def _service(request: Request, project_id: int) -> TriageService:
     """Build a TriageService for *project_id* or raise 404."""
     try:
-        return TriageService.for_project(request.app.state.project_registry, project_id)
+        return create_triage_service(request.app.state.project_registry, project_id)
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 

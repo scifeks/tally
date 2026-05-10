@@ -83,6 +83,9 @@ def _start_kwargs(
         run_repo=run_repo,
         chat_session_repo=chat_session_repo,
         profiles_repo=profiles_repo,
+        finding_repo=MagicMock(),
+        repo_repo=MagicMock(),
+        url_finding_repo=MagicMock(),
         prompt=MagicMock(),
     )
     base.update(overrides)
