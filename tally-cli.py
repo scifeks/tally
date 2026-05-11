@@ -51,6 +51,17 @@ def _setup_logging() -> None:
     logging.basicConfig(level=logging.DEBUG, handlers=[main_handler, err_handler])
 
 
+def _prepare_report_args(args: Namespace) -> None:
+    """Map --type flag to report_command for the report handler."""
+    report_type = args.type
+    if report_type == "draft":
+        args.report_command = "draft"
+    elif report_type == "shell":
+        args.report_command = "shell"
+    else:
+        args.report_command = None
+
+
 def _dispatch(
     args: Namespace,
     project_registry: ProjectRegistryService,
@@ -65,6 +76,9 @@ def _dispatch(
     from application.cli.commands.stats import cmd_stats
     from application.cli.commands.triage import cmd_triage
     from application.cli.commands.ui import cmd_ui
+
+    if args.command == "report":
+        _prepare_report_args(args)
 
     handlers = {
         "scan": cmd_scan,
