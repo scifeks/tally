@@ -212,6 +212,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 ## Documentation
 
 - [docs/usage.md](docs/usage.md) - Full REPL usage guide with examples
+- [docs/cli.md](docs/cli.md) - CLI reference for scripted and automated workflows
 - [docs/ui.md](docs/ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
 - [docs/report.md](docs/report.md) - Report generation guide: quick reports, PDF assembly, and shell preview
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
