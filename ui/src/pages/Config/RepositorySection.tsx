@@ -45,7 +45,12 @@ export function RepositorySection({
 }: {
   repositories: RepositoryConfig[]
   projectId: number
-  onSave: (repo: RepositoryConfig, isNew: boolean, endpointFile?: File | null) => void
+  onSave: (
+    repo: RepositoryConfig,
+    isNew: boolean,
+    endpointFile?: File | null,
+    garakConfigFile?: File | null
+  ) => void
   onDelete: (repoId: number) => void
   onUpdateAuth: (repoId: number, auth: RepositoryAuthUpdate) => void
   isSaving: boolean
@@ -62,9 +67,11 @@ export function RepositorySection({
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [form, setForm] = useState<Partial<RepositoryConfig>>({})
   const [endpointFileUpload, setEndpointFileUpload] = useState<File | null>(null)
+  const [garakConfigUpload, setGarakConfigUpload] = useState<File | null>(null)
   const [_isDirty, setIsDirty] = useState(false)
   const [auth, setAuth] = useState<AuthFormState>(EMPTY_AUTH)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const garakFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const isNewRepo = selectedId === NEW_REPO_ID
 
@@ -84,6 +91,7 @@ export function RepositorySection({
         katana: { headless: false, crawlDepth: 10 },
       })
       setEndpointFileUpload(null)
+      setGarakConfigUpload(null)
       setAuth(EMPTY_AUTH)
       setIsDirty(false)
     } else if (selectedId !== null) {
@@ -91,6 +99,7 @@ export function RepositorySection({
       if (repo) {
         setForm({ ...repo })
         setEndpointFileUpload(null)
+        setGarakConfigUpload(null)
         setAuth(EMPTY_AUTH)
         setIsDirty(false)
       }
@@ -109,7 +118,7 @@ export function RepositorySection({
     // detaches the underlying blob when the input's value is cleared, and
     // the mutation reads the bytes asynchronously. The parent triggers
     // cleanup via the saveCompletedAt prop after the request settles.
-    onSave(repo, isNewRepo, endpointFileUpload)
+    onSave(repo, isNewRepo, endpointFileUpload, garakConfigUpload)
     if (isNewRepo) setSelectedId(null)
     setIsDirty(false)
   }
@@ -117,7 +126,9 @@ export function RepositorySection({
   useEffect(() => {
     if (saveCompletedAt === null) return
     setEndpointFileUpload(null)
+    setGarakConfigUpload(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    if (garakFileInputRef.current) garakFileInputRef.current.value = ''
   }, [saveCompletedAt])
 
   const handleReset = () => {
@@ -128,7 +139,9 @@ export function RepositorySection({
       if (repo) setForm({ ...repo })
     }
     setEndpointFileUpload(null)
+    setGarakConfigUpload(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
+    if (garakFileInputRef.current) garakFileInputRef.current.value = ''
     setIsDirty(false)
   }
 
@@ -537,6 +550,39 @@ export function RepositorySection({
               </div>
             </div>
           )}
+
+          {/* LLM Configuration */}
+          <div className="border-t border-border pt-4">
+            <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+              LLM Scanning
+            </div>
+            <div>
+              <label
+                htmlFor="repo-garak-config"
+                className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+              >
+                Garak Config
+              </label>
+              <input
+                ref={garakFileInputRef}
+                id="repo-garak-config"
+                type="file"
+                accept=".yaml,.yml"
+                onChange={e => {
+                  const file = e.target.files?.[0] ?? null
+                  setGarakConfigUpload(file)
+                  setIsDirty(true)
+                }}
+                className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
+              />
+              {form.garakConfigFile && !garakConfigUpload && (
+                <div className="text-[9px] text-accent mt-1">
+                  Current: {form.garakConfigFile}. Uploading a new file will replace it.
+                </div>
+              )}
+              <div className="text-[9px] text-dim mt-1">YAML config file required to run Garak</div>
+            </div>
+          </div>
 
           {/* Actions */}
           <div className="border-t border-border pt-4 flex items-center justify-between">

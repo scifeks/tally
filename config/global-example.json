@@ -23,7 +23,9 @@
     "retry_count": 2,
     "debug": false
   },
-  "chat_inference": null,
+  "chat_inference": {
+    "provider": "ollama"
+  },
   "enrichment_inference": {
     "provider": "ollama"
   },

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -9,11 +10,40 @@ from rich.panel import Panel
 from rich.table import Table
 
 from application.project.repositories_service import ProjectRepositoriesService
+from core.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
     from application.repl.interface import REPL
     from core.config.schemas import Repository
+
+
+def _offer_garak_config(project_name: str, base_path: str, repo_id: int) -> None:
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    dest = paths.garak_config(repo_id)
+    has_existing = dest.exists()
+    if has_existing:
+        hint = "  Garak config file (Enter to keep existing, or new path)"
+    else:
+        hint = "  Garak config file path (optional)"
+    while True:
+        raw = input(f"{hint}: ").strip()
+        if not raw:
+            return
+        src = Path(raw).expanduser().resolve()
+        if not src.exists():
+            print(f"  File not found: {raw}")
+            choice = input("  [r]etry / [s]kip? [r/s]: ").strip().lower()
+            if choice not in ("r", "retry"):
+                return
+            continue
+        if src.suffix not in (".yaml", ".yml"):
+            print("  Garak config must be a YAML file (.yaml or .yml)")
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        print(f"  Garak config saved to {dest}")
+        return
 
 
 class ProjectCommands:
@@ -205,7 +235,13 @@ class ProjectCommands:
                 "Use 'project add' or 'project switch <name>'[/yellow]"
             )
             return
-        self.repl.wizard.add_repository(self.repl.active_project)
+        repo = self.repl.wizard.add_repository(self.repl.active_project)
+        if repo is not None and repo.id is not None:
+            _offer_garak_config(
+                self.repl.active_project,
+                str(self.repl.base_path),
+                repo.id,
+            )
 
     def cmd_repos(self, _cmd: str, _args: list[str]) -> None:
         """List configured repositories for the active project."""
@@ -282,7 +318,15 @@ class ProjectCommands:
             )
             return
         try:
-            self.repl.wizard.edit_repository(self.repl.active_project, repo_name)
+            updated = self.repl.wizard.edit_repository(
+                self.repl.active_project, repo_name
+            )
+            if updated is not None and updated.id is not None:
+                _offer_garak_config(
+                    self.repl.active_project,
+                    str(self.repl.base_path),
+                    updated.id,
+                )
         except ValueError as exc:
             self.repl.console.print(f"[red]{exc}[/red]")
 

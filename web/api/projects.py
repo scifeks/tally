@@ -241,12 +241,21 @@ def _existing_endpoint_file(repo: Repository) -> str | None:
     return Path(repo.url_seed_file).name
 
 
-def _serialize_repo(repo: Repository, repo_id: int | None) -> dict:
+def _serialize_repo(
+    repo: Repository,
+    repo_id: int | None,
+    paths: ProjectPaths | None = None,
+) -> dict:
     """Convert Repository to JSON, excluding auth credentials."""
     data = repo.model_dump()
     data.pop("auth", None)
     data["id"] = repo_id
     data["endpoint_file"] = _existing_endpoint_file(repo)
+    data["garak_config_file"] = None
+    if paths is not None and repo_id is not None:
+        gc = paths.garak_config(repo_id)
+        if gc.exists():
+            data["garak_config_file"] = gc.name
     return data
 
 
@@ -260,12 +269,13 @@ async def list_repositories(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
 ) -> JSONResponse:
-    _resolve_project(request, project_id)
+    row = _resolve_project(request, project_id)
+    paths = ProjectPaths(Path(row.path))
     service = _service_from_request(request)
     repos = service.list_active(project_id)
     total = len(repos)
     page = repos[offset : offset + limit]
-    items = [_serialize_repo(repo, repo.id) for repo in page]
+    items = [_serialize_repo(repo, repo.id, paths) for repo in page]
     return JSONResponse(
         content={
             "items": items,
@@ -286,13 +296,14 @@ async def get_repository_detail(
     request: Request,
 ) -> JSONResponse:
     """Return a single repository. Auth fields are never echoed."""
-    _resolve_project(request, project_id)
+    row = _resolve_project(request, project_id)
+    paths = ProjectPaths(Path(row.path))
     service = _service_from_request(request)
     try:
         repo = service.get(project_id, repo_id)
     except RepositoryNotFound as exc:
         raise NotFound(str(exc)) from exc
-    return JSONResponse(content=_serialize_repo(repo, repo.id))
+    return JSONResponse(content=_serialize_repo(repo, repo.id, paths))
 
 
 def _parse_payload(payload: str | None) -> dict[str, Any]:
@@ -314,9 +325,10 @@ async def create_repository(
     request: Request,
     payload: str = Form(...),
     endpoint_file: UploadFile | None = File(default=None),
+    garak_config: UploadFile | None = File(default=None),
 ) -> JSONResponse:
     """Create a new repository (multipart)."""
-    _resolve_project(request, project_id)
+    row = _resolve_project(request, project_id)
 
     data = _parse_payload(payload)
     data.pop("id", None)
@@ -336,7 +348,13 @@ async def create_repository(
         await _ingest_endpoint_file(request, project_id, created, endpoint_file)
         created = service.get(project_id, created.id)
 
-    return JSONResponse(status_code=201, content=_serialize_repo(created, created.id))
+    if garak_config is not None and garak_config.filename and created.id is not None:
+        await _ingest_garak_config(row, created.id, garak_config)
+
+    paths = ProjectPaths(Path(row.path))
+    return JSONResponse(
+        status_code=201, content=_serialize_repo(created, created.id, paths)
+    )
 
 
 @v1_router.patch("/{project_id}/repositories/{repo_id}")
@@ -346,9 +364,10 @@ async def patch_repository(
     request: Request,
     payload: str | None = Form(default=None),
     endpoint_file: UploadFile | None = File(default=None),
+    garak_config: UploadFile | None = File(default=None),
 ) -> JSONResponse:
     """Partial update of a repository (multipart)."""
-    _resolve_project(request, project_id)
+    row = _resolve_project(request, project_id)
     service = _service_from_request(request)
 
     data = _parse_payload(payload)
@@ -367,7 +386,11 @@ async def patch_repository(
         await _ingest_endpoint_file(request, project_id, updated, endpoint_file)
         updated = service.get(project_id, repo_id)
 
-    return JSONResponse(content=_serialize_repo(updated, updated.id))
+    if garak_config is not None and garak_config.filename:
+        await _ingest_garak_config(row, repo_id, garak_config)
+
+    paths = ProjectPaths(Path(row.path))
+    return JSONResponse(content=_serialize_repo(updated, updated.id, paths))
 
 
 @v1_router.delete("/{project_id}/repositories/{repo_id}", status_code=204)
@@ -428,3 +451,18 @@ async def _ingest_endpoint_file(
         filename=filename,
         contents=contents,
     )
+
+
+async def _ingest_garak_config(
+    project_row: ProjectRow,
+    repo_id: int,
+    upload: UploadFile,
+) -> None:
+    filename = upload.filename or "garak.yaml"
+    if not filename.endswith((".yaml", ".yml")):
+        raise ApiValidationError("Garak config must be a YAML file (.yaml or .yml)")
+    contents = await upload.read()
+    paths = ProjectPaths(Path(project_row.path))
+    dest = paths.garak_config(repo_id)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(contents)

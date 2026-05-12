@@ -118,7 +118,7 @@ class TestFullScan:
             ),
         ):
             mock_repo.return_value.execute.return_value = sub
-            summary = FullScan(exclude_segments=["secrets", "web"]).execute(
+            summary = FullScan(exclude_segments=["secrets", "web", "llm"]).execute(
                 mock_config, mock_resources
             )
 
