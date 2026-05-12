@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from domain.tools.base import ToolResult
 
-SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web"]
+SEGMENT_ORDER: list[str] = ["sast", "sca", "secrets", "web", "llm"]
 
 
 @dataclass

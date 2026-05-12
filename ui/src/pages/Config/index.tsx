@@ -86,9 +86,9 @@ export default function Config() {
           <RepositorySection
             repositories={repositories}
             projectId={projectId}
-            onSave={(repo, isNew, endpointFile) =>
+            onSave={(repo, isNew, endpointFile, garakConfigFile) =>
               saveRepository.mutate(
-                { projectId, repo, isNew, endpointFile },
+                { projectId, repo, isNew, endpointFile, garakConfigFile },
                 { onSuccess: () => setRepoSaveCompletedAt(Date.now()) }
               )
             }

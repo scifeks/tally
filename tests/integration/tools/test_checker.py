@@ -3,26 +3,41 @@
 from __future__ import annotations
 
 import importlib
+import inspect
+from pathlib import Path
 
 import pytest
 
 from application.startup.checker import DependencyChecker
+from domain.tools.interface import ToolInterface
 
 pytestmark = pytest.mark.integration
 
-_EXPECTED_TOOLS = {
-    "composer-audit",
-    "dalfox",
-    "gitleaks",
-    "katana",
-    "noir",
-    "npm-audit",
-    "osv-scanner",
-    "pip-audit",
-    "semgrep",
-    "xsstrike",
-    "zap",
-}
+_LOCAL_WRAPPER_DIR = (
+    Path(__file__).resolve().parents[3]
+    / "infrastructure"
+    / "tools"
+    / "wrappers"
+    / "local"
+)
+
+
+def _expected_tool_names() -> set[str]:
+    names: set[str] = set()
+    for py in _LOCAL_WRAPPER_DIR.glob("*.py"):
+        if py.name.startswith("_"):
+            continue
+        stem = py.stem
+        module_name = f"infrastructure.tools.wrappers.local.{stem}"
+        module = importlib.import_module(module_name)
+        for _, cls in inspect.getmembers(module, inspect.isclass):
+            if (
+                issubclass(cls, ToolInterface)
+                and not inspect.isabstract(cls)
+                and cls.__module__ == module_name
+            ):
+                names.add(cls().name)
+    return names
 
 
 def test_check_system_tools_discovers_all_tools() -> None:
@@ -32,11 +47,12 @@ def test_check_system_tools_discovers_all_tools() -> None:
     layer directory) that would silently empty the Installed System Tools
     display.
     """
+    expected = _expected_tool_names()
     checker = DependencyChecker()
     tool_checks = checker.check_system_tools()
     found = {c.name for c in tool_checks}
-    assert found == _EXPECTED_TOOLS, (
-        f"Missing: {_EXPECTED_TOOLS - found}, Unexpected: {found - _EXPECTED_TOOLS}"
+    assert found == expected, (
+        f"Missing: {expected - found}, Unexpected: {found - expected}"
     )
 
 

@@ -687,6 +687,7 @@ export interface RepositoryConfig {
   endpointFile?: string
   /** Endpoint file format (auto-detected) */
   endpointFileFormat?: 'openapi3' | 'swagger2' | 'postman' | 'har' | 'katana-jsonl'
+  garakConfigFile?: string
   /** When both baseUrls and endpointFile set, should crawlers also run? */
   alsoRunCrawlers: boolean
   /** Katana configuration */

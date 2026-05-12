@@ -40,6 +40,13 @@ class ProjectPaths:
         return self.config_dir / "commands.json"
 
     @property
+    def garak_config_dir(self) -> Path:
+        return self.config_dir / "garak"
+
+    def garak_config(self, repo_id: int) -> Path:
+        return self.garak_config_dir / str(repo_id) / "garak.yaml"
+
+    @property
     def endpoints_config_dir(self) -> Path:
         return self.config_dir / "endpoints"
 

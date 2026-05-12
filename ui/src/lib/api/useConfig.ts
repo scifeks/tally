@@ -58,6 +58,7 @@ interface RepositoryApi {
   katana_depth: number
   katana_headers: Record<string, string>
   endpoint_file: string | null
+  garak_config_file: string | null
 }
 
 interface RepositoryListResponseApi {
@@ -140,6 +141,7 @@ function mapRepository(api: RepositoryApi, projectId: number): RepositoryConfig 
     },
   }
   if (api.endpoint_file) result.endpointFile = api.endpoint_file
+  if (api.garak_config_file) result.garakConfigFile = api.garak_config_file
   return result
 }
 
@@ -297,13 +299,17 @@ export function useSaveRepository() {
       repo: RepositoryConfig
       isNew: boolean
       endpointFile?: File | null
+      garakConfigFile?: File | null
     }
   >({
-    mutationFn: async ({ projectId, repo, isNew, endpointFile }) => {
+    mutationFn: async ({ projectId, repo, isNew, endpointFile, garakConfigFile }) => {
       const formData = new FormData()
       formData.append('payload', JSON.stringify(toRepositoryPayload(repo)))
       if (endpointFile) {
         formData.append('endpoint_file', endpointFile)
+      }
+      if (garakConfigFile) {
+        formData.append('garak_config', garakConfigFile)
       }
       const url = isNew
         ? REST_ENDPOINTS.createRepository(projectId)

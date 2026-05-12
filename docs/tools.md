@@ -14,6 +14,7 @@
 | pip-audit | SCA | Python dependency audit (PyPI advisory database) |
 | npm-audit | SCA | Node.js dependency audit |
 | composer-audit | SCA | PHP Composer dependency audit |
+| Garak | LLM Security | LLM vulnerability scanning for prompt injection, jailbreaks, data leakage, and toxicity |
 
 All tools are optional. Tally skips any tool that is not detected.
 
@@ -89,6 +90,36 @@ Priority logic:
 When `noir` mode is selected but no Noir output exists for the repository at scan time, XSStrike falls back to `crawl` mode automatically. The same fallback applies to `provided` mode when `oas3_path` is empty.
 
 Set or change the mode at any time with `repo edit <name>`.
+
+---
+
+## Garak LLM Scanner
+
+Garak requires a YAML configuration file specifying the target LLM (model type, model name, probes to run). The config is per-repository since different repos may target different LLMs.
+
+You can provide the config file in two ways:
+
+- **REPL.** During `repo add` or `repo edit`, Tally prompts for a local file path and copies it to the project's config directory.
+- **Web UI.** On the Config page, select a repository and upload a `.yaml` or `.yml` file in the LLM Scanning section.
+
+When no garak config file is present for a repository, the tool is skipped automatically for that repo.
+
+### Timeout
+
+Garak defaults to a 3600-second (1 hour) timeout. For large probe sets or slow models, set a custom timeout in the config file under a `tally` section:
+
+```yaml
+tally:
+  timeout: 7200
+
+plugins:
+  target_type: ollama
+  # ...
+```
+
+The `tally` section is ignored by garak itself and only read by Tally.
+
+See the [garak documentation](https://github.com/NVIDIA/garak) for config file format and available probes.
 
 ---
 

@@ -37,7 +37,7 @@ STATUS_LEVELS: frozenset[str] = frozenset(
     {"active", "false_positive", "fixed", "wont_fix"}
 )
 
-DOMAINS: set[str] = {"code", "web"}
+DOMAINS: set[str] = {"code", "llm", "web"}
 
 BOOLEAN_TYPE_FIELDS: set[str] = {f"type_{t}" for t in FINDING_TYPES}
 
@@ -88,3 +88,18 @@ OWASP_CODE_TO_NAME: dict[str, str] = {
 }
 
 OWASP_NAMES: frozenset[str] = frozenset(OWASP_CODE_TO_NAME.values())
+
+OWASP_LLM_CODE_TO_NAME: dict[str, str] = {
+    "LLM01": "Prompt Injection",
+    "LLM02": "Sensitive Information Disclosure",
+    "LLM03": "Supply Chain Vulnerabilities",
+    "LLM04": "Data and Model Poisoning",
+    "LLM05": "Improper Output Handling",
+    "LLM06": "Excessive Agency",
+    "LLM07": "System Prompt Leakage",
+    "LLM08": "Vector and Embedding Weaknesses",
+    "LLM09": "Misinformation",
+    "LLM10": "Unbounded Consumption",
+}
+
+OWASP_LLM_NAMES: frozenset[str] = frozenset(OWASP_LLM_CODE_TO_NAME.values())
