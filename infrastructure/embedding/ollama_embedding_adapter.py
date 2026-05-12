@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
 
 from application.ports.embedding_provider import EmbeddingProvider
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaEmbeddingAdapter(EmbeddingProvider):
@@ -18,10 +21,12 @@ class OllamaEmbeddingAdapter(EmbeddingProvider):
         base_url: str,
         model: str,
         timeout_seconds: int = 60,
+        debug: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout_seconds
+        self._debug = debug
 
     def is_available(self) -> bool:
         """Return True if Ollama responds at its /api/tags endpoint."""
@@ -35,6 +40,13 @@ class OllamaEmbeddingAdapter(EmbeddingProvider):
 
     def embed(self, text: str, **kwargs: Any) -> list[float]:
         """POST to /api/embeddings and return the embedding vector."""
+        if self._debug:
+            logger.debug(
+                "embed: model=%s url=%s text_len=%d",
+                self._model,
+                self._base_url,
+                len(text),
+            )
         payload = json.dumps({"model": self._model, "prompt": text}).encode()
         req = urllib.request.Request(
             f"{self._base_url}/api/embeddings",

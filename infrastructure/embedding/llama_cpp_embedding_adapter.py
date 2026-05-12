@@ -25,10 +25,12 @@ class LlamaCppEmbeddingAdapter(EmbeddingProvider):
         base_url: str,
         model: str,
         timeout_seconds: int = 60,
+        debug: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout_seconds
+        self._debug = debug
 
     def is_available(self) -> bool:
         try:
@@ -38,6 +40,13 @@ class LlamaCppEmbeddingAdapter(EmbeddingProvider):
             return False
 
     def embed(self, text: str, **kwargs: Any) -> list[float]:
+        if self._debug:
+            logger.debug(
+                "embed: model=%s url=%s text_len=%d",
+                self._model,
+                self._base_url,
+                len(text),
+            )
         try:
             client = openai.OpenAI(
                 base_url=f"{self._base_url}/v1",
