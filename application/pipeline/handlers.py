@@ -38,6 +38,12 @@ logger = logging.getLogger(__name__)
 
 def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledgeBase:
     embedding_provider = get_embedding_provider(base_path)
+    logger.info(
+        "Embedding provider: %s model=%s url=%s",
+        type(embedding_provider).__name__,
+        getattr(embedding_provider, "_model", "?"),
+        getattr(embedding_provider, "_base_url", "?"),
+    )
     chat_provider = get_llm_provider("chat", base_path)
     vector_index = make_chromadb_vector_index(
         project_name=project_name,

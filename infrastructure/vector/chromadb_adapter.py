@@ -28,11 +28,16 @@ class _ProviderEmbeddingFn:
 
     def __init__(self, provider: EmbeddingProvider) -> None:
         self._provider = provider
+        self._debug: bool = getattr(provider, "_debug", False)
 
     def __call__(self, input: Documents) -> Embeddings:  # noqa: A002
+        if self._debug:
+            logger.debug("ChromaDB embedding: documents=%d", len(input))
         return [self._provider.embed(t) for t in input]  # type: ignore[return-value]
 
     def embed_query(self, input: Documents) -> Embeddings:  # noqa: A002
+        if self._debug:
+            logger.debug("ChromaDB query embedding: documents=%d", len(input))
         return [self._provider.embed(t) for t in input]  # type: ignore[return-value]
 
     def name(self) -> str:
