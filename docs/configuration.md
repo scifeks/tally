@@ -40,6 +40,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
 | `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
 | `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
+| `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Connection Fields](#defectdojo-connection-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
 | `projects_dir` | string | Directory where project workspaces are stored. Default: `"./projects"`. |
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
@@ -97,6 +98,18 @@ feature config schema:
 |---|---|---|---|
 | `api_key` | string | `""` | API key passed to the OpenCode agent. Set to any non-empty value when running against Ollama (e.g. `"ollama"`). |
 | `api_provider` | string | `""` | LLM endpoint URL (e.g. `http://localhost:11434`). Used for network egress allowlisting in the triage container. |
+
+### DefectDojo Connection Fields
+
+Optional. Required only when using the `export defectdojo` command.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `url` | string | Yes | | Base URL of your DefectDojo instance. Must use `http://` or `https://`. |
+| `api_token` | string | Yes | | API v2 token from your DefectDojo user profile. |
+| `verify_ssl` | bool | No | `true` | Verify TLS certificates. Set to `false` for self-signed certificates. |
+
+See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for per-project targeting config and usage.
 
 ### Example: Ollama Only
 
@@ -272,7 +285,19 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 | `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. |
 | `department_name` | string | no | Optional department or team name, stored for reference. |
 | `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` → `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
+| `defectdojo` | object | no | DefectDojo targeting settings for this project. See [DefectDojo Project Fields](#defectdojo-project-fields). |
 | `repositories` | array | no | List of repository objects (mirrors repositories.json). |
+
+#### DefectDojo Project Fields
+
+Optional. Required only when using the `export defectdojo` command.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `product_name` | string | Yes | | DefectDojo product to export into. |
+| `engagement_name` | string | Yes | | DefectDojo engagement within the product. |
+| `product_type_name` | string | No | `"Tally"` | Product type assigned when auto-creating the product. |
+| `auto_create_context` | bool | No | `true` | Create the product, engagement, and product type in DefectDojo if they do not exist. |
 
 #### Example
 
@@ -283,6 +308,10 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
   "company_name": "Acme Corp",
   "department_name": "Engineering",
   "abbreviation": "ACM",
+  "defectdojo": {
+    "product_name": "ACME Web App",
+    "engagement_name": "Q2 2025 Security Audit"
+  },
   "repositories": []
 }
 ```

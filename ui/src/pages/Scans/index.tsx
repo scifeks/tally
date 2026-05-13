@@ -27,13 +27,6 @@ import { StaleSavedScanModal } from '@/components/StaleSavedScanModal'
 import type { StaleSavedScanItem } from '@/components/StaleSavedScanModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
-const SEGMENT_LABEL: Record<Segment, string> = {
-  sast: 'SAST',
-  sca: 'SCA',
-  web: 'WEB',
-  secrets: 'SECRETS',
-}
-
 export default function Scans() {
   const activeProjectId = useUI(s => s.activeProjectId)
 
@@ -475,7 +468,7 @@ export default function Scans() {
                         <div className="text-[10px] text-dim">
                           {scan.toolNames.length + scan.argProfileIds.length} tools &middot;{' '}
                           {scan.segments.length > 0
-                            ? scan.segments.map(s => SEGMENT_LABEL[s]).join(', ')
+                            ? scan.segments.map(s => s.toUpperCase()).join(', ')
                             : 'all domains'}
                         </div>
                       </button>
@@ -640,7 +633,7 @@ export default function Scans() {
                             : 'border-border text-muted-foreground hover:border-muted-foreground'
                         )}
                       >
-                        {SEGMENT_LABEL[d]}
+                        {d.toUpperCase()}
                       </button>
                     )
                   })}

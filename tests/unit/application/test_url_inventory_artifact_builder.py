@@ -59,6 +59,48 @@ class TestBuildSeeds:
             ["https://api.example.com/dup", "https://api.example.com/other"]
         )
 
+    def test_query_params_from_oas3_meta(self) -> None:
+        meta = {
+            "original_file": {
+                "parameters": [
+                    {"in": "query", "name": "q", "schema": {"type": "string"}},
+                ],
+                "responses": {"200": {"description": "ok"}},
+            }
+        }
+        out = build_seeds([_scan(path="/search", meta=meta)])
+        assert "https://api.example.com/search?q=" in out
+
+    def test_multiple_query_params(self) -> None:
+        meta = {
+            "original_file": {
+                "parameters": [
+                    {"in": "query", "name": "q", "schema": {"type": "string"}},
+                    {"in": "query", "name": "page", "schema": {"type": "integer"}},
+                ],
+                "responses": {"200": {"description": "ok"}},
+            }
+        }
+        out = build_seeds([_scan(path="/search", meta=meta)])
+        assert "?q=&page=" in out
+
+    def test_non_query_params_excluded(self) -> None:
+        meta = {
+            "original_file": {
+                "parameters": [
+                    {"in": "path", "name": "id"},
+                    {"in": "header", "name": "X-Token"},
+                ],
+                "responses": {"200": {"description": "ok"}},
+            }
+        }
+        out = build_seeds([_scan(path="/items/{id}", meta=meta)])
+        assert "?" not in out
+
+    def test_no_meta_produces_bare_url(self) -> None:
+        out = build_seeds([_scan(path="/plain")])
+        assert "?" not in out
+
     def test_empty_input(self) -> None:
         assert build_seeds([]) == ""
 

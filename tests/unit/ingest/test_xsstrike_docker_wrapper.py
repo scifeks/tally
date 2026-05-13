@@ -43,10 +43,10 @@ def _make_repo(**kwargs: Any) -> MagicMock:
 
 
 class TestDockerBuildCommandFlags:
-    def test_path_flag_present(self) -> None:
+    def test_path_flag_not_present(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(base_url="http://localhost:8080")
-        assert "--path" in cmd
+        assert "--path" not in cmd
 
     def test_threads_flag_present(self) -> None:
         tool = _make_tool()
@@ -92,7 +92,7 @@ class TestDockerBuildCommandFlags:
     def test_new_flags_present_in_seeds_mode(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(seeds_file="/tally_data/seeds.txt")
-        assert "--path" in cmd
+        assert "--path" not in cmd
         assert "-t" in cmd
         assert "--timeout" in cmd
 

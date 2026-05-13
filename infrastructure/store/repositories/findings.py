@@ -458,6 +458,14 @@ class FindingRepository(FindingRepositoryPort):
             rows = conn.execute("SELECT * FROM findings").fetchall()
         return [Finding.from_row(r) for r in rows]
 
+    def get_findings_by_run_id(self, run_id: int) -> list[Finding]:
+        with self._factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM findings WHERE run_id = ?",
+                (run_id,),
+            ).fetchall()
+        return [Finding.from_row(r) for r in rows]
+
     def get_all_findings_deserialized(self) -> list[dict]:
         """Return all findings with no triage filter, deserialised."""
         with self._factory.connect() as conn:

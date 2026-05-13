@@ -161,6 +161,16 @@ The REPL provides the same capabilities as the web UI in a terminal interface. A
 
 See [docs/report.md](docs/report.md) for the full PDF assembly workflow and argument reference.
 
+### Integrations
+
+| Command | Description |
+|---|---|
+| `export defectdojo` | Export all findings to DefectDojo |
+| `export defectdojo --run-id=<id>` | Export findings from a specific scan run |
+| `export defectdojo --test-connection` | Verify DefectDojo connectivity and authentication |
+
+See [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) for setup and configuration.
+
 ### Utility
 
 | Command | Description |
@@ -223,6 +233,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying your own OAS3/Swagger/Postman/HAR endpoint file
 - [docs/endpoint-file-adapter-internals.md](docs/endpoint-file-adapter-internals.md) - Developer guide for adding endpoint file format adapters
 - [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) - Developer guide for adding tool wrappers (requires `config/commands.json` registration to take effect)
+- [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) - DefectDojo integration: export findings, configuration, and field mapping
 - [docs/docker.md](docs/docker.md) - Optional Docker containers for npm-audit and composer-audit
 - [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
 

@@ -52,7 +52,7 @@ function mapTool(api: ScanConfigToolApi): ConfiguredTool {
   return {
     id: api.id,
     name: api.name,
-    segment: api.domain as Segment,
+    segment: api.domain,
     enabled: api.enabled,
   }
 }
@@ -61,7 +61,7 @@ function mapScanConfig(api: ScanConfigResponseApi): ProjectScanConfig {
   return {
     repos: api.repos.map(mapRepo),
     tools: api.tools.map(mapTool),
-    segments: api.domains as Segment[],
+    segments: api.domains,
   }
 }
 

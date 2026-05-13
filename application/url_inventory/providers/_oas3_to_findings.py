@@ -23,6 +23,28 @@ _ALLOWED_METHODS: frozenset[str] = frozenset(
 )
 
 
+def _dedup_parameters(op: dict) -> dict:
+    params = op.get("parameters")
+    if not isinstance(params, list) or len(params) <= 1:
+        return op
+    seen: set[tuple[str, str]] = set()
+    deduped: list[dict] = []
+    for p in params:
+        if not isinstance(p, dict):
+            deduped.append(p)
+            continue
+        key = (p.get("name", ""), p.get("in", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(p)
+    if len(deduped) == len(params):
+        return op
+    result = dict(op)
+    result["parameters"] = deduped
+    return result
+
+
 def iter_oas3_rows(
     doc: dict,
     ctx: UrlProviderContext,
@@ -54,6 +76,8 @@ def iter_oas3_rows(
         if not isinstance(ops, dict):
             continue
         path_str = raw_path if isinstance(raw_path, str) else str(raw_path)
+        if path_str and not path_str.startswith("/"):
+            path_str = "/" + path_str
         if is_vendor_path(path_str, extra_indicators=extra_indicators):
             continue
         for method_key, op in ops.items():
@@ -62,7 +86,7 @@ def iter_oas3_rows(
                 continue
             meta: dict[str, Any] = {}
             if isinstance(op, dict):
-                meta["original_file"] = op
+                meta["original_file"] = _dedup_parameters(op)
             yield UrlFinding(
                 repo_id=ctx.repo_id,
                 source=source,

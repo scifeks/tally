@@ -41,6 +41,11 @@
     "provider": "ollama",
     "timeout_seconds": 120
   },
+  "defectdojo": {
+    "url": "https://defectdojo.example.com",
+    "api_token": "",
+    "verify_ssl": true
+  },
   "projects_dir": "./projects",
   "location_attestation_confirmed": false,
   "enrichment_max_concurrency": 4,

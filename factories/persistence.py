@@ -292,7 +292,7 @@ def create_findings_service(
         project_id=project_id,
         project_name=row.name,
         findings_db_exists=findings_db_exists,
-        purge_tables=factory.purge_non_preserved_tables,
+        purge_tables=factory.purge_operational_tables,
         knowledge_base_cache=knowledge_base_cache,
         base_path=base_path or "",
         event_sink=event_sink,

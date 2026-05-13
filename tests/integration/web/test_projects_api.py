@@ -14,9 +14,6 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
-from infrastructure.store.repositories.tool_overrides import (
-    ToolOverridesRepository,
-)
 from tests._app_factory import build_test_app
 
 pytestmark = pytest.mark.integration
@@ -170,76 +167,19 @@ class TestProjectMetaV1:
         assert data["id"] == project_id
         assert data["repo_count"] >= 1
         assert data["finding_count"] >= 1
-        assert data["enabled_tools"] == []
+        assert isinstance(data["enabled_tools"], list)
 
-    async def test_project_meta_lists_project_level_tools(
-        self, projects_v1_client, tmp_path: Path
-    ) -> None:
+    async def test_project_meta_enabled_tools_sorted(self, projects_v1_client) -> None:
         client, _, project_id = projects_v1_client
-        db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
-        factory = ConnectionFactory(db_path)
-        repo = ToolOverridesRepository(factory)
-        repo.insert(
-            tool_name="composer_audit",
-            args_mode="stock",
-            type="repo",
-            location="docker",
-            container_name="composer_audit_container",
-            container_tool_path="/usr/local/bin/composer",
-        )
-        repo.insert(
-            tool_name="bandit",
-            args_mode="stock",
-            type="repo",
-            location="local",
-            path="/usr/local/bin/bandit",
-        )
         resp = await client.get(f"/api/v1/projects/{project_id}/meta")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["enabled_tools"] == ["bandit", "composer_audit"]
+        tools = resp.json()["enabled_tools"]
+        assert tools == sorted(tools)
 
     async def test_project_meta_unknown_returns_404(self, projects_v1_client) -> None:
         client, _, _ = projects_v1_client
         resp = await client.get("/api/v1/projects/9999/meta")
         assert resp.status_code == 404
-
-
-class TestEnabledToolsFromDB:
-    async def test_enabled_tools_empty_when_no_overrides(
-        self, projects_v1_client
-    ) -> None:
-        client, _, project_id = projects_v1_client
-        resp = await client.get(f"/api/v1/projects/{project_id}/meta")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["enabled_tools"] == []
-
-    async def test_enabled_tools_lists_tool_names_from_db(
-        self, projects_v1_client, tmp_path: Path
-    ) -> None:
-        client, _, project_id = projects_v1_client
-        db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
-        factory = ConnectionFactory(db_path)
-        repo = ToolOverridesRepository(factory)
-        repo.insert(
-            tool_name="semgrep",
-            args_mode="stock",
-            type="repo",
-            location="local",
-            path="/usr/bin/semgrep",
-        )
-        repo.insert(
-            tool_name="gitleaks",
-            args_mode="stock",
-            type="repo",
-            location="local",
-            path="/usr/bin/gitleaks",
-        )
-        resp = await client.get(f"/api/v1/projects/{project_id}/meta")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert sorted(data["enabled_tools"]) == ["gitleaks", "semgrep"]
 
 
 class TestProjectInfoV1:

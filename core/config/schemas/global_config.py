@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
+from .defectdojo_config import DefectDojoConnectionConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
 from .opencode_config import OpenCodeConfig
@@ -23,6 +24,7 @@ class GlobalConfig(BaseModel):
     ollama: LocalInferenceConfig | None = None
     llama_cpp: LocalInferenceConfig | None = None
     claude: ClaudeConfig | None = None
+    defectdojo: DefectDojoConnectionConfig | None = None
     opencode: OpenCodeConfig | None = None
     chat_inference: FeatureInferenceConfig | None = None
     enrichment_inference: FeatureInferenceConfig | None = None

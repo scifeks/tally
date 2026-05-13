@@ -56,7 +56,7 @@ export default function Dashboard() {
   if (!project) {
     return <NoProjectSelectedState projects={projects} />
   }
-  const reposCount = counts?.reposCount ?? 0
+  const reposCount = meta?.repoCount ?? 0
   const urlsCount = counts?.urlsCount ?? 0
   const enabledToolsCount = meta?.enabledTools?.length ?? 0
   const totalFindings = counts?.total ?? 0

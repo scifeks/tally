@@ -40,6 +40,7 @@ class NoirProvider:
             return []
         if not isinstance(doc, dict):
             return []
+        doc.pop("servers", None)
         return list(
             iter_oas3_rows(
                 doc,

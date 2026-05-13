@@ -34,7 +34,9 @@ def jit_rebuild_artifacts(
     if repo.id is None:
         return None, None
 
-    paths = ProjectPaths.from_canonical(base_path, project_name)
+    from pathlib import Path
+
+    paths = ProjectPaths.from_canonical(str(Path(base_path).resolve()), project_name)
     if not paths.findings_db.exists():
         return None, None
 

@@ -723,3 +723,34 @@ Editing project 'acme-security-audit' (press Enter to keep current value)...
 ```
 
 To clear the abbreviation (reverting to the global prefix), enter `--clear` at the abbreviation prompt.
+
+---
+
+## Exporting Findings
+
+Tally can export findings to external vulnerability management platforms. Currently supported: DefectDojo.
+
+### DefectDojo
+
+Export all findings in the active project to DefectDojo:
+
+```
+[acme-security-audit]> export defectdojo
+Export complete: 142 exported
+```
+
+Export findings from a specific scan run:
+
+```
+[acme-security-audit]> export defectdojo --run-id=3
+Export complete: 28 exported
+```
+
+Test the connection before exporting:
+
+```
+[acme-security-audit]> export defectdojo --test-connection
+DefectDojo connection successful.
+```
+
+DefectDojo connection settings are configured in `config/global.json`. Per-project targeting (which product and engagement to export into) is configured in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for full setup instructions.

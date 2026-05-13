@@ -56,6 +56,15 @@ def parse_dalfox_json_string(json_string: str) -> dict[str, Any]:
     return _parse_dalfox_data(data)
 
 
+def _get(item: dict[str, Any], *keys: str, default: str = "") -> str:
+    """Return the first matching key's value, or *default*."""
+    for k in keys:
+        val = item.get(k)
+        if val is not None:
+            return str(val)
+    return default
+
+
 def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
     """Normalise a list of DalFox PoC objects into the standard finding shape."""
     findings: list[dict[str, Any]] = []
@@ -67,16 +76,16 @@ def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
         if not item:
             continue
 
-        poc = item.get("PoC", "")
-        param = item.get("Param", "")
-        payload = item.get("Payload", "")
-        cwe = item.get("CWE", "")
-        severity = (item.get("Severity") or "medium").lower()
-        inject_type = item.get("InjectType", "")
-        method = item.get("Method", "GET")
-        evidence = item.get("Evidence", "")
-        message = item.get("MessageStr", "")
-        raw_type = item.get("Type", "R")
+        poc = _get(item, "PoC", "data", "poc")
+        param = _get(item, "Param", "param")
+        payload = _get(item, "Payload", "payload")
+        cwe = _get(item, "CWE", "cwe")
+        severity = (_get(item, "Severity", "severity") or "medium").lower()
+        inject_type = _get(item, "InjectType", "inject_type")
+        method = _get(item, "Method", "method", default="GET")
+        evidence = _get(item, "Evidence", "evidence")
+        message = _get(item, "MessageStr", "message_str")
+        raw_type = _get(item, "Type", "type", default="R")
         confidence = _TYPE_CONFIDENCE.get(raw_type, "potential")
 
         findings.append(

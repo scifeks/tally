@@ -1,5 +1,6 @@
 """REPL commands package."""
 
+from .export import ExportCommand
 from .knowledge_commands import KnowledgeCommands
 from .project_commands import ProjectCommands
 from .purge import PurgeCommand
@@ -10,6 +11,7 @@ from .triage_commands import TriageCommands
 from .ui_commands import UiCommands
 
 __all__ = [
+    "ExportCommand",
     "KnowledgeCommands",
     "ProjectCommands",
     "PurgeCommand",

@@ -28,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  tally --project myapp --command purge"
             " --tool semgrep --keep-reports\n"
             "  tally --project myapp --command stats\n"
+            "  tally --project myapp --command"
+            " integration-sync\n"
             "  tally --command ui"
         ),
     )
@@ -54,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
             "triage",
             "purge",
             "stats",
+            "integration-sync",
             "ui",
         ],
         help="Command to execute",
@@ -167,6 +170,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--keep-reports",
         action="store_true",
         help="Preserve generated reports",
+    )
+
+    parser.add_argument(
+        "--run-id",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Scan run ID to export (integration-sync only)",
     )
 
     parser.add_argument(

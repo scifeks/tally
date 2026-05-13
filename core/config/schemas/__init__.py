@@ -2,6 +2,10 @@
 
 from .claude_config import ClaudeConfig
 from .command_entry import CommandEntry
+from .defectdojo_config import (
+    DefectDojoConnectionConfig,
+    DefectDojoProjectConfig,
+)
 from .docker_container import DockerContainer
 from .endpoint_config import EndpointConfig
 from .feature_inference_config import FeatureInferenceConfig
@@ -17,6 +21,8 @@ from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_
 __all__ = [
     "ClaudeConfig",
     "CommandEntry",
+    "DefectDojoConnectionConfig",
+    "DefectDojoProjectConfig",
     "DockerContainer",
     "EndpointConfig",
     "FeatureInferenceConfig",

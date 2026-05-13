@@ -1,26 +1,20 @@
 """XSStrike local wrapper for XSS-focused dynamic web application scanning.
 
-XSStrike has no built-in URL crawler; all URLs must be supplied via a seeds
-file. This wrapper reads ``repo.merged_seeds_path``, the canonical
-deduplicated seeds file produced by the URL discovery pipeline after Katana,
-Noir, and/or a user-provided endpoint file run.
-
-When ``merged_seeds_path`` is empty or missing, XSStrike is skipped and a
-warning is logged.
+Seeds are supplied via ``--seeds`` from the URL discovery pipeline (Katana,
+Noir, or a user-provided endpoint file). When no seeds file is available,
+XSStrike is skipped and a warning is logged.
 
 Invocation
 ----------
 ::
 
     xsstrike --seeds <seeds_file> --crawl --skip -l <level>
-        --path -t <threads> --timeout 15
+        -t <threads> --timeout 15
         --file-log-level DEBUG --log-file <logfile>
 
-Note on ``--crawl``
--------------------
-The ``--crawl`` flag controls DOM-level crawling of each seed URL (following
-links within the page to find additional injection points).  It is unrelated
-to URL enumeration and is always included.
+``--crawl`` activates XSStrike's Photon crawler, which follows links from
+each seed URL to discover additional pages and tests every parameter it
+finds. ``-l`` controls the crawl depth.
 
 Output
 ------
@@ -130,7 +124,6 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 "--skip",
                 "-l",
                 str(crawl_level),
-                "--path",
                 "-t",
                 str(_recommended_thread_count()),
                 "--timeout",
