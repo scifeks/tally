@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from domain.tools.execution_config import ToolExecutionConfig
 from infrastructure.tools.wrappers.docker.xsstrike import XSSTrikeDockerTool
 from infrastructure.tools.wrappers.local.xsstrike import _recommended_thread_count
 
@@ -39,14 +40,23 @@ def _make_repo(**kwargs: Any) -> MagicMock:
     return repo
 
 
+def _tool_config(
+    blind_xss_callback_url: str = "",
+) -> ToolExecutionConfig:
+    return ToolExecutionConfig(
+        noir_provider=None,
+        blind_xss_callback_url=blind_xss_callback_url,
+    )
+
+
 # build_command: basic flag assertions
 
 
 class TestDockerBuildCommandFlags:
-    def test_path_flag_present(self) -> None:
+    def test_path_flag_not_present(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(base_url="http://localhost:8080")
-        assert "--path" in cmd
+        assert "--path" not in cmd
 
     def test_threads_flag_present(self) -> None:
         tool = _make_tool()
@@ -92,9 +102,18 @@ class TestDockerBuildCommandFlags:
     def test_new_flags_present_in_seeds_mode(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(seeds_file="/tally_data/seeds.txt")
-        assert "--path" in cmd
         assert "-t" in cmd
         assert "--timeout" in cmd
+
+    def test_blind_flag_when_enabled(self) -> None:
+        tool = _make_tool()
+        cmd = tool.build_command(base_url="http://localhost:8080", blind=True)
+        assert "--blind" in cmd
+
+    def test_no_blind_flag_by_default(self) -> None:
+        tool = _make_tool()
+        cmd = tool.build_command(base_url="http://localhost:8080")
+        assert "--blind" not in cmd
 
     def test_crawl_level_propagated(self) -> None:
         tool = _make_tool()
@@ -154,11 +173,17 @@ class TestDockerBuildExecutionPasses:
     rebuilds it from ``url_findings`` rows). These tests stub the helper
     to isolate the docker wrapper's pass-construction logic."""
 
-    def _make_context(self, repo: MagicMock, tmp_path: Any) -> MagicMock:
-        ctx = MagicMock(spec=["repo", "base_path", "project_name"])
+    def _make_context(
+        self,
+        repo: MagicMock,
+        tmp_path: Any,
+        blind_url: str = "",
+    ) -> MagicMock:
+        ctx = MagicMock(spec=["repo", "base_path", "project_name", "tool_config"])
         ctx.repo = repo
         ctx.base_path = str(tmp_path)
         ctx.project_name = "proj"
+        ctx.tool_config = _tool_config(blind_url)
         return ctx
 
     def _make_seeds(self, tmp_path: Any, name: str = "seeds.txt") -> str:
@@ -231,3 +256,21 @@ class TestDockerBuildExecutionPasses:
         with self._patched(seeds=seeds):
             passes = tool.build_execution_passes(ctx)
         assert passes[0].label_suffix == "myapp"
+
+    def test_blind_kwarg_set_when_callback_configured(self, tmp_path: Any) -> None:
+        tool = _make_tool()
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo()
+        ctx = self._make_context(repo, tmp_path, blind_url="https://cb.example.com")
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
+        assert passes[0].kwargs["blind"] is True
+
+    def test_no_blind_kwarg_when_callback_empty(self, tmp_path: Any) -> None:
+        tool = _make_tool()
+        seeds = self._make_seeds(tmp_path)
+        repo = _make_repo()
+        ctx = self._make_context(repo, tmp_path)
+        with self._patched(seeds=seeds):
+            passes = tool.build_execution_passes(ctx)
+        assert "blind" not in passes[0].kwargs
