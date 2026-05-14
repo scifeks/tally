@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -336,16 +337,23 @@ async def test_generate_validates_format(app_client) -> None:
 
 
 async def _wait_for_assembler_call(mock_class: MagicMock, timeout: float = 5.0) -> None:
-    """Poll until the patched ReportAssembler class is invoked once."""
+    """Poll until the patched ReportAssembler class is invoked once,
+    then drain the report daemon thread so its event-bus publishes
+    are processed before the test's event loop tears down."""
     deadline = asyncio.get_event_loop().time() + timeout
     while asyncio.get_event_loop().time() < deadline:
         if mock_class.call_count >= 1:
-            return
+            break
         await asyncio.sleep(0.02)
-    raise AssertionError(
-        f"ReportAssembler was not called within {timeout}s "
-        f"(call_count={mock_class.call_count})"
-    )
+    else:
+        raise AssertionError(
+            f"ReportAssembler was not called within {timeout}s "
+            f"(call_count={mock_class.call_count})"
+        )
+    while asyncio.get_event_loop().time() < deadline:
+        if not any(t.name.startswith("report-run-") for t in threading.enumerate()):
+            return
+        await asyncio.sleep(0.05)
 
 
 def _patch_assembler(monkeypatch) -> MagicMock:

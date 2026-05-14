@@ -1,6 +1,7 @@
 """Shared base class for gitleaks local and docker wrappers."""
 
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -11,10 +12,33 @@ from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterfac
 from infrastructure.tools.parsers.gitleaks import combine_gitleaks_results
 
 
+def _build_gitleaks_toml(
+    excluded_dirs: list[str],
+    extend_path: str | None,
+) -> str:
+    if extend_path:
+        extend = f'[extend]\npath = "{extend_path}"'
+    else:
+        extend = "[extend]\nuseDefault = true"
+    if not excluded_dirs:
+        return extend + "\n"
+    lines = []
+    for d in excluded_dirs:
+        escaped = re.escape(d)
+        lines.append(f"    '''(^|/){escaped}/'''")
+    paths_block = ",\n".join(lines)
+    return (
+        f"{extend}\n\n"
+        f"[[allowlists]]\n"
+        f'description = "Tally excluded directories"\n'
+        f"paths = [\n{paths_block},\n]\n"
+    )
+
+
 class BaseGitleaksTool(ToolInterface):
     _candidate_commands: list[str] = ["gitleaks"]
     _command_entry_type: str = "repo"
-    _last_ignore_path: str | None = None
+    _last_config_paths: list[str] = []
 
     @property
     def name(self) -> str:

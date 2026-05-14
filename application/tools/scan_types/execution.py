@@ -41,7 +41,10 @@ def _build_tool_execution_config(
                 model=provider_config.model,
                 num_ctx=getattr(provider_config, "num_ctx", None),
             )
-    return ToolExecutionConfig(noir_provider=noir_snapshot)
+    return ToolExecutionConfig(
+        noir_provider=noir_snapshot,
+        blind_xss_callback_url=gc.blind_xss_callback_url,
+    )
 
 
 def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:

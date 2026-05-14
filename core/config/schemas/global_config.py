@@ -62,6 +62,14 @@ class GlobalConfig(BaseModel):
     # Post-scan hooks
     post_scan_sync: list[str] = Field(default_factory=list)
 
+    blind_xss_callback_url: str = Field(
+        default="",
+        description=(
+            "Blind XSS callback URL. Passed to Dalfox via -b and "
+            "enables XSStrike --blind mode when non-empty."
+        ),
+    )
+
     # Web UI / dev server
     web_ui_host: str = Field(default="127.0.0.1")
     web_ui_port: int = Field(default=8080)
