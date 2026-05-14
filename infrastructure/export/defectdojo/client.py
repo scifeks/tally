@@ -30,8 +30,9 @@ class DefectDojoClient:
         product_name: str,
         engagement_name: str,
         *,
-        product_type_name: str = "Tally",
+        product_type_name: str = "Tally Scan",
         auto_create_context: bool = True,
+        test_title: str | None = None,
     ) -> tuple[int, dict[str, Any]]:
         """POST to /api/v2/reimport-scan/.
 
@@ -48,6 +49,8 @@ class DefectDojoClient:
             "product_type_name": product_type_name,
             "auto_create_context": str(auto_create_context),
         }
+        if test_title is not None:
+            data["test_title"] = test_title
         response = httpx.post(
             url,
             headers=self._headers,
@@ -55,6 +58,56 @@ class DefectDojoClient:
             files=files,
             verify=self._verify_ssl,
             timeout=_REIMPORT_TIMEOUT,
+        )
+        try:
+            body = response.json()
+        except Exception:
+            body = {"raw": response.text}
+        return response.status_code, body
+
+    def get_product_id(self, product_name: str) -> int | None:
+        """Look up a Product by name, return its ID or None."""
+        url = f"{self._base_url}/api/v2/products/"
+        try:
+            response = httpx.get(
+                url,
+                headers=self._headers,
+                params={"name": product_name},
+                verify=self._verify_ssl,
+                timeout=_DEFAULT_TIMEOUT,
+            )
+            if response.status_code != 200:
+                return None
+            results = response.json().get("results", [])
+            if not results:
+                return None
+            return int(results[0]["id"])
+        except (httpx.HTTPError, KeyError, ValueError):
+            return None
+
+    def create_endpoint(
+        self,
+        product_id: int,
+        protocol: str,
+        host: str,
+        port: int,
+        path: str,
+    ) -> tuple[int, dict[str, Any]]:
+        """POST to /api/v2/endpoints/."""
+        url = f"{self._base_url}/api/v2/endpoints/"
+        payload: dict[str, Any] = {
+            "product": product_id,
+            "protocol": protocol,
+            "host": host,
+            "port": port,
+            "path": path,
+        }
+        response = httpx.post(
+            url,
+            headers=self._headers,
+            json=payload,
+            verify=self._verify_ssl,
+            timeout=_DEFAULT_TIMEOUT,
         )
         try:
             body = response.json()

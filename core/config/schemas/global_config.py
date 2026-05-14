@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
-from .defectdojo_config import DefectDojoConnectionConfig
+from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
 from .opencode_config import OpenCodeConfig
@@ -24,7 +24,7 @@ class GlobalConfig(BaseModel):
     ollama: LocalInferenceConfig | None = None
     llama_cpp: LocalInferenceConfig | None = None
     claude: ClaudeConfig | None = None
-    defectdojo: DefectDojoConnectionConfig | None = None
+    defectdojo: DefectDojoGlobalConfig | None = None
     opencode: OpenCodeConfig | None = None
     chat_inference: FeatureInferenceConfig | None = None
     enrichment_inference: FeatureInferenceConfig | None = None
@@ -58,6 +58,9 @@ class GlobalConfig(BaseModel):
             "scan-triggered sealing. Set to 0 to disable retention sweeping."
         ),
     )
+
+    # Post-scan hooks
+    post_scan_sync: list[str] = Field(default_factory=list)
 
     # Web UI / dev server
     web_ui_host: str = Field(default="127.0.0.1")

@@ -181,6 +181,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--engagement-type",
+        type=str,
+        default=None,
+        metavar="TYPE",
+        help="Engagement type override (integration-sync only)",
+    )
+
+    parser.add_argument(
         "args",
         nargs=argparse.REMAINDER,
         help="Pass-through arguments for the tool (run only)",

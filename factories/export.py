@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,9 @@ from infrastructure.export.defectdojo.adapter import (
 )
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.url_findings import (
+    UrlFindingRepository,
+)
 
 if TYPE_CHECKING:
     from application.export.service import ExportService
@@ -35,10 +39,61 @@ def _resolve_project(registry: ProjectRegistryService, project_id: int) -> tuple
     return row, paths
 
 
+def _build_run_mappings(
+    factory: ConnectionFactory,
+    repo_name_to_id: dict[str, int],
+    run_id: int | None,
+) -> tuple[dict[int, int], set[tuple[int | None, str]]]:
+    where = "WHERE id = ?" if run_id is not None else ""
+    params = (run_id,) if run_id is not None else ()
+
+    with factory.connect() as conn:
+        rows = conn.execute(
+            f"SELECT id, repo_ids, tool_ids FROM scan_runs {where}",
+            params,
+        ).fetchall()
+
+        run_ids = [r["id"] for r in rows]
+        tools_by_run: dict[int, set[str]] = {}
+        if run_ids:
+            placeholders = ",".join("?" * len(run_ids))
+            run_tools_rows = conn.execute(
+                f"SELECT DISTINCT run_id, tool FROM run_tools"
+                f" WHERE run_id IN ({placeholders})",
+                run_ids,
+            ).fetchall()
+            for rt in run_tools_rows:
+                if rt["run_id"] not in tools_by_run:
+                    tools_by_run[rt["run_id"]] = set()
+                tools_by_run[rt["run_id"]].add(rt["tool"])
+
+    run_to_repo_id: dict[int, int] = {}
+    all_tool_runs: set[tuple[int | None, str]] = set()
+
+    for r in rows:
+        repo_names_json = json.loads(r["repo_ids"] or "[]")
+        tool_names = json.loads(r["tool_ids"] or "[]")
+
+        if len(repo_names_json) == 1:
+            rid = repo_name_to_id.get(repo_names_json[0])
+            if rid is not None:
+                run_to_repo_id[r["id"]] = rid
+
+        actual_tools = set(tool_names) | tools_by_run.get(r["id"], set())
+        for repo_name in repo_names_json:
+            rid = repo_name_to_id.get(repo_name)
+            for tool in actual_tools:
+                all_tool_runs.add((rid, tool))
+
+    return run_to_repo_id, all_tool_runs
+
+
 def create_export_service(
     registry: ProjectRegistryService,
     project_id: int,
     base_path: str | Path,
+    run_id: int | None = None,
+    engagement_type_override: str | None = None,
 ) -> ExportService:
     """Build an ExportService wired to the DefectDojo adapter."""
     from application.export.service import ExportService
@@ -48,26 +103,50 @@ def create_export_service(
     config_manager = ConfigManager(str(base_path))
 
     global_config = config_manager.load_global_config()
-    if global_config.defectdojo is None:
+    dd_config = global_config.defectdojo
+    if dd_config is None:
         raise ExportNotConfigured(
             "DefectDojo connection not configured. "
             "Add a 'defectdojo' section to global.json."
         )
 
-    project_config = config_manager.load_project_config(row.name)
-    if project_config is None or project_config.defectdojo is None:
-        raise ExportNotConfigured(
-            f"DefectDojo targeting not configured for "
-            f"project {row.name!r}. Add a 'defectdojo' "
-            "section to the project config."
-        )
+    from infrastructure.store.repositories.repositories import (
+        RepositoryRepository,
+    )
 
     factory = ConnectionFactory(paths.findings_db)
     factory.init_schema()
-    finding_repo = FindingRepository(factory)
-    export_adapter = DefectDojoExportAdapter(
-        connection=global_config.defectdojo,
-        project=project_config.defectdojo,
+    repo_repo = RepositoryRepository(factory)
+    repo_names = {r.id: r.name for r in repo_repo.list_active() if r.id is not None}
+    repo_name_to_id = {name: rid for rid, name in repo_names.items()}
+
+    run_to_repo_id, all_tool_runs = _build_run_mappings(
+        factory, repo_name_to_id, run_id
     )
 
-    return ExportService(finding_repo, export_adapter)
+    project_config = config_manager.load_project_config(row.name)
+    project_dd = project_config.defectdojo if project_config else None
+
+    engagement_type = (
+        engagement_type_override
+        or (project_dd.engagement_type if project_dd else None)
+        or dd_config.engagement_type
+    )
+
+    active_repos = repo_repo.list_active()
+    repo_base_urls = {r.id: r.base_urls for r in active_repos if r.id is not None}
+
+    finding_repo = FindingRepository(factory)
+    url_finding_repo = UrlFindingRepository(factory)
+    export_adapter = DefectDojoExportAdapter(
+        config=dd_config,
+        repo_names=repo_names,
+        project_name=row.name,
+        engagement_type=engagement_type,
+        run_to_repo_id=run_to_repo_id,
+        all_tool_runs=all_tool_runs,
+        url_finding_repo=url_finding_repo,
+        repo_base_urls=repo_base_urls,
+    )
+
+    return ExportService(finding_repo, export_adapter, run_id=run_id)

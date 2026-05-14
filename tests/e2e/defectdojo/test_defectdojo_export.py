@@ -11,8 +11,7 @@ import httpx
 import pytest
 
 from core.config.schemas.defectdojo_config import (
-    DefectDojoConnectionConfig,
-    DefectDojoProjectConfig,
+    DefectDojoGlobalConfig,
 )
 from domain.findings.entry import Finding
 from infrastructure.export.defectdojo.adapter import (
@@ -24,21 +23,23 @@ pytestmark = [pytest.mark.e2e, requires_defectdojo]
 
 _DD_URL = os.environ.get("DD_TEST_URL", "http://127.0.0.1:8080")
 _DD_TOKEN = os.environ.get("DD_TEST_TOKEN", "")
-_PRODUCT = "Tally E2E Test"
+_PROJECT = "e2e-test"
 _ENGAGEMENT = "Export E2E"
 
 
-def _build_connection() -> DefectDojoConnectionConfig:
-    return DefectDojoConnectionConfig(
+def _build_config() -> DefectDojoGlobalConfig:
+    return DefectDojoGlobalConfig(
         url=_DD_URL,
         api_token=_DD_TOKEN,
     )
 
 
-def _build_project() -> DefectDojoProjectConfig:
-    return DefectDojoProjectConfig(
-        product_name=_PRODUCT,
-        engagement_name=_ENGAGEMENT,
+def _build_adapter() -> DefectDojoExportAdapter:
+    return DefectDojoExportAdapter(
+        config=_build_config(),
+        repo_names={1: "e2e-repo"},
+        project_name=_PROJECT,
+        engagement_type=_ENGAGEMENT,
     )
 
 
@@ -86,6 +87,7 @@ def _make_finding(
         "last_seen": "2024-01-15T10:00:00",
         "seen_count": 1,
         "status": "active",
+        "repo_id": 1,
     }
     defaults.update(overrides)
     return Finding(**defaults)
@@ -93,11 +95,11 @@ def _make_finding(
 
 class TestDefectDojoExportE2E:
     def test_connection(self) -> None:
-        adapter = DefectDojoExportAdapter(_build_connection(), _build_project())
+        adapter = _build_adapter()
         assert adapter.test_connection() is True
 
     def test_export_single_finding(self) -> None:
-        adapter = DefectDojoExportAdapter(_build_connection(), _build_project())
+        adapter = _build_adapter()
         finding = _make_finding(1)
         result = adapter.export_findings([finding])
 
@@ -107,7 +109,7 @@ class TestDefectDojoExportE2E:
         assert result.errors == ()
 
     def test_export_multiple_tools(self) -> None:
-        adapter = DefectDojoExportAdapter(_build_connection(), _build_project())
+        adapter = _build_adapter()
         findings = [
             _make_finding(101, tool="semgrep"),
             _make_finding(
@@ -154,22 +156,21 @@ class TestDefectDojoExportE2E:
         assert result.findings_failed == 0
 
     def test_reimport_deduplicates(self) -> None:
-        adapter = DefectDojoExportAdapter(
-            _build_connection(),
-            _build_project(),
-        )
+        adapter = _build_adapter()
         finding = _make_finding(200, fingerprint="dedup-test-fixed")
+
+        product = f"{_PROJECT} / e2e-repo"
 
         result1 = adapter.export_findings([finding])
         assert result1.success is True
 
-        data_before = _query_dd_findings(_PRODUCT)
+        data_before = _query_dd_findings(product)
         count_before = data_before["count"]
 
         result2 = adapter.export_findings([finding])
         assert result2.success is True
 
-        data_after = _query_dd_findings(_PRODUCT)
+        data_after = _query_dd_findings(product)
         count_after = data_after["count"]
 
         assert count_after == count_before

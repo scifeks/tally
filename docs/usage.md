@@ -726,31 +726,42 @@ To clear the abbreviation (reverting to the global prefix), enter `--clear` at t
 
 ---
 
-## Exporting Findings
+## Syncing Findings
 
-Tally can export findings to external vulnerability management platforms. Currently supported: DefectDojo.
+Tally can sync findings to external vulnerability management platforms. Currently supported: DefectDojo.
 
 ### DefectDojo
 
-Export all findings in the active project to DefectDojo:
+Sync all findings in the active project to DefectDojo:
 
 ```
-[acme-security-audit]> export defectdojo
-Export complete: 142 exported
+[acme-security-audit]> sync --integration=defectdojo
+Sync complete: 142 exported
 ```
 
-Export findings from a specific scan run:
+Sync findings from a specific scan run:
 
 ```
-[acme-security-audit]> export defectdojo --run-id=3
-Export complete: 28 exported
+[acme-security-audit]> sync --integration=defectdojo --run-id=3
+Sync complete: 28 exported
 ```
 
-Test the connection before exporting:
+Override the engagement type for a single sync:
 
 ```
-[acme-security-audit]> export defectdojo --test-connection
+[acme-security-audit]> sync --integration=defectdojo --engagement-type="Manual Assessment"
+Sync complete: 142 exported
+```
+
+Test the connection before syncing:
+
+```
+[acme-security-audit]> sync --integration=defectdojo --test-connection
 DefectDojo connection successful.
 ```
 
-DefectDojo connection settings are configured in `config/global.json`. Per-project targeting (which product and engagement to export into) is configured in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for full setup instructions.
+Each repo in the project becomes its own DefectDojo Product, named
+`"{project} / {repo}"`. DefectDojo connection and mapping settings
+are configured in `config/global.json`. See
+[docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for
+full setup instructions and entity mapping details.

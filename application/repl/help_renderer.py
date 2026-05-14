@@ -276,6 +276,26 @@ _HELP_REGISTRY = [
         "--dry-run",
         "Batch + render prompts to DEBUG log; no MCP server, no backend session",
     ),
+    # Integration Sync
+    ("sync", None, None, "Integration Sync"),
+    (
+        "sync",
+        "sync",
+        "--integration=<name>",
+        "Sync findings to an external system",
+    ),
+    (
+        "sync",
+        "sync",
+        "--run-id=<id>",
+        "Sync findings from a specific scan run",
+    ),
+    (
+        "sync",
+        "sync",
+        "--test-connection",
+        "Test the integration connection",
+    ),
     # Web UI
     ("ui", None, None, "Web UI"),
     (

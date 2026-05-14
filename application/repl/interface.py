@@ -25,12 +25,12 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
-    ExportCommand,
     KnowledgeCommands,
     ProjectCommands,
     PurgeCommand,
     ReportCommand,
     ScanCommands,
+    SyncCommand,
     ToolCommands,
     TriageCommands,
     UiCommands,
@@ -72,7 +72,7 @@ _COMPLETIONS = [
     "purge",
     "report",
     "triage",
-    "export",
+    "sync",
     "ui",
 ]
 # First tokens only for WordCompleter
@@ -275,7 +275,7 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self)
-        self.export_commands = ExportCommand(self)
+        self.sync_commands = SyncCommand(self)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
     def run(self) -> None:
@@ -383,7 +383,7 @@ class REPL:
             "purge": self.purge_commands.cmd_purge,
             "report": self.report_commands.execute,
             "triage": self.triage_commands.cmd_triage,
-            "export": self.export_commands.cmd_export,
+            "sync": self.sync_commands.cmd_sync,
             "ui": self.ui_commands.cmd_ui,
         }
         handler = handlers.get(cmd)

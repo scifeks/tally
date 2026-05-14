@@ -358,6 +358,7 @@ export default function Findings() {
           <FindingsList
             rows={filtered}
             total={total}
+            unfilteredTotal={counts?.total ?? 0}
             onSelect={setSelectedRow}
             selectedRowId={selectedRow}
             selectedIds={selectedFindingIds}

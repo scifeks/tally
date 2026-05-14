@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from domain.findings.entry import Finding
-from infrastructure.export.defectdojo.mapper import map_finding, map_findings
+from infrastructure.export.defectdojo.mapper import (
+    _is_static_asset_path,
+    map_finding,
+    map_findings,
+)
 
 
 class TestDefectDojoMapper:
@@ -559,3 +563,151 @@ class TestDefectDojoMapper:
         assert len(results) >= 1
         assert results[0]["title"]
         assert results[0]["severity"]
+
+    def test_dalfox_strips_payload_from_endpoint(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="dalfox",
+            domain="web",
+            segment="dast",
+            severity="high",
+            confidence=None,
+            description="Test",
+            file=None,
+            rule_id="rule1",
+            url=(
+                "http://127.0.0.1:8081/search.php"
+                "?q=test%3E%3Cbase+href%3Djavascript"
+                "%3Aalert%281%29%2F%2F"
+            ),
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=[],
+            meta={"param": "q", "payload": "<base href=javascript:alert(1)//>"},
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        assert result["endpoints"] == ["http://127.0.0.1:8081/search.php"]
+
+    def test_dalfox_strips_fragment_from_endpoint(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="dalfox",
+            domain="web",
+            segment="dast",
+            severity="high",
+            confidence=None,
+            description="Test",
+            file=None,
+            rule_id="rule1",
+            url=(
+                "http://127.0.0.1:8081/account/profile.php"
+                "#jaVasCript:/*-/*`/*\\`/*'/*\"/**/"
+            ),
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=[],
+            meta={},
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        assert result["endpoints"] == ["http://127.0.0.1:8081/account/profile.php"]
+
+    def test_zap_strips_query_from_endpoint(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="zap",
+            domain="web",
+            segment="dast",
+            severity="medium",
+            confidence=None,
+            description="Test",
+            file=None,
+            rule_id="rule1",
+            url="https://example.com/api/users?id=1&action=delete",
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=[],
+            meta={"param": "id"},
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        assert result["endpoints"] == ["https://example.com/api/users"]
+
+    def test_xss_mapper_skips_static_asset_endpoint(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="xsstrike",
+            domain="web",
+            segment="dast",
+            severity="high",
+            confidence=None,
+            description="Test",
+            file=None,
+            rule_id="rule1",
+            url=("https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.4/jquery.min.js"),
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=[],
+            meta={},
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        assert "endpoints" not in result
+
+
+class TestStaticAssetFilter:
+    def test_js_is_static(self) -> None:
+        assert _is_static_asset_path("/jquery.min.js") is True
+
+    def test_css_is_static(self) -> None:
+        assert _is_static_asset_path("/styles/main.css") is True
+
+    def test_svg_is_static(self) -> None:
+        assert _is_static_asset_path("/images/logo.svg") is True
+
+    def test_png_is_static(self) -> None:
+        assert _is_static_asset_path("/img/banner.png") is True
+
+    def test_php_is_not_static(self) -> None:
+        assert _is_static_asset_path("/search.php") is False
+
+    def test_no_extension_is_not_static(self) -> None:
+        assert _is_static_asset_path("/api/users") is False
+
+    def test_html_is_not_static(self) -> None:
+        assert _is_static_asset_path("/index.html") is False
+
+    def test_empty_path_is_not_static(self) -> None:
+        assert _is_static_asset_path("") is False
+
+    def test_case_insensitive(self) -> None:
+        assert _is_static_asset_path("/bundle.JS") is True

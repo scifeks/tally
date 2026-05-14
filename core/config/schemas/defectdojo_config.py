@@ -1,20 +1,23 @@
 """DefectDojo export configuration schema."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class DefectDojoConnectionConfig(BaseModel):
-    """DefectDojo server connection settings."""
+class DefectDojoGlobalConfig(BaseModel):
+    """DefectDojo server connection and defaults."""
 
     url: str
     api_token: str
     verify_ssl: bool = Field(default=True)
+    product_type: str = Field(default="Tally Scan")
+    engagement_type: str = Field(default="Tally Engagement")
+    auto_create_context: bool = Field(default=True)
+    scan_type: str = Field(default="Generic Findings Import")
 
 
 class DefectDojoProjectConfig(BaseModel):
-    """DefectDojo targeting settings per project."""
+    """DefectDojo project-level overrides."""
 
-    product_name: str
-    engagement_name: str
-    product_type_name: str = Field(default="Tally")
-    auto_create_context: bool = Field(default=True)
+    model_config = ConfigDict(extra="ignore")
+
+    engagement_type: str | None = None

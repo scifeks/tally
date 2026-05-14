@@ -41,7 +41,7 @@ class TestExportService:
         )
 
         service = ExportService(repo, export_adapter)
-        result = service.export(run_id=None)
+        result = service.export()
 
         repo.get_all_findings.assert_called_once()
         repo.get_findings_by_run_id.assert_not_called()
@@ -79,8 +79,8 @@ class TestExportService:
             findings_failed=0,
         )
 
-        service = ExportService(repo, export_adapter)
-        result = service.export(run_id=5)
+        service = ExportService(repo, export_adapter, run_id=5)
+        result = service.export()
 
         repo.get_findings_by_run_id.assert_called_once_with(5)
         repo.get_all_findings.assert_not_called()
@@ -95,7 +95,7 @@ class TestExportService:
         repo.get_all_findings.return_value = []
 
         service = ExportService(repo, export_adapter)
-        result = service.export(run_id=None)
+        result = service.export()
 
         repo.get_all_findings.assert_called_once()
         export_adapter.export_findings.assert_not_called()
@@ -109,8 +109,8 @@ class TestExportService:
 
         repo.get_findings_by_run_id.return_value = []
 
-        service = ExportService(repo, export_adapter)
-        result = service.export(run_id=10)
+        service = ExportService(repo, export_adapter, run_id=10)
+        result = service.export()
 
         repo.get_findings_by_run_id.assert_called_once_with(10)
         export_adapter.export_findings.assert_not_called()

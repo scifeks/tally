@@ -104,12 +104,14 @@ export function FindingsList({
   sevFacets,
   sort,
   onSort,
+  unfilteredTotal,
   sentinelRef,
   isFetchingNextPage,
   hasNextPage,
 }: {
   rows: Finding[]
   total: number
+  unfilteredTotal: number
   onSelect: (id: number) => void
   selectedRowId: number | null
   selectedIds: Set<number>
@@ -222,10 +224,19 @@ export function FindingsList({
       {/* Body */}
       <div ref={parentRef} className="flex-1 min-h-0 overflow-auto">
         {rows.length === 0 ? (
-          <div className="p-8 text-center text-xs">
-            <div className="text-dim mb-1">{'// no findings match current filters'}</div>
-            <div className="text-muted-foreground">try clearing filters or switching domains.</div>
-          </div>
+          unfilteredTotal === 0 ? (
+            <div className="p-8 text-center text-xs">
+              <div className="text-dim mb-1">{'// no findings yet'}</div>
+              <div className="text-muted-foreground">run a scan to populate this list.</div>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-xs">
+              <div className="text-dim mb-1">{'// no findings match current filters'}</div>
+              <div className="text-muted-foreground">
+                try clearing filters or switching domains.
+              </div>
+            </div>
+          )
         ) : (
           <div
             style={{

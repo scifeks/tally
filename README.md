@@ -165,9 +165,9 @@ See [docs/report.md](docs/report.md) for the full PDF assembly workflow and argu
 
 | Command | Description |
 |---|---|
-| `export defectdojo` | Export all findings to DefectDojo |
-| `export defectdojo --run-id=<id>` | Export findings from a specific scan run |
-| `export defectdojo --test-connection` | Verify DefectDojo connectivity and authentication |
+| `sync --integration=defectdojo` | Sync all findings to DefectDojo |
+| `sync --integration=defectdojo --run-id=<id>` | Sync findings from a specific scan run |
+| `sync --integration=defectdojo --test-connection` | Verify DefectDojo connectivity and authentication |
 
 See [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) for setup and configuration.
 

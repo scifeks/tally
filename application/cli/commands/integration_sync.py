@@ -43,14 +43,22 @@ def cmd_integration_sync(
         create_export_service,
     )
 
+    run_id: int | None = getattr(args, "run_id", None)
+    engagement_type: str | None = getattr(args, "engagement_type", None)
+
     try:
-        service = create_export_service(project_registry, project_id, base_path)
+        service = create_export_service(
+            project_registry,
+            project_id,
+            base_path,
+            run_id=run_id,
+            engagement_type_override=engagement_type,
+        )
     except ExportNotConfigured as exc:
         print(str(exc), file=sys.stderr)
         return GENERAL_ERROR
 
-    run_id: int | None = getattr(args, "run_id", None)
-    result = service.export(run_id=run_id)
+    result = service.export()
 
     if not result.success:
         for error in result.errors:

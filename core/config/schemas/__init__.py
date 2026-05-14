@@ -3,7 +3,7 @@
 from .claude_config import ClaudeConfig
 from .command_entry import CommandEntry
 from .defectdojo_config import (
-    DefectDojoConnectionConfig,
+    DefectDojoGlobalConfig,
     DefectDojoProjectConfig,
 )
 from .docker_container import DockerContainer
@@ -21,7 +21,7 @@ from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_
 __all__ = [
     "ClaudeConfig",
     "CommandEntry",
-    "DefectDojoConnectionConfig",
+    "DefectDojoGlobalConfig",
     "DefectDojoProjectConfig",
     "DockerContainer",
     "EndpointConfig",

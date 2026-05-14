@@ -244,6 +244,23 @@ class ScanService:
                 skip_tools=set(skip_tool_ids) or None,
             )
             future.set_result(summary)
+            tools_run = list(summary.findings_by_tool.keys())
+            try:
+                _run_post_scan_sync(
+                    base_path=base_path,
+                    project_name=project_name,
+                    run_id=run_id,
+                    finding_repo=finding_repo,
+                    repo_repo=repo_repo,
+                    url_finding_repo=url_finding_repo,
+                    tools_run=tools_run,
+                    run_repo=run_repo,
+                )
+            except Exception:
+                logger.exception(
+                    "post-scan sync failed for run %d",
+                    run_id,
+                )
         except Exception as exc:
             if not setup_ok:
                 # Setup-stage failure (pipeline build, orchestrator
@@ -268,6 +285,116 @@ class ScanService:
                 logger.warning("lock holder mismatch on scan run %d release", run_id)
             except KeyError:
                 logger.warning("scan lock already released for run %d", run_id)
+
+
+def _run_post_scan_sync(
+    *,
+    base_path: str,
+    project_name: str,
+    run_id: int,
+    finding_repo: FindingRepositoryPort,
+    repo_repo: ProjectRepoRepositoryPort,
+    url_finding_repo: UrlFindingRepositoryPort,
+    tools_run: list[str],
+    run_repo: RunRepositoryPort,
+) -> None:
+    from core.config.manager import ConfigManager
+
+    config_manager = ConfigManager(base_path)
+    global_config = config_manager.load_global_config()
+
+    if not global_config.post_scan_sync:
+        return
+
+    for integration in global_config.post_scan_sync:
+        if integration == "defectdojo":
+            _sync_defectdojo(
+                config_manager,
+                global_config,
+                project_name,
+                run_id,
+                finding_repo,
+                repo_repo,
+                url_finding_repo,
+                tools_run,
+                run_repo,
+            )
+        else:
+            logger.warning(
+                "post-scan sync: unknown integration %r",
+                integration,
+            )
+
+
+def _sync_defectdojo(
+    config_manager: Any,
+    global_config: Any,
+    project_name: str,
+    run_id: int,
+    finding_repo: FindingRepositoryPort,
+    repo_repo: ProjectRepoRepositoryPort,
+    url_finding_repo: UrlFindingRepositoryPort,
+    tools_run: list[str],
+    run_repo: RunRepositoryPort,
+) -> None:
+    from application.export.service import ExportService
+    from infrastructure.export.defectdojo.adapter import (
+        DefectDojoExportAdapter,
+    )
+
+    dd_config = global_config.defectdojo
+    if dd_config is None:
+        logger.warning(
+            "post-scan sync: defectdojo listed in post_scan_sync but not configured"
+        )
+        return
+
+    project_config = config_manager.load_project_config(project_name)
+    project_dd = project_config.defectdojo if project_config else None
+    engagement_type = (
+        project_dd.engagement_type if project_dd else None
+    ) or dd_config.engagement_type
+
+    active_repos = repo_repo.list_active()
+    repo_names = {r.id: r.name for r in active_repos if r.id is not None}
+    repo_base_urls = {r.id: r.base_urls for r in active_repos if r.id is not None}
+
+    scan_row = run_repo.get(run_id)
+    run_to_repo_id: dict[int, int] = {}
+    all_tool_runs: set[tuple[int | None, str]] = set()
+    if scan_row is not None:
+        repo_name_to_id = {name: rid for rid, name in repo_names.items()}
+        if len(scan_row.repo_ids) == 1:
+            rid = repo_name_to_id.get(scan_row.repo_ids[0])
+            if rid is not None:
+                run_to_repo_id[run_id] = rid
+        for rn in scan_row.repo_ids:
+            rid = repo_name_to_id.get(rn)
+            for tool in tools_run:
+                all_tool_runs.add((rid, tool))
+
+    adapter = DefectDojoExportAdapter(
+        config=dd_config,
+        repo_names=repo_names,
+        project_name=project_name,
+        engagement_type=engagement_type,
+        run_to_repo_id=run_to_repo_id,
+        all_tool_runs=all_tool_runs,
+        url_finding_repo=url_finding_repo,
+        repo_base_urls=repo_base_urls,
+    )
+    service = ExportService(finding_repo, adapter, run_id=run_id)
+    result = service.export()
+
+    if result.success:
+        logger.info(
+            "post-scan sync: exported %d findings to DefectDojo (run %d)",
+            result.findings_exported,
+            run_id,
+        )
+    else:
+        for error in result.errors:
+            logger.warning("post-scan sync: %s", error)
 
 
 def _resolve_arg_profile_snapshots(

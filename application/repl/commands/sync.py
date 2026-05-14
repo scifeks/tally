@@ -1,4 +1,4 @@
-"""Export command for the tally REPL."""
+"""Sync command for the tally REPL."""
 
 from __future__ import annotations
 
@@ -11,28 +11,36 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_SUPPORTED_INTEGRATIONS = ("defectdojo",)
 
-class ExportCommand:
-    """Handler for the 'export' REPL command."""
+
+class SyncCommand:
+    """Handler for the 'sync' REPL command."""
 
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
 
-    def cmd_export(self, _cmd: str, args: list[str]) -> None:
-        """Dispatch export subcommands."""
-        if not args:
+    def cmd_sync(self, _cmd: str, args: list[str]) -> None:
+        integration, args = self._parse_value_flag(args, "--integration")
+        if integration is None:
             self.repl.console.print(
-                "Usage: export defectdojo [--run-id=<id>] [--test-connection]"
+                "Usage: sync --integration=<name> [--run-id=<id>] "
+                "[--engagement-type=<type>] [--test-connection]"
             )
             return
 
-        target = args[0].lower()
-        if target == "defectdojo":
-            self._export_defectdojo(args[1:])
+        integration = integration.lower()
+        if integration == "defectdojo":
+            self._sync_defectdojo(args)
         else:
-            self.repl.console.print(f"[red]Unknown export target:[/red] {target!r}")
+            self.repl.console.print(
+                f"[red]Unknown integration:[/red]"
+                f" {integration!r}\n"
+                f"Available: "
+                f"{', '.join(_SUPPORTED_INTEGRATIONS)}"
+            )
 
-    def _export_defectdojo(self, args: list[str]) -> None:
+    def _sync_defectdojo(self, args: list[str]) -> None:
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. "
@@ -53,8 +61,13 @@ class ExportCommand:
                 self.repl.console.print(f"[red]Invalid run ID:[/red] {run_id_str!r}")
                 return
 
+        engagement_type, args = self._parse_value_flag(args, "--engagement-type")
+
         try:
-            service = self._build_service()
+            service = self._build_service(
+                run_id=run_id,
+                engagement_type_override=engagement_type,
+            )
         except Exception as exc:
             self.repl.console.print(f"[red]{exc}[/red]")
             return
@@ -69,25 +82,24 @@ class ExportCommand:
                 self.repl.console.print("[red]DefectDojo connection failed.[/red]")
             return
 
-        with self.repl.console.status("Exporting findings to DefectDojo..."):
-            result = service.export(run_id=run_id)
+        with self.repl.console.status("Syncing findings to DefectDojo..."):
+            result = service.export()
 
         if result.success:
-            self.repl.console.print(
-                f"[green]Export complete:[/green] "
-                f"{result.findings_exported} exported"
-                + (
-                    f", {result.findings_failed} failed to map"
-                    if result.findings_failed
-                    else ""
-                )
-            )
+            msg = f"[green]Sync complete:[/green] {result.findings_exported} exported"
+            if result.findings_failed:
+                msg += f", {result.findings_failed} failed to map"
+            self.repl.console.print(msg)
         else:
-            self.repl.console.print("[red]Export failed.[/red]")
+            self.repl.console.print("[red]Sync failed.[/red]")
             for error in result.errors:
                 self.repl.console.print(f"  {error}")
 
-    def _build_service(self) -> ExportService:
+    def _build_service(
+        self,
+        run_id: int | None = None,
+        engagement_type_override: str | None = None,
+    ) -> ExportService:
         from factories.export import create_export_service
 
         project_id = self._resolve_project_id()
@@ -95,6 +107,8 @@ class ExportCommand:
             self.repl.project_registry,
             project_id,
             self.repl.base_path,
+            run_id=run_id,
+            engagement_type_override=engagement_type_override,
         )
 
     def _resolve_project_id(self) -> int:
@@ -113,5 +127,8 @@ class ExportCommand:
             for flag in flags:
                 if token.startswith(f"{flag}="):
                     value = token[len(flag) + 1 :]
-                    return value, args[:i] + args[i + 1 :]
+                    return (
+                        value,
+                        args[:i] + args[i + 1 :],
+                    )
         return None, args

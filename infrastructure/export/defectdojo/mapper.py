@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse, urlunparse
 
 if TYPE_CHECKING:
     from domain.findings.entry import Finding
@@ -163,6 +164,48 @@ def _map_confidence(confidence: str | None) -> int | None:
     return _CONFIDENCE_MAP.get(confidence)
 
 
+_STATIC_ASSET_EXTENSIONS = frozenset(
+    {
+        ".js",
+        ".css",
+        ".svg",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".map",
+        ".webp",
+        ".avif",
+        ".bmp",
+        ".cur",
+        ".less",
+        ".scss",
+        ".sass",
+        ".ts",
+        ".mjs",
+        ".cjs",
+    }
+)
+
+
+def _is_static_asset_path(path: str) -> bool:
+    dot = path.rfind(".")
+    if dot == -1:
+        return False
+    return path[dot:].lower() in _STATIC_ASSET_EXTENSIONS
+
+
+def _clean_endpoint_url(raw_url: str) -> str:
+    """Strip query params and fragments so DD gets a clean endpoint."""
+    parsed = urlparse(raw_url)
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
+
 def _map_semgrep(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     """Add semgrep-specific fields."""
     if finding.meta.get("line_start") is not None:
@@ -196,8 +239,8 @@ def _map_zap(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     if finding.meta.get("param"):
         base["param"] = finding.meta["param"]
 
-    if finding.url:
-        base["endpoints"] = [finding.url]
+    if finding.url and not _is_static_asset_path(urlparse(finding.url).path):
+        base["endpoints"] = [_clean_endpoint_url(finding.url)]
 
     return base
 
@@ -210,8 +253,8 @@ def _map_xss_tool(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     if finding.meta.get("payload"):
         base["payload"] = finding.meta["payload"]
 
-    if finding.url:
-        base["endpoints"] = [finding.url]
+    if finding.url and not _is_static_asset_path(urlparse(finding.url).path):
+        base["endpoints"] = [_clean_endpoint_url(finding.url)]
 
     return base
 
