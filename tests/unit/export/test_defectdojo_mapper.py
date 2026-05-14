@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from domain.findings.entry import Finding
 from infrastructure.export.defectdojo.mapper import (
-    _is_static_asset_path,
+    is_static_asset_path,
     map_finding,
     map_findings,
 )
@@ -216,6 +216,66 @@ class TestDefectDojoMapper:
         result = map_finding(finding)
         assert result["line"] == 42
         assert result["sast_source_file_path"] == "src/app.py"
+
+    def test_semgrep_maps_dataflow_fields(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="semgrep",
+            domain="code",
+            segment="sast",
+            severity="high",
+            confidence=None,
+            description="Taint finding",
+            file="app/views.py",
+            rule_id="xss-taint",
+            cwe=["CWE-79"],
+            meta={
+                "line_start": 42,
+                "sast_source_line": 30,
+                "sast_source_file_path": "app/views.py",
+                "sast_source_object": "request.args.get('q')",
+                "sast_sink_object": ("render_template_string(user_input)"),
+            },
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+
+        assert result["sast_source_line"] == 30
+        assert result["sast_source_object"] == ("request.args.get('q')")
+        assert result["sast_sink_object"] == ("render_template_string(user_input)")
+        assert result["sast_source_file_path"] == "app/views.py"
+
+    def test_semgrep_omits_absent_dataflow_fields(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="semgrep",
+            domain="code",
+            segment="sast",
+            severity="high",
+            confidence=None,
+            description="Pattern-only finding",
+            file="app/config.py",
+            rule_id="hardcoded-secret",
+            cwe=[],
+            meta={"line_start": 10},
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+
+        assert "sast_source_line" not in result
+        assert "sast_source_object" not in result
+        assert "sast_sink_object" not in result
+        assert result["sast_source_file_path"] == "app/config.py"
 
     def test_gitleaks_adds_line(self) -> None:
         finding = Finding(
@@ -683,31 +743,136 @@ class TestDefectDojoMapper:
         result = map_finding(finding)
         assert "endpoints" not in result
 
+    def test_dalfox_description_includes_payload_and_param(
+        self,
+    ) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="dalfox",
+            domain="web",
+            segment="dast",
+            severity="high",
+            confidence="confirmed",
+            description=None,
+            file=None,
+            rule_id=None,
+            url=(
+                "http://127.0.0.1:8081/search.php?q=%3Cscript%3Ealert(1)%3C/script%3E"
+            ),
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=["CWE-79"],
+            meta={
+                "title": "Cross-Site Scripting (XSS) in 'q'",
+                "param": "q",
+                "payload": "<script>alert(1)</script>",
+                "method": "GET",
+                "inject_type": "inHTML-URL",
+                "evidence": "<script>alert(1)</script>",
+            },
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        desc = result["description"]
+        assert "<script>alert(1)</script>" in desc
+        assert "q" in desc
+        assert "GET" in desc
+        assert "inHTML-URL" in desc
+        assert "http://127.0.0.1:8081/search.php" in desc
+
+    def test_dalfox_preserves_explicit_description(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="dalfox",
+            domain="web",
+            segment="dast",
+            severity="high",
+            confidence=None,
+            description="Enriched XSS description from LLM",
+            file=None,
+            rule_id=None,
+            url="http://example.com/page.php",
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=[],
+            meta={
+                "param": "q",
+                "payload": "<img src=x>",
+            },
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        desc = result["description"]
+        assert "Enriched XSS description from LLM" in desc
+        assert "<img src=x>" in desc
+
+    def test_dalfox_description_handles_missing_meta(self) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="dalfox",
+            domain="web",
+            segment="dast",
+            severity="high",
+            confidence=None,
+            description=None,
+            file=None,
+            rule_id=None,
+            url="http://example.com/page.php",
+            vulnerability_id=None,
+            package_name=None,
+            ecosystem=None,
+            package_version=None,
+            cwe=[],
+            meta={},
+            first_seen="2024-01-15T10:00:00",
+            last_seen="2024-01-15T10:00:00",
+            seen_count=1,
+            status="active",
+        )
+        result = map_finding(finding)
+        assert "description" in result
+
 
 class TestStaticAssetFilter:
     def test_js_is_static(self) -> None:
-        assert _is_static_asset_path("/jquery.min.js") is True
+        assert is_static_asset_path("/jquery.min.js") is True
 
     def test_css_is_static(self) -> None:
-        assert _is_static_asset_path("/styles/main.css") is True
+        assert is_static_asset_path("/styles/main.css") is True
 
     def test_svg_is_static(self) -> None:
-        assert _is_static_asset_path("/images/logo.svg") is True
+        assert is_static_asset_path("/images/logo.svg") is True
 
     def test_png_is_static(self) -> None:
-        assert _is_static_asset_path("/img/banner.png") is True
+        assert is_static_asset_path("/img/banner.png") is True
 
     def test_php_is_not_static(self) -> None:
-        assert _is_static_asset_path("/search.php") is False
+        assert is_static_asset_path("/search.php") is False
 
     def test_no_extension_is_not_static(self) -> None:
-        assert _is_static_asset_path("/api/users") is False
+        assert is_static_asset_path("/api/users") is False
 
     def test_html_is_not_static(self) -> None:
-        assert _is_static_asset_path("/index.html") is False
+        assert is_static_asset_path("/index.html") is False
 
     def test_empty_path_is_not_static(self) -> None:
-        assert _is_static_asset_path("") is False
+        assert is_static_asset_path("") is False
 
     def test_case_insensitive(self) -> None:
-        assert _is_static_asset_path("/bundle.JS") is True
+        assert is_static_asset_path("/bundle.JS") is True

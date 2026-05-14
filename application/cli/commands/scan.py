@@ -25,7 +25,6 @@ from factories.persistence import (
     create_overrides_repo,
     create_repo_repo,
     create_scan_repos,
-    create_scans_service,
     create_url_finding_repo,
 )
 
@@ -203,20 +202,12 @@ def _cmd_scan_inner(
         return GENERAL_ERROR
 
     try:
-        summary = handle.result.result()
+        handle.result.result()
     except ScanCancelled:
         print("Scan cancelled.", file=sys.stderr)
         return GENERAL_ERROR
     except Exception as exc:
         print(f"Scan failed: {exc}", file=sys.stderr)
         return GENERAL_ERROR
-
-    if summary.findings_by_tool:
-        try:
-            create_scans_service(project_registry, project_id).record_run_tool_counts(
-                handle.run_id, summary.findings_by_tool
-            )
-        except Exception:
-            pass
 
     return SUCCESS

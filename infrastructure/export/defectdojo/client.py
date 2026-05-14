@@ -14,7 +14,7 @@ _DEFAULT_TIMEOUT = 30.0
 
 
 class DefectDojoClient:
-    def __init__(self, url: str, api_token: str, *, verify_ssl: bool = False) -> None:
+    def __init__(self, url: str, api_token: str, *, verify_ssl: bool = True) -> None:
         if not url.startswith(("http://", "https://")):
             raise ValueError(
                 f"DefectDojo URL must use http:// or https:// scheme, got: {url!r}"

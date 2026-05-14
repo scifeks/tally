@@ -84,24 +84,7 @@ def create_app(
     tool_registry: ToolRegistry,
     allowed_origins: list[str] | None = None,
 ) -> FastAPI:
-    """Create and configure the FastAPI application.
-
-    Pure wiring: bootstrap (schema init, registry sync, stale-scan sweep,
-    tool discovery) is owned by ``BootstrapService`` and runs once in the
-    REPL composition root. ``project_registry`` and ``tool_registry`` are
-    injected already-bootstrapped.
-
-    Args:
-        base_path: Tally base directory (same as ``ConfigManager.base_path``).
-        handshake_token: One-time token; SPA exchanges it for session cookies.
-        port: Bound port used by Host/Origin middleware allowlists.
-        project_registry: Bootstrapped registry passed in from the REPL.
-        tool_registry: Populated tool registry passed in from the REPL.
-        allowed_origins: CORS allow-list. Empty or None disables CORS entirely.
-
-    Returns:
-        Configured ``FastAPI`` instance.
-    """
+    """Create and configure the FastAPI application."""
     app = FastAPI(title="Tally Web UI", lifespan=_lifespan)
     install_error_handlers(app)
 

@@ -38,8 +38,25 @@ class SemgrepDockerTool(BaseSemgrepTool):
         ruleset: str = kwargs.get("config", "auto")
         severity: list[str] | None = kwargs.get("severity")
         exclude: list[str] | None = kwargs.get("exclude")
+        trace_mode: bool = bool(kwargs.get("trace_mode"))
 
-        tool_args = ["scan", "--config", ruleset, "--json", repo_path]
+        if trace_mode:
+            tool_args = [
+                "scan",
+                "--config",
+                ruleset,
+                "--text",
+                "--dataflow-traces",
+                repo_path,
+            ]
+        else:
+            tool_args = [
+                "scan",
+                "--config",
+                ruleset,
+                "--json",
+                repo_path,
+            ]
 
         if severity:
             for sev in severity:

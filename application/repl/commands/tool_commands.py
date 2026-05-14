@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.tool_overrides.service import ToolOverridesService
 from core.project_paths import ProjectPaths
 from factories.persistence import create_overrides_repo
+from infrastructure.store.repositories.global_commands import (
+    GlobalCommandsRepository,
+)
 
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
@@ -204,16 +206,13 @@ class ToolCommands:
 
     def _load_commands_json(self) -> dict:
         path = self._commands_json_path()
-        if not path.exists():
-            return {}
-        with open(path) as f:
-            return json.load(f)
+        repo = GlobalCommandsRepository(path)
+        return repo.load_all()
 
     def _save_commands_json(self, commands: dict) -> None:
         path = self._commands_json_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(commands, f, indent=2)
+        repo = GlobalCommandsRepository(path)
+        repo.save_all(commands)
 
     def _reload_registry(self) -> None:
         from application.tools.registry import discover_tools
@@ -278,52 +277,13 @@ class ToolCommands:
 
     def _load_project_commands_json(self, project_name: str) -> dict:
         service, _repo = self._project_overrides_service(project_name)
-        rows, _total = service.list(offset=0, limit=10_000)
-        out: dict[str, dict] = {}
-        for o in rows:
-            container = None
-            if o.container_name and o.container_tool_path:
-                container = {
-                    "name": o.container_name,
-                    "tool_path": o.container_tool_path,
-                }
-            out[o.tool_name] = {
-                "type": o.type,
-                "location": o.location,
-                "path": o.path or "",
-                "container": container,
-                "args_mode": o.args_mode,
-            }
-        return out
+        return service.to_commands_dict()
 
     def _save_project_commands_json(
         self, project_name: str, commands: dict[str, dict]
     ) -> None:
         service, _repo = self._project_overrides_service(project_name)
-        current_rows, _ = service.list(offset=0, limit=10_000)
-        current = {r.tool_name: r for r in current_rows}
-        desired_names = set(commands.keys())
-        for tool_name, entry in commands.items():
-            kwargs = self._entry_to_service_kwargs(entry)
-            if tool_name in current:
-                service.replace(tool_name, **kwargs)
-            else:
-                service.create(tool_name=tool_name, **kwargs)
-        for tool_name in current:
-            if tool_name not in desired_names:
-                service.delete(tool_name)
-
-    @staticmethod
-    def _entry_to_service_kwargs(entry: dict) -> dict:
-        container = entry.get("container")
-        return {
-            "args_mode": entry.get("args_mode", "stock"),
-            "type": entry["type"],
-            "location": entry["location"],
-            "path": entry.get("path") or None,
-            "container_name": container["name"] if container else None,
-            "container_tool_path": container["tool_path"] if container else None,
-        }
+        service.sync(commands)
 
     def _cmd_tool_list_project(self, project_name: str) -> None:
         from rich.table import Table

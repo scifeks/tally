@@ -6,9 +6,11 @@ from pathlib import Path
 
 import pytest
 
+from domain.findings.normalization import split_analyst_fields
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -36,7 +38,7 @@ def _seed(
     findings: list[dict],
 ) -> int:
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, findings)
+    finding_repo.insert_findings(run_id, normalize_test_findings(findings))
     return run_id
 
 
@@ -55,17 +57,16 @@ class TestUpdateAnalystFields:
         _seed(run_repo, repo, [{"tool": "semgrep", "severity": "low"}])
         fid = _first_id(factory)
 
-        result = repo.update_analyst_fields(
-            fid,
-            {"risk_type": "xss", "remediation": "escape output"},
-        )
+        fields = {"risk_type": "xss", "remediation": "escape output"}
+        cols, meta = split_analyst_fields(fields)
+        result = repo.update_analyst_fields(fid, cols, meta)
 
         assert result is True
         row = repo.get_finding(fid)
         assert row is not None
-        meta = row.meta
-        assert meta["risk_type"] == "xss"
-        assert meta["remediation"] == "escape output"
+        meta_result = row.meta
+        assert meta_result["risk_type"] == "xss"
+        assert meta_result["remediation"] == "escape output"
         assert row.triaged_by == "analyst_web"
 
     def test_update_analyst_fields_updates_named_columns(
@@ -77,7 +78,9 @@ class TestUpdateAnalystFields:
         _seed(run_repo, repo, [{"tool": "semgrep", "severity": "low"}])
         fid = _first_id(factory)
 
-        result = repo.update_analyst_fields(fid, {"severity": "critical"})
+        fields = {"severity": "critical"}
+        cols, meta = split_analyst_fields(fields)
+        result = repo.update_analyst_fields(fid, cols, meta)
 
         assert result is True
         row = repo.get_finding(fid)
@@ -89,7 +92,9 @@ class TestUpdateAnalystFields:
         self,
         repo: FindingRepository,
     ) -> None:
-        result = repo.update_analyst_fields(99999, {"severity": "low"})
+        fields = {"severity": "low"}
+        cols, meta = split_analyst_fields(fields)
+        result = repo.update_analyst_fields(99999, cols, meta)
         assert result is False
 
     def test_update_analyst_fields_returns_true_on_success(
@@ -101,7 +106,9 @@ class TestUpdateAnalystFields:
         _seed(run_repo, repo, [{"tool": "semgrep", "severity": "low"}])
         fid = _first_id(factory)
 
-        result = repo.update_analyst_fields(fid, {"severity": "high"})
+        fields = {"severity": "high"}
+        cols, meta = split_analyst_fields(fields)
+        result = repo.update_analyst_fields(fid, cols, meta)
 
         assert result is True
 
@@ -119,13 +126,15 @@ class TestUpdateAnalystFields:
         )
         fid = _first_id(factory)
 
-        repo.update_analyst_fields(fid, {"risk_type": "sqli"})
+        fields = {"risk_type": "sqli"}
+        cols, meta = split_analyst_fields(fields)
+        repo.update_analyst_fields(fid, cols, meta)
 
         row = repo.get_finding(fid)
         assert row is not None
-        meta = row.meta
-        assert meta["risk_type"] == "sqli"
-        assert meta.get("extra_field") == "keep_me"
+        meta_result = row.meta
+        assert meta_result["risk_type"] == "sqli"
+        assert meta_result.get("extra_field") == "keep_me"
 
     def test_update_analyst_fields_sets_triaged_at(
         self,
@@ -136,7 +145,9 @@ class TestUpdateAnalystFields:
         _seed(run_repo, repo, [{"tool": "gitleaks", "severity": "medium"}])
         fid = _first_id(factory)
 
-        repo.update_analyst_fields(fid, {"owasp_name": "A03:2021"})
+        fields = {"owasp_name": "A03:2021"}
+        cols, meta = split_analyst_fields(fields)
+        repo.update_analyst_fields(fid, cols, meta)
 
         row = repo.get_finding(fid)
         assert row is not None
@@ -152,25 +163,24 @@ class TestUpdateAnalystFields:
         _seed(run_repo, repo, [{"tool": "semgrep", "severity": "high"}])
         fid = _first_id(factory)
 
-        repo.update_analyst_fields(
-            fid,
-            {
-                "remediation": "sanitise input",
-                "risk_type": "injection",
-                "owasp_name": "A03:2021",
-                "title": "SQL Injection",
-                "tags": ["critical", "backend"],
-            },
-        )
+        fields = {
+            "remediation": "sanitize input",
+            "risk_type": "injection",
+            "owasp_name": "A03:2021",
+            "title": "SQL Injection",
+            "tags": ["critical", "backend"],
+        }
+        cols, meta = split_analyst_fields(fields)
+        repo.update_analyst_fields(fid, cols, meta)
 
         row = repo.get_finding(fid)
         assert row is not None
-        meta = row.meta
-        assert meta["remediation"] == "sanitise input"
-        assert meta["risk_type"] == "injection"
-        assert meta["owasp_name"] == "A03:2021"
-        assert meta["title"] == "SQL Injection"
-        assert meta["tags"] == ["critical", "backend"]
+        meta_result = row.meta
+        assert meta_result["remediation"] == "sanitize input"
+        assert meta_result["risk_type"] == "injection"
+        assert meta_result["owasp_name"] == "A03:2021"
+        assert meta_result["title"] == "SQL Injection"
+        assert meta_result["tags"] == ["critical", "backend"]
 
     def test_update_analyst_fields_mixed_meta_and_column(
         self,
@@ -182,14 +192,13 @@ class TestUpdateAnalystFields:
         _seed(run_repo, repo, [{"tool": "semgrep", "severity": "low"}])
         fid = _first_id(factory)
 
-        repo.update_analyst_fields(
-            fid,
-            {"severity": "high", "risk_type": "rce"},
-        )
+        fields = {"severity": "high", "risk_type": "rce"}
+        cols, meta = split_analyst_fields(fields)
+        repo.update_analyst_fields(fid, cols, meta)
 
         row = repo.get_finding(fid)
         assert row is not None
         assert row.severity == "high"
-        meta = row.meta
-        assert meta["risk_type"] == "rce"
+        meta_result = row.meta
+        assert meta_result["risk_type"] == "rce"
         assert row.triaged_by == "analyst_web"

@@ -50,7 +50,7 @@ class GitleaksLocalTool(BaseGitleaksTool):
         os.close(fd)
         self._last_report_path = Path(tmp)
 
-        gitleaks_ignore_path: str | None = kwargs.get("gitleaks_ignore_path")
+        config_path: str | None = kwargs.get("config_path")
 
         cmd = [
             "gitleaks",
@@ -63,8 +63,8 @@ class GitleaksLocalTool(BaseGitleaksTool):
             "--exit-code",
             "0",
         ]
-        if gitleaks_ignore_path:
-            cmd.extend(["--gitleaks-ignore-path", gitleaks_ignore_path])
+        if config_path:
+            cmd.extend(["--config", config_path])
         return cmd
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:

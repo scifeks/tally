@@ -323,14 +323,17 @@ def test_run_batch_findings_writes_verdict_fields(
 
     finding_repo.update_finding.assert_called_once_with(
         42,
-        "confirmed",
-        "vulnerability",
-        "critical",
-        "sql injection",
-        "use parameterized queries",
-        "network input",
-        '["main.py:10", "db.py:5"]',
-        "sast",
+        severity_rank=0,
+        confidence="confirmed",
+        finding_type_json='["vulnerability"]',
+        triage_meta={
+            "confidence": "confirmed",
+            "reasoning": "sql injection",
+            "remediation": "use parameterized queries",
+            "attack_vector": "network input",
+            "call_stack": '["main.py:10", "db.py:5"]',
+        },
+        strategy="sast",
         triaged_by="claudecode",
         source="auto_triage",
     )

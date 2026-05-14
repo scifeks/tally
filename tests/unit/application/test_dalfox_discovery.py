@@ -90,7 +90,7 @@ class TestDalFoxDiscoveryFromCommandsJson:
         assert tool.scan_segment == "web"
 
     def test_dalfox_requires_base_urls_is_true(self, tmp_path) -> None:
-        """requires_base_urls=True ensures scan skips repos with no base URLs."""
+        """requires_base_urls=True causes scan to skip repos with no base URLs."""
         registry = _registry_after_discover(tmp_path, {"dalfox": _DALFOX_LOCAL_ENTRY})
         tool = registry.get_tool("dalfox")
         assert tool is not None

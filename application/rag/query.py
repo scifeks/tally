@@ -44,13 +44,7 @@ class QueryEngine:
         knowledge_base: FindingKnowledgeBase,
         llm_provider: LLMProvider | None = None,
     ) -> None:
-        """Initialise the query engine.
-
-        Args:
-            knowledge_base: Project-scoped FindingKnowledgeBase.
-            llm_provider:   LLMProvider override; falls back to the knowledge
-                            base's chat_provider if None.
-        """
+        """Initialize the query engine."""
         self._kb = knowledge_base
         self._provider: LLMProvider = llm_provider or knowledge_base.chat_provider
 
@@ -66,14 +60,7 @@ class QueryEngine:
         n_results: int = _DEFAULT_N_RESULTS,
         query: SearchQuery | None = None,
     ) -> list[VectorMatch]:
-        """Run semantic or metadata-only search and return matching findings.
-
-        When query is provided it bypasses parse_search_query. The n_results
-        parameter overrides page_size for context retrieval (used by chat()).
-
-        Raises:
-            SearchValidationError: Propagated to caller for user-friendly display.
-        """
+        """Run semantic or metadata-only search and return findings."""
         if query is None:
             if not raw_input.strip():
                 return []

@@ -15,6 +15,7 @@ import pytest
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -54,7 +55,9 @@ class TestDuplicateFingerprintsInSameRun:
         finding_repo = FindingRepository(factory)
 
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(run_id, [_FINDING_A, _FINDING_B])
+        finding_repo.insert_findings(
+            run_id, normalize_test_findings([_FINDING_A, _FINDING_B])
+        )
 
         with factory.connect() as conn:
             count = conn.execute(
@@ -73,10 +76,10 @@ class TestDuplicateFingerprintsInSameRun:
         finding_repo = FindingRepository(factory)
 
         run_id1 = run_repo.create_run({})
-        finding_repo.insert_findings(run_id1, [_FINDING_A])
+        finding_repo.insert_findings(run_id1, normalize_test_findings([_FINDING_A]))
 
         run_id2 = run_repo.create_run({})
-        finding_repo.insert_findings(run_id2, [_FINDING_A])
+        finding_repo.insert_findings(run_id2, normalize_test_findings([_FINDING_A]))
 
         with factory.connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]

@@ -57,12 +57,14 @@ def test_invalid_tool_rejected_by_search():
 
 
 @patch("application.repl.commands.scan_commands.get_scan_service")
-def test_valid_tool_accepted_by_scan(mock_get_service):
+@patch("application.repl.commands.scan_commands.ProjectRepositoriesService")
+def test_valid_tool_accepted_by_scan(mock_repos_svc_cls, mock_get_service):
     repl = _mock_repl()
     repl.config.load_repositories.return_value = []
     repl.project_registry.resolve_by_name.return_value = ProjectRow(
         id=1, name="proj", path="/tmp/test", created_at="2026-05-02T00:00:00Z"
     )
+    mock_repos_svc_cls.return_value.list_active.return_value = []
 
     mock_handle = MagicMock(run_id=1)
     mock_handle.result.result.return_value = MagicMock(findings_by_tool={})

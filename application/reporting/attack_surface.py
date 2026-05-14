@@ -58,11 +58,7 @@ def _repo_label(finding: Finding) -> str:
 
 
 class AttackSurfaceBuilder:
-    """Build the Attack Surface Overview HTML block for the report.
-
-    Two subsections: Repository Surface (which tool categories ran per
-    repo) and Dependency Surface (which ecosystems were audited per repo).
-    """
+    """Build the Attack Surface Overview HTML block."""
 
     def __init__(self, finding_repo: FindingRepositoryPort) -> None:
         self._repo = finding_repo
@@ -70,12 +66,7 @@ class AttackSurfaceBuilder:
     def build(self, filtered_findings: list[Finding]) -> str:
         """Return the full Attack Surface Overview HTML fragment.
 
-        Args:
-            filtered_findings: Pre-filtered findings (triaged, should_report=1).
-                               Used for Repository and Dependency surfaces.
-
-        Returns:
-            Self-contained HTML fragment including scoped ``<style>`` block.
+        Expects pre-filtered findings (triaged, should_report=1).
         """
         repo_html = self._build_repository_surface(filtered_findings)
         dep_html = self._build_dependency_surface(filtered_findings)
@@ -91,11 +82,11 @@ class AttackSurfaceBuilder:
         )
 
     def _build_repository_surface(self, findings: list[Finding]) -> str:
-        """Render a repo × tool-category coverage matrix.
+        """Render a repo by tool-category coverage matrix.
 
         Rows are repositories; columns are SAST, Secrets, SCA, DAST.
-        A ✓ appears where at least one finding from that category was found
-        for the repo.  NULL repo values are grouped under "Unattributed".
+        A checkmark appears where at least one finding from that category exists.
+        NULL repo values group under "Unattributed".
         """
         if not findings:
             return (
@@ -140,10 +131,7 @@ class AttackSurfaceBuilder:
         )
 
     def _build_dependency_surface(self, findings: list[Finding]) -> str:
-        """Render a table of audited dependency ecosystems per repository.
-
-        One row per distinct (repo, ecosystem) pair from SCA findings.
-        """
+        """Render a table of audited dependency ecosystems per repository."""
         sca = [f for f in findings if (f.tool or "").lower() in _SCA_TOOLS]
 
         if not sca:

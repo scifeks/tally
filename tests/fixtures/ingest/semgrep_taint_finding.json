@@ -1,0 +1,45 @@
+{
+  "results": [
+    {
+      "check_id": "php.lang.security.injection.tainted-exec.tainted-exec",
+      "path": "src/HealthController.php",
+      "start": {"line": 88, "col": 4, "offset": 2445},
+      "end": {"line": 88, "col": 52, "offset": 2493},
+      "extra": {
+        "severity": "WARNING",
+        "message": "User input is passed to a function that executes a shell command.",
+        "fingerprint": "abc123",
+        "lines": "exec (\"ping -c 4 \" . $target, $output, $ret_var);",
+        "metadata": {
+          "cwe": ["CWE-78"],
+          "owasp": ["A03:2021 - Injection"],
+          "confidence": "MEDIUM",
+          "category": "security",
+          "technology": ["php"],
+          "subcategory": ["vuln"],
+          "impact": "HIGH",
+          "likelihood": "MEDIUM"
+        },
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    },
+    {
+      "check_id": "php.lang.security.exec-use.exec-use",
+      "path": "src/HealthController.php",
+      "start": {"line": 88, "col": 4},
+      "end": {"line": 88, "col": 53},
+      "extra": {
+        "severity": "ERROR",
+        "message": "Executing non-constant commands.",
+        "fingerprint": "def456",
+        "lines": "exec (\"ping -c 4 \" . $target, $output, $ret_var);",
+        "metadata": {
+          "category": "security"
+        },
+        "validation_state": "NO_VALIDATOR",
+        "engine_kind": "OSS"
+      }
+    }
+  ]
+}

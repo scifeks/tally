@@ -10,15 +10,7 @@ if TYPE_CHECKING:
 
 
 class CapabilitiesService:
-    """Compute SPA-facing feature flags.
-
-    Sources:
-      - chat_enabled: GlobalConfig.chat_inference is not None.
-      - triage_enabled: boot-time readiness check result.
-      - report_retention_enabled: hardcoded False; no retention sweep
-        mechanism exists yet.
-      - max_report_history: GlobalConfig.report_retention_count.
-    """
+    """Compute SPA-facing feature flags from runtime configuration."""
 
     def __init__(
         self,

@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -68,15 +69,17 @@ class TestNoCommaStringsInMeta:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {
-                    "tool": "gitleaks",
-                    "rule_id": "aws-key",
-                    "file": "src/config.py",
-                    "severity": "high",
-                    "tags": "key, aws, secret",
-                }
-            ],
+            normalize_test_findings(
+                [
+                    {
+                        "tool": "gitleaks",
+                        "rule_id": "aws-key",
+                        "file": "src/config.py",
+                        "severity": "high",
+                        "tags": "key, aws, secret",
+                    }
+                ]
+            ),
         )
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         tags = results[0]["metadata"].get("tags")

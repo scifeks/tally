@@ -36,7 +36,10 @@ def _expected_tool_names() -> set[str]:
                 and not inspect.isabstract(cls)
                 and cls.__module__ == module_name
             ):
-                names.add(cls().name)
+                try:
+                    names.add(cls().name)
+                except TypeError:
+                    pass
     return names
 
 

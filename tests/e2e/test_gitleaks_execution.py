@@ -122,7 +122,7 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-# Scenario 3 – Gitleaks scan execution  (@requires_gitleaks @slow)
+# Scenario 3 - Gitleaks scan execution  (@requires_gitleaks @slow)
 
 
 @requires_gitleaks

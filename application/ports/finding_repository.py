@@ -6,10 +6,13 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from domain.findings.entry import Finding
+    from domain.findings.normalization import NormalizedFinding
 
 
 class FindingRepositoryPort(Protocol):
-    def insert_findings(self, run_id: int, findings: list[dict]) -> None: ...
+    def insert_findings(
+        self, run_id: int, findings: list[NormalizedFinding]
+    ) -> None: ...
     def delete_findings(self, tools: list[str] | None = None) -> None: ...
     def delete_findings_by_tool_name(self, tools: list[str]) -> None: ...
     def get_tool_meta_keys(
@@ -37,13 +40,10 @@ class FindingRepositoryPort(Protocol):
     def update_finding(
         self,
         finding_id: int,
+        severity_rank: int,
         confidence: str,
-        finding_type: str,
-        severity: str,
-        reasoning: str,
-        remediation: str,
-        attack_vector: str | None,
-        call_stack: str | None,
+        finding_type_json: str,
+        triage_meta: dict,
         strategy: str,
         *,
         triaged_by: str = "claudecode",
@@ -57,7 +57,8 @@ class FindingRepositoryPort(Protocol):
     def update_analyst_fields(
         self,
         finding_id: int,
-        fields: dict[str, Any],
+        columns: dict[str, Any],
+        meta: dict[str, Any],
         *,
         source: str = "web_ui",
     ) -> bool: ...
@@ -75,7 +76,8 @@ class FindingRepositoryPort(Protocol):
     def update_enrichment_fields(
         self,
         finding_id: int,
-        fields: dict,
+        columns: dict[str, Any],
+        meta: dict[str, Any],
         *,
         source: str = "llm_inference",
     ) -> None: ...

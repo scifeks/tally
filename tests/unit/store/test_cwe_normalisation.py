@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from infrastructure.store.repositories.findings_serial import normalise_cwe
+from domain.findings.normalization import normalise_cwe
 
 
 class TestCweNormalisationUnit:

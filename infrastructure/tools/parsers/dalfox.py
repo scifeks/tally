@@ -14,6 +14,14 @@ from ._shared import _first_output_file, _shared_meta
 
 logger = logging.getLogger(__name__)
 
+_XSS_CHARS = frozenset("<>\"'()=;+/")
+
+
+def _has_xss_syntax(payload: str) -> bool:
+    """True if *payload* contains characters that can break HTML context."""
+    return bool(_XSS_CHARS.intersection(payload))
+
+
 # DalFox Type field values and their confidence mappings.
 # V = verified (confirmed XSS), R = reflected, G = grep match.
 _TYPE_CONFIDENCE: dict[str, str] = {
@@ -132,7 +140,10 @@ class DalFoxHandler:
     normalized_fields: list[str] = [
         "confidence",
         "cwe",
+        "evidence",
         "finding_type",
+        "inject_type",
+        "message",
         "method",
         "param",
         "payload",
@@ -154,8 +165,11 @@ class DalFoxHandler:
             url = finding.get("url", "")
             param = finding.get("param", "")
             payload = finding.get("payload", "")
+
+            if payload and not _has_xss_syntax(payload):
+                continue
+
             cwe_raw = finding.get("cwe", "")
-            # Normalise "CWE-79" → 79 (integer), or fall back to 79.
             cwe_id: int = 79
             if cwe_raw:
                 try:
@@ -175,6 +189,9 @@ class DalFoxHandler:
                 "poc": url,
                 "param": param,
                 "payload": payload,
+                "inject_type": finding.get("inject_type", ""),
+                "evidence": finding.get("evidence", ""),
+                "message": finding.get("message", ""),
                 "method": finding.get("method", "GET"),
                 "timestamp": timestamp,
                 "source_file": source_file,

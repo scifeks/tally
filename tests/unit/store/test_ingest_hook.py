@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from application.rag.enrichment import EnrichmentPipeline
+from domain.findings.normalization import split_enrichment_fields
 
 
 def _make_pipeline(
@@ -32,8 +33,9 @@ class TestEnrichmentWriteBack:
 
         pipeline.enrich([1])
 
+        cols, meta = split_enrichment_fields({"risk_type": "xss"})
         mock_repo.update_enrichment_fields.assert_called_once_with(
-            1, {"risk_type": "xss"}, source="llm_inference"
+            1, cols, meta, source="llm_inference"
         )
 
     def test_update_called_for_each_finding(self) -> None:

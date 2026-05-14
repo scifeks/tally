@@ -42,6 +42,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
 | `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
 | `post_scan_sync` | list\[string\] | Integrations to auto-sync after each scan. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-scan-sync). |
+| `post_triage_sync` | list\[string\] | Integrations to auto-sync after triage. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-triage-sync). |
 | `projects_dir` | string | Directory where project workspaces are stored. Default: `"./projects"`. |
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |

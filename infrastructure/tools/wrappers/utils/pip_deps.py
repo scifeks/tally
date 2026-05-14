@@ -21,30 +21,7 @@ def find_or_generate_requirements(
     container_name: str = "",
     timeout: int = 120,
 ) -> str | None:
-    """Find or generate a pip-audit-compatible requirements file.
-
-    Detection order:
-    1. ``requirements.txt`` exists → return its path.
-    2. ``poetry.lock`` exists → ``poetry export`` → return generated path.
-    3. ``Pipfile.lock`` exists → ``pipenv requirements`` → return path.
-    4. ``pyproject.toml`` / ``setup.py`` / ``setup.cfg`` exists →
-       ``pip freeze`` → return path.
-    5. Nothing found → return ``None``.
-
-    For docker mode (``container_name`` non-empty) file existence checks use
-    ``docker exec <container> test -f``, and export commands run via
-    ``docker exec -w <repo_path> <container> <cmd>``.
-
-    Args:
-        repo_path: Absolute path to the repository root (local or
-            in-container path for docker mode).
-        container_name: If non-empty, operate inside this container.
-        timeout: Seconds before an export command is killed.
-
-    Returns:
-        Path to a requirements-format file, or ``None`` if none could be
-        found or generated.
-    """
+    """Find or generate a pip-audit-compatible requirements file."""
     root = Path(repo_path)
 
     def _exists(filename: str) -> bool:
@@ -63,7 +40,7 @@ def find_or_generate_requirements(
         return (root / filename).exists()
 
     def _run(cmd: list[str], out_file: str) -> str | None:
-        """Run cmd, write stdout to out_file, return its path or None."""
+        """Execute command and write stdout to file."""
         logger.info("pip_deps: running %s", " ".join(cmd))
         try:
             if container_name:
@@ -112,7 +89,6 @@ def find_or_generate_requirements(
         logger.info("pip_deps: wrote %r", str(dest))
         return str(dest)
 
-    # 1. requirements.txt already present
     if _exists("requirements.txt"):
         logger.debug("pip_deps: using existing requirements.txt in %r", repo_path)
         return str(root / "requirements.txt")
@@ -123,7 +99,6 @@ def find_or_generate_requirements(
 
     _attempted.add(repo_path)
 
-    # 2. poetry.lock to poetry export
     if _exists("poetry.lock"):
         return _run(
             [
@@ -136,11 +111,9 @@ def find_or_generate_requirements(
             ".tally_requirements.txt",
         )
 
-    # 3. Pipfile.lock to pipenv requirements
     if _exists("Pipfile.lock"):
         return _run(["pipenv", "requirements"], ".tally_requirements.txt")
 
-    # 4. pyproject.toml, setup.py, or setup.cfg to pip freeze
     for marker in ("pyproject.toml", "setup.py", "setup.cfg"):
         if _exists(marker):
             return _run(

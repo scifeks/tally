@@ -106,18 +106,15 @@ def compute_batches(findings: list[dict[str, Any]]) -> list[list[dict[str, Any]]
     while queue:
         anchor_file = queue[0].get("file")
 
-        # 1. Extract consecutive same-file cluster (file only, not file+rt)
         cluster, queue = _split_consecutive_by_file(queue, anchor_file)
 
-        # 2. Split cluster into severity tiers
+        # Critical/high findings get isolated batches to avoid diluting triage focus
         no_fill = [f for f in cluster if f.get("severity") in _NO_FILL_SEVERITIES]
         fill = [f for f in cluster if f.get("severity") not in _NO_FILL_SEVERITIES]
 
-        # 3. No-fill tier: 1 finding per batch, no sibling fill
         for f in no_fill:
             batches.append([f])
 
-        # 4. Fill tier: chunk by MAX_SAME_FILE_FINDINGS
         for i in range(0, len(fill), MAX_SAME_FILE_FINDINGS):
             chunk = fill[i : i + MAX_SAME_FILE_FINDINGS]
             if len(chunk) == 1:

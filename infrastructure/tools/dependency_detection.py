@@ -34,18 +34,7 @@ _ALWAYS_EXCLUDE: list[str] = [".git"]
 
 
 def detect_dependency_dirs(repo_path: Path) -> list[str]:
-    """Return dependency directory names to exclude for the given repo.
-
-    Checks for package manager files and only includes directories that
-    actually exist on disk.  Deduplicates while preserving insertion order.
-    Always includes ``.git`` when present.
-
-    Args:
-        repo_path: Filesystem path to the repository root.
-
-    Returns:
-        Deduplicated list of directory names (e.g. ``["vendor", ".git"]``).
-    """
+    """Return dependency directory names to exclude for the given repo."""
     seen: set[str] = set()
     result: list[str] = []
 
@@ -68,16 +57,5 @@ def detect_dependency_dirs(repo_path: Path) -> list[str]:
 
 
 def build_exclude_path_prefixes(dep_dirs: list[str]) -> list[str]:
-    """Convert dependency directory names to URL path prefix strings.
-
-    Each name is wrapped with leading and trailing slashes so the prefix
-    matches only proper directory segments in OAS3 endpoint paths and avoids
-    false positives (e.g. ``/vendor/`` does not match ``/vendor-api/``).
-
-    Args:
-        dep_dirs: Directory names as returned by :func:`detect_dependency_dirs`.
-
-    Returns:
-        List of path prefix strings (e.g. ``["/vendor/", "/node_modules/"]``).
-    """
+    """Convert dependency dir names to slash-wrapped URL prefixes."""
     return [f"/{d.strip('/')}/" for d in dep_dirs]

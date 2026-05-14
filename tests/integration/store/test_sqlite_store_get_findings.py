@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -110,7 +111,9 @@ def _seed_gf(store: _TestStore) -> None:
     run_id = store.create_run({})
     store.insert_findings(
         run_id,
-        [_SAST_FINDING, _SECRETS_FINDING, _SCA_FINDING_GF, _NO_FILE_FINDING],
+        normalize_test_findings(
+            [_SAST_FINDING, _SECRETS_FINDING, _SCA_FINDING_GF, _NO_FILE_FINDING]
+        ),
     )
 
 
@@ -161,10 +164,12 @@ class TestGetFindings:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {**_SAST_FINDING, "repo_id": myrepo_id},
-                {**_SAST_FINDING, "repo_id": otherrepo_id, "rule_id": "r2"},
-            ],
+            normalize_test_findings(
+                [
+                    {**_SAST_FINDING, "repo_id": myrepo_id},
+                    {**_SAST_FINDING, "repo_id": otherrepo_id, "rule_id": "r2"},
+                ]
+            ),
         )
         rows = store.get_findings(limit=100)
         myrepo_rows = [r for r in rows if r.repo_id == myrepo_id]
@@ -177,10 +182,12 @@ class TestGetFindings:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {"tool": "semgrep", "severity": "high"},
-                {"tool": "gitleaks", "severity": "critical"},
-            ],
+            normalize_test_findings(
+                [
+                    {"tool": "semgrep", "severity": "high"},
+                    {"tool": "gitleaks", "severity": "critical"},
+                ]
+            ),
         )
         with store._connect() as conn:
             conn.execute("UPDATE findings SET status='triaged' WHERE tool='semgrep'")
@@ -207,12 +214,14 @@ class TestGetFindings:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {**_SAST_FINDING},
-                {**_SECRETS_FINDING},
-                {**_SCA_FINDING_GF},
-                {**_NO_FILE_FINDING},
-            ],
+            normalize_test_findings(
+                [
+                    {**_SAST_FINDING},
+                    {**_SECRETS_FINDING},
+                    {**_SCA_FINDING_GF},
+                    {**_NO_FILE_FINDING},
+                ]
+            ),
         )
         rows = store.get_findings(
             tools=["semgrep"],
@@ -231,7 +240,9 @@ class TestPagination:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(5)],
+            normalize_test_findings(
+                [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(5)]
+            ),
         )
         rows = store.get_findings(limit=3)
         assert len(rows) == 3
@@ -241,7 +252,9 @@ class TestPagination:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(5)],
+            normalize_test_findings(
+                [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(5)]
+            ),
         )
         all_rows = store.get_findings(limit=100, offset=0)
         offset_rows = store.get_findings(limit=100, offset=2)
@@ -253,7 +266,9 @@ class TestPagination:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(4)],
+            normalize_test_findings(
+                [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(4)]
+            ),
         )
         rows_a = store.get_findings(limit=100)
         rows_b = store.get_findings(limit=100)
@@ -280,7 +295,9 @@ class TestPagination:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(6)],
+            normalize_test_findings(
+                [{**_SAST_FINDING, "rule_id": f"rule-{i}"} for i in range(6)]
+            ),
         )
         total = store.count_findings()
         page1 = store.get_findings(limit=2, offset=0)

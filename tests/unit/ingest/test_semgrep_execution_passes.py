@@ -46,7 +46,7 @@ class TestSemgrepBuildExecutionPasses:
         ctx = _make_context(repo)
         tool = SemgrepLocalTool(config=None)
         passes = tool.build_execution_passes(ctx)
-        assert len(passes) == 1
+        assert len(passes) == 2
         assert passes[0].kwargs["exclude"] == ["tests", "spec"]
 
     def test_no_exclude_when_empty_and_no_auto_detect(self, tmp_path: Path) -> None:
@@ -56,7 +56,7 @@ class TestSemgrepBuildExecutionPasses:
         ctx = _make_context(repo)
         tool = SemgrepLocalTool(config=None)
         passes = tool.build_execution_passes(ctx)
-        assert len(passes) == 1
+        assert len(passes) == 2
         assert "exclude" not in passes[0].kwargs
 
     def test_no_auto_detect_when_config_dirs_empty(self, tmp_path: Path) -> None:
@@ -70,5 +70,5 @@ class TestSemgrepBuildExecutionPasses:
         ctx = _make_context(repo)
         tool = SemgrepLocalTool(config=None)
         passes = tool.build_execution_passes(ctx)
-        assert len(passes) == 1
+        assert len(passes) == 2
         assert "exclude" not in passes[0].kwargs

@@ -63,9 +63,7 @@ _DRAFT_SECTIONS: list[tuple[str, str]] = [
 def _generate_toc() -> str:
     """Return a static TOC ``<nav>`` fragment.
 
-    Page numbers are populated at PDF render time by WeasyPrint via the
-    ``target-counter(attr(href, url), page)`` CSS rule applied to
-    ``.toc-pagenum::after``.
+    Page numbers are populated at PDF render time by WeasyPrint.
     """
     items: list[str] = []
     for title, anchor in _TOC_ENTRIES:
@@ -80,15 +78,7 @@ def _generate_toc() -> str:
 
 
 class ReportAssembler:
-    """Orchestrates the full report build: resolve sections, render template, emit PDF.
-
-    Args:
-        project:         Active project name.
-        base_path:       Application root (the directory containing ``projects/``).
-        testing_type:    One of ``"white_box"``, ``"grey_box"``, ``"black_box"``.
-        engagement_date: ISO date string (``YYYY-MM-DD``).  If *None*, falls back
-                         to the project creation date from ``ProjectConfig``.
-    """
+    """Resolve sections, render template, emit PDF."""
 
     def __init__(
         self,
@@ -119,15 +109,6 @@ class ReportAssembler:
     def build_context(self) -> ReportContext:
         """Resolve all sections, render blurbs, generate TOC.
 
-        Calls :meth:`DraftResolver.resolve` for each of the six LLM-drafted
-        sections and :meth:`DraftResolver.resolve_blurb` for the three static
-        blurb sections.  If any resolution fails (missing file or user
-        declines), :exc:`SectionMissingError` propagates to the caller.
-
-        Returns:
-            Fully populated :class:`ReportContext` with all Segment 4 and
-            Segment 5 fields filled in.
-
         Raises:
             SectionMissingError: A required section cannot be resolved.
             ValueError: The project does not exist.
@@ -150,13 +131,11 @@ class ReportAssembler:
 
         resolver = DraftResolver(self._project, self._base_path, self._prompt)
 
-        # -- LLM-drafted sections ----------------------------------------
         draft_html: dict[str, str] = {}
         for section_name, field_name in _DRAFT_SECTIONS:
             logger.debug("Resolving section %r", section_name)
             draft_html[field_name] = resolver.resolve(section_name)
 
-        # -- Blurbs --------------------------------------------------------
         confidentiality_html = resolver.resolve_blurb(
             "confidentiality",
             {
@@ -168,20 +147,16 @@ class ReportAssembler:
         severity_definitions_html = resolver.resolve_blurb("severity-definitions")
         glossary_html = resolver.resolve_blurb("glossary")
 
-        # -- Table of contents --------------------------------------------
         toc_html = _generate_toc()
 
-        # -- Segment 4: vulnerability distribution chart ------------------
         query_svc = DraftQueryService(self._finding_repo)
         filtered = query_svc.get_findings_for_report(skip_triage=self._skip_triage)
         sev_counts = query_svc.severity_distribution(filtered)
         chart_html = get_chart_renderer("css").severity_distribution(sev_counts)
         vuln_distribution_chart_html = chart_html
 
-        # -- Segment 4: attack surface overview ---------------------------
         attack_surface_html = AttackSurfaceBuilder(self._finding_repo).build(filtered)
 
-        # -- Segment 5: Finding ID assignment ---------------------------------
         code_sorted = sorted(
             filtered,
             key=lambda f: (
@@ -196,7 +171,6 @@ class ReportAssembler:
         )
         logger.info("Assigned %d finding IDs to code findings.", len(code_with_ids))
 
-        # -- Segment 5: HTML sections -------------------------------------
         secrets = [f for f in code_with_ids if f.get("segment") == "secrets"]
         builder = FindingsBuilder(prefix=prefix)
         findings_table_html = builder.build_master_table(code_with_ids)
@@ -224,18 +198,7 @@ class ReportAssembler:
         )
 
     def render_pdf(self, context: ReportContext) -> bytes:
-        """Render *context* to PDF bytes via the injected renderers.
-
-        Steps:
-        1. Load ``static/report.css`` from disk.
-        2. Render the master template with *context*.
-        3. Pass the HTML and CSS to the PdfRenderer.
-
-        Args:
-            context: Fully (or partially) populated :class:`ReportContext`.
-
-        Returns:
-            Raw PDF bytes.
+        """Render context to PDF bytes.
 
         Raises:
             PdfRenderError: The PDF backend failed to produce a PDF.
@@ -246,11 +209,7 @@ class ReportAssembler:
         return self._pdf_renderer.render(html, css)
 
     def build_and_render(self) -> bytes:
-        """Convenience: :meth:`build_context` then :meth:`render_pdf`.
-
-        Returns:
-            Raw PDF bytes.
-        """
+        """Build context and render to PDF."""
         context = self.build_context()
         return self.render_pdf(context)
 

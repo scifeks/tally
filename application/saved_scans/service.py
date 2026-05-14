@@ -185,18 +185,15 @@ class SavedScansService:
 
         stale: list[StaleSavedScanItem] = []
 
-        # Check for soft-deleted repos.
         for r in hydrated.repos:
             if r.deleted_at is not None:
                 stale.append(StaleSavedScanRepoItem(id=r.id, name=r.name))
 
-        # Check for unregistered tools.
         registered = set(self._tool_registry.list_tool_names())
         for t in hydrated.tools:
             if t.tool_name not in registered:
                 stale.append(StaleSavedScanToolItem(name=t.tool_name))
 
-        # Check for orphan arg profiles.
         raw_profile_ids = self._repo.list_arg_profile_ids(saved_scan_id)
         if raw_profile_ids:
             present = set(self._profiles_repo.existing_ids(raw_profile_ids))

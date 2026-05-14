@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -91,7 +92,7 @@ class TestExactVsPartial:
     def test_exact_match_does_not_return_partial(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS))
 
         # "high" should not return "medium"
         results = store.search(
@@ -107,7 +108,7 @@ class TestExactVsPartial:
     def test_contains_returns_substring_match(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS))
 
         # "sql" should match "python.sql-injection"
         results = store.search(

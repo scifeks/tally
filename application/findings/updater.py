@@ -7,6 +7,11 @@ import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from domain.findings.normalization import (
+    build_triage_meta,
+    normalise_finding_type,
+    severity_to_rank,
+)
 from domain.tools.constants import CONFIDENCE_LEVELS, FINDING_TYPES, SEVERITY_LEVELS
 
 if TYPE_CHECKING:
@@ -171,14 +176,17 @@ class FindingUpdateService:
             result = await asyncio.to_thread(
                 self._finding_repo.update_finding,
                 finding_id,
-                confidence,
-                finding_type,
-                severity,
-                reasoning,
-                remediation,
-                attack_vector,
-                call_stack,
-                strategy,
+                severity_rank=severity_to_rank(severity) or 0,
+                confidence=confidence,
+                finding_type_json=normalise_finding_type(finding_type) or "[]",
+                triage_meta=build_triage_meta(
+                    confidence=confidence,
+                    reasoning=reasoning,
+                    remediation=remediation,
+                    attack_vector=attack_vector,
+                    call_stack=call_stack,
+                ),
+                strategy=strategy,
                 triaged_by=self._triaged_by,
                 source="auto_triage",
             )

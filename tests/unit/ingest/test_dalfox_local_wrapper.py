@@ -30,6 +30,11 @@ class TestBuildCommandFlags:
         cmd = tool.build_command(**self._base_kwargs())
         assert "--deep-domxss" in cmd
 
+    def test_skip_grepping_present(self) -> None:
+        tool = _make_tool()
+        cmd = tool.build_command(**self._base_kwargs())
+        assert "--skip-grepping" in cmd
+
     def test_json_format_and_output_file(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(**self._base_kwargs())

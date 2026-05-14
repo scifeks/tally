@@ -180,4 +180,7 @@ def _discover_fallback(registry: ToolRegistry, wrappers_dir: Path) -> None:
                 and not inspect.isabstract(obj)
                 and obj.__module__ == module_name
             ):
-                registry.register(obj())
+                try:
+                    registry.register(obj())
+                except TypeError:
+                    pass

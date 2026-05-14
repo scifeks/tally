@@ -315,6 +315,33 @@ To disable, remove `"defectdojo"` from the array or set
 
 ---
 
+## Automatic post-triage sync
+
+Tally can automatically re-sync findings to DefectDojo after triage
+completes. Add `"defectdojo"` to the `post_triage_sync` array in
+`config/global.json`:
+
+```json
+{
+  "post_triage_sync": ["defectdojo"]
+}
+```
+
+When enabled, Tally re-exports findings for the triaged scan run
+immediately after triage finishes. The export uses the `reimport-scan`
+endpoint, which deduplicates on fingerprint. DefectDojo updates
+existing records with triage-enriched fields: confidence, severity,
+finding type, remediation guidance, and false positive status.
+
+The sync is best-effort: if the DefectDojo instance is unreachable or
+misconfigured, the triage result is still reported as successful. Sync
+failures are logged but never mask triage results.
+
+To disable, remove `"defectdojo"` from the array or set
+`post_triage_sync` to an empty list.
+
+---
+
 ## Troubleshooting
 
 **"DefectDojo connection not configured."** Add a `defectdojo` section

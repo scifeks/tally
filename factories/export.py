@@ -8,9 +8,6 @@ from typing import TYPE_CHECKING
 
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
-from infrastructure.export.defectdojo.adapter import (
-    DefectDojoExportAdapter,
-)
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.url_findings import (
@@ -19,8 +16,17 @@ from infrastructure.store.repositories.url_findings import (
 
 if TYPE_CHECKING:
     from application.export.service import ExportService
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
+    from application.ports.url_finding_repository import (
+        UrlFindingRepositoryPort,
+    )
     from application.project.registry_service import (
         ProjectRegistryService,
+    )
+    from core.config.schemas.defectdojo_config import (
+        DefectDojoGlobalConfig,
     )
 
 
@@ -88,6 +94,38 @@ def _build_run_mappings(
     return run_to_repo_id, all_tool_runs
 
 
+def build_export_service(
+    dd_config: DefectDojoGlobalConfig,
+    finding_repo: FindingRepositoryPort,
+    repo_names: dict[int, str],
+    project_name: str,
+    engagement_type: str,
+    run_id: int | None = None,
+    run_to_repo_id: dict[int, int] | None = None,
+    all_tool_runs: set[tuple[int | None, str]] | None = None,
+    url_finding_repo: UrlFindingRepositoryPort | None = None,
+    repo_base_urls: dict[int, list[str]] | None = None,
+) -> ExportService:
+    """Build an ExportService with pre-resolved dependencies."""
+    from application.export.service import ExportService
+    from infrastructure.export.defectdojo.adapter import (
+        DefectDojoExportAdapter,
+    )
+
+    export_adapter = DefectDojoExportAdapter(
+        config=dd_config,
+        repo_names=repo_names,
+        project_name=project_name,
+        engagement_type=engagement_type,
+        run_to_repo_id=run_to_repo_id or {},
+        all_tool_runs=all_tool_runs or set(),
+        url_finding_repo=url_finding_repo,
+        repo_base_urls=repo_base_urls or {},
+    )
+
+    return ExportService(finding_repo, export_adapter, run_id=run_id)
+
+
 def create_export_service(
     registry: ProjectRegistryService,
     project_id: int,
@@ -96,8 +134,6 @@ def create_export_service(
     engagement_type_override: str | None = None,
 ) -> ExportService:
     """Build an ExportService wired to the DefectDojo adapter."""
-    from application.export.service import ExportService
-
     row, paths = _resolve_project(registry, project_id)
 
     config_manager = ConfigManager(str(base_path))
@@ -138,15 +174,78 @@ def create_export_service(
 
     finding_repo = FindingRepository(factory)
     url_finding_repo = UrlFindingRepository(factory)
-    export_adapter = DefectDojoExportAdapter(
-        config=dd_config,
+
+    return build_export_service(
+        dd_config=dd_config,
+        finding_repo=finding_repo,
         repo_names=repo_names,
         project_name=row.name,
         engagement_type=engagement_type,
+        run_id=run_id,
         run_to_repo_id=run_to_repo_id,
         all_tool_runs=all_tool_runs,
         url_finding_repo=url_finding_repo,
         repo_base_urls=repo_base_urls,
     )
 
-    return ExportService(finding_repo, export_adapter, run_id=run_id)
+
+def create_export_service_for_project(
+    base_path: str | Path,
+    project_name: str,
+    run_id: int | None = None,
+    engagement_type_override: str | None = None,
+) -> ExportService:
+    """Build an ExportService without requiring a ProjectRegistryService."""
+    from infrastructure.store.repositories.repositories import (
+        RepositoryRepository,
+    )
+
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+
+    config_manager = ConfigManager(str(base_path))
+    global_config = config_manager.load_global_config()
+    dd_config = global_config.defectdojo
+    if dd_config is None:
+        raise ExportNotConfigured(
+            "DefectDojo connection not configured. "
+            "Add a 'defectdojo' section to global.json."
+        )
+
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    repo_repo = RepositoryRepository(factory)
+    active_repos = repo_repo.list_active()
+    repo_names = {r.id: r.name for r in active_repos if r.id is not None}
+    repo_name_to_id = {name: rid for rid, name in repo_names.items()}
+
+    run_to_repo_id, all_tool_runs = _build_run_mappings(
+        factory, repo_name_to_id, run_id
+    )
+
+    project_config = config_manager.load_project_config(project_name)
+    project_dd = project_config.defectdojo if project_config else None
+
+    engagement_type = (
+        engagement_type_override
+        or (project_dd.engagement_type if project_dd else None)
+        or dd_config.engagement_type
+    )
+
+    repo_base_urls = {r.id: r.base_urls for r in active_repos if r.id is not None}
+
+    finding_repo = FindingRepository(factory)
+    url_finding_repo = UrlFindingRepository(factory)
+
+    return build_export_service(
+        dd_config=dd_config,
+        finding_repo=finding_repo,
+        repo_names=repo_names,
+        project_name=project_name,
+        engagement_type=engagement_type,
+        run_id=run_id,
+        run_to_repo_id=run_to_repo_id,
+        all_tool_runs=all_tool_runs,
+        url_finding_repo=url_finding_repo,
+        repo_base_urls=repo_base_urls,
+    )

@@ -38,9 +38,27 @@ class SemgrepLocalTool(BaseSemgrepTool):
         config: str = kwargs.get("config", "auto")
         severity: list[str] | None = kwargs.get("severity")
         exclude: list[str] | None = kwargs.get("exclude")
+        trace_mode: bool = bool(kwargs.get("trace_mode"))
 
-        # --json sends findings as JSON to stdout; executor captures and saves it
-        cmd = ["semgrep", "scan", "--config", config, "--json", repo_path]
+        if trace_mode:
+            cmd = [
+                "semgrep",
+                "scan",
+                "--config",
+                config,
+                "--text",
+                "--dataflow-traces",
+                repo_path,
+            ]
+        else:
+            cmd = [
+                "semgrep",
+                "scan",
+                "--config",
+                config,
+                "--json",
+                repo_path,
+            ]
 
         if severity:
             for sev in severity:

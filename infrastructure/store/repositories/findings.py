@@ -6,18 +6,12 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from application.pipeline.fingerprint import compute_fingerprint
 from application.ports.finding_repository import FindingRepositoryPort
 from domain.findings.entry import Finding
+from domain.findings.normalization import NormalizedFinding
 from domain.findings.severity import Severity
 from infrastructure.store.repositories.findings_query import FindingQueryBuilder
-from infrastructure.store.repositories.findings_serial import (
-    _COMMA_LIST_FIELDS,
-    _DIRECT_COLUMNS,
-    deserialise_row,
-    normalise_cwe,
-    normalise_finding_type,
-)
+from infrastructure.store.repositories.findings_serial import deserialise_row
 
 if TYPE_CHECKING:
     import sqlite3
@@ -26,13 +20,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ENRICHMENT_META_FIELDS: frozenset[str] = frozenset(
-    {"risk_type", "remediation", "owasp_name", "title", "tags", "notes"}
-)
-_ENRICHMENT_COLUMN_FIELDS: frozenset[str] = frozenset(
-    {"severity", "confidence", "description"}
-)
-
 
 class FindingRepository(FindingRepositoryPort):
     """CRUD and search operations for the findings table."""
@@ -40,59 +27,18 @@ class FindingRepository(FindingRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    def insert_findings(self, run_id: int, findings: list[dict]) -> None:
+    def insert_findings(self, run_id: int, findings: list[NormalizedFinding]) -> None:
         """Insert finding rows from a scan, mapping ChromaDB fields to schema."""
         if not findings:
             return
 
-        # Keys handled before the generic loop are excluded from meta blob.
-        _PRE_EXTRACTED: frozenset[str] = frozenset(
-            {"finding_type", "cwe", "cwe_id", "cwe_ids"}
-        )
-
         rows: list[tuple] = []
         for finding in findings:
-            fingerprint = compute_fingerprint(finding)
-            named: dict[str, Any] = {}
-            meta: dict[str, Any] = {}
+            columns = finding.columns
+            meta = finding.meta
+            fingerprint = finding.fingerprint
 
-            # --- Pre-extract finding_type ---
-            named["finding_type"] = normalise_finding_type(finding.get("finding_type"))
-
-            # --- Pre-extract cwe (any of the three source keys) ---
-            raw_cwe = (
-                finding.get("cwe") or finding.get("cwe_id") or finding.get("cwe_ids")
-            )
-            if raw_cwe is not None:
-                named["cwe"] = normalise_cwe(raw_cwe)
-
-            # --- Generic column mapping (skip pre-extracted keys) ---
-            for key, val in finding.items():
-                if key in _PRE_EXTRACTED:
-                    continue
-                if key in _DIRECT_COLUMNS:
-                    named[key] = str(val) if val is not None else None
-                elif key == "severity":
-                    if val is not None:
-                        try:
-                            named["severity"] = Severity.from_label(str(val)).rank
-                        except ValueError:
-                            named["severity"] = None
-                    else:
-                        named["severity"] = None
-                elif key == "file_path":
-                    named["file"] = str(val) if val is not None else None
-                elif key == "lockfile":
-                    # file_path takes priority over lockfile for the file column.
-                    if named.get("file") is None:
-                        named["file"] = str(val) if val is not None else None
-                else:
-                    if key in _COMMA_LIST_FIELDS and isinstance(val, str) and val:
-                        meta[key] = [v.strip() for v in val.split(",") if v.strip()]
-                    else:
-                        meta[key] = val
-
-            repo_id_raw = finding.get("repo_id")
+            repo_id_raw = columns.get("repo_id")
             repo_id_val: int | None
             if isinstance(repo_id_raw, int):
                 repo_id_val = repo_id_raw
@@ -105,23 +51,23 @@ class FindingRepository(FindingRepositoryPort):
                 (
                     fingerprint,
                     run_id,
-                    named.get("tool"),
-                    named.get("domain"),
-                    named.get("segment"),
+                    columns.get("tool"),
+                    columns.get("domain"),
+                    columns.get("segment"),
                     repo_id_val,
-                    named.get("finding_type"),
-                    named.get("severity"),
-                    named.get("confidence"),
-                    named.get("file"),
-                    named.get("rule_id"),
-                    named.get("url"),
-                    named.get("vulnerability_id"),
-                    named.get("package_name"),
-                    named.get("ecosystem"),
-                    named.get("description"),
-                    named.get("package_version"),
-                    named.get("cwe"),
-                    0,  # enriched: set to 1 by EnrichmentPipeline after LLM processing
+                    columns.get("finding_type"),
+                    columns.get("severity"),
+                    columns.get("confidence"),
+                    columns.get("file"),
+                    columns.get("rule_id"),
+                    columns.get("url"),
+                    columns.get("vulnerability_id"),
+                    columns.get("package_name"),
+                    columns.get("ecosystem"),
+                    columns.get("description"),
+                    columns.get("package_version"),
+                    columns.get("cwe"),
+                    0,
                     json.dumps(meta),
                 )
             )
@@ -358,13 +304,10 @@ class FindingRepository(FindingRepositoryPort):
     def update_finding(
         self,
         finding_id: int,
+        severity_rank: int,
         confidence: str,
-        finding_type: str,
-        severity: str,
-        reasoning: str,
-        remediation: str,
-        attack_vector: str | None,
-        call_stack: str | None,
+        finding_type_json: str,
+        triage_meta: dict,
         strategy: str,
         *,
         triaged_by: str = "claudecode",
@@ -383,19 +326,14 @@ class FindingRepository(FindingRepositoryPort):
         existing_meta = json.loads(row["meta"] or "{}")
         now_iso = datetime.now(UTC).isoformat()
         existing_meta["triage"] = {
-            "confidence": confidence,
+            **triage_meta,
             "previous_confidence": previous_confidence,
-            "reasoning": reasoning,
-            "remediation": remediation,
-            "attack_vector": attack_vector,
-            "call_stack": call_stack,
             "triaged_by": triaged_by,
             "triaged_at": now_iso,
             "strategy": strategy,
         }
         before = dict(row)
         updated_meta = json.dumps(existing_meta)
-        finding_type_db = json.dumps([finding_type])
         with self._factory.connect() as conn:
             conn.execute(
                 "UPDATE findings "
@@ -410,8 +348,8 @@ class FindingRepository(FindingRepositoryPort):
                 "WHERE id = ?",
                 (
                     confidence,
-                    finding_type_db,
-                    Severity.from_label(severity).rank,
+                    finding_type_json,
+                    severity_rank,
                     now_iso,
                     now_iso,
                     triaged_by,
@@ -428,11 +366,7 @@ class FindingRepository(FindingRepositoryPort):
         return True
 
     def get_reportable_findings(self) -> list[Finding]:
-        """Return findings where triaged_by IS NOT NULL and should_report = 1.
-
-        These are the findings that have been confirmed by triage and are
-        marked for inclusion in the report.
-        """
+        """Return findings confirmed by triage and marked for the report."""
         sql = (
             "SELECT * FROM findings WHERE triaged_by IS NOT NULL AND should_report = 1"
         )
@@ -441,12 +375,7 @@ class FindingRepository(FindingRepositoryPort):
         return [Finding.from_row(r) for r in rows]
 
     def get_findings_marked_for_report(self) -> list[Finding]:
-        """Return findings where should_report = 1, regardless of triage.
-
-        Used by the report-assembly path when the caller has opted out of
-        the triage-column requirement but still wants only findings the
-        analyst has marked for inclusion.
-        """
+        """Return findings marked for inclusion regardless of triage status."""
         sql = "SELECT * FROM findings WHERE should_report = 1"
         with self._factory.connect() as conn:
             rows = conn.execute(sql).fetchall()
@@ -467,7 +396,7 @@ class FindingRepository(FindingRepositoryPort):
         return [Finding.from_row(r) for r in rows]
 
     def get_all_findings_deserialized(self) -> list[dict]:
-        """Return all findings with no triage filter, deserialised."""
+        """Return all findings with no triage filter, deserialized."""
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM findings").fetchall()
         return [deserialise_row(r) for r in rows]
@@ -475,25 +404,12 @@ class FindingRepository(FindingRepositoryPort):
     def update_analyst_fields(
         self,
         finding_id: int,
-        fields: dict[str, Any],
+        columns: dict[str, Any],
+        meta: dict[str, Any],
         *,
         source: str = "web_ui",
     ) -> bool:
-        """Update analyst-writable fields on a finding row.
-
-        Writes only the editable named columns and/or meta keys present
-        in ``fields``.  Never touches locked fields or type_* flags.
-        Always sets ``triaged_by = 'analyst_web'`` and ``triaged_at``
-        to the current UTC timestamp.
-
-        Meta keys accepted in ``fields``: ``remediation``, ``risk_type``,
-        ``owasp_name``, ``title``, ``tags``.  All other keys are treated
-        as named-column updates.
-
-        Returns True if the row was updated, False if not found.
-        Does NOT call update_finding(), upsert_findings(), or any
-        ChromaDB / enrichment method.
-        """
+        """Update analyst-writable fields, setting triaged_by and triaged_at."""
         from datetime import UTC, datetime
 
         row = self._get_row(finding_id)
@@ -505,31 +421,16 @@ class FindingRepository(FindingRepositoryPort):
         except (json.JSONDecodeError, TypeError):
             existing_meta = {}
 
-        _META_KEYS: frozenset[str] = frozenset(
-            {"remediation", "risk_type", "owasp_name", "title", "tags", "notes"}
-        )
-
-        column_updates: dict[str, Any] = {}
-        for key, val in fields.items():
-            if key in _META_KEYS:
-                # Merge into existing blob; type_* flags are untouched
-                # because they are not in _META_KEYS and are never set here.
-                existing_meta[key] = val
-            else:
-                column_updates[key] = val
-
+        existing_meta.update(meta)
         updated_meta = json.dumps(existing_meta)
         now_iso = datetime.now(UTC).isoformat()
 
         set_parts: list[str] = []
         params: list[Any] = []
 
-        for col, val in column_updates.items():
+        for col, val in columns.items():
             set_parts.append(f"{col} = ?")
-            if col == "severity" and val is not None:
-                params.append(Severity.from_label(str(val)).rank)
-            else:
-                params.append(val)
+            params.append(val)
 
         set_parts.extend(["meta = ?", "triaged_by = 'analyst_web'", "triaged_at = ?"])
         params.extend([updated_meta, now_iso])
@@ -557,12 +458,7 @@ class FindingRepository(FindingRepositoryPort):
         ids: list[int],
         fields: dict[str, Any],
     ) -> int:
-        """Update analyst-writable named columns on multiple findings in one tx.
-
-        Sets triaged_by = 'analyst_web' and triaged_at on every row.
-        Does not touch the meta JSON blob; meta keys are not supported for batch.
-        Returns the count of rows actually updated.
-        """
+        """Update analyst fields on multiple findings, return updated count."""
         from datetime import UTC, datetime
 
         if not ids or not fields:
@@ -637,11 +533,7 @@ class FindingRepository(FindingRepositoryPort):
         return [row["id"] for row in rows]
 
     def get_by_ids(self, ids: list[int]) -> list[dict]:
-        """Return deserialized row dicts for the given SQLite primary keys.
-
-        Each dict is the output of deserialise_row() with an added 'id' key.
-        Rows are returned in arbitrary order. Missing IDs are silently omitted.
-        """
+        """Return deserialized row dicts for the given SQLite primary keys."""
         if not ids:
             return []
         placeholders = ",".join("?" * len(ids))
@@ -658,16 +550,12 @@ class FindingRepository(FindingRepositoryPort):
     def update_enrichment_fields(
         self,
         finding_id: int,
-        fields: dict,
+        columns: dict[str, Any],
+        meta: dict[str, Any],
         *,
         source: str = "llm_inference",
     ) -> None:
-        """Write LLM-enriched fields back to the SQLite row.
-
-        Named columns updated directly: severity, confidence, description.
-        Meta-blob fields: risk_type, remediation, owasp_name, title, tags.
-        Sets enriched = 1 and updates last_seen = now().
-        """
+        """Write LLM-enriched fields back to the SQLite row."""
         from datetime import UTC, datetime
 
         row = self._get_row(finding_id)
@@ -679,12 +567,7 @@ class FindingRepository(FindingRepositoryPort):
         except (json.JSONDecodeError, TypeError):
             existing_meta = {}
 
-        column_updates: dict[str, Any] = {}
-        for key, val in fields.items():
-            if key in _ENRICHMENT_META_FIELDS:
-                existing_meta[key] = val
-            elif key in _ENRICHMENT_COLUMN_FIELDS:
-                column_updates[key] = val
+        existing_meta.update(meta)
 
         before = dict(row)
         updated_meta = json.dumps(existing_meta)
@@ -693,12 +576,9 @@ class FindingRepository(FindingRepositoryPort):
         set_parts: list[str] = ["enriched = 1", "last_seen = ?", "meta = ?"]
         params: list[Any] = [now_iso, updated_meta]
 
-        for col, val in column_updates.items():
+        for col, val in columns.items():
             set_parts.append(f"{col} = ?")
-            if col == "severity" and val is not None:
-                params.append(Severity.from_label(str(val)).rank)
-            else:
-                params.append(val)
+            params.append(val)
 
         params.append(finding_id)
         sql_upd = f"UPDATE findings SET {', '.join(set_parts)} WHERE id = ?"
@@ -716,20 +596,7 @@ class FindingRepository(FindingRepositoryPort):
             )
 
     def search(self, filters: dict) -> list[dict]:
-        """Execute a structured SQL search.
-
-        ``filters`` format::
-
-            {
-                "conditions": [(col_expr, op, values), ...],
-                "page": 1,
-                "page_size": 200,
-            }
-
-        Returns a list of result dicts::
-
-            {"metadata": {<chromadb-compatible field names>}, "distance": None}
-        """
+        """Execute a structured SQL search and return ChromaDB-shaped results."""
         sql, params = FindingQueryBuilder(filters).build()
         with self._factory.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
@@ -757,13 +624,7 @@ class FindingRepository(FindingRepositoryPort):
         return row[0] if row else 0
 
     def count_aggregates(self) -> dict:
-        """Return finding counts and dashboard aggregates.
-
-        Buckets: severity, domain, segment, repo, status, tool, plus
-        a 2D severity x status crosstab. Also returns ``total``,
-        per-project ``scans_count`` / ``repos_count`` / ``urls_count``,
-        and the ``last_scan_at`` / ``last_triage_at`` timestamps.
-        """
+        """Return finding counts and dashboard aggregates across dimensions."""
         canonical_statuses = ("active", "false_positive", "fixed", "wont_fix")
         canonical_severities = (
             "critical",
@@ -946,28 +807,7 @@ class FindingRepository(FindingRepositoryPort):
         }
 
     def filter_options(self, filters: dict) -> dict:
-        """Return per-dimension counts under the given filter set.
-
-        Strict semantics: every dimension's counts apply every active
-        filter, including its own dimension's filter. Options with
-        ``count = 0`` are omitted (HAVING COUNT > 0). Every dimension key
-        is always present (empty list when no values match).
-
-        Returns::
-
-            {
-                "severity":     [{"value": "high", "count": 12}, ...],
-                "status":       [...],
-                "confidence":   [...],
-                "domain":       [...],
-                "segment":      [...],
-                "tool":         [...],
-                "finding_type": [...],
-                "repo":         [
-                    {"value": <int>, "label": <str>, "count": <int>}, ...
-                ],
-            }
-        """
+        """Return per-dimension option counts under the given filter set."""
         builder = FindingQueryBuilder(filters)
         where_parts, params = builder.build_where_parts()
 

@@ -124,9 +124,11 @@ def main() -> int:
         ProjectRegistryService,
     )
     from application.tools.registry import ToolRegistry
+    from infrastructure.store.connection import ConnectionFactory
     from infrastructure.store.project_registry import (
         ProjectRegistryRepository,
     )
+    from infrastructure.store.repositories.runs import RunRepository
 
     registry_repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
     project_registry = ProjectRegistryService(registry_repo)
@@ -137,6 +139,7 @@ def main() -> int:
         project_registry=project_registry,
         tool_registry=tool_registry,
         base_path=base_path,
+        run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
     ).run()
 
     needs_project = args.command not in ("ui",)

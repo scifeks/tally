@@ -44,12 +44,12 @@ class LLMProvider(Protocol):
         Implementations MUST be async generators (``async def`` with
         ``yield``). Each yielded chunk is a plain UTF-8 string fragment
         produced by the provider's streaming API; chunks are not
-        word-aligned and may include mid-word fragments. Callers are
-        responsible for any presentation buffering.
+        word-aligned and may include mid-word fragments. Callers handle
+        presentation buffering.
 
         Cancellation flows through standard ``asyncio`` task cancellation:
         when the consumer calls ``aclose()`` on the iterator (or its
-        owning task is cancelled), implementations MUST close the
+        owning task is canceled), implementations MUST close the
         underlying provider stream. Errors raised by the provider MUST
         be wrapped in :class:`LLMAdapterError` before propagation.
         """

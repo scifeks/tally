@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from application.pipeline.handlers import IngestHandler
+from domain.findings.normalization import NormalizedFinding
 from domain.pipeline.events import ToolCompleted
 from domain.tools.base import ToolResult
 
@@ -43,6 +44,7 @@ class TestIngestHandlerRepoId:
         mock_tool_handler.normalize.return_value = [
             {"tool": "dalfox", "url": "http://127.0.0.1/test"}
         ]
+        mock_tool_handler.fingerprint_key.return_value = "dalfox|test"
 
         with patch(
             "application.pipeline.handlers.ToolHandlerFactory.load",
@@ -52,8 +54,9 @@ class TestIngestHandlerRepoId:
 
         call_args = finding_repo.insert_findings.call_args
         rows = call_args[0][1]
-        assert rows[0]["repo_id"] == 42
-        assert rows[0]["repo"] == "dveca"
+        assert isinstance(rows[0], NormalizedFinding)
+        assert rows[0].columns.get("repo_id") == 42
+        assert rows[0].meta.get("repo") == "dveca"
 
     def test_sca_tool_gets_repo_id(self) -> None:
         bus = MagicMock()
@@ -69,6 +72,7 @@ class TestIngestHandlerRepoId:
         mock_tool_handler.normalize.return_value = [
             {"tool": "osv-scanner", "package": "lodash"}
         ]
+        mock_tool_handler.fingerprint_key.return_value = "osv-scanner|test"
 
         with patch(
             "application.pipeline.handlers.ToolHandlerFactory.load",
@@ -78,5 +82,6 @@ class TestIngestHandlerRepoId:
 
         call_args = finding_repo.insert_findings.call_args
         rows = call_args[0][1]
-        assert rows[0]["repo_id"] == 7
-        assert rows[0]["repo"] == "dveca"
+        assert isinstance(rows[0], NormalizedFinding)
+        assert rows[0].columns.get("repo_id") == 7
+        assert rows[0].meta.get("repo") == "dveca"

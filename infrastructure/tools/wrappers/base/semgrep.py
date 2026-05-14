@@ -1,15 +1,26 @@
 """Shared base class for semgrep local and docker wrappers."""
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
-from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
+from domain.tools.interface import (
+    ExecutionContext,
+    ExecutionPass,
+    ToolInterface,
+)
 from infrastructure.tools.parsers.semgrep import (
     parse_semgrep_json,
     parse_semgrep_json_string,
 )
+from infrastructure.tools.parsers.semgrep_traces import (
+    merge_traces,
+    parse_traces,
+)
+
+_log = logging.getLogger(__name__)
 
 
 class BaseSemgrepTool(ToolInterface):
@@ -68,19 +79,30 @@ class BaseSemgrepTool(ToolInterface):
     def supported_languages(self) -> list[str] | None:
         return self.language_gates or None
 
-    def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        """Parse semgrep JSON output into structured data.
+    def parse_output(
+        self,
+        output: str,
+        files: dict[str, Path],
+    ) -> dict[str, Any]:
+        """Parse semgrep output into structured data.
 
-        Prefers the saved stdout file; falls back to parsing the output string.
+        Prefers the saved stdout file; falls back to the
+        output string.
         """
         json_path = files.get("stdout")
         if json_path is not None and json_path.exists():
             return parse_semgrep_json(json_path)
         return parse_semgrep_json_string(output)
 
-    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+    def build_execution_passes(
+        self,
+        context: ExecutionContext,
+    ) -> list[ExecutionPass]:
         assert context.repo is not None
-        repo_path = context.registry.get_repo_path(self.name, context.repo)
+        repo_path = context.registry.get_repo_path(
+            self.name,
+            context.repo,
+        )
         exclude = build_excluded_dirs(context.repo)
         kwargs: dict[str, object] = {"repo_path": repo_path}
         if exclude:
@@ -89,13 +111,51 @@ class BaseSemgrepTool(ToolInterface):
             ExecutionPass(
                 label_suffix=context.repo.name,
                 kwargs=kwargs,
-            )
+            ),
+            ExecutionPass(
+                label_suffix=f"{context.repo.name}_traces",
+                kwargs={**kwargs, "trace_mode": True},
+            ),
         ]
 
-    def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        return pass_results[0]
+    def merge_pass_results(
+        self,
+        pass_results: list[ToolResult],
+    ) -> ToolResult:
+        json_result = pass_results[0]
+        if len(pass_results) < 2:
+            return json_result
 
-    def count_findings(self, parsed_data: dict[str, Any]) -> int:
+        trace_result = pass_results[1]
+        parsed = json_result.parsed_data
+        if parsed and trace_result.output:
+            try:
+                traces = parse_traces(trace_result.output)
+                findings = parsed.get("findings", [])
+                merge_traces(findings, traces)
+            except Exception:
+                _log.exception("Failed to parse trace output")
+
+        combined_files = dict(json_result.output_files)
+        for k, v in trace_result.output_files.items():
+            combined_files[f"trace_{k}"] = v
+
+        return ToolResult(
+            tool_name="semgrep",
+            success=json_result.success,
+            output=json_result.output,
+            parsed_data=parsed,
+            output_files=combined_files,
+            timestamp=json_result.timestamp,
+            duration_seconds=(
+                json_result.duration_seconds + trace_result.duration_seconds
+            ),
+        )
+
+    def count_findings(
+        self,
+        parsed_data: dict[str, Any],
+    ) -> int:
         summary = parsed_data.get("summary", {})
         if "total_findings" in summary:
             return summary["total_findings"]

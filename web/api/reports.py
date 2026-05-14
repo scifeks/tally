@@ -8,6 +8,7 @@ Route ordering: literal-segment routes (``.../latest``, ``.../events``,
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -27,10 +28,9 @@ from application.reporting.reports_service import (
     ReportsService,
     UnknownSectionError,
 )
-from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
-from domain.reports.entry import REPORT_STATUSES, DraftRow, ReportRow
+from domain.reports.entry import REPORT_STATUSES, ReportRow
 from factories.persistence import ProjectNotFound, create_reports_service
 from web.adapters.event_bus_draft_sink import EventBusDraftSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
@@ -221,20 +221,12 @@ async def generate_report(
 
     paths = ProjectPaths.from_registry_row(row)
     reports_dir = paths.reports_dir
-    reports_dir_resolved = reports_dir.resolve()
 
+    output_path = ReportsService.resolve_output_path(
+        body.output_path, body.format, reports_dir
+    )
     if body.output_path:
-        output_path = Path(body.output_path)
-        if not output_path.is_absolute():
-            output_path = (reports_dir / output_path).resolve()
-        else:
-            output_path = output_path.resolve()
-        _ensure_within(reports_dir_resolved, output_path)
-    else:
-        ts = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
-        ext = "md" if body.format == "markdown" else body.format
-        output_path = reports_dir_resolved / f"report_{ts}.{ext}"
-
+        _ensure_within(reports_dir.resolve(), output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     lock_registry = get_registry()
@@ -244,11 +236,7 @@ async def generate_report(
     except JobBusy as exc:
         raise JobBusyError("report", exc.current_holder) from exc
 
-    try:
-        config = ConfigManager(base_path).global_config
-        retention_count = int(getattr(config, "report_retention_count", 10) or 0)
-    except FileNotFoundError:
-        retention_count = 10
+    retention_count = ReportsService.get_retention_count(base_path)
 
     try:
         report_id = await asyncio.to_thread(
@@ -351,56 +339,17 @@ class _DraftStartRequest(BaseModel):
     skip_triage: bool = False
 
 
-def _resolve_drafts_dir(row: ProjectRow) -> Path:
-    paths = ProjectPaths.from_registry_row(row)
-    return paths.reports_draft_dir.resolve()
-
-
-def _draft_section_summary(
-    section: str,
-    record: DraftRow | None,
-    draft_dir: Path,
-) -> dict[str, Any]:
-    status = record.status if record else "not_generated"
-    path = draft_dir / f"{section}.md"
-    word_count: int | None = None
-    preview: str | None = None
-    if path.exists():
-        try:
-            text = path.read_text(encoding="utf-8")
-            word_count = len(text.split())
-            preview = text[:200]
-        except OSError:
-            pass
-    return {
-        "section": section,
-        "status": status,
-        "generated_at": record.generated_at if record else None,
-        "reviewed_at": record.reviewed_at if record else None,
-        "uploaded_filename": record.original_filename if record else None,
-        "word_count": word_count,
-        "preview": preview,
-        "error": record.error if record else None,
-    }
-
-
 @v1_router.get("/{project_id}/reports/drafts")
 async def list_drafts(
     project_id: int,
     request: Request,
 ) -> dict[str, Any]:
     """Return one entry per section; absent rows report as ``not_generated``."""
-    row = _resolve_project(request, project_id)
     service = _service(request, project_id)
-    records = await asyncio.to_thread(service.draft_repo.list_all)
-    draft_dir = _resolve_drafts_dir(row)
-    by_section = {r.section: r for r in records}
-    return {
-        "drafts": [
-            _draft_section_summary(s, by_section.get(s), draft_dir)
-            for s in SECTION_REGISTRY
-        ]
-    }
+    summaries = await asyncio.to_thread(
+        lambda: [service.get_section_summary(s) for s in SECTION_REGISTRY]
+    )
+    return {"drafts": [dataclasses.asdict(s) for s in summaries]}
 
 
 @v1_router.post(
@@ -524,12 +473,8 @@ async def upload_draft(
     if "\x00" in text:
         raise ValidationError("draft file contains null bytes", details={})
 
-    row = _resolve_project(request, project_id)
     service = _service(request, project_id)
-    draft_dir = _resolve_drafts_dir(row)
-    draft_dir.mkdir(parents=True, exist_ok=True)
-    out = draft_dir / f"{section}.md"
-    await asyncio.to_thread(out.write_text, text, "utf-8")
+    await asyncio.to_thread(service.write_draft, section, text)
 
     original_filename = file.filename or f"{section}.md"
     now = datetime.now(UTC).isoformat()
@@ -557,20 +502,15 @@ async def download_draft(
             f"unknown section {section!r}",
             details={"allowed": list(SECTION_REGISTRY)},
         )
-    row = _resolve_project(request, project_id)
     service = _service(request, project_id)
     record = await asyncio.to_thread(service.draft_repo.get, section)
     if record is None:
         raise NotFound(f"draft {section!r} not found")
 
-    draft_dir = _resolve_drafts_dir(row)
-    candidate = draft_dir / f"{section}.md"
-    _ensure_within(draft_dir, candidate)
-
-    if not candidate.exists():
+    text = await asyncio.to_thread(service.read_draft, section)
+    if text is None:
         raise NotFound(f"draft file missing for section {section!r}")
 
-    text = await asyncio.to_thread(candidate.read_text, "utf-8")
     return Response(
         content=text,
         media_type="text/markdown; charset=utf-8",
@@ -593,17 +533,8 @@ async def delete_draft(
             f"unknown section {section!r}",
             details={"allowed": list(SECTION_REGISTRY)},
         )
-    row = _resolve_project(request, project_id)
     service = _service(request, project_id)
-    draft_dir = _resolve_drafts_dir(row)
-    candidate = draft_dir / f"{section}.md"
-    try:
-        _ensure_within(draft_dir, candidate)
-        candidate.resolve().unlink(missing_ok=True)
-    except PathTraversal:
-        logger.warning("skipping unlink for draft %r: path outside draft dir", section)
-    except OSError:
-        logger.exception("could not unlink draft %s", candidate)
+    await asyncio.to_thread(service.delete_draft_file, section)
     await asyncio.to_thread(service.draft_repo.delete, section)
 
 

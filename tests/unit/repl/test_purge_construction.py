@@ -1,6 +1,6 @@
-"""Tests for the construction-helper paths in PurgeCommand.
+"""Tests for the construction-helper paths in PurgeService.
 
-Each test patches the application service classmethod so no real SQLite
+Each test patches the application service factory so no real SQLite
 or ChromaDB is touched.
 """
 
@@ -17,6 +17,7 @@ if str(_TALLY_ROOT) not in sys.path:
 import pytest  # noqa: E402
 
 from application.chat.stream_composer import RagUnavailable  # noqa: E402
+from application.purge.service import PurgeService  # noqa: E402
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from domain.projects.entry import ProjectRow  # noqa: E402
 
@@ -39,6 +40,13 @@ def _mock_repl(active_project: str | None = _PROJECT) -> MagicMock:
     return repl
 
 
+def _make_service() -> PurgeService:
+    kb = MagicMock()
+    paths = MagicMock()
+    registry = MagicMock()
+    return PurgeService(kb, paths, registry, _PROJECT_ID)
+
+
 class TestPurgeGetKnowledgeBase:
     def test_raises_rag_unavailable_when_helper_returns_none(self) -> None:
         repl = _mock_repl()
@@ -53,83 +61,85 @@ class TestPurgeGetKnowledgeBase:
 
 class TestPurgeCountChatSessions:
     def test_returns_zero_when_resolve_returns_none(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.resolve_by_name.return_value = None
-        cmd = PurgeCommand(repl)
-        assert cmd._count_chat_sessions() == 0
+        svc = _make_service()
+        with patch(
+            "application.purge.service.create_chat_session_service",
+            side_effect=Exception("no project"),
+        ):
+            assert svc._count_chat_sessions() == 0
 
 
 class TestPurgePurgeChat:
     def test_purge_chat_returns_count(self) -> None:
-        repl = _mock_repl()
-        cmd = PurgeCommand(repl)
-        sentinel_repo = MagicMock(name="session_repo_port")
-        sentinel_service = MagicMock(session_repo=sentinel_repo)
+        svc = _make_service()
+        sentinel_service = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.create_chat_session_service",
+                "application.purge.service.create_chat_session_service",
                 return_value=sentinel_service,
             ),
             patch(
-                "application.repl.commands.purge.purge_chat_for_project",
+                "application.purge.service.purge_chat_for_project",
                 return_value=4,
             ),
         ):
-            result = cmd._purge_chat()
+            result = svc._purge_chat()
         assert result == 4
 
     def test_returns_zero_and_prints_warning_on_exception(self) -> None:
-        repl = _mock_repl()
-        cmd = PurgeCommand(repl)
+        svc = _make_service()
         with patch(
-            "application.repl.commands.purge.create_chat_session_service",
+            "application.purge.service.create_chat_session_service",
             side_effect=RuntimeError("boom"),
         ):
-            result = cmd._purge_chat()
+            result = svc._purge_chat()
         assert result == 0
-        printed = [str(c) for c in repl.console.print.call_args_list]
-        assert any("Chat purge warning" in p for p in printed)
 
     def test_returns_zero_when_resolve_returns_none(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.resolve_by_name.return_value = None
-        cmd = PurgeCommand(repl)
-        assert cmd._purge_chat() == 0
+        svc = _make_service()
+        with patch(
+            "application.purge.service.create_chat_session_service",
+            side_effect=Exception("no project"),
+        ):
+            assert svc._purge_chat() == 0
 
 
 class TestPurgeCountSqliteFindings:
     def test_returns_zero_when_resolve_returns_none(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.resolve_by_name.return_value = None
-        cmd = PurgeCommand(repl)
-        assert cmd._count_sqlite_findings(tools=None) == 0
+        svc = _make_service()
+        with patch(
+            "application.purge.service.create_findings_service",
+            side_effect=Exception("no project"),
+        ):
+            assert svc._count_sqlite_findings(tools=None) == 0
 
 
 class TestPurgeCountUrlFindings:
     def test_returns_zero_when_resolve_returns_none(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.resolve_by_name.return_value = None
-        cmd = PurgeCommand(repl)
-        assert cmd._count_url_findings() == 0
+        svc = _make_service()
+        with patch(
+            "application.purge.service.create_url_list_service",
+            side_effect=Exception("no project"),
+        ):
+            assert svc._count_url_findings() == 0
 
 
 class TestPurgeSqliteFullWipe:
     def test_full_wipe_purges_all_findings(self) -> None:
-        repl = _mock_repl()
-        cmd = PurgeCommand(repl)
+        svc = _make_service()
         findings_svc = MagicMock()
         url_svc = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.create_findings_service",
+                "application.purge.service.create_findings_service",
                 return_value=findings_svc,
             ),
             patch(
-                "application.repl.commands.purge.create_url_list_service",
+                "application.purge.service.create_url_list_service",
                 return_value=url_svc,
             ),
         ):
-            cmd._purge_sqlite(tools=None)
+            svc._purge_sqlite(tools=None)
         assert url_svc.purge_all_url_findings.called
         assert findings_svc.purge_all_findings_data.called
 
@@ -138,38 +148,36 @@ class TestPurgeSqlitePerTool:
     def test_per_tool_deletes_findings_for_selected_tools(
         self,
     ) -> None:
-        repl = _mock_repl()
-        cmd = PurgeCommand(repl)
+        svc = _make_service()
         findings_svc = MagicMock()
         url_svc = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.create_findings_service",
+                "application.purge.service.create_findings_service",
                 return_value=findings_svc,
             ),
             patch(
-                "application.repl.commands.purge.create_url_list_service",
+                "application.purge.service.create_url_list_service",
                 return_value=url_svc,
             ),
         ):
-            cmd._purge_sqlite(tools=["gitleaks", "katana"])
+            svc._purge_sqlite(tools=["gitleaks", "katana"])
         assert findings_svc.delete_findings_for_tools.called
         assert url_svc.delete_url_findings_for_tools.called
 
     def test_per_tool_handles_non_url_tools(self) -> None:
-        repl = _mock_repl()
-        cmd = PurgeCommand(repl)
+        svc = _make_service()
         findings_svc = MagicMock()
         url_svc = MagicMock()
         with (
             patch(
-                "application.repl.commands.purge.create_findings_service",
+                "application.purge.service.create_findings_service",
                 return_value=findings_svc,
             ),
             patch(
-                "application.repl.commands.purge.create_url_list_service",
+                "application.purge.service.create_url_list_service",
                 return_value=url_svc,
             ),
         ):
-            cmd._purge_sqlite(tools=["gitleaks", "semgrep"])
+            svc._purge_sqlite(tools=["gitleaks", "semgrep"])
         assert findings_svc.delete_findings_for_tools.called

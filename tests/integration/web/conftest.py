@@ -15,6 +15,7 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
 from tests._app_factory import build_test_app
+from tests.finding_helpers import normalize_test_findings
 
 
 def _seed_global_config(base_path: Path) -> None:
@@ -94,7 +95,7 @@ async def app_client(tmp_path: Path):
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, [_BASE_FINDING])
+    finding_repo.insert_findings(run_id, normalize_test_findings([_BASE_FINDING]))
 
     with factory.connect() as conn:
         row = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()

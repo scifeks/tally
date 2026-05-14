@@ -59,8 +59,9 @@ class GlobalConfig(BaseModel):
         ),
     )
 
-    # Post-scan hooks
+    # Post-action sync hooks
     post_scan_sync: list[str] = Field(default_factory=list)
+    post_triage_sync: list[str] = Field(default_factory=list)
 
     blind_xss_callback_url: str = Field(
         default="",
@@ -75,6 +76,15 @@ class GlobalConfig(BaseModel):
     web_ui_port: int = Field(default=8080)
     web_ui_vite_port: int = Field(default=3000)
     web_ui_allowed_origins: list[str] | None = None
+
+    @field_validator("blind_xss_callback_url")
+    @classmethod
+    def _validate_xss_callback_url(cls, v: str) -> str:
+        if v and not v.startswith(("http://", "https://")):
+            raise ValueError(
+                "blind_xss_callback_url must start with http:// or https://"
+            )
+        return v
 
     @field_validator("web_ui_host")
     @classmethod

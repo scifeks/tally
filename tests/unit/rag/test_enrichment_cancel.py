@@ -64,6 +64,14 @@ def test_cancel_during_phase2_raises_and_persists_completed_only() -> None:
     assert repo.update_enrichment_fields.called
     persisted_ids = {c.args[0] for c in repo.update_enrichment_fields.call_args_list}
     assert 1 in persisted_ids
+    # Verify the split signature was called correctly: each call should have
+    # (id, cols_dict, meta_dict, source="llm_inference").
+    for call in repo.update_enrichment_fields.call_args_list:
+        cols = call.args[1]
+        meta = call.args[2]
+        assert isinstance(cols, dict)
+        assert isinstance(meta, dict)
+        assert call.kwargs.get("source") == "llm_inference"
     # The third finding's worker must not have run (or its result must
     # have been discarded by executor.shutdown(cancel_futures=True)).
     assert 3 not in persisted_ids

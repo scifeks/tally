@@ -49,6 +49,7 @@
     "engagement_type": "Tally Engagement"
   },
   "post_scan_sync": [],
+  "post_triage_sync": [],
   "blind_xss_callback_url": "",
   "projects_dir": "./projects",
   "location_attestation_confirmed": false,

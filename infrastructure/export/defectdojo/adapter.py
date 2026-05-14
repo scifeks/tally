@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from application.ports.export import ExportResult
 from infrastructure.export.defectdojo.client import DefectDojoClient
 from infrastructure.export.defectdojo.mapper import (
-    _is_static_asset_path,
+    is_static_asset_path,
     map_findings,
 )
 
@@ -216,7 +216,7 @@ class DefectDojoExportAdapter:
                 for uf in url_findings:
                     if (uf.host, uf.port) not in allowed:
                         continue
-                    if _is_static_asset_path(uf.path):
+                    if is_static_asset_path(uf.path):
                         continue
                     key = (uf.protocol, uf.host, uf.port, uf.path)
                     if key in seen:

@@ -29,6 +29,8 @@ import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
 export default function Scans() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const scanWatchState = useUI(s => s.scanWatchState)
+  const setScanWatchState = useUI(s => s.setScanWatchState)
 
   const projectIdParam = activeProjectId !== null ? String(activeProjectId) : ''
   const projectIdNum = activeProjectId ?? 0
@@ -51,16 +53,22 @@ export default function Scans() {
   const configuredTools = useMemo(() => scanConfig?.tools ?? [], [scanConfig])
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
 
-  // Scan run state
-  const [runStatus, setRunStatus] = useState<ScanRunStatus>('idle')
-  const [runId, setRunId] = useState<number | null>(null)
-  const [logs, setLogs] = useState<ScanLogEvent[]>([])
+  // Scan run state. When returning from another page, restore from the
+  // Zustand snapshot that was saved on unmount.
+  const [runStatus, setRunStatus] = useState<ScanRunStatus>(() => scanWatchState?.status ?? 'idle')
+  const [runId, setRunId] = useState<number | null>(() => scanWatchState?.runId ?? null)
+  const [logs, setLogs] = useState<ScanLogEvent[]>(() => scanWatchState?.logs ?? [])
   const [enrichmentProgress, setEnrichmentProgress] = useState<{
     enrichedCount: number
     totalToEnrich: number
     timestamp: string
-  } | null>(null)
-  const [elapsedSec, setElapsedSec] = useState(0)
+  } | null>(() => scanWatchState?.enrichment ?? null)
+  const [elapsedSec, setElapsedSec] = useState(() => {
+    if (scanWatchState?.startedAt) {
+      return Math.floor((Date.now() - scanWatchState.startedAt) / 1000)
+    }
+    return 0
+  })
 
   // Advanced options state
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -71,7 +79,7 @@ export default function Scans() {
   const [skipEnrichment, setSkipEnrichment] = useState(false)
   const [selectedArgProfiles, setSelectedArgProfiles] = useState<Set<number>>(new Set())
 
-  // Reset advanced options when project changes
+  // Reset advanced options and scan watch state when project changes
   useEffect(() => {
     setSelectedRepos(new Set())
     setSelectedDomains(new Set())
@@ -80,7 +88,8 @@ export default function Scans() {
     setSkipEnrichment(false)
     setSelectedArgProfiles(new Set())
     setSelectedSavedScanId(null)
-  }, [activeProjectId])
+    setScanWatchState(null)
+  }, [activeProjectId, setScanWatchState])
 
   const { data: savedScansResponse } = useSavedScans(projectIdNum)
   const savedScans = useMemo(() => savedScansResponse?.items ?? [], [savedScansResponse])
@@ -170,6 +179,15 @@ export default function Scans() {
   const runIdRef = useRef<number | null>(null)
   runIdRef.current = runId
 
+  // Refs for unmount save (capture latest values without re-rendering)
+  const runStatusRef = useRef<ScanRunStatus>(runStatus)
+  runStatusRef.current = runStatus
+  const logsRef = useRef<ScanLogEvent[]>(logs)
+  logsRef.current = logs
+  const enrichmentRef = useRef(enrichmentProgress)
+  enrichmentRef.current = enrichmentProgress
+  const startedAtRef = useRef<number | null>(scanWatchState?.startedAt ?? null)
+
   const [activeTab, setActiveTab] = useState<'live' | 'history' | 'saved'>('live')
 
   const stopElapsedTimer = useCallback(() => {
@@ -179,11 +197,14 @@ export default function Scans() {
     }
   }, [])
 
-  const startElapsedTimer = useCallback(() => {
-    stopElapsedTimer()
-    setElapsedSec(0)
-    timerRef.current = setInterval(() => setElapsedSec(s => s + 1), 1000)
-  }, [stopElapsedTimer])
+  const startElapsedTimer = useCallback(
+    (resetToZero = true) => {
+      stopElapsedTimer()
+      if (resetToZero) setElapsedSec(0)
+      timerRef.current = setInterval(() => setElapsedSec(s => s + 1), 1000)
+    },
+    [stopElapsedTimer]
+  )
 
   // Per-event SSE handler. `enrichment_progress` is kept in a single state
   // slot (latest-value-wins) because appending it to the log would grow
@@ -226,30 +247,92 @@ export default function Scans() {
     [queryClient, projectIdNum]
   )
 
-  // Snapshot frame on (re)connect. Seeds runId/runStatus only when there is
-  // exactly one active run for the project, so we don't latch onto a stranger.
-  const handleSnapshot = useCallback((snap: SnapshotPayload) => {
-    if (snap.runId === null) {
-      const ids = snap.activeRunIds ?? []
-      if (ids.length === 1 && runIdRef.current === null) {
-        setRunId(ids[0])
-        setRunStatus('running')
+  const handleSnapshot = useCallback(
+    (snap: SnapshotPayload) => {
+      if (snap.runId === null) {
+        // Project-wide snapshot (no run_id in SSE URL).
+        const ids = snap.activeRunIds ?? []
+        if (ids.length === 1 && runIdRef.current === null) {
+          setRunId(ids[0])
+          setRunStatus('running')
+          startElapsedTimer()
+        } else if (runIdRef.current !== null && !ids.includes(runIdRef.current)) {
+          setRunStatus('completed')
+          queryClient.invalidateQueries({
+            queryKey: ['scans', projectIdNum],
+          })
+        }
+        return
       }
-      return
-    }
-    if (snap.status === 'running' || snap.status === 'queued') {
-      setRunId(snap.runId)
-      setRunStatus('running')
-    } else if (snap.status === 'cancelling') {
-      setRunId(snap.runId)
-      setRunStatus('cancelling')
-    }
-  }, [])
+
+      // Targeted snapshot (run_id was in SSE URL).
+      const status = snap.status
+      if (status === 'running' || status === 'queued') {
+        setRunId(snap.runId)
+        setRunStatus('running')
+        if (!timerRef.current) startElapsedTimer(false)
+      } else if (status === 'cancelling') {
+        setRunId(snap.runId)
+        setRunStatus('cancelling')
+      } else if (status === 'done') {
+        setRunId(snap.runId)
+        setRunStatus('completed')
+        queryClient.invalidateQueries({
+          queryKey: ['scans', projectIdNum],
+        })
+      } else if (status === 'cancelled') {
+        setRunId(snap.runId)
+        setRunStatus('cancelled')
+        queryClient.invalidateQueries({
+          queryKey: ['scans', projectIdNum],
+        })
+      } else if (status === 'failed') {
+        setRunId(snap.runId)
+        setRunStatus('failed')
+        queryClient.invalidateQueries({
+          queryKey: ['scans', projectIdNum],
+        })
+      }
+    },
+    [startElapsedTimer, queryClient, projectIdNum]
+  )
 
   useScanEvents(projectIdNum, handleScanEvent, {
     enabled: projectIdNum > 0,
+    runId: runId,
     onSnapshot: handleSnapshot,
   })
+
+  // On mount: if restoring a running scan, start the elapsed timer and
+  // clear the Zustand snapshot so it doesn't go stale.
+  useEffect(() => {
+    if (scanWatchState !== null) {
+      setScanWatchState(null)
+      if (scanWatchState.status === 'running') {
+        startedAtRef.current = scanWatchState.startedAt
+        startElapsedTimer(false)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // On unmount: snapshot active scan state into Zustand so it survives
+  // navigation to another page and back.
+  useEffect(() => {
+    return () => {
+      const rid = runIdRef.current
+      const status = runStatusRef.current
+      if (rid !== null && (status === 'running' || status === 'cancelling')) {
+        setScanWatchState({
+          runId: rid,
+          status,
+          logs: logsRef.current,
+          enrichment: enrichmentRef.current,
+          startedAt: startedAtRef.current ?? Date.now(),
+        })
+      }
+    }
+  }, [setScanWatchState])
 
   // Stop the elapsed timer once the run leaves a live-running state.
   useEffect(() => {
@@ -265,6 +348,7 @@ export default function Scans() {
     const onSuccess = (scan: { id: number }) => {
       setRunId(scan.id)
       setRunStatus('running')
+      startedAtRef.current = Date.now()
       startElapsedTimer()
     }
 
@@ -326,7 +410,9 @@ export default function Scans() {
     setEnrichmentProgress(null)
     setElapsedSec(0)
     setSelectedSavedScanId(null)
-  }, [])
+    startedAtRef.current = null
+    setScanWatchState(null)
+  }, [setScanWatchState])
 
   // Auto-scroll log
   useEffect(() => {
@@ -671,7 +757,7 @@ export default function Scans() {
                   Run Only These Tools{' '}
                   {selectedTools.size > 0 && `(${selectedTools.size} selected)`}
                 </div>
-                <div className="max-h-32 overflow-y-auto border border-border bg-background p-2 space-y-1">
+                <div className="max-h-56 overflow-y-auto border border-border bg-background p-2 space-y-1">
                   {configuredTools.length === 0 ? (
                     <div className="text-[10px] text-dim">No tools configured</div>
                   ) : (
@@ -735,7 +821,7 @@ export default function Scans() {
                 <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
                   Skip These Tools {skipTools.size > 0 && `(${skipTools.size} selected)`}
                 </div>
-                <div className="max-h-24 overflow-y-auto border border-border bg-background p-2 space-y-1">
+                <div className="max-h-56 overflow-y-auto border border-border bg-background p-2 space-y-1">
                   {configuredTools.length === 0 ? (
                     <div className="text-[10px] text-dim">No tools configured</div>
                   ) : (
@@ -924,6 +1010,7 @@ export default function Scans() {
             setActiveTab('live')
             setRunId(scan.id)
             setRunStatus('running')
+            startedAtRef.current = Date.now()
             startElapsedTimer()
           }}
           isSaving={saveScan.isPending}

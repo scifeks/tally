@@ -114,28 +114,20 @@ def _validation_error_to_envelope(exc: ScanValidationError) -> dict:
 def _build_progress(
     row: ScanRunRow, tool_runs: list[ToolRunRow]
 ) -> ScanProgressResponse:
-    counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}
-    for tr in tool_runs:
-        if tr.skip_reason:
-            counts["skipped"] += 1
-            continue
-        st = (tr.status or "queued").lower()
-        if st in counts:
-            counts[st] += 1
-        else:
-            counts["queued"] += 1
-    total = len(tool_runs)
-    finished = counts["done"] + counts["failed"] + counts["skipped"]
-    progress = int(round(finished * 100 / total)) if total > 0 else 0
-    if row.status in {"done", "failed", "cancelled"}:
-        progress = 100
+    sp = ScansService.compute_progress(row, tool_runs)
     return ScanProgressResponse(
         id=row.id,
         status=row.status,
-        progress=progress,
+        progress=sp.progress,
         current_segment=None,
         segment_label=None,
-        tool_runs_summary=ToolRunsSummary(**counts),
+        tool_runs_summary=ToolRunsSummary(
+            queued=sp.counts.queued,
+            running=sp.counts.running,
+            done=sp.counts.done,
+            failed=sp.counts.failed,
+            skipped=sp.counts.skipped,
+        ),
     )
 
 

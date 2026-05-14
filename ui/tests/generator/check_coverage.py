@@ -37,7 +37,7 @@ def _load(rel: str) -> dict:
 
 
 def check_findings_diversity() -> list[str]:
-    """populated.json is the FIRST 50 findings — it may not cover every
+    """populated.json is the FIRST 50 findings. It may not cover every
     enum on its own. Source the diversity check from BOTH page-1 + page-2
     (which together cover the first 100), and counts-populated (which
     aggregates over the entire patched dataset)."""
@@ -120,13 +120,13 @@ def main() -> int:
     errors.extend(check_xrefs())
 
     if errors:
-        print("\nFAIL — coverage / cross-reference issues:")
+        print("\nFAIL - coverage / cross-reference issues:")
         for e in errors:
             print(f"  ✗ {e}")
         return 1
 
     print(
-        "OK — every required severity / status / segment / tool present, "
+        "OK - every required severity / status / segment / tool present, "
         "all id cross-references valid."
     )
     return 0

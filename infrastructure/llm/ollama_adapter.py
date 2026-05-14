@@ -72,19 +72,7 @@ class OllamaAdapter(LLMProvider):
         messages: list[dict[str, str]],
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        """Stream the Ollama chat response as text chunks.
-
-        Yields each chunk's ``message.content`` delta. Empty deltas are
-        skipped so callers never see no-op events. Cancellation propagates
-        through ``aclose()`` on the generator; the underlying httpx
-        connection used by ``ollama.AsyncClient`` is released when the
-        async iterator is closed.
-
-        Raises:
-            LLMAdapterError: For any error raised by the Ollama SDK,
-                including connection failures and protocol errors. Sync
-                ``chat()`` keeps its existing pass-through behavior.
-        """
+        """Stream the Ollama chat response as text chunks."""
         async_client = ollama.AsyncClient(host=self._base_url)
         options = self._build_options(kwargs)
         try:

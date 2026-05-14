@@ -53,7 +53,7 @@ def _needs_root(stderr: str) -> bool:
 
 
 def sanitize_command(cmd: list[str]) -> list[str]:
-    """Raise ValueError if any token in *cmd* looks like a shell injection attempt."""
+    """Reject any token in cmd that looks like a shell injection."""
     for token in cmd:
         if token in _METACHAR_TOKENS:
             raise ValueError(f"Unsafe shell operator in command: {token!r}")
@@ -86,12 +86,7 @@ class ToolExecutor:
         self._cancel_token: CancellationToken = no_op_token()
 
     def set_cancel_token(self, token: CancellationToken) -> None:
-        """Install a cooperative cancellation flag for subprocess waits.
-
-        Called by ``ScanOrchestrator`` so cancellation requests reach the
-        running tool and SIGTERM the process group. Default is a shared
-        no-op token that is never set, so REPL behavior is unchanged.
-        """
+        """Install a cooperative cancellation flag for subprocess waits."""
         self._cancel_token = token
 
     # Public API
@@ -107,20 +102,9 @@ class ToolExecutor:
         raw_cmd: list[str] | None = None,
         **kwargs,
     ) -> ToolResult:
-        """Build, approve, run, capture, and return a ToolResult.
-
-        Args:
-            tool:         The ToolWrapper to run.
-            auto_approve: Pass True to skip the approval prompt (when already
-                          obtained by a parent context).
-            timeout:      Seconds before the subprocess is killed.
-            label:        Prefix for saved output filenames (e.g. "webservers").
-            cwd:          Working directory for the subprocess.
-            **kwargs:     Passed verbatim to tool.build_command().
-        """
+        """Build, approve, run, and capture a tool execution."""
         timestamp = ToolResult.now_iso()
 
-        # 1. Build command argv
         if raw_cmd is not None:
             cmd = raw_cmd
         else:
@@ -138,19 +122,17 @@ class ToolExecutor:
                     f"build_command error: {exc}",
                 )
 
-        # 2. Basic safety check (no shell=True, but guard against obvious injections)
+        # Guard against argv injection even without shell=True
         try:
             sanitize_command(cmd)
         except ValueError as exc:
             _log.error("Tool %s: command sanitization failed: %s", tool.name, exc)
             return self._failure(tool.name, timestamp, str(exc))
 
-        # 3. Human approval gate
         if not auto_approve:
             if not self._prompt_approval(tool.name, cmd):
                 return self._failure(tool.name, timestamp, "Execution denied by user.")
 
-        # 4. Run (with privilege escalation if needed)
         _log.info("Tool %s: command: %s", tool.name, shlex.join(cmd))
         if env:
             _log.info("Tool %s: env overrides: %s", tool.name, list(env.keys()))
@@ -167,7 +149,6 @@ class ToolExecutor:
         proc, start, success = run_result
         duration = round(perf_counter() - start, 3)
 
-        # 5. Persist stdout / stderr to disk
         output_files: dict[str, Path] = {}
         if proc.stdout:
             path = output_dir / f"{label}_{ts_file}.stdout"
@@ -183,7 +164,6 @@ class ToolExecutor:
         if not success and proc.stderr:
             combined = (combined + "\n" + proc.stderr).strip()
 
-        # 6. Parse output (failures are silently swallowed; parsed_data stays None)
         parsed: dict[str, Any] | None = None
         try:
             parsed = tool.parse_output(combined, output_files)

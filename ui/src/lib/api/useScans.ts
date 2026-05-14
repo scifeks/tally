@@ -399,9 +399,14 @@ function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
 export function useScanEvents(
   projectId: number,
   onEvent: (event: ScanLogEvent) => void,
-  options?: { enabled?: boolean; onSnapshot?: (snap: SnapshotPayload) => void }
+  options?: {
+    enabled?: boolean
+    runId?: number | null
+    onSnapshot?: (snap: SnapshotPayload) => void
+  }
 ) {
   const enabled = options?.enabled ?? true
+  const runId = options?.runId ?? null
   const onEventRef = useRef(onEvent)
   const onSnapshotRef = useRef(options?.onSnapshot)
   onEventRef.current = onEvent
@@ -409,7 +414,10 @@ export function useScanEvents(
 
   useEffect(() => {
     if (!enabled || !projectId) return
-    const url = SSE_ENDPOINTS.scanEvents(projectId)
+    let url = SSE_ENDPOINTS.scanEvents(projectId)
+    if (runId !== null) {
+      url = `${url}?run_id=${runId}`
+    }
     const handle = apiEventSource(url, {
       eventTypes: ['snapshot', ...SCAN_EVENT_TYPES],
       onEvent: (type, data) => {
@@ -423,7 +431,7 @@ export function useScanEvents(
       },
     })
     return () => handle.close()
-  }, [projectId, enabled])
+  }, [projectId, enabled, runId])
 }
 
 /**

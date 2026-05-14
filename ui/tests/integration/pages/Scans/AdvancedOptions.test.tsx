@@ -35,7 +35,11 @@ beforeEach(() => {
   __setEventSourceFactory(
     (url, init) => new MockEventSource(url, init) as unknown as EventSource
   )
-  useUI.setState({ activeProjectId: 1, scanMutationError: null })
+  useUI.setState({
+    activeProjectId: 1,
+    scanMutationError: null,
+    scanWatchState: null,
+  })
 })
 
 afterEach(() => {

@@ -15,6 +15,7 @@ from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
 from tests._app_factory import build_test_app
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -103,7 +104,7 @@ async def projects_v1_client(tmp_path: Path):
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, [_BASE_FINDING])
+    finding_repo.insert_findings(run_id, normalize_test_findings([_BASE_FINDING]))
 
     kb_mock = MagicMock()
     kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]

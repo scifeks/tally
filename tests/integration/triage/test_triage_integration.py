@@ -37,6 +37,7 @@ from infrastructure.store.repositories.findings import (  # noqa: E402
 from infrastructure.store.repositories.runs import (  # noqa: E402
     RunRepository,
 )
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -118,7 +119,7 @@ def _seed(
         }
         for i in range(n)
     ]
-    finding_repo.insert_findings(run_id, batch)
+    finding_repo.insert_findings(run_id, normalize_test_findings(batch))
     return run_id
 
 
@@ -250,19 +251,21 @@ def test_all_batches_processed_no_stuck_in_progress(
     seed_run_id = run_repo.create_run({})
     finding_repo.insert_findings(
         seed_run_id,
-        [
-            {
-                **_BASE_FINDING,
-                "file_path": "src/alpha.py",
-                "repo_id": repo_id,
-            },
-            {
-                **_BASE_FINDING,
-                "file_path": "src/beta.py",
-                "rule_id": "python.xss",
-                "repo_id": repo_id,
-            },
-        ],
+        normalize_test_findings(
+            [
+                {
+                    **_BASE_FINDING,
+                    "file_path": "src/alpha.py",
+                    "repo_id": repo_id,
+                },
+                {
+                    **_BASE_FINDING,
+                    "file_path": "src/beta.py",
+                    "rule_id": "python.xss",
+                    "repo_id": repo_id,
+                },
+            ]
+        ),
     )
 
     mock_semgrep = _make_mock_semgrep()
@@ -285,19 +288,21 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
     seed_run_id = run_repo.create_run({})
     finding_repo.insert_findings(
         seed_run_id,
-        [
-            {
-                **_BASE_FINDING,
-                "file_path": "src/a.py",
-                "repo_id": repo_id,
-            },
-            {
-                **_BASE_FINDING,
-                "file_path": "src/b.py",
-                "rule_id": "python.xss",
-                "repo_id": repo_id,
-            },
-        ],
+        normalize_test_findings(
+            [
+                {
+                    **_BASE_FINDING,
+                    "file_path": "src/a.py",
+                    "repo_id": repo_id,
+                },
+                {
+                    **_BASE_FINDING,
+                    "file_path": "src/b.py",
+                    "rule_id": "python.xss",
+                    "repo_id": repo_id,
+                },
+            ]
+        ),
     )
 
     mock_semgrep = _make_mock_semgrep()

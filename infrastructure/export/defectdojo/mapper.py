@@ -193,7 +193,7 @@ _STATIC_ASSET_EXTENSIONS = frozenset(
 )
 
 
-def _is_static_asset_path(path: str) -> bool:
+def is_static_asset_path(path: str) -> bool:
     dot = path.rfind(".")
     if dot == -1:
         return False
@@ -211,8 +211,19 @@ def _map_semgrep(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     if finding.meta.get("line_start") is not None:
         base["line"] = finding.meta["line_start"]
 
-    if finding.file:
+    if finding.meta.get("sast_source_file_path"):
+        base["sast_source_file_path"] = finding.meta["sast_source_file_path"]
+    elif finding.file:
         base["sast_source_file_path"] = finding.file
+
+    if finding.meta.get("sast_source_line") is not None:
+        base["sast_source_line"] = finding.meta["sast_source_line"]
+
+    if finding.meta.get("sast_source_object"):
+        base["sast_source_object"] = finding.meta["sast_source_object"]
+
+    if finding.meta.get("sast_sink_object"):
+        base["sast_sink_object"] = finding.meta["sast_sink_object"]
 
     if finding.meta.get("references"):
         refs = finding.meta["references"]
@@ -239,7 +250,7 @@ def _map_zap(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     if finding.meta.get("param"):
         base["param"] = finding.meta["param"]
 
-    if finding.url and not _is_static_asset_path(urlparse(finding.url).path):
+    if finding.url and not is_static_asset_path(urlparse(finding.url).path):
         base["endpoints"] = [_clean_endpoint_url(finding.url)]
 
     return base
@@ -247,16 +258,57 @@ def _map_zap(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
 
 def _map_xss_tool(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     """Add XSS tool-specific fields (Dalfox, XSStrike)."""
-    if finding.meta.get("param"):
-        base["param"] = finding.meta["param"]
+    param = finding.meta.get("param", "")
+    payload = finding.meta.get("payload", "")
+    method = finding.meta.get("method", "")
+    inject_type = finding.meta.get("inject_type", "")
+    evidence = finding.meta.get("evidence", "")
 
-    if finding.meta.get("payload"):
-        base["payload"] = finding.meta["payload"]
+    if param:
+        base["param"] = param
+    if payload:
+        base["payload"] = payload
 
-    if finding.url and not _is_static_asset_path(urlparse(finding.url).path):
+    if finding.url and not is_static_asset_path(urlparse(finding.url).path):
         base["endpoints"] = [_clean_endpoint_url(finding.url)]
 
+    base["description"] = _build_xss_description(
+        base.get("description", base.get("title", "")),
+        param=param,
+        payload=payload,
+        method=method,
+        inject_type=inject_type,
+        evidence=evidence,
+        poc_url=finding.url or "",
+    )
+
     return base
+
+
+def _build_xss_description(
+    base_text: str,
+    *,
+    param: str,
+    payload: str,
+    method: str,
+    inject_type: str,
+    evidence: str,
+    poc_url: str,
+) -> str:
+    parts = [base_text]
+    if payload:
+        parts.append(f"Payload: {payload}")
+    if param:
+        parts.append(f"Parameter: {param}")
+    if method:
+        parts.append(f"Method: {method}")
+    if inject_type:
+        parts.append(f"Inject type: {inject_type}")
+    if evidence:
+        parts.append(f"Evidence: {evidence}")
+    if poc_url:
+        parts.append(f"PoC URL: {poc_url}")
+    return "\n".join(parts)
 
 
 def _map_garak(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:

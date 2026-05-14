@@ -1,7 +1,7 @@
 """Destination for chat lifecycle events.
 
 The chat application service calls ``sink.emit(event)`` on every state
-transition (stream start, per-token, stream end, cancelled, or failed).
+transition (stream start, per-token, stream end, canceled, or failed).
 Concrete adapters decide what to do with the event:
 
 - Tests / REPL parity: ``NullChatStreamSink`` discards every event.

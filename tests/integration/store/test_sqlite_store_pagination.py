@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -163,7 +164,9 @@ class TestPagination:
         # Seed 7 findings (2 semgrep + 2 gitleaks + 1 nmap + 2 zap)
         store.insert_findings(
             run_id,
-            _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS,
+            normalize_test_findings(
+                _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS
+            ),
         )
 
         page1 = store.search({"conditions": [], "page": 1, "page_size": 5})
@@ -178,7 +181,9 @@ class TestPagination:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS,
+            normalize_test_findings(
+                _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS
+            ),
         )
 
         p1_rules = [
@@ -195,7 +200,7 @@ class TestPagination:
     def test_empty_second_page(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _NMAP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_NMAP_FINDINGS))
 
         page2 = store.search({"conditions": [], "page": 2, "page_size": 200})
         assert page2 == []

@@ -128,19 +128,17 @@ class ZAPLocalTool(BaseZapTool):
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
         """Parse ZAP scan output into structured data."""
-        # 1. Report file written by ZAP itself
         if self._last_report_path is not None and self._last_report_path.exists():
             suffix = self._last_report_path.suffix.lower()
             if suffix == ".xml":
                 return parse_zap_xml(self._last_report_path)
             return parse_zap_json(self._last_report_path)
 
-        # 2. Stdout file saved by executor (may contain progress text, not JSON)
+        # Stdout may contain progress text mixed with JSON
         stdout_path = files.get("stdout")
         if stdout_path is not None and stdout_path.exists():
             return parse_zap_json(stdout_path)
 
-        # 3. Raw output string (fallback, unlikely to be valid JSON)
         return parse_zap_json_string(output)
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:

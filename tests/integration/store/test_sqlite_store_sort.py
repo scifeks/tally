@@ -8,6 +8,7 @@ import pytest
 
 from domain.findings.sort import FindingSortColumn, InvalidSortColumn, SortDirection
 from infrastructure.store import make_store
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -78,7 +79,9 @@ class TestSortBySeverity:
     def test_asc_returns_critical_first(self, tmp_path: Path) -> None:
         run_repo, finding_repo = _repos(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(run_id, _SEVERITY_FIXTURES)
+        finding_repo.insert_findings(
+            run_id, normalize_test_findings(_SEVERITY_FIXTURES)
+        )
 
         results = finding_repo.search(
             {
@@ -96,7 +99,9 @@ class TestSortBySeverity:
     def test_desc_returns_informational_first(self, tmp_path: Path) -> None:
         run_repo, finding_repo = _repos(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(run_id, _SEVERITY_FIXTURES)
+        finding_repo.insert_findings(
+            run_id, normalize_test_findings(_SEVERITY_FIXTURES)
+        )
 
         results = finding_repo.search(
             {
@@ -119,7 +124,9 @@ class TestSortBySeverity:
         """
         run_repo, finding_repo = _repos(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(run_id, _SEVERITY_FIXTURES)
+        finding_repo.insert_findings(
+            run_id, normalize_test_findings(_SEVERITY_FIXTURES)
+        )
 
         results = finding_repo.search(
             {
@@ -170,7 +177,7 @@ class TestSortByTool:
                 "profile": "repo1",
             },
         ]
-        finding_repo.insert_findings(run_id, multi_tool)
+        finding_repo.insert_findings(run_id, normalize_test_findings(multi_tool))
 
         results = finding_repo.search(
             {
@@ -225,7 +232,7 @@ class TestSortByTitle:
                 "title": "Mango Issue",
             },
         ]
-        finding_repo.insert_findings(run_id, titled)
+        finding_repo.insert_findings(run_id, normalize_test_findings(titled))
 
         results = finding_repo.search(
             {
@@ -246,7 +253,8 @@ class TestDefaultSort:
     def test_returns_all_findings(self, tmp_path: Path) -> None:
         run_repo, finding_repo = _repos(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(run_id, _SEVERITY_FIXTURES)
+        normalized = normalize_test_findings(_SEVERITY_FIXTURES)
+        finding_repo.insert_findings(run_id, normalized)
 
         results = finding_repo.search({"conditions": [], "page": 1, "page_size": 200})
 
@@ -259,7 +267,7 @@ class TestDefaultSort:
         run_repo, finding_repo = _repos(tmp_path)
         run_id = run_repo.create_run({})
         three = _SEVERITY_FIXTURES[:3]  # low, medium, critical → ids 1, 2, 3
-        finding_repo.insert_findings(run_id, three)
+        finding_repo.insert_findings(run_id, normalize_test_findings(three))
 
         results = finding_repo.search({"conditions": [], "page": 1, "page_size": 200})
 

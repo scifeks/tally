@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from application.ports.draft_repository import DraftRepositoryPort
@@ -18,8 +19,11 @@ DRAFT_STATUSES = ("generating", "draft", "reviewed", "failed")
 class DraftRepository(DraftRepositoryPort):
     """CRUD for the project-scoped ``drafts`` table."""
 
-    def __init__(self, factory: ConnectionFactory) -> None:
+    def __init__(
+        self, factory: ConnectionFactory, *, draft_dir: Path | None = None
+    ) -> None:
         self._factory = factory
+        self._draft_dir = draft_dir
 
     def get(self, section: str) -> DraftRow | None:
         with self._factory.connect() as conn:
@@ -32,6 +36,15 @@ class DraftRepository(DraftRepositoryPort):
         with self._factory.connect() as conn:
             rows = conn.execute("SELECT * FROM drafts ORDER BY section").fetchall()
         return [_row_to_draft(r) for r in rows]
+
+    def read_content(self, section: str) -> str | None:
+        if self._draft_dir is None:
+            return None
+        path = self._draft_dir / f"{section}.md"
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            return None
 
     def upsert_generating(self, section: str) -> None:
         """Insert or update *section* to ``generating``, clearing timestamps."""

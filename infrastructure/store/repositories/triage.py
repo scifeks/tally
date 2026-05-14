@@ -221,12 +221,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
     def list_run_ids_for_project(
         self, *, offset: int = 0, limit: int = 20
     ) -> tuple[list[int], int]:
-        """Distinct run_ids that have triage_batches rows, newest-first.
-
-        ``triage_batches`` lives in the project's findings.db, so the
-        repository instance is already project-scoped; there is no
-        project_id column to filter on. Returns (rows, total_count).
-        """
+        """Return distinct run_ids with triage_batches rows, newest-first."""
         with self._factory.connect() as conn:
             total = conn.execute(
                 "SELECT COUNT(DISTINCT run_id) FROM triage_batches"

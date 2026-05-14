@@ -8,12 +8,7 @@ from pathlib import Path
 
 
 def _get_wrapper_meta(tool_name: str, location: str = "local") -> dict:
-    """Return {candidate_commands, tool_type} derived from wrapper class attributes.
-
-    Reads ``_candidate_commands`` and ``_command_entry_type`` class-level attrs set
-    on each base wrapper class.  Falls back to sane defaults when the module cannot
-    be imported or the class does not define those attrs.
-    """
+    """Return {candidate_commands, tool_type} from wrapper class attributes."""
     from domain.tools.interface import ToolInterface
 
     stem = tool_name.replace("-", "_")
@@ -77,6 +72,7 @@ def _discover_wrapper_tools(location: str) -> list[str]:
 
 
 def resolve_local_binary(tool_name: str, configured_path: str | None) -> str | None:
+    """Resolve the local binary path for tool_name."""
     if (
         configured_path
         and configured_path != "skip"
@@ -96,6 +92,7 @@ def load_commands_json(base_path: str) -> dict[str, dict]:
 
 
 def reconcile_commands_with_system(existing: dict[str, dict]) -> dict[str, dict]:
+    """Reconcile existing commands with system state."""
     reconciled: dict[str, dict] = {}
 
     for name, entry in existing.items():

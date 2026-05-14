@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -79,28 +80,28 @@ class TestNewColumns:
     def test_file_populated_from_lockfile(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, [self._SCA_FINDING])
+        store.insert_findings(run_id, normalize_test_findings([self._SCA_FINDING]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("file_path") == "requirements.txt"
 
     def test_package_version_populated(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, [self._SCA_FINDING])
+        store.insert_findings(run_id, normalize_test_findings([self._SCA_FINDING]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("package_version") == "2.27.0"
 
     def test_package_name_populated(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, [self._SCA_FINDING])
+        store.insert_findings(run_id, normalize_test_findings([self._SCA_FINDING]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("package_name") == "requests"
 
     def test_cwe_is_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, [self._SCA_FINDING])
+        store.insert_findings(run_id, normalize_test_findings([self._SCA_FINDING]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         cwe = results[0]["metadata"].get("cwe")
         assert isinstance(cwe, list)
@@ -111,6 +112,6 @@ class TestNewColumns:
         run_id = store.create_run({})
         finding = dict(self._SCA_FINDING)
         finding["file_path"] = "src/requirements.txt"
-        store.insert_findings(run_id, [finding])
+        store.insert_findings(run_id, normalize_test_findings([finding]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("file_path") == "src/requirements.txt"

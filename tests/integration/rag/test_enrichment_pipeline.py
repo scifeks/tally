@@ -17,7 +17,6 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
 from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
@@ -27,6 +26,7 @@ from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import IngestCompleted  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 _DIM = 8
 
@@ -109,8 +109,11 @@ def _make_llm_response(fields: list[str]) -> dict:
 
 def _seed(finding_repo: object, run_id: int, rows: list[dict]) -> list[int]:
     """Insert findings and return their SQLite ids."""
-    finding_repo.insert_findings(run_id, rows)  # type: ignore[union-attr]
-    fps = [compute_fingerprint(r) for r in rows]
+    normalized = normalize_test_findings(rows)
+    finding_repo.insert_findings(  # type: ignore[union-attr]
+        run_id, normalized
+    )
+    fps = [nf.fingerprint for nf in normalized]
     return finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]
 
 
@@ -179,10 +182,12 @@ def seeded_env(project_env: dict) -> dict:
 
 @pytest.fixture()
 def pipeline(seeded_env: dict) -> EnrichmentPipeline:
-    return EnrichmentPipeline(
+    p = EnrichmentPipeline(
         finding_repo=seeded_env["finding_repo"],
         base_path=str(seeded_env["base_path"]),
     )
+    p._llm_provider = MagicMock()
+    return p
 
 
 class TestEnrichmentPipeline:
@@ -297,6 +302,7 @@ class TestEnrichmentPipeline:
         p = EnrichmentPipeline(
             finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
+        p._llm_provider = MagicMock()
 
         call_count = [0]
 
@@ -475,6 +481,7 @@ class TestEnrichmentPipeline:
             finding_repo=finding_repo,
             base_path=str(project_env["base_path"]),
         )
+        p._llm_provider = MagicMock()
 
         def fake_generic(spec: object, source_values: dict) -> str | None:
             field = getattr(spec, "field_name", "")

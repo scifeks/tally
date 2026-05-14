@@ -163,6 +163,45 @@ class ToolOverridesService:
         """
         self._repo.delete(tool_name)
 
+    def to_commands_dict(self) -> dict[str, dict]:
+        """Serialize all overrides to commands dict format."""
+        rows, _total = self._repo.list_paginated(offset=0, limit=10_000)
+        out: dict[str, dict] = {}
+        for o in rows:
+            container = None
+            if o.container_name and o.container_tool_path:
+                container = {
+                    "name": o.container_name,
+                    "tool_path": o.container_tool_path,
+                }
+            out[o.tool_name] = {
+                "type": o.type,
+                "location": o.location,
+                "path": o.path or "",
+                "container": container,
+                "args_mode": o.args_mode,
+            }
+        return out
+
+    def sync(self, desired: dict[str, dict]) -> None:
+        """Reconcile current state with desired state.
+
+        Creates, updates, and deletes overrides as needed to reach
+        the desired command configuration.
+        """
+        current_rows, _ = self._repo.list_paginated(offset=0, limit=10_000)
+        current = {r.tool_name: r for r in current_rows}
+        desired_names = set(desired.keys())
+        for tool_name, entry in desired.items():
+            kwargs = _entry_to_service_kwargs(entry)
+            if tool_name in current:
+                self.replace(tool_name, **kwargs)
+            else:
+                self.create(tool_name=tool_name, **kwargs)
+        for tool_name in current:
+            if tool_name not in desired_names:
+                self.delete(tool_name)
+
     def _validate_input(
         self,
         *,
@@ -232,3 +271,16 @@ def _normalize(
     if location == "local":
         return path, None, None
     return None, container_name, container_tool_path
+
+
+def _entry_to_service_kwargs(entry: dict) -> dict:
+    """Convert commands dict entry to service method kwargs."""
+    container = entry.get("container")
+    return {
+        "args_mode": entry.get("args_mode", "stock"),
+        "type": entry["type"],
+        "location": entry["location"],
+        "path": entry.get("path") or None,
+        "container_name": container["name"] if container else None,
+        "container_tool_path": container["tool_path"] if container else None,
+    }

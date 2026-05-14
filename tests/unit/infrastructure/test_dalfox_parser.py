@@ -318,6 +318,71 @@ class TestDalFoxHandlerNormalize:
         rows = handler.normalize(result, "default")
         assert len(rows) == 2
 
+    def test_skips_finding_with_benign_payload(self) -> None:
+        handler = DalFoxHandler()
+        probe_finding = {
+            "url": "http://example.com/?q=code",
+            "param": "q",
+            "payload": "code",
+            "cwe": "CWE-79",
+            "severity": "medium",
+            "inject_type": "inHTML",
+            "method": "GET",
+            "evidence": 'value="code"',
+            "message": "Reflected Payload in HTML",
+            "confidence": "potential",
+        }
+        result = _make_result([probe_finding])
+        rows = handler.normalize(result, "default")
+        assert rows == []
+
+    def test_keeps_finding_with_real_xss_payload(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert len(rows) == 1
+        assert rows[0]["payload"] == "<script>alert(1)</script>"
+
+    def test_keeps_finding_with_utf7_payload(self) -> None:
+        handler = DalFoxHandler()
+        utf7_finding = {
+            "url": "http://example.com/?q=test",
+            "param": "q",
+            "payload": "+ADw-script+AD4-alert(1)+ADw-/script+AD4-",
+            "cwe": "CWE-79",
+            "severity": "medium",
+            "inject_type": "",
+            "method": "GET",
+            "evidence": "",
+            "message": "",
+            "confidence": "potential",
+        }
+        result = _make_result([utf7_finding])
+        rows = handler.normalize(result, "default")
+        assert len(rows) == 1
+
+    def test_inject_type_stored_in_row(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert rows[0]["inject_type"] == "inHTML-URL"
+
+    def test_evidence_stored_in_row(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert rows[0]["evidence"] == "<script>alert(1)</script>"
+
+    def test_message_stored_in_row(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert rows[0]["message"] == "Reflected XSS found in parameter q"
+
 
 # DalFoxHandler.render
 
