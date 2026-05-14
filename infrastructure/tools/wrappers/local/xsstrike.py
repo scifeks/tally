@@ -13,7 +13,7 @@ Invocation
 ::
 
     xsstrike --seeds <seeds_file> --crawl --skip -l <level>
-        --path -t <threads> --timeout 15
+        -t <threads> --timeout 15
         --file-log-level DEBUG --log-file <logfile>
 
 Note on ``--crawl``
@@ -100,8 +100,10 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 Required.
             crawl_level (int): Passed as ``-l``. Controls crawl depth.
                 Defaults to 10.
-            headers (dict[str, str] | None): Extra HTTP headers serialised
+            headers (dict[str, str] | None): Extra HTTP headers serialized
                 as JSON and passed via ``--headers``.
+            blind (bool): When True, add ``--blind`` to enable blind XSS
+                payload injection during crawl.
         """
         raw = kwargs or {}
         base_url: str | None = str(raw["base_url"]) if "base_url" in raw else None
@@ -109,6 +111,7 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         log_file: str | None = str(raw["log_file"]) if "log_file" in raw else None
         crawl_level: int = int(raw.get("crawl_level", 10))  # type: ignore[arg-type]
         headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
+        blind: bool = bool(raw.get("blind", False))
 
         if not base_url and not seeds_file:
             raise ValueError("Either base_url or seeds_file is required for xsstrike")
@@ -130,7 +133,6 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
                 "--skip",
                 "-l",
                 str(crawl_level),
-                "--path",
                 "-t",
                 str(_recommended_thread_count()),
                 "--timeout",
@@ -144,6 +146,9 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
 
         if headers:
             cmd.extend(["--headers", json.dumps(headers)])
+
+        if blind:
+            cmd.append("--blind")
 
         return cmd
 
@@ -207,6 +212,8 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         }
         if repo.xsstrike_headers:
             kwargs["headers"] = dict(repo.xsstrike_headers)
+        if context.tool_config.blind_xss_callback_url:
+            kwargs["blind"] = True
 
         return [
             ExecutionPass(

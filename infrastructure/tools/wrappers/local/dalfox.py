@@ -14,6 +14,7 @@ Invocation
 
     dalfox file <seeds_file> --format json -o <output_file>
         --no-spinner --no-color --deep-domxss
+        --remote-payloads portswigger,payloadbox
 
 Output
 ------
@@ -94,6 +95,8 @@ class DalFoxLocalTool(BaseDalFoxTool):
                 Required.
             headers (dict[str, str] | None): Extra HTTP headers passed via
                 ``-H "Key: Value"`` (one flag per header).
+            blind_xss_callback (str | None): Blind XSS callback URL
+                passed via ``-b``.
         """
         raw = kwargs or {}
         base_url: str | None = str(raw["base_url"]) if "base_url" in raw else None
@@ -102,6 +105,9 @@ class DalFoxLocalTool(BaseDalFoxTool):
             str(raw["output_file"]) if "output_file" in raw else None
         )
         headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
+        blind_xss_callback: str | None = (
+            str(raw["blind_xss_callback"]) if raw.get("blind_xss_callback") else None
+        )
 
         if not base_url and not seeds_file:
             raise ValueError("Either base_url or seeds_file is required for dalfox")
@@ -126,12 +132,17 @@ class DalFoxLocalTool(BaseDalFoxTool):
                 "--no-spinner",
                 "--no-color",
                 "--deep-domxss",
+                "--remote-payloads",
+                "portswigger,payloadbox",
             ]
         )
 
         if headers:
             for key, value in headers.items():
                 cmd.extend(["-H", f"{key}: {value}"])
+
+        if blind_xss_callback:
+            cmd.extend(["-b", blind_xss_callback])
 
         return cmd
 
@@ -194,6 +205,9 @@ class DalFoxLocalTool(BaseDalFoxTool):
         }
         if repo.dalfox_headers:
             kwargs["headers"] = dict(repo.dalfox_headers)
+        blind_url = context.tool_config.blind_xss_callback_url
+        if blind_url:
+            kwargs["blind_xss_callback"] = blind_url
 
         return [
             ExecutionPass(

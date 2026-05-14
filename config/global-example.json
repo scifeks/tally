@@ -41,6 +41,7 @@
     "provider": "ollama",
     "timeout_seconds": 120
   },
+  "blind_xss_callback_url": "",
   "projects_dir": "./projects",
   "location_attestation_confirmed": false,
   "enrichment_max_concurrency": 4,

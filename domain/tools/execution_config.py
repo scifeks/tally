@@ -2,8 +2,8 @@
 
 Snapshots are built at the application boundary from `ConfigManager`
 state and frozen so wrappers cannot mutate them. Keeping the shape
-narrow (one optional `noir_provider` today) means the domain stays
-free of references to outward configuration types.
+narrow means the domain stays free of references to outward
+configuration types.
 """
 
 from __future__ import annotations
@@ -21,3 +21,4 @@ class NoirProviderSnapshot:
 @dataclass(frozen=True)
 class ToolExecutionConfig:
     noir_provider: NoirProviderSnapshot | None
+    blind_xss_callback_url: str = ""
