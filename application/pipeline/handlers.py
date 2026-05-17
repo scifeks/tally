@@ -13,6 +13,10 @@ from application.rag.ingestor import (
     filter_code_rows,
 )
 from application.rag.knowledge_base import FindingKnowledgeBase
+from domain.findings.normalization import (
+    NormalizedFinding,
+    normalise_finding_for_insert,
+)
 from domain.pipeline.events import (
     EventBus,
     IngestCompleted,
@@ -135,6 +139,14 @@ class IngestHandler(BaseHandler):
         self._bus = bus
         self._repo_repo = repo_repo
 
+    def _resolve_repo_id(self, repo_name: str) -> int | None:
+        if self._repo_repo is None:
+            return None
+        try:
+            return self._repo_repo.find_id_by_name(repo_name)
+        except Exception:
+            return None
+
     def handle(self, event: ToolCompleted) -> None:
         result = event.result
         if (
@@ -174,8 +186,11 @@ class IngestHandler(BaseHandler):
             if handler.domain == "code":
                 if handler.segment in ("sca", "web"):
                     if event.repo:
+                        repo_id = self._resolve_repo_id(event.repo)
                         for row in rows:
                             row.setdefault("repo", event.repo)
+                            if repo_id is not None:
+                                row.setdefault("repo_id", repo_id)
                 else:
                     try:
                         active = self._repo_repo.list_active()
@@ -189,10 +204,19 @@ class IngestHandler(BaseHandler):
                     )
             else:
                 if event.repo:
+                    repo_id = self._resolve_repo_id(event.repo)
                     for row in rows:
                         row.setdefault("repo", event.repo)
+                        if repo_id is not None:
+                            row.setdefault("repo_id", repo_id)
 
-            self._finding_repo.insert_findings(event.run_id or 0, rows)
+            normalized = []
+            for r in rows:
+                n = normalise_finding_for_insert(r)
+                normalized.append(
+                    NormalizedFinding(n.columns, n.meta, compute_fingerprint(r))
+                )
+            self._finding_repo.insert_findings(event.run_id or 0, normalized)
             fingerprints = [compute_fingerprint(row) for row in rows]
             sqlite_ids = self._finding_repo.get_ids_by_fingerprints(
                 fingerprints, run_id=event.run_id or 0

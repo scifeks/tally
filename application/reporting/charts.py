@@ -25,21 +25,14 @@ class ChartRenderer(ABC):
     def severity_distribution(self, counts: dict[str, int]) -> str:
         """Render a severity distribution chart.
 
-        Args:
-            counts: Severity name → finding count mapping.  Missing severities
-                    are treated as zero.
-
-        Returns:
-            Self-contained HTML fragment (no ``<html>`` / ``<body>`` wrapper).
+        Missing severities are treated as zero.
         """
 
 
 class CSSChartRenderer(ChartRenderer):
-    """Chart renderer that produces a pure HTML/CSS fragment with no JavaScript
-    and no external dependencies.
+    """Pure HTML/CSS chart renderer with no JavaScript or external dependencies.
 
-    All styles are scoped inside the fragment so it can be embedded into any
-    HTML document without polluting the host stylesheet.
+    Styles are scoped so the fragment can be embedded without polluting the host.
     """
 
     def severity_distribution(self, counts: dict[str, int]) -> str:
@@ -88,15 +81,10 @@ class CSSChartRenderer(ChartRenderer):
 def get_chart_renderer(name: str) -> ChartRenderer:
     """Return the chart renderer for the given backend name.
 
-    Args:
-        name: Backend identifier.  Currently ``"css"`` is the only supported
-              value.
-
-    Returns:
-        Configured :class:`ChartRenderer` instance.
+    Currently only ``"css"`` is supported.
 
     Raises:
-        ValueError: *name* is not a recognised backend.
+        ValueError: Backend name is not recognized.
     """
     if name == "css":
         return CSSChartRenderer()

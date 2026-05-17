@@ -181,6 +181,65 @@ class TestParseDalfoxData:
         assert result["findings"][0]["confidence"] == "potential"
 
 
+# _parse_dalfox_data: v2.12+ lowercase field names
+
+_V212_FIXTURE_PATH = (
+    Path(__file__).parent.parent.parent / "fixtures" / "ingest" / "dalfox_v2_12.json"
+)
+
+_V212_FINDING = {
+    "type": "V",
+    "inject_type": "inHTML-URL",
+    "poc_type": "plain",
+    "method": "GET",
+    "data": "http://example.com/search?q=payload",
+    "param": "q",
+    "payload": "><base href=javascript:alert(1)//>",
+    "evidence": "reflected",
+    "cwe": "CWE-79",
+    "severity": "High",
+    "message_str": "Triggered XSS",
+}
+
+
+class TestParseDalfoxV212:
+    def test_data_field_used_as_url(self) -> None:
+        result = _parse_dalfox_data([_V212_FINDING])
+        assert result["findings"][0]["url"] == _V212_FINDING["data"]
+
+    def test_lowercase_param_extracted(self) -> None:
+        result = _parse_dalfox_data([_V212_FINDING])
+        assert result["findings"][0]["param"] == "q"
+
+    def test_lowercase_payload_extracted(self) -> None:
+        result = _parse_dalfox_data([_V212_FINDING])
+        f = result["findings"][0]
+        assert f["payload"] == _V212_FINDING["payload"]
+
+    def test_lowercase_severity_normalised(self) -> None:
+        result = _parse_dalfox_data([_V212_FINDING])
+        assert result["findings"][0]["severity"] == "high"
+
+    def test_lowercase_type_maps_to_confirmed(self) -> None:
+        result = _parse_dalfox_data([_V212_FINDING])
+        assert result["findings"][0]["confidence"] == "confirmed"
+
+    def test_lowercase_method_extracted(self) -> None:
+        result = _parse_dalfox_data([_V212_FINDING])
+        assert result["findings"][0]["method"] == "GET"
+
+    def test_v212_fixture_file_parses(self) -> None:
+        result = parse_dalfox_json(_V212_FIXTURE_PATH)
+        assert result["summary"]["total_findings"] == 2
+        assert result["findings"][0]["param"] == "q"
+        assert "127.0.0.1" in result["findings"][0]["url"]
+
+    def test_old_format_still_works(self) -> None:
+        result = _parse_dalfox_data([_VERIFIED_FINDING])
+        assert result["findings"][0]["url"] == _VERIFIED_FINDING["PoC"]
+        assert result["findings"][0]["param"] == "q"
+
+
 # DalFoxHandler.normalize
 
 
@@ -258,6 +317,71 @@ class TestDalFoxHandlerNormalize:
         result = _make_result(parsed["findings"])
         rows = handler.normalize(result, "default")
         assert len(rows) == 2
+
+    def test_skips_finding_with_benign_payload(self) -> None:
+        handler = DalFoxHandler()
+        probe_finding = {
+            "url": "http://example.com/?q=code",
+            "param": "q",
+            "payload": "code",
+            "cwe": "CWE-79",
+            "severity": "medium",
+            "inject_type": "inHTML",
+            "method": "GET",
+            "evidence": 'value="code"',
+            "message": "Reflected Payload in HTML",
+            "confidence": "potential",
+        }
+        result = _make_result([probe_finding])
+        rows = handler.normalize(result, "default")
+        assert rows == []
+
+    def test_keeps_finding_with_real_xss_payload(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert len(rows) == 1
+        assert rows[0]["payload"] == "<script>alert(1)</script>"
+
+    def test_keeps_finding_with_utf7_payload(self) -> None:
+        handler = DalFoxHandler()
+        utf7_finding = {
+            "url": "http://example.com/?q=test",
+            "param": "q",
+            "payload": "+ADw-script+AD4-alert(1)+ADw-/script+AD4-",
+            "cwe": "CWE-79",
+            "severity": "medium",
+            "inject_type": "",
+            "method": "GET",
+            "evidence": "",
+            "message": "",
+            "confidence": "potential",
+        }
+        result = _make_result([utf7_finding])
+        rows = handler.normalize(result, "default")
+        assert len(rows) == 1
+
+    def test_inject_type_stored_in_row(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert rows[0]["inject_type"] == "inHTML-URL"
+
+    def test_evidence_stored_in_row(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert rows[0]["evidence"] == "<script>alert(1)</script>"
+
+    def test_message_stored_in_row(self) -> None:
+        handler = DalFoxHandler()
+        parsed = _parse_dalfox_data([_VERIFIED_FINDING])
+        result = _make_result(parsed["findings"])
+        rows = handler.normalize(result, "default")
+        assert rows[0]["message"] == "Reflected XSS found in parameter q"
 
 
 # DalFoxHandler.render

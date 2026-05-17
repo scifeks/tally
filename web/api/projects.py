@@ -32,7 +32,6 @@ from core.project_paths import ProjectPaths
 from domain.projects.entry import ProjectRow
 from factories.persistence import (
     create_findings_service,
-    create_overrides_repo,
     create_url_list_service,
 )
 from web.api._errors import NotFound
@@ -73,13 +72,6 @@ def _url_list_service(request: Request, project_id: int) -> UrlListService:
         return create_url_list_service(request.app.state.project_registry, project_id)
     except Exception as exc:
         raise NotFound(f"project {project_id} not found") from exc
-
-
-def _load_project_tool_ids(paths: ProjectPaths) -> list[str]:
-    """Return sorted tool names from tool_overrides table in DB."""
-    repo = create_overrides_repo(paths.findings_db)
-    rows, _total = repo.list_paginated(offset=0, limit=10_000)
-    return sorted(o.tool_name for o in rows)
 
 
 def _service_from_request(request: Request) -> ProjectRepositoriesService:
@@ -141,13 +133,13 @@ async def get_project_meta(
     config = manager.get_project_info(row.name)
     if config is None:
         raise NotFound(f"Project {project_id} not found")
-    paths = ProjectPaths.from_registry_row(row)
 
     findings_service = _findings_service(request, project_id)
     url_list_service = _url_list_service(request, project_id)
     finding_count = await asyncio.to_thread(findings_service.count_findings)
     url_list_count = await asyncio.to_thread(url_list_service.count_active_url_findings)
-    enabled_tools = await asyncio.to_thread(_load_project_tool_ids, paths)
+    installed: frozenset[str] = request.app.state.installed_tools.installed()
+    enabled_tools = sorted(installed)
     repo_service = _service_from_request(request)
     repo_count = await asyncio.to_thread(_count_active_repos, repo_service, project_id)
     return ProjectMetaResponse(

@@ -1,8 +1,8 @@
 """Verify REPL ``purge`` clears the ``url_findings`` table.
 
-Full-purge (no --tool) uses ``purge_non_preserved_tables``, which clears
-all tables except those in ``ConnectionFactory.PRESERVED_TABLES``.
-``url_findings`` is cleared; ``repositories`` rows survive.
+Full-purge (no --tool) uses ``purge_operational_tables``, which clears
+tables listed in ``ConnectionFactory.PURGEABLE_TABLES``.
+``url_findings`` is cleared; configuration tables survive.
 """
 
 from __future__ import annotations

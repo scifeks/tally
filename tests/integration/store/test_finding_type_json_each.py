@@ -14,6 +14,7 @@ if str(_TALLY_ROOT) not in sys.path:
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -34,25 +35,23 @@ class TestFindingTypeJsonEach:
     ) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "gitleaks",
-                    "rule_id": "r1",
-                    "file_path": "a.py",
-                    "line_number": 1,
-                    "finding_type": "secret",
-                },
-                {
-                    "tool": "semgrep",
-                    "rule_id": "r2",
-                    "file_path": "b.py",
-                    "line_start": 1,
-                    "finding_type": "vulnerability",
-                },
-            ],
-        )
+        findings = [
+            {
+                "tool": "gitleaks",
+                "rule_id": "r1",
+                "file_path": "a.py",
+                "line_number": 1,
+                "finding_type": "secret",
+            },
+            {
+                "tool": "semgrep",
+                "rule_id": "r2",
+                "file_path": "b.py",
+                "line_start": 1,
+                "finding_type": "vulnerability",
+            },
+        ]
+        finding_repo.insert_findings(run_id, normalize_test_findings(findings))
         results = finding_repo.search(
             {
                 "conditions": [("finding_type", "=", ["secret"])],
@@ -66,30 +65,28 @@ class TestFindingTypeJsonEach:
     def test_exact_match_multi_value_returns_both_types(self, tmp_path: Path) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "gitleaks",
-                    "rule_id": "r1",
-                    "file_path": "a.py",
-                    "line_number": 1,
-                    "finding_type": "secret",
-                },
-                {
-                    "tool": "semgrep",
-                    "rule_id": "r2",
-                    "file_path": "b.py",
-                    "line_start": 1,
-                    "finding_type": "vulnerability",
-                },
-                {
-                    "tool": "nmap",
-                    "ip_address": "1.2.3.4",
-                    "finding_type": "informational",
-                },
-            ],
-        )
+        findings = [
+            {
+                "tool": "gitleaks",
+                "rule_id": "r1",
+                "file_path": "a.py",
+                "line_number": 1,
+                "finding_type": "secret",
+            },
+            {
+                "tool": "semgrep",
+                "rule_id": "r2",
+                "file_path": "b.py",
+                "line_start": 1,
+                "finding_type": "vulnerability",
+            },
+            {
+                "tool": "nmap",
+                "ip_address": "1.2.3.4",
+                "finding_type": "informational",
+            },
+        ]
+        finding_repo.insert_findings(run_id, normalize_test_findings(findings))
         results = finding_repo.search(
             {
                 "conditions": [("finding_type", "=", ["secret", "vulnerability"])],
@@ -105,25 +102,23 @@ class TestFindingTypeJsonEach:
     def test_partial_match_vuln_matches_vulnerability(self, tmp_path: Path) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "semgrep",
-                    "rule_id": "r2",
-                    "file_path": "b.py",
-                    "line_start": 1,
-                    "finding_type": "vulnerability",
-                },
-                {
-                    "tool": "gitleaks",
-                    "rule_id": "r1",
-                    "file_path": "a.py",
-                    "line_number": 1,
-                    "finding_type": "secret",
-                },
-            ],
-        )
+        findings = [
+            {
+                "tool": "semgrep",
+                "rule_id": "r2",
+                "file_path": "b.py",
+                "line_start": 1,
+                "finding_type": "vulnerability",
+            },
+            {
+                "tool": "gitleaks",
+                "rule_id": "r1",
+                "file_path": "a.py",
+                "line_number": 1,
+                "finding_type": "secret",
+            },
+        ]
+        finding_repo.insert_findings(run_id, normalize_test_findings(findings))
         results = finding_repo.search(
             {
                 "conditions": [("finding_type", "~=", ["vuln"])],
@@ -137,16 +132,14 @@ class TestFindingTypeJsonEach:
     def test_exact_match_does_not_return_unrelated_type(self, tmp_path: Path) -> None:
         _, run_repo, finding_repo = _make_store(tmp_path)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "nmap",
-                    "ip_address": "1.2.3.4",
-                    "finding_type": "informational",
-                },
-            ],
-        )
+        findings = [
+            {
+                "tool": "nmap",
+                "ip_address": "1.2.3.4",
+                "finding_type": "informational",
+            },
+        ]
+        finding_repo.insert_findings(run_id, normalize_test_findings(findings))
         results = finding_repo.search(
             {
                 "conditions": [("finding_type", "=", ["secret"])],

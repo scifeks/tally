@@ -14,6 +14,14 @@ from ._shared import _first_output_file, _shared_meta
 
 logger = logging.getLogger(__name__)
 
+_XSS_CHARS = frozenset("<>\"'()=;+/")
+
+
+def _has_xss_syntax(payload: str) -> bool:
+    """True if *payload* contains characters that can break HTML context."""
+    return bool(_XSS_CHARS.intersection(payload))
+
+
 # DalFox Type field values and their confidence mappings.
 # V = verified (confirmed XSS), R = reflected, G = grep match.
 _TYPE_CONFIDENCE: dict[str, str] = {
@@ -56,6 +64,15 @@ def parse_dalfox_json_string(json_string: str) -> dict[str, Any]:
     return _parse_dalfox_data(data)
 
 
+def _get(item: dict[str, Any], *keys: str, default: str = "") -> str:
+    """Return the first matching key's value, or *default*."""
+    for k in keys:
+        val = item.get(k)
+        if val is not None:
+            return str(val)
+    return default
+
+
 def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
     """Normalise a list of DalFox PoC objects into the standard finding shape."""
     findings: list[dict[str, Any]] = []
@@ -67,16 +84,16 @@ def _parse_dalfox_data(data: list[dict[str, Any]]) -> dict[str, Any]:
         if not item:
             continue
 
-        poc = item.get("PoC", "")
-        param = item.get("Param", "")
-        payload = item.get("Payload", "")
-        cwe = item.get("CWE", "")
-        severity = (item.get("Severity") or "medium").lower()
-        inject_type = item.get("InjectType", "")
-        method = item.get("Method", "GET")
-        evidence = item.get("Evidence", "")
-        message = item.get("MessageStr", "")
-        raw_type = item.get("Type", "R")
+        poc = _get(item, "PoC", "data", "poc")
+        param = _get(item, "Param", "param")
+        payload = _get(item, "Payload", "payload")
+        cwe = _get(item, "CWE", "cwe")
+        severity = (_get(item, "Severity", "severity") or "medium").lower()
+        inject_type = _get(item, "InjectType", "inject_type")
+        method = _get(item, "Method", "method", default="GET")
+        evidence = _get(item, "Evidence", "evidence")
+        message = _get(item, "MessageStr", "message_str")
+        raw_type = _get(item, "Type", "type", default="R")
         confidence = _TYPE_CONFIDENCE.get(raw_type, "potential")
 
         findings.append(
@@ -123,7 +140,10 @@ class DalFoxHandler:
     normalized_fields: list[str] = [
         "confidence",
         "cwe",
+        "evidence",
         "finding_type",
+        "inject_type",
+        "message",
         "method",
         "param",
         "payload",
@@ -145,8 +165,11 @@ class DalFoxHandler:
             url = finding.get("url", "")
             param = finding.get("param", "")
             payload = finding.get("payload", "")
+
+            if payload and not _has_xss_syntax(payload):
+                continue
+
             cwe_raw = finding.get("cwe", "")
-            # Normalise "CWE-79" → 79 (integer), or fall back to 79.
             cwe_id: int = 79
             if cwe_raw:
                 try:
@@ -166,6 +189,9 @@ class DalFoxHandler:
                 "poc": url,
                 "param": param,
                 "payload": payload,
+                "inject_type": finding.get("inject_type", ""),
+                "evidence": finding.get("evidence", ""),
+                "message": finding.get("message", ""),
                 "method": finding.get("method", "GET"),
                 "timestamp": timestamp,
                 "source_file": source_file,

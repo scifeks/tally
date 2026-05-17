@@ -18,13 +18,37 @@ from domain.url_inventory.entry import UrlFinding
 from infrastructure.tools.wrappers.utils.url_merge import _normalise_url
 
 
+def _query_string_from_meta(meta: dict[str, Any]) -> str:
+    """Extract query param names from OAS3 operation metadata."""
+    original = meta.get("original_file")
+    if not isinstance(original, dict):
+        return ""
+    params = original.get("parameters")
+    if not isinstance(params, list):
+        return ""
+    names = list(
+        dict.fromkeys(
+            p["name"]
+            for p in params
+            if isinstance(p, dict)
+            and p.get("in") == "query"
+            and isinstance(p.get("name"), str)
+        )
+    )
+    if not names:
+        return ""
+    return "?" + "&".join(f"{n}=" for n in names)
+
+
 def _seed_url(row: UrlFinding) -> str:
     """Return the seed-file URL for *row* (one URL per line for tools)."""
     if (row.protocol == "http" and row.port == 80) or (
         row.protocol == "https" and row.port == 443
     ):
-        return f"{row.protocol}://{row.host}{row.path}"
-    return f"{row.protocol}://{row.host}:{row.port}{row.path}"
+        base = f"{row.protocol}://{row.host}{row.path}"
+    else:
+        base = f"{row.protocol}://{row.host}:{row.port}{row.path}"
+    return base + _query_string_from_meta(row.meta)
 
 
 def build_seeds(rows: Iterable[UrlFinding]) -> str:

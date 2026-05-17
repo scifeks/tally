@@ -47,12 +47,7 @@ def has_dependency_manifests(
     repo_path: str,
     languages: list[str],
 ) -> bool:
-    """Return True if any language-appropriate manifest exists locally.
-
-    Args:
-        repo_path: Absolute path to the repository root.
-        languages: List of language names (case-insensitive).
-    """
+    """Return True if any language-appropriate manifest exists locally."""
     root = Path(repo_path)
     for lang in languages:
         manifests = LANGUAGE_MANIFESTS.get(lang.lower(), [])
@@ -73,15 +68,7 @@ def has_dependency_manifests_docker(
     repo_path: str,
     languages: list[str],
 ) -> bool:
-    """Return True if any language-appropriate manifest exists in a container.
-
-    Uses ``docker exec <container> test -f <path>`` for each candidate.
-
-    Args:
-        container_name: Running Docker container name or ID.
-        repo_path: Absolute path inside the container.
-        languages: List of language names (case-insensitive).
-    """
+    """Return True if any language-appropriate manifest exists in a container."""
     for lang in languages:
         manifests = LANGUAGE_MANIFESTS.get(lang.lower(), [])
         for manifest in manifests:
@@ -116,17 +103,7 @@ def has_manifests_for_language(
     language: str,
     container_name: str = "",
 ) -> bool:
-    """Return True if any manifest for ``language`` exists in the repo.
-
-    Uses a local stat when ``container_name`` is empty, or ``docker exec
-    test -f`` when it is set.
-
-    Args:
-        repo_path: Absolute path to the repository root (local or
-            in-container path for docker mode).
-        language: Language name (case-insensitive).
-        container_name: If non-empty, check inside this container.
-    """
+    """Return True if any manifest for the language exists in the repo."""
     if container_name:
         return has_dependency_manifests_docker(container_name, repo_path, [language])
     return has_dependency_manifests(repo_path, [language])

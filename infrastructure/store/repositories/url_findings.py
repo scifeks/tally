@@ -128,6 +128,13 @@ class UrlFindingRepository(UrlFindingRepositoryPort):
             cur = conn.executemany(sql, rows)
             return cur.rowcount
 
+    def update_meta(self, finding_id: int, meta: dict[str, Any]) -> None:
+        with self._factory.connect() as conn:
+            conn.execute(
+                "UPDATE url_findings SET meta = ? WHERE id = ?",
+                (json.dumps(meta), finding_id),
+            )
+
     def delete_for_repo_and_tool(self, repo_id: int, tool: UrlTool) -> int:
         """Wipe SCAN-sourced rows for ``(repo_id, tool)``. Used before re-ingest."""
         with self._factory.connect() as conn:

@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -77,7 +78,7 @@ class TestD2OsvSearch:
     def test_aliases_stored_as_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, [self._OSV_FINDING])
+        store.insert_findings(run_id, normalize_test_findings([self._OSV_FINDING]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         aliases = results[0]["metadata"].get("aliases")
         assert isinstance(aliases, list)
@@ -86,17 +87,15 @@ class TestD2OsvSearch:
     def test_null_meta_does_not_cause_error(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "osv-scanner",
-                    "package_name": "pkg",
-                    "vulnerability_id": "GHSA-y",
-                    "ecosystem": "PyPI",
-                }
-            ],
-        )
+        findings = [
+            {
+                "tool": "osv-scanner",
+                "package_name": "pkg",
+                "vulnerability_id": "GHSA-y",
+                "ecosystem": "PyPI",
+            }
+        ]
+        store.insert_findings(run_id, normalize_test_findings(findings))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert len(results) == 1
         assert results[0]["metadata"].get("tool") == "osv-scanner"

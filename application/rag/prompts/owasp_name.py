@@ -74,16 +74,7 @@ _OWASP_PROMPT_TEMPLATE = (
 
 
 def render_prompt(source_values: dict[str, Any]) -> str:
-    """Build the owasp_name prompt from extracted finding metadata values.
-
-    Args:
-        source_values: Dict of metadata key/value pairs already extracted
-            from the finding (e.g. ``{"alert_name": "SQL Injection", ...}``).
-            Missing source fields are silently omitted by the caller.
-
-    Returns:
-        Complete user-turn prompt string ready for the LLM.
-    """
+    """Build the owasp_name prompt from extracted finding metadata."""
     context = "\n".join(f"{k}: {v}" for k, v in source_values.items())
     return _OWASP_PROMPT_TEMPLATE.format(
         context=context,

@@ -6,7 +6,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,10 +14,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.pipeline.fingerprint import compute_fingerprint  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
 from infrastructure.store import make_store  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -58,8 +58,11 @@ def _write_commands_config(base_path: Path) -> None:
 
 
 def _seed(finding_repo: object, run_id: int, row: dict) -> int:
-    finding_repo.insert_findings(run_id, [row])  # type: ignore[union-attr]
-    fps = [compute_fingerprint(row)]
+    normalized = normalize_test_findings([row])
+    finding_repo.insert_findings(  # type: ignore[union-attr]
+        run_id, normalized
+    )
+    fps = [normalized[0].fingerprint]
     ids = finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]
     return ids[0]
 
@@ -145,6 +148,7 @@ class TestGitleaksEnrichmentBypass:
         p = EnrichmentPipeline(
             finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
+        p._llm_provider = MagicMock()
         # semgrep uses the per-field path; verify _call_per_field fires and
         # the specs passed to it include risk_type.
         with patch.object(
@@ -175,6 +179,7 @@ class TestGitleaksEnrichmentBypass:
         p = EnrichmentPipeline(
             finding_repo=finding_repo, base_path=str(project_env["base_path"])
         )
+        p._llm_provider = MagicMock()
         with patch.object(
             p, "_call_per_field", return_value={"owasp_name": "Injection"}
         ) as mock_pf:

@@ -248,6 +248,23 @@ class SemgrepHandler:
                 row["references"] = ", ".join(references)
             if rule_id:
                 row["title"] = rule_id.rsplit(".", 1)[-1] or rule_id
+
+            src_line = finding.get("sast_source_line")
+            if src_line is not None:
+                row["sast_source_line"] = src_line
+            src_path = finding.get("sast_source_file_path")
+            if src_path:
+                row["sast_source_file_path"] = src_path
+            src_obj = finding.get("sast_source_object")
+            if src_obj:
+                row["sast_source_object"] = src_obj
+            sink_obj = finding.get("sast_sink_object")
+            if sink_obj:
+                row["sast_sink_object"] = sink_obj
+            df_trace = finding.get("dataflow_trace")
+            if df_trace:
+                row["dataflow_trace"] = df_trace
+
             row.update(_shared_meta(self, "vulnerability"))
 
             rows.append(row)

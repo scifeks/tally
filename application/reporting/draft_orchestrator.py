@@ -25,6 +25,7 @@ from infrastructure.llm.factory import get_llm_provider
 from infrastructure.vector.factory import make_chromadb_vector_index
 
 if TYPE_CHECKING:
+    from application.ports.draft_files import DraftFilesPort
     from application.ports.draft_repository import DraftRepositoryPort
     from application.ports.finding_repository import (
         FindingRepositoryPort,
@@ -78,6 +79,7 @@ def run_draft(
     repo_repo: ProjectRepoRepositoryPort,
     event_sink: DraftEventSink | None = None,
     cancel_token: CancellationToken | None = None,
+    draft_files: DraftFilesPort | None = None,
 ) -> Path:
     """Generate a draft for *request.section*. Returns the written file path.
 
@@ -97,10 +99,14 @@ def run_draft(
 
     paths = ProjectPaths.from_canonical(request.base_path, request.project)
     draft_dir = paths.reports_draft_dir
-    draft_dir.mkdir(parents=True, exist_ok=True)
+    if draft_files:
+        draft_files.ensure_dir()
+    else:
+        draft_dir.mkdir(parents=True, exist_ok=True)
 
     draft_path = draft_dir / f"{section}.md"
-    if draft_path.exists() and not request.force_overwrite:
+    file_exists = draft_files.exists(section) if draft_files else draft_path.exists()
+    if file_exists and not request.force_overwrite:
         user_msg = "Draft already exists. Use Regenerate to overwrite."
         sink.emit(
             DraftFailed(
@@ -136,6 +142,7 @@ def run_draft(
             prompt,
             finding_repo,
             repo_repo,
+            draft_files,
         )
     except DraftCancelled as exc:
         user_msg = "Cancelled before generation completed."
@@ -167,9 +174,12 @@ def run_draft(
     generated_at = datetime.now(UTC).isoformat()
     repo.mark_drafted(section, generated_at)
 
-    content = output.read_text(encoding="utf-8")
+    if draft_files:
+        content = draft_files.read(section) or ""
+    else:
+        content = output.read_text(encoding="utf-8")
     word_count = len(content.split())
-    file_size = output.stat().st_size
+    file_size = len(content.encode("utf-8"))
     preview = content[:200]
 
     sink.emit(
@@ -211,6 +221,7 @@ def _generate(
     prompt: UserPromptPort,
     finding_repo: FindingRepositoryPort,
     repo_repo: ProjectRepoRepositoryPort,
+    draft_files: DraftFilesPort | None = None,
 ) -> Path:
     """Execute LLM generation steps and write the file. Returns the path."""
     del prompt  # accepted for interface parity with run_report; no interactive steps
@@ -271,6 +282,7 @@ def _generate(
         repos=repos,
         draft_dir=draft_dir,
         prefix=prefix,
+        draft_files=draft_files,
     )
 
     _check_cancel(token, section)
@@ -305,7 +317,10 @@ def _generate(
 
     _check_cancel(token, section)
     content = generator.generate(context)
-    draft_path.write_text(content, encoding="utf-8")
+    if draft_files:
+        draft_files.write(section, content)
+    else:
+        draft_path.write_text(content, encoding="utf-8")
     return draft_path
 
 
@@ -373,6 +388,7 @@ def _build_context(
     repos: list[str],
     draft_dir: Path,
     prefix: str = "",
+    draft_files: DraftFilesPort | None = None,
 ) -> dict[str, Any]:
     """Assemble the template context dict for *section*."""
     base: dict[str, Any] = {
@@ -417,7 +433,7 @@ def _build_context(
                 "risk_type_groups": query.risk_type_groups(findings, top_n=8),
                 "recurring_by_risk_type": query.recurring_by_risk_type(findings),
                 "improvement_points_draft": _load_existing_draft(
-                    draft_dir, "improvement-points"
+                    draft_dir, "improvement-points", draft_files
                 ),
             }
         )
@@ -435,7 +451,11 @@ def _load_tools_blurb(tools: list[str]) -> str:
         return tool_list
 
 
-def _load_existing_draft(draft_dir: Path, section: str) -> str | None:
+def _load_existing_draft(
+    draft_dir: Path, section: str, draft_files: DraftFilesPort | None = None
+) -> str | None:
+    if draft_files:
+        return draft_files.read(section)
     path = draft_dir / f"{section}.md"
     if path.exists():
         try:

@@ -111,11 +111,15 @@ if __name__ == "__main__":
     project_registry = ProjectRegistryService(registry_repo)
     tool_registry = ToolRegistry()
 
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.runs import RunRepository
+
     BootstrapService(
         registry_repo=registry_repo,
         project_registry=project_registry,
         tool_registry=tool_registry,
         base_path=_BASE_PATH,
+        run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
     ).run()
 
     try:

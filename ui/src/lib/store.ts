@@ -1,6 +1,24 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ApiErrorPayload, Segment, TriagePageStatus } from './types'
+import type {
+  ApiErrorPayload,
+  ScanLogEvent,
+  ScanRunStatus,
+  Segment,
+  TriagePageStatus,
+} from './types'
+
+export interface ScanWatchState {
+  runId: number
+  status: ScanRunStatus
+  logs: ScanLogEvent[]
+  enrichment: {
+    enrichedCount: number
+    totalToEnrich: number
+    timestamp: string
+  } | null
+  startedAt: number
+}
 
 const PERSIST_KEY = 'tally-ui-active-project'
 
@@ -98,6 +116,9 @@ interface UIState {
   /** Track triage page status to block project switches. */
   triageRunStatus: TriagePageStatus
   setTriageRunStatus: (status: TriagePageStatus) => void
+
+  scanWatchState: ScanWatchState | null
+  setScanWatchState: (state: ScanWatchState | null) => void
 }
 
 export const useUI = create<UIState>()(
@@ -143,6 +164,9 @@ export const useUI = create<UIState>()(
 
       triageRunStatus: 'idle',
       setTriageRunStatus: status => set({ triageRunStatus: status }),
+
+      scanWatchState: null,
+      setScanWatchState: state => set({ scanWatchState: state }),
     }),
     {
       // activeProjectId persists across browser reloads; the `?fresh=1`

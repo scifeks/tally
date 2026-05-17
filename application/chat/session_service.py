@@ -38,12 +38,7 @@ logger = logging.getLogger("application.chat.session_service")
 
 @dataclass(frozen=True)
 class SendMessageHandle:
-    """Returned from :meth:`ChatSessionService.send_message`.
-
-    The user row is already persisted; the assistant row will be
-    written write-once on clean stream end and its id arrives on the
-    SSE ``stream_end`` event.
-    """
+    """Handle returned from ChatSessionService.send_message."""
 
     user_message_id: int
     session_id: int

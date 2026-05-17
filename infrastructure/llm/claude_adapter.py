@@ -13,14 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ClaudeAdapter(LLMProvider):
-    """LLMProvider backed by the Anthropic Messages API.
-
-    API key is resolved first from ANTHROPIC_API_KEY environment variable,
-    then from config (global.json claude.api_key). The synchronous SDK client
-    is instantiated once in __init__ and reused for chat()/complete() calls.
-    The async client used by stream_chat() is created per call; streaming
-    sessions are short-lived and the connection-pool overhead is small.
-    """
+    """LLMProvider backed by the Anthropic Messages API."""
 
     def __init__(
         self,
@@ -43,21 +36,11 @@ class ClaudeAdapter(LLMProvider):
         return self._model
 
     def is_available(self) -> bool:
-        """Return True if an API key is configured.
-
-        Returns False when api_key (config) is empty AND the ANTHROPIC_API_KEY
-        environment variable is unset. Authentication errors still surface as
-        LLMAdapterError from chat()/complete() even when this returns True.
-        """
+        """Return True if an API key is configured."""
         return bool(self._resolved_key)
 
     def _normalise_kwargs(self, kwargs: dict[str, Any]) -> tuple[int, str]:
-        """Pop and resolve max_tokens and model from kwargs.
-
-        Mutates ``kwargs`` (consumes ``num_predict``, ``max_tokens``,
-        ``model``). Remaining kwargs are forwarded to the SDK as-is
-        (e.g. ``temperature``, ``top_p``).
-        """
+        """Pop and resolve max_tokens and model from kwargs."""
         num_predict = kwargs.pop("num_predict", None)
         max_tokens: int = (
             kwargs.pop("max_tokens", None)
@@ -70,12 +53,7 @@ class ClaudeAdapter(LLMProvider):
     def _split_messages(
         self, messages: list[dict[str, str]]
     ) -> tuple[list[dict[str, str]], str | None]:
-        """Extract system messages and validate roles.
-
-        Anthropic's Messages API requires the system prompt as a top-level
-        ``system`` parameter and rejects any role other than ``user`` /
-        ``assistant`` in the messages list.
-        """
+        """Extract system messages and validate roles."""
         system_parts = [m["content"] for m in messages if m.get("role") == "system"]
         api_messages = [m for m in messages if m.get("role") != "system"]
 
@@ -100,11 +78,7 @@ class ClaudeAdapter(LLMProvider):
         return api_messages, system
 
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
-        """Call the Anthropic Messages API and return the text response.
-
-        Raises:
-            LLMAdapterError: For empty/invalid messages, or any SDK error.
-        """
+        """Call the Anthropic Messages API and return the text response."""
         max_tokens, model = self._normalise_kwargs(kwargs)
         api_messages, system = self._split_messages(messages)
 
@@ -139,17 +113,7 @@ class ClaudeAdapter(LLMProvider):
         messages: list[dict[str, str]],
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        """Stream the Anthropic Messages API response as text chunks.
-
-        Yields each fragment from ``stream.text_stream`` verbatim.
-        Cancellation propagates through ``aclose()`` on the generator,
-        which closes the ``async with`` block and releases the underlying
-        HTTP stream.
-
-        Raises:
-            LLMAdapterError: For empty/invalid messages, or any SDK error
-                (raised before the first yield, or during iteration).
-        """
+        """Stream the Anthropic Messages API response as text chunks."""
         max_tokens, model = self._normalise_kwargs(kwargs)
         api_messages, system = self._split_messages(messages)
 

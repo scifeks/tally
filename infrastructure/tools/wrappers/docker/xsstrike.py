@@ -134,7 +134,7 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
         Phase 9: the seeds file is JIT-rebuilt from ``url_findings`` rows
         right before the scan runs. Returns an empty list (skipping
         XSStrike) when no rows exist. The seeds file must be accessible
-        inside the container; ensure the relevant directory is
+        inside the container; the relevant directory must be
         volume-mounted.
         """
         from application.url_inventory.jit import jit_rebuild_artifacts

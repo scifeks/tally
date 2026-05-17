@@ -17,6 +17,7 @@ from application.repl.commands.knowledge_commands import KnowledgeCommands
 from infrastructure.store import make_store
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -84,7 +85,7 @@ _SEMGREP_WITH_META = [
 
 def _seed_semgrep(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
     run_id = run_repo.create_run({"args": []})
-    finding_repo.insert_findings(run_id, _SEMGREP_WITH_META)
+    finding_repo.insert_findings(run_id, normalize_test_findings(_SEMGREP_WITH_META))
 
 
 # --show-fields tests

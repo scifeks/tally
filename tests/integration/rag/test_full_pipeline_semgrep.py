@@ -147,6 +147,10 @@ class TestSemgrepFullPipeline:
                 return_value={"risk_type": "sql_injection"},
             ),
             patch(
+                "application.rag.enrichment.get_llm_provider",
+                return_value=object(),
+            ),
+            patch(
                 "application.pipeline.handlers._build_knowledge_base",
                 side_effect=_build_test_kb,
             ),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
@@ -46,8 +46,6 @@ class ExecutionContext:
     registry: RegistryLike
     is_docker: bool
     execution_mode: Literal["scan", "manual"] = "scan"
-    # currently dead; TODO: implement when gate-level exclusion is required
-    exclude_dirs: list[str] = field(default_factory=list)
 
 
 class ToolInterface(ABC):

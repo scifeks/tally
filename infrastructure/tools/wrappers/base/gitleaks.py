@@ -102,25 +102,21 @@ class BaseGitleaksTool(ToolInterface):
         exclude = build_excluded_dirs(context.repo)
 
         shared_kwargs: dict[str, object] = {"repo_path": repo_path}
-        # Always exclude .git because the dir scan is a plain filesystem walk
-        # that would crawl .git/objects/pack (potentially GBs of binary data).
-        # The git pass handles history via git's own traversal.
+        # .git must always be excluded: the dir scan walks the filesystem
+        # and would crawl .git/objects/pack (potentially GBs of binary).
         all_excludes = [".git"] + exclude
-        patterns = "\n".join(f"**/{d}" for d in all_excludes) + "\n"
+        toml_content = _build_gitleaks_toml(all_excludes, extend_path=None)
         if context.repo.docker_path and context.repo.path:
-            # Docker mode: write to local repo path (already mounted in container).
-            # The file is overwritten on each scan; it is not committed.
-            ignore_file = Path(context.repo.path) / ".tally_gitleaksignore"
-            ignore_file.write_text(patterns)
-            container_ignore = f"{context.repo.docker_path}/.tally_gitleaksignore"
-            shared_kwargs["gitleaks_ignore_path"] = container_ignore
+            config_file = Path(context.repo.path) / ".tally_gitleaks.toml"
+            config_file.write_text(toml_content)
+            container_cfg = f"{context.repo.docker_path}/.tally_gitleaks.toml"
+            shared_kwargs["config_path"] = container_cfg
         else:
-            # Local mode: write to a temp file.
-            fd, tmp = tempfile.mkstemp(suffix=".gitleaksignore", prefix="tally_")
+            fd, tmp = tempfile.mkstemp(suffix=".toml", prefix="tally_gitleaks_")
             with os.fdopen(fd, "w") as f:
-                f.write(patterns)
-            self._last_ignore_path = tmp
-            shared_kwargs["gitleaks_ignore_path"] = tmp
+                f.write(toml_content)
+            self._last_config_paths = [tmp]
+            shared_kwargs["config_path"] = tmp
 
         return [
             ExecutionPass(
@@ -135,9 +131,9 @@ class BaseGitleaksTool(ToolInterface):
 
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
         """Combine dir-scan and git-scan passes into a single result."""
-        if self._last_ignore_path is not None:
-            Path(self._last_ignore_path).unlink(missing_ok=True)
-            self._last_ignore_path = None
+        for p in self._last_config_paths:
+            Path(p).unlink(missing_ok=True)
+        self._last_config_paths = []
         dir_result, git_result = pass_results[0], pass_results[1]
         dir_data = dir_result.parsed_data or {}
         git_data = git_result.parsed_data or {}

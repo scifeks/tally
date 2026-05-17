@@ -53,9 +53,9 @@ SCAN_LOCK_KIND = "scan"
 
 @dataclass(frozen=True)
 class ScanHandle:
-    """Returned from :meth:`ScanService.start_scan`.
+    """Handle returned from start_scan.
 
-    ``run_id`` is available immediately. ``result`` resolves when the
+    ``run_id`` is available immediately; ``result`` resolves when the
     background scan completes.
     """
 
@@ -101,23 +101,23 @@ class ScanService:
         arg_profile_ids: list[int] | None = None,
         saved_scan_id: int | None = None,
     ) -> ScanHandle:
-        """Start a scan and return a :class:`ScanHandle`.
+        """Start a scan and return a ScanHandle.
 
-        Raises:
-            JobBusy: another scan is already holding the scan slot.
-            ValueError: ``arg_profile_ids`` references unknown profiles.
-            Anything raised by ``run_repo.create``: the lock is released
-                before the exception propagates.
+        Raises JobBusy if another scan holds the slot, ValueError if
+        arg_profile_ids references unknown profiles.
         """
         holder_token = f"scan-run:{uuid.uuid4().hex[:8]}"
         self._lock_registry.acquire_job(SCAN_LOCK_KIND, holder_token)
 
         try:
             snapshots = _resolve_arg_profile_snapshots(profiles_repo, arg_profile_ids)
+            effective = _resolve_effective_tools(
+                tool_registry, tool_ids, domains, skip_tool_ids
+            )
             run_id = run_repo.create(
                 project_id=project_id,
                 repo_ids=list(repo_ids),
-                tool_ids=list(tool_ids),
+                tool_ids=effective,
                 domains=list(domains),
                 skip_enrichment=skip_enrichment,
                 args=run_args,
@@ -243,7 +243,26 @@ class ScanService:
                 domains=list(domains) or None,
                 skip_tools=set(skip_tool_ids) or None,
             )
+            _persist_tool_counts(run_repo, run_id, summary.findings_by_tool)
             future.set_result(summary)
+            try:
+                from application.sync.integration_sync import (
+                    run_configured_syncs,
+                )
+                from core.config.manager import ConfigManager
+
+                gc = ConfigManager(base_path).load_global_config()
+                run_configured_syncs(
+                    base_path=base_path,
+                    project_name=project_name,
+                    run_id=run_id,
+                    sync_list=gc.post_scan_sync,
+                )
+            except Exception:
+                logger.exception(
+                    "post-scan sync failed for run %d",
+                    run_id,
+                )
         except Exception as exc:
             if not setup_ok:
                 # Setup-stage failure (pipeline build, orchestrator
@@ -274,10 +293,9 @@ def _resolve_arg_profile_snapshots(
     profiles_repo: ToolArgProfilesRepositoryPort,
     arg_profile_ids: list[int] | None,
 ) -> dict[str, str]:
-    """Validate ids and return ``{tool_name: snapshot_json}``.
+    """Validate ids and return {tool_name: snapshot_json}.
 
-    Later ids win on duplicate ``tool_name``. Raises :class:`ValueError`
-    listing missing ids when validation fails.
+    Later ids override duplicates. Raises ValueError if validation fails.
     """
     if not arg_profile_ids:
         return {}
@@ -292,6 +310,25 @@ def _resolve_arg_profile_snapshots(
             raise ValueError(f"unknown arg profile ids: [{profile_id}]")
         snapshots[profile.tool_name] = json.dumps([asdict(arg) for arg in profile.args])
     return snapshots
+
+
+def _resolve_effective_tools(
+    tool_registry: ToolRegistry,
+    tool_ids: tuple[str, ...],
+    domains: tuple[str, ...],
+    skip_tool_ids: tuple[str, ...],
+) -> list[str]:
+    """Compute the tool names that will actually run."""
+    from application.rag.ingestor import get_tool_domain
+
+    candidates = list(tool_ids) if tool_ids else tool_registry.list_tool_names()
+    if domains:
+        domain_set = set(domains)
+        candidates = [t for t in candidates if get_tool_domain(t) in domain_set]
+    if skip_tool_ids:
+        skip_set = set(skip_tool_ids)
+        candidates = [t for t in candidates if t not in skip_set]
+    return candidates
 
 
 def _safe_persist_failed(run_repo: RunRepositoryPort, run_id: int) -> None:
@@ -322,6 +359,24 @@ def _safe_emit_run_failed(
         logger.exception("failed to emit RunFailed; suppressing")
 
 
+def _persist_tool_counts(
+    run_repo: RunRepositoryPort,
+    run_id: int,
+    findings_by_tool: dict[str, int],
+) -> None:
+    """Persist per-tool finding counts."""
+    if not findings_by_tool:
+        return
+    rows = [
+        {"tool": tool, "findings_count": count}
+        for tool, count in findings_by_tool.items()
+    ]
+    try:
+        run_repo.add_run_tools(run_id, rows)
+    except Exception:
+        logger.exception("failed to persist run_tools for run %d", run_id)
+
+
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -330,7 +385,7 @@ _SERVICE: ScanService | None = None
 
 
 def get_scan_service() -> ScanService:
-    """Return the process-shared :class:`ScanService` singleton."""
+    """Return the process-shared ScanService singleton."""
     global _SERVICE
     if _SERVICE is None:
         _SERVICE = ScanService()

@@ -1,6 +1,6 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'informational'
 export type Status = 'active' | 'false_positive' | 'fixed' | 'wont_fix'
-export type Segment = 'sast' | 'web' | 'secrets' | 'sca'
+export type Segment = string
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'
 

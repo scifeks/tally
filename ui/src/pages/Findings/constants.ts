@@ -1,15 +1,8 @@
-import type { Segment, Finding, Severity, Status } from '@/lib/types'
+import type { Finding, Severity, Status } from '@/lib/types'
 
 export function locationOf(f: Finding): string {
   return f.file ? `${f.file}:${f.line ?? ''}` : f.target
 }
-
-export const SEGMENTS: { key: Segment; label: string }[] = [
-  { key: 'sast', label: 'SAST' },
-  { key: 'web', label: 'WEB' },
-  { key: 'secrets', label: 'SECRETS' },
-  { key: 'sca', label: 'SCA' },
-]
 
 export const SEV_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'informational']
 export const SEV_LABEL: Record<Severity, string> = {

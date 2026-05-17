@@ -19,7 +19,7 @@ _SCA_TOOLS = ("osv-scanner", "pip-audit", "npm-audit", "composer-audit")
 
 
 class ReportGenerator:
-    """Generates security reports from findings stored in the RAG engine."""
+    """Generate security reports from findings stored in the RAG engine."""
 
     def __init__(
         self, rag_engine: object, project: str, finding_repo: FindingRepositoryPort
@@ -35,12 +35,7 @@ class ReportGenerator:
     ) -> str:
         """Aggregate findings and render a report in the requested format.
 
-        Args:
-            output_format: One of 'markdown', 'html', 'json'.
-            output_path:   If provided, write the report to this path.
-
-        Returns:
-            Report content as a string.
+        Supported formats: 'markdown', 'html', 'json'.
         """
         aggregated = self._aggregate_findings()
 
@@ -63,11 +58,7 @@ class ReportGenerator:
         return content
 
     def _aggregate_findings(self) -> dict[str, Any]:
-        """Pull all findings from RAG grouped by tool.
-
-        Returns:
-            Dict with keys project_name, generated_at, summary, findings.
-        """
+        """Pull all findings from RAG grouped by tool."""
         generated_at = datetime.now(UTC).isoformat()
         findings_by_tool: dict[str, list[dict[str, Any]]] = {}
         by_severity = {s.label: 0 for s in Severity.all_ordered()}
@@ -98,7 +89,7 @@ class ReportGenerator:
         }
 
     def _render_markdown(self, aggregated: dict[str, Any]) -> str:
-        """Render aggregated findings as a Markdown report."""
+        """Render aggregated findings as a markdown report."""
         project_name = aggregated["project_name"]
         generated_at = aggregated["generated_at"]
         summary = aggregated["summary"]
@@ -121,7 +112,6 @@ class ReportGenerator:
             "## Findings by Tool",
         ]
 
-        # --- semgrep ---
         semgrep_findings = findings.get("semgrep", [])
         if semgrep_findings:
             lines += [
@@ -137,7 +127,6 @@ class ReportGenerator:
                     f"| {f.get('cwe', '')} |"
                 )
 
-        # --- SCA tools ---
         for tool in _SCA_TOOLS:
             sca_findings = findings.get(tool, [])
             if sca_findings:
@@ -155,7 +144,6 @@ class ReportGenerator:
                         f"| {f.get('fixed_version', '')} |"
                     )
 
-        # --- gitleaks ---
         gitleaks_findings = findings.get("gitleaks", [])
         if gitleaks_findings:
             lines += [
@@ -171,7 +159,6 @@ class ReportGenerator:
                 )
             lines.append("_Note: Secret values are never stored or displayed._")
 
-        # --- zap ---
         zap_findings = findings.get("zap", [])
         if zap_findings:
             lines += [
@@ -187,7 +174,6 @@ class ReportGenerator:
                     f"| {f.get('param', '')} | {f.get('cwe_id', '')} |"
                 )
 
-        # --- noir (attack surface) ---
         noir_findings = findings.get("noir", [])
         if noir_findings:
             lines += [
@@ -215,9 +201,7 @@ class ReportGenerator:
         return "\n".join(lines)
 
     def _render_html(self, aggregated: dict[str, Any]) -> str:
-        """Render aggregated findings as a self-contained HTML report (inline CSS
-        only).
-        """
+        """Render aggregated findings as self-contained HTML with inline CSS."""
         project_name = aggregated["project_name"]
         generated_at = aggregated["generated_at"]
         summary = aggregated["summary"]
@@ -274,7 +258,6 @@ class ReportGenerator:
 
         sections: list[str] = []
 
-        # --- semgrep ---
         semgrep_findings = findings.get("semgrep", [])
         if semgrep_findings:
             rows = "".join(
@@ -293,7 +276,6 @@ class ReportGenerator:
                 f"<tbody>{rows}</tbody></table></div>"
             )
 
-        # --- SCA tools ---
         for tool in _SCA_TOOLS:
             sca_findings = findings.get(tool, [])
             if sca_findings:
@@ -316,7 +298,6 @@ class ReportGenerator:
                     f"<tbody>{rows}</tbody></table></div>"
                 )
 
-        # --- gitleaks ---
         gitleaks_findings = findings.get("gitleaks", [])
         if gitleaks_findings:
             rows = "".join(
@@ -335,7 +316,6 @@ class ReportGenerator:
                 " stored or displayed.</p></div>"
             )
 
-        # --- zap ---
         zap_findings = findings.get("zap", [])
         if zap_findings:
             rows = "".join(
@@ -355,7 +335,6 @@ class ReportGenerator:
                 f"<tbody>{rows}</tbody></table></div>"
             )
 
-        # --- noir (attack surface) ---
         noir_findings = findings.get("noir", [])
         if noir_findings:
             rows = "".join(
@@ -408,5 +387,5 @@ class ReportGenerator:
         )
 
     def _render_json(self, aggregated: dict[str, Any]) -> str:
-        """Return aggregated findings as a JSON string."""
+        """Return aggregated findings as JSON."""
         return json.dumps(aggregated, indent=2)

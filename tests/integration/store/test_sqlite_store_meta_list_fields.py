@@ -10,6 +10,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -68,17 +69,19 @@ class TestMetaListFields:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {
-                    "tool": "semgrep",
-                    "rule_id": "r1",
-                    "file_path": "a.py",
-                    "line_start": 1,
-                    # Comma-joined string as stored by ChromaDB ingestor
-                    "technology": "python, flask",
-                    "references": "https://cwe.mitre.org, https://owasp.org",
-                }
-            ],
+            normalize_test_findings(
+                [
+                    {
+                        "tool": "semgrep",
+                        "rule_id": "r1",
+                        "file_path": "a.py",
+                        "line_start": 1,
+                        # Comma-joined string as stored by ChromaDB ingestor
+                        "technology": "python, flask",
+                        "references": "https://cwe.mitre.org, https://owasp.org",
+                    }
+                ]
+            ),
         )
         conn = store._connect()
         row = conn.execute("SELECT meta FROM findings").fetchone()

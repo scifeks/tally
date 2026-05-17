@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -161,7 +162,7 @@ def _seed_all(store: _TestStore) -> int:
     all_findings = (
         _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS
     )
-    store.insert_findings(run_id, all_findings)
+    store.insert_findings(run_id, normalize_test_findings(all_findings))
     return run_id
 
 
@@ -377,6 +378,41 @@ class TestPurge:
         # Batch has a gitleaks finding still present; must not be deleted
         assert conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[0] == 1
         conn.close()
+
+    def test_purge_preserves_config_tables(self, tmp_path: Path) -> None:
+        """Full purge must not delete tool_arg_profiles or tool_overrides."""
+        store = _make_store(tmp_path)
+        _seed_all(store)
+
+        conn = store._connect()
+        conn.execute(
+            "INSERT INTO tool_arg_profiles"
+            " (tool_name, name, args, created_at, updated_at)"
+            " VALUES (?, ?, ?, datetime('now'), datetime('now'))",
+            ("semgrep", "strict", '{"--severity": "ERROR"}'),
+        )
+        conn.execute(
+            "INSERT INTO tool_overrides"
+            " (tool_name, args_mode, type, location,"
+            " created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, datetime('now'),"
+            " datetime('now'))",
+            ("semgrep", "custom", "repo", "local"),
+        )
+        conn.commit()
+        conn.close()
+
+        store._factory.purge_operational_tables()
+
+        conn = store._connect()
+        profiles = conn.execute("SELECT COUNT(*) FROM tool_arg_profiles").fetchone()[0]
+        overrides = conn.execute("SELECT COUNT(*) FROM tool_overrides").fetchone()[0]
+        findings = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+        conn.close()
+
+        assert profiles == 1
+        assert overrides == 1
+        assert findings == 0
 
     def test_schema_recreated_after_db_delete(self, tmp_path: Path) -> None:
         """After deleting and recreating the DB, _init_schema works cleanly."""

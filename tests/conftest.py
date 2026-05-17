@@ -70,6 +70,30 @@ requires_docker = pytest.mark.skipif(
 )
 
 
+def _defectdojo_reachable() -> bool:
+    url = os.environ.get("DD_TEST_URL")
+    token = os.environ.get("DD_TEST_TOKEN")
+    if not url or not token:
+        return False
+    try:
+        import httpx
+
+        resp = httpx.get(
+            f"{url.rstrip('/')}/api/v2/",
+            timeout=5,
+            verify=False,
+        )
+        return resp.status_code < 500
+    except Exception:
+        return False
+
+
+requires_defectdojo = pytest.mark.skipif(
+    not _defectdojo_reachable(),
+    reason="DD_TEST_URL/DD_TEST_TOKEN not set or DefectDojo not reachable",
+)
+
+
 @pytest.fixture(autouse=True)
 def _restore_lock_registry():
     """Isolate lock_registry singleton state across all test scopes."""

@@ -81,8 +81,7 @@ def tally_harness_live() -> Generator[TallyHarness]:
     """Live TallyHarness pointed at the real repo root.
 
     Spawns against your actual config and projects for debugging a
-    specific implementation. You are responsible for any data created
-    during the test.
+    specific implementation. Clean up any data created during the test.
     """
     harness = TallyHarness()
     harness.spawn()

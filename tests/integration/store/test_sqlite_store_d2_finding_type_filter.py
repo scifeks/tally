@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -106,7 +107,9 @@ def _seed_d2(store: _TestStore) -> None:
     run_id = store.create_run({})
     store.insert_findings(
         run_id,
-        [_VULN_FINDING, _SECRET_FINDING, _DEP_FINDING, _MULTI_TYPE_FINDING],
+        normalize_test_findings(
+            [_VULN_FINDING, _SECRET_FINDING, _DEP_FINDING, _MULTI_TYPE_FINDING]
+        ),
     )
 
 
@@ -201,7 +204,7 @@ class TestD2FindingTypeFilter:
     ) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, [_MULTI_TYPE_FINDING])
+        store.insert_findings(run_id, normalize_test_findings([_MULTI_TYPE_FINDING]))
         results = store.search(
             {
                 "conditions": [("finding_type", "=", ["secret"])],

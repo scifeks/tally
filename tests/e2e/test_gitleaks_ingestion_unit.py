@@ -145,7 +145,7 @@ def project_env(tmp_path: Path) -> dict:
     return {"base_path": tmp_path, "project_name": name}
 
 
-# Scenario 4a – Ingestion unit tests  (@requires_ollama, no gitleaks, not slow)
+# Scenario 4a - Ingestion unit tests  (@requires_ollama, no gitleaks, not slow)
 
 
 @requires_ollama

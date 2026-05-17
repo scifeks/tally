@@ -24,7 +24,8 @@ from application.tools.scan_run_registry import (
     get_scan_run_registry,
 )
 from core.project_paths import ProjectPaths
-from domain.scans.entry import SCAN_RUN_STATUSES
+from domain.scans.entry import SCAN_RUN_STATUSES, ScanRunRow, ToolRunRow
+from domain.scans.progress import ScanProgress, ToolRunCounts
 from domain.tools.scan_types import SEGMENT_ORDER
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FieldError:
-    """Single field validation failure."""
+    """Field validation failure."""
 
     field: str
     issue: str
@@ -59,7 +60,7 @@ class ScanValidationError(Exception):
 
 @dataclass(frozen=True)
 class StartScanResolved:
-    """Values derived during validation that the route needs for dispatch."""
+    """Values derived during validation for route dispatch."""
 
     repo_names: list[str]
 
@@ -108,15 +109,33 @@ class ScansService:
     def project_id(self) -> int:
         return self._project_id
 
+    @staticmethod
+    def compute_progress(row: ScanRunRow, tool_runs: list[ToolRunRow]) -> ScanProgress:
+        """Compute scan progress from tool run states."""
+        counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}
+        for tr in tool_runs:
+            if tr.skip_reason:
+                counts["skipped"] += 1
+                continue
+            st = (tr.status or "queued").lower()
+            if st in counts:
+                counts[st] += 1
+            else:
+                counts["queued"] += 1
+        total = len(tool_runs)
+        finished = counts["done"] + counts["failed"] + counts["skipped"]
+        progress = int(round(finished * 100 / total)) if total > 0 else 0
+        if row.status in {"done", "failed", "cancelled"}:
+            progress = 100
+        return ScanProgress(
+            progress=progress,
+            counts=ToolRunCounts(**counts),
+        )
+
     def record_run_tool_counts(
         self, run_id: int, findings_by_tool: dict[str, int]
     ) -> None:
-        """Persist aggregate per-tool finding counts for a completed run.
-
-        No-op when ``findings_by_tool`` is empty. Translates the
-        domain-shaped mapping into the row shape
-        ``RunRepositoryPort.add_run_tools`` accepts.
-        """
+        """Persist aggregate per-tool finding counts for a completed run."""
         if not findings_by_tool:
             return
         rows = [
@@ -128,15 +147,10 @@ class ScansService:
     def cancel_scan(self, run_id: int) -> None:
         """Signal cancellation for a single scan run owned by this project.
 
-        Looks up the live handle in the run registry; if absent, falls
-        back to the run repo to distinguish unknown from finished. On
-        a live handle, sets the cancel token and writes the DB status
-        to ``cancelling``. Mirrors ``ChatSessionService.cancel_stream``.
+        Sets the cancel token and marks the DB status as cancelling.
 
-        Raises:
-            ScanNotFound: run id unknown, or row belongs to a different
-                project.
-            ScanNotCancellable: row exists but is not in a live state.
+        Raises ScanNotFound if the run is unknown or belongs to a different
+        project, ScanNotCancellable if not in a live state.
         """
         handle = self._registry.get(run_id)
         if handle is None:
@@ -154,9 +168,7 @@ class ScansService:
     def cancel_all(self) -> list[int]:
         """Cancel every active scan for this project.
 
-        Sets each cancel token, then writes ``cancelling`` to the DB.
-        Per-row DB write failures are logged and swallowed. Returns the
-        run ids that received the cancel signal.
+        Returns the run ids that received the cancel signal.
         """
         cancelled: list[int] = []
         for handle in self._registry.list_for_project(self._project_id):
@@ -167,12 +179,7 @@ class ScansService:
         return cancelled
 
     def peek_active_run(self, run_id: int) -> ScanRunHandle | None:
-        """Registry handle for a live run, or None.
-
-        Used by the SSE on-connect snapshot to project the
-        ``current_repo`` / ``current_tool`` fields without forcing the
-        route to know the registry shape.
-        """
+        """Return a live run handle for the given id, or None."""
         return self._registry.get(run_id)
 
     def list_active_runs(self) -> list[ScanRunHandle]:
@@ -191,11 +198,7 @@ class ScansService:
         tool_registry: ToolRegistry,
         profiles_repo: ToolArgProfilesRepositoryPort,
     ) -> StartScanResolved:
-        """Validate a start-scan request and return resolved values.
-
-        Aggregates all field errors before raising so the caller sees
-        every problem at once.
-        """
+        """Validate a start-scan request and return resolved values."""
         errors: list[FieldError] = []
 
         lookup = repos_service.find_by_ids(self._project_id, repo_ids)
@@ -263,14 +266,7 @@ class ScansService:
         project_registry: ProjectRegistryService,
         run_repo_factory: Callable[[Path], RunRepositoryPort],
     ) -> None:
-        """Mark every running/cancelling scan_runs row as failed.
-
-        Tier-1 lock guarantees only one scan is live per process at a
-        time, so any persisted-as-running row at boot belongs to a prior
-        process that is no longer here. Iterates every active project's
-        findings DB and sweeps once. Errors per-project are logged and
-        skipped so one bad project does not block startup.
-        """
+        """Mark every running/canceling scan_runs row as failed at startup."""
         for project in project_registry.list_active():
             try:
                 paths = ProjectPaths.from_registry_row(project)

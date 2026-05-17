@@ -2,13 +2,6 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn, formatTime } from '@/lib/utils'
 import type { Segment, TriageBatchStatus } from '@/lib/types'
 
-const SEGMENT_LABEL: Record<Segment, string> = {
-  sast: 'SAST',
-  sca: 'SCA',
-  web: 'WEB',
-  secrets: 'SECRETS',
-}
-
 export interface BatchDisplay {
   id: number
   segment: Segment | null
@@ -49,7 +42,7 @@ export function BatchRow({
         )}
         <span className="text-accent font-mono w-20">B-{String(batch.id).padStart(3, '0')}</span>
         <span className="uppercase text-muted-foreground w-16">
-          {batch.segment ? SEGMENT_LABEL[batch.segment] : 'MIXED'}
+          {batch.segment ? batch.segment.toUpperCase() : 'MIXED'}
         </span>
         <span className="tabular-nums w-20">{batch.findingCount} findings</span>
         <span className={cn('uppercase font-bold w-24', statusColor[batch.status])}>
@@ -69,7 +62,7 @@ export function BatchRow({
             {'// Claude analysis for '}
             {batch.findingCount}
             {' findings in '}
-            {batch.segment ? SEGMENT_LABEL[batch.segment] : 'MIXED'}
+            {batch.segment ? batch.segment.toUpperCase() : 'MIXED'}
             <br />
             {
               '// Prompt: Analyze security findings, provide severity assessment, recommend actions...'

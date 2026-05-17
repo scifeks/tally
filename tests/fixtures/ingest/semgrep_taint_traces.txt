@@ -1,0 +1,41 @@
+
+
+
+┌─────────────────┐
+│ 2 Code Findings │
+└─────────────────┘
+
+    src/HealthController.php
+    ❯❱ php.lang.security.injection.tainted-exec.tainted-exec
+          ❰❰ Blocking ❱❱
+          User input is passed to a function that executes a shell command.
+          Details: https://sg.run/kxEEz
+
+           88┆ exec ("ping -c 4 " . $target, $output, $ret_var);
+
+
+          Taint comes from:
+
+           84┆ $input = (array) json_decode(file_get_contents('php://input'), TRUE);
+
+
+          Taint flows through these intermediate variables:
+
+           84┆ $input = (array) json_decode(file_get_contents('php://input'), TRUE);
+
+           86┆ $target = $input['target'];
+
+
+                This is how taint reaches the sink:
+
+           88┆ exec ("ping -c 4 " . $target, $output, $ret_var);
+
+
+            ⋮┆----------------------------------------
+
+   ❯❯❱ php.lang.security.exec-use.exec-use
+          ❰❰ Blocking ❱❱
+          Executing non-constant commands.
+          Details: https://sg.run/5Q1j
+
+           88┆ exec ("ping -c 4 " . $target, $output, $ret_var);

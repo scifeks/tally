@@ -40,6 +40,9 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
 | `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
 | `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
+| `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
+| `post_scan_sync` | list\[string\] | Integrations to auto-sync after each scan. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-scan-sync). |
+| `post_triage_sync` | list\[string\] | Integrations to auto-sync after triage. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-triage-sync). |
 | `projects_dir` | string | Directory where project workspaces are stored. Default: `"./projects"`. |
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
@@ -97,6 +100,22 @@ feature config schema:
 |---|---|---|---|
 | `api_key` | string | `""` | API key passed to the OpenCode agent. Set to any non-empty value when running against Ollama (e.g. `"ollama"`). |
 | `api_provider` | string | `""` | LLM endpoint URL (e.g. `http://localhost:11434`). Used for network egress allowlisting in the triage container. |
+
+### DefectDojo Fields
+
+Optional. Required only when using the `sync --integration=defectdojo` command.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `url` | string | Yes | | Base URL of your DefectDojo instance. Must use `http://` or `https://`. |
+| `api_token` | string | Yes | | API v2 token from your DefectDojo user profile. |
+| `verify_ssl` | bool | No | `true` | Verify TLS certificates. Set to `false` for self-signed certificates. |
+| `product_type` | string | No | `"Tally Scan"` | Product Type label in DefectDojo. Groups all repo Products under a common type. |
+| `engagement_type` | string | No | `"Tally Engagement"` | Default Engagement name. Can be overridden per project or per invocation. |
+| `auto_create_context` | bool | No | `true` | Create Product, Engagement, and Product Type in DefectDojo if they do not exist. |
+| `scan_type` | string | No | `"Generic Findings Import"` | DefectDojo scan type used for the import. Controls the "Found By" label. |
+
+See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity mapping, engagement type cascade, and usage.
 
 ### Example: Ollama Only
 
@@ -272,7 +291,18 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 | `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. |
 | `department_name` | string | no | Optional department or team name, stored for reference. |
 | `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` → `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
+| `defectdojo` | object | no | Optional DefectDojo overrides for this project. See [DefectDojo Project Fields](#defectdojo-project-fields). |
 | `repositories` | array | no | List of repository objects (mirrors repositories.json). |
+
+#### DefectDojo Project Fields
+
+Optional. Overrides global DefectDojo defaults for this project.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `engagement_type` | string | No | | Overrides the global `engagement_type` for this project. |
+
+See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for the engagement type cascade and entity mapping.
 
 #### Example
 

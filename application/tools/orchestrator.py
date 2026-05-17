@@ -298,6 +298,9 @@ class ScanOrchestrator:
         ToolOnAllReposScan, or FullScan based on which scopes are set.
         """
         from application.rag.ingestor import get_tool_domain
+        from application.tools.scan_types.execution import (
+            ordered_repo_tools,
+        )
 
         effective_tools: list[str] | None = None
         if tool_names is not None or domains is not None:
@@ -305,7 +308,7 @@ class ScanOrchestrator:
             candidates = list(tool_names) if tool_names is not None else all_configured
             if domains is not None:
                 candidates = [t for t in candidates if get_tool_domain(t) in domains]
-            effective_tools = candidates
+            effective_tools = ordered_repo_tools(set(candidates), self.registry)
 
         def _body() -> ScanSummary:
             return self._scoped_body(repo_names, effective_tools, skip_tools)

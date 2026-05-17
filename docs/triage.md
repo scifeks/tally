@@ -270,6 +270,16 @@ conservative assessments.
 
 ---
 
+## DefectDojo Sync
+
+Triage results can be automatically synced to DefectDojo after each
+triage run. Set `post_triage_sync` to `["defectdojo"]` in
+`config/global.json`. See
+[docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-triage-sync)
+for setup details.
+
+---
+
 ## Troubleshooting
 
 ### "Docker is not installed or not running"

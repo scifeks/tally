@@ -81,7 +81,7 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
 
     try:
         with httpx.Client(follow_redirects=True, timeout=15) as client:
-            # 1. Fetch the login page to collect CSRF tokens.
+            # GET first to harvest CSRF tokens from hidden inputs
             get_resp = client.get(auth.login_url)
             get_resp.raise_for_status()
 
@@ -89,7 +89,6 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
             parser.feed(get_resp.text)
             hidden = parser.hidden
 
-            # 2. Build form payload: hidden tokens + credentials + extra fields.
             payload: dict[str, str] = {
                 **hidden,
                 auth.username_field: username,
@@ -97,7 +96,6 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
                 **auth.extra_fields,
             }
 
-            # 3. POST the login form using cookies from the GET response.
             post_resp = client.post(
                 auth.login_url,
                 data=payload,
@@ -105,7 +103,7 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
             )
             post_resp.raise_for_status()
 
-            # 4. Collect cookies from the entire redirect chain.
+            # Cookies may be set at any point in the redirect chain
             jar = client.cookies
             if not jar:
                 logger.warning(

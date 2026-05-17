@@ -9,6 +9,7 @@ import pytest
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -38,7 +39,7 @@ def _upsert(
 ) -> int:
     run_id = run_repo.create_run({})
     row = {"tool": tool, "severity": "low", "profile": "default", **(extra or {})}
-    repo.insert_findings(run_id, [row])
+    repo.insert_findings(run_id, normalize_test_findings([row]))
     with repo._factory.connect() as conn:
         fid = conn.execute(
             "SELECT id FROM findings WHERE tool=? ORDER BY id DESC LIMIT 1",

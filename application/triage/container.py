@@ -95,8 +95,8 @@ def ensure_triage_containers(
     """Generate compose and start services if not running.
 
     Returns True if services were started, False if already running.
-    ``repo_paths`` maps repo name to its on-disk path. When omitted
-    the caller is responsible for pre-starting containers.
+    ``repo_paths`` maps repo name to its on-disk path. When omitted,
+    containers must already be running.
     """
     path = _compose_path(app_root)
     port = _resolve_container_port()

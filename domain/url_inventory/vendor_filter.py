@@ -31,17 +31,7 @@ def _normalize_indicator(name: str) -> str:
 
 
 def is_vendor_path(path: str, *, extra_indicators: Iterable[str] = ()) -> bool:
-    """Return True if *path* sits under a vendor or dependency directory.
-
-    Args:
-        path: A URL path (``/foo/bar``) or full URL; only the path
-            portion is examined.
-        extra_indicators: Additional directory names (with or without
-            slashes) to treat as vendor dirs, typically from
-            ``Repository.ignore_dirs``.
-
-    Matching is case-insensitive and segment-anchored.
-    """
+    """Return True if path sits under a vendor or dependency directory."""
     if not path:
         return False
     haystack = path.lower()

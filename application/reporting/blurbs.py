@@ -10,7 +10,7 @@ _BLURBS_DIR = Path(__file__).parent / "blurbs"
 TESTING_TYPES: dict[str, str] = {
     "white_box": (
         "The assessor was provided with full access to source code, architecture "
-        "documentation, and internal system credentials. This approach maximises "
+        "documentation, and internal system credentials. This approach maximizes "
         "coverage and allows for deep analysis of logic flaws, insecure "
         "configurations, and code-level vulnerabilities that are not visible from "
         "the outside."
@@ -41,14 +41,6 @@ class BlurbVariableError(KeyError):
 
 def load_blurb(name: str, variables: dict[str, str] | None = None) -> str:
     """Load a blurb file and substitute ``{{variable_name}}`` placeholders.
-
-    Args:
-        name:      Blurb name, resolved to ``<blurbs_dir>/<name>.md``.
-        variables: Dict of placeholder values.  Extra keys are ignored.
-                   Defaults to an empty dict.
-
-    Returns:
-        Rendered blurb text with all placeholders substituted.
 
     Raises:
         BlurbNotFoundError: The blurb file does not exist.

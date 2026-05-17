@@ -53,7 +53,7 @@ _TEST_DIR_NAMES: frozenset[str] = frozenset(
 
 
 def _sca_manifest_notification(repo: Repository) -> None:
-    """Print a notice when no SCA-relevant dependency manifests are found."""
+    """Print a notice when SCA-relevant manifests are not found."""
     sca_langs = set(LANGUAGE_MANIFESTS)
     repo_langs = {lang.lower() for lang in (repo.languages or [])}
     if not repo_langs & sca_langs:
@@ -119,13 +119,7 @@ def _prompt(message: str, default: str = "") -> str:
 
 
 def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> bool:
-    """Return whether live crawling (Katana / Noir) should be enabled.
-
-    Only prompts when *base_urls* is non-empty and an endpoint file is
-    configured; in that case the user chooses whether to also run live
-    crawlers on top of the static file. In all other situations crawling
-    is enabled by default and no prompt is shown.
-    """
+    """Return whether live crawling (Katana / Noir) should be enabled."""
     if not base_urls or not has_endpoint_file:
         return True
     ans = _prompt(
@@ -139,11 +133,7 @@ def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> b
 def _interview_auth(
     current: RepoAuth | None = None,
 ) -> RepoAuth | None:
-    """Prompt for optional pre-crawl login config.
-
-    Returns a populated ``RepoAuth`` when the user opts in, or ``None``
-    when the site does not require login (or the user skips).
-    """
+    """Prompt for optional pre-crawl login config."""
     current_yn = "y" if current is not None else "N"
     ans = _prompt(
         "  Does this site require login to crawl? [y/N]",
@@ -204,11 +194,7 @@ def _interview_katana(
     detected_spa: bool = False,
     spa_reason: str = "",
 ) -> tuple[bool, int]:
-    """Prompt for Katana crawler options; returns (headless, depth).
-
-    Skipped (returns current values) when base_urls is empty.
-    headless defaults to True when current_headless or detected_spa is True.
-    """
+    """Prompt for Katana crawler options; return (headless, depth)."""
     if not base_urls:
         return current_headless, current_depth
 
@@ -620,21 +606,14 @@ class InteractiveProjectWizard:
     def _has_existing_endpoint_file(
         self, paths: ProjectPaths, repo: Repository
     ) -> bool:
-        """Return True if the repo has a user-uploaded endpoint file recorded."""
+        """Return True if the repo has a user-uploaded endpoint file."""
         del paths
         return repo.url_seed_file is not None
 
     def _prompt_endpoint_file(
         self, prompt_label: str, *, allow_keep: bool
     ) -> str | None:
-        """Prompt for an endpoint-file path; validate that the path exists.
-
-        Returns the resolved source path string when the user supplies a
-        valid path, or ``None`` when the user skips (or, when *allow_keep*
-        is True, chooses to keep the existing file). Format detection is
-        deferred to the actual ingest helper, which runs the converter
-        pipeline and surfaces any format errors.
-        """
+        """Prompt for an endpoint-file path and validate it exists."""
         from infrastructure.endpoints.converters.detector import FormatDetector
 
         while True:
@@ -671,14 +650,7 @@ class InteractiveProjectWizard:
         source_path: str,
         paths: ProjectPaths,
     ) -> None:
-        """Copy *source_path* into a fresh ``<name>-<epoch>/`` dir and ingest.
-
-        Each upload creates a new sibling dir under ``endpoints/`` so
-        prior uploads accumulate as history. The DB ``url_seed_file``
-        column is updated with the latest path. JIT-rebuilds
-        ``merged_urls.txt`` + ``merged_oas3.json`` under
-        ``endpoints/<repo_id>/``.
-        """
+        """Copy source_path into a timestamped dir and ingest."""
         from infrastructure.endpoints.converters import ConverterError
         from infrastructure.endpoints.converters.endpoint_file_converter import (
             EndpointFileConverter,
@@ -735,7 +707,7 @@ class InteractiveProjectWizard:
         print(f"\n  ✓ Endpoint file ingested: {target}")
 
     def _interview_company_name(self) -> str:
-        """Prompt for a required company name."""
+        """Prompt for company name."""
         while True:
             val = _prompt("  Company Name")
             if val:
@@ -743,11 +715,11 @@ class InteractiveProjectWizard:
             print("  Company Name is required.")
 
     def _interview_department_name(self) -> str:
-        """Prompt for an optional department name."""
+        """Prompt for department name (optional)."""
         return _prompt("  Department Name (optional)")
 
     def _interview_abbreviation(self) -> str:
-        """Prompt for an optional project abbreviation (max 3 chars)."""
+        """Prompt for project abbreviation, max 3 characters (optional)."""
         while True:
             val = _prompt(
                 "  Abbreviation"
@@ -777,17 +749,13 @@ class InteractiveProjectWizard:
             return name
 
     def edit_project(self, project_name: str) -> bool:
-        """Interactively edit project-level fields for *project_name*.
+        """Interactively edit project-level fields.
 
-        Covers: company_name (required), department_name (optional),
-        abbreviation (optional, max 3 chars).  Repositories are managed
-        separately via ``repo add / edit / delete``.
+        Covers company_name (required), department_name and abbreviation
+        (both optional, max 3 chars). Repositories are managed separately.
 
-        Returns:
-            True on success, False if the user canceled.
-
-        Raises:
-            ValueError: if the project does not exist.
+        Returns True on success, False if canceled. Raises ValueError if
+        the project does not exist.
         """
         config = self._manager.config.load_project_config(project_name)
         if config is None:
@@ -874,11 +842,8 @@ class InteractiveProjectWizard:
     def _interview_single_repo(self, idx: int) -> tuple[Repository, str | None] | None:
         """Interview the user for one repository.
 
-        Returns a tuple ``(repo, pending_endpoint_file)`` where the second
-        element is the source path of a user-provided endpoint file (when
-        the user supplied one) or ``None``. Callers stamp a uuid + DB row
-        and ingest the file via ``UrlInventoryService`` after the project
-        config has been saved.
+        Returns a tuple (repo, pending_endpoint_file) where the second
+        element is the source path of a user-provided endpoint file or None.
         """
         print(f"\nRepository #{idx}:")
 

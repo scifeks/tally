@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -131,7 +132,7 @@ class TestBasicRoundTrip:
     def test_upsert_and_query_all(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS))
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert len(results) == len(_SEMGREP_FINDINGS)
@@ -139,7 +140,7 @@ class TestBasicRoundTrip:
     def test_result_has_metadata_and_distance(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS[:1]))
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         r = results[0]
@@ -149,7 +150,7 @@ class TestBasicRoundTrip:
     def test_metadata_tool_field(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS[:1]))
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"]["tool"] == "semgrep"
@@ -158,7 +159,7 @@ class TestBasicRoundTrip:
         """SQLite column 'file' is returned as 'file_path' in metadata."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS[:1])
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS[:1]))
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "file_path" in results[0]["metadata"]
@@ -168,7 +169,7 @@ class TestBasicRoundTrip:
         """ip_address is stored in the meta blob and returned in metadata."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _NMAP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_NMAP_FINDINGS))
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert "ip_address" in results[0]["metadata"]
@@ -178,7 +179,7 @@ class TestBasicRoundTrip:
         # insert_findings writes enriched=0; EnrichmentPipeline sets it to 1
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id, normalize_test_findings(_GITLEAKS_FINDINGS[:1]))
 
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"]["enriched"] is False

@@ -1,24 +1,4 @@
-"""Katana local wrapper for runtime URL discovery via live crawling.
-
-Invocation pattern
-------------------
-``katana -u <base_url> -d <depth> -jc -kf all -xhr -j -o <jsonl_file>``
-
-Optional flags:
-- ``-hl`` when ``katana_headless`` is True (headless Chrome mode)
-- ``-H "Key: Value"`` per entry in ``katana_headers``
-
-The ``-j`` flag writes JSONL to the file specified by ``-o``.
-``build_command`` stores the JSONL path in ``self._last_jsonl_path``; after
-the subprocess completes, ``parse_output`` reads that file, calls the
-``KatanaAdapter`` to produce an OAS3 JSON document, and moves it to the
-final ``<repo>_<ts>_oas3.json`` destination so downstream tools (ZAP,
-XSStrike, DalFox) can consume it.
-
-The OAS3 file is retained on disk (same as Noir) so that DAST tools can
-discover it via glob helpers.  It is deleted only if the converted spec
-contains zero paths (prevents downstream tools from importing an empty spec).
-"""
+"""Katana local wrapper for runtime URL discovery via live crawling."""
 
 from __future__ import annotations
 
@@ -28,9 +8,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from application.ports.endpoint_converter import EndpointConverterPort
 from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
-from infrastructure.endpoints.converters.katana import KatanaAdapter
 from infrastructure.tools.parsers.katana import parse_katana_jsonl
 from infrastructure.tools.wrappers.base.katana import BaseKatanaTool
 from infrastructure.tools.wrappers.utils.scope import scope_key
@@ -85,9 +65,11 @@ def _filter_jsonl_by_scope(jsonl_path: Path, base_url: str) -> None:
 class KatanaLocalTool(BaseKatanaTool):
     """Concrete local wrapper for the Katana binary."""
 
-    def __init__(self, config=None) -> None:
+    def __init__(
+        self, config=None, *, endpoint_converter: EndpointConverterPort
+    ) -> None:
+        self._endpoint_converter = endpoint_converter
         self._katana_path: str = config.path if config is not None else "katana"
-        # Set by build_execution_passes(); read by parse_output().
         self._last_jsonl_path: Path | None = None
         self._last_oas3_path: Path | None = None
         self._last_base_url: str | None = None
@@ -129,7 +111,7 @@ class KatanaLocalTool(BaseKatanaTool):
             return None
 
     # Crawl ceilings prevent infinite/multi-hour hangs when headless Chrome
-    # stalls on a single page or cyclic parameterised routes produce
+    # stalls on a single page or cyclic parameterized routes produce
     # near-unbounded link graphs.
     _CRAWL_TIMEOUT_SECS = 15  # per-request HTTP timeout
     _CRAWL_CONCURRENCY = 10  # parallel browser/HTTP workers (-c)
@@ -145,7 +127,6 @@ class KatanaLocalTool(BaseKatanaTool):
             base_url (str): Target URL to crawl.  Required.
             output_file (str): Path for the JSONL output file.  Required.
             oas3_target (str): Destination path for the converted OAS3 file.
-                Set by ``build_execution_passes``; used in ``parse_output``.
             depth (int): Crawl depth, passed as ``-d``.  Defaults to 5.
             headless (bool): Enable headless Chrome via ``-hl``.
             headers (dict[str, str]): Extra headers, each passed as
@@ -203,15 +184,7 @@ class KatanaLocalTool(BaseKatanaTool):
         return cmd
 
     def parse_output(self, output: str, files: dict[str, Path]) -> dict[str, Any]:
-        """Parse Katana JSONL output and produce an OAS3 file for downstream tools.
-
-        Steps:
-        1. Resolve JSONL path from ``self._last_jsonl_path`` (fallback: files).
-        2. Parse JSONL into structured endpoint data.
-        3. Convert JSONL → OAS3 via ``KatanaAdapter``.
-        4. Move ``seed.json`` to the timestamped ``_oas3.json`` target.
-        5. Delete the OAS3 file if it contains zero paths (mirrors Noir).
-        """
+        """Parse JSONL output into endpoints and produce an OAS3 spec."""
         try:
             jsonl_path: Path | None = self._last_jsonl_path
             if jsonl_path is None or not jsonl_path.exists():
@@ -235,7 +208,7 @@ class KatanaLocalTool(BaseKatanaTool):
             # Convert JSONL → OAS3 so downstream DAST tools can consume it.
             katana_dir = jsonl_path.parent
             try:
-                tmp_oas3 = KatanaAdapter().convert(jsonl_path, katana_dir)
+                tmp_oas3 = self._endpoint_converter.convert(jsonl_path, katana_dir)
                 oas3_target = self._last_oas3_path
                 if oas3_target is not None:
                     shutil.move(str(tmp_oas3), str(oas3_target))

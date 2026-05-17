@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from application.locking import FindingsBusy, LockRegistry, get_registry
+from domain.findings.normalization import split_analyst_fields
 
 if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
@@ -75,7 +76,10 @@ class FindingAnalystService:
     ) -> bool:
         """Acquire the finding lock, write, release. Raises FindingsBusy if held."""
         with self._registry.findings([finding_id], holder_token):
-            return self._repo.update_analyst_fields(finding_id, fields, source="web_ui")
+            cols, meta = split_analyst_fields(fields)
+            return self._repo.update_analyst_fields(
+                finding_id, cols, meta, source="web_ui"
+            )
 
     def update_fields_under_held_lock(
         self,
@@ -89,7 +93,8 @@ class FindingAnalystService:
         Raises HolderMismatch if the finding is held by a different token.
         """
         self._registry.assert_held_by(finding_id, holder_token)
-        return self._repo.update_analyst_fields(finding_id, fields, source="web_ui")
+        cols, meta = split_analyst_fields(fields)
+        return self._repo.update_analyst_fields(finding_id, cols, meta, source="web_ui")
 
     def bulk_update_fields(
         self,
@@ -110,8 +115,9 @@ class FindingAnalystService:
                 continue
             try:
                 with self._registry.findings([finding_id], holder_token):
+                    cols, meta = split_analyst_fields(fields)
                     self._repo.update_analyst_fields(
-                        finding_id, fields, source="web_ui"
+                        finding_id, cols, meta, source="web_ui"
                     )
                 result.updated.append(finding_id)
             except FindingsBusy:
@@ -136,7 +142,8 @@ class FindingAnalystService:
                 result.not_found.append(finding_id)
                 continue
             self._registry.assert_held_by(finding_id, holder_token)
-            self._repo.update_analyst_fields(finding_id, fields, source="web_ui")
+            cols, meta = split_analyst_fields(fields)
+            self._repo.update_analyst_fields(finding_id, cols, meta, source="web_ui")
             result.updated.append(finding_id)
         return result
 

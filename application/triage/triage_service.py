@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import uuid
 from concurrent.futures import Future
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from application.events.ids import new_event_id
+from application.events.types import BusEvent
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
+from application.sync.integration_sync import run_configured_syncs
 from application.triage.factory import ensure_triage_backend_configured
 from application.triage.orchestrator import (
     resume_triage_for_project,
@@ -22,6 +27,7 @@ from application.triage.run_registry import (
     get_triage_run_registry,
 )
 from application.triage.runner import NoScanRunError, TriageCancelled
+from core.config.manager import ConfigManager
 
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
@@ -30,6 +36,7 @@ if TYPE_CHECKING:
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
     from application.ports.triage_event_sink import TriageEventSink
     from application.tools.registry import ToolRegistry
+    from domain.triage.entry import TriageBatchRow
 
 
 logger = logging.getLogger("application.triage_service")
@@ -44,10 +51,9 @@ class ProjectNotFound(LookupError):
 
 
 class TriageNotResumableError(RuntimeError):
-    """Raised when ``resume_triage`` is called against a non-resumable run.
+    """Raised when resume_triage is called against a non-resumable run.
 
-    Carries ``status`` so the route layer can include it in the 409
-    error payload.
+    Carries ``status`` for the route layer's 409 error payload.
     """
 
     def __init__(self, scan_run_id: int, status: str | None) -> None:
@@ -60,13 +66,10 @@ class TriageNotResumableError(RuntimeError):
 
 @dataclass(frozen=True)
 class TriageStartHandle:
-    """Returned from :meth:`TriageService.start_triage`/``resume_triage``.
+    """Handle returned from start_triage/resume_triage.
 
-    ``scan_run_id`` and ``holder_token`` are available immediately.
-    ``result`` resolves with the triage outcome dict produced by the
-    orchestrator (``sessions_run`` / ``success`` / ``failed`` /
-    ``incomplete``) when the worker thread completes, or with the
-    raised exception on failure.
+    ``scan_run_id`` and ``holder_token`` are available immediately;
+    ``result`` resolves with the orchestrator's outcome dict or exception.
     """
 
     scan_run_id: int
@@ -118,10 +121,8 @@ class TriageService:
     ) -> TriageStartHandle:
         """Start a triage run against the latest scan_run for a project.
 
-        Raises:
-            NoScanRunError: project has no scan_runs to triage. The lock
-                is not acquired in this case.
-            JobBusy: another triage already holds the lock.
+        Raises NoScanRunError if no scan_runs exist, JobBusy if another
+        triage holds the lock.
         """
         del finding_ids  # finding-scoped triage is reserved for later
         ensure_triage_backend_configured(app_root=Path(base_path))
@@ -153,10 +154,8 @@ class TriageService:
     ) -> TriageStartHandle:
         """Resume an existing triage run for a project.
 
-        Raises:
-            TriageNotResumableError: the run does not exist or is in a
-                terminal state. The lock is not acquired in this case.
-            JobBusy: another triage already holds the lock.
+        Raises TriageNotResumableError if the run does not exist or is in
+        a terminal state, JobBusy if another triage holds the lock.
         """
         ensure_triage_backend_configured(app_root=Path(base_path))
         summary = self._triage_repo.summarize_for_run(scan_run_id)
@@ -274,6 +273,19 @@ class TriageService:
                         holder_token=holder_token,
                     )
                 future.set_result(result)
+                try:
+                    gc = ConfigManager(base_path).load_global_config()
+                    run_configured_syncs(
+                        base_path=base_path,
+                        project_name=project_name,
+                        run_id=scan_run_id,
+                        sync_list=gc.post_triage_sync,
+                    )
+                except Exception:
+                    logger.exception(
+                        "post-triage sync failed for scan_run_id=%d",
+                        scan_run_id,
+                    )
             except TriageCancelled as exc:
                 logger.info("triage scan_run_id=%d cancelled", scan_run_id)
                 future.set_exception(exc)
@@ -312,3 +324,63 @@ class TriageService:
                     "post-triage container teardown failed",
                     exc_info=True,
                 )
+
+    # Snapshot queries
+
+    async def build_snapshot_event(
+        self,
+        project_id: int,
+        scan_run_id: int | None,
+    ) -> BusEvent:
+        """Build the on-connect snapshot for a triage SSE stream."""
+        payload: dict[str, Any] = {
+            "project_id": project_id,
+            "scan_run_id": scan_run_id,
+        }
+        if scan_run_id is not None:
+            summary = await asyncio.to_thread(
+                self._triage_repo.summarize_for_run, scan_run_id
+            )
+            if summary is not None:
+                batches = await asyncio.to_thread(
+                    self._triage_repo.list_for_run, scan_run_id
+                )
+                payload.update(
+                    status=summary.status,
+                    total_findings=summary.total_findings,
+                    processed_findings=summary.processed_findings,
+                    started_at=summary.started_at,
+                    finished_at=summary.finished_at,
+                    batches=[self._batch_to_dict(b) for b in batches],
+                )
+        else:
+            active = self._triage_run_registry.list_for_project(project_id)
+            payload["active_scan_run_ids"] = [h.scan_run_id for h in active]
+
+        return BusEvent(
+            event_id=new_event_id(),
+            job_id="triage",
+            stream="triage",
+            event_type="snapshot",
+            payload=payload,
+            ts=datetime.now(UTC),
+        )
+
+    @staticmethod
+    def _batch_to_dict(batch: TriageBatchRow) -> dict[str, Any]:
+        """Convert a batch row to a payload-ready dict."""
+        segment: str | None = None
+        if batch.batch_data and isinstance(batch.batch_data[0], dict):
+            segment = batch.batch_data[0].get("segment")
+        return {
+            "id": batch.id,
+            "scan_run_id": batch.run_id,
+            "segment": segment,
+            "finding_ids": batch.finding_ids,
+            "status": batch.status,
+            "attempts": batch.run_attempts,
+            "started_at": batch.started_at,
+            "finished_at": batch.completed_at,
+            "response_preview": None,
+            "error": None,
+        }

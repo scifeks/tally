@@ -11,6 +11,7 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.finding_history import FindingHistoryRepository
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -39,7 +40,7 @@ def finding_id(factory: ConnectionFactory) -> int:
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, [_BASE_FINDING])
+    finding_repo.insert_findings(run_id, normalize_test_findings([_BASE_FINDING]))
     with factory.connect() as conn:
         row = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()
     return int(row["id"])

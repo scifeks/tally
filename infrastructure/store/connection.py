@@ -89,9 +89,21 @@ class ConnectionFactory:
                     ON findings (repo_id);
     """
 
-    # Tables that must survive a full purge. Extend this set when new
-    # persistent reference tables are added to the schema.
-    PRESERVED_TABLES: frozenset[str] = frozenset({"repositories"})
+    PURGEABLE_TABLES: frozenset[str] = frozenset(
+        {
+            "findings",
+            "finding_history",
+            "scan_runs",
+            "run_tools",
+            "triage_batches",
+            "tool_audit_log",
+            "reports",
+            "drafts",
+            "chat_sessions",
+            "chat_messages",
+            "url_findings",
+        }
+    )
 
     def init_schema(self) -> None:
         """Create all tables and indexes if they do not exist."""
@@ -395,28 +407,22 @@ class ConnectionFactory:
                     ON saved_scan_arg_profiles (arg_profile_id);
             """)
 
-    def purge_non_preserved_tables(self) -> None:
-        """Delete all rows from every table not in PRESERVED_TABLES.
+    def purge_operational_tables(self) -> None:
+        """Clear operational data tables, preserving configuration.
 
-        Schema is left intact; only rows and AUTOINCREMENT counters are
-        cleared. Foreign-key enforcement is suspended for the duration so
-        deletion order does not matter.
+        AUTOINCREMENT counters are also reset. Foreign-key enforcement
+        is suspended so deletion order does not matter.
         """
         with self.connect() as conn:
             conn.execute("PRAGMA foreign_keys = OFF")
-            rows = conn.execute(
-                "SELECT name FROM sqlite_master"
-                " WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            ).fetchall()
-            to_clear = [r[0] for r in rows if r[0] not in self.PRESERVED_TABLES]
-            for table in to_clear:
+            for table in self.PURGEABLE_TABLES:
                 conn.execute(f"DELETE FROM [{table}]")
             seq_exists = conn.execute(
                 "SELECT 1 FROM sqlite_master"
                 " WHERE type='table' AND name='sqlite_sequence'"
             ).fetchone()
             if seq_exists:
-                for table in to_clear:
+                for table in self.PURGEABLE_TABLES:
                     conn.execute(
                         "DELETE FROM sqlite_sequence WHERE name = ?",
                         (table,),

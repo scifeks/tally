@@ -81,8 +81,14 @@ def _make_orchestrator(
         )
 
 
+@patch(
+    "application.tools.scan_types.execution.ordered_repo_tools",
+    side_effect=lambda s, _r: sorted(s),
+)
 @patch("application.tools.orchestrator.ToolOnRepoScan")
-def test_repos_and_tools_runs_nested_loop(mock_tor: MagicMock) -> None:
+def test_repos_and_tools_runs_nested_loop(
+    mock_tor: MagicMock, _mock_order: MagicMock
+) -> None:
     mock_tor.return_value.execute.return_value = _summary({"semgrep": 1})
     sink = _RecordingSink()
     o = _make_orchestrator(sink=sink)
@@ -111,8 +117,14 @@ def test_repos_only_loops_repo_scan(mock_rs: MagicMock) -> None:
     assert mock_rs.call_count == 2
 
 
+@patch(
+    "application.tools.scan_types.execution.ordered_repo_tools",
+    side_effect=lambda s, _r: sorted(s),
+)
 @patch("application.tools.orchestrator.ToolOnAllReposScan")
-def test_tools_only_loops_tool_on_all_repos(mock_toa: MagicMock) -> None:
+def test_tools_only_loops_tool_on_all_repos(
+    mock_toa: MagicMock, _mock_order: MagicMock
+) -> None:
     mock_toa.return_value.execute.return_value = _empty_summary()
     sink = _RecordingSink()
     o = _make_orchestrator(sink=sink)
@@ -120,7 +132,7 @@ def test_tools_only_loops_tool_on_all_repos(mock_toa: MagicMock) -> None:
     o.run_scoped_scan(tool_names=["semgrep", "gitleaks"])
 
     tools_called = [c.args[0] for c in mock_toa.call_args_list]
-    assert tools_called == ["semgrep", "gitleaks"]
+    assert tools_called == ["gitleaks", "semgrep"]
 
 
 @patch("application.tools.orchestrator.FullScan")
@@ -137,23 +149,29 @@ def test_no_scope_falls_to_full_scan(mock_full: MagicMock) -> None:
     assert args[1] == {"zap"}
 
 
+@patch(
+    "application.tools.scan_types.execution.ordered_repo_tools",
+    side_effect=lambda s, _r: sorted(s),
+)
 @patch("application.rag.ingestor.get_tool_domain")
 @patch("application.tools.orchestrator.ToolOnAllReposScan")
 def test_domains_filter_effective_tools(
-    mock_toa: MagicMock, mock_domain: MagicMock
+    mock_toa: MagicMock,
+    mock_domain: MagicMock,
+    _mock_order: MagicMock,
 ) -> None:
     mock_toa.return_value.execute.return_value = _empty_summary()
-    # semgrep -> code, zap -> web, gitleaks -> code
-    mock_domain.side_effect = lambda t: {"semgrep": "code", "gitleaks": "code"}.get(
-        t, "web"
-    )
+    mock_domain.side_effect = lambda t: {
+        "semgrep": "code",
+        "gitleaks": "code",
+    }.get(t, "web")
     sink = _RecordingSink()
     o = _make_orchestrator(sink=sink)
 
     o.run_scoped_scan(domains=["code"])
 
     tools_called = [c.args[0] for c in mock_toa.call_args_list]
-    assert tools_called == ["semgrep", "gitleaks"]
+    assert tools_called == ["gitleaks", "semgrep"]
     assert "zap" not in tools_called
 
 
@@ -173,13 +191,19 @@ def test_emits_single_run_started_completed(mock_tor: MagicMock) -> None:
     assert isinstance(sink.events[1], se.RunCompleted)
 
 
+@patch(
+    "application.tools.scan_types.execution.ordered_repo_tools",
+    side_effect=lambda s, _r: sorted(s),
+)
 @patch("application.tools.orchestrator.ToolOnRepoScan")
-def test_findings_by_tool_aggregated(mock_tor: MagicMock) -> None:
+def test_findings_by_tool_aggregated(
+    mock_tor: MagicMock, _mock_order: MagicMock
+) -> None:
     mock_tor.return_value.execute.side_effect = [
-        _summary({"semgrep": 1}),
-        _summary({"semgrep": 2}),
         _summary({"gitleaks": 4}),
         _summary({"gitleaks": 5}),
+        _summary({"semgrep": 1}),
+        _summary({"semgrep": 2}),
     ]
     sink = _RecordingSink()
     o = _make_orchestrator(sink=sink)

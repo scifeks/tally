@@ -9,7 +9,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.rag.enrichment import EnrichmentPipeline
+from domain.findings.normalization import split_enrichment_fields
 from infrastructure.store import make_store
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -31,10 +33,11 @@ def _seed_finding(
     }
     if extra:
         row.update(extra)
-    finding_repo.insert_findings(run_id, [row])  # type: ignore[union-attr]
-    from application.pipeline.fingerprint import compute_fingerprint
-
-    fps = [compute_fingerprint(row)]
+    normalized = normalize_test_findings([row])
+    finding_repo.insert_findings(  # type: ignore[union-attr]
+        run_id, normalized
+    )
+    fps = [normalized[0].fingerprint]
     ids = finding_repo.get_ids_by_fingerprints(fps)  # type: ignore[union-attr]
     if enriched:
         with finding_repo._factory.connect() as conn:  # type: ignore[union-attr]
@@ -263,7 +266,8 @@ class TestPhase3UpdateEnrichmentFields:
         run_id = store_env["run_id"]
         fid = _seed_finding(finding_repo, run_id, "semgrep")
 
-        finding_repo.update_enrichment_fields(fid, {"risk_type": "xss"})
+        cols, meta = split_enrichment_fields({"risk_type": "xss"})
+        finding_repo.update_enrichment_fields(fid, cols, meta)
 
         row = finding_repo.get_finding(fid)
         assert row is not None
@@ -278,7 +282,8 @@ class TestPhase3UpdateEnrichmentFields:
             finding_repo, run_id, "semgrep", extra={"source_file": "scan.json"}
         )
 
-        finding_repo.update_enrichment_fields(fid, {"owasp_name": "Injection"})
+        cols, meta = split_enrichment_fields({"owasp_name": "Injection"})
+        finding_repo.update_enrichment_fields(fid, cols, meta)
 
         row = finding_repo.get_finding(fid)
         assert row is not None
@@ -288,4 +293,5 @@ class TestPhase3UpdateEnrichmentFields:
     def test_update_enrichment_fields_missing_id_is_noop(self, store_env: dict) -> None:
         """update_enrichment_fields with a non-existent id does nothing."""
         finding_repo = store_env["finding_repo"]
-        finding_repo.update_enrichment_fields(99999, {"risk_type": "xss"})
+        cols, meta = split_enrichment_fields({"risk_type": "xss"})
+        finding_repo.update_enrichment_fields(99999, cols, meta)

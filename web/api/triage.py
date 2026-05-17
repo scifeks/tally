@@ -5,14 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.events.ids import new_event_id
-from application.events.types import EOS, BusEvent
+from application.events.types import EOS
 from application.locking import JobBusy
 from application.triage.run_registry import get_triage_run_registry
 from application.triage.runner import NoScanRunError
@@ -214,7 +211,7 @@ async def triage_events(
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("triage")
 
-    snapshot_event = await _build_snapshot(service, project_id, scan_run_id)
+    snapshot_event = await service.build_snapshot_event(project_id, scan_run_id)
 
     async def stream() -> AsyncIterator[str]:
         try:
@@ -453,44 +450,4 @@ async def get_triage(
         total_findings=summary.total_findings,
         processed_findings=summary.processed_findings,
         batches=[_batch_to_item(b) for b in batches],
-    )
-
-
-# Snapshot helper
-
-
-async def _build_snapshot(
-    service: TriageService,
-    project_id: int,
-    scan_run_id: int | None,
-) -> BusEvent:
-    """Build the on-connect ``snapshot`` BusEvent for a triage SSE stream."""
-    payload: dict[str, Any] = {
-        "project_id": project_id,
-        "scan_run_id": scan_run_id,
-    }
-    if scan_run_id is not None:
-        triage_repo = service.triage_repo
-        summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
-        if summary is not None:
-            batches = await asyncio.to_thread(triage_repo.list_for_run, scan_run_id)
-            payload.update(
-                status=summary.status,
-                total_findings=summary.total_findings,
-                processed_findings=summary.processed_findings,
-                started_at=summary.started_at,
-                finished_at=summary.finished_at,
-                batches=[_batch_to_item(b).model_dump() for b in batches],
-            )
-    else:
-        active = get_triage_run_registry().list_for_project(project_id)
-        payload["active_scan_run_ids"] = [h.scan_run_id for h in active]
-
-    return BusEvent(
-        event_id=new_event_id(),
-        job_id="triage",
-        stream="triage",
-        event_type="snapshot",
-        payload=payload,
-        ts=datetime.now(UTC),
     )

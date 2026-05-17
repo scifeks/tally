@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .claude_config import ClaudeConfig
+from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
 from .opencode_config import OpenCodeConfig
@@ -23,6 +24,7 @@ class GlobalConfig(BaseModel):
     ollama: LocalInferenceConfig | None = None
     llama_cpp: LocalInferenceConfig | None = None
     claude: ClaudeConfig | None = None
+    defectdojo: DefectDojoGlobalConfig | None = None
     opencode: OpenCodeConfig | None = None
     chat_inference: FeatureInferenceConfig | None = None
     enrichment_inference: FeatureInferenceConfig | None = None
@@ -57,6 +59,10 @@ class GlobalConfig(BaseModel):
         ),
     )
 
+    # Post-action sync hooks
+    post_scan_sync: list[str] = Field(default_factory=list)
+    post_triage_sync: list[str] = Field(default_factory=list)
+
     blind_xss_callback_url: str = Field(
         default="",
         description=(
@@ -70,6 +76,15 @@ class GlobalConfig(BaseModel):
     web_ui_port: int = Field(default=8080)
     web_ui_vite_port: int = Field(default=3000)
     web_ui_allowed_origins: list[str] | None = None
+
+    @field_validator("blind_xss_callback_url")
+    @classmethod
+    def _validate_xss_callback_url(cls, v: str) -> str:
+        if v and not v.startswith(("http://", "https://")):
+            raise ValueError(
+                "blind_xss_callback_url must start with http:// or https://"
+            )
+        return v
 
     @field_validator("web_ui_host")
     @classmethod

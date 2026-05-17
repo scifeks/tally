@@ -16,7 +16,7 @@ You also need at least one project created through the REPL or web UI before the
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `ui` |
+| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui` |
 | `--base-path DIR` | string | `.` | Base directory for projects |
 | `--project NAME` | string | *(required)* | Target project name |
 
@@ -201,6 +201,30 @@ No additional flags. Prints total document count, breakdown by tool, breakdown b
 python3 tally-cli.py --project myapp --command stats
 ```
 
+### integration-sync
+
+Export findings to configured integrations. Currently supports DefectDojo.
+
+```
+tally --project NAME --command integration-sync [--run-id ID]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--run-id ID` | Export findings from a specific scan run only |
+
+Requires DefectDojo connection settings in `config/global.json` and targeting settings in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for configuration.
+
+Exits 0 on success, 1 if the integration is not configured or the export fails, 3 if the project is not found.
+
+```bash
+# Export all findings to DefectDojo
+python3 tally-cli.py --project myapp --command integration-sync
+
+# Export findings from a specific scan run
+python3 tally-cli.py --project myapp --command integration-sync --run-id 5
+```
+
 ### ui
 
 Launch the web interface.
@@ -250,6 +274,12 @@ Run a nightly scan at midnight and log the output:
 
 ```bash
 0 0 * * * cd /opt/tally && .venv/bin/python3 tally-cli.py --project myapp --command scan >> /var/log/tally-scan.log 2>&1
+```
+
+Sync findings to DefectDojo every 6 hours:
+
+```bash
+0 */6 * * * cd /opt/tally && .venv/bin/python3 tally-cli.py --project myapp --command integration-sync >> /var/log/tally-sync.log 2>&1
 ```
 
 Weekly report generation every Friday at 6 PM:

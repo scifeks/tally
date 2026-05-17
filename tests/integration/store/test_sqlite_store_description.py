@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -67,14 +68,16 @@ class TestDescription:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {
-                    "tool": "zap",
-                    "url": "https://example.com",
-                    "alert_name": "sqli",
-                    "description": "SQL injection in login form",
-                }
-            ],
+            normalize_test_findings(
+                [
+                    {
+                        "tool": "zap",
+                        "url": "https://example.com",
+                        "alert_name": "sqli",
+                        "description": "SQL injection in login form",
+                    }
+                ]
+            ),
         )
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("description") == (
@@ -86,15 +89,17 @@ class TestDescription:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {
-                    "tool": "semgrep",
-                    "rule_id": "r1",
-                    "file_path": "a.py",
-                    "line_start": 1,
-                    "description": "Use of eval is dangerous",
-                }
-            ],
+            normalize_test_findings(
+                [
+                    {
+                        "tool": "semgrep",
+                        "rule_id": "r1",
+                        "file_path": "a.py",
+                        "line_start": 1,
+                        "description": "Use of eval is dangerous",
+                    }
+                ]
+            ),
         )
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("description") == "Use of eval is dangerous"
@@ -104,14 +109,16 @@ class TestDescription:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {
-                    "tool": "pip-audit",
-                    "package_name": "pkg",
-                    "vulnerability_id": "GHSA-y",
-                    "description": "Remote code execution via deserialization",
-                }
-            ],
+            normalize_test_findings(
+                [
+                    {
+                        "tool": "pip-audit",
+                        "package_name": "pkg",
+                        "vulnerability_id": "GHSA-y",
+                        "description": "Remote code execution via deserialization",
+                    }
+                ]
+            ),
         )
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("description") == (
@@ -123,15 +130,17 @@ class TestDescription:
         run_id = store.create_run({})
         store.insert_findings(
             run_id,
-            [
-                {
-                    "tool": "gitleaks",
-                    "rule_id": "generic-api-key",
-                    "file_path": "config.py",
-                    "line_number": 10,
-                    "description": "Generic API Key",
-                }
-            ],
+            normalize_test_findings(
+                [
+                    {
+                        "tool": "gitleaks",
+                        "rule_id": "generic-api-key",
+                        "file_path": "config.py",
+                        "line_number": 10,
+                        "description": "Generic API Key",
+                    }
+                ]
+            ),
         )
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("description") == "Generic API Key"

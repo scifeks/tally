@@ -15,6 +15,7 @@ from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
 from tests._app_factory import build_test_app
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -54,7 +55,9 @@ async def batch_client(tmp_path: Path):
     run_repo = RunRepository(factory)
     finding_repo = FindingRepository(factory)
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, [_FINDING_A, _FINDING_B])
+    finding_repo.insert_findings(
+        run_id, normalize_test_findings([_FINDING_A, _FINDING_B])
+    )
 
     with factory.connect() as conn:
         ids = [

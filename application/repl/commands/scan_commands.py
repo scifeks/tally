@@ -12,21 +12,19 @@ from application.repl.adapters.orchestrator_display import OrchestratorDisplay
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
-from application.scans.scans_service import ProjectNotFound
+from application.tools.dast_prerequisites import DastPrerequisiteService
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
 from application.tools.scan_service import get_scan_service
 from application.url_inventory.url_list_service import (
     ProjectNotFound as UrlProjectNotFound,
 )
-from core.detection.noir import noir_skip_reason
 from core.project_paths import ProjectPaths
 from factories.persistence import (
     create_finding_repo,
     create_overrides_repo,
     create_repo_repo,
     create_scan_repos,
-    create_scans_service,
     create_url_finding_repo,
     create_url_list_service,
 )
@@ -245,7 +243,7 @@ class ScanCommands:
             return
 
         try:
-            summary = handle.result.result()
+            handle.result.result()
         except ScanCancelled:
             self.repl.console.print("[yellow]Scan cancelled.[/yellow]")
             return
@@ -255,14 +253,6 @@ class ScanCommands:
         except Exception as exc:
             self.repl.console.print(f"[red]Scan failed:[/red] {exc}")
             return
-
-        if summary.findings_by_tool:
-            try:
-                create_scans_service(
-                    self.repl.project_registry, project_id
-                ).record_run_tool_counts(handle.run_id, summary.findings_by_tool)
-            except ProjectNotFound:
-                pass
 
     def _resolve_project_id(self) -> int:
         assert self.repl.active_project is not None
@@ -433,13 +423,6 @@ class ScanCommands:
 
         When ``auto_approve`` is True the warning is suppressed.
         """
-        _dast_tools = {"zap", "xsstrike", "dalfox"}
-        _discovery_tools = {"katana", "noir"}
-
-        if not (_dast_tools & set(tools)):
-            return tools
-        if _discovery_tools & set(tools):
-            return tools
         if auto_approve:
             return tools
 
@@ -451,15 +434,16 @@ class ScanCommands:
             else repos
         )
 
-        missing = [
-            r
-            for r in target_repos
-            if r.crawl_enabled and not self._repo_has_url_findings(r, project_id)
-        ]
-        if not missing:
+        service = DastPrerequisiteService()
+        check = service.check(
+            tools,
+            target_repos,
+            lambda r: self._repo_has_url_findings(r, project_id),
+        )
+        if check is None:
             return tools
 
-        missing_str = ", ".join(r.name for r in missing)
+        missing_str = ", ".join(r.name for r in check.missing_repos)
         self.repl.console.print(
             f"\n[yellow]Warning:[/yellow] No endpoint discovery output found"
             f" for: {missing_str}.\n"
@@ -482,12 +466,8 @@ class ScanCommands:
             self.repl.console.print("[dim]Scan cancelled.[/dim]")
             return None
         if choice == "1":
-            # Prepend discovery tools: katana always, noir when supported.
-            to_prepend: list[str] = ["katana"]
-            if any(noir_skip_reason(r) is None for r in missing):
-                to_prepend.append("noir")
-            existing = [t for t in tools if t not in to_prepend]
-            return to_prepend + existing
+            to_prepend = service.resolve_discovery_tools(check.missing_repos)
+            return service.prepend_prerequisites(to_prepend, tools)
         # choice == "2": proceed without discovery
         return tools
 

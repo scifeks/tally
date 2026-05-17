@@ -113,6 +113,7 @@ class _StubInventory:
 
     def __init__(self) -> None:
         self.ingest_calls: list[dict[str, Any]] = []
+        self.regenerate_calls: list[dict[str, Any]] = []
 
     def ingest_user_file(
         self, *, repo_id: int, file_path: str, entries: Iterable[Any]
@@ -122,6 +123,10 @@ class _StubInventory:
             {"repo_id": repo_id, "file_path": file_path, "entries": items}
         )
         return len(items)
+
+    def regenerate_artifacts(self, **kwargs: Any) -> tuple[str, str]:
+        self.regenerate_calls.append(kwargs)
+        return ("/fake/seeds.txt", "/fake/oas3.json")
 
 
 def _build(
@@ -354,6 +359,7 @@ class _FakeRepository:
 
     def __init__(self, name: str) -> None:
         self.name = name
+        self.base_urls: list[str] = []
 
 
 class TestUrlListServiceIngestUploadedEndpointFile:

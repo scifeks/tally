@@ -14,6 +14,7 @@ from infrastructure.endpoints.converters.endpoint_file_converter import (
     EndpointFileConverter,
 )
 from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.draft_files import DraftFilesAdapter
 from infrastructure.store.repositories.audit import AuditRepository
 from infrastructure.store.repositories.chat_messages import (
     ChatMessageRepository,
@@ -292,7 +293,7 @@ def create_findings_service(
         project_id=project_id,
         project_name=row.name,
         findings_db_exists=findings_db_exists,
-        purge_tables=factory.purge_non_preserved_tables,
+        purge_tables=factory.purge_operational_tables,
         knowledge_base_cache=knowledge_base_cache,
         base_path=base_path or "",
         event_sink=event_sink,
@@ -323,9 +324,11 @@ def create_reports_service(
 
     _, paths = _resolve_project(registry, project_id)
     factory = _init_factory(paths.findings_db)
+    draft_files = DraftFilesAdapter(paths.reports_draft_dir)
     return ReportsService(
         report_repo=ReportRepository(factory),
-        draft_repo=DraftRepository(factory),
+        draft_repo=DraftRepository(factory, draft_dir=paths.reports_draft_dir),
+        draft_files=draft_files,
         finding_repo=FindingRepository(factory),
         repo_repo=RepositoryRepository(factory),
     )

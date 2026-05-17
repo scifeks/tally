@@ -14,6 +14,7 @@ if str(_TALLY_ROOT) not in sys.path:
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -36,7 +37,7 @@ class TestUpsertShouldReportDefault:
         run_repo = RunRepository(factory)
         finding_repo = FindingRepository(factory)
         run_id = run_repo.create_run({})
-        finding_repo.insert_findings(run_id, [_BASE_FINDING])
+        finding_repo.insert_findings(run_id, normalize_test_findings([_BASE_FINDING]))
         with factory.connect() as conn:
             row = conn.execute("SELECT should_report FROM findings LIMIT 1").fetchone()
         assert row["should_report"] == 0
@@ -56,7 +57,7 @@ class TestUpsertShouldReportDefault:
         finding_repo = FindingRepository(factory)
 
         run_id1 = run_repo.create_run({})
-        finding_repo.insert_findings(run_id1, [_BASE_FINDING])
+        finding_repo.insert_findings(run_id1, normalize_test_findings([_BASE_FINDING]))
         with factory.connect() as conn:
             conn.execute(
                 "UPDATE findings SET should_report = 1 WHERE run_id = ?",
@@ -64,7 +65,7 @@ class TestUpsertShouldReportDefault:
             )
 
         run_id2 = run_repo.create_run({})
-        finding_repo.insert_findings(run_id2, [_BASE_FINDING])
+        finding_repo.insert_findings(run_id2, normalize_test_findings([_BASE_FINDING]))
 
         with factory.connect() as conn:
             rows = conn.execute(
@@ -91,7 +92,7 @@ class TestBatchUpdateAnalystFields:
             {**_BASE_FINDING, "rule_id": f"rule-{i}", "file_path": f"src/{i}.py"}
             for i in range(count)
         ]
-        finding_repo.insert_findings(run_id, findings)
+        finding_repo.insert_findings(run_id, normalize_test_findings(findings))
         with factory.connect() as conn:
             ids = [
                 r["id"]

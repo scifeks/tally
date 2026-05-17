@@ -42,6 +42,7 @@ from infrastructure.store.connection import (  # noqa: E402
     ConnectionFactory,
 )
 from tests.conftest import requires_docker  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.e2e
 
@@ -221,7 +222,7 @@ def triage_env(tmp_path: Path):
 
     run_id = run_repo.create_run({})
     finding = {**_FINDING_TEMPLATE, "repo_id": repo_id}
-    finding_repo.insert_findings(run_id, [finding])
+    finding_repo.insert_findings(run_id, normalize_test_findings([finding]))
 
     with factory.connect() as conn:
         row = conn.execute("SELECT id FROM findings ORDER BY id LIMIT 1").fetchone()

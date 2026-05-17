@@ -123,7 +123,7 @@ class TestCliDraftEventSinkUnknownEvent:
 
         unknown = UnknownEvent()
 
-        # Should not raise, just ignore
+        # Unknown event types are silently ignored
         sink.emit(unknown)  # type: ignore
         captured = capsys.readouterr()
 

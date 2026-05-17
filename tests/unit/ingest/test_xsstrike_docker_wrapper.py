@@ -102,6 +102,7 @@ class TestDockerBuildCommandFlags:
     def test_new_flags_present_in_seeds_mode(self) -> None:
         tool = _make_tool()
         cmd = tool.build_command(seeds_file="/tally_data/seeds.txt")
+        assert "--path" not in cmd
         assert "-t" in cmd
         assert "--timeout" in cmd
 
@@ -127,7 +128,7 @@ class TestDockerBuildCommandFlags:
         idx = cmd.index("-l")
         assert cmd[idx + 1] == "10"
 
-    def test_headers_serialised_as_json(self) -> None:
+    def test_headers_serialized_as_json(self) -> None:
         tool = _make_tool()
         hdrs = {"Authorization": "Bearer tok", "X-Custom": "val"}
         cmd = tool.build_command(base_url="http://localhost:8080", headers=hdrs)
@@ -220,7 +221,7 @@ class TestDockerBuildExecutionPasses:
             passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["seeds_file"] == seeds
 
-    def test_crawl_level_honoured(self, tmp_path: Any) -> None:
+    def test_crawl_level_honored(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
         repo = _make_repo(xsstrike_crawl_level=7)
@@ -229,7 +230,7 @@ class TestDockerBuildExecutionPasses:
             passes = tool.build_execution_passes(ctx)
         assert passes[0].kwargs["crawl_level"] == 7
 
-    def test_headers_honoured(self, tmp_path: Any) -> None:
+    def test_headers_honored(self, tmp_path: Any) -> None:
         tool = _make_tool()
         seeds = self._make_seeds(tmp_path)
         hdrs = {"Cookie": "session=abc"}

@@ -12,9 +12,15 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from domain.findings.normalization import (  # noqa: E402
+    build_triage_meta,
+    normalise_finding_type,
+    severity_to_rank,
+)
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -42,22 +48,11 @@ def _seed(
     findings: list[dict],
 ) -> int:
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, findings)
+    finding_repo.insert_findings(run_id, normalize_test_findings(findings))
     return run_id
 
 
 class TestUpdateFinding:
-    _VALID_UPDATE = {
-        "confidence": "probable",
-        "finding_type": "vulnerability",
-        "severity": "high",
-        "reasoning": "Code review confirms taint flow.",
-        "remediation": "Parameterise the query.",
-        "attack_vector": "network",
-        "call_stack": None,
-        "strategy": "manual",
-    }
-
     def test_updates_row(
         self,
         factory: ConnectionFactory,
@@ -79,7 +74,21 @@ class TestUpdateFinding:
         with factory.connect() as conn:
             fid = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()["id"]
 
-        result = repo.update_finding(fid, **self._VALID_UPDATE)
+        result = repo.update_finding(
+            fid,
+            severity_rank=severity_to_rank("high") or 0,
+            confidence="probable",
+            finding_type_json=normalise_finding_type("vulnerability") or "[]",
+            triage_meta=build_triage_meta(
+                "probable",
+                "Code review confirms taint flow.",
+                "Parameterise the query.",
+                "network",
+                None,
+            ),
+            strategy="manual",
+            source="auto_triage",
+        )
         assert result is True
 
         with factory.connect() as conn:
@@ -93,7 +102,21 @@ class TestUpdateFinding:
 
     def test_raises_for_missing_id(self, repo: FindingRepository) -> None:
         with pytest.raises(ValueError, match="not found"):
-            repo.update_finding(999_999, **self._VALID_UPDATE)
+            repo.update_finding(
+                999_999,
+                severity_rank=severity_to_rank("high") or 0,
+                confidence="probable",
+                finding_type_json=normalise_finding_type("vulnerability") or "[]",
+                triage_meta=build_triage_meta(
+                    "probable",
+                    "Code review confirms taint flow.",
+                    "Parameterise the query.",
+                    "network",
+                    None,
+                ),
+                strategy="manual",
+                source="auto_triage",
+            )
 
     def test_triage_block_in_meta(
         self,
@@ -105,7 +128,21 @@ class TestUpdateFinding:
         with factory.connect() as conn:
             fid = conn.execute("SELECT id FROM findings LIMIT 1").fetchone()["id"]
 
-        repo.update_finding(fid, **self._VALID_UPDATE)
+        repo.update_finding(
+            fid,
+            severity_rank=severity_to_rank("high") or 0,
+            confidence="probable",
+            finding_type_json=normalise_finding_type("vulnerability") or "[]",
+            triage_meta=build_triage_meta(
+                "probable",
+                "Code review confirms taint flow.",
+                "Parameterise the query.",
+                "network",
+                None,
+            ),
+            strategy="manual",
+            source="auto_triage",
+        )
 
         with factory.connect() as conn:
             row = conn.execute(

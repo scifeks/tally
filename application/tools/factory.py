@@ -4,6 +4,11 @@ import importlib
 import inspect
 
 from domain.tools.interface import ToolInterface
+from infrastructure.endpoints.converters.katana import KatanaAdapter
+
+_EXTRA_DEPS: dict[str, dict] = {
+    "katana": {"endpoint_converter": KatanaAdapter()},
+}
 
 
 class ToolWrapperFactory:
@@ -18,7 +23,10 @@ class ToolWrapperFactory:
                 and not inspect.isabstract(obj)
                 and obj.__module__ == module_name
             ):
-                return obj(config=config)  # type: ignore[call-arg]
+                kwargs: dict = {"config": config}
+                if tool_name in _EXTRA_DEPS:
+                    kwargs.update(_EXTRA_DEPS[tool_name])
+                return obj(**kwargs)  # type: ignore[call-arg]
         raise ValueError(
             f"No ToolInterface implementation found for {tool_name!r} in {module_name}"
         )

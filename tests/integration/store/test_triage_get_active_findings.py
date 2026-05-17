@@ -15,6 +15,7 @@ from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 from infrastructure.store.repositories.triage import TriageBatchRepository  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -67,7 +68,7 @@ def _seed_findings(
             {**f, "repo_id": repo_ids[f.get("repo", "unknown")]} for f in findings
         ]
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, findings)
+    finding_repo.insert_findings(run_id, normalize_test_findings(findings))
     return run_id
 
 

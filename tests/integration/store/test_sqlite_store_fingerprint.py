@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -96,10 +97,10 @@ class TestFingerprint:
         store = _make_store(tmp_path)
 
         run_id1 = store.create_run({"args": []})
-        store.insert_findings(run_id1, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id1, normalize_test_findings(_GITLEAKS_FINDINGS[:1]))
 
         run_id2 = store.create_run({"args": []})
-        store.insert_findings(run_id2, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id2, normalize_test_findings(_GITLEAKS_FINDINGS[:1]))
 
         conn = store._connect()
         count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
@@ -109,7 +110,7 @@ class TestFingerprint:
         """Two different findings produce different fingerprints."""
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _GITLEAKS_FINDINGS)  # 2 findings
+        store.insert_findings(run_id, normalize_test_findings(_GITLEAKS_FINDINGS))
 
         conn = store._connect()
         count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]

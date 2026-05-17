@@ -132,6 +132,7 @@ class DalFoxLocalTool(BaseDalFoxTool):
                 "--no-spinner",
                 "--no-color",
                 "--deep-domxss",
+                "--skip-grepping",
                 "--remote-payloads",
                 "portswigger,payloadbox",
             ]

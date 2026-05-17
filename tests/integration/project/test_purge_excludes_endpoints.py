@@ -11,7 +11,7 @@ import datetime
 import shutil
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -56,7 +56,8 @@ class TestPurgePreservesConfigEndpoints:
         self, tmp_path: Path
     ) -> None:
         """``config/endpoints/<repo>/`` survives a full tool-output purge."""
-        from application.repl.commands.purge import PurgeCommand
+        from application.purge.service import PurgeService
+        from core.project_paths import ProjectPaths
 
         project_name = "test-proj"
         project_dir = tmp_path / "projects" / project_name
@@ -75,8 +76,9 @@ class TestPurgePreservesConfigEndpoints:
         seed_file = seed_dir / "seed.json"
         seed_file.write_text('{"openapi": "3.0.3", "info": {}, "paths": {}}')
 
-        pc = PurgeCommand(_make_repl(tmp_path, project_name))
-        pc._delete_tool_output_files(tools=None)
+        paths = ProjectPaths.from_canonical(tmp_path, project_name)
+        svc = PurgeService(MagicMock(), paths, MagicMock(), 1)
+        svc._delete_tool_output_files(tools=None)
 
         assert original_file.exists(), "original seed must survive tool-output purge"
         assert seed_file.exists(), "seed.json must survive tool-output purge"
@@ -102,21 +104,24 @@ class TestDeleteMergedEndpoints:
 
     def test_delete_merged_removes_files(self, tmp_path: Path) -> None:
         """``_delete_merged_endpoints`` wipes merged artifact files."""
-        from application.repl.commands.purge import PurgeCommand
+        from application.purge.service import PurgeService
 
         project_name = "test-proj"
         repo_name = "my-repo"
         oas3, urls = self._setup(tmp_path, project_name, repo_name)
 
-        pc = PurgeCommand(_make_repl(tmp_path, project_name))
-        pc._delete_merged_endpoints()
+        from core.project_paths import ProjectPaths
+
+        paths = ProjectPaths.from_canonical(tmp_path, project_name)
+        svc = PurgeService(MagicMock(), paths, MagicMock(), 1)
+        svc._delete_merged_endpoints()
 
         assert not oas3.exists(), "merged_oas3.json must be deleted"
         assert not urls.exists(), "merged_urls.txt must be deleted"
 
     def test_delete_merged_leaves_config_endpoints_intact(self, tmp_path: Path) -> None:
         """``config/endpoints/`` is never touched by ``_delete_merged_endpoints``."""
-        from application.repl.commands.purge import PurgeCommand
+        from application.purge.service import PurgeService
 
         project_name = "test-proj"
         repo_name = "my-repo"
@@ -129,8 +134,11 @@ class TestDeleteMergedEndpoints:
         seed_file = seed_dir / "seed.json"
         seed_file.write_text('{"openapi": "3.0.3", "info": {}, "paths": {}}')
 
-        pc = PurgeCommand(_make_repl(tmp_path, project_name))
-        pc._delete_merged_endpoints()
+        from core.project_paths import ProjectPaths
+
+        paths = ProjectPaths.from_canonical(tmp_path, project_name)
+        svc = PurgeService(MagicMock(), paths, MagicMock(), 1)
+        svc._delete_merged_endpoints()
 
         assert seed_file.exists(), "seed.json must survive _delete_merged_endpoints"
 
@@ -157,32 +165,24 @@ class TestCmdPurgeMergedPrompt:
 
     def test_answering_n_leaves_merged_intact(self, tmp_path: Path) -> None:
         """Answering 'n' to the merged-URL prompt keeps merged files."""
-        from application.repl.commands.purge import PurgeCommand
+        from application.purge.service import PurgeService
+        from core.project_paths import ProjectPaths
 
         project_name = "purge-n-test"
         repo_name = "api"
         oas3, urls = self._setup(tmp_path, project_name, repo_name)
 
-        repl = _make_repl(tmp_path, project_name)
-        mock_rag = MagicMock()
-        mock_rag.count.return_value = 1
-        mock_rag.delete_findings.return_value = 1
+        paths = ProjectPaths.from_canonical(tmp_path, project_name)
+        svc = PurgeService(MagicMock(), paths, MagicMock(), 1)
+        svc.execute(tools=None, keep_reports=False, delete_merged=False)
 
-        pc = PurgeCommand(repl)
-        with (
-            patch.object(pc, "_get_knowledge_base", return_value=mock_rag),
-            patch("builtins.input", side_effect=["y", "n"]),
-            patch.object(pc, "_count_sqlite_findings", return_value=0),
-            patch.object(pc, "_purge_sqlite"),
-        ):
-            pc.cmd_purge("purge", [])
-
-        assert oas3.exists(), "merged_oas3.json must survive when user answers 'n'"
-        assert urls.exists(), "merged_urls.txt must survive when user answers 'n'"
+        assert oas3.exists(), "merged_oas3.json must survive when delete_merged=False"
+        assert urls.exists(), "merged_urls.txt must survive when delete_merged=False"
 
     def test_answering_y_deletes_merged_files(self, tmp_path: Path) -> None:
         """Answering 'y' to the merged-URL prompt deletes merged files."""
-        from application.repl.commands.purge import PurgeCommand
+        from application.purge.service import PurgeService
+        from core.project_paths import ProjectPaths
 
         project_name = "purge-y-test"
         repo_name = "api"
@@ -195,24 +195,14 @@ class TestCmdPurgeMergedPrompt:
         seed_file = seed_dir / "seed.json"
         seed_file.write_text('{"openapi": "3.0.3", "info": {}, "paths": {}}')
 
-        repl = _make_repl(tmp_path, project_name)
-        mock_rag = MagicMock()
-        mock_rag.count.return_value = 1
-        mock_rag.delete_findings.return_value = 1
-
-        pc = PurgeCommand(repl)
-        with (
-            patch.object(pc, "_get_knowledge_base", return_value=mock_rag),
-            patch("builtins.input", side_effect=["y", "y"]),
-            patch.object(pc, "_count_sqlite_findings", return_value=0),
-            patch.object(pc, "_purge_sqlite"),
-        ):
-            pc.cmd_purge("purge", [])
+        paths = ProjectPaths.from_canonical(tmp_path, project_name)
+        svc = PurgeService(MagicMock(), paths, MagicMock(), 1)
+        svc.execute(tools=None, keep_reports=False, delete_merged=True)
 
         assert not oas3.exists(), (
-            "merged_oas3.json must be deleted when user answers 'y'"
+            "merged_oas3.json must be deleted when delete_merged=True"
         )
         assert not urls.exists(), (
-            "merged_urls.txt must be deleted when user answers 'y'"
+            "merged_urls.txt must be deleted when delete_merged=True"
         )
         assert seed_file.exists(), "seed.json must survive purge"

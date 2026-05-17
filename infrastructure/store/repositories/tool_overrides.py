@@ -24,7 +24,7 @@ _COLUMNS = (
 
 
 class ToolOverridesRepository(ToolOverridesRepositoryPort):
-    """CRUD on ``tool_overrides``. Domain validation lives in the service."""
+    """CRUD on tool_overrides table."""
 
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory

@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -161,7 +162,7 @@ def _seed_all(store: _TestStore) -> int:
     all_findings = (
         _SEMGREP_FINDINGS + _GITLEAKS_FINDINGS + _NMAP_FINDINGS + _ZAP_FINDINGS
     )
-    store.insert_findings(run_id, all_findings)
+    store.insert_findings(run_id, normalize_test_findings(all_findings))
     return run_id
 
 
@@ -183,7 +184,7 @@ class TestFileFilter:
     def test_file_contains_php_extension(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _SEMGREP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_SEMGREP_FINDINGS))
 
         results = store.search(
             {

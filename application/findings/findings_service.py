@@ -156,13 +156,10 @@ class FindingsService:
             return
 
     def purge_all_findings_data(self) -> None:
-        """Wipe every non-preserved table in the project's findings DB.
+        """Clear operational tables in the project's findings DB.
 
-        Used by the full ``purge`` REPL command. The ``repositories``
-        table is preserved by ``ConnectionFactory.purge_non_preserved_tables``;
-        every other findings-DB table is cleared. Failures are
-        swallowed so the REPL flow can proceed with the rest of the
-        purge cascade; the caller prints a warning if it cares.
+        Configuration tables (repositories, tool_arg_profiles,
+        tool_overrides, saved_scans) are preserved.
         """
         if self._purge_tables is None:
             return

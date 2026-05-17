@@ -98,7 +98,7 @@ class TestQueryChatContextLabel:
         )
 
     def test_chat_context_label_omits_repo_when_profile_empty(self) -> None:
-        """When profile is absent, label is just [tool] with no repo= part."""
+        """When profile is absent, label becomes [tool] with no repo= part."""
         engine = self._make_query_engine()
 
         search_result = [

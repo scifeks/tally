@@ -9,6 +9,7 @@ import pytest
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
 from infrastructure.store.repositories.runs import RunRepository
+from tests.finding_helpers import normalize_test_findings
 
 
 @pytest.fixture()
@@ -43,7 +44,7 @@ def _insert(factory: ConnectionFactory, findings: list[dict]) -> None:
         else:
             patched.append(f)
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(run_id, patched)
+    finding_repo.insert_findings(run_id, normalize_test_findings(patched))
 
 
 class TestCountAggregatesEmpty:

@@ -723,3 +723,45 @@ Editing project 'acme-security-audit' (press Enter to keep current value)...
 ```
 
 To clear the abbreviation (reverting to the global prefix), enter `--clear` at the abbreviation prompt.
+
+---
+
+## Syncing Findings
+
+Tally can sync findings to external vulnerability management platforms. Currently supported: DefectDojo.
+
+### DefectDojo
+
+Sync all findings in the active project to DefectDojo:
+
+```
+[acme-security-audit]> sync --integration=defectdojo
+Sync complete: 142 exported
+```
+
+Sync findings from a specific scan run:
+
+```
+[acme-security-audit]> sync --integration=defectdojo --run-id=3
+Sync complete: 28 exported
+```
+
+Override the engagement type for a single sync:
+
+```
+[acme-security-audit]> sync --integration=defectdojo --engagement-type="Manual Assessment"
+Sync complete: 142 exported
+```
+
+Test the connection before syncing:
+
+```
+[acme-security-audit]> sync --integration=defectdojo --test-connection
+DefectDojo connection successful.
+```
+
+Each repo in the project becomes its own DefectDojo Product, named
+`"{project} / {repo}"`. DefectDojo connection and mapping settings
+are configured in `config/global.json`. See
+[docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for
+full setup instructions and entity mapping details.

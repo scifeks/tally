@@ -14,13 +14,6 @@ import { StaleSavedScanModal } from '@/components/StaleSavedScanModal'
 import type { StaleSavedScanItem } from '@/components/StaleSavedScanModal'
 import type { ToolArgProfile } from '@/lib/api/useToolArgProfiles'
 
-const SEGMENT_LABEL: Record<Segment, string> = {
-  sast: 'SAST',
-  sca: 'SCA',
-  web: 'WEB',
-  secrets: 'SECRETS',
-}
-
 interface FormState {
   id?: number
   name: string
@@ -521,7 +514,7 @@ export function SavedScansTab({
                             : 'border-border text-muted-foreground hover:border-muted-foreground'
                         )}
                       >
-                        {SEGMENT_LABEL[d]}
+                        {d.toUpperCase()}
                       </button>
                     )
                   })}

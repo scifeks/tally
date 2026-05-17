@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from application.ports.llm_provider import LLMProvider
 from application.ports.progress_reporter import NullProgressReporter, ProgressReporter
+from domain.findings.normalization import split_enrichment_fields
 from domain.tools.constants import (
     CONFIDENCE_LEVELS,
     ENRICHMENT_FIELDS,
@@ -272,11 +273,7 @@ class EnrichmentPipeline:
         total = len(ids)
         max_workers = self._resolve_max_workers()
 
-        # Phase 1: Fetch rows from SQLite and build work list
-        # Each work item: (row, text, meta, legacy_fields, specs)
-        #   legacy_fields is set when using the batch path.
-        #   specs is set when using the per-field path.
-        #   Exactly one of the two is non-None per item.
+        # Phase 1: build work list from un-enriched rows.
         work_items: list[
             tuple[
                 dict[str, Any],
@@ -297,9 +294,6 @@ class EnrichmentPipeline:
             if not legacy_fields and not specs:
                 auto_enriched += 1
                 continue
-            # doc_text is empty: all current tools use the per-field path
-            # which reads only from meta. The legacy batch path is dead for
-            # current tools but left in place.
             work_items.append((row, "", row, legacy_fields, specs))
 
         if not work_items:
@@ -351,8 +345,9 @@ class EnrichmentPipeline:
         # Phase 3: SQLite writes (sequential to avoid write contention).
         # Runs even on cancel so already-completed work isn't lost.
         for row, validated_fields in updates:
+            cols, meta = split_enrichment_fields(validated_fields)
             self._finding_repo.update_enrichment_fields(
-                row["id"], validated_fields, source="llm_inference"
+                row["id"], cols, meta, source="llm_inference"
             )
 
         if cancelled:

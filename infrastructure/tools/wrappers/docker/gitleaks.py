@@ -45,7 +45,7 @@ class GitleaksDockerTool(BaseGitleaksTool):
         if scan_type not in ("dir", "git"):
             raise ValueError(f"scan_type must be 'dir' or 'git', got {scan_type!r}")
 
-        gitleaks_ignore_path: str | None = kwargs.get("gitleaks_ignore_path")
+        config_path: str | None = kwargs.get("config_path")
 
         tool_args = [
             scan_type,
@@ -55,8 +55,8 @@ class GitleaksDockerTool(BaseGitleaksTool):
             "--exit-code",
             "0",
         ]
-        if gitleaks_ignore_path:
-            tool_args.extend(["--gitleaks-ignore-path", gitleaks_ignore_path])
+        if config_path:
+            tool_args.extend(["--config", config_path])
 
         return build_docker_exec(self._container_name, self._tool_path, tool_args)
 

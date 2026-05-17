@@ -69,6 +69,9 @@ def _dispatch(
     base_path: str,
 ) -> int:
     """Route to the appropriate command handler."""
+    from application.cli.commands.integration_sync import (
+        cmd_integration_sync,
+    )
     from application.cli.commands.purge import cmd_purge
     from application.cli.commands.report import cmd_report
     from application.cli.commands.run import cmd_run
@@ -87,6 +90,7 @@ def _dispatch(
         "triage": cmd_triage,
         "purge": cmd_purge,
         "stats": cmd_stats,
+        "integration-sync": cmd_integration_sync,
         "ui": cmd_ui,
     }
 
@@ -120,9 +124,11 @@ def main() -> int:
         ProjectRegistryService,
     )
     from application.tools.registry import ToolRegistry
+    from infrastructure.store.connection import ConnectionFactory
     from infrastructure.store.project_registry import (
         ProjectRegistryRepository,
     )
+    from infrastructure.store.repositories.runs import RunRepository
 
     registry_repo = ProjectRegistryRepository(Path(base_path) / "tally.db")
     project_registry = ProjectRegistryService(registry_repo)
@@ -133,6 +139,7 @@ def main() -> int:
         project_registry=project_registry,
         tool_registry=tool_registry,
         base_path=base_path,
+        run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
     ).run()
 
     needs_project = args.command not in ("ui",)

@@ -147,7 +147,7 @@ async def stream_chat(
         )
     if session.expired_at is not None:
         raise ChatSessionExpired(
-            f"chat session {request.session_id} is sealed (expired_at="
+            f"chat session {request.session_id} is expired (expired_at="
             f"{session.expired_at!r})"
         )
 
@@ -303,12 +303,7 @@ def _build_messages(
     prior_turns: list[ChatMessageRow],
     new_user_message: str,
 ) -> list[dict[str, str]]:
-    """Assemble the chat-completion message list for the provider.
-
-    Layout: ``[system] + [prior turns mapped to {role, content}] +
-    [new user]``. The system message embeds the retrieval context;
-    prior turns are rendered in insertion order (oldest first).
-    """
+    """Assemble the chat-completion message list for the provider."""
     system_content = _SYSTEM_PROMPT_TEMPLATE.format(
         context=retrieval_context or "(no findings retrieved)"
     )
@@ -323,12 +318,9 @@ def _apply_char_ceiling(
     messages: list[dict[str, str]],
     ceiling: int,
 ) -> list[dict[str, str]]:
-    """Drop oldest prior turns until total content length is <= *ceiling*.
+    """Drop oldest prior turns until total content fits within *ceiling*.
 
-    The system message (index 0) and the final user message (last
-    index) are preserved unconditionally. Stored DB rows are
-    untouched; only the in-memory list passed to the provider is
-    trimmed.
+    System and final user messages are never dropped.
     """
     if len(messages) <= 2:
         return messages

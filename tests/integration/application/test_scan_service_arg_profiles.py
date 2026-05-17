@@ -79,7 +79,7 @@ def _start_kwargs(
         project_id=1,
         project_name="test-proj",
         base_path="/tmp",
-        tool_registry=MagicMock(),
+        tool_registry=MagicMock(list_tool_names=MagicMock(return_value=[])),
         run_repo=run_repo,
         chat_session_repo=chat_session_repo,
         profiles_repo=profiles_repo,

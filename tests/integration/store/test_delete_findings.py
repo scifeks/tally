@@ -14,6 +14,7 @@ if str(_TALLY_ROOT) not in sys.path:
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
+from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -30,24 +31,22 @@ def _make_store(
 
 def _seed_two_tools(run_repo: RunRepository, finding_repo: FindingRepository) -> None:
     run_id = run_repo.create_run({})
-    finding_repo.insert_findings(
-        run_id,
-        [
-            {
-                "tool": "semgrep",
-                "severity": "high",
-                "file_path": "foo.py",
-                "rule_id": "r1",
-            },
-            {
-                "tool": "gitleaks",
-                "severity": "critical",
-                "file_path": "bar.py",
-                "rule_id": "g1",
-                "line_number": 1,
-            },
-        ],
-    )
+    findings = [
+        {
+            "tool": "semgrep",
+            "severity": "high",
+            "file_path": "foo.py",
+            "rule_id": "r1",
+        },
+        {
+            "tool": "gitleaks",
+            "severity": "critical",
+            "file_path": "bar.py",
+            "rule_id": "g1",
+            "line_number": 1,
+        },
+    ]
+    finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
 
 class TestDeleteFindings:

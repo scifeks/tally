@@ -3,8 +3,8 @@
 A scan thread checks ``token.is_set()`` between segments, between tool
 launches, and inside ``ToolExecutor`` while waiting on a subprocess. The
 HTTP cancel endpoint sets the token; the scan thread observes it and
-unwinds gracefully, emitting ``run_cancelled`` and persisting
-``status='cancelled'`` before exiting.
+unwinds gracefully, emitting ``run_canceled`` and persisting
+``status='canceled'`` before exiting.
 
 The REPL passes a ``no_op_token()`` since the REPL has no UX to cancel
 mid-scan; only the API surface needs cooperative cancellation.
@@ -18,7 +18,7 @@ import threading
 class CancellationToken:
     """Thread-safe cooperative cancellation flag.
 
-    Wraps :class:`threading.Event`. ``set()`` requests cancellation;
+    Wraps ``threading.Event``. ``set()`` requests cancellation;
     ``is_set()`` is the polling check; ``wait(timeout)`` blocks until
     either cancellation or timeout. The token is one-way: once set, it
     stays set for the lifetime of the scan.

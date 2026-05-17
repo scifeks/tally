@@ -6,6 +6,7 @@ import logging
 import threading
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,9 +23,12 @@ from application.reporting.draft_run_registry import (
     get_draft_run_registry,
 )
 from application.reporting.drafts import SECTION_REGISTRY
+from core.config.manager import ConfigManager
+from domain.reports.draft_summary import DraftSectionSummary
 
 if TYPE_CHECKING:
     from application.ports.draft_event_sink import DraftEventSink
+    from application.ports.draft_files import DraftFilesPort
     from application.ports.draft_repository import DraftRepositoryPort
     from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.project_repo_repository import (
@@ -70,11 +74,13 @@ class ReportsService:
         finding_repo: FindingRepositoryPort,
         repo_repo: ProjectRepoRepositoryPort,
         *,
+        draft_files: DraftFilesPort | None = None,
         lock_registry: LockRegistry | None = None,
         draft_run_registry: DraftRunRegistry | None = None,
     ) -> None:
         self._report_repo = report_repo
         self._draft_repo = draft_repo
+        self._draft_files = draft_files
         self._finding_repo = finding_repo
         self._repo_repo = repo_repo
         self._lock_registry = lock_registry or get_registry()
@@ -87,6 +93,84 @@ class ReportsService:
     @property
     def draft_repo(self) -> DraftRepositoryPort:
         return self._draft_repo
+
+    @property
+    def draft_files(self) -> DraftFilesPort | None:
+        return self._draft_files
+
+    def get_section_summary(self, section: str) -> DraftSectionSummary:
+        """Build a summary for a single draft section."""
+        record = self._draft_repo.get(section)
+        text = (
+            self._draft_files.read(section)
+            if self._draft_files
+            else self._draft_repo.read_content(section)
+        )
+        word_count: int | None = None
+        preview: str | None = None
+        if text is not None:
+            word_count = len(text.split())
+            preview = text[:200]
+        return DraftSectionSummary(
+            section=section,
+            status=record.status if record else "not_generated",
+            generated_at=record.generated_at if record else None,
+            reviewed_at=record.reviewed_at if record else None,
+            uploaded_filename=record.original_filename if record else None,
+            word_count=word_count,
+            preview=preview,
+            error=record.error if record else None,
+        )
+
+    def write_draft(self, section: str, content: str) -> None:
+        """Write draft content via the filesystem port."""
+        if self._draft_files:
+            self._draft_files.write(section, content)
+
+    def read_draft(self, section: str) -> str | None:
+        """Read draft content via the filesystem port."""
+        if self._draft_files:
+            return self._draft_files.read(section)
+        return None
+
+    def draft_exists(self, section: str) -> bool:
+        """Check if a draft file exists via the filesystem port."""
+        if self._draft_files:
+            return self._draft_files.exists(section)
+        return False
+
+    def delete_draft_file(self, section: str) -> None:
+        """Delete a draft file via the filesystem port."""
+        if self._draft_files:
+            self._draft_files.delete(section)
+
+    @staticmethod
+    def resolve_output_path(
+        output_path: str | None,
+        fmt: str,
+        reports_dir: Path,
+    ) -> Path:
+        """Resolve a user-provided output path or generate a timestamped fallback."""
+        reports_dir_resolved = reports_dir.resolve()
+        if output_path:
+            p = Path(output_path)
+            if not p.is_absolute():
+                resolved = (reports_dir / p).resolve()
+            else:
+                resolved = p.resolve()
+            return resolved
+        ts = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
+        ext = "md" if fmt == "markdown" else fmt
+        return reports_dir_resolved / f"report_{ts}.{ext}"
+
+    @staticmethod
+    def get_retention_count(base_path: str) -> int:
+        """Read report_retention_count from global config, default 10."""
+        try:
+            config = ConfigManager(base_path).global_config
+            return int(getattr(config, "report_retention_count", 10) or 0)
+        except FileNotFoundError:
+            return 10
 
     def start_drafts(
         self,
@@ -169,6 +253,7 @@ class ReportsService:
                         repo_repo=self._repo_repo,
                         event_sink=event_sink,
                         cancel_token=cancel_token,
+                        draft_files=self._draft_files,
                     )
                 except DraftCancelled:
                     logger.info("draft run %r cancelled", section)

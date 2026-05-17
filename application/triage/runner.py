@@ -24,6 +24,11 @@ from application.triage.verdict import (
     Verdict,
     VerdictParseError,
 )
+from domain.findings.normalization import (
+    build_triage_meta,
+    normalise_finding_type,
+    severity_to_rank,
+)
 from domain.pipeline.triage_events import (
     BatchCompleted,
     BatchCreated,
@@ -54,7 +59,7 @@ class TriageCancelled(Exception):
     """Raised when triage observes its CancellationToken set mid-run.
 
     The runner's batch loop catches this, marks remaining batches
-    cancelled, emits a ``run_cancelled`` event, and exits cleanly.
+    canceled, emits a ``run_canceled`` event, and exits cleanly.
     """
 
 
@@ -552,14 +557,17 @@ class TriageRunner:
         call_stack_str = json.dumps(verdict.call_stack) if verdict.call_stack else None
         self._finding_repo.update_finding(
             verdict.finding_id,
-            verdict.confidence,
-            verdict.finding_type,
-            verdict.severity,
-            verdict.reasoning,
-            verdict.remediation,
-            verdict.attack_vector,
-            call_stack_str,
-            segment,
+            severity_rank=severity_to_rank(verdict.severity) or 0,
+            confidence=verdict.confidence,
+            finding_type_json=normalise_finding_type(verdict.finding_type) or "[]",
+            triage_meta=build_triage_meta(
+                confidence=verdict.confidence,
+                reasoning=verdict.reasoning,
+                remediation=verdict.remediation,
+                attack_vector=verdict.attack_vector,
+                call_stack=call_stack_str,
+            ),
+            strategy=segment,
             triaged_by=self._triaged_by,
             source="auto_triage",
         )

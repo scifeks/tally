@@ -30,6 +30,7 @@ from application.repl.commands import (
     PurgeCommand,
     ReportCommand,
     ScanCommands,
+    SyncCommand,
     ToolCommands,
     TriageCommands,
     UiCommands,
@@ -71,6 +72,7 @@ _COMPLETIONS = [
     "purge",
     "report",
     "triage",
+    "sync",
     "ui",
 ]
 # First tokens only for WordCompleter
@@ -273,6 +275,7 @@ class REPL:
         self.report_commands = ReportCommand(self)
         self.tool_commands = ToolCommands(self, self.help_renderer)
         self.triage_commands = TriageCommands(self)
+        self.sync_commands = SyncCommand(self)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
 
     def run(self) -> None:
@@ -380,6 +383,7 @@ class REPL:
             "purge": self.purge_commands.cmd_purge,
             "report": self.report_commands.execute,
             "triage": self.triage_commands.cmd_triage,
+            "sync": self.sync_commands.cmd_sync,
             "ui": self.ui_commands.cmd_ui,
         }
         handler = handlers.get(cmd)

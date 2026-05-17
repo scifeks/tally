@@ -97,6 +97,7 @@ class UrlInventoryIngestHandler:
                 tool=url_tool,
                 entries=entries,
             )
+            service.reconcile_noir_with_katana(repo_id)
             service.regenerate_artifacts(
                 repo_id=repo_id,
                 project_paths=paths,

@@ -9,6 +9,7 @@ import pytest
 
 from infrastructure.store import make_store
 from infrastructure.store.connection import ConnectionFactory
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -106,18 +107,16 @@ class TestCweNormalization:
     def test_semgrep_cwe_is_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "semgrep",
-                    "rule_id": "r1",
-                    "file_path": "a.py",
-                    "line_start": 1,
-                    "cwe": "CWE-89",
-                }
-            ],
-        )
+        findings = [
+            {
+                "tool": "semgrep",
+                "rule_id": "r1",
+                "file_path": "a.py",
+                "line_start": 1,
+                "cwe": "CWE-89",
+            }
+        ]
+        store.insert_findings(run_id, normalize_test_findings(findings))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         cwe = results[0]["metadata"].get("cwe")
         assert isinstance(cwe, list)
@@ -125,18 +124,16 @@ class TestCweNormalization:
     def test_zap_cwe_id_int_becomes_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "zap",
-                    "url": "https://example.com",
-                    "method": "GET",
-                    "alert_name": "xss",
-                    "cwe_id": 79,
-                }
-            ],
-        )
+        findings = [
+            {
+                "tool": "zap",
+                "url": "https://example.com",
+                "method": "GET",
+                "alert_name": "xss",
+                "cwe_id": 79,
+            }
+        ]
+        store.insert_findings(run_id, normalize_test_findings(findings))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         cwe = results[0]["metadata"].get("cwe")
         assert cwe == ["CWE-79"]
@@ -144,17 +141,15 @@ class TestCweNormalization:
     def test_sca_cwe_ids_is_list(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(
-            run_id,
-            [
-                {
-                    "tool": "pip-audit",
-                    "package_name": "pkg",
-                    "vulnerability_id": "GHSA-x",
-                    "cwe_ids": "CWE-89, CWE-20",
-                }
-            ],
-        )
+        findings = [
+            {
+                "tool": "pip-audit",
+                "package_name": "pkg",
+                "vulnerability_id": "GHSA-x",
+                "cwe_ids": "CWE-89, CWE-20",
+            }
+        ]
+        store.insert_findings(run_id, normalize_test_findings(findings))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         cwe = results[0]["metadata"].get("cwe")
         assert isinstance(cwe, list)
@@ -163,13 +158,13 @@ class TestCweNormalization:
     def test_gitleaks_no_cwe(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _GITLEAKS_FINDINGS[:1])
+        store.insert_findings(run_id, normalize_test_findings(_GITLEAKS_FINDINGS[:1]))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("cwe") is None
 
     def test_nmap_no_cwe(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
         run_id = store.create_run({})
-        store.insert_findings(run_id, _NMAP_FINDINGS)
+        store.insert_findings(run_id, normalize_test_findings(_NMAP_FINDINGS))
         results = store.search({"conditions": [], "page": 1, "page_size": 200})
         assert results[0]["metadata"].get("cwe") is None

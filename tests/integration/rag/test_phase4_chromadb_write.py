@@ -12,7 +12,6 @@ from unittest.mock import patch
 
 import pytest
 
-from application.pipeline.fingerprint import compute_fingerprint
 from application.pipeline.strategies import PersistOnlyStrategy
 from application.ports.embedding_provider import EmbeddingProvider
 from application.rag.knowledge_base import FindingKnowledgeBase
@@ -20,6 +19,7 @@ from core.project_paths import ProjectPaths
 from domain.pipeline.events import IngestCompleted
 from infrastructure.store import make_store
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
+from tests.finding_helpers import normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -63,9 +63,11 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
-    finding_repo.insert_findings(run_id, [row])  # type: ignore[union-attr]
-    fp = compute_fingerprint(row)
-    ids = finding_repo.get_ids_by_fingerprints([fp])  # type: ignore[union-attr]
+    normalized = normalize_test_findings([row])
+    finding_repo.insert_findings(  # type: ignore[union-attr]
+        run_id, normalized
+    )
+    ids = finding_repo.get_ids_by_fingerprints([normalized[0].fingerprint])  # type: ignore[union-attr]
     return ids[0]
 
 

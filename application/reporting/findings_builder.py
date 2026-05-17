@@ -142,12 +142,8 @@ def _affected_location(finding: dict[str, Any], meta: dict[str, Any]) -> str:
 class FindingsBuilder:
     """Builds HTML fragments for all Segment 5 report sections.
 
-    Args:
-        prefix: Resolved finding ID prefix (e.g. ``"TAL"``, ``"FOO"``).
-                When empty, findings use a numeric-only format (e.g. ``001``).
-
-    User-sourced values are always HTML-escaped.  CSS classes reference the
-    palette defined in ``static/report.css``; no colours are hardcoded here.
+    User-sourced values are always HTML-escaped. CSS classes reference the
+    palette defined in ``static/report.css``; no colors are hardcoded.
     """
 
     def __init__(self, prefix: str = "") -> None:
@@ -166,17 +162,10 @@ class FindingsBuilder:
         """Return HTML for the Master Findings Table.
 
         The ``<h2>`` heading is included in the returned HTML (the template
-        does not provide headings for this slot).
-
-        Args:
-            code_findings: Pre-sorted, finding-ID-assigned findings.
-
-        Returns:
-            HTML string of the findings table.
+        does not provide headings for this slot). Expects pre-sorted findings.
         """
         parts: list[str] = []
 
-        # --- Code findings ---
         parts.append("<h2>Code Findings</h2>")
         if not code_findings:
             parts.append('<p class="placeholder">No code findings to display.</p>')
@@ -213,18 +202,11 @@ class FindingsBuilder:
 
     @staticmethod
     def build_code_cards(code_findings: list[dict[str, Any]]) -> str:
-        """Return HTML for per-finding detail cards grouped by repo.
-
-        Args:
-            code_findings: Pre-sorted, finding-ID-assigned non-network findings.
-
-        Returns:
-            HTML string of grouped finding cards.
-        """
+        """Return HTML for per-finding detail cards grouped by repo."""
         if not code_findings:
             return '<p class="placeholder">No code findings to display.</p>'
 
-        # Group by repo; None → "Unattributed".
+        # Group by repo; None maps to "Unattributed".
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for f in code_findings:
             key = f.get("repo") or "Unattributed"
@@ -233,7 +215,6 @@ class FindingsBuilder:
         parts: list[str] = []
         for repo_name in sorted(groups):
             parts.append(f"<h3>{html.escape(repo_name)}</h3>")
-            # Sort within group by severity desc.
             repo_findings = sorted(groups[repo_name], key=_severity_key)
             for f in repo_findings:
                 meta = _parse_meta(f)
@@ -273,19 +254,13 @@ class FindingsBuilder:
     def build_secrets_cards(secrets_findings: list[dict[str, Any]]) -> str:
         """Return HTML for per-repo secrets summary cards.
 
-        Receives findings already filtered to ``segment == "secrets"`` by the
-        assembler.  No secret values or line numbers are included.
-
-        Args:
-            secrets_findings: Findings with segment ``"secrets"``.
-
-        Returns:
-            HTML string of per-repo summary cards.
+        Receives findings already filtered to ``segment == "secrets"``.
+        No secret values or line numbers are included.
         """
         if not secrets_findings:
             return '<p class="placeholder">No secrets findings detected.</p>'
 
-        # Group by repo; None → "Unattributed".
+        # Group by repo; None maps to "Unattributed".
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for f in secrets_findings:
             key = f.get("repo") or "Unattributed"
@@ -296,12 +271,10 @@ class FindingsBuilder:
             repo_findings = groups[repo_name]
             total = len(repo_findings)
 
-            # Count by rule_id.
             rule_counts: dict[str, int] = defaultdict(int)
             for f in repo_findings:
                 rule_counts[f.get("rule_id") or "(unknown rule)"] += 1
 
-            # Unique file paths (no line numbers, no secret values).
             file_paths: set[str] = {f["file"] for f in repo_findings if f.get("file")}
 
             parts.append(
@@ -333,21 +306,10 @@ class FindingsBuilder:
     def build_comprehensive_code_table(
         self, code_findings: list[dict[str, Any]]
     ) -> str:
-        """Return HTML for the comprehensive code findings appendix table.
-
-        Columns: Finding ID | OWASP Name | Severity | Confidence | Repo | File Path
-        | Line Number.
-
-        Args:
-            code_findings: Pre-sorted, finding-ID-assigned non-network findings.
-
-        Returns:
-            HTML string of the detail table.
-        """
+        """Return HTML for the code findings appendix table."""
         if not code_findings:
             return '<p class="placeholder">No code findings available.</p>'
 
-        # Sort by severity desc, then repo alpha (stable).
         sorted_findings = sorted(
             code_findings,
             key=lambda f: (
@@ -387,8 +349,6 @@ class FindingsBuilder:
             )
         parts.append("</tbody></table>")
         return "\n".join(parts)
-
-    # Internal helpers
 
 
 __all__ = ["FindingsBuilder"]
