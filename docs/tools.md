@@ -4,6 +4,7 @@
 
 | Tool | Category | What it does |
 |---|---|---|
+| Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | OWASP ZAP | DAST | Dynamic web/API security scanning |
 | XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
 | OWASP Noir | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
@@ -90,6 +91,33 @@ Priority logic:
 When `noir` mode is selected but no Noir output exists for the repository at scan time, XSStrike falls back to `crawl` mode automatically. The same fallback applies to `provided` mode when `oas3_path` is empty.
 
 Set or change the mode at any time with `repo edit <name>`.
+
+---
+
+## Nuclei
+
+Nuclei is a template-based vulnerability scanner that identifies specific known vulnerabilities (CVEs), misconfigurations, and exposures on live targets using YAML templates from a community-maintained library of 9000+ detection rules.
+
+### Two-pass scanning
+
+Nuclei runs in two passes per repository:
+
+1. **Automatic scan** (`-as`): Uses Wappalyzer-style technology fingerprinting to detect what's running on the target, then selects templates matching the detected stack. Scans for critical, high, and medium severity findings.
+2. **DAST fuzzing** (`-dast`): Runs fuzzing templates that actively probe for vulnerabilities. Scans for critical and high severity only to reduce noise.
+
+Both passes consume all available URLs: base URLs, URLs discovered by Noir/Katana, and user-uploaded URL lists.
+
+### Custom templates
+
+Place a `.nuclei/` directory at the root of your repository to include organization-specific templates alongside the default library. Any YAML templates in this directory are automatically included in both scan passes.
+
+### What Nuclei covers that other tools don't
+
+- Known CVE fingerprinting against live targets (1496 known-exploited vulnerabilities)
+- SSL/TLS vulnerability scanning
+- Technology-specific misconfigurations and exposed admin panels
+- Network protocol scanning (DNS, TCP, WebSocket)
+- Default credential detection
 
 ---
 

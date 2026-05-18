@@ -166,13 +166,13 @@ async def get_scans_config(
     repos: list[ScanConfigRepo] = []
     for r in repo_service.list_active(project_id):
         assert isinstance(r.id, int)  # list_active filters to DB-resident repos
-        data = r.model_dump()
-        location = "docker" if data.get("container_name") else "local"
+        repo_fields = r.model_dump()
+        location = "docker" if repo_fields.get("container_name") else "local"
         repos.append(
             ScanConfigRepo(
                 id=r.id,
                 name=r.name,
-                source=",".join(data.get("type", [])) or "unknown",
+                source=",".join(repo_fields.get("type", [])) or "unknown",
                 location=location,
             )
         )
