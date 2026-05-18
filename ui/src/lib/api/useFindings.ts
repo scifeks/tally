@@ -49,6 +49,7 @@ interface FindingApi {
   description?: string | null
   tool: string
   target: string
+  repo_name: string
   file?: string | null
   line?: number | null
   cwe: string[] | null
@@ -94,6 +95,7 @@ export function mapFinding(api: FindingApi): Finding {
     description: api.description ?? undefined,
     tool: api.tool,
     target: api.target,
+    repoName: api.repo_name ?? '',
     file: api.file ?? undefined,
     line: api.line ?? undefined,
     cwe: api.cwe ?? [],

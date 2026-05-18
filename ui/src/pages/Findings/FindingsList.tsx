@@ -207,6 +207,7 @@ export function FindingsList({
           selected={filters.tool as Set<string>}
           onChange={next => setFilters(f => ({ ...f, tool: next }))}
         />
+        <PlainHeader label="repo" />
         <PlainHeader label="location" />
         <PlainHeader label="cwe" />
         <FilterHeader
@@ -289,6 +290,7 @@ export function FindingsList({
                   </div>
                   <div className="text-foreground truncate pr-3">{findingTitle(f)}</div>
                   <div className="text-muted-foreground truncate">{f.tool}</div>
+                  <div className="text-muted-foreground truncate">{f.repoName}</div>
                   <div className="text-muted-foreground truncate tabular-nums">{locationOf(f)}</div>
                   <div className="flex flex-wrap gap-x-1 gap-y-0.5 py-1 tabular-nums">
                     {f.cwe.length > 0 ? (

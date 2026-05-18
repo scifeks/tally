@@ -64,7 +64,7 @@ export function useFindingsEvents(projectId: string): void {
                 counted = true
               }
               touched = true
-              return updated
+              return { ...updated, repoName: updated.repoName || item.repoName }
             })
             return touched ? { ...page, items: nextItems } : page
           })

@@ -311,6 +311,32 @@ def _build_xss_description(
     return "\n".join(parts)
 
 
+def _map_sqlmap(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
+    """Add sqlmap-specific fields."""
+    param = finding.meta.get("param", "")
+    if param:
+        base["param"] = param
+
+    if finding.url and not is_static_asset_path(urlparse(finding.url).path):
+        base["endpoints"] = [_clean_endpoint_url(finding.url)]
+
+    dbms = finding.meta.get("dbms", "")
+    technique_summary = finding.meta.get("technique_summary", "")
+    payload = finding.meta.get("payload", "")
+
+    desc_parts = [base.get("description", base.get("title", ""))]
+    if dbms:
+        desc_parts.append(f"DBMS: {dbms}")
+    if technique_summary:
+        desc_parts.append(f"Techniques: {technique_summary}")
+    if payload:
+        desc_parts.append(f"Payload: {payload}")
+
+    base["description"] = "\n".join(desc_parts)
+
+    return base
+
+
 def _map_garak(finding: Finding, base: dict[str, Any]) -> dict[str, Any]:
     """Add Garak-specific fields."""
     base["service"] = "llm"
@@ -384,6 +410,7 @@ _TOOL_MAPPERS: dict[str, Callable[[Finding, dict[str, Any]], dict[str, Any]]] = 
     "dalfox": _map_xss_tool,
     "xsstrike": _map_xss_tool,
     "garak": _map_garak,
+    "sqlmap": _map_sqlmap,
     "osv": _map_sca,
     "npm-audit": _map_sca,
     "pip-audit": _map_sca,
