@@ -174,7 +174,7 @@ def create_app(
     else:
         logger.warning(
             "web/static/ not found (static file mount skipped). "
-            "Run the frontend build step to enable the Vue SPA."
+            "Run the frontend build step to enable the React UI."
         )
 
     return app
