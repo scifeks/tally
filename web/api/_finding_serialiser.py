@@ -34,6 +34,8 @@ def serialise_finding(
     result["enriched"] = 1 if result["enriched"] else 0
     result["should_report"] = 1 if result["should_report"] else 0
 
+    result["target"] = result.get("url") or ""
+
     is_locked, lock_holder = lock_state
     result["is_locked"] = is_locked
     result["lock_holder"] = lock_holder

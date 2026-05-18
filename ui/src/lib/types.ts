@@ -66,6 +66,7 @@ export interface Finding {
   description?: string
   tool: string
   target: string
+  repoName: string
   file?: string
   line?: number
   /** Backend always returns an array (possibly empty) for cwe. */

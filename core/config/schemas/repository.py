@@ -131,19 +131,20 @@ class Repository(BaseModel):
         ),
     )
     sqlmap_level: int = Field(
-        default=1,
+        default=2,
         description=(
             "sqlmap detection level (1-5). Higher levels test more "
-            "payloads and injection points but take longer. Default "
-            "1 covers common cases."
+            "payloads and injection points but take longer. Level 2 "
+            "adds cookie and additional parameter testing."
         ),
     )
     sqlmap_risk: int = Field(
-        default=1,
+        default=2,
         description=(
             "sqlmap risk level (1-3). Higher risk enables heavier "
             "payloads (e.g. OR-based injections at risk 3 can alter "
-            "data). Default 1 is safe for production targets."
+            "data). Risk 2 adds time-based blind testing while "
+            "remaining safe for production targets."
         ),
     )
     sqlmap_headers: dict[str, str] = Field(

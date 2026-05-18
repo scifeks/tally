@@ -88,11 +88,15 @@ export function TopBar() {
           aria-label="Tally home"
           className="row-span-2 flex items-center justify-center px-6 border-r border-border-strong hover:bg-muted/40 transition-colors min-w-[220px]"
         >
-          <img
-            src="/tally-logo.png"
-            alt="Tally"
-            className="h-14 md:h-16 w-auto max-w-[240px] object-contain drop-shadow-[0_0_4px_rgba(107,211,107,0.25)]"
-          />
+          <pre
+            aria-hidden="true"
+            className="font-mono text-[6px] md:text-[7px] leading-none select-none text-green-400 [text-shadow:0_0_4px_rgba(107,211,107,0.25)]"
+          >{`.___________.    ___       __       __      ____    ____
+|           |   /   \\     |  |     |  |     \\   \\  /   /
+\`---|  |----\`  /  ^  \\    |  |     |  |      \\   \\/   /
+    |  |      /  /_\\  \\   |  |     |  |       \\_    _/
+    |  |     /  _____  \\  |  \`----.|  \`----.    |  |
+    |__|    /__/     \\__\\ |_______||_______|    |__|`}</pre>
         </NavLink>
 
         {/* Row 1: utility bar (scans indicator + project switcher) */}

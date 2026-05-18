@@ -29,7 +29,7 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from core.project_paths import ProjectPaths
 from domain.tools.interface import ExecutionContext, ExecutionPass
@@ -44,8 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 def _has_query_params(url: str) -> bool:
-    parsed = urlparse(url)
-    return bool(parse_qs(parsed.query))
+    return bool(urlparse(url).query)
 
 
 def _write_parameterized_urls(seeds_path: Path, output_dir: Path) -> Path | None:
@@ -140,6 +139,7 @@ class SqlmapLocalTool(BaseSqlmapTool):
             str(output_dir),
             "--flush-session",
             "--disable-coloring",
+            "--forms",
         ]
 
         if headers:
