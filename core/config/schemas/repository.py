@@ -130,6 +130,38 @@ class Repository(BaseModel):
             'authentication cookies, e.g. {"Cookie": "session=abc123"}.'
         ),
     )
+    sqlmap_level: int = Field(
+        default=1,
+        description=(
+            "sqlmap detection level (1-5). Higher levels test more "
+            "payloads and injection points but take longer. Default "
+            "1 covers common cases."
+        ),
+    )
+    sqlmap_risk: int = Field(
+        default=1,
+        description=(
+            "sqlmap risk level (1-3). Higher risk enables heavier "
+            "payloads (e.g. OR-based injections at risk 3 can alter "
+            "data). Default 1 is safe for production targets."
+        ),
+    )
+    sqlmap_headers: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Extra HTTP headers passed to sqlmap via --header. Use "
+            "to supply authentication cookies, e.g. "
+            '{"Cookie": "session=abc123"}.'
+        ),
+    )
+    sqlmap_tamper: str = Field(
+        default="",
+        description=(
+            "Comma-separated tamper script names for WAF evasion "
+            "(e.g. 'space2comment,between'). Leave empty for "
+            "default payloads."
+        ),
+    )
     katana_headless: bool = Field(
         default=False,
         description=(
