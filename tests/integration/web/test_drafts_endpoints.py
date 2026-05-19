@@ -116,9 +116,15 @@ async def test_list_drafts_word_count_from_file(app_client, tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_start_drafts_single_section_returns_202(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
-    with patch(
-        "application.reporting.reports_service.ReportsService._run_worker",
-        return_value=None,
+    with (
+        patch(
+            "application.reporting.reports_service.ReportsService._run_worker",
+            return_value=None,
+        ),
+        patch(
+            "infrastructure.llm.factory.get_llm_provider",
+            return_value=None,
+        ),
     ):
         resp = await client.post(
             f"/api/v1/projects/{project_id}/reports/drafts",
@@ -133,9 +139,15 @@ async def test_start_drafts_single_section_returns_202(app_client) -> None:
 @pytest.mark.asyncio
 async def test_start_drafts_multi_section_returns_202(app_client) -> None:
     client, _fid, _rag, _factory, mut_headers, project_id = app_client
-    with patch(
-        "application.reporting.reports_service.ReportsService._run_worker",
-        return_value=None,
+    with (
+        patch(
+            "application.reporting.reports_service.ReportsService._run_worker",
+            return_value=None,
+        ),
+        patch(
+            "infrastructure.llm.factory.get_llm_provider",
+            return_value=None,
+        ),
     ):
         resp = await client.post(
             f"/api/v1/projects/{project_id}/reports/drafts",
@@ -160,11 +172,15 @@ async def test_start_drafts_returns_409_when_job_held(app_client) -> None:
     reg = get_registry()
     reg.acquire_job("report", "external-holder")
     try:
-        resp = await client.post(
-            f"/api/v1/projects/{project_id}/reports/drafts",
-            json={"sections": ["executive-summary"]},
-            headers=mut_headers,
-        )
+        with patch(
+            "infrastructure.llm.factory.get_llm_provider",
+            return_value=None,
+        ):
+            resp = await client.post(
+                f"/api/v1/projects/{project_id}/reports/drafts",
+                json={"sections": ["executive-summary"]},
+                headers=mut_headers,
+            )
     finally:
         reg.release_job("report", "external-holder")
     assert resp.status_code == 409
@@ -228,9 +244,15 @@ async def test_start_drafts_forwards_skip_triage_to_worker(app_client) -> None:
     def capture(self, **kwargs):  # type: ignore[no-untyped-def]
         captured.update(kwargs)
 
-    with patch(
-        "application.reporting.reports_service.ReportsService._run_worker",
-        new=capture,
+    with (
+        patch(
+            "application.reporting.reports_service.ReportsService._run_worker",
+            new=capture,
+        ),
+        patch(
+            "infrastructure.llm.factory.get_llm_provider",
+            return_value=None,
+        ),
     ):
         resp = await client.post(
             f"/api/v1/projects/{project_id}/reports/drafts",
@@ -250,9 +272,15 @@ async def test_start_drafts_skip_triage_defaults_to_false(app_client) -> None:
     def capture(self, **kwargs):  # type: ignore[no-untyped-def]
         captured.update(kwargs)
 
-    with patch(
-        "application.reporting.reports_service.ReportsService._run_worker",
-        new=capture,
+    with (
+        patch(
+            "application.reporting.reports_service.ReportsService._run_worker",
+            new=capture,
+        ),
+        patch(
+            "infrastructure.llm.factory.get_llm_provider",
+            return_value=None,
+        ),
     ):
         resp = await client.post(
             f"/api/v1/projects/{project_id}/reports/drafts",

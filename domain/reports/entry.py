@@ -26,9 +26,11 @@ class ReportRow:
     retention_tier: str
     file_size_bytes: int | None
     error: str | None
-    created_at: str | None
-    started_at: str | None
-    finished_at: str | None
+    display_name: str | None = None
+    notes: str | None = None
+    created_at: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
 
 
 @dataclass(frozen=True)

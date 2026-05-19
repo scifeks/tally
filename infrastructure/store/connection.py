@@ -9,12 +9,7 @@ from pathlib import Path
 
 
 class ConnectionFactory:
-    """Creates SQLite connections and manages schema initialisation.
-
-    Database path is fixed at construction time.  All repositories in
-    ``infrastructure.store.repositories`` receive a ``ConnectionFactory`` in their
-    ``__init__`` and call ``self._factory.connect()`` internally.
-    """
+    """Creates SQLite connections and manages schema initialization."""
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
@@ -190,6 +185,8 @@ class ConnectionFactory:
                     retention_tier  TEXT NOT NULL DEFAULT 'auto',
                     file_size_bytes INTEGER,
                     error           TEXT,
+                    display_name    TEXT,
+                    notes           TEXT,
                     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
                     started_at      TEXT,
                     finished_at     TEXT

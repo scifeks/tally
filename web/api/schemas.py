@@ -392,7 +392,7 @@ class UrlListPortFilterOption(BaseModel):
 
 
 class UrlListFilterOptionsResponse(BaseModel):
-    """Per-dimension filter options for the URL Lists page (Phase 12.2).
+    """Per-dimension filter options for the URL Lists page.
 
     Strict semantics (same as Findings): every dimension's counts apply
     every active filter, including its own dimension's filter. Zero-count
@@ -432,11 +432,10 @@ class ScanConfigResponse(BaseModel):
 class ScanStartRequest(BaseModel):
     """POST body for /api/v1/projects/{id}/scans.
 
-    All fields optional; empty arrays mean "scan everything" per
-    endpoints.md §9. Field names are camelCase to match the SSE/HTTP
-    contract; aliases accept snake_case for REPL/tooling parity.
-    The argProfileIds field (D-1-4) is additive: existing callers that
-    omit it continue to work unchanged.
+    All fields optional; empty arrays mean "scan everything". Field
+    names are camelCase to match the SSE/HTTP contract; aliases accept
+    snake_case for REPL/tooling parity. The argProfileIds field is
+    additive: existing callers that omit it continue to work unchanged.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -668,10 +667,17 @@ class ReportSummary(BaseModel):
     pinned: bool
     file_size_bytes: int | None
     error: str | None
+    display_name: str | None = None
+    notes: str | None = None
     created_at: str | None
     started_at: str | None
     finished_at: str | None
     download_url: str | None
+
+
+class ReportPatchRequest(BaseModel):
+    display_name: str | None = None
+    notes: str | None = None
 
 
 class ReportsListResponse(BaseModel):
@@ -764,9 +770,8 @@ class ChatMessageSendResponse(BaseModel):
     """202 response for ``POST .../sessions/{session_id}/messages``.
 
     ``assistant_message_id`` is ``None`` here because the assistant row
-    is written write-once on clean stream end (decisions.md B7.7); the
-    final id is delivered via the ``stream_end`` SSE event's
-    ``message_id`` field.
+    is written write-once on clean stream end; the final id is delivered
+    via the ``stream_end`` SSE event's ``message_id`` field.
     """
 
     user_message_id: int
@@ -778,11 +783,11 @@ class ChatMessageSendResponse(BaseModel):
 class ChatMessageCancelResponse(BaseModel):
     """202 response for ``POST .../sessions/{session_id}/cancel``.
 
-    ``cancelled_message_id`` is ``None`` in v1 because cancellation lands
-    before the ``stream_end`` event where the assistant row would
-    otherwise be written write-once (decisions.md B7.7). The field is
-    typed ``int | None`` so the wire format stays stable if a future
-    iteration assigns the assistant id earlier in the lifecycle.
+    ``cancelled_message_id`` is ``None`` in v1 because cancellation
+    lands before the ``stream_end`` event where the assistant row
+    would otherwise be written. The field is typed ``int | None`` so
+    the wire format stays stable if a future iteration assigns the
+    assistant id earlier in the lifecycle.
     """
 
     session_id: int

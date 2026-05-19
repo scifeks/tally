@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .claude_config import ClaudeConfig
 from .defectdojo_config import DefectDojoGlobalConfig
@@ -19,6 +19,25 @@ class GlobalConfig(BaseModel):
     """Global application configuration."""
 
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_llm_keys(cls, data: dict) -> dict:  # type: ignore[override]
+        """Convert old flat ``*_llm_provider`` keys to ``*_inference`` objects."""
+        if not isinstance(data, dict):
+            return data
+        _LEGACY = {
+            "chat_llm_provider": "chat_inference",
+            "enrichment_llm_provider": "enrichment_inference",
+            "report_llm_provider": "report_inference",
+            "embedding_provider": "embedding_inference",
+        }
+        for old_key, new_key in _LEGACY.items():
+            if old_key in data and new_key not in data:
+                value = data.pop(old_key)
+                if value:
+                    data[new_key] = {"provider": value}
+        return data
 
     triage_agent_provider: Literal["", "claude_code", "open_code"] = ""
     ollama: LocalInferenceConfig | None = None

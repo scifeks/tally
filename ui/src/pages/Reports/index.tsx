@@ -15,6 +15,7 @@ import {
   useCancelReport,
   useReportEvents,
   useReportDraftEvents,
+  useUpdateReportMetadata,
 } from '@/lib/api'
 import type {
   ReportFormat,
@@ -30,6 +31,7 @@ import { SECTION_ORDER, FORMAT_OPTIONS, TESTING_TYPE_OPTIONS } from './constants
 import { PrinterAnimation } from './PrinterAnimation'
 import { DraftCard } from './DraftCard'
 import { HistoryTable } from './HistoryTable'
+import { ReportDetailPanel } from './ReportDetailPanel'
 import { LogRow } from './LogRow'
 import { PreflightChecklist } from './PreflightChecklist'
 
@@ -74,6 +76,14 @@ export default function Reports() {
   const deleteDraft = useDeleteDraft()
   const generateReport = useGenerateReport()
   const cancelReport = useCancelReport()
+  const updateMetadata = useUpdateReportMetadata()
+
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null)
+
+  const selectedReport = useMemo(
+    () => historyData.find(r => r.id === selectedReportId) ?? null,
+    [historyData, selectedReportId]
+  )
 
   const project = projects.find(p => p.id === activeProjectId)
 
@@ -271,6 +281,32 @@ export default function Reports() {
     setRunId(null)
     setLogs([])
   }, [])
+
+  const handleUpdateName = useCallback(
+    (name: string) => {
+      if (selectedReportId && activeProjectId) {
+        updateMetadata.mutate({
+          projectId: activeProjectId,
+          reportId: selectedReportId,
+          displayName: name,
+        })
+      }
+    },
+    [selectedReportId, activeProjectId, updateMetadata]
+  )
+
+  const handleUpdateNotes = useCallback(
+    (notes: string) => {
+      if (selectedReportId && activeProjectId) {
+        updateMetadata.mutate({
+          projectId: activeProjectId,
+          reportId: selectedReportId,
+          notes,
+        })
+      }
+    },
+    [selectedReportId, activeProjectId, updateMetadata]
+  )
 
   if (activeProjectId === null) {
     return <NoProjectSelectedState projects={projects} />
@@ -576,8 +612,25 @@ export default function Reports() {
 
             {/* History */}
             <Panel title="Report History">
-              <div className="p-4">
-                <HistoryTable projectId={activeProjectId ?? 0} entries={historyData} />
+              <div className="flex">
+                <div className="flex-1 min-w-0 p-4">
+                  <HistoryTable
+                    projectId={activeProjectId ?? 0}
+                    entries={historyData}
+                    selectedReportId={selectedReportId}
+                    onSelectReport={setSelectedReportId}
+                  />
+                </div>
+                {selectedReport && (
+                  <aside className="w-[340px] shrink-0 border-l border-border p-4">
+                    <ReportDetailPanel
+                      report={selectedReport}
+                      onUpdateName={handleUpdateName}
+                      onUpdateNotes={handleUpdateNotes}
+                      onClose={() => setSelectedReportId(null)}
+                    />
+                  </aside>
+                )}
               </div>
             </Panel>
           </div>

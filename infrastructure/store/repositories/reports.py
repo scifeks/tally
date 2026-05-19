@@ -36,18 +36,20 @@ class ReportRepository(ReportRepositoryPort):
         filepath: str,
         status: str = "queued",
         retention_tier: str = "auto",
+        display_name: str | None = None,
     ) -> int:
         if status not in REPORT_STATUSES:
             raise ValueError(f"unknown report status: {status!r}")
         if retention_tier not in RETENTION_TIERS:
             raise ValueError(f"unknown retention_tier: {retention_tier!r}")
+        display_name = display_name or datetime.now(UTC).date().isoformat()
         created_at = datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
             cur = conn.execute(
                 "INSERT INTO reports ("
                 "project_id, scan_run_id, format, filename, filepath,"
-                " status, retention_tier, created_at"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " status, retention_tier, display_name, created_at"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     project_id,
                     scan_run_id,
@@ -56,6 +58,7 @@ class ReportRepository(ReportRepositoryPort):
                     filepath,
                     status,
                     retention_tier,
+                    display_name,
                     created_at,
                 ),
             )
@@ -111,6 +114,36 @@ class ReportRepository(ReportRepositoryPort):
     def delete(self, report_id: int) -> None:
         with self._factory.connect() as conn:
             conn.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+
+    def update_metadata(
+        self,
+        report_id: int,
+        project_id: int,
+        *,
+        display_name: str | None = None,
+        notes: str | None = None,
+    ) -> ReportRow | None:
+        sets: list[str] = []
+        params: list[Any] = []
+        if display_name is not None:
+            sets.append("display_name = ?")
+            params.append(display_name)
+        if notes is not None:
+            sets.append("notes = ?")
+            params.append(notes)
+        if not sets:
+            return self.get(report_id)
+        params.extend([report_id, project_id])
+        with self._factory.connect() as conn:
+            conn.execute(
+                f"UPDATE reports SET {', '.join(sets)} WHERE id = ? AND project_id = ?",
+                tuple(params),
+            )
+            row = conn.execute(
+                "SELECT * FROM reports WHERE id = ? AND project_id = ?",
+                (report_id, project_id),
+            ).fetchone()
+        return _row_to_report(row) if row else None
 
     def get(self, report_id: int) -> ReportRow | None:
         with self._factory.connect() as conn:
@@ -196,6 +229,8 @@ def _row_to_report(row: Any) -> ReportRow:
         retention_tier=row["retention_tier"],
         file_size_bytes=row["file_size_bytes"],
         error=row["error"],
+        display_name=row["display_name"],
+        notes=row["notes"],
         created_at=row["created_at"],
         started_at=row["started_at"],
         finished_at=row["finished_at"],

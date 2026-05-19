@@ -51,6 +51,8 @@ interface ReportSummaryApi {
   format: ReportFormat
   status: string
   file_size_bytes: number | null
+  display_name: string | null
+  notes: string | null
   created_at: string | null
   started_at: string | null
   finished_at: string | null
@@ -142,6 +144,8 @@ export function mapReportHistoryEntry(api: ReportSummaryApi): ReportHistoryEntry
     sizeBytes: api.file_size_bytes ?? 0,
     downloadUrl: api.download_url ?? '',
     pinned: api.pinned,
+    displayName: api.display_name ?? null,
+    notes: api.notes ?? null,
   }
 }
 
@@ -341,27 +345,18 @@ export function useGenerateDrafts() {
       )
       return data.drafts.map(mapReportDraft)
     },
-    onError: err => setError(toErrorPayload(err)),
-    onSuccess: (incoming, { projectId }) => {
-      // Apply the POST response to the cache so any stale `failed` state
-      // from prior runs clears immediately. SSE drives transitions from
-      // here on; no GET refetch needed.
+    onMutate: ({ projectId, sections }) => {
       queryClient.setQueryData<ReportDraft[]>(['reports', projectId, 'drafts'], prev => {
         if (!prev) return prev
-        const bySection = new Map(incoming.map(d => [d.section, d]))
-        return prev.map(existing => {
-          const next = bySection.get(existing.section)
-          if (!next) return existing
-          return {
-            ...existing,
-            status: next.status,
-            error: undefined,
-            preview: undefined,
-            wordCount: undefined,
-            generatedAt: undefined,
-          }
-        })
+        const sectionSet = new Set(sections)
+        return prev.map(d =>
+          sectionSet.has(d.section) ? { ...d, status: 'generating' as const, error: undefined } : d
+        )
       })
+    },
+    onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['reports', projectId, 'drafts'] })
     },
   })
 }
@@ -471,6 +466,43 @@ export function useCancelReport() {
     onError: err => setError(toErrorPayload(err)),
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['reports', projectId] })
+    },
+  })
+}
+
+export function useUpdateReportMetadata() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setReportMutationError)
+
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      reportId,
+      displayName,
+      notes,
+    }: {
+      projectId: number
+      reportId: number
+      displayName?: string
+      notes?: string
+    }) => {
+      const body: Record<string, unknown> = {}
+      if (displayName !== undefined) body.display_name = displayName
+      if (notes !== undefined) body.notes = notes
+      return apiFetch<ReportSummaryApi>(`${REST_ENDPOINTS.reportHistory(projectId)}/${reportId}`, {
+        method: 'PATCH',
+        body,
+      })
+    },
+    onSuccess: (_, { projectId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['reports', projectId, 'history'],
+      })
+    },
+    onError: (err: Error) => {
+      if (err instanceof ApiError) {
+        setError({ code: err.code, message: err.message, details: {}, status: 0 })
+      }
     },
   })
 }

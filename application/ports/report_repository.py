@@ -43,3 +43,11 @@ class ReportRepositoryPort(Protocol):
         *,
         keep: int,
     ) -> list[ReportRow]: ...
+    def update_metadata(
+        self,
+        report_id: int,
+        project_id: int,
+        *,
+        display_name: str | None = None,
+        notes: str | None = None,
+    ) -> ReportRow | None: ...
