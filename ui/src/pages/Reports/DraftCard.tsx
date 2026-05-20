@@ -130,7 +130,7 @@ export function DraftCard({
               onClick={() => onGenerate(false)}
               disabled={isGenerating}
               data-testid={`report-draft-${draft.section}-generate`}
-              className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent cursor-pointer hover:bg-accent hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Generate'}
             </button>
@@ -139,7 +139,7 @@ export function DraftCard({
               onClick={() => onGenerate(true)}
               disabled={isGenerating}
               data-testid={`report-draft-${draft.section}-regenerate`}
-              className="p-1.5 text-[10px] border border-border text-muted-foreground hover:border-warn hover:text-warn transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 text-[10px] border border-border text-muted-foreground cursor-pointer hover:border-accent hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Regenerate (overwrites existing)"
             >
               <RefreshCw className="h-3 w-3" />
@@ -160,7 +160,7 @@ export function DraftCard({
             className={cn(
               'p-1.5 text-[10px] border transition-colors',
               hasDraft
-                ? 'border-border text-muted-foreground hover:border-good hover:text-good'
+                ? 'border-border text-muted-foreground cursor-pointer hover:border-good hover:text-good'
                 : 'border-border/50 text-dim cursor-not-allowed'
             )}
             disabled={!hasDraft}
@@ -175,7 +175,7 @@ export function DraftCard({
             className={cn(
               'p-1.5 text-[10px] border transition-colors',
               hasDraft
-                ? 'border-border text-muted-foreground hover:border-accent hover:text-accent'
+                ? 'border-border text-muted-foreground cursor-pointer hover:border-accent hover:text-accent'
                 : 'border-border/50 text-dim cursor-not-allowed'
             )}
             disabled={!hasDraft}
@@ -190,7 +190,7 @@ export function DraftCard({
             className={cn(
               'p-1.5 text-[10px] border transition-colors',
               hasDraft
-                ? 'border-border text-muted-foreground hover:border-crit hover:text-crit'
+                ? 'border-border text-muted-foreground cursor-pointer hover:border-crit hover:text-crit'
                 : 'border-border/50 text-dim cursor-not-allowed'
             )}
             disabled={!hasDraft}

@@ -67,7 +67,7 @@ export function HistoryTable({
               void downloadReportFile(projectId, entry.id, entry.filename)
             }}
             data-testid={`report-history-download-${entry.id}`}
-            className="text-accent hover:text-foreground transition-colors"
+            className="text-accent cursor-pointer hover:text-foreground transition-colors"
             title="Download report"
           >
             <Download className="h-4 w-4" />

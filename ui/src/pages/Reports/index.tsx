@@ -560,7 +560,7 @@ export default function Reports() {
                       generateDrafts.isPending || allDraftsReady || activeProjectId === null
                     }
                     data-testid="report-generate-missing-button"
-                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent enabled:hover:bg-accent enabled:hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 text-[10px] uppercase tracking-wider border transition-colors enabled:border-accent enabled:text-accent cursor-pointer enabled:hover:bg-accent enabled:hover:text-background disabled:border-border disabled:text-muted-foreground disabled:cursor-not-allowed"
                   >
                     {generateDrafts.isPending ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -572,7 +572,7 @@ export default function Reports() {
                     onClick={() => handleGenerateAll(true)}
                     disabled={generateDrafts.isPending || activeProjectId === null}
                     data-testid="report-regenerate-all-button"
-                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-warn text-warn enabled:hover:bg-warn/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-border text-muted-foreground cursor-pointer enabled:hover:border-accent enabled:hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Regenerate all (overwrites existing)"
                   >
                     <RefreshCw className="h-3 w-3" />

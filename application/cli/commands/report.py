@@ -19,10 +19,12 @@ from application.cli.project import ProjectResolutionError, resolve_project
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
 from application.reporting.drafts import SECTION_REGISTRY
 from application.reporting.generator import ReportGenerator
+from application.reporting.reports_service import ReportsService
 from core.project_paths import ProjectPaths
 from factories.persistence import (
     create_findings_service,
     create_repo_repo,
+    create_report_repo,
     create_reports_service,
     make_store,
 )
@@ -65,7 +67,7 @@ def _cmd_full_report(
     fmt = args.format or "pdf"
 
     if fmt == "pdf":
-        return _assemble_pdf(args, base_path, project_name)
+        return _assemble_pdf(args, base_path, project_id, project_name)
 
     if fmt not in ("markdown", "html", "json"):
         print(
@@ -82,6 +84,7 @@ def _cmd_full_report(
 def _assemble_pdf(
     args: Namespace,
     base_path: Path,
+    project_id: int,
     project_name: str,
 ) -> int:
     """Assemble the final PDF from drafted sections."""
@@ -108,7 +111,10 @@ def _assemble_pdf(
         and not (paths.reports_dir / "reviewed" / f"{s}.md").exists()
     ]
     if missing:
-        print("The following sections have not been drafted yet:", file=sys.stderr)
+        print(
+            "The following sections have not been drafted yet:",
+            file=sys.stderr,
+        )
         for s in missing:
             print(f"  - {s}", file=sys.stderr)
         print(
@@ -125,6 +131,8 @@ def _assemble_pdf(
 
     testing_type = args.testing_type or "white_box"
     engagement_date = args.engagement_date
+    report_repo = create_report_repo(paths.findings_db)
+    retention = ReportsService.get_retention_count(str(base_path))
 
     request = ReportRequest(
         project=project_name,
@@ -134,6 +142,7 @@ def _assemble_pdf(
         testing_type=testing_type,
         engagement_date=engagement_date,
         force_overwrite=True,
+        project_id=project_id,
     )
 
     try:
@@ -144,6 +153,8 @@ def _assemble_pdf(
             finding_repo=fr,
             template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
             pdf_renderer=WeasyPrintPdfRenderer(),
+            report_repo=report_repo,
+            retention_count=retention,
         )
     except SectionMissingError as exc:
         print(f"Section missing: {exc}", file=sys.stderr)

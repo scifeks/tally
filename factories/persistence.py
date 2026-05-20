@@ -173,6 +173,13 @@ def load_active_repos(base_path: str | Path, project_name: str) -> list[Reposito
     return RepositoryRepository(factory).list_active()
 
 
+def create_report_repo(
+    db_path: Path,
+) -> ReportRepository:
+    """Create a ReportRepository for the given DB."""
+    return ReportRepository(_init_factory(db_path))
+
+
 def create_repo_repo(
     db_path: Path,
 ) -> ProjectRepoRepositoryPort:

@@ -30,6 +30,10 @@
   --color-low: #6bd36b;
   --color-info: #6ac7ff;
 
+  /* UI feedback (semantic aliases for severity values) */
+  --color-warn: #ffd84d;
+  --color-good: #6bd36b;
+
   --radius: 0rem;
 }
 
