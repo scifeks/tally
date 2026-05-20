@@ -74,6 +74,7 @@ export {
   useDeleteDraft,
   useGenerateReport,
   useCancelReport,
+  useUpdateReportMetadata,
   useReportEvents,
   useReportDraftEvents,
   downloadDraftSection,

@@ -396,7 +396,7 @@ export type TriageSnapshotPayload =
       activeScanRunIds: number[]
     }
 
-// ─── Runtime Dependencies / Installed Tools (Phase 2.6, Phase 6.8) ──────────
+// ─── Runtime Dependencies / Installed Tools ─────────────────────────────────
 
 export interface RuntimeDependency {
   name: string
@@ -481,6 +481,8 @@ export interface ReportHistoryEntry {
   sizeBytes: number
   downloadUrl: string
   pinned?: boolean
+  displayName: string | null
+  notes: string | null
 }
 
 export interface ReportCancelResponse {
@@ -539,8 +541,8 @@ export type ChatMessageRole = 'user' | 'assistant'
  * row served by `GET /api/v1/projects/:id/chat/sessions/:sid/messages`.
  *
  * `model` is null on user turns and the LLM provider's model id on assistant
- * turns. `citations` is reserved for the future RAG citations surface
- * (chat-history.md decision 10) - always `null` in v1.
+ * turns. `citations` is reserved for the future RAG citations surface and
+ * is always `null` in v1.
  */
 export interface ChatMessage {
   /** Numeric SQLite primary key. */
@@ -562,7 +564,7 @@ export interface ChatMessage {
 /**
  * One chat session row served by `GET /api/v1/projects/:id/chat/sessions`.
  * Title is server-set as `'YYYY-MM-DD HH:MM'`; sessions are sealed (their
- * `expiredAt` is set) when a new scan run starts (decisions.md B7).
+ * `expiredAt` is set) when a new scan run starts.
  */
 export interface ChatSession {
   /** Numeric SQLite primary key. */
@@ -587,9 +589,9 @@ export type ChatStreamEventType =
   | 'stream_cancelled'
 
 /**
- * SSE snapshot frame emitted once per subscriber on connect (endpoints.md
- * §15.4). When `active` is true, a stream is currently in flight for this
- * session and `userMessageId` is the in-progress user turn's id.
+ * SSE snapshot frame emitted once per subscriber on connect. When `active`
+ * is true, a stream is currently in flight for this session and
+ * `userMessageId` is the in-progress user turn's id.
  */
 export interface ChatStreamSnapshotPayload {
   projectId: number
@@ -599,9 +601,9 @@ export interface ChatStreamSnapshotPayload {
 }
 
 /**
- * Discriminated union of SSE token-stream events (endpoints.md §15.4).
- * `messageId` is null on every event except `stream_end`, where the
- * persisted assistant row id is delivered (write-once semantics, B7.7).
+ * Discriminated union of SSE token-stream events. `messageId` is null on
+ * every event except `stream_end`, where the persisted assistant row id
+ * is delivered.
  */
 export type ChatStreamEvent =
   | { type: 'stream_start'; projectId: number; sessionId: number; messageId: null }

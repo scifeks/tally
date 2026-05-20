@@ -7,7 +7,7 @@ layer from infrastructure store details.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.project_paths import ProjectPaths
 from infrastructure.endpoints.converters.endpoint_file_converter import (
@@ -173,6 +173,13 @@ def load_active_repos(base_path: str | Path, project_name: str) -> list[Reposito
     return RepositoryRepository(factory).list_active()
 
 
+def create_report_repo(
+    db_path: Path,
+) -> ReportRepository:
+    """Create a ReportRepository for the given DB."""
+    return ReportRepository(_init_factory(db_path))
+
+
 def create_repo_repo(
     db_path: Path,
 ) -> ProjectRepoRepositoryPort:
@@ -318,6 +325,8 @@ def create_chat_session_service(
 def create_reports_service(
     registry: ProjectRegistryService,
     project_id: int,
+    *,
+    report_update_sink: Any = None,
 ) -> ReportsService:
     """Build a ReportsService for a project."""
     from application.reporting.reports_service import ReportsService
@@ -331,6 +340,7 @@ def create_reports_service(
         draft_files=draft_files,
         finding_repo=FindingRepository(factory),
         repo_repo=RepositoryRepository(factory),
+        report_update_sink=report_update_sink,
     )
 
 

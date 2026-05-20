@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,7 +36,9 @@ if TYPE_CHECKING:
         ProjectRepoRepositoryPort,
     )
     from application.ports.report_repository import ReportRepositoryPort
+    from application.ports.report_update_event_sink import ReportUpdateEventSink
     from application.ports.user_prompt import UserPromptPort
+    from domain.reports.entry import ReportRow
 
 
 logger = logging.getLogger("application.reports_service")
@@ -53,12 +56,7 @@ class UnknownSectionError(ValueError):
 
 @dataclass(frozen=True)
 class DraftBatchHandle:
-    """Returned from :meth:`ReportsService.start_drafts`.
-
-    ``sections`` is the validated, deduplicated list the worker will iterate.
-    ``holder_token`` is the lock holder for the batch and is exposed for
-    diagnostics only; the worker releases the lock, not the caller.
-    """
+    """Returned from :meth:`ReportsService.start_drafts`."""
 
     sections: tuple[str, ...]
     holder_token: str
@@ -77,6 +75,7 @@ class ReportsService:
         draft_files: DraftFilesPort | None = None,
         lock_registry: LockRegistry | None = None,
         draft_run_registry: DraftRunRegistry | None = None,
+        report_update_sink: ReportUpdateEventSink | None = None,
     ) -> None:
         self._report_repo = report_repo
         self._draft_repo = draft_repo
@@ -85,6 +84,7 @@ class ReportsService:
         self._repo_repo = repo_repo
         self._lock_registry = lock_registry or get_registry()
         self._draft_run_registry = draft_run_registry or get_draft_run_registry()
+        self._report_update_sink = report_update_sink
 
     @property
     def report_repo(self) -> ReportRepositoryPort:
@@ -172,6 +172,51 @@ class ReportsService:
         except FileNotFoundError:
             return 10
 
+    def update_report_metadata(
+        self,
+        report_id: int,
+        project_id: int,
+        *,
+        display_name: str | None = None,
+        notes: str | None = None,
+    ) -> ReportRow | None:
+        """Update editable metadata on a report.
+
+        Returns the updated row, or None if the report was not found.
+        Emits ReportUpdated on success, ReportUpdateFailed on failure.
+        """
+        from domain.reports.events import (
+            ReportUpdated,
+            ReportUpdateFailed,
+        )
+
+        row = self._report_repo.update_metadata(
+            report_id,
+            project_id,
+            display_name=display_name,
+            notes=notes,
+        )
+        if row is None:
+            if self._report_update_sink:
+                self._report_update_sink.emit(
+                    ReportUpdateFailed(
+                        report_id=report_id,
+                        project_id=project_id,
+                        error="report not found",
+                    )
+                )
+            return None
+        if self._report_update_sink:
+            self._report_update_sink.emit(
+                ReportUpdated(
+                    report_id=row.id,
+                    project_id=row.project_id,
+                    display_name=row.display_name,
+                    notes=row.notes,
+                )
+            )
+        return row
+
     def start_drafts(
         self,
         *,
@@ -183,6 +228,7 @@ class ReportsService:
         prompt: UserPromptPort,
         event_sink: DraftEventSink,
         skip_triage: bool = False,
+        preflight: Callable[[], None] | None = None,
     ) -> DraftBatchHandle:
         """Start a sequential draft batch on a daemon worker thread.
 
@@ -190,8 +236,11 @@ class ReportsService:
             UnknownSectionError: ``sections`` is empty, contains duplicates,
                 or names a section not in :data:`SECTION_REGISTRY`.
             JobBusy: another report or draft batch is already running.
+            ValueError: ``preflight`` check failed (e.g. LLM not configured).
         """
         validated = _validate_sections(sections)
+        if preflight is not None:
+            preflight()
 
         holder_token = f"draft-batch:{uuid.uuid4().hex[:8]}"
         self._lock_registry.acquire_job(REPORT_LOCK_KIND, holder_token)

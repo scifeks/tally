@@ -15,6 +15,7 @@ import {
   useCancelReport,
   useReportEvents,
   useReportDraftEvents,
+  useUpdateReportMetadata,
 } from '@/lib/api'
 import type {
   ReportFormat,
@@ -30,6 +31,7 @@ import { SECTION_ORDER, FORMAT_OPTIONS, TESTING_TYPE_OPTIONS } from './constants
 import { PrinterAnimation } from './PrinterAnimation'
 import { DraftCard } from './DraftCard'
 import { HistoryTable } from './HistoryTable'
+import { ReportDetailPanel } from './ReportDetailPanel'
 import { LogRow } from './LogRow'
 import { PreflightChecklist } from './PreflightChecklist'
 
@@ -74,6 +76,14 @@ export default function Reports() {
   const deleteDraft = useDeleteDraft()
   const generateReport = useGenerateReport()
   const cancelReport = useCancelReport()
+  const updateMetadata = useUpdateReportMetadata()
+
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null)
+
+  const selectedReport = useMemo(
+    () => historyData.find(r => r.id === selectedReportId) ?? null,
+    [historyData, selectedReportId]
+  )
 
   const project = projects.find(p => p.id === activeProjectId)
 
@@ -271,6 +281,32 @@ export default function Reports() {
     setRunId(null)
     setLogs([])
   }, [])
+
+  const handleUpdateName = useCallback(
+    (name: string) => {
+      if (selectedReportId && activeProjectId) {
+        updateMetadata.mutate({
+          projectId: activeProjectId,
+          reportId: selectedReportId,
+          displayName: name,
+        })
+      }
+    },
+    [selectedReportId, activeProjectId, updateMetadata]
+  )
+
+  const handleUpdateNotes = useCallback(
+    (notes: string) => {
+      if (selectedReportId && activeProjectId) {
+        updateMetadata.mutate({
+          projectId: activeProjectId,
+          reportId: selectedReportId,
+          notes,
+        })
+      }
+    },
+    [selectedReportId, activeProjectId, updateMetadata]
+  )
 
   if (activeProjectId === null) {
     return <NoProjectSelectedState projects={projects} />
@@ -524,7 +560,7 @@ export default function Reports() {
                       generateDrafts.isPending || allDraftsReady || activeProjectId === null
                     }
                     data-testid="report-generate-missing-button"
-                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-accent text-accent enabled:hover:bg-accent enabled:hover:text-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 text-[10px] uppercase tracking-wider border transition-colors enabled:border-accent enabled:text-accent cursor-pointer enabled:hover:bg-accent enabled:hover:text-background disabled:border-border disabled:text-muted-foreground disabled:cursor-not-allowed"
                   >
                     {generateDrafts.isPending ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -536,7 +572,7 @@ export default function Reports() {
                     onClick={() => handleGenerateAll(true)}
                     disabled={generateDrafts.isPending || activeProjectId === null}
                     data-testid="report-regenerate-all-button"
-                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-warn text-warn enabled:hover:bg-warn/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-2 py-1 text-[10px] uppercase tracking-wider border border-border text-muted-foreground cursor-pointer enabled:hover:border-accent enabled:hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Regenerate all (overwrites existing)"
                   >
                     <RefreshCw className="h-3 w-3" />
@@ -576,8 +612,25 @@ export default function Reports() {
 
             {/* History */}
             <Panel title="Report History">
-              <div className="p-4">
-                <HistoryTable projectId={activeProjectId ?? 0} entries={historyData} />
+              <div className="flex">
+                <div className="flex-1 min-w-0 p-4">
+                  <HistoryTable
+                    projectId={activeProjectId ?? 0}
+                    entries={historyData}
+                    selectedReportId={selectedReportId}
+                    onSelectReport={setSelectedReportId}
+                  />
+                </div>
+                {selectedReport && (
+                  <aside className="w-[340px] shrink-0 border-l border-border p-4">
+                    <ReportDetailPanel
+                      report={selectedReport}
+                      onUpdateName={handleUpdateName}
+                      onUpdateNotes={handleUpdateNotes}
+                      onClose={() => setSelectedReportId(null)}
+                    />
+                  </aside>
+                )}
               </div>
             </Panel>
           </div>

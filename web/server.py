@@ -59,6 +59,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await bus.register_job("triage", "triage")
     await bus.register_job("report", "report")
     await bus.register_job("report_draft", "report_draft")
+    await bus.register_job("report_update", "report_update")
     await bus.register_job("chat", "chat")
     yield
     with contextlib.suppress(Exception):
@@ -71,6 +72,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await bus.close_job("report")
     with contextlib.suppress(Exception):
         await bus.close_job("report_draft")
+    with contextlib.suppress(Exception):
+        await bus.close_job("report_update")
     with contextlib.suppress(Exception):
         await bus.close_job("chat")
 
@@ -180,11 +183,6 @@ def create_app(
     return app
 
 
-# todo: Add cross-midnight rollover, rquest-ID inner layer correlation
-#  (context var), retention policy
-# todo: Add a concept of log/run levels for debug vs normal logging
-# todo: Turn off logging by default
-# todo: Logging does not need to be duplicated and it is not the concern of the server.
 def _attach_file_logging(base_path: str) -> None:
     """Attach a dated FileHandler to uvicorn loggers.
 

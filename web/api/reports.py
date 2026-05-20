@@ -33,6 +33,7 @@ from domain.projects.entry import ProjectRow
 from domain.reports.entry import REPORT_STATUSES, ReportRow
 from factories.persistence import ProjectNotFound, create_reports_service
 from web.adapters.event_bus_draft_sink import EventBusDraftSink
+from web.adapters.event_bus_report_update_sink import EventBusReportUpdateSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.adapters.report_run_registry import get_report_run_registry
 from web.api._errors import (
@@ -46,6 +47,7 @@ from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
     ReportCancelResponse,
     ReportGenerateRequest,
+    ReportPatchRequest,
     ReportsListResponse,
     ReportSummary,
 )
@@ -80,6 +82,8 @@ def _row_to_summary(report: ReportRow, project_id: int) -> ReportSummary:
         pinned=report.retention_tier == "pinned",
         file_size_bytes=report.file_size_bytes,
         error=report.error,
+        display_name=report.display_name,
+        notes=report.notes,
         created_at=report.created_at,
         started_at=report.started_at,
         finished_at=report.finished_at,
@@ -370,17 +374,25 @@ async def start_drafts(
     row = _resolve_project(request, project_id)
     service = _service(request, project_id)
     sink = EventBusDraftSink(request.app.state.event_bus)
+    base_path = request.app.state.base_path
+
+    def _llm_preflight() -> None:
+        from infrastructure.llm.factory import get_llm_provider
+
+        get_llm_provider("report", base_path)
+
     try:
         handle = await asyncio.to_thread(
             service.start_drafts,
             sections=body.sections,
             force=body.force,
             skip_triage=body.skip_triage,
-            base_path=request.app.state.base_path,
+            base_path=base_path,
             project_id=project_id,
             project_name=row.name,
             prompt=NoApprovalPromptAdapter(),
             event_sink=sink,
+            preflight=_llm_preflight,
         )
     except UnknownSectionError as exc:
         raise ValidationError(
@@ -388,6 +400,8 @@ async def start_drafts(
         ) from exc
     except JobBusy as exc:
         raise JobBusyError("report", exc.current_holder) from exc
+    except ValueError as exc:
+        raise ValidationError(str(exc), details={}) from exc
 
     return {
         "drafts": [
@@ -592,6 +606,34 @@ async def pin_report(
     if report is None or report.project_id != project_id:
         raise NotFound(f"report {report_id} not found")
     await asyncio.to_thread(repo.set_pinned, report_id, True)
+
+
+@v1_router.patch(
+    "/{project_id}/reports/{report_id}",
+    response_model=ReportSummary,
+)
+async def update_report_metadata(
+    project_id: int,
+    report_id: int,
+    request: Request,
+    body: ReportPatchRequest,
+) -> ReportSummary:
+    sink = EventBusReportUpdateSink(request.app.state.event_bus)
+    service = create_reports_service(
+        request.app.state.project_registry,
+        project_id,
+        report_update_sink=sink,
+    )
+    row = await asyncio.to_thread(
+        service.update_report_metadata,
+        report_id,
+        project_id,
+        display_name=body.display_name,
+        notes=body.notes,
+    )
+    if row is None:
+        raise NotFound(f"report {report_id} not found")
+    return _row_to_summary(row, project_id)
 
 
 @v1_router.delete(
