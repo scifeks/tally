@@ -16,6 +16,7 @@ from application.rag.knowledge_base import FindingKnowledgeBase
 from domain.findings.normalization import (
     NormalizedFinding,
     normalise_finding_for_insert,
+    prepare_row_for_render,
 )
 from domain.pipeline.events import (
     EventBus,
@@ -106,7 +107,8 @@ class BaseHandler:
                 if handler is None:
                     continue
                 texts = [
-                    f"Repository: {profile} | {handler.render(row)}"
+                    f"Repository: {profile} | "
+                    f"{handler.render(prepare_row_for_render(row))}"
                     for row in group_rows
                 ]
                 metadatas: list[Mapping[str, Any]] = [

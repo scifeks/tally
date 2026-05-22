@@ -251,7 +251,7 @@ class SqlmapHandler:
             f"Method: {row.get('method', '')}",
             f"Severity: {row.get('severity', '')}",
             f"Confidence: {row.get('confidence', '')}",
-            f"CWE: {row.get('cwe_id', 89)}",
+            f"CWE: {row.get('cwe_id', '')}",
         ]
         if row.get("dbms"):
             parts.append(f"DBMS: {row['dbms']}")

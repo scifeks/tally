@@ -215,7 +215,7 @@ class DalFoxHandler:
             f"Method: {row.get('method', '')}",
             f"Severity: {row.get('severity', '')}",
             f"Confidence: {row.get('confidence', '')}",
-            f"CWE: {row.get('cwe_id', 79)}",
+            f"CWE: {row.get('cwe_id', '')}",
         ]
         if row.get("owasp_name"):
             parts.append(f"OWASP category: {row['owasp_name']}")

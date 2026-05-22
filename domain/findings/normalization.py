@@ -201,6 +201,32 @@ def split_enrichment_fields(
     return columns, meta
 
 
+def prepare_row_for_render(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a deserialized finding row for document rendering.
+
+    Bridges the gap between storage-form (lists, canonical names) and the
+    string/alias form that render methods expect.
+    """
+    prepared = dict(row)
+
+    cwe = prepared.get("cwe")
+    if isinstance(cwe, list):
+        cwe_str = ", ".join(str(v) for v in cwe)
+        prepared["cwe"] = cwe_str
+        prepared["cwe_id"] = cwe_str
+        prepared["cwe_ids"] = cwe_str
+    elif cwe:
+        prepared["cwe_id"] = str(cwe)
+        prepared["cwe_ids"] = str(cwe)
+
+    for key in ("tags", "aliases", "references", "finding_type"):
+        val = prepared.get(key)
+        if isinstance(val, list):
+            prepared[key] = ", ".join(str(v) for v in val)
+
+    return prepared
+
+
 def build_triage_meta(
     confidence: str,
     reasoning: str,
