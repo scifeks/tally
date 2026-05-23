@@ -71,9 +71,7 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof Repository
 describe('RepositorySection', () => {
   it('shows the empty placeholder when no repository is selected', () => {
     renderSection()
-    expect(
-      screen.getByText(/select a repository to edit or create a new one/i)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/select a repository to edit or create a new one/i)).toBeInTheDocument()
   })
 
   it('populates form fields when an existing repository is selected', async () => {
@@ -84,11 +82,14 @@ describe('RepositorySection', () => {
     expect(screen.getByLabelText(/local path/i)).toHaveValue('/opt/repos/dvwa')
   })
 
-  it('hides the auth section when creating a new repository', async () => {
+  it('shows auth fields but not the Save Auth button when creating a new repository', async () => {
     const user = userEvent.setup()
     renderSection()
     await user.click(screen.getByRole('button', { name: /new/i }))
-    expect(screen.queryByLabelText(/login url/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/login url/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /save auth/i })).not.toBeInTheDocument()
   })
 
   it('shows the auth section when editing an existing repository', async () => {
@@ -213,9 +214,7 @@ describe('RepositorySection', () => {
 
   it('shows the existing seed file affordance when set and no fresh upload is staged', async () => {
     const user = userEvent.setup()
-    const reposWithSeed: RepositoryConfig[] = [
-      { ...repos[0], endpointFile: 'existing.json' },
-    ]
+    const reposWithSeed: RepositoryConfig[] = [{ ...repos[0], endpointFile: 'existing.json' }]
     renderSection({ repositories: reposWithSeed })
     await user.selectOptions(screen.getByRole('combobox'), '101')
     expect(
@@ -225,17 +224,13 @@ describe('RepositorySection', () => {
 
   it('hides the existing seed file affordance once a fresh file is staged', async () => {
     const user = userEvent.setup()
-    const reposWithSeed: RepositoryConfig[] = [
-      { ...repos[0], endpointFile: 'existing.json' },
-    ]
+    const reposWithSeed: RepositoryConfig[] = [{ ...repos[0], endpointFile: 'existing.json' }]
     renderSection({ repositories: reposWithSeed })
     await user.selectOptions(screen.getByRole('combobox'), '101')
     const fresh = new File(['{}'], 'fresh.json', { type: 'application/json' })
     const fileInput = screen.getByLabelText(/endpoint file/i) as HTMLInputElement
     await user.upload(fileInput, fresh)
-    expect(
-      screen.queryByText(/current: existing\.json\./i)
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/current: existing\.json\./i)).not.toBeInTheDocument()
   })
 
   it('calls onSave with isNew=true when creating a new repository', async () => {

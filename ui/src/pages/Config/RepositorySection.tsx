@@ -609,7 +609,11 @@ export function RepositorySection({
                       loginUrl: e.target.value,
                     }))
                   }
-                  placeholder="https://example.com/login"
+                  placeholder={
+                    !isNewRepo && selectedRepo?.authConfigured
+                      ? 'Stored — enter new value to override'
+                      : 'https://example.com/login'
+                  }
                   className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
                 />
               </div>
@@ -631,11 +635,13 @@ export function RepositorySection({
                       username: e.target.value,
                     }))
                   }
+                  placeholder={
+                    !isNewRepo && selectedRepo?.authConfigured
+                      ? 'Stored — enter new value to override'
+                      : undefined
+                  }
                   className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
                 />
-                {!isNewRepo && selectedRepo?.authConfigured && !auth.username && (
-                  <span className="text-[9px] text-dim mt-1 block">Credentials stored</span>
-                )}
               </div>
               <div>
                 <label
@@ -655,11 +661,13 @@ export function RepositorySection({
                       password: e.target.value,
                     }))
                   }
+                  placeholder={
+                    !isNewRepo && selectedRepo?.authConfigured
+                      ? 'Stored — enter new value to override'
+                      : undefined
+                  }
                   className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
                 />
-                {!isNewRepo && selectedRepo?.authConfigured && !auth.password && (
-                  <span className="text-[9px] text-dim mt-1 block">Credentials stored</span>
-                )}
               </div>
             </div>
             {!isNewRepo && (
