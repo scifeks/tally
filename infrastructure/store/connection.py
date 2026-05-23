@@ -403,6 +403,9 @@ class ConnectionFactory:
                 CREATE INDEX IF NOT EXISTS idx_saved_scan_arg_profiles_profile
                     ON saved_scan_arg_profiles (arg_profile_id);
             """)
+            from infrastructure.store.migrations import run_pending
+
+            run_pending(conn)
 
     def purge_operational_tables(self) -> None:
         """Clear operational data tables, preserving configuration.

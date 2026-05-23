@@ -15,3 +15,21 @@ class FindingUpdated:
     finding: Finding
     is_locked: bool
     lock_holder: str | None
+
+
+@dataclass(frozen=True)
+class FindingCreated:
+    """Emitted after a manual finding is created."""
+
+    project_id: int
+    finding: Finding
+    is_locked: bool
+    lock_holder: str | None
+
+
+@dataclass(frozen=True)
+class FindingDeleted:
+    """Emitted after a manual finding is deleted."""
+
+    project_id: int
+    finding_id: int

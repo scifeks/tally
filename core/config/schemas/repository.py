@@ -60,7 +60,10 @@ class Repository(BaseModel):
         ),
         exclude=True,
     )
-    type: list[str] = Field(..., description="Repository types (library, api, ui)")
+    type: list[str] = Field(
+        default_factory=list,
+        description="Repository types (library, api, ui)",
+    )
     path: str = Field(default="", description="Filesystem path to repository")
     docker_path: str = Field(
         default="", description="Container mount path for Docker tools"
@@ -201,7 +204,7 @@ class Repository(BaseModel):
     def validate_repo_type(cls, v: list[str]) -> list[str]:
         """Validate repository type values and mutual exclusivity."""
         if not v:
-            raise ValueError("At least one repository type is required")
+            return v
         invalid = set(v) - _VALID_REPO_TYPES
         if invalid:
             sorted_invalid = ", ".join(sorted(invalid))
@@ -215,7 +218,6 @@ class Repository(BaseModel):
     @field_validator("path")
     @classmethod
     def path_must_exist(cls, v: str) -> str:
-        """Validate that repository path exists (only when non-empty)."""
         if v and not Path(v).exists():
             raise ValueError(f"Repository path does not exist: {v}")
         return v
@@ -230,12 +232,8 @@ class Repository(BaseModel):
 
     @model_validator(mode="after")
     def cap_headless_depth(self) -> "Repository":
-        """Cap katana_depth at 5 when headless mode is enabled.
+        # Headless Chrome stalls on cyclic apps at high depth.
 
-        Headless Chrome at high depth stalls indefinitely on cyclic or
-        parameterised apps (e.g. DVWA ``?id=...``). Silently truncating
-        rather than raising allows existing project configs to load.
-        """
         _HEADLESS_DEPTH_CAP = 5
         if self.katana_headless and self.katana_depth > _HEADLESS_DEPTH_CAP:
             warnings.warn(
@@ -249,9 +247,5 @@ class Repository(BaseModel):
 
 
 def build_excluded_dirs(repo: Repository) -> list[str]:
-    """Return deduplicated list of dir names to exclude from scans.
-
-    Combines repo.test_dirs and repo.ignore_dirs in insertion order. Entries
-    are bare dir names matched case-insensitively at any depth in the tree.
-    """
+    """Merge test_dirs and ignore_dirs, deduplicated in insertion order."""
     return list(dict.fromkeys(repo.test_dirs + repo.ignore_dirs))

@@ -885,3 +885,66 @@ class FindingRepository(FindingRepositoryPort):
             "finding_type": finding_type,
             "repo": repo,
         }
+
+    def insert_manual_finding(
+        self,
+        columns: dict[str, Any],
+        meta: dict[str, Any],
+        fingerprint: str,
+    ) -> int:
+        """Insert a single manually-created finding. Returns the new row id."""
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC).isoformat()
+        row = (
+            fingerprint,
+            None,  # run_id
+            columns.get("tool"),
+            columns.get("domain"),
+            columns.get("segment"),
+            columns.get("repo_id"),
+            columns.get("finding_type"),
+            columns.get("severity"),
+            columns.get("confidence"),
+            columns.get("file"),
+            columns.get("rule_id"),
+            columns.get("url"),
+            columns.get("vulnerability_id"),
+            columns.get("package_name"),
+            columns.get("ecosystem"),
+            columns.get("description"),
+            columns.get("package_version"),
+            columns.get("cwe"),
+            0,  # enriched
+            json.dumps(meta),
+            now,  # first_seen
+            now,  # last_seen
+            1,  # seen_count
+            columns.get("status", "active"),
+            0,  # should_report
+        )
+        sql = """
+            INSERT INTO findings (
+                fingerprint, run_id, tool, domain, segment,
+                repo_id, finding_type, severity, confidence,
+                file, rule_id, url, vulnerability_id,
+                package_name, ecosystem, description,
+                package_version, cwe, enriched, meta,
+                first_seen, last_seen, seen_count, status,
+                should_report
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+        """
+        with self._factory.connect() as conn:
+            cursor = conn.execute(sql, row)
+            return cursor.lastrowid  # type: ignore[return-value]
+
+    def delete_finding_by_id(self, finding_id: int) -> None:
+        """Delete a single finding by primary key."""
+        with self._factory.connect() as conn:
+            conn.execute(
+                "DELETE FROM findings WHERE id = ?",
+                (finding_id,),
+            )
