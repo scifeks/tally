@@ -62,7 +62,6 @@ def _service(request: Request, project_id: int) -> FindingsService:
 
 
 def _translate_patch_fields(raw: dict[str, Any]) -> dict[str, Any]:
-    """Reshape a Pydantic patch body into repository column schema."""
     fields: dict[str, Any] = {}
     for k, v in raw.items():
         if k.startswith("meta_"):
@@ -396,11 +395,7 @@ async def batch_patch_findings(
     request: Request,
     body: BatchFindingPatchRequest,
 ) -> BatchPatchResponse:
-    """Apply analyst field updates to multiple findings in one request.
-
-    Locked findings are skipped (not errored). Returns three disjoint
-    id buckets: updated, skipped_locked, not_found.
-    """
+    """Batch-patch analyst fields; locked findings are skipped."""
     service = _service(request, project_id)
     raw = body.model_dump(exclude={"ids"}, exclude_none=True)
     fields = _translate_patch_fields(raw)
@@ -441,4 +436,11 @@ async def patch_finding(
     if finding is None:
         raise NotFound("Finding not found")
 
-    return _serialise_finding(finding, service.lock_state_for(finding.id))
+    serial = _serialise_finding(finding, service.lock_state_for(finding.id))
+    repo_names = service.repo_name_lookup()
+    rid = serial.get("repo_id")
+    if isinstance(rid, int):
+        serial["repo_name"] = repo_names.get(rid, "")
+    else:
+        serial["repo_name"] = ""
+    return serial

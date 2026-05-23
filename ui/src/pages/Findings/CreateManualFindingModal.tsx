@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Modal, ModalButton } from '@/components/Modal'
 import { useFieldSpecs, useRepositories, useProjectScanConfig, useCreateFinding } from '@/lib/api'
+import { TagInput } from '@/pages/Config/shared'
 
 interface FormState {
   title: string
@@ -12,7 +13,7 @@ interface FormState {
   repoId: string
   file: string
   url: string
-  cwe: string
+  cwe: string[]
   vulnerabilityId: string
   description: string
   notes: string
@@ -42,7 +43,7 @@ function initialFormState(segment: string): FormState {
     repoId: '',
     file: '',
     url: '',
-    cwe: '',
+    cwe: [],
     vulnerabilityId: '',
     description: '',
     notes: '',
@@ -67,7 +68,7 @@ export function CreateManualFindingModal({
     }
   }, [open, segment])
 
-  const updateField = (field: keyof FormState, value: string) => {
+  const updateField = (field: Exclude<keyof FormState, 'cwe'>, value: string) => {
     setForm(f => ({ ...f, [field]: value }))
   }
 
@@ -88,12 +89,7 @@ export function CreateManualFindingModal({
       ...(form.status && { status: form.status }),
       ...(form.confidence && { confidence: form.confidence }),
       ...(form.findingType && { findingType: [form.findingType] }),
-      ...(form.cwe && {
-        cwe: form.cwe
-          .split(',')
-          .map(c => c.trim())
-          .filter(c => c.length > 0),
-      }),
+      ...(form.cwe.length > 0 && { cwe: form.cwe }),
       ...(form.vulnerabilityId && { vulnerabilityId: form.vulnerabilityId.trim() }),
       ...(form.description && { description: form.description.trim() }),
       ...(form.notes && { notes: form.notes.trim() }),
@@ -129,7 +125,7 @@ export function CreateManualFindingModal({
         </>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-5">
         <label className={labelCls}>
           TITLE <span className="text-crit">*</span>
           <input
@@ -232,14 +228,14 @@ export function CreateManualFindingModal({
             </span>
           </span>
           <div className="grid grid-cols-3 gap-3 mt-2">
-            <label className="sr-only">
-              Repo
+            <label className={labelCls}>
+              REPO
               <select
                 value={form.repoId}
                 onChange={e => updateField('repoId', e.target.value)}
                 className={selectCls}
               >
-                <option value="">repo</option>
+                <option value="">select...</option>
                 {repositories.map(repo => (
                   <option key={repo.id} value={String(repo.id)}>
                     {repo.name}
@@ -248,8 +244,8 @@ export function CreateManualFindingModal({
               </select>
             </label>
 
-            <label className="sr-only">
-              File
+            <label className={labelCls}>
+              FILE
               <input
                 type="text"
                 value={form.file}
@@ -259,7 +255,7 @@ export function CreateManualFindingModal({
               />
             </label>
 
-            <label className="sr-only">
+            <label className={labelCls}>
               URL
               <input
                 type="text"
@@ -273,16 +269,14 @@ export function CreateManualFindingModal({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className={labelCls}>
-            CWE
-            <input
-              type="text"
+          <div>
+            <div className={labelCls}>CWE</div>
+            <TagInput
               value={form.cwe}
-              onChange={e => updateField('cwe', e.target.value)}
-              className={inputCls}
-              placeholder="comma-separated IDs"
+              onChange={cwe => setForm(f => ({ ...f, cwe }))}
+              placeholder="type and press Enter or comma"
             />
-          </label>
+          </div>
 
           <label className={labelCls}>
             VULNERABILITY ID
@@ -290,7 +284,7 @@ export function CreateManualFindingModal({
               type="text"
               value={form.vulnerabilityId}
               onChange={e => updateField('vulnerabilityId', e.target.value)}
-              className={inputCls}
+              className={`${inputCls} min-h-[36px]`}
               placeholder="CVE, etc."
             />
           </label>

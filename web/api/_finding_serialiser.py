@@ -1,8 +1,4 @@
-"""Serialisation of ``Finding`` rows for the findings HTTP surface.
-
-Shared between ``web/api/findings.py`` (response bodies) and
-``web/adapters/event_bus_finding_sink.py`` (SSE payload).
-"""
+"""Normalize Finding rows into the shape the API and SSE surfaces expect."""
 
 from __future__ import annotations
 
@@ -11,6 +7,7 @@ from dataclasses import asdict
 from typing import Any
 
 from domain.findings.entry import Finding
+from domain.findings.normalization import ANALYST_META_KEYS
 
 # Matches type_secret, type_vulnerability, type_weakness, etc.
 _TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
@@ -19,24 +16,20 @@ _TYPE_FLAG_RE = re.compile(r"^type_[a-z]+$")
 def serialise_finding(
     finding: Finding, lock_state: tuple[bool, str | None]
 ) -> dict[str, Any]:
-    """Serialise a Finding for the API response.
+    """Normalize a Finding into the dict shape the API returns."""
+    payload: dict[str, Any] = asdict(finding)
+    meta = payload.get("meta", {})
+    for key in ANALYST_META_KEYS:
+        if key in meta:
+            payload.setdefault(key, meta.pop(key))
+    payload["meta"] = {k: v for k, v in meta.items() if not _TYPE_FLAG_RE.match(k)}
+    payload["id_fingerprint"] = payload.pop("fingerprint")
+    payload["enriched"] = 1 if payload["enriched"] else 0
+    payload["should_report"] = 1 if payload["should_report"] else 0
 
-    The named ``fingerprint`` column is exposed as ``id_fingerprint`` so
-    it cannot collide with semgrep's scanner fingerprint stored in
-    ``meta``. ``type_*`` flags written by the ChromaDB ingestor are
-    stripped from ``meta`` before the response leaves the adapter.
-    """
-    result: dict[str, Any] = asdict(finding)
-    result["meta"] = {
-        k: v for k, v in result["meta"].items() if not _TYPE_FLAG_RE.match(k)
-    }
-    result["id_fingerprint"] = result.pop("fingerprint")
-    result["enriched"] = 1 if result["enriched"] else 0
-    result["should_report"] = 1 if result["should_report"] else 0
-
-    result["target"] = result.get("url") or ""
+    payload["target"] = payload.get("url") or ""
 
     is_locked, lock_holder = lock_state
-    result["is_locked"] = is_locked
-    result["lock_holder"] = lock_holder
-    return result
+    payload["is_locked"] = is_locked
+    payload["lock_holder"] = lock_holder
+    return payload
