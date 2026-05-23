@@ -16,7 +16,10 @@ from application.findings.analyst_service import (
 )
 from application.findings.findings_service import FindingsService
 from application.locking import FindingsBusy, LockQueryService
-from application.ports.finding_event_sink import NullFindingEventSink
+from application.ports.finding_event_sink import (
+    FindingEvent,
+    NullFindingEventSink,
+)
 from domain.findings.entry import Finding
 from domain.findings.events import FindingUpdated
 from domain.projects.entry import ProjectRow
@@ -96,9 +99,9 @@ class _StubProjectRepo:
 
 class _RecordingSink:
     def __init__(self) -> None:
-        self.events: list[FindingUpdated] = []
+        self.events: list[FindingEvent] = []
 
-    def emit(self, event: FindingUpdated) -> None:
+    def emit(self, event: FindingEvent) -> None:
         self.events.append(event)
 
 
@@ -404,6 +407,7 @@ class TestFindingsServicePatch:
         assert len(sink.events) == 1
         event = sink.events[0]
         assert event.project_id == 7
+        assert isinstance(event, FindingUpdated)
         assert event.finding is finding
 
     def test_patch_finding_returns_none_when_not_found(self) -> None:
@@ -453,7 +457,11 @@ class TestFindingsServicePatch:
         result = service.batch_patch_findings([1, 2, 3], {"should_report": 1})
 
         assert result is bulk
-        assert [e.finding.id for e in sink.events] == [1, 2]
+        assert all(isinstance(e, FindingUpdated) for e in sink.events)
+        assert [e.finding.id for e in sink.events if isinstance(e, FindingUpdated)] == [
+            1,
+            2,
+        ]
         assert all(e.project_id == 11 for e in sink.events)
 
     def test_batch_patch_holder_token_format(self) -> None:

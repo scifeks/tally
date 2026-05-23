@@ -1,12 +1,14 @@
 /**
- * useFindingsEvents - subscribe to the project-scoped `finding_updated`
- * SSE stream and patch the TanStack Query cache directly.
+ * useFindingsEvents - subscribe to the project-scoped `finding_updated`,
+ * `finding_created`, and `finding_deleted` SSE stream and patch the
+ * TanStack Query cache directly.
  *
  * Per `decisions.md` B13 the SPA does not refetch the list when an event
- * arrives - the event payload is the full serialized finding row, so we
- * locate it across every cached page of `['findings', projectId, *]`
- * and replace it in place. When the event reports a different
- * `severity` or `status` than the previously cached row,
+ * arrives - the event payload is the full serialized finding row (for update
+ * and create), so we locate it across every cached page of
+ * `['findings', projectId, *]` and replace it in place. For deletes, we
+ * remove the finding and decrement page totals. When the event reports a
+ * different `severity` or `status` than the previously cached row,
  * `['findingsCounts', projectId]` is invalidated so dashboard tiles
  * refresh.
  *
@@ -40,10 +42,41 @@ export function useFindingsEvents(projectId: string): void {
   useEffect(() => {
     if (!projectId) return
     const handle = apiEventSource(SSE_ENDPOINTS.findingsEvents(projectId), {
-      eventTypes: ['finding_updated'],
-      onEvent: (_type, raw) => {
+      eventTypes: ['finding_updated', 'finding_created', 'finding_deleted'],
+      onEvent: (type, raw) => {
         if (!raw || typeof raw !== 'object') return
+
+        if (type === 'finding_deleted') {
+          const deletedId = (raw as { id: number }).id
+          const entries = queryClient.getQueriesData<InfiniteFindingsCache>({
+            queryKey: ['findings', projectId],
+          })
+          for (const [key, cache] of entries as Array<
+            [QueryKey, InfiniteFindingsCache | undefined]
+          >) {
+            if (!cache) continue
+            queryClient.setQueryData<InfiniteFindingsCache>(key, {
+              ...cache,
+              pages: cache.pages.map(page => ({
+                ...page,
+                items: page.items.filter(item => item.id !== deletedId),
+                total: page.total - 1,
+              })),
+            })
+          }
+          queryClient.invalidateQueries({ queryKey: ['findingsCounts', projectId] })
+          return
+        }
+
         const updated = mapFinding(raw as FindingApiPayload)
+
+        if (type === 'finding_created') {
+          queryClient.invalidateQueries({ queryKey: ['findings', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['findingsCounts', projectId] })
+          return
+        }
+
+        // finding_updated: patch in place
         const entries = queryClient.getQueriesData<InfiniteFindingsCache>({
           queryKey: ['findings', projectId],
         })
@@ -69,7 +102,10 @@ export function useFindingsEvents(projectId: string): void {
             return touched ? { ...page, items: nextItems } : page
           })
           if (touched) {
-            queryClient.setQueryData<InfiniteFindingsCache>(key, { ...cache, pages: nextPages })
+            queryClient.setQueryData<InfiniteFindingsCache>(key, {
+              ...cache,
+              pages: nextPages,
+            })
           }
         }
         if (counted && (prevSeverity !== updated.severity || prevStatus !== updated.status)) {

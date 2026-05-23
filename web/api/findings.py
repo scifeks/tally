@@ -21,7 +21,7 @@ from factories.persistence import (
     create_findings_service,
 )
 from web.adapters.event_bus_finding_sink import EventBusFindingSink
-from web.api._errors import FindingsLocked, NotFound
+from web.api._errors import FindingsLocked, Forbidden, NotFound
 from web.api._finding_serialiser import serialise_finding as _serialise_finding
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
@@ -35,6 +35,7 @@ from web.api.schemas import (
     FindingsFacetsResponse,
     FindingsFilterOptionsResponse,
     FindingsListResponse,
+    ManualFindingCreateRequest,
 )
 from web.sse import format_sse_frame
 
@@ -156,6 +157,30 @@ async def get_findings_filter_options(
 
     data = await asyncio.to_thread(service.analyst.filter_options, filters)
     return FindingsFilterOptionsResponse(**data)
+
+
+@v1_router.post(
+    "/{project_id}/findings",
+    response_model=FindingResponse,
+    status_code=201,
+)
+async def create_manual_finding(
+    project_id: int,
+    request: Request,
+    body: ManualFindingCreateRequest,
+) -> dict:
+    """Create a manually-reported finding."""
+    service = _service(request, project_id)
+    fields = body.model_dump(exclude_none=True)
+    finding = await asyncio.to_thread(service.create_manual_finding, fields)
+    repo_names = service.repo_name_lookup()
+    serial = _serialise_finding(finding, service.lock_state_for(finding.id))
+    rid = serial.get("repo_id")
+    if isinstance(rid, int):
+        serial["repo_name"] = repo_names.get(rid, "")
+    else:
+        serial["repo_name"] = ""
+    return serial
 
 
 @v1_router.get(
@@ -299,6 +324,27 @@ async def get_finding(
     if finding is None:
         raise NotFound("Finding not found")
     return _serialise_finding(finding, service.lock_state_for(finding.id))
+
+
+@v1_router.delete(
+    "/{project_id}/findings/{finding_id}",
+    status_code=204,
+)
+async def delete_finding(
+    project_id: int,
+    finding_id: int,
+    request: Request,
+) -> None:
+    """Delete a manual finding."""
+    service = _service(request, project_id)
+    try:
+        await asyncio.to_thread(service.delete_manual_finding, finding_id)
+    except LookupError as exc:
+        raise NotFound(str(exc)) from exc
+    except PermissionError as exc:
+        raise Forbidden(str(exc)) from exc
+    except FindingsBusy as exc:
+        raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
 
 
 @v1_router.get(

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Panel } from '@/components/tty'
 import { EditableText, EditableSelect } from '@/components/Editable'
 import { cn, formatRelative } from '@/lib/utils'
 import type { Finding, Severity, Status } from '@/lib/types'
 import { useUI } from '@/lib/store'
-import { useStartTriage, useRuntimeDependencies } from '@/lib/api'
+import { useStartTriage, useRuntimeDependencies, useDeleteFinding } from '@/lib/api'
 import { TriagePromptInjectionWarningModal } from '@/components/TriagePromptInjectionWarningModal'
 import {
   SEV_ORDER,
@@ -47,9 +47,13 @@ function Field({
 export function FindingDetailPanel({
   finding,
   onUpdate,
+  projectId,
+  onDelete,
 }: {
   finding: Finding | null
   onUpdate: (patch: Partial<Finding>) => void
+  projectId: number | null
+  onDelete?: () => void
 }) {
   const activeProjectId = useUI(s => s.activeProjectId)
   const triageInjectionAcked = useUI(s => s.triageInjectionAcked)
@@ -58,6 +62,12 @@ export function FindingDetailPanel({
   const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
   const [showInjectionWarning, setShowInjectionWarning] = useState(false)
+  const deleteMutation = useDeleteFinding()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  useEffect(() => {
+    setConfirmDelete(false)
+  }, [finding?.id])
 
   if (!finding) {
     return (
@@ -92,6 +102,7 @@ export function FindingDetailPanel({
   }
 
   const triageDisabled = claudeMissing || isTriagePending || activeProjectId === null
+
   return (
     <Panel title={`detail :: ${finding.id}`} className="h-full" bodyClassName="overflow-auto">
       <div className="p-4 space-y-4 text-xs">
@@ -236,6 +247,49 @@ export function FindingDetailPanel({
             wontfix
           </button>
         </div>
+
+        {finding.tool === 'manual' && (
+          <div className="border-t border-border pt-3 mt-1">
+            {confirmDelete ? (
+              <div className="space-y-2">
+                <p className="text-[10px] text-muted-foreground">
+                  This cannot be undone. Delete this finding?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (projectId === null) return
+                      deleteMutation.mutate(
+                        {
+                          projectId: String(projectId),
+                          findingId: finding.id,
+                        },
+                        { onSuccess: () => onDelete?.() }
+                      )
+                      setConfirmDelete(false)
+                    }}
+                    className="flex-1 text-[11px] uppercase tracking-wider py-1.5 border border-red-900 text-red-400 hover:bg-red-950"
+                  >
+                    confirm delete
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="flex-1 text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:bg-muted"
+                  >
+                    cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full text-[11px] uppercase tracking-wider py-1.5 border border-red-900/50 text-red-400/80 hover:bg-red-950/50 hover:text-red-400"
+              >
+                delete finding
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </Panel>
   )
