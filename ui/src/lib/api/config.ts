@@ -99,6 +99,13 @@ export const REST_ENDPOINTS = {
   /** GET: audit trail (newest-first) for a single finding. */
   findingHistory: (projectId: string | number, findingId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/findings/${findingId}/history`,
+  /** POST: create a manual finding. */
+  createFinding: (projectId: string | number) => `${API_BASE_URL}/projects/${projectId}/findings`,
+  /** DELETE: delete a manual finding. */
+  deleteFinding: (projectId: string | number, findingId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/${findingId}`,
+  /** GET: field specs (valid enums for severity, confidence, finding_type, status). */
+  fieldSpecs: `${API_BASE_URL}/config/field-specs`,
 
   // ─── Scans ──────────────────────────────────────────────────────────────────
   /** GET: paginated scan history for a project. Query: status?, offset?, limit?. */

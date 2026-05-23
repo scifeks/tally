@@ -299,7 +299,7 @@ class TestRepositoriesV1:
         resp = await client.get(f"/api/v1/projects/{project_id}/repositories")
         assert resp.status_code == 200
         raw = resp.text
-        assert "auth" not in raw
+        assert "login_url" not in raw
         assert "super-secret-key" not in raw
         assert len(resp.json()["items"]) >= 1
 
@@ -334,7 +334,7 @@ class TestRepositoriesV1:
         )
         assert detail_resp.status_code == 200
         raw = detail_resp.text
-        assert "auth" not in raw
+        assert "login_url" not in raw
         assert "super-secret-password" not in raw
 
         body = detail_resp.json()

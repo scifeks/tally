@@ -1,17 +1,15 @@
-"""Web adapter: project FindingUpdated events onto the async EventBus.
-
-Findings PATCH executes on a worker thread (``asyncio.to_thread``)
-separate from the FastAPI asyncio loop, so ``publish_threadsafe`` hops
-back into the bus's loop. Bus publish failures are swallowed so a
-patch never fails when nothing listens.
-"""
+"""Web adapter: project finding events onto the async EventBus."""
 
 from __future__ import annotations
 
 import contextlib
 from datetime import UTC, datetime
 
-from domain.findings.events import FindingUpdated
+from application.ports.finding_event_sink import FindingEvent
+from domain.findings.events import (
+    FindingCreated,
+    FindingDeleted,
+)
 from infrastructure.events.bus import EventBus
 from infrastructure.events.ids import new_event_id
 from infrastructure.events.types import BusEvent
@@ -28,16 +26,33 @@ class EventBusFindingSink:
         self._bus = bus
         self._job_id = job_id
 
-    def emit(self, event: FindingUpdated) -> None:
-        serialised = serialise_finding(
-            event.finding, (event.is_locked, event.lock_holder)
-        )
+    def emit(self, event: FindingEvent) -> None:
+        if isinstance(event, FindingDeleted):
+            payload: dict = {
+                "id": event.finding_id,
+                "project_id": event.project_id,
+            }
+            event_type = "finding_deleted"
+        else:
+            serialised = serialise_finding(
+                event.finding,
+                (event.is_locked, event.lock_holder),
+            )
+            payload = {
+                **serialised,
+                "project_id": event.project_id,
+            }
+            if isinstance(event, FindingCreated):
+                event_type = "finding_created"
+            else:
+                event_type = "finding_updated"
+
         bus_event = BusEvent(
             event_id=new_event_id(),
             job_id=self._job_id,
             stream=FINDING_STREAM,
-            event_type="finding_updated",
-            payload={**serialised, "project_id": event.project_id},
+            event_type=event_type,
+            payload=payload,
             ts=datetime.now(UTC),
         )
         with contextlib.suppress(Exception):

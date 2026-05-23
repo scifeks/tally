@@ -13,6 +13,7 @@ from domain.findings.normalization import (
     normalise_cwe,
     normalise_finding_for_insert,
     normalise_finding_type,
+    prepare_row_for_render,
     severity_to_rank,
     split_analyst_fields,
     split_enrichment_fields,
@@ -427,3 +428,77 @@ class TestBuildTriageMeta:
         assert result["attack_vector"] is None
         assert result["call_stack"] is None
         assert len(result) == 5
+
+
+class TestPrepareRowForRender:
+    def test_cwe_list_joined_and_aliased(self) -> None:
+        row = {"cwe": ["CWE-89", "CWE-79"], "tool": "semgrep"}
+        result = prepare_row_for_render(row)
+        assert result["cwe"] == "CWE-89, CWE-79"
+        assert result["cwe_id"] == "CWE-89, CWE-79"
+        assert result["cwe_ids"] == "CWE-89, CWE-79"
+
+    def test_cwe_single_item_list(self) -> None:
+        row = {"cwe": ["CWE-89"]}
+        result = prepare_row_for_render(row)
+        assert result["cwe"] == "CWE-89"
+        assert result["cwe_id"] == "CWE-89"
+        assert result["cwe_ids"] == "CWE-89"
+
+    def test_cwe_string_passthrough(self) -> None:
+        row = {"cwe": "CWE-89"}
+        result = prepare_row_for_render(row)
+        assert result["cwe"] == "CWE-89"
+        assert result["cwe_id"] == "CWE-89"
+        assert result["cwe_ids"] == "CWE-89"
+
+    def test_cwe_none_no_aliases(self) -> None:
+        row = {"tool": "semgrep"}
+        result = prepare_row_for_render(row)
+        assert "cwe_id" not in result
+        assert "cwe_ids" not in result
+
+    def test_tags_list_joined(self) -> None:
+        row = {"tags": ["xss", "web", "critical"]}
+        result = prepare_row_for_render(row)
+        assert result["tags"] == "xss, web, critical"
+
+    def test_aliases_list_joined(self) -> None:
+        row = {"aliases": ["CVE-2023-1234", "GHSA-abcd"]}
+        result = prepare_row_for_render(row)
+        assert result["aliases"] == "CVE-2023-1234, GHSA-abcd"
+
+    def test_references_list_joined(self) -> None:
+        row = {"references": ["http://a.com", "http://b.com"]}
+        result = prepare_row_for_render(row)
+        assert result["references"] == "http://a.com, http://b.com"
+
+    def test_finding_type_list_joined(self) -> None:
+        row = {"finding_type": ["secret", "vulnerability"]}
+        result = prepare_row_for_render(row)
+        assert result["finding_type"] == "secret, vulnerability"
+
+    def test_string_fields_unchanged(self) -> None:
+        row = {"tags": "already a string", "aliases": "single"}
+        result = prepare_row_for_render(row)
+        assert result["tags"] == "already a string"
+        assert result["aliases"] == "single"
+
+    def test_non_list_fields_untouched(self) -> None:
+        row = {
+            "tool": "gitleaks",
+            "severity": "high",
+            "rule_id": "generic-api-key",
+            "line_number": 42,
+        }
+        result = prepare_row_for_render(row)
+        assert result["tool"] == "gitleaks"
+        assert result["severity"] == "high"
+        assert result["rule_id"] == "generic-api-key"
+        assert result["line_number"] == 42
+
+    def test_does_not_mutate_input(self) -> None:
+        row = {"cwe": ["CWE-89"], "tags": ["a", "b"]}
+        prepare_row_for_render(row)
+        assert row["cwe"] == ["CWE-89"]
+        assert row["tags"] == ["a", "b"]

@@ -1,32 +1,27 @@
-"""Destination for finding lifecycle events.
-
-The findings service calls ``sink.emit(event)`` after a successful
-analyst PATCH. Concrete adapters decide what to do with the event:
-
-- API adapter (``EventBusFindingSink``): projects the event into a
-  ``BusEvent(stream="finding", ...)`` and publishes it to the
-  process-singleton ``EventBus`` for SSE fan-out.
-- REPL adapter / tests: ``NullFindingEventSink`` swallows every event.
-"""
+"""Destination for finding lifecycle events."""
 
 from __future__ import annotations
 
 from typing import Protocol
 
-from domain.findings.events import FindingUpdated
+from domain.findings.events import (
+    FindingCreated,
+    FindingDeleted,
+    FindingUpdated,
+)
+
+FindingEvent = FindingCreated | FindingUpdated | FindingDeleted
 
 
 class FindingEventSink(Protocol):
     """Sink for domain-pure finding lifecycle events."""
 
-    def emit(self, event: FindingUpdated) -> None:
-        """Receive *event*. Implementations must not raise on transport errors."""
-        ...
+    def emit(self, event: FindingEvent) -> None: ...
 
 
 class NullFindingEventSink:
-    """Discards every event. Default for tests and REPL parity paths."""
+    """Discards every event."""
 
-    def emit(self, event: FindingUpdated) -> None:
+    def emit(self, event: FindingEvent) -> None:
         del event
         return None

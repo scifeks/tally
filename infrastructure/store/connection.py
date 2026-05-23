@@ -10,12 +10,7 @@ from pathlib import Path
 
 
 def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
-    """Migrate old repositories schema to new schema with services_json.
-
-    If old columns exist (docker_path, type_json, etc.), read all rows,
-    construct a services_json array with one 'default' entry containing the
-    old flat fields, create a new table, copy transformed data, and rename it.
-    """
+    """Collapse flat repo columns into services_json for pre-TAL-143 databases."""
     cursor = conn.cursor()
     table_info = cursor.execute("PRAGMA table_info(repositories)").fetchall()
     column_names = {row[1] for row in table_info}
@@ -485,6 +480,9 @@ class ConnectionFactory:
                 CREATE INDEX IF NOT EXISTS idx_saved_scan_arg_profiles_profile
                     ON saved_scan_arg_profiles (arg_profile_id);
             """)
+            from infrastructure.store.migrations import run_pending
+
+            run_pending(conn)
             _migrate_repositories_to_services(conn)
 
     def purge_operational_tables(self) -> None:

@@ -18,6 +18,11 @@ export type {
   RepoFilterOption,
   FindingsFilterOptions,
 } from './useFindingsFilterOptions'
+export { useFieldSpecs } from './useFieldSpecs'
+export type { FieldSpecs } from './useFieldSpecs'
+export { useCreateFinding } from './useCreateFinding'
+export type { CreateFindingInput } from './useCreateFinding'
+export { useDeleteFinding } from './useDeleteFinding'
 
 // Scan hooks
 export {

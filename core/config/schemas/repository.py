@@ -164,7 +164,6 @@ class Repository(BaseModel):
     @field_validator("path")
     @classmethod
     def path_must_exist(cls, v: str) -> str:
-        """Validate that repository path exists (only when non-empty)."""
         if v and not Path(v).exists():
             raise ValueError(f"Repository path does not exist: {v}")
         return v
@@ -177,12 +176,8 @@ class Repository(BaseModel):
 
     @model_validator(mode="after")
     def cap_headless_depth(self) -> "Repository":
-        """Cap katana_depth at 5 when headless mode is enabled.
+        # Headless Chrome stalls on cyclic apps at high depth.
 
-        Headless Chrome at high depth stalls indefinitely on cyclic or
-        parameterised apps (e.g. DVWA ``?id=...``). Silently truncating
-        rather than raising allows existing project configs to load.
-        """
         _HEADLESS_DEPTH_CAP = 5
         if self.katana_headless and self.katana_depth > _HEADLESS_DEPTH_CAP:
             warnings.warn(

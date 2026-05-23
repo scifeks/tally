@@ -142,8 +142,11 @@ class TestToolsCatalog:
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 2
-        assert len(data["items"]) == 2
+        assert data["total"] >= 2
+        assert len(data["items"]) == data["total"]
+        ids = {item["id"] for item in data["items"]}
+        assert "bandit" in ids
+        assert "gitleaks" in ids
 
     async def test_catalog_item_fields(self, app_client) -> None:
         client, *_ = app_client
@@ -162,7 +165,9 @@ class TestToolsCatalog:
         assert isinstance(item["supports_docker"], bool)
         assert item["description"] == "Python security linter"
 
-    async def test_catalog_empty_when_no_tools(self, app_client) -> None:
+    async def test_catalog_with_empty_registry_only_has_disk_tools(
+        self, app_client
+    ) -> None:
         client, *_ = app_client
         app = client._transport.app
         registry = app.state.tool_registry
@@ -171,8 +176,9 @@ class TestToolsCatalog:
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 0
-        assert data["items"] == []
+        assert data["total"] == len(data["items"])
+        for item in data["items"]:
+            assert item["domain"] == ""
 
     async def test_catalog_stable_after_registry_mutation(self, app_client) -> None:
         client, *_ = app_client
@@ -186,7 +192,10 @@ class TestToolsCatalog:
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 2
+        ids = {item["id"] for item in data["items"]}
+        assert "bandit" in ids
+        assert "gitleaks" in ids
+        assert data["total"] == len(data["items"])
 
     async def test_catalog_requires_auth(self, tmp_path: Path) -> None:
         (tmp_path / "config").mkdir(parents=True)

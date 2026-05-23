@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X, Plus } from 'lucide-react'
 import {
   useFindings,
   useFindingsCounts,
@@ -21,6 +21,7 @@ import { emptyFilters } from './types'
 import type { Filters, SortKey, SortState } from './types'
 import { FindingsList } from './FindingsList'
 import { FindingDetailPanel } from './FindingDetailPanel'
+import { CreateManualFindingModal } from './CreateManualFindingModal'
 
 const SEARCH_DEBOUNCE_MS = 250
 
@@ -50,6 +51,7 @@ export default function Findings() {
   const [sort, setSort] = useState<SortState>(null)
   const [selectedRow, setSelectedRow] = useState<number | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   // Reset filters, sort, and selection on project / domain change.
   useEffect(() => {
@@ -86,9 +88,7 @@ export default function Findings() {
     return f
   }, [domain, filters.severity, filters.status, filters.tool, debouncedSearch, sort])
 
-  // Filter-aware option counts for the severity chips and FilterHeader
-  // dropdowns (Phase 12.1). Strict semantics: every count reflects every
-  // active filter; zero-count options are dropped by the backend.
+  // Counts reflect all active filters; zero-count options are dropped by the backend.
   const filterOptionsQuery = useFindingsFilterOptions(projectIdParam, serverFilters)
 
   const findingsQuery = useFindings({ projectId: projectIdParam, filters: serverFilters })
@@ -204,6 +204,12 @@ export default function Findings() {
   return (
     <div className="h-full flex flex-col min-h-0">
       <FindingMutationErrorModal />
+      <CreateManualFindingModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        segment={domain}
+        projectId={projectIdNum}
+      />
       {/* Unified filter row: [SEGMENT] + tabs | [SEVERITY] + chips | [SEARCH] + input */}
       <div className="flex items-stretch border-b border-border-strong bg-background shrink-0">
         {/* === SEGMENT SECTION === */}
@@ -316,6 +322,14 @@ export default function Findings() {
           </span>
         </div>
 
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="shrink-0 flex items-center gap-1.5 px-3 h-9 border-l border-border text-[11px] uppercase tracking-wider font-bold text-accent bg-accent/8 hover:bg-accent/15 transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          add issue
+        </button>
+
         {hasAnyFilter && (
           <button
             onClick={clearAllFilters}
@@ -379,7 +393,12 @@ export default function Findings() {
         </div>
 
         <aside className="hidden xl:flex w-[420px] border-l border-border flex-col shrink-0">
-          <FindingDetailPanel finding={detail} onUpdate={handleUpdate} />
+          <FindingDetailPanel
+            finding={detail}
+            onUpdate={handleUpdate}
+            projectId={activeProjectId}
+            onDelete={() => setSelectedRow(null)}
+          />
         </aside>
       </div>
     </div>
