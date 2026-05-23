@@ -178,10 +178,20 @@ class TestProjectCommands(unittest.TestCase):
     def test_cmd_repos_with_repos_prints_table(self) -> None:
         mock_repo = MagicMock()
         mock_repo.name = "r"
-        mock_repo.type = ["web"]
         mock_repo.path = "/p"
-        mock_repo.languages = ["python"]
-        mock_repo.base_urls = ["http://x"]
+        mock_repo.id = 1
+        service = MagicMock()
+        service.type = ["web"]
+        service.languages = ["python"]
+        service.base_urls = ["http://x"]
+        service.docker_path = ""
+        service.container_name = ""
+        service.relative_path = ""
+        service.dependencies_file = ""
+        service.crawl_enabled = True
+        service.test_dirs = []
+        service.ignore_dirs = []
+        mock_repo.services = [service]
         self._active_repos_mock.return_value = [mock_repo]
         self.cmds.cmd_repos("repo", [])
         self.repl.console.print.assert_called_once()
@@ -255,7 +265,17 @@ class TestProjectCommands(unittest.TestCase):
     def test_cmd_project_info_success_prints_panel(self) -> None:
         mock_repo = MagicMock()
         mock_repo.name = "my-repo"
-        mock_repo.languages = ["python"]
+        service = MagicMock()
+        service.languages = ["python"]
+        service.docker_path = ""
+        service.container_name = ""
+        service.relative_path = ""
+        service.dependencies_file = ""
+        service.crawl_enabled = True
+        service.type = []
+        service.test_dirs = []
+        service.ignore_dirs = []
+        mock_repo.services = [service]
         info = MagicMock()
         info.created = "2026-01-01T00:00:00"
         info.repositories = [mock_repo]

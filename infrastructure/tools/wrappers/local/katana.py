@@ -164,7 +164,7 @@ class KatanaLocalTool(BaseKatanaTool):
             "-xhr",
             "-j",
             "-o", output_file,
-            # Ceiling to prevent infinite crawls on cyclic/parameterised apps
+            # Ceiling to prevent infinite crawls on cyclic/parameterized apps
             "-ct", str(max_duration),
             "-timeout", str(self._CRAWL_TIMEOUT_SECS),
             "-c", str(self._CRAWL_CONCURRENCY),
@@ -248,20 +248,22 @@ class KatanaLocalTool(BaseKatanaTool):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass for Katana.
 
-        Skips (returns []) when ``repo.base_urls`` is empty; the generic
+        Skips (returns []) when ``service.base_urls`` is empty; the generic
         orchestrator skip handles this, but we guard explicitly for safety.
         """
         assert context.repo is not None
+        assert context.service is not None
         repo = context.repo
+        service = context.service
 
-        if not repo.base_urls:
+        if not service.base_urls:
             logger.info(
                 "Katana: no base_urls configured for %s; skipping",
                 repo.name,
             )
             return []
 
-        base_url = repo.base_urls[0]
+        base_url = service.base_urls[0]
         self._last_base_url = base_url
 
         output_dir = ProjectPaths.from_canonical(
@@ -287,8 +289,16 @@ class KatanaLocalTool(BaseKatanaTool):
             "base_url": base_url,
             "output_file": jsonl_file,
             "oas3_target": oas3_file,
-            "depth": repo.katana_depth,
-            "headless": repo.katana_headless,
+            "depth": (
+                service.katana_depth
+                if service.katana_depth is not None
+                else repo.katana_depth
+            ),
+            "headless": (
+                service.katana_headless
+                if service.katana_headless is not None
+                else repo.katana_headless
+            ),
             "max_duration": self._CRAWL_MAX_DURATION,
         }
         if headers:

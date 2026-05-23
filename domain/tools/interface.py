@@ -7,21 +7,21 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
-    from core.config.schemas import Repository
+    from core.config.schemas import RepoService, Repository
     from domain.tools.execution_config import ToolExecutionConfig
 
 from domain.tools.base import ToolResult
 
 
 class RegistryLike(Protocol):
-    """Pure-domain protocol satisfied by any registry that can resolve repo paths.
+    """Pure-domain protocol satisfied by any registry that can resolve service paths.
 
     Defined here so that domain types carry no runtime dependency on
     application.tools.registry.ToolRegistry.
     """
 
-    def get_repo_path(self, tool_name: str, repo) -> str:
-        """Return the filesystem path to use for the given tool and repo."""
+    def get_service_path(self, tool_name: str, service, repo_path: str) -> str:
+        """Return the filesystem path to use for the given tool and service."""
         ...
 
 
@@ -42,6 +42,7 @@ class ExecutionContext:
     project_name: str
     base_path: str
     repo: Repository | None  # None when not repo-scoped
+    service: RepoService
     tool_config: ToolExecutionConfig
     registry: RegistryLike
     is_docker: bool

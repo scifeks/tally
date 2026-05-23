@@ -167,9 +167,11 @@ def filter_code_rows(
         rid = r.id
         if not isinstance(rid, int):
             continue
-        excl = build_excluded_dirs(r)
-        if excl:
-            repo_excluded_dirs[rid] = excl
+        excl_list: list[str] = []
+        for service in r.services:
+            excl_list.extend(build_excluded_dirs(service))
+        if excl_list:
+            repo_excluded_dirs[rid] = list(dict.fromkeys(excl_list))
         if r.name:
             repo_name_by_id[rid] = r.name
     filtered: list[dict] = []

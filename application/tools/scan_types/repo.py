@@ -73,219 +73,251 @@ class RepoScan(ScanType):
                 f" project '{config.project_name}'"
             )
 
-        tool_set: set[str] = set()
-        for registered_tool in cast(list[Any], registry.get_all_tools()):
-            if registered_tool.always_run:
-                tool_set.add(registered_tool.name)
-            elif registered_tool.language_gates:
-                if getattr(registered_tool, "scan_segment", "") == "sca":
-                    # SCA tools: gate on manifest presence, not language
-                    # detection.  Language auto-detection (e.g. 3 .py files
-                    # in a Node repo's test/files/) must not trigger pip-audit.
-                    skip, _ = should_skip_sca_tool(registered_tool, repo)
-                    if not skip:
-                        tool_set.add(registered_tool.name)
-                else:
-                    gates = [g.lower() for g in registered_tool.language_gates]
-                    for lang in repo.languages or []:
-                        if lang.lower() in gates:
-                            tool_set.add(registered_tool.name)
-                            break
+        services = repo.services if repo.services else []
+        if not services:
+            raise ValueError(f"Repository '{repo.name}' has no services")
 
-        # Skip Noir when the repo uses a framework it doesn't support.
-        if noir_skip_reason(repo) is not None:
-            tool_set.discard("noir")
-
-        ordered_tools = ordered_repo_tools(tool_set, registry)
-        if self.exclude_tools:
-            ordered_tools = [t for t in ordered_tools if t not in self.exclude_tools]
-
-        lang_str = ", ".join(repo.languages) if repo.languages else "unknown"
-        resources.display.print_repo_scan_header(repo.name, lang_str, ordered_tools)
-
-        start = perf_counter()
-        results: list[ToolResult] = []
+        all_services_results: list[ToolResult] = []
         total_run = total_skipped = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
-        for _tool_idx, tool_name in enumerate(ordered_tools):
-            tool_inst_for_seg: Any = registry.get_tool(tool_name)
-            seg = (
-                getattr(tool_inst_for_seg, "scan_segment", "")
-                if tool_inst_for_seg is not None
-                else ""
+        for service in services:
+            tool_set: set[str] = set()
+            for registered_tool in cast(list[Any], registry.get_all_tools()):
+                if registered_tool.always_run:
+                    tool_set.add(registered_tool.name)
+                elif registered_tool.language_gates:
+                    if getattr(registered_tool, "scan_segment", "") == "sca":
+                        skip, _ = should_skip_sca_tool(
+                            registered_tool, service, repo.path
+                        )
+                        if not skip:
+                            tool_set.add(registered_tool.name)
+                    else:
+                        gates = [g.lower() for g in registered_tool.language_gates]
+                        for lang in service.languages or []:
+                            if lang.lower() in gates:
+                                tool_set.add(registered_tool.name)
+                                break
+
+            if noir_skip_reason(service, repo.path) is not None:
+                tool_set.discard("noir")
+
+            ordered_tools = ordered_repo_tools(tool_set, registry)
+            if self.exclude_tools:
+                ordered_tools = [
+                    t for t in ordered_tools if t not in self.exclude_tools
+                ]
+
+            lang_str = ", ".join(service.languages) if service.languages else "unknown"
+            service_label = repo.name
+            if len(services) > 1:
+                service_label = f"{repo.name} [{service.name}]"
+            resources.display.print_repo_scan_header(
+                service_label, lang_str, ordered_tools
             )
 
-            tool_config = registry.get_tool_config(tool_name)
-            if tool_config is None:
-                resources.display.print_tool_line(
-                    ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
-                )
-                _emit_skipped(
-                    resources, config, self.repo_name, tool_name, seg, "not registered"
-                )
-                total_skipped += 1
-                continue
+            start = perf_counter()
+            results: list[ToolResult] = []
 
-            try:
-                tool: Any = factory.create(tool_name, tool_config)
-            except Exception as exc:
-                logger.warning("Factory failed for %r: %s", tool_name, exc)
-                resources.display.print_tool_line(
-                    ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
+            for _tool_idx, tool_name in enumerate(ordered_tools):
+                tool_inst_for_seg: Any = registry.get_tool(tool_name)
+                seg = (
+                    getattr(tool_inst_for_seg, "scan_segment", "")
+                    if tool_inst_for_seg is not None
+                    else ""
                 )
-                _emit_skipped(
-                    resources, config, self.repo_name, tool_name, seg, "factory error"
-                )
-                total_skipped += 1
-                continue
 
-            if tool.requires_base_urls and not repo.base_urls:
-                resources.display.print_tool_line(
-                    ToolDisplayRow(
-                        tool_name, False, True, 0, 0.0, "no base_urls configured"
+                tool_config = registry.get_tool_config(tool_name)
+                if tool_config is None:
+                    resources.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.repo_name,
+                        tool_name,
+                        seg,
+                        "not registered",
+                    )
+                    total_skipped += 1
+                    continue
+
+                try:
+                    tool: Any = factory.create(tool_name, tool_config)
+                except Exception as exc:
+                    logger.warning("Factory failed for %r: %s", tool_name, exc)
+                    resources.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.repo_name,
+                        tool_name,
+                        seg,
+                        "factory error",
+                    )
+                    total_skipped += 1
+                    continue
+
+                if tool.requires_base_urls and not service.base_urls:
+                    resources.display.print_tool_line(
+                        ToolDisplayRow(
+                            tool_name, False, True, 0, 0.0, "no base_urls configured"
+                        )
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.repo_name,
+                        tool_name,
+                        seg,
+                        "no base_urls configured",
+                    )
+                    total_skipped += 1
+                    continue
+
+                if not tool.check_available():
+                    resources.display.print_tool_line(
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
+                    )
+                    _emit_skipped(
+                        resources,
+                        config,
+                        self.repo_name,
+                        tool_name,
+                        seg,
+                        "not installed",
+                    )
+                    total_skipped += 1
+                    continue
+
+                resources.display.print_running(tool_name)
+                resources.event_sink.emit(
+                    se.ToolStarted(
+                        run_id=config.run_id or 0,
+                        project_id=config.project_id,
+                        segment=seg,
+                        repo=repo.name,
+                        tool=tool_name,
+                        message=f"{tool_name} on {repo.name} started",
                     )
                 )
-                _emit_skipped(
-                    resources,
+                context = make_context(
+                    config.tool_config,
+                    config.project_name,
+                    config.base_path,
+                    registry,
+                    repo,
+                    service,
+                    tool_config,
+                )
+                _remaining = (
+                    len(ordered_tools) - _tool_idx - 1
+                ) + config.remaining_peers
+                result = execute_tool_passes(
+                    tool,
+                    context,
                     config,
-                    self.repo_name,
-                    tool_name,
-                    seg,
-                    "no base_urls configured",
+                    executor,
+                    remaining_tools=_remaining,
+                    command_config=tool_config,
                 )
-                total_skipped += 1
-                continue
 
-            if not tool.check_available():
-                resources.display.print_tool_line(
-                    ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
-                )
-                _emit_skipped(
-                    resources, config, self.repo_name, tool_name, seg, "not installed"
-                )
-                total_skipped += 1
-                continue
-
-            resources.display.print_running(tool_name)
-            resources.event_sink.emit(
-                se.ToolStarted(
-                    run_id=config.run_id or 0,
-                    project_id=config.project_id,
-                    segment=seg,
-                    repo=repo.name,
-                    tool=tool_name,
-                    message=f"{tool_name} on {repo.name} started",
-                )
-            )
-            context = make_context(
-                config.tool_config,
-                config.project_name,
-                config.base_path,
-                registry,
-                repo,
-                tool_config,
-            )
-            _remaining = (len(ordered_tools) - _tool_idx - 1) + config.remaining_peers
-            result = execute_tool_passes(
-                tool,
-                context,
-                config,
-                executor,
-                remaining_tools=_remaining,
-                command_config=tool_config,
-            )
-
-            if result is None:
-                resources.display.print_tool_line(
-                    ToolDisplayRow(tool_name, False, True, 0, 0.0)
-                )
-                _emit_skipped(
-                    resources, config, self.repo_name, tool_name, seg, "no result"
-                )
-                total_skipped += 1
-            else:
-                result = normalize_success(result, tool)
-                result.repo = self.repo_name
-                results.append(result)
-                findings = tool.count_findings(result.parsed_data or {})
-                findings_by_tool[result.tool_name] = (
-                    findings_by_tool.get(result.tool_name, 0) + findings
-                )
-                if result.success:
-                    total_run += 1
-                    total_ingested += dispatch_and_count_ingested(
-                        resources.event_bus,
-                        ToolCompleted(
-                            result,
-                            repo.name,
-                            config.run_id,
-                            config.project_name,
-                            config.base_path,
-                            repo=repo.name,
-                        ),
-                    )
+                if result is None:
                     resources.display.print_tool_line(
-                        ToolDisplayRow(
-                            tool_name,
-                            True,
-                            False,
-                            findings,
-                            result.duration_seconds,
-                        )
+                        ToolDisplayRow(tool_name, False, True, 0, 0.0)
                     )
-                    resources.event_sink.emit(
-                        se.ToolCompleted(
-                            run_id=config.run_id or 0,
-                            project_id=config.project_id,
-                            segment=seg,
-                            repo=repo.name,
-                            tool=tool_name,
-                            message=f"{tool_name} on {repo.name} complete",
-                            findings_count=findings,
-                            duration=result.duration_seconds,
-                            exit_code=0,
-                        )
+                    _emit_skipped(
+                        resources, config, self.repo_name, tool_name, seg, "no result"
                     )
-                    if tool_name == "noir" and findings == 0:
-                        resources.display.print_status(
-                            "    [yellow]⚠ noir found 0 endpoints. "
-                            "The framework may not be supported by noir.[/yellow]"
-                        )
-                        resources.display.print_status(
-                            "    [dim]ZAP will fall back to spider-only "
-                            "mode for this repository.[/dim]"
-                        )
+                    total_skipped += 1
                 else:
-                    total_failed += 1
-                    total_ingested += dispatch_and_count_ingested(
-                        resources.event_bus,
-                        ToolCompleted(
-                            result,
-                            repo.name,
-                            config.run_id,
-                            config.project_name,
-                            config.base_path,
-                            repo=repo.name,
-                        ),
+                    result = normalize_success(result, tool)
+                    result.repo = self.repo_name
+                    results.append(result)
+                    findings = tool.count_findings(result.parsed_data or {})
+                    findings_by_tool[result.tool_name] = (
+                        findings_by_tool.get(result.tool_name, 0) + findings
                     )
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(
-                            tool_name, False, False, 0, result.duration_seconds
+                    if result.success:
+                        total_run += 1
+                        total_ingested += dispatch_and_count_ingested(
+                            resources.event_bus,
+                            ToolCompleted(
+                                result,
+                                repo.name,
+                                config.run_id,
+                                config.project_name,
+                                config.base_path,
+                                repo=repo.name,
+                            ),
                         )
-                    )
-                    resources.event_sink.emit(
-                        se.ToolFailed(
-                            run_id=config.run_id or 0,
-                            project_id=config.project_id,
-                            segment=seg,
-                            repo=repo.name,
-                            tool=tool_name,
-                            message=f"{tool_name} on {repo.name} failed",
-                            exit_code=1,
-                            duration=result.duration_seconds,
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
+                                True,
+                                False,
+                                findings,
+                                result.duration_seconds,
+                            )
                         )
-                    )
+                        resources.event_sink.emit(
+                            se.ToolCompleted(
+                                run_id=config.run_id or 0,
+                                project_id=config.project_id,
+                                segment=seg,
+                                repo=repo.name,
+                                tool=tool_name,
+                                message=f"{tool_name} on {repo.name} complete",
+                                findings_count=findings,
+                                duration=result.duration_seconds,
+                                exit_code=0,
+                            )
+                        )
+                        if tool_name == "noir" and findings == 0:
+                            resources.display.print_status(
+                                "    [yellow]⚠ noir found 0 endpoints. "
+                                "The framework may not be supported by noir.[/yellow]"
+                            )
+                            resources.display.print_status(
+                                "    [dim]ZAP will fall back to spider-only "
+                                "mode for this repository.[/dim]"
+                            )
+                    else:
+                        total_failed += 1
+                        total_ingested += dispatch_and_count_ingested(
+                            resources.event_bus,
+                            ToolCompleted(
+                                result,
+                                repo.name,
+                                config.run_id,
+                                config.project_name,
+                                config.base_path,
+                                repo=repo.name,
+                            ),
+                        )
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name, False, False, 0, result.duration_seconds
+                            )
+                        )
+                        resources.event_sink.emit(
+                            se.ToolFailed(
+                                run_id=config.run_id or 0,
+                                project_id=config.project_id,
+                                segment=seg,
+                                repo=repo.name,
+                                tool=tool_name,
+                                message=f"{tool_name} on {repo.name} failed",
+                                exit_code=1,
+                                duration=result.duration_seconds,
+                            )
+                        )
+
+            all_services_results.extend(results)
 
         duration = round(perf_counter() - start, 1)
 
@@ -298,14 +330,14 @@ class RepoScan(ScanType):
                 duration_seconds=r.duration_seconds,
                 repo=r.repo,
             )
-            for r in results
+            for r in all_services_results
         ]
         resources.display.print_summary_table(rows)
         summary = ScanSummary(
             total_tools_run=total_run,
             total_tools_skipped=total_skipped,
             total_tools_failed=total_failed,
-            results=results,
+            results=all_services_results,
             duration_seconds=duration,
             findings_ingested=total_ingested,
             findings_by_tool=findings_by_tool,

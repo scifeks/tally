@@ -21,6 +21,16 @@ def _make_repo(name: str = "myrepo") -> MagicMock:
     # warning path, which would otherwise prompt for stdin input under
     # pytest's captured-stdin environment.
     repo.crawl_enabled = False
+    service = MagicMock()
+    service.crawl_enabled = False
+    service.docker_path = ""
+    service.container_name = ""
+    service.relative_path = ""
+    service.dependencies_file = ""
+    service.type = []
+    service.test_dirs = []
+    service.ignore_dirs = []
+    repo.services = [service]
     return repo
 
 

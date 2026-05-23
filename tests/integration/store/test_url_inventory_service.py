@@ -13,6 +13,7 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from application.url_inventory.service import UrlInventoryService  # noqa: E402
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 from core.config.schemas.repository import Repository  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool  # noqa: E402
@@ -30,10 +31,16 @@ pytestmark = pytest.mark.integration
 def _repo(name: str) -> Repository:
     return Repository(
         name=name,
-        type=["api"],
-        languages=["python"],
-        docker_path="/app",
-        container_name="ctr",
+        path="",
+        services=[
+            RepoService(
+                name="default",
+                type=["api"],
+                languages=["python"],
+                docker_path="/app",
+                container_name="ctr",
+            )
+        ],
     )
 
 

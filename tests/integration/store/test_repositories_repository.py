@@ -12,6 +12,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 from core.config.schemas.repository import RepoAuth, Repository  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.repositories import (  # noqa: E402
@@ -41,14 +42,47 @@ def make_repo(tmp_path: Path) -> RepoFactory:
     """Build Repository objects backed by a real on-disk path (tmp_path)."""
 
     def _make(name: str, **overrides: object) -> Repository:
-        fields: dict[str, object] = {
-            "name": name,
+        service_kwargs: dict[str, object] = {
+            "name": "default",
+            "relative_path": "",
             "type": ["api"],
             "languages": ["python"],
+        }
+        repo_kwargs: dict[str, object] = {
+            "name": name,
             "path": str(tmp_path),
         }
-        fields.update(overrides)
-        return Repository(**fields)  # type: ignore[arg-type]
+        _service_fields = {
+            "type",
+            "languages",
+            "docker_path",
+            "container_name",
+            "base_urls",
+            "test_dirs",
+            "ignore_dirs",
+            "dependencies_file",
+            "crawl_enabled",
+            "relative_path",
+        }
+        for key in list(overrides.keys()):
+            if key in _service_fields:
+                service_kwargs[key] = overrides.pop(key)
+        repo_kwargs.update(overrides)
+        service = RepoService(
+            name=str(service_kwargs["name"]),
+            relative_path=str(service_kwargs.get("relative_path", "")),
+            type=service_kwargs.get("type", []),  # type: ignore[arg-type]
+            languages=service_kwargs.get("languages", []),  # type: ignore[arg-type]
+            docker_path=str(service_kwargs.get("docker_path", "")),
+            container_name=str(service_kwargs.get("container_name", "")),
+            base_urls=service_kwargs.get("base_urls", []),  # type: ignore[arg-type]
+            test_dirs=service_kwargs.get("test_dirs", []),  # type: ignore[arg-type]
+            ignore_dirs=service_kwargs.get("ignore_dirs", []),  # type: ignore[arg-type]
+            dependencies_file=str(service_kwargs.get("dependencies_file", "")),
+            crawl_enabled=bool(service_kwargs.get("crawl_enabled", True)),
+        )
+        repo_kwargs["services"] = [service]
+        return Repository(**repo_kwargs)  # type: ignore[arg-type]
 
     return _make
 
@@ -82,11 +116,11 @@ class TestInsertAndLookups:
         rid = repos.insert(repo)
         row = repos.get_by_id(rid)
         assert row is not None
-        assert row.type == ["api", "ui"]
-        assert row.languages == ["python", "typescript"]
-        assert row.base_urls == ["http://localhost:3000"]
-        assert row.test_dirs == ["tests/", "spec/"]
-        assert row.ignore_dirs == ["dist/"]
+        assert row.services[0].type == ["api", "ui"]
+        assert row.services[0].languages == ["python", "typescript"]
+        assert row.services[0].base_urls == ["http://localhost:3000"]
+        assert row.services[0].test_dirs == ["tests/", "spec/"]
+        assert row.services[0].ignore_dirs == ["dist/"]
         assert row.xsstrike_headers == {"X-Auth": "abc"}
         assert row.dalfox_headers == {"X-Foo": "bar"}
         assert row.katana_headers == {"X-K": "1"}
@@ -205,11 +239,12 @@ class TestUpdate:
         rid = repos.insert(make_repo("project-a"))
         existing = repos.get_by_id(rid)
         assert existing is not None
-        merged = existing.model_copy(update={"languages": ["go"]})
+        updated_service = existing.services[0].model_copy(update={"languages": ["go"]})
+        merged = existing.model_copy(update={"services": [updated_service]})
         repos.update(rid, merged)
         row = repos.get_by_id(rid)
         assert row is not None
-        assert row.languages == ["go"]
+        assert row.services[0].languages == ["go"]
 
 
 class TestSchemaSanity:
@@ -228,9 +263,7 @@ class TestSchemaSanity:
             "id",
             "name",
             "path",
-            "type_json",
-            "languages_json",
-            "base_urls_json",
+            "services_json",
             "auth_json",
             "url_seed_file",
             "created_at",

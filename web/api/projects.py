@@ -233,6 +233,37 @@ def _existing_endpoint_file(repo: Repository) -> str | None:
     return Path(repo.url_seed_file).name
 
 
+_SERVICE_FIELDS = {
+    "type",
+    "languages",
+    "docker_path",
+    "container_name",
+    "base_urls",
+    "test_dirs",
+    "ignore_dirs",
+    "dependencies_file",
+    "crawl_enabled",
+    "relative_path",
+}
+
+
+def _ensure_services(data: dict[str, Any], *, require: bool = True) -> dict[str, Any]:
+    """Wrap flat repo fields into a single service (basic mode adapter).
+
+    When *require* is False (patch mode), only creates a service entry
+    if the payload actually contains service-level fields.
+    """
+    if "services" in data:
+        return data
+    service: dict[str, Any] = {"name": "default"}
+    for key in list(data.keys()):
+        if key in _SERVICE_FIELDS:
+            service[key] = data.pop(key)
+    if require or len(service) > 1:
+        data["services"] = [service]
+    return data
+
+
 def _serialize_repo(
     repo: Repository,
     repo_id: int | None,
@@ -240,6 +271,8 @@ def _serialize_repo(
 ) -> dict:
     """Convert Repository to JSON, excluding auth credentials."""
     data = repo.model_dump()
+    has_auth = repo.auth is not None and bool(repo.auth.login_url)
+    data["auth_configured"] = has_auth
     data.pop("auth", None)
     data["id"] = repo_id
     data["endpoint_file"] = _existing_endpoint_file(repo)
@@ -324,6 +357,7 @@ async def create_repository(
 
     data = _parse_payload(payload)
     data.pop("id", None)
+    data = _ensure_services(data)
 
     try:
         repo = Repository(**data)
@@ -364,6 +398,7 @@ async def patch_repository(
 
     data = _parse_payload(payload)
     data.pop("id", None)
+    data = _ensure_services(data, require=False)
 
     try:
         updated = service.update(project_id, repo_id, data)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from core.config.schemas.repository import Repository
+from core.config.schemas.repo_service import RepoService
 
 # Python framework packages that Noir v0.25.1 does not support.
 # When any of these appear in the repo's dependencies file Noir is skipped
@@ -51,18 +51,17 @@ def _first_unsupported_package(deps_file: str) -> str:
     return ""
 
 
-def noir_skip_reason(repo: Repository) -> str | None:
-    """Return ``None`` if Noir should run, or a human-readable skip reason.
-
-    Two conditions cause a skip:
-    - The repo root contains a ``package.json`` (Noir's JS parser crashes
-      on complex Node apps).
-    - The repo's dependencies file contains a package that Noir does not
-      support, causing it to fall back to full-repo scanning and emit garbage.
-    """
-    if _is_node_app(repo.path):
+def noir_skip_reason(service: RepoService, repo_path: str = "") -> str | None:
+    """Return ``None`` if Noir should run, or a human-readable skip reason."""
+    if service.docker_path:
+        check_path = service.docker_path
+    elif service.relative_path and repo_path:
+        check_path = str(Path(repo_path) / service.relative_path)
+    else:
+        check_path = repo_path
+    if _is_node_app(check_path):
         return "Node.js app"
-    bad_pkg = _first_unsupported_package(repo.dependencies_file)
+    bad_pkg = _first_unsupported_package(service.dependencies_file)
     if bad_pkg:
         return f"unsupported framework ({bad_pkg})"
     return None

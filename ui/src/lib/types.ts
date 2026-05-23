@@ -660,6 +660,55 @@ export type RepoType = 'library' | 'api' | 'ui'
 /** Repository location mode */
 export type RepoLocationMode = 'local' | 'docker'
 
+/** Basic (single default service) or advanced (multi-service) */
+export type ConfigMode = 'basic' | 'advanced'
+
+/** A single service within a repository. */
+export interface ServiceConfig {
+  name: string
+  relativePath: string
+  type: RepoType[]
+  languages: string[]
+  locationMode: RepoLocationMode
+  docker?: {
+    containerName: string
+    mountPoint: string
+  }
+  baseUrls: string[]
+  testDirectories: string[]
+  ignoreDirectories: string[]
+  dependenciesFile: string
+  crawlEnabled: boolean
+  katanaHeadless: boolean | null
+  katanaCrawlDepth: number | null
+}
+
+/** Derive config mode from the services array shape. */
+export function deriveConfigMode(services: ServiceConfig[]): ConfigMode {
+  if (services.length === 1 && services[0].name === 'default') {
+    return 'basic'
+  }
+  return 'advanced'
+}
+
+/** Create a blank service with sensible defaults. */
+export function emptyService(name = 'default'): ServiceConfig {
+  return {
+    name,
+    relativePath: '',
+    type: [],
+    languages: [],
+    locationMode: 'local',
+    baseUrls: [],
+    testDirectories: [],
+    ignoreDirectories: [],
+    dependenciesFile: '',
+    crawlEnabled: true,
+    katanaHeadless: null,
+    katanaCrawlDepth: null,
+  }
+}
+
 /**
  * A repository configuration in a project.
  * Full model for Add/Edit repository form.
@@ -668,38 +717,17 @@ export interface RepositoryConfig {
   id: number
   projectId: number
   name: string
-  /** At least one required. library is mutually exclusive with api/ui. */
-  types: RepoType[]
-  locationMode: RepoLocationMode
-  /** Required in both local and docker modes */
   localPath: string
-  /** Docker-only fields */
-  docker?: {
-    containerName: string
-    mountPoint: string
-  }
-  /** Auto-detected or user-specified */
-  languages: string[]
-  /** Directories treated as test code */
-  testDirectories: string[]
-  /** Directories excluded from scans */
-  ignoreDirectories: string[]
-  /** API target URLs (first is canonical) */
-  baseUrls: string[]
-  /** Uploaded endpoint definition file path (if any) */
+  services: ServiceConfig[]
   endpointFile?: string
-  /** Endpoint file format (auto-detected) */
   endpointFileFormat?: 'openapi3' | 'swagger2' | 'postman' | 'har' | 'katana-jsonl'
   garakConfigFile?: string
-  /** When both baseUrls and endpointFile set, should crawlers also run? */
+  authConfigured?: boolean
   alsoRunCrawlers: boolean
-  /** Katana configuration */
   katana: {
     headless: boolean
-    /** Capped at 5 when headless is on */
     crawlDepth: number
   }
-  /** Auth configuration for crawling */
   auth?: {
     loginUrl: string
     usernameFieldName: string
@@ -708,7 +736,6 @@ export interface RepositoryConfig {
     inlineUsername?: string
     inlinePassword?: string
   }
-  /** Server-detected flags */
   detected?: {
     isSpa: boolean
     languages: string[]

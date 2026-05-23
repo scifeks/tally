@@ -9,13 +9,21 @@ const repos: RepositoryConfig[] = [
     id: 101,
     projectId: 1,
     name: 'dvwa',
-    types: ['api', 'ui'],
-    locationMode: 'local',
     localPath: '/opt/repos/dvwa',
-    languages: ['php'],
-    testDirectories: ['tests'],
-    ignoreDirectories: ['vendor'],
-    baseUrls: ['http://localhost:8080'],
+    services: [
+      {
+        name: 'default',
+        relativePath: '',
+        type: ['api', 'ui'],
+        languages: ['php'],
+        locationMode: 'local',
+        testDirectories: ['tests'],
+        ignoreDirectories: ['vendor'],
+        baseUrls: ['http://localhost:8080'],
+        dependenciesFile: '',
+        crawlEnabled: true,
+      },
+    ],
     alsoRunCrawlers: true,
     katana: { headless: false, crawlDepth: 10 },
   },
@@ -23,14 +31,22 @@ const repos: RepositoryConfig[] = [
     id: 102,
     projectId: 1,
     name: 'dvpwa',
-    types: ['api'],
-    locationMode: 'docker',
     localPath: '/opt/repos/dvpwa',
-    docker: { containerName: 'dvpwa-container', mountPoint: '/app' },
-    languages: ['python'],
-    testDirectories: ['tests'],
-    ignoreDirectories: [],
-    baseUrls: [],
+    services: [
+      {
+        name: 'default',
+        relativePath: '',
+        type: ['api'],
+        languages: ['python'],
+        locationMode: 'docker',
+        docker: { containerName: 'dvpwa-container', mountPoint: '/app' },
+        testDirectories: ['tests'],
+        ignoreDirectories: [],
+        baseUrls: [],
+        dependenciesFile: '',
+        crawlEnabled: true,
+      },
+    ],
     alsoRunCrawlers: true,
     katana: { headless: false, crawlDepth: 8 },
   },
@@ -236,6 +252,6 @@ describe('RepositorySection', () => {
     expect(isNew).toBe(true)
     expect(repo.name).toBe('newrepo')
     expect(repo.localPath).toBe('/opt/repos/newrepo')
-    expect(repo.types).toContain('api')
+    expect(repo.services[0].type).toContain('api')
   })
 })

@@ -13,6 +13,7 @@ from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers.user_file import UserFileProvider
 from application.url_inventory.service import UrlInventoryService
 from core.config import Repository
+from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
 from infrastructure.tools.wrappers.utils.manifest_check import (
@@ -54,20 +55,27 @@ _TEST_DIR_NAMES: frozenset[str] = frozenset(
 
 def _sca_manifest_notification(repo: Repository) -> None:
     """Print a notice when SCA-relevant manifests are not found."""
+    if not repo.services:
+        return
+    service = repo.services[0]
     sca_langs = set(LANGUAGE_MANIFESTS)
-    repo_langs = {lang.lower() for lang in (repo.languages or [])}
+    repo_langs = {lang.lower() for lang in (service.languages or [])}
     if not repo_langs & sca_langs:
         return
-    if repo.container_name:
+    if service.container_name:
         found = has_dependency_manifests_docker(
-            repo.container_name, repo.docker_path, repo.languages or []
+            service.container_name,
+            service.docker_path,
+            service.languages or [],
         )
     else:
-        found = has_dependency_manifests(repo.path, repo.languages or [])
+        found = has_dependency_manifests(repo.path, service.languages or [])
     if not found:
         print(
-            "  Note: no dependency manifests found for the configured languages.\n"
-            "  SCA scanning (npm-audit, pip-audit, composer-audit, osv-scanner)\n"
+            "  Note: no dependency manifests found for the configured"
+            " languages.\n"
+            "  SCA scanning (npm-audit, pip-audit, composer-audit,"
+            " osv-scanner)\n"
             "  will be skipped for this repository."
         )
 
@@ -353,6 +361,8 @@ class InteractiveProjectWizard:
             " (press Enter to keep current value)...\n"
         )
         try:
+            existing_service = existing.services[0] if existing.services else None
+
             # Name
             while True:
                 name = _prompt("  Name", default=existing.name)
@@ -362,7 +372,11 @@ class InteractiveProjectWizard:
 
             # Type
             print(_REPO_TYPE_HELP)
-            current_type_str = ", ".join(existing.type) if existing.type else ""
+            current_type_str = (
+                ", ".join(existing_service.type)
+                if existing_service and existing_service.type
+                else ""
+            )
             while True:
                 type_input = _prompt("  Type", default=current_type_str)
                 types = _parse_repo_types(type_input)
@@ -373,7 +387,11 @@ class InteractiveProjectWizard:
                 break
 
             # Mode selection
-            current_mode_str = "docker" if existing.docker_path else "local"
+            current_mode_str = (
+                "docker"
+                if existing_service and existing_service.docker_path
+                else "local"
+            )
             while True:
                 mode = _prompt(
                     "  Mode [local/docker]", default=current_mode_str
@@ -387,15 +405,20 @@ class InteractiveProjectWizard:
             container_name = ""
             if mode == "docker":
                 container_name = _prompt(
-                    "  Docker container name", default=existing.container_name
+                    "  Docker container name",
+                    default=(
+                        existing_service.container_name if existing_service else ""
+                    ),
                 ).strip()
                 docker_path = _prompt(
-                    "  Docker mount point", default=existing.docker_path
+                    "  Docker mount point",
+                    default=(existing_service.docker_path if existing_service else ""),
                 ).strip()
                 while True:
                     raw_path = _prompt(
                         "  Local path"
-                        " (required for language detection and local tool execution)",
+                        " (required for language detection and local"
+                        " tool execution)",
                         default=existing.path,
                     )
                     if not raw_path:
@@ -429,7 +452,9 @@ class InteractiveProjectWizard:
                 default_langs = detected_label
             else:
                 current_langs = (
-                    ", ".join(existing.languages) if existing.languages else ""
+                    ", ".join(existing_service.languages)
+                    if existing_service and existing_service.languages
+                    else ""
                 )
                 prompt_label = "  Languages (comma-separated)"
                 default_langs = current_langs
@@ -439,31 +464,50 @@ class InteractiveProjectWizard:
             if "python" in [lang.lower() for lang in langs]:
                 if mode == "docker":
                     print(
-                        "  Note: if no dependencies file is provided, pip-audit will"
-                        " scan all packages installed in the container environment."
+                        "  Note: if no dependencies file is provided,"
+                        " pip-audit will"
+                        " scan all packages installed in the container"
+                        " environment."
                     )
                     dependencies_file = _prompt(
                         "  Python dependencies file"
-                        " (container path, e.g. /app/requirements.txt, optional)",
-                        default=existing.dependencies_file,
+                        " (container path, e.g. /app/requirements.txt,"
+                        " optional)",
+                        default=(
+                            existing_service.dependencies_file
+                            if existing_service
+                            else ""
+                        ),
                     )
                 else:
                     print(
-                        "  Note: without a dependencies file, pip-audit will be"
+                        "  Note: without a dependencies file, pip-audit"
+                        " will be"
                         " skipped for this repository."
                     )
                     dependencies_file = _prompt(
                         "  Python dependencies file"
                         " (local path, e.g. requirements.txt, optional)",
-                        default=existing.dependencies_file,
+                        default=(
+                            existing_service.dependencies_file
+                            if existing_service
+                            else ""
+                        ),
                     )
             else:
-                dependencies_file = existing.dependencies_file
+                dependencies_file = (
+                    existing_service.dependencies_file if existing_service else ""
+                )
 
             # Base URLs
-            current_urls = ", ".join(existing.base_urls) if existing.base_urls else ""
+            current_urls = (
+                ", ".join(existing_service.base_urls)
+                if existing_service and existing_service.base_urls
+                else ""
+            )
             url_input = _prompt(
-                "  Base URLs (comma-separated, optional)", default=current_urls
+                "  Base URLs (comma-separated, optional)",
+                default=current_urls,
             )
             base_urls = [u.strip() for u in url_input.split(",") if u.strip()]
 
@@ -478,7 +522,9 @@ class InteractiveProjectWizard:
                 test_dirs_default = auto_label
             else:
                 current_test = (
-                    ", ".join(existing.test_dirs) if existing.test_dirs else ""
+                    ", ".join(existing_service.test_dirs)
+                    if existing_service and existing_service.test_dirs
+                    else ""
                 )
                 test_dirs_prompt = (
                     "  Test dir names (any depth, comma-separated, optional)"
@@ -489,7 +535,9 @@ class InteractiveProjectWizard:
 
             # Ignore dir names
             current_ignore = (
-                ", ".join(existing.ignore_dirs) if existing.ignore_dirs else ""
+                ", ".join(existing_service.ignore_dirs)
+                if existing_service and existing_service.ignore_dirs
+                else ""
             )
             ignore_dirs_input = _prompt(
                 "  Ignore dir names (e.g. vendor, node_modules, mocks;"
@@ -510,13 +558,15 @@ class InteractiveProjectWizard:
                 ).lower()
                 if replace_ans in ("y", "yes"):
                     print(
-                        "  Warning: when an endpoint file is configured, Noir"
+                        "  Warning: when an endpoint file is configured,"
+                        " Noir"
                         " is skipped and ZAP relies entirely on that file."
-                        " ZAP results will be less accurate if the file is"
+                        " ZAP results will be less accurate if the file"
+                        " is"
                         " incomplete."
                     )
                     pending_endpoint_file = self._prompt_endpoint_file(
-                        prompt_label="  New endpoint definition file path (optional)",
+                        prompt_label=("  New endpoint definition file path (optional)"),
                         allow_keep=True,
                     )
             else:
@@ -527,9 +577,11 @@ class InteractiveProjectWizard:
                     " Katana JSONL (.jsonl)"
                 )
                 print(
-                    "  Warning: when an endpoint file is configured, Noir"
+                    "  Warning: when an endpoint file is configured,"
+                    " Noir"
                     " is skipped and ZAP relies entirely on that file."
-                    " ZAP results will be less accurate if the file is"
+                    " ZAP results will be less accurate if the file"
+                    " is"
                     " incomplete."
                 )
                 pending_endpoint_file = self._prompt_endpoint_file(
@@ -537,16 +589,12 @@ class InteractiveProjectWizard:
                     allow_keep=False,
                 )
 
-            # crawl_enabled is only asked when base URLs and endpoint file
-            # are both configured. Treat any prior or pending endpoint file
-            # as "endpoint file present" for the prompt logic.
             has_endpoint_file = bool(pending_endpoint_file) or had_existing_endpoint
             crawl_enabled = _interview_crawl_enabled(
                 base_urls=base_urls,
                 has_endpoint_file=has_endpoint_file,
             )
 
-            # Katana crawler options are skipped when crawling is disabled
             if crawl_enabled and base_urls:
                 from core.detection.spa import detect_spa
 
@@ -568,16 +616,21 @@ class InteractiveProjectWizard:
 
             patch: dict[str, object] = {
                 "name": name,
-                "type": types,
                 "path": local_path_str,
-                "docker_path": docker_path,
-                "container_name": container_name,
-                "languages": langs,
-                "base_urls": base_urls,
-                "test_dirs": test_dirs,
-                "ignore_dirs": ignore_dirs,
-                "dependencies_file": dependencies_file,
-                "crawl_enabled": crawl_enabled,
+                "services": [
+                    RepoService(
+                        name="default",
+                        type=types,
+                        docker_path=docker_path,
+                        container_name=container_name,
+                        languages=langs,
+                        base_urls=base_urls,
+                        test_dirs=test_dirs,
+                        ignore_dirs=ignore_dirs,
+                        dependencies_file=dependencies_file,
+                        crawl_enabled=crawl_enabled,
+                    ).model_dump(exclude_defaults=False)
+                ],
                 "katana_headless": katana_headless,
                 "katana_depth": katana_depth,
                 "auth": auth.model_dump() if auth is not None else None,
@@ -691,17 +744,22 @@ class InteractiveProjectWizard:
             url_repo = create_url_finding_repo(paths.findings_db)
         else:
             url_repo = self._url_repo_factory(paths.findings_db)
-        service = UrlInventoryService(url_repo)
-        service.ingest_user_file(
+        service_obj = UrlInventoryService(url_repo)
+        service_obj.ingest_user_file(
             repo_id=repo_id,
             file_path=str(target),
             entries=entries,
         )
-        service.regenerate_artifacts(
+        base_url = (
+            repo.services[0].base_urls[0]
+            if repo.services and repo.services[0].base_urls
+            else None
+        )
+        service_obj.regenerate_artifacts(
             repo_id=repo_id,
             project_paths=paths,
             repo_dir_key=str(repo_id),
-            base_url=repo.base_urls[0] if repo.base_urls else None,
+            base_url=base_url,
         )
         self._service.record_seed_file(project_id, repo_id, str(target))
         print(f"\n  ✓ Endpoint file ingested: {target}")
@@ -1036,10 +1094,9 @@ class InteractiveProjectWizard:
 
         auth = _interview_auth()
 
-        new_repo = Repository(
-            name=name,
+        service = RepoService(
+            name="default",
             type=types,
-            path=local_path_str,
             docker_path=docker_path,
             container_name=container_name,
             languages=langs,
@@ -1048,6 +1105,11 @@ class InteractiveProjectWizard:
             ignore_dirs=ignore_dirs,
             dependencies_file=dependencies_file,
             crawl_enabled=crawl_enabled,
+        )
+        new_repo = Repository(
+            name=name,
+            path=local_path_str,
+            services=[service],
             katana_headless=katana_headless,
             katana_depth=katana_depth,
             auth=auth,

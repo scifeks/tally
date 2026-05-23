@@ -6,32 +6,42 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from core.config.schemas import Repository
+from core.config.schemas.repo_service import RepoService
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.local.semgrep import SemgrepLocalTool
 
 
 def _make_repo(path: str, test_dirs: list[str]) -> Repository:
-    return Repository.model_construct(
-        name="test-repo",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path=path,
-        docker_path="",
-        container_name="",
         languages=["python"],
         base_urls=[],
         test_dirs=test_dirs,
         ignore_dirs=[],
+    )
+    return Repository.model_construct(
+        name="test-repo",
+        path=path,
+        services=[service],
     )
 
 
 def _make_context(repo: Repository) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = repo.path or "/repo"
+    service = (
+        repo.services[0]
+        if repo.services
+        else RepoService.model_construct(name="default")
+    )
     return ExecutionContext(
         project_name="test",
         base_path="/tmp",
         repo=repo,
+        service=service,
         tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,

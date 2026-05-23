@@ -45,11 +45,16 @@ def _make_repo(
 ) -> MagicMock:
     repo = MagicMock()
     repo.name = "my-repo"
-    repo.languages = ["python"]
-    repo.base_urls = ["http://example.com"]
-    repo.oas3_path = oas3_path
     repo.path = path
-    repo.crawl_enabled = crawl_enabled
+    repo.oas3_path = oas3_path
+    service = MagicMock()
+    service.languages = ["python"]
+    service.base_urls = ["http://example.com"]
+    service.crawl_enabled = crawl_enabled
+    service.docker_path = ""
+    service.relative_path = ""
+    service.dependencies_file = ""
+    repo.services = [service]
     return repo
 
 
@@ -144,6 +149,7 @@ class TestNoirSkipIncompatTechs:
         (tmp_path / "package.json").write_text("{}", encoding="utf-8")
         noir = _make_noir_tool()
         repo = _make_repo(path=str(tmp_path), crawl_enabled=True)
+        repo.services[0].languages = ["node"]
         repo_repo = MagicMock()
         repo_repo.list_active.return_value = [repo]
         config = _make_config(repo_repo=repo_repo)

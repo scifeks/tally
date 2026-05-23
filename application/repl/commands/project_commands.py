@@ -266,9 +266,14 @@ class ProjectCommands:
         table.add_column("Base URLs", style="white", overflow="fold")
 
         for repo in repos:
-            types = ", ".join(repo.type) if repo.type else "-"
-            langs = ", ".join(repo.languages) if repo.languages else "-"
-            urls = ", ".join(repo.base_urls) if repo.base_urls else "-"
+            service = repo.services[0] if repo.services else None
+            types = ", ".join(service.type) if service and service.type else "-"
+            langs = (
+                ", ".join(service.languages) if service and service.languages else "-"
+            )
+            urls = (
+                ", ".join(service.base_urls) if service and service.base_urls else "-"
+            )
             id_str = str(repo.id) if isinstance(repo.id, int) else "-"
             table.add_row(id_str, repo.name, types, repo.path, langs, urls)
 
@@ -385,7 +390,12 @@ class ProjectCommands:
             lines.append("")
             lines.append("Repositories:")
             for repo in repos:
-                lang_str = ", ".join(repo.languages) if repo.languages else "none"
+                service = repo.services[0] if repo.services else None
+                lang_str = (
+                    ", ".join(service.languages)
+                    if service and service.languages
+                    else "none"
+                )
                 lines.append(f"  \u2022 {repo.name} ({lang_str})")
 
         self.repl.console.print(

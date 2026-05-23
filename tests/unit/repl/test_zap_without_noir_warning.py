@@ -41,6 +41,16 @@ def _make_repl(
         r = MagicMock()
         r.name = name
         r.crawl_enabled = True
+        service = MagicMock()
+        service.crawl_enabled = True
+        service.docker_path = ""
+        service.container_name = ""
+        service.relative_path = ""
+        service.dependencies_file = ""
+        service.type = []
+        service.test_dirs = []
+        service.ignore_dirs = []
+        r.services = [service]
         repos.append(r)
     return repl, repos
 
@@ -97,12 +107,12 @@ class TestMaybeWarnDastWithoutDiscovery:
         """Repos with crawl_enabled=False are excluded from missing."""
         repl, repos = _make_repl()
         repos[0].crawl_enabled = False
+        repos[0].services[0].crawl_enabled = False
         sc = ScanCommands(repl)
         sc._active_repos = MagicMock(return_value=repos)  # type: ignore[method-assign]
-        mock_input = MagicMock()
         with (
             patch.object(sc, "_repo_has_url_findings", return_value=False),
-            patch("builtins.input", mock_input),
+            patch("builtins.input") as mock_input,
         ):
             result = sc._maybe_warn_dast_without_discovery(["zap"], None, False, 1)
         assert result == ["zap"]
@@ -189,6 +199,16 @@ class TestCmdScanInnerWarning:
         _repo = MagicMock()
         _repo.name = "dvna"
         _repo.crawl_enabled = True
+        service = MagicMock()
+        service.crawl_enabled = True
+        service.docker_path = ""
+        service.container_name = ""
+        service.relative_path = ""
+        service.dependencies_file = ""
+        service.type = []
+        service.test_dirs = []
+        service.ignore_dirs = []
+        _repo.services = [service]
         repl.project_registry.resolve_by_name.return_value = ProjectRow(
             id=1, name="proj", path="/tmp/test", created_at="2026-05-02T00:00:00Z"
         )

@@ -17,6 +17,7 @@ from application.url_inventory.providers.user_file import (  # noqa: E402
     UserFileProvider,
 )
 from core.config.schemas import Repository  # noqa: E402
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 from domain.url_inventory.entry import UrlSource  # noqa: E402
 from infrastructure.endpoints.converters.endpoint_file_converter import (  # noqa: E402
     EndpointFileConverter,
@@ -29,12 +30,17 @@ def _make_repo(tmp_path: Path, *, base_urls: list[str] | None = None) -> Reposit
     """Build a minimal Repository for the provider context."""
     repo_path = tmp_path / "repo-src"
     repo_path.mkdir(exist_ok=True)
-    return Repository(
-        name="alpha",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path=str(repo_path),
         languages=["python"],
         base_urls=base_urls or [],
+    )
+    return Repository(
+        name="alpha",
+        path=str(repo_path),
+        services=[service],
     )
 
 

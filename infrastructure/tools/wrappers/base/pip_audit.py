@@ -83,9 +83,12 @@ class BasePipAuditTool(ToolInterface):
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
-        repo_path = context.registry.get_repo_path(self.name, context.repo)
+        assert context.service is not None
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, context.repo.path
+        )
         if context.is_docker:
-            deps_file = context.repo.dependencies_file
+            deps_file = context.service.dependencies_file
         else:
             deps_file = find_or_generate_requirements(repo_path)
             if not deps_file:

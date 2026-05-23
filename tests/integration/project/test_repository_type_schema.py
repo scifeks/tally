@@ -12,49 +12,57 @@ if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
 from core.config.schemas import Repository  # noqa: E402
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
 
 def _make_repo(**kwargs: object) -> Repository:
-    defaults: dict[str, object] = {
-        "name": "test-repo",
+    service_kwargs: dict[str, object] = {
+        "name": "default",
         "type": ["api"],
-        "path": str(_TALLY_ROOT),
         "languages": ["python"],
     }
-    defaults.update(kwargs)
-    return Repository(**defaults)  # type: ignore[arg-type]
+    repo_kwargs: dict[str, object] = {
+        "name": "test-repo",
+        "path": str(_TALLY_ROOT),
+    }
+    for key in list(kwargs.keys()):
+        if key in ("type", "languages", "docker_path", "container_name"):
+            service_kwargs[key] = kwargs.pop(key)
+    repo_kwargs.update(kwargs)
+    repo_kwargs["services"] = [service_kwargs]
+    return Repository(**repo_kwargs)  # type: ignore[arg-type]
 
 
 class TestRepositoryTypeSchema:
     def test_valid_api(self) -> None:
         repo = _make_repo(type=["api"])
-        assert repo.type == ["api"]
+        assert repo.services[0].type == ["api"]
 
     def test_valid_ui(self) -> None:
         repo = _make_repo(type=["ui"])
-        assert repo.type == ["ui"]
+        assert repo.services[0].type == ["ui"]
 
     def test_valid_library(self) -> None:
         repo = _make_repo(type=["library"])
-        assert repo.type == ["library"]
+        assert repo.services[0].type == ["library"]
 
     def test_valid_api_ui(self) -> None:
         repo = _make_repo(type=["api", "ui"])
-        assert repo.type == ["api", "ui"]
+        assert repo.services[0].type == ["api", "ui"]
 
-    def test_missing_type_raises(self) -> None:
-        with pytest.raises(Exception):
-            Repository(  # type: ignore[call-arg]
-                name="r",
-                path=str(_TALLY_ROOT),
-                languages=[],
-            )
+    def test_missing_type_defaults_to_empty(self) -> None:
+        repo = Repository(
+            name="r",
+            path=str(_TALLY_ROOT),
+            services=[RepoService(name="default")],
+        )
+        assert repo.services[0].type == []
 
-    def test_empty_type_raises(self) -> None:
-        with pytest.raises(Exception):
-            _make_repo(type=[])
+    def test_empty_type_is_valid(self) -> None:
+        repo = _make_repo(type=[])
+        assert repo.services[0].type == []
 
     def test_invalid_type_raises(self) -> None:
         with pytest.raises(Exception, match="Invalid"):
@@ -68,14 +76,9 @@ class TestRepositoryTypeSchema:
         with pytest.raises(Exception, match="library"):
             _make_repo(type=["library", "ui"])
 
-    def test_no_paths_raises(self) -> None:
-        with pytest.raises(Exception, match="path"):
-            _make_repo(path="", docker_path="")
-
     def test_docker_only_repo_valid(self) -> None:
-        # Existing docker-only repos (no local path) must still load without error
         repo = _make_repo(path="", docker_path="/mnt/repo", container_name="c")
-        assert repo.docker_path == "/mnt/repo"
+        assert repo.services[0].docker_path == "/mnt/repo"
         assert repo.path == ""
 
     def test_docker_path_requires_container_name(self) -> None:
@@ -84,10 +87,10 @@ class TestRepositoryTypeSchema:
 
     def test_valid_docker_repo(self) -> None:
         repo = _make_repo(docker_path="/mnt/repo", container_name="my-container")
-        assert repo.docker_path == "/mnt/repo"
-        assert repo.container_name == "my-container"
+        assert repo.services[0].docker_path == "/mnt/repo"
+        assert repo.services[0].container_name == "my-container"
 
     def test_valid_local_repo(self) -> None:
         repo = _make_repo()
         assert repo.path == str(_TALLY_ROOT)
-        assert repo.docker_path == ""
+        assert repo.services[0].docker_path == ""

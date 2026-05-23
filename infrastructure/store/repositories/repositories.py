@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.ports.project_repo_repository import ProjectRepoRepositoryPort
+from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import RepoAuth, Repository
 
 if TYPE_CHECKING:
@@ -23,14 +24,6 @@ if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
 
-_LIST_FIELDS: tuple[str, ...] = (
-    "type",
-    "languages",
-    "base_urls",
-    "test_dirs",
-    "ignore_dirs",
-)
-
 _DICT_FIELDS: tuple[str, ...] = (
     "xsstrike_headers",
     "dalfox_headers",
@@ -38,29 +31,26 @@ _DICT_FIELDS: tuple[str, ...] = (
 )
 
 _ALL_COLUMNS: str = (
-    "id, name, path, docker_path, container_name, dependencies_file, "
-    "crawl_enabled, xsstrike_crawl_level, katana_headless, katana_depth, "
-    "type_json, languages_json, base_urls_json, test_dirs_json, "
-    "ignore_dirs_json, xsstrike_headers_json, dalfox_headers_json, "
-    "katana_headers_json, auth_json, url_seed_file, created_at, deleted_at"
+    "id, name, path, services_json, "
+    "xsstrike_crawl_level, katana_headless, katana_depth, "
+    "xsstrike_headers_json, dalfox_headers_json, "
+    "katana_headers_json, auth_json, url_seed_file, "
+    "created_at, deleted_at"
 )
 
 
 def _row_to_repository(row: sqlite3.Row) -> Repository:
     """Hydrate a Repository pydantic model from a ``repositories`` row."""
+    services_raw = json.loads(row["services_json"])
+    services = [RepoService(**s) for s in services_raw]
     fields: dict[str, Any] = {
         "name": row["name"],
         "path": row["path"],
-        "docker_path": row["docker_path"],
-        "container_name": row["container_name"],
-        "dependencies_file": row["dependencies_file"],
-        "crawl_enabled": bool(row["crawl_enabled"]),
+        "services": services,
         "xsstrike_crawl_level": int(row["xsstrike_crawl_level"]),
         "katana_headless": bool(row["katana_headless"]),
         "katana_depth": int(row["katana_depth"]),
     }
-    for field in _LIST_FIELDS:
-        fields[field] = json.loads(row[f"{field}_json"])
     for field in _DICT_FIELDS:
         fields[field] = json.loads(row[f"{field}_json"])
     auth_raw = row["auth_json"]
@@ -77,21 +67,14 @@ def _row_to_repository(row: sqlite3.Row) -> Repository:
 def _repository_to_row(repo: Repository) -> dict[str, Any]:
     """Serialize a Repository for INSERT / UPDATE."""
     auth_dump = repo.auth.model_dump() if repo.auth is not None else None
+    services_dump = [s.model_dump() for s in repo.services]
     return {
         "name": repo.name,
         "path": repo.path,
-        "docker_path": repo.docker_path,
-        "container_name": repo.container_name,
-        "dependencies_file": repo.dependencies_file,
-        "crawl_enabled": int(repo.crawl_enabled),
+        "services_json": json.dumps(services_dump),
         "xsstrike_crawl_level": int(repo.xsstrike_crawl_level),
         "katana_headless": int(repo.katana_headless),
         "katana_depth": int(repo.katana_depth),
-        "type_json": json.dumps(repo.type),
-        "languages_json": json.dumps(repo.languages),
-        "base_urls_json": json.dumps(repo.base_urls),
-        "test_dirs_json": json.dumps(repo.test_dirs),
-        "ignore_dirs_json": json.dumps(repo.ignore_dirs),
         "xsstrike_headers_json": json.dumps(repo.xsstrike_headers),
         "dalfox_headers_json": json.dumps(repo.dalfox_headers),
         "katana_headers_json": json.dumps(repo.katana_headers),
@@ -176,6 +159,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
     def insert(self, repo: Repository) -> int:
         """Insert *repo* and return the new integer id."""
         cols = _repository_to_row(repo)
+        cols["created_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         column_list = ", ".join(cols.keys())
         placeholders = ", ".join("?" for _ in cols)
         with self._factory.connect() as conn:

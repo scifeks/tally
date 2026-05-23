@@ -19,6 +19,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.repl.commands.purge import PurgeCommand  # noqa: E402
 from application.url_inventory.service import UrlInventoryService  # noqa: E402
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 from core.config.schemas.repository import Repository  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.projects.entry import ProjectRow  # noqa: E402
@@ -60,13 +61,19 @@ def _seed_url_findings(tmp_path: Path) -> tuple[ConnectionFactory, int]:
     factory = ConnectionFactory(paths.findings_db)
     factory.init_schema()
     rr = RepositoryRepository(factory)
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
+        type=["api"],
+        languages=["python"],
+        docker_path="/app",
+        container_name="ctr",
+    )
     rid = rr.insert(
         Repository(
             name="alpha",
-            type=["api"],
-            languages=["python"],
-            docker_path="/app",
-            container_name="ctr",
+            path="",
+            services=[service],
         )
     )
     UrlInventoryService(UrlFindingRepository(factory)).ingest_user_file(

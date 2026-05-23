@@ -63,11 +63,13 @@ class ToolRegistry:
     def get_tool_config(self, name: str):
         return self._configs.get(name)
 
-    def get_repo_path(self, tool_name: str, repo) -> str:
+    def get_service_path(self, tool_name: str, service, repo_path: str) -> str:
         config = self.get_tool_config(tool_name)
         if config is not None and config.location == "docker":
-            return repo.docker_path
-        return repo.path
+            return service.docker_path
+        if service.relative_path:
+            return str(Path(repo_path) / service.relative_path)
+        return repo_path
 
     def get_tools_by_category(self, category: str) -> list[ToolWrapper]:
         return [t for t in self._tools.values() if t.category == category]

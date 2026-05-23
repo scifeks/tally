@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.config.schemas import Repository
+from core.config.schemas.repo_service import RepoService
 from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.base.noir import _compute_noir_techs
@@ -15,16 +16,19 @@ from infrastructure.tools.wrappers.local.noir import NoirLocalTool
 
 
 def _make_repo(path: str) -> Repository:
-    return Repository.model_construct(
-        name="dvna",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path=path,
-        docker_path="",
-        container_name="",
         languages=["javascript/typescript"],
         base_urls=["http://localhost:9090"],
         test_dirs=[],
         ignore_dirs=[],
+    )
+    return Repository.model_construct(
+        name="dvna",
+        path=path,
+        services=[service],
     )
 
 
@@ -34,11 +38,19 @@ def _make_context(
     tool_config: ToolExecutionConfig | None = None,
 ) -> ExecutionContext:
     registry = MagicMock()
-    registry.get_repo_path.return_value = repo.path or "/repo"
+    repo_path = repo.path or "/repo"
+    registry.get_repo_path.return_value = repo_path
+    registry.get_service_path.return_value = repo_path
+    service = (
+        repo.services[0]
+        if repo.services
+        else RepoService.model_construct(name="default")
+    )
     return ExecutionContext(
         project_name="DVPA",
         base_path=base_path,
         repo=repo,
+        service=service,
         tool_config=tool_config or ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,

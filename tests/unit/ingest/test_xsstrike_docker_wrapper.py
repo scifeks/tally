@@ -32,11 +32,21 @@ def _make_tool(
 
 def _make_repo(**kwargs: Any) -> MagicMock:
     repo = MagicMock()
-    repo.base_urls = kwargs.get("base_urls", ["http://localhost:8080"])
     repo.name = kwargs.get("name", "myrepo")
     repo.uuid = kwargs.get("uuid", "00000000-0000-0000-0000-000000000001")
     repo.xsstrike_crawl_level = kwargs.get("xsstrike_crawl_level", 10)
     repo.xsstrike_headers = kwargs.get("xsstrike_headers", None)
+    service = MagicMock()
+    service.base_urls = kwargs.get("base_urls", ["http://localhost:8080"])
+    service.docker_path = ""
+    service.container_name = ""
+    service.relative_path = ""
+    service.dependencies_file = ""
+    service.crawl_enabled = True
+    service.type = []
+    service.test_dirs = []
+    service.ignore_dirs = []
+    repo.services = [service]
     return repo
 
 

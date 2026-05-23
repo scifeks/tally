@@ -11,20 +11,46 @@ from domain.tools.execution_config import ToolExecutionConfig
 _TOOL_CONFIG = ToolExecutionConfig(noir_provider=None)
 
 
+def _make_service(
+    name: str = "default-service",
+    docker_path: str = "",
+    container_name: str = "",
+    languages: list[str] | None = None,
+    relative_path: str = "",
+) -> MagicMock:
+    service = MagicMock()
+    service.name = name
+    service.docker_path = docker_path
+    service.container_name = container_name
+    service.languages = languages if languages is not None else ["python"]
+    service.base_urls = []
+    service.relative_path = relative_path
+    service.dependencies_file = ""
+    service.crawl_enabled = True
+    service.type = []
+    service.test_dirs = []
+    service.ignore_dirs = []
+    return service
+
+
 def _make_repo(
     name: str = "my-repo",
     path: str = "",
     docker_path: str = "",
     container_name: str = "",
     languages: list[str] | None = None,
+    relative_path: str = "",
 ) -> MagicMock:
     repo = MagicMock()
     repo.name = name
     repo.path = path
-    repo.docker_path = docker_path
-    repo.container_name = container_name
-    repo.languages = languages if languages is not None else ["python"]
-    repo.base_urls = []
+    service = _make_service(
+        docker_path=docker_path,
+        container_name=container_name,
+        languages=languages,
+        relative_path=relative_path or path,
+    )
+    repo.services = [service]
     repo.oas3_path = None
     return repo
 

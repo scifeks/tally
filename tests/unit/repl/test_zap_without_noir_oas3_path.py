@@ -16,7 +16,13 @@ from application.repl.commands.scan_commands import ScanCommands
 def _make_repo(name: str, crawl_enabled: bool = True) -> MagicMock:
     r = MagicMock()
     r.name = name
-    r.crawl_enabled = crawl_enabled
+    r.path = ""
+    service = MagicMock()
+    service.crawl_enabled = crawl_enabled
+    service.docker_path = ""
+    service.relative_path = ""
+    service.dependencies_file = ""
+    r.services = [service]
     return r
 
 

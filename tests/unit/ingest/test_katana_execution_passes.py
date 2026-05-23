@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from core.config.schemas import Repository
+from core.config.schemas.repo_service import RepoService
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.local.katana import KatanaLocalTool
@@ -25,17 +26,19 @@ def _make_repo(
     katana_headless: bool = False,
     katana_headers: dict[str, str] | None = None,
 ) -> Repository:
-    return Repository.model_construct(
-        name="testrepo",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path="/repo",
-        docker_path="",
-        container_name="",
         languages=["python"],
         base_urls=base_urls if base_urls is not None else ["http://localhost:8080"],
         test_dirs=[],
         ignore_dirs=[],
-        oas3_path="",
+    )
+    return Repository.model_construct(
+        name="testrepo",
+        path="/repo",
+        services=[service],
         katana_depth=katana_depth,
         katana_headless=katana_headless,
         katana_headers=katana_headers or {},
@@ -44,10 +47,16 @@ def _make_repo(
 
 def _make_context(repo: Repository, base_path: str) -> ExecutionContext:
     registry = MagicMock()
+    service = (
+        repo.services[0]
+        if repo.services
+        else RepoService.model_construct(name="default")
+    )
     return ExecutionContext(
         project_name="testproject",
         base_path=base_path,
         repo=repo,
+        service=service,
         tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,

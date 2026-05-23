@@ -183,9 +183,14 @@ class UrlListService:
             file_path=str(dest),
             entries=entries,
         )
+        base_url = (
+            repo.services[0].base_urls[0]
+            if repo.services and repo.services[0].base_urls
+            else None
+        )
         self._inventory.regenerate_artifacts(
             repo_id=repo_id,
             project_paths=self._paths,
             repo_dir_key=str(repo_id),
-            base_url=repo.base_urls[0] if repo.base_urls else None,
+            base_url=base_url,
         )

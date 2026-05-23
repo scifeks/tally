@@ -79,6 +79,20 @@ def _supports_docker(tool_name: str) -> bool:
     return (_WRAPPERS_ROOT / "docker" / f"{normalized}.py").exists()
 
 
+def _discover_all_tool_names() -> set[str]:
+    """Scan wrapper directories for all tools with implementations."""
+    names: set[str] = set()
+    for subdir in ("local", "docker"):
+        d = _WRAPPERS_ROOT / subdir
+        if not d.is_dir():
+            continue
+        for p in d.glob("*.py"):
+            if p.stem.startswith("_"):
+                continue
+            names.add(p.stem.replace("_", "-"))
+    return names
+
+
 def _build_service(
     request: Request, project_id: int
 ) -> tuple[ToolOverridesService, ToolOverridesRepositoryPort, ProjectPaths, str]:
@@ -127,6 +141,19 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
         )
         for tool in tools
     ]
+    registered_ids = {item.id for item in items}
+    for tool_name in sorted(_discover_all_tool_names()):
+        if tool_name not in registered_ids:
+            items.append(
+                ToolCatalogItem(
+                    id=tool_name,
+                    name=tool_name.replace("-", " ").title(),
+                    domain="",
+                    supports_local=_supports_local(tool_name),
+                    supports_docker=_supports_docker(tool_name),
+                    description="",
+                )
+            )
     return ToolCatalogResponse(items=items, total=len(items))
 
 

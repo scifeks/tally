@@ -25,12 +25,21 @@ def _make_mock_repo(
 ) -> MagicMock:
     repo = MagicMock()
     repo.name = name
-    repo.languages = languages if languages is not None else ["python"]
-    repo.base_urls = base_urls
     repo.path = path
-    repo.docker_path = docker_path
-    repo.container_name = container_name
     repo.oas3_path = oas3_path
+    service = MagicMock()
+    service.name = "default"
+    service.languages = languages if languages is not None else ["python"]
+    service.base_urls = base_urls
+    service.docker_path = docker_path
+    service.container_name = container_name
+    service.relative_path = ""
+    service.dependencies_file = ""
+    service.crawl_enabled = True
+    service.type = []
+    service.test_dirs = []
+    service.ignore_dirs = []
+    repo.services = [service]
     return repo
 
 

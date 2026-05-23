@@ -229,13 +229,9 @@ class RepositoryItem(BaseModel):
 
     id: int | None = None
     name: str
-    type: list[str]
     path: str | None = None
-    docker_path: str | None = None
-    container_name: str | None = None
-    languages: list[str]
-    base_urls: list[str]
     endpoint_file: str | None = None
+    services: list[dict] | None = None
 
 
 class RepoAuthPatchRequest(BaseModel):

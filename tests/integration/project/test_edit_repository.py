@@ -38,9 +38,14 @@ def _make_pm(base_path: Path) -> ProjectManager:
 def _make_repo(**kwargs: object) -> Repository:
     defaults: dict[str, object] = {
         "name": "test-repo",
-        "type": ["api"],
         "path": str(_TALLY_ROOT),
-        "languages": ["python"],
+        "services": [
+            {
+                "name": "default",
+                "type": ["api"],
+                "languages": ["python"],
+            }
+        ],
     }
     defaults.update(kwargs)
     return Repository(**defaults)  # type: ignore[arg-type]
@@ -63,8 +68,15 @@ class TestEditRepository:
         repo = _make_repo(
             name="my-repo",
             path=str(repo_dir),
-            docker_path="/mnt/repo",
-            container_name="my-container",
+            services=[
+                {
+                    "name": "default",
+                    "type": ["api"],
+                    "languages": ["python"],
+                    "docker_path": "/mnt/repo",
+                    "container_name": "my-container",
+                }
+            ],
         )
         pm = self._setup_project(tmp_path / "pm", repo)
         # Switch from docker to local; "" for deps file; "" for endpoint file; "" auth
@@ -74,8 +86,8 @@ class TestEditRepository:
                 "test-project", "my-repo"
             )
         assert updated is not None
-        assert updated.docker_path == ""
-        assert updated.container_name == ""
+        assert updated.services[0].docker_path == ""
+        assert updated.services[0].container_name == ""
         assert updated.path == str(repo_dir)
 
     def test_edit_local_keeps_defaults(self, tmp_path: Path) -> None:
@@ -92,4 +104,4 @@ class TestEditRepository:
             )
         assert updated is not None
         assert updated.path == str(repo_dir)
-        assert updated.docker_path == ""
+        assert updated.services[0].docker_path == ""

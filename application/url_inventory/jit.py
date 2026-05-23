@@ -45,10 +45,15 @@ def jit_rebuild_artifacts(
         return None, None
 
     service = UrlInventoryService(url_finding_repo)
+    base_url = (
+        repo.services[0].base_urls[0]
+        if repo.services and repo.services[0].base_urls
+        else None
+    )
     seeds_path, oas3_path = service.regenerate_artifacts(
         repo_id=repo.id,
         project_paths=paths,
         repo_dir_key=str(repo.id),
-        base_url=repo.base_urls[0] if repo.base_urls else None,
+        base_url=base_url,
     )
     return seeds_path, oas3_path
